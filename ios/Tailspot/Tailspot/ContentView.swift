@@ -2,8 +2,9 @@
 //  ContentView.swift
 //  Tailspot
 //
-//  Day 1 POC: camera background + live sensor readout overlay.
-//  No planes yet — that's tomorrow.
+//  Day 2 POC: camera background + sensor readout (top) + scrollable list
+//  of nearby aircraft with their bearing/elevation/distance from us
+//  (bottom). No projected labels yet — that's Day 3.
 //
 
 import SwiftUI
@@ -12,6 +13,7 @@ import AVFoundation
 struct ContentView: View {
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
+    @StateObject private var adsb = ADSBManager()
     @State private var cameraAuthorized = false
 
     var body: some View {
@@ -23,31 +25,107 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Tailspot — POC Day 1")
-                    .font(.headline)
+            VStack(spacing: 0) {
+                sensorReadout
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Group {
-                    Text(formatLocation())
-                    Text(formatHeading())
-                    Text(formatAttitude())
-                    if !cameraAuthorized {
-                        Text("camera: not authorized")
-                    }
-                }
-                .font(.system(.caption, design: .monospaced))
+                Spacer(minLength: 0)
+
+                aircraftList
             }
-            .foregroundStyle(.white)
-            .padding(12)
-            .background(.black.opacity(0.55), in: .rect(cornerRadius: 12))
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .task {
             await requestCameraPermission()
             location.requestPermissionAndStart()
             motion.start()
+            adsb.start { location.cllocation }
         }
+    }
+
+    // MARK: - Top: sensor readout
+
+    private var sensorReadout: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Tailspot — POC Day 2")
+                .font(.headline)
+
+            Group {
+                Text(formatLocation())
+                Text(formatHeading())
+                Text(formatAttitude())
+                Text(formatADSBStatus())
+                if !cameraAuthorized {
+                    Text("camera: not authorized")
+                }
+            }
+            .font(.system(.caption, design: .monospaced))
+        }
+        .foregroundStyle(.white)
+        .padding(12)
+        .background(.black.opacity(0.55), in: .rect(cornerRadius: 12))
+    }
+
+    // MARK: - Bottom: nearby-aircraft list
+
+    private var aircraftList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Nearby aircraft (\(adsb.observed.count))")
+                    .font(.caption.bold())
+                Spacer()
+                if let err = adsb.lastError {
+                    Text(err).font(.caption2)
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    ForEach(adsb.observed) { obs in
+                        aircraftRow(obs)
+                    }
+                    if adsb.observed.isEmpty {
+                        Text(adsb.lastFetched == nil
+                             ? "Waiting for first fetch…"
+                             : "No aircraft in range.")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                    }
+                }
+                .padding(.bottom, 12)
+            }
+            .frame(maxHeight: 320)
+        }
+        .background(.black.opacity(0.7))
+    }
+
+    private func aircraftRow(_ obs: ObservedAircraft) -> some View {
+        let cs = obs.aircraft.callsign ?? obs.aircraft.icao24
+        let altKm = obs.aircraft.altitudeMeters / 1000
+        let dKm = obs.slantDistanceMeters / 1000
+
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(cs)
+                .frame(width: 70, alignment: .leading)
+                .bold()
+            Text(String(format: "brg %5.1f°", obs.bearingDeg))
+                .frame(width: 86, alignment: .leading)
+            Text(String(format: "el %+5.1f°", obs.elevationDeg))
+                .frame(width: 76, alignment: .leading)
+            Text(String(format: "%4.1fkm", dKm))
+                .frame(width: 60, alignment: .leading)
+            Text(String(format: "FL%03.0f", altKm * 32.8))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .font(.system(.caption2, design: .monospaced))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 2)
     }
 
     // MARK: - Permission
@@ -86,6 +164,14 @@ struct ContentView: View {
         let pitchDeg = motion.pitch * 180 / .pi
         let rollDeg = motion.roll * 180 / .pi
         return String(format: "Tilt:    pitch %5.1f°  roll %5.1f°", pitchDeg, rollDeg)
+    }
+
+    private func formatADSBStatus() -> String {
+        if let t = adsb.lastFetched {
+            let secs = Int(Date().timeIntervalSince(t))
+            return String(format: "ADSB:    %d aircraft, %ds ago", adsb.observed.count, secs)
+        }
+        return "ADSB:    fetching…"
     }
 }
 

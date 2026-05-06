@@ -39,6 +39,22 @@ final class LocationManager: NSObject, ObservableObject {
     }
 }
 
+extension LocationManager {
+    /// Snapshot the current GPS state as a CLLocation, or nil if we
+    /// don't have a fix yet. Used by ADSBManager to know the bbox to
+    /// query OpenSky with.
+    var cllocation: CLLocation? {
+        guard let lat = latitude, let lon = longitude else { return nil }
+        return CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+            altitude: altitude ?? 0,
+            horizontalAccuracy: horizontalAccuracy ?? -1,
+            verticalAccuracy: -1,
+            timestamp: Date()
+        )
+    }
+}
+
 extension LocationManager: CLLocationManagerDelegate {
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
