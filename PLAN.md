@@ -80,7 +80,40 @@ Open: airline livery as trade dress is generally fair to depict, but trademarks 
 
 Phase length assumes **solo dev, full-time**. With a team of 2–3 (iOS + backend + design), compress by ~40%. The brief did not specify team size — see §6.5.
 
-### Phase 0 — De-risk geometric ID (2–4 weeks)
+### Phase 0a — Friday proof of concept (3 days)
+
+The narrowest possible demo: **on Noah's phone, a screen showing live aircraft labels at the right places in the sky**, no game, no auth, no backend, no polish. Existence proof that the idea is buildable.
+
+**Scope (in):**
+- iOS app builds and runs on Noah's iPhone.
+- Camera feed as the background.
+- Live readout: GPS coordinates, compass heading, device pitch.
+- OpenSky API call (direct from device, not via backend) for aircraft inside ~50 km bbox around current position.
+- For each aircraft, compute true bearing + elevation from device.
+- Render a text label for each aircraft at its projected screen position; label includes callsign + altitude.
+
+**Scope (out):**
+- ARKit / drift correction — raw compass + pitch is good enough for a POC.
+- "Catch" interaction or any persistence.
+- Backend, auth, accounts, scoring, achievements, illustrated cards.
+- Visual polish, error states, calibration UX.
+- Forward-extrapolation of ADS-B positions (we'll find out if it's needed).
+
+**Day-by-day (assuming 3 evenings of work):**
+
+| Day | Goal |
+|---|---|
+| Tue (today) | Confirm prereqs (see §10). Scaffold Xcode project. App requests camera + location permissions and shows live GPS / heading / pitch readout on top of camera feed. |
+| Wed | OpenSky integration. Show a list of nearby aircraft (callsign, altitude, bearing-from-me, elevation-angle). Still scrolling list, not overlaid yet. |
+| Thu | Project each aircraft's bearing/elevation onto screen coordinates and render labels at those positions over the camera feed. |
+| Fri | Field test outside. Iterate on whatever is broken. Demo. |
+
+**Success criterion (loose, vs. Phase 0 main):**
+> Walk outside, point phone at a plane I can see overhead, and the corresponding label appears reasonably close to it. Doesn't have to be 80% accurate or work for multiple planes — that's Phase 0 main.
+
+This POC only proves "the pipeline runs end-to-end." The harder accuracy bar from §3.0 below (≥80%, ≥50 trials) is the **subsequent** Phase 0 work, which the replay harness and field testing serves.
+
+### Phase 0 — De-risk geometric ID (2–4 weeks after POC)
 
 The single highest-risk technical assumption is "geometric correlation actually picks the right plane in the field." We validate before building anything else.
 
@@ -172,39 +205,35 @@ AR + outdoors + ADS-B-required is genuinely awkward to test. Layered approach:
 
 ---
 
-## 6. Open questions (need user input)
+## 6. Open questions
 
-Listed in resolution-priority order. The first one cascades into several others.
+Status legend: ✅ resolved · ⏳ still open
 
-### 6.1 Monetization model — **gates ADS-B vendor decision**
+### ✅ 6.1 Monetization model — **resolved: free, no monetization**
 
-Free? Freemium? One-time purchase? Subscription? Ads?
+Implication: **OpenSky Network's free tier is the v1 ADS-B source.** Their terms cover "research and non-commercial purposes," and a free, ad-free, no-IAP app squarely fits. We still build the provider-abstraction adapter (§2) so we can swap if usage outgrows OpenSky's limits, but no paid feed is required for v1.
 
-This is not a launch-day question — it's a Phase 0 question. **OpenSky's free tier is non-commercial.** If Tailspot has any IAP, subscription, or ads, we likely need a paid feed (cheapest path: ADSBexchange via RapidAPI; serious option: FlightAware AeroAPI at real money). The monetization answer is the data-vendor answer is the unit-economics answer. We need it before we commit to a provider.
+### ✅ 6.2 Team — **resolved: solo dev (Noah + Claude), no prior iOS background**
 
-### 6.2 Solo developer or team?
+This rewrites the working model:
 
-Phase estimates assume solo dev, full-time. A 2–3 person team (iOS + backend + design) compresses every phase by ~40% but adds coordination and cost. What's the actual setup?
+- **Claude writes the code.** Noah reviews, runs, debugs, and field-tests.
+- **Explain-as-we-go.** Every Swift/SwiftUI/ARKit pattern Claude introduces gets a short explanation in commit messages or comments — Noah is learning iOS in parallel with shipping.
+- **Phase estimates from §3 are no longer reliable.** "8–12 weeks for MVP" assumed solo-with-iOS-experience. Realistically: 4–6 months to a polished MVP. We won't re-cost the whole plan now; we'll re-estimate after Phase 0 lands and we know the actual velocity.
+- **Pick the simplest viable iOS stack at every fork.** SwiftUI over UIKit, SwiftData over Core Data, Apple-native libs over third-party, no Cocoapods. Less learning surface, fewer ways to get stuck.
 
-### 6.3 Photo strategy preference
+### ✅ 6.4 Timeline — **resolved: proof of concept by Friday (3 days)**
 
-§1.4 recommends commissioned illustrated cards. Confirm — or override with: (a) AI-generated, (b) user-uploaded with moderation, (c) licensed photo library. Each has very different cost/timeline implications.
+A POC by Fri is doable but tight. The POC is **not** the MVP; it's the narrowest demonstration that the core idea works on a real phone. See new §3.0 below.
 
-### 6.4 Target ship date or budget
+### ⏳ Still open
 
-Is there a hard deadline, a budget cap, or pure best-effort?
+- **6.3 Photo strategy** — defaulting to commissioned illustrated cards (§1.4); revisit at Phase 2 (months out, plenty of time).
+- **6.5 Privacy posture** — defaulting to location-when-in-use, only catches send location to backend; revisit at Phase 1 when we add the backend.
+- **6.6 Launch region** — defaulting to US + Western Europe; revisit at Phase 3.
+- **6.7 Backend hosting** — defaulting to Fly.io + Postgres; revisit at Phase 1 when we actually start the backend.
 
-### 6.5 Privacy posture
-
-Recommendation: location-**when-in-use** only (not "always"); the only data point that ever leaves the device with a location attached is the catch event itself, and that's needed for cheat validation. Confirm this is acceptable, or specify a stricter posture.
-
-### 6.6 Launch region
-
-§3.3 recommends US + Western Europe based on ADS-B coverage. Confirm or specify.
-
-### 6.7 Backend hosting / ownership
-
-Comfortable building and operating a backend, or want to use a BaaS (Firebase, Supabase) to avoid ops?
+These four can stay deferred without blocking anything before Phase 1.
 
 ---
 
@@ -246,10 +275,21 @@ tailspot/
 
 ## 9. Immediate next steps
 
-In order:
+1. **Confirm prerequisites in §10** so Tue work isn't blocked.
+2. **Tue evening:** scaffold Xcode project; permissions + sensors readout on camera view.
+3. **Wed–Thu:** OpenSky integration → projected labels (per §3.0a day-by-day).
+4. **Fri:** field test, iterate, demo.
+5. **Sat onward:** retrospective on what the POC taught us; commit to Phase 0 main scope.
 
-1. **Resolve §6.1** (monetization → ADS-B vendor). Without this, Phase 0 ADS-B integration could need rework.
-2. **Resolve §6.2 and §6.4** so phase estimates are real.
-3. **Begin Phase 0:** scaffold iOS project, build the bare "see all overhead aircraft" prototype, build the replay harness alongside.
-4. **Run a Phase 0 field test** against the §3.0 success criterion.
-5. **Go / no-go review** against Phase 0 results before committing to Phase 1.
+## 10. Prerequisites for the Friday POC
+
+Need to confirm before Claude starts writing Swift on Tue:
+
+1. **Mac with Xcode installed?** (Xcode 15+ for iOS 17 SwiftUI/SwiftData; free from the Mac App Store, ~10 GB and a long download.)
+2. **iPhone for testing?** What model and iOS version? The Simulator does not provide real GPS/compass/camera, so for this app, a physical device is required from day 1.
+3. **Apple Developer account?** Two paths:
+   - **Free Apple ID signing** — works for personal-device testing, but the build expires after 7 days and you need to re-sign / re-install. Fine for POC.
+   - **$99/yr paid program** — needed for TestFlight, App Store, and persistent installs. Not needed this week.
+   - Default: free signing for POC; pay if/when we want testers in Phase 1.
+4. **Field-test location?** Are you somewhere with regular overhead air traffic (near a major airport approach path, an urban area, etc.)? "Friday demo" requires a sky with planes in it.
+5. **Learning preference?** Do you want every step explained as we go (slower, more learning), or do you want code first and questions later (faster, learn ad hoc)?
