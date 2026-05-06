@@ -38,6 +38,12 @@ final class ADSBManager: ObservableObject {
     @Published var lastError: String?
     @Published var lastFetched: Date?
 
+    /// Toggle between the live OpenSky source and a synthetic mock for
+    /// couch-testing. Flipping it triggers an immediate refresh.
+    @Published var useMock: Bool = false {
+        didSet { Task { await refreshNow() } }
+    }
+
     /// Search radius around the user, in km. OpenSky's anonymous tier
     /// caps bbox area; 50 km here is conservatively inside that limit
     /// at any latitude we care about.
@@ -47,8 +53,12 @@ final class ADSBManager: ObservableObject {
     /// little headroom.
     var pollInterval: TimeInterval = 12
 
-    private let client = OpenSkyClient()
+    private let liveSource: ADSBSource = OpenSkyClient()
+    private let mockSource: ADSBSource = MockADSBSource()
+    private var source: ADSBSource { useMock ? mockSource : liveSource }
+
     private var pollTask: Task<Void, Never>?
+    private var locationProvider: (@MainActor () -> CLLocation?)?
 
     /// Start polling. The provider closure is called on each tick to
     /// fetch the latest user location — passing it as a closure (rather
@@ -56,11 +66,12 @@ final class ADSBManager: ObservableObject {
     /// classes loosely coupled.
     func start(locationProvider: @escaping @MainActor () -> CLLocation?) {
         guard pollTask == nil else { return }
+        self.locationProvider = locationProvider
 
         let interval = pollInterval
         pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                if let loc = locationProvider() {
+                if let loc = self?.locationProvider?() {
                     await self?.refresh(around: loc)
                     try? await Task.sleep(for: .seconds(interval))
                 } else {
@@ -75,6 +86,14 @@ final class ADSBManager: ObservableObject {
     func stop() {
         pollTask?.cancel()
         pollTask = nil
+    }
+
+    /// Force an immediate fetch using the current location, if any.
+    /// Used by the useMock toggle so flipping modes is instantaneous
+    /// rather than waiting for the next poll tick.
+    func refreshNow() async {
+        guard let loc = locationProvider?() else { return }
+        await refresh(around: loc)
     }
 
     /// Single fetch + annotate cycle. Errors are surfaced via lastError;
@@ -92,7 +111,7 @@ final class ADSBManager: ObservableObject {
         let dLon = radiusKm / (111.0 * cos(observerLat * .pi / 180))
 
         do {
-            let raw = try await client.aircraftInBbox(
+            let raw = try await source.aircraftInBbox(
                 lamin: observerLat - dLat,
                 lomin: observerLon - dLon,
                 lamax: observerLat + dLat,

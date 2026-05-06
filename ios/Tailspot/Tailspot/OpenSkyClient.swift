@@ -19,7 +19,7 @@
 
 import Foundation
 
-final class OpenSkyClient: Sendable {
+final class OpenSkyClient: ADSBSource, Sendable {
 
     private let base = URL(string: "https://opensky-network.org/api")!
     private let session = URLSession.shared

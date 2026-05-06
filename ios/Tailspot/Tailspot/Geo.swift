@@ -61,6 +61,28 @@ enum Geo {
         let dh = targetAltMeters - observerAltMeters
         return atan2(dh, groundDistanceMeters).degrees
     }
+
+    /// Inverse of `bearing`/`distance`: given a starting point, an
+    /// initial true-north bearing, and a ground distance, return the
+    /// destination point. Used by the mock ADS-B source to place fake
+    /// aircraft at known angular positions relative to the observer.
+    static func project(
+        fromLat lat: Double, lon: Double,
+        bearingDeg: Double,
+        distanceMeters: Double
+    ) -> (lat: Double, lon: Double) {
+        let δ = distanceMeters / earthRadiusMeters
+        let θ = bearingDeg.radians
+        let φ1 = lat.radians
+        let λ1 = lon.radians
+
+        let φ2 = asin(sin(φ1) * cos(δ) + cos(φ1) * sin(δ) * cos(θ))
+        let λ2 = λ1 + atan2(
+            sin(θ) * sin(δ) * cos(φ1),
+            cos(δ) - sin(φ1) * sin(φ2)
+        )
+        return (φ2.degrees, λ2.degrees)
+    }
 }
 
 // MARK: - Convenience

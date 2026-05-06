@@ -54,7 +54,7 @@ struct ContentView: View {
                 Text(formatLocation())
                 Text(formatHeading())
                 Text(formatAttitude())
-                Text(formatADSBStatus())
+                adsbStatusRow
                 if !cameraAuthorized {
                     Text("camera: not authorized")
                 }
@@ -172,6 +172,22 @@ struct ContentView: View {
             return String(format: "ADSB:    %d aircraft, %ds ago", adsb.observed.count, secs)
         }
         return "ADSB:    fetching…"
+    }
+
+    /// Tap-to-toggle row: shows the ADS-B status text plus a [LIVE] /
+    /// [MOCK] tag. Tapping anywhere on the row flips the source.
+    private var adsbStatusRow: some View {
+        HStack(spacing: 8) {
+            Text(formatADSBStatus())
+            Text(adsb.useMock ? "[MOCK]" : "[LIVE]")
+                .foregroundStyle(adsb.useMock ? .yellow : .green)
+                .bold()
+            Spacer()
+        }
+        .contentShape(.rect)        // make the whole row hit-testable
+        .onTapGesture {
+            adsb.useMock.toggle()
+        }
     }
 }
 

@@ -83,6 +83,14 @@ extension LocationManager: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        // kCLErrorDenied (code 1) fires during the permission-prompt flow
+        // BEFORE the user has answered. We already handle the answer via
+        // locationManagerDidChangeAuthorization, so logging this would
+        // just be noise.
+        let ns = error as NSError
+        if ns.domain == kCLErrorDomain && ns.code == CLError.denied.rawValue {
+            return
+        }
         print("LocationManager error: \(error.localizedDescription)")
     }
 }
