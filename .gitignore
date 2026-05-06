@@ -31,11 +31,12 @@ xcuserdata/
 Packages/
 Package.pins
 Package.resolved
-*.xcodeproj
-!*.xcodeproj/project.pbxproj
-!*.xcodeproj/xcshareddata/
-!*.xcworkspace/contents.xcworkspacedata
 .swiftpm/
+
+# Inside .xcodeproj: keep project.pbxproj and xcshareddata, drop user state.
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
 
 # CocoaPods
 Pods/
