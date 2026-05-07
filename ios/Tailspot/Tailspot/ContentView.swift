@@ -15,6 +15,7 @@ struct ContentView: View {
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
     @State private var cameraAuthorized = false
+    @State private var selectedAircraft: ObservedAircraft?
 
     var body: some View {
         ZStack {
@@ -25,10 +26,10 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
             }
 
-            // Per-aircraft AR labels: one over each plane that's currently
-            // inside the camera's view frustum. GeometryReader gives us the
-            // actual on-screen size; .position(_:) places each label at its
-            // projected pixel coordinate.
+            // Per-aircraft AR reticles: one over each plane currently inside
+            // the camera's view frustum. GeometryReader gives us the actual
+            // on-screen size; .position(_:) places each at its projected
+            // pixel. The reticle itself is tappable — opens the detail sheet.
             GeometryReader { geo in
                 ForEach(adsb.observed) { obs in
                     if let pos = obs.screenPosition(
@@ -36,12 +37,13 @@ struct ContentView: View {
                         cameraElevationDeg: motion.cameraElevationDeg,
                         in: geo.size
                     ) {
-                        aircraftLabel(obs).position(pos)
+                        aircraftReticle(obs)
+                            .position(pos)
+                            .onTapGesture { selectedAircraft = obs }
                     }
                 }
             }
             .ignoresSafeArea()
-            .allowsHitTesting(false)   // labels shouldn't eat taps from the readout / list
 
             VStack(spacing: 0) {
                 sensorReadout
@@ -59,29 +61,39 @@ struct ContentView: View {
             motion.start()
             adsb.start { location.cllocation }
         }
+        .sheet(item: $selectedAircraft) { obs in
+            AircraftDetailView(observed: obs)
+        }
     }
 
-    // MARK: - AR label
+    // MARK: - AR reticle
 
-    private func aircraftLabel(_ obs: ObservedAircraft) -> some View {
+    /// Reticle box + compact label below. Box is hollow so the actual
+    /// plane shows through the camera view inside it. Compound view is
+    /// tappable; tapping opens AircraftDetailView for this aircraft.
+    private func aircraftReticle(_ obs: ObservedAircraft) -> some View {
         let cs = obs.aircraft.callsign ?? obs.aircraft.icao24
         let fl = obs.aircraft.altitudeMeters / 30.48     // meters → flight level
         let dKm = obs.slantDistanceMeters / 1000
 
-        return VStack(spacing: 1) {
-            Image(systemName: "airplane")
-                .font(.title3)
-                .rotationEffect(.degrees((obs.aircraft.trackDeg ?? 0) - 90))
-            Text(cs)
-                .font(.caption2.monospaced().bold())
-            Text(String(format: "FL%03.0f  %.0fkm", fl, dKm))
-                .font(.system(size: 9, design: .monospaced))
+        return VStack(spacing: 4) {
+            Rectangle()
+                .stroke(Color.cyan, lineWidth: 1.5)
+                .frame(width: 50, height: 50)
+
+            VStack(spacing: 1) {
+                Text(cs)
+                    .font(.caption2.monospaced().bold())
+                Text(String(format: "FL%03.0f  %.0fkm", fl, dKm))
+                    .font(.system(size: 9, design: .monospaced))
+            }
+            .foregroundStyle(.white)
+            .shadow(color: .black, radius: 2)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.black.opacity(0.55), in: .rect(cornerRadius: 4))
         }
-        .foregroundStyle(.white)
-        .shadow(color: .black, radius: 2)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(.black.opacity(0.55), in: .rect(cornerRadius: 4))
+        .contentShape(.rect)   // make the gap between box and label hit-testable too
     }
 
     // MARK: - Top: sensor readout
