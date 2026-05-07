@@ -94,7 +94,11 @@ nonisolated final class MockADSBSource: ADSBSource, Sendable {
                 altitudeMeters: t.altitudeMeters,
                 velocityMps: t.velocityMps,
                 trackDeg: t.trackDeg,
-                onGround: false
+                onGround: false,
+                // Fresh-now timestamp so the manager's extrapolation is
+                // a no-op for mock data — keeps the mocks anchored at the
+                // bearings/distances declared in the templates.
+                positionTimestamp: Date()
             )
         }
     }

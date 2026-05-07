@@ -70,7 +70,8 @@ struct ADSBManagerTests {
         distanceMeters: Double,
         altitudeMeters: Double,
         icao: String,
-        onGround: Bool = false
+        onGround: Bool = false,
+        positionTimestamp: Date? = nil
     ) -> Aircraft {
         let (lat, lon) = Geo.project(
             fromLat: observerCoord.lat, lon: observerCoord.lon,
@@ -85,7 +86,8 @@ struct ADSBManagerTests {
             altitudeMeters: altitudeMeters,
             velocityMps: nil,
             trackDeg: nil,
-            onGround: onGround
+            onGround: onGround,
+            positionTimestamp: positionTimestamp
         )
     }
 
@@ -191,6 +193,68 @@ struct ADSBManagerTests {
     }
 
     // MARK: - Live/mock toggle integration
+
+    // MARK: - Forward-extrapolation
+
+    @Test func extrapolationMovesAircraftAlongTrack() {
+        // Aircraft at (37, 0), heading due east at 100 m/s, position 10s old.
+        let now = Date()
+        let aircraft = Aircraft(
+            icao24: "abc", callsign: "TEST", originCountry: "Test",
+            longitude: 0, latitude: 37,
+            altitudeMeters: 5_000,
+            velocityMps: 100, trackDeg: 90,    // due east
+            onGround: false,
+            positionTimestamp: now.addingTimeInterval(-10)
+        )
+
+        let pos = aircraft.extrapolatedPosition(at: now)
+
+        // 100 m/s × 10s = 1 km east. At lat 37, 1° lon ≈ 89 km, so
+        // 1 km ≈ 0.0113°. Latitude unchanged.
+        #expect(abs(pos.lat - 37) < 0.001)
+        #expect(pos.lon > 0.005)
+        #expect(pos.lon < 0.02)
+    }
+
+    @Test func extrapolationFallsBackWhenTimestampMissing() {
+        let aircraft = Self.aircraftAt(
+            bearing: 0, distanceMeters: 10_000, altitudeMeters: 5_000,
+            icao: "noTime"
+        )  // positionTimestamp defaults to nil
+        let pos = aircraft.extrapolatedPosition(at: Date())
+        #expect(pos.lat == aircraft.latitude)
+        #expect(pos.lon == aircraft.longitude)
+    }
+
+    @Test func extrapolationFallsBackWhenVelocityMissing() {
+        let aircraft = Aircraft(
+            icao24: "x", callsign: nil, originCountry: "T",
+            longitude: 0, latitude: 37,
+            altitudeMeters: 5_000,
+            velocityMps: nil, trackDeg: 90,
+            onGround: false,
+            positionTimestamp: Date().addingTimeInterval(-10)
+        )
+        let pos = aircraft.extrapolatedPosition(at: Date())
+        #expect(pos.lat == 37)
+        #expect(pos.lon == 0)
+    }
+
+    @Test func extrapolationFallsBackWhenAgeTooLarge() {
+        // 10 minutes old — well past the 120 s sanity cap.
+        let aircraft = Aircraft(
+            icao24: "x", callsign: nil, originCountry: "T",
+            longitude: 0, latitude: 37,
+            altitudeMeters: 5_000,
+            velocityMps: 250, trackDeg: 90,
+            onGround: false,
+            positionTimestamp: Date().addingTimeInterval(-600)
+        )
+        let pos = aircraft.extrapolatedPosition(at: Date())
+        #expect(pos.lat == 37)
+        #expect(pos.lon == 0)
+    }
 
     @Test func mockSourceIntegrationProducesFiveAircraft() async {
         // Default ADSBManager uses real OpenSkyClient + MockADSBSource.

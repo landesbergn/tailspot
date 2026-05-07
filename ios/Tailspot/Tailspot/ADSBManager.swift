@@ -158,16 +158,22 @@ final class ADSBManager: ObservableObject {
                 lomax: observerLon + dLon
             )
 
+            let now = Date()
             let annotated = raw
                 .filter { !$0.onGround }
                 .map { aircraft -> ObservedAircraft in
+                    // Extrapolate the aircraft's position forward to
+                    // "now" along its track — ADS-B reports can be
+                    // 5–15 s old, and that staleness shows up as labels
+                    // lagging behind real planes on screen.
+                    let pos = aircraft.extrapolatedPosition(at: now)
                     let ground = Geo.distance(
                         fromLat: observerLat, lon: observerLon,
-                        toLat: aircraft.latitude, lon: aircraft.longitude
+                        toLat: pos.lat, lon: pos.lon
                     )
                     let bearing = Geo.bearing(
                         fromLat: observerLat, lon: observerLon,
-                        toLat: aircraft.latitude, lon: aircraft.longitude
+                        toLat: pos.lat, lon: pos.lon
                     )
                     let elev = Geo.elevation(
                         observerAltMeters: observerAlt,

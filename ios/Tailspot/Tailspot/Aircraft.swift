@@ -36,8 +36,43 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     let velocityMps: Double?    // ground speed, m/s
     let trackDeg: Double?       // direction of travel, degrees true
     let onGround: Bool
+    /// When the network last received a position update for this aircraft.
+    /// Used by `extrapolatedPosition(at:)` to project the position forward
+    /// to "now" along the reported track. Nil if OpenSky didn't report it.
+    let positionTimestamp: Date?
 
     var id: String { icao24 }
+}
+
+extension Aircraft {
+    /// Project this aircraft's position forward to `now` using its reported
+    /// velocity and track. Returns the raw lat/lon if any required field is
+    /// missing, or if the extrapolation age is implausible.
+    ///
+    /// Why this exists: ADS-B positions can be 5–15 s old, and a typical
+    /// jet at 250 m/s drifts ~1.3 km per 10 s of staleness. At a 30 km
+    /// viewing distance that's several degrees of bearing error — visible
+    /// as labels lagging the actual plane on screen.
+    func extrapolatedPosition(at now: Date) -> (lat: Double, lon: Double) {
+        guard
+            let t = positionTimestamp,
+            let v = velocityMps, v > 0,
+            let track = trackDeg
+        else {
+            return (latitude, longitude)
+        }
+        let age = now.timeIntervalSince(t)
+        // Sanity-cap to avoid extrapolating from corrupt data; a "fresh"
+        // OpenSky response should never be more than a couple of minutes old.
+        guard age > 0, age < 120 else {
+            return (latitude, longitude)
+        }
+        return Geo.project(
+            fromLat: latitude, lon: longitude,
+            bearingDeg: track,
+            distanceMeters: v * age
+        )
+    }
 }
 
 // `nonisolated` applies to the whole extension — without it, the
@@ -61,8 +96,13 @@ nonisolated extension Aircraft: Decodable {
         // 2  origin_country
         self.originCountry = try c.decode(String.self)
 
-        // 3  time_position (Int?)        — we don't use it
-        _ = try c.decodeIfPresent(Int.self)
+        // 3  time_position (Int?, Unix seconds when network last received
+        //    a position update for this aircraft). Used for forward
+        //    extrapolation in ObservedAircraft annotation.
+        let timePosition = try c.decodeIfPresent(Int.self)
+        self.positionTimestamp = timePosition.map {
+            Date(timeIntervalSince1970: TimeInterval($0))
+        }
 
         // 4  last_contact (Int)          — we don't use it
         _ = try c.decode(Int.self)
