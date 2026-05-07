@@ -18,7 +18,7 @@
 
 import Foundation
 
-final class MockADSBSource: ADSBSource, Sendable {
+nonisolated final class MockADSBSource: ADSBSource, Sendable {
 
     /// One mock aircraft, expressed as its angular relationship to the
     /// observer rather than absolute lat/lon. Resolves to a real

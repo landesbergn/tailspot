@@ -13,7 +13,10 @@
 
 import Foundation
 
-enum Geo {
+// All Geo helpers are pure functions on numbers — explicitly nonisolated
+// so they can be called from any actor context (MainActor views, the
+// background URLSession callback, tests in nonisolated contexts).
+nonisolated enum Geo {
     /// Mean Earth radius in meters.
     static let earthRadiusMeters: Double = 6_371_000
 
@@ -87,7 +90,7 @@ enum Geo {
 
 // MARK: - Convenience
 
-private extension Double {
+nonisolated private extension Double {
     /// Degrees → radians.
     var radians: Double { self * .pi / 180 }
     /// Radians → degrees.

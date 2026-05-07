@@ -21,11 +21,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build and run
 
-The iOS app is built and run from Xcode (`⌘R` on Noah's machine). Claude does not run builds; Noah does. There are no scripts and no CI.
+The iOS app is built and run from Xcode (`⌘R` on Noah's machine) on a physical iPhone. Claude does not run device builds; Noah does. There are no scripts and no CI.
 
-For a code-only sanity check that things compile, `xcodebuild -project ios/Tailspot/Tailspot.xcodeproj -scheme Tailspot -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO` is plausible but has not been used in this repo — prefer asking Noah to ⌘R and report any errors.
+The iOS Simulator cannot provide real GPS, compass, or camera, so a physical device is required for runtime testing of this app.
 
-The iOS Simulator cannot provide real GPS, compass, or camera, so a physical device is required for any meaningful testing of this app.
+## Tests
+
+Unit tests live in `ios/Tailspot/TailspotTests/` and use Swift Testing (`@Test`, `#expect`, `@Suite`) — not XCTest. UI tests in `TailspotUITests/` exist as Xcode template scaffolding but are slow (~3 min on cold sim) and not part of the regular workflow.
+
+**Claude runs the unit tests after substantive code changes** with:
+```
+xcodebuild test \
+  -project ios/Tailspot/Tailspot.xcodeproj \
+  -scheme Tailspot \
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+  -only-testing:TailspotTests
+```
+First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, or anything they depend on).
+
+The current suite covers `Geo` (math), `Aircraft` decoding (incl. FailableDecodable's lossy behavior), and `ADSBManager` orchestration via an injected `FixedSource` fixture. ADSBManager has a default-init signature `init(liveSource: ADSBSource = OpenSkyClient(), mockSource: ADSBSource = MockADSBSource())` so production uses real sources but tests can substitute fixtures.
+
+## MainActor default isolation
+
+The Xcode 26 app template sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`. Every type, extension, and global is implicitly `@MainActor` unless explicitly marked otherwise. This is new in Xcode 26 and affects every file we add.
+
+Convention in this repo:
+
+- **UI / state-holding types stay MainActor.** `LocationManager`, `MotionManager`, `ADSBManager`, SwiftUI views — all rely on @Published mutations being main-thread-safe by construction.
+- **Pure data, geometry, and Sendable cross-actor types are explicitly `nonisolated`.** `Aircraft`, `FailableDecodable`, the `ADSBSource` protocol, `OpenSkyClient`, `MockADSBSource`, `Geo` and its private number-extension all carry `nonisolated`.
+- **Extensions get their own isolation.** `nonisolated struct Aircraft` does NOT propagate to `extension Aircraft: Decodable {}` — that extension also needs `nonisolated extension Aircraft: Decodable`. Same for any other extensions on nonisolated types.
+
+If you see a warning like *"main actor-isolated conformance of X to Y cannot be used in nonisolated context"* — the fix is almost always `nonisolated` on the extension.
 
 ## Repository layout
 

@@ -53,12 +53,24 @@ final class ADSBManager: ObservableObject {
     /// little headroom.
     var pollInterval: TimeInterval = 12
 
-    private let liveSource: ADSBSource = OpenSkyClient()
-    private let mockSource: ADSBSource = MockADSBSource()
+    private let liveSource: ADSBSource
+    private let mockSource: ADSBSource
     private var source: ADSBSource { useMock ? mockSource : liveSource }
 
     private var pollTask: Task<Void, Never>?
     private var locationProvider: (@MainActor () -> CLLocation?)?
+
+    /// Default init keeps the production behavior unchanged. The
+    /// parameters exist so tests can inject a fixture source — without
+    /// them, every method on this class would have to be tested against
+    /// the real OpenSky network, which is slow and flaky.
+    init(
+        liveSource: ADSBSource = OpenSkyClient(),
+        mockSource: ADSBSource = MockADSBSource()
+    ) {
+        self.liveSource = liveSource
+        self.mockSource = mockSource
+    }
 
     /// Start polling. The provider closure is called on each tick to
     /// fetch the latest user location — passing it as a closure (rather

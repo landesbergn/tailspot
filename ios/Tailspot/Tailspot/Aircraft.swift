@@ -20,7 +20,13 @@
 
 import Foundation
 
-struct Aircraft: Identifiable, Equatable, Sendable {
+// Xcode 26 sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` for new app
+// projects, which makes every type implicitly MainActor. Aircraft is a
+// pure value type that needs to flow across actor boundaries (decoded
+// off the network thread, displayed from a view on main, etc.) — mark
+// it `nonisolated` so its `Decodable` conformance and stored properties
+// are usable from anywhere.
+nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     let icao24: String          // 24-bit ICAO transponder address (lowercase hex)
     let callsign: String?       // trimmed flight callsign, may be nil
     let originCountry: String   // country of registration
@@ -34,7 +40,12 @@ struct Aircraft: Identifiable, Equatable, Sendable {
     var id: String { icao24 }
 }
 
-extension Aircraft: Decodable {
+// `nonisolated` applies to the whole extension — without it, the
+// project's MainActor default isolation makes the Decodable conformance
+// MainActor-isolated, which breaks tests that decode in nonisolated
+// context. The init's `nonisolated` alone isn't enough; the *conformance*
+// itself has to be nonisolated.
+nonisolated extension Aircraft: Decodable {
     init(from decoder: Decoder) throws {
         var c = try decoder.unkeyedContainer()
 
@@ -100,7 +111,7 @@ extension Aircraft: Decodable {
 /// Wraps a Decodable so per-element errors don't kill the whole batch.
 /// JSONDecoder will assign `value = nil` for any element whose inner
 /// init(from:) throws.
-struct FailableDecodable<T: Decodable>: Decodable {
+nonisolated struct FailableDecodable<T: Decodable>: Decodable {
     let value: T?
 
     init(from decoder: Decoder) throws {
@@ -110,6 +121,6 @@ struct FailableDecodable<T: Decodable>: Decodable {
 
 // MARK: - Convenience
 
-private extension String {
+nonisolated private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }

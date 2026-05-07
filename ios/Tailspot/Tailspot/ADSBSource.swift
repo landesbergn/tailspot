@@ -16,7 +16,11 @@
 
 import Foundation
 
-protocol ADSBSource: Sendable {
+// Marked `nonisolated` so conformers (and their methods) are usable
+// from any actor — without this, the project's MainActor default
+// isolation would force conformers to MainActor too, defeating the
+// whole point of having an injectable source.
+nonisolated protocol ADSBSource: Sendable {
     func aircraftInBbox(
         lamin: Double, lomin: Double, lamax: Double, lomax: Double
     ) async throws -> [Aircraft]
