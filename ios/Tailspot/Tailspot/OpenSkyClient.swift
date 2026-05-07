@@ -29,8 +29,13 @@ import os.lock
 nonisolated final class OpenSkyClient: ADSBSource, Sendable {
 
     private let base = URL(string: "https://opensky-network.org/api")!
+    // OpenSky's Keycloak uses the older `/auth/realms/...` path. Modern
+    // Keycloak (post-version 17) drops the `/auth` prefix, but OpenSky
+    // is still on the older release as of this writing — verified
+    // empirically: `/auth/realms/...` returns 401 to an unauthenticated
+    // POST, `/realms/...` returns 404.
     private let tokenURL = URL(string:
-        "https://auth.opensky-network.org/realms/opensky-network/protocol/openid-connect/token"
+        "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
     )!
     private let session = URLSession.shared
 

@@ -38,6 +38,14 @@ Package.resolved
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcworkspace/xcuserdata/
 
+# Don't commit Xcode shared schemes — Xcode's "Edit Scheme..." dialog
+# saves environment variables (including credentials like
+# OPENSKY_CLIENT_SECRET) into the SHARED scheme by default. We had a
+# secret-leak incident from this once. Schemes still work fine without
+# being shared — Xcode auto-creates a user-scheme on first open.
+*.xcodeproj/xcshareddata/xcschemes/
+*.xcworkspace/xcshareddata/xcschemes/
+
 # CocoaPods
 Pods/
 
