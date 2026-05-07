@@ -29,6 +29,10 @@ final class LocationManager: NSObject, ObservableObject {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
+        // Pin heading reference to portrait. Without this, iOS uses the
+        // current UI orientation, so a brief device rotation gives back
+        // heading values relative to a different axis — rare but baffling.
+        manager.headingOrientation = .portrait
         authorizationStatus = manager.authorizationStatus
     }
 

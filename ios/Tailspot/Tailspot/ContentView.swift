@@ -25,6 +25,24 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
             }
 
+            // Per-aircraft AR labels: one over each plane that's currently
+            // inside the camera's view frustum. GeometryReader gives us the
+            // actual on-screen size; .position(_:) places each label at its
+            // projected pixel coordinate.
+            GeometryReader { geo in
+                ForEach(adsb.observed) { obs in
+                    if let pos = obs.screenPosition(
+                        phoneHeadingDeg: location.heading ?? 0,
+                        phonePitchDeg: motion.pitch * 180 / .pi,
+                        in: geo.size
+                    ) {
+                        aircraftLabel(obs).position(pos)
+                    }
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)   // labels shouldn't eat taps from the readout / list
+
             VStack(spacing: 0) {
                 sensorReadout
                     .padding()
@@ -41,6 +59,29 @@ struct ContentView: View {
             motion.start()
             adsb.start { location.cllocation }
         }
+    }
+
+    // MARK: - AR label
+
+    private func aircraftLabel(_ obs: ObservedAircraft) -> some View {
+        let cs = obs.aircraft.callsign ?? obs.aircraft.icao24
+        let fl = obs.aircraft.altitudeMeters / 30.48     // meters → flight level
+        let dKm = obs.slantDistanceMeters / 1000
+
+        return VStack(spacing: 1) {
+            Image(systemName: "airplane")
+                .font(.title3)
+                .rotationEffect(.degrees((obs.aircraft.trackDeg ?? 0) - 90))
+            Text(cs)
+                .font(.caption2.monospaced().bold())
+            Text(String(format: "FL%03.0f  %.0fkm", fl, dKm))
+                .font(.system(size: 9, design: .monospaced))
+        }
+        .foregroundStyle(.white)
+        .shadow(color: .black, radius: 2)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(.black.opacity(0.55), in: .rect(cornerRadius: 4))
     }
 
     // MARK: - Top: sensor readout

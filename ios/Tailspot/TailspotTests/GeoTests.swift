@@ -11,6 +11,7 @@
 //
 
 import Testing
+import CoreGraphics
 @testable import Tailspot
 
 @Suite("Geo")
@@ -138,6 +139,86 @@ struct GeoTests {
                 toLat: lat, lon: lon
             )
             #expect(abs(measured - bearing) < 0.1)
+        }
+    }
+
+    // MARK: screenPosition
+
+    private static let screen = CGSize(width: 400, height: 800)
+    private static let hfov: Double = 56
+    private static let vfov: Double = 72
+
+    @Test func projectionTargetStraightAheadIsAtCenter() {
+        let pos = Geo.screenPosition(
+            targetBearingDeg: 90, targetElevationDeg: 30,
+            phoneHeadingDeg: 90,  phonePitchDeg: 30,
+            screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
+        )
+        if let pos {
+            #expect(abs(pos.x - 200) < 0.001)
+            #expect(abs(pos.y - 400) < 0.001)
+        } else {
+            Issue.record("Expected non-nil position for centered target")
+        }
+    }
+
+    @Test func projectionWayOutOfFovReturnsNil() {
+        // 90° to the right of the camera's pointing direction; FOV is 56°.
+        let pos = Geo.screenPosition(
+            targetBearingDeg: 180, targetElevationDeg: 0,
+            phoneHeadingDeg: 90,   phonePitchDeg: 0,
+            screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
+        )
+        #expect(pos == nil)
+    }
+
+    /// 0/360° wraparound — heading high, target low.
+    /// Naive (bearing - heading) gives -340°; correct delta is +20°.
+    @Test func projectionWraparoundFromHighHeading() {
+        let pos = Geo.screenPosition(
+            targetBearingDeg: 10, targetElevationDeg: 0,
+            phoneHeadingDeg: 350, phonePitchDeg: 0,
+            screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
+        )
+        if let pos {
+            // dB = +20° ⇒ right of center, well inside the right half-screen.
+            #expect(pos.x > 200)
+            #expect(pos.x < 400)
+        } else {
+            Issue.record("+20° delta should land on screen, not be filtered as off-FOV")
+        }
+    }
+
+    /// 0/360° wraparound — heading low, target high.
+    /// Naive (bearing - heading) gives +340°; correct delta is -20°.
+    @Test func projectionWraparoundFromLowHeading() {
+        let pos = Geo.screenPosition(
+            targetBearingDeg: 350, targetElevationDeg: 0,
+            phoneHeadingDeg: 10,   phonePitchDeg: 0,
+            screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
+        )
+        if let pos {
+            // dB = -20° ⇒ left of center.
+            #expect(pos.x < 200)
+            #expect(pos.x > 0)
+        } else {
+            Issue.record("-20° delta should land on screen, not be filtered as off-FOV")
+        }
+    }
+
+    @Test func projectionElevationAboveCameraRendersAboveCenter() {
+        // Phone aimed at horizon, target 20° up.
+        let pos = Geo.screenPosition(
+            targetBearingDeg: 0, targetElevationDeg: 20,
+            phoneHeadingDeg: 0,  phonePitchDeg: 0,
+            screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
+        )
+        if let pos {
+            #expect(abs(pos.x - 200) < 0.001)  // perfectly aligned in bearing
+            #expect(pos.y < 400)               // above center (lower Y on screen)
+            #expect(pos.y > 0)
+        } else {
+            Issue.record("20° elevation delta should be on screen for vfov=72°")
         }
     }
 }

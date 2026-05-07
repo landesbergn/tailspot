@@ -31,6 +31,31 @@ struct ObservedAircraft: Identifiable, Sendable {
     var id: String { aircraft.icao24 }
 }
 
+extension ObservedAircraft {
+    /// Project this aircraft into screen coordinates given the phone's
+    /// current pose and the camera's FOV. Returns nil if off-screen.
+    /// Default FOV values are estimates for the iPhone main wide camera
+    /// in portrait orientation; refine when we query AVCaptureDevice for
+    /// the real values.
+    func screenPosition(
+        phoneHeadingDeg: Double,
+        phonePitchDeg: Double,
+        in screenSize: CGSize,
+        hfovDeg: Double = 56,
+        vfovDeg: Double = 72
+    ) -> CGPoint? {
+        Geo.screenPosition(
+            targetBearingDeg: bearingDeg,
+            targetElevationDeg: elevationDeg,
+            phoneHeadingDeg: phoneHeadingDeg,
+            phonePitchDeg: phonePitchDeg,
+            screenSize: screenSize,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
+        )
+    }
+}
+
 @MainActor
 final class ADSBManager: ObservableObject {
 

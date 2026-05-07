@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import CoreGraphics
 
 // All Geo helpers are pure functions on numbers — explicitly nonisolated
 // so they can be called from any actor context (MainActor views, the
@@ -63,6 +64,55 @@ nonisolated enum Geo {
         guard groundDistanceMeters > 0 else { return 0 }
         let dh = targetAltMeters - observerAltMeters
         return atan2(dh, groundDistanceMeters).degrees
+    }
+
+    /// Project an angular world-space target (bearing/elevation) into
+    /// 2D screen coordinates given the phone's current pose and the
+    /// camera's FOV. Returns nil if the target is outside the camera's
+    /// view frustum.
+    ///
+    /// Uses tan-based rectilinear projection — accurate for FOV < ~90°,
+    /// which matches every iPhone main wide camera.
+    ///
+    /// LIMITATION: assumes the device is held with roll ≈ 0 (upright).
+    /// At non-trivial roll the camera direction isn't simply (heading,
+    /// pitch) and this function will misplace labels by an angle
+    /// proportional to the roll. Also fails near pitch=±90° (gimbal
+    /// lock when looking straight up). Both are deferred to Phase 0
+    /// main, where ARKit will hand us the camera transform directly.
+    static func screenPosition(
+        targetBearingDeg: Double,
+        targetElevationDeg: Double,
+        phoneHeadingDeg: Double,
+        phonePitchDeg: Double,
+        screenSize: CGSize,
+        hfovDeg: Double,
+        vfovDeg: Double
+    ) -> CGPoint? {
+        // Wrap dBearing to [-180, 180] so heading=350°/bearing=10° gives
+        // +20° (the small one), not -340°. This is the math that would
+        // silently mis-place labels across north if we got it wrong.
+        var dB = targetBearingDeg - phoneHeadingDeg
+        while dB > 180 { dB -= 360 }
+        while dB < -180 { dB += 360 }
+        let dE = targetElevationDeg - phonePitchDeg
+
+        // Strict off-screen test (no margin). Off-frame planes already
+        // surface in the bottom list — we don't need to extrapolate
+        // them past the screen edge here.
+        if abs(dB) > hfovDeg / 2 || abs(dE) > vfovDeg / 2 {
+            return nil
+        }
+
+        // Tan-based rectilinear: tan(θ) / tan(fov/2) maps to a relative
+        // screen position in [-1, 1] across the frame.
+        let xRel = tan(dB.radians) / tan((hfovDeg / 2).radians)
+        let yRel = tan(dE.radians) / tan((vfovDeg / 2).radians)
+
+        return CGPoint(
+            x: screenSize.width  / 2 + xRel * screenSize.width  / 2,
+            y: screenSize.height / 2 - yRel * screenSize.height / 2  // Y flipped (screen origin top-left)
+        )
     }
 
     /// Inverse of `bearing`/`distance`: given a starting point, an
