@@ -37,9 +37,12 @@ extension ObservedAircraft {
     /// Default FOV values are estimates for the iPhone main wide camera
     /// in portrait orientation; refine when we query AVCaptureDevice for
     /// the real values.
+    ///
+    /// `cameraElevationDeg` is the angle above the horizon the camera
+    /// is pointing (use MotionManager.cameraElevationDeg, NOT raw pitch).
     func screenPosition(
         phoneHeadingDeg: Double,
-        phonePitchDeg: Double,
+        cameraElevationDeg: Double,
         in screenSize: CGSize,
         hfovDeg: Double = 56,
         vfovDeg: Double = 72
@@ -48,7 +51,7 @@ extension ObservedAircraft {
             targetBearingDeg: bearingDeg,
             targetElevationDeg: elevationDeg,
             phoneHeadingDeg: phoneHeadingDeg,
-            phonePitchDeg: phonePitchDeg,
+            cameraElevationDeg: cameraElevationDeg,
             screenSize: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg

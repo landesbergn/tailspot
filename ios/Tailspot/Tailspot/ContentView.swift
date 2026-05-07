@@ -33,7 +33,7 @@ struct ContentView: View {
                 ForEach(adsb.observed) { obs in
                     if let pos = obs.screenPosition(
                         phoneHeadingDeg: location.heading ?? 0,
-                        phonePitchDeg: motion.pitch * 180 / .pi,
+                        cameraElevationDeg: motion.cameraElevationDeg,
                         in: geo.size
                     ) {
                         aircraftLabel(obs).position(pos)
@@ -204,7 +204,9 @@ struct ContentView: View {
     private func formatAttitude() -> String {
         let pitchDeg = motion.pitch * 180 / .pi
         let rollDeg = motion.roll * 180 / .pi
-        return String(format: "Tilt:    pitch %5.1f°  roll %5.1f°", pitchDeg, rollDeg)
+        let camElDeg = motion.cameraElevationDeg
+        return String(format: "Tilt:    pitch %5.1f°  cam-el %+5.1f°  roll %5.1f°",
+                      pitchDeg, camElDeg, rollDeg)
     }
 
     private func formatADSBStatus() -> String {

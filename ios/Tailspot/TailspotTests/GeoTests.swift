@@ -151,7 +151,7 @@ struct GeoTests {
     @Test func projectionTargetStraightAheadIsAtCenter() {
         let pos = Geo.screenPosition(
             targetBearingDeg: 90, targetElevationDeg: 30,
-            phoneHeadingDeg: 90,  phonePitchDeg: 30,
+            phoneHeadingDeg: 90,  cameraElevationDeg: 30,
             screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
         )
         if let pos {
@@ -166,7 +166,7 @@ struct GeoTests {
         // 90° to the right of the camera's pointing direction; FOV is 56°.
         let pos = Geo.screenPosition(
             targetBearingDeg: 180, targetElevationDeg: 0,
-            phoneHeadingDeg: 90,   phonePitchDeg: 0,
+            phoneHeadingDeg: 90,   cameraElevationDeg: 0,
             screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
         )
         #expect(pos == nil)
@@ -177,7 +177,7 @@ struct GeoTests {
     @Test func projectionWraparoundFromHighHeading() {
         let pos = Geo.screenPosition(
             targetBearingDeg: 10, targetElevationDeg: 0,
-            phoneHeadingDeg: 350, phonePitchDeg: 0,
+            phoneHeadingDeg: 350, cameraElevationDeg: 0,
             screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
         )
         if let pos {
@@ -194,7 +194,7 @@ struct GeoTests {
     @Test func projectionWraparoundFromLowHeading() {
         let pos = Geo.screenPosition(
             targetBearingDeg: 350, targetElevationDeg: 0,
-            phoneHeadingDeg: 10,   phonePitchDeg: 0,
+            phoneHeadingDeg: 10,   cameraElevationDeg: 0,
             screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
         )
         if let pos {
@@ -210,7 +210,7 @@ struct GeoTests {
         // Phone aimed at horizon, target 20° up.
         let pos = Geo.screenPosition(
             targetBearingDeg: 0, targetElevationDeg: 20,
-            phoneHeadingDeg: 0,  phonePitchDeg: 0,
+            phoneHeadingDeg: 0,  cameraElevationDeg: 0,
             screenSize: Self.screen, hfovDeg: Self.hfov, vfovDeg: Self.vfov
         )
         if let pos {

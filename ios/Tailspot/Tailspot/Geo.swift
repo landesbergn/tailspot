@@ -71,20 +71,24 @@ nonisolated enum Geo {
     /// camera's FOV. Returns nil if the target is outside the camera's
     /// view frustum.
     ///
+    /// `cameraElevationDeg` is the angle the camera is pointing above
+    /// the horizon — NOT raw CMAttitude.pitch (those differ by 90°
+    /// when the phone is held in portrait; see MotionManager.cameraElevationDeg).
+    ///
     /// Uses tan-based rectilinear projection — accurate for FOV < ~90°,
     /// which matches every iPhone main wide camera.
     ///
     /// LIMITATION: assumes the device is held with roll ≈ 0 (upright).
     /// At non-trivial roll the camera direction isn't simply (heading,
-    /// pitch) and this function will misplace labels by an angle
-    /// proportional to the roll. Also fails near pitch=±90° (gimbal
+    /// elevation) and this function will misplace labels by an angle
+    /// proportional to the roll. Also fails near elevation=±90° (gimbal
     /// lock when looking straight up). Both are deferred to Phase 0
     /// main, where ARKit will hand us the camera transform directly.
     static func screenPosition(
         targetBearingDeg: Double,
         targetElevationDeg: Double,
         phoneHeadingDeg: Double,
-        phonePitchDeg: Double,
+        cameraElevationDeg: Double,
         screenSize: CGSize,
         hfovDeg: Double,
         vfovDeg: Double
@@ -95,7 +99,7 @@ nonisolated enum Geo {
         var dB = targetBearingDeg - phoneHeadingDeg
         while dB > 180 { dB -= 360 }
         while dB < -180 { dB += 360 }
-        let dE = targetElevationDeg - phonePitchDeg
+        let dE = targetElevationDeg - cameraElevationDeg
 
         // Strict off-screen test (no margin). Off-frame planes already
         // surface in the bottom list — we don't need to extrapolate

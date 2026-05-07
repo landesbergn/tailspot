@@ -51,4 +51,18 @@ final class MotionManager: ObservableObject {
     func stop() {
         manager.stopDeviceMotionUpdates()
     }
+
+    /// Camera elevation above the horizon, in degrees, derived from
+    /// CMAttitude.pitch.
+    ///
+    /// In the `.xArbitraryZVertical` reference frame:
+    ///   pitch =   0  → phone flat on its back  → camera pointing straight up (elevation +90°)
+    ///   pitch = +π/2 → phone upright (portrait) → camera pointing at horizon  (elevation 0°)
+    /// Hence the complement: cameraElevation = π/2 − pitch.
+    ///
+    /// Assumes the device is in roughly portrait orientation. At
+    /// significant roll (phone tilted sideways) or near pitch ≈ ±π/2
+    /// (gimbal lock), this single-axis derivation breaks down — Phase 0
+    /// main will replace it with a 3D rotation-matrix approach.
+    var cameraElevationDeg: Double { 90 - pitch * 180 / .pi }
 }
