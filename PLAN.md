@@ -10,6 +10,20 @@ This document covers the architectural decisions, phased roadmap, testing strate
 
 These are the four calls that shape everything else. Worth getting right before code.
 
+### 1.1a Visual confirmation — deferred but planned
+
+The original §1.1 call was: identification is geometric, not visual. That call holds — for *which plane is which*, geometry is the right answer.
+
+But for *where to draw the AR reticle on screen*, Noah wants visual confirmation: the reticle should sit on the actual plane in the camera frame, not just at the geometrically-predicted position. Compass error (±5–15° on iPhone) means the predicted position can be visibly off from the real plane. This is real and worth fixing.
+
+Plan when we tackle it (Phase 0 main, after the replay harness lands):
+
+- Add a Vision-framework `VNCoreMLRequest` running at ~10 fps on the camera buffer, using a model with the COCO `airplane` class (YOLOv8n is the obvious starting point).
+- For each ADS-B plane currently inside the predicted FOV, look for a detected airplane near its predicted position. If found, lock the reticle to the **visual** position. If not, fall back to drawing the reticle at the **predicted** position with a faint / lower-confidence visual treatment (so e.g. on cloudy days you still see "the plane is supposed to be here").
+- Detection range limit is real: a 737 at 30 km cruise is ~0.5 px on a 400-px portrait viewport — undetectable by any general object detector. Visual confirmation effectively works for **close** planes (regional approaches, helicopters, small craft within ~10–15 km). Cruise traffic stays predicted-only.
+
+Not started; tracked here so it's not lost.
+
 ### 1.1 Identification is geometric, not visual
 
 The "AR plane recognition" framing is misleading. ARKit and CoreML cannot reliably distinguish a 737-800 from a 737-700 through a phone camera at typical spotting distances (3–10 km, often 9+ km up). Object detection on a 20-pixel silhouette in a hazy sky is a research problem, not a v1 feature.

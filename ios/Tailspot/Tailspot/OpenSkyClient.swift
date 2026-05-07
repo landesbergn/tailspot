@@ -24,14 +24,42 @@ nonisolated final class OpenSkyClient: ADSBSource, Sendable {
     private let base = URL(string: "https://opensky-network.org/api")!
     private let session = URLSession.shared
 
+    /// Optional HTTP basic-auth credentials. If set, requests carry the
+    /// Authorization header and OpenSky's registered-user quota applies
+    /// (4000 credits/day vs 400 anonymous). To set: in Xcode →
+    /// Product → Scheme → Edit Scheme → Run → Arguments → Environment
+    /// Variables, add OPENSKY_USERNAME and OPENSKY_PASSWORD. Scheme env
+    /// vars live under xcuserdata/ which is gitignored, so credentials
+    /// don't get committed.
+    private let credentials: (username: String, password: String)?
+
+    init(credentials: (username: String, password: String)? = nil) {
+        // Default: pick up credentials from the process environment so
+        // configured developers automatically use the registered tier
+        // without code changes.
+        if let creds = credentials {
+            self.credentials = creds
+        } else {
+            let env = ProcessInfo.processInfo.environment
+            if let u = env["OPENSKY_USERNAME"], !u.isEmpty,
+               let p = env["OPENSKY_PASSWORD"], !p.isEmpty {
+                self.credentials = (u, p)
+            } else {
+                self.credentials = nil
+            }
+        }
+    }
+
     enum ClientError: Error, LocalizedError {
         case badURL
+        case rateLimited     // HTTP 429 — daily quota exhausted, back off
         case http(status: Int)
         case decoding(Error)
 
         var errorDescription: String? {
             switch self {
             case .badURL:                  return "Bad URL"
+            case .rateLimited:             return "OpenSky rate limit (HTTP 429) — daily quota exhausted"
             case .http(let s):             return "HTTP \(s)"
             case .decoding(let inner):     return "Decoding: \(inner.localizedDescription)"
             }
@@ -60,10 +88,23 @@ nonisolated final class OpenSkyClient: ADSBSource, Sendable {
         var request = URLRequest(url: url)
         request.timeoutInterval = 8.0
 
+        // Add HTTP basic auth header when credentials are configured.
+        if let credentials {
+            let raw = "\(credentials.username):\(credentials.password)"
+            if let encoded = raw.data(using: .utf8)?.base64EncodedString() {
+                request.setValue("Basic \(encoded)", forHTTPHeaderField: "Authorization")
+            }
+        }
+
         let (data, response) = try await session.data(for: request)
 
-        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-            throw ClientError.http(status: http.statusCode)
+        if let http = response as? HTTPURLResponse {
+            if http.statusCode == 429 {
+                throw ClientError.rateLimited
+            }
+            if http.statusCode != 200 {
+                throw ClientError.http(status: http.statusCode)
+            }
         }
 
         do {

@@ -152,6 +152,19 @@ struct ADSBManagerTests {
 
     // MARK: - Error handling
 
+    @Test func rateLimitedErrorIsSurfacedAsBackoffMessage() async {
+        // OpenSkyClient.ClientError.rateLimited is the typed signal that
+        // ADSBManager catches specifically to apply backoff. Verify the
+        // user-facing lastError message reflects the backoff state.
+        let source = FixedSource([], error: OpenSkyClient.ClientError.rateLimited)
+        let manager = ADSBManager(liveSource: source, mockSource: source)
+
+        await manager.refresh(around: Self.observer())
+
+        let msg = manager.lastError ?? ""
+        #expect(msg.localizedCaseInsensitiveContains("rate limit"))
+    }
+
     @Test func sourceErrorsLandInLastErrorWithoutCrashing() async {
         let source = FixedSource([], error: TestError())
         let manager = ADSBManager(liveSource: source, mockSource: source)

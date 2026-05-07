@@ -141,9 +141,7 @@ struct ContentView: View {
                         aircraftRow(obs)
                     }
                     if adsb.observed.isEmpty {
-                        Text(adsb.lastFetched == nil
-                             ? "Waiting for first fetch…"
-                             : "No aircraft in range.")
+                        Text(emptyListMessage)
                             .font(.caption.monospaced())
                             .foregroundStyle(.white.opacity(0.7))
                             .padding(.horizontal, 12)
@@ -219,6 +217,16 @@ struct ContentView: View {
         let camElDeg = motion.cameraElevationDeg
         return String(format: "Tilt:    pitch %5.1f°  cam-el %+5.1f°  roll %5.1f°",
                       pitchDeg, camElDeg, rollDeg)
+    }
+
+    /// Empty-state message for the bottom list. Surfaces the actual
+    /// reason — error, no fix yet, or just no traffic — instead of the
+    /// blanket "Waiting for first fetch…" which used to stick around
+    /// even after a failure.
+    private var emptyListMessage: String {
+        if let err = adsb.lastError { return err }
+        if adsb.lastFetched == nil  { return "Waiting for first fetch…" }
+        return "No aircraft in range."
     }
 
     private func formatADSBStatus() -> String {

@@ -77,9 +77,18 @@ final class ADSBManager: ObservableObject {
     /// at any latitude we care about.
     var radiusKm: Double = 50
 
-    /// Polling interval. OpenSky anonymous minimum is 10s; we leave a
-    /// little headroom.
-    var pollInterval: TimeInterval = 12
+    /// Base polling interval. OpenSky anonymous minimum is 10s, daily
+    /// quota is 400 credits (~400 queries) — at 12s polling we burn
+    /// through that in 1.3 hr. 20s is more sustainable for casual
+    /// testing on the anonymous tier; registered users (with credentials
+    /// in env) get 10× the daily budget and could go faster if needed.
+    var pollInterval: TimeInterval = 20
+
+    /// When the last fetch returned HTTP 429, we exponentially back off
+    /// up to this cap before trying again. Resets to `pollInterval` on
+    /// the next successful fetch.
+    private let maxBackoffInterval: TimeInterval = 120
+    private var currentInterval: TimeInterval = 20
 
     private let liveSource: ADSBSource
     private let mockSource: ADSBSource
@@ -107,13 +116,14 @@ final class ADSBManager: ObservableObject {
     func start(locationProvider: @escaping @MainActor () -> CLLocation?) {
         guard pollTask == nil else { return }
         self.locationProvider = locationProvider
+        self.currentInterval = pollInterval
 
-        let interval = pollInterval
         pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 if let loc = self?.locationProvider?() {
                     await self?.refresh(around: loc)
-                    try? await Task.sleep(for: .seconds(interval))
+                    let waitSeconds = self?.currentInterval ?? 20
+                    try? await Task.sleep(for: .seconds(waitSeconds))
                 } else {
                     // Location not yet available — short retry so we
                     // fetch as soon as the first GPS fix arrives.
@@ -196,6 +206,13 @@ final class ADSBManager: ObservableObject {
             self.observed = annotated
             self.lastError = nil
             self.lastFetched = Date()
+            // Successful fetch — snap polling back to the base interval.
+            self.currentInterval = pollInterval
+        } catch OpenSkyClient.ClientError.rateLimited {
+            // 429: over the daily quota or per-IP limit. Back off
+            // exponentially so we stop hammering OpenSky.
+            self.lastError = "Rate limit hit — backing off (next try in \(Int(min(currentInterval * 2, maxBackoffInterval)))s)"
+            self.currentInterval = min(currentInterval * 2, maxBackoffInterval)
         } catch {
             self.lastError = error.localizedDescription
         }
