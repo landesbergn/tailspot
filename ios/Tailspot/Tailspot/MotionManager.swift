@@ -14,6 +14,7 @@
 import Foundation
 import Combine
 import CoreMotion
+import os
 
 final class MotionManager: ObservableObject {
     private let manager = CMMotionManager()
@@ -31,7 +32,7 @@ final class MotionManager: ObservableObject {
 
     func start() {
         guard manager.isDeviceMotionAvailable else {
-            print("Device motion not available on this device")
+            Log.motion.notice("Device motion not available on this device")
             return
         }
         manager.deviceMotionUpdateInterval = 1.0 / 30.0  // 30 Hz is plenty for UI

@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import CoreLocation
+import os
 
 final class LocationManager: NSObject, ObservableObject {
     private let manager = CLLocationManager()
@@ -95,6 +96,6 @@ extension LocationManager: CLLocationManagerDelegate {
         if ns.domain == kCLErrorDomain && ns.code == CLError.denied.rawValue {
             return
         }
-        print("LocationManager error: \(error.localizedDescription)")
+        Log.location.error("LocationManager error: \(error.localizedDescription, privacy: .public)")
     }
 }

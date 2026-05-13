@@ -13,6 +13,7 @@
 
 import SwiftUI
 import AVFoundation
+import os
 
 struct CameraPreview: UIViewRepresentable {
     func makeUIView(context: Context) -> PreviewView {
@@ -51,7 +52,7 @@ final class PreviewView: UIView {
                 let input = try? AVCaptureDeviceInput(device: device),
                 session.canAddInput(input)
             else {
-                print("CameraPreview: failed to set up back camera")
+                Log.ui.error("CameraPreview: failed to set up back camera")
                 session.commitConfiguration()
                 return
             }
