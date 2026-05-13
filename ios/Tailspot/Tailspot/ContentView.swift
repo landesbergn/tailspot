@@ -68,7 +68,7 @@ struct ContentView: View {
             adsb.start { location.cllocation }
         }
         .sheet(item: $selectedAircraft) { obs in
-            AircraftDetailView(observed: obs, manager: adsb)
+            AircraftDetailView(observed: obs, manager: adsb, observerLocation: location.cllocation)
         }
     }
 

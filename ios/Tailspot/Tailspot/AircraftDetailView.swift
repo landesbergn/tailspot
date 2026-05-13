@@ -8,20 +8,38 @@
 //  from OpenSky on first appearance via ADSBManager.metadata(for:).
 //  Repeated taps on the same plane hit the in-memory MetadataCache.
 //
+//  Also the place the user "catches" a plane — the green button at
+//  the bottom inserts a Catch SwiftData row capturing what we know
+//  right now (callsign, metadata snapshot, observer pose, slant
+//  distance). v1 lets you catch the same plane multiple times; the
+//  Hangar view (PLAN §9 #7) will handle dedupe / grouping.
+//
 
 import SwiftUI
+import SwiftData
+import CoreLocation
+import os
 
 struct AircraftDetailView: View {
     let observed: ObservedAircraft
     let manager: ADSBManager
+    /// Observer's location at the moment the sheet was presented. We
+    /// stash it on the Catch so the Hangar can show "where you saw
+    /// this plane from." nil → button is disabled (no fix yet).
+    let observerLocation: CLLocation?
+
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     @State private var metadata: AircraftMetadata?
     @State private var didLoad = false
+    @State private var caughtCount: Int = 0
 
     var body: some View {
         NavigationStack {
             List {
+                catchSection
+
                 Section("Identity") {
                     row("Callsign",     observed.aircraft.callsign ?? "—")
                     row("ICAO24",       observed.aircraft.icao24)
@@ -64,7 +82,55 @@ struct AircraftDetailView: View {
                 didLoad = true
                 metadata = await manager.metadata(for: observed.aircraft.icao24)
             }
+            // Haptic on each catch; the trigger value being a counter
+            // (not a Bool) lets multiple consecutive catches each fire.
+            .sensoryFeedback(.success, trigger: caughtCount)
         }
+    }
+
+    // MARK: - Catch action
+
+    private var catchSection: some View {
+        Section {
+            Button(action: catchTapped) {
+                HStack {
+                    Spacer()
+                    Image(systemName: "scope")
+                    Text("Catch this plane")
+                        .font(.headline)
+                    Spacer()
+                }
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
+            .disabled(observerLocation == nil)
+        }
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+    }
+
+    private func catchTapped() {
+        guard let loc = observerLocation else { return }
+        let c = Catch(
+            icao24: observed.aircraft.icao24,
+            callsign: observed.aircraft.callsign,
+            model: metadata?.model,
+            manufacturer: metadata?.manufacturerName,
+            caughtAt: Date(),
+            observerLat: loc.coordinate.latitude,
+            observerLon: loc.coordinate.longitude,
+            slantDistanceMeters: observed.slantDistanceMeters
+        )
+        modelContext.insert(c)
+        do {
+            try modelContext.save()
+        } catch {
+            Log.adsb.error("Catch save failed for \(observed.aircraft.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        caughtCount += 1
+        Log.adsb.notice("Caught \(observed.aircraft.icao24, privacy: .public) (callsign=\(observed.aircraft.callsign ?? "—", privacy: .public))")
+        dismiss()
     }
 
     private var footerText: String {
