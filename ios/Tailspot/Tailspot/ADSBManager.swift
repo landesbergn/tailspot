@@ -77,12 +77,19 @@ final class ADSBManager: ObservableObject {
     /// at any latitude we care about.
     var radiusKm: Double = 50
 
-    /// Base polling interval. OpenSky anonymous minimum is 10s, daily
+    /// Network poll interval. OpenSky anonymous minimum is 10s, daily
     /// quota is 400 credits (~400 queries) — at 12s polling we burn
     /// through that in 1.3 hr. 20s is more sustainable for casual
     /// testing on the anonymous tier; registered users (with credentials
     /// in env) get 10× the daily budget and could go faster if needed.
     var pollInterval: TimeInterval = 20
+
+    /// How often we re-annotate the last-fetched raw aircraft to "now"
+    /// — forward-extrapolating positions and recomputing bearings from
+    /// the current observer location. Decoupled from `pollInterval` so
+    /// boxes glide smoothly between network fetches instead of jumping
+    /// every 20s when new data arrives.
+    var reAnnotationInterval: TimeInterval = 1
 
     /// When the last fetch returned HTTP 429, we exponentially back off
     /// up to this cap before trying again. Resets to `pollInterval` on
@@ -94,7 +101,14 @@ final class ADSBManager: ObservableObject {
     private let mockSource: ADSBSource
     private var source: ADSBSource { useMock ? mockSource : liveSource }
 
+    /// The last-fetched aircraft list, kept raw (no annotation). The
+    /// re-annotation tick reads from here, extrapolates to "now," and
+    /// publishes `observed`. We never publish this directly — SwiftUI
+    /// renders from `observed` which is the annotated, sorted view.
+    private var rawAircraft: [Aircraft] = []
+
     private var pollTask: Task<Void, Never>?
+    private var reAnnotationTask: Task<Void, Never>?
     private var locationProvider: (@MainActor () -> CLLocation?)?
 
     /// Default init keeps the production behavior unchanged. The
@@ -118,6 +132,7 @@ final class ADSBManager: ObservableObject {
         self.locationProvider = locationProvider
         self.currentInterval = pollInterval
 
+        // Network poll: fetches new state from OpenSky periodically.
         pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 if let loc = self?.locationProvider?() {
@@ -131,11 +146,29 @@ final class ADSBManager: ObservableObject {
                 }
             }
         }
+
+        // Smoothness loop: every reAnnotationInterval, re-extrapolate
+        // the raw aircraft positions to "now" using the current
+        // observer location, recompute angular positions, publish.
+        // This is what makes the AR boxes glide smoothly with each
+        // plane's motion instead of jumping every 20s when new ADS-B
+        // data arrives.
+        let tick = reAnnotationInterval
+        reAnnotationTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                if let loc = self?.locationProvider?() {
+                    self?.reAnnotate(observer: loc, now: Date())
+                }
+                try? await Task.sleep(for: .seconds(tick))
+            }
+        }
     }
 
     func stop() {
         pollTask?.cancel()
         pollTask = nil
+        reAnnotationTask?.cancel()
+        reAnnotationTask = nil
     }
 
     /// Force an immediate fetch using the current location, if any.
@@ -149,10 +182,13 @@ final class ADSBManager: ObservableObject {
     /// Single fetch + annotate cycle. Errors are surfaced via lastError;
     /// they never throw out of this method, so the polling loop survives
     /// a network blip.
+    ///
+    /// On success the raw aircraft list is stashed in `rawAircraft` and
+    /// also immediately re-annotated so callers (and tests) see the new
+    /// data without waiting for the next smoothness tick.
     func refresh(around location: CLLocation) async {
         let observerLat = location.coordinate.latitude
         let observerLon = location.coordinate.longitude
-        let observerAlt = location.altitude
 
         // Convert km radius → degrees of latitude/longitude.
         // 1° latitude is ~111 km everywhere.
@@ -167,43 +203,9 @@ final class ADSBManager: ObservableObject {
                 lamax: observerLat + dLat,
                 lomax: observerLon + dLon
             )
+            self.rawAircraft = raw
+            self.reAnnotate(observer: location, now: Date())
 
-            let now = Date()
-            let annotated = raw
-                .filter { !$0.onGround }
-                .map { aircraft -> ObservedAircraft in
-                    // Extrapolate the aircraft's position forward to
-                    // "now" along its track — ADS-B reports can be
-                    // 5–15 s old, and that staleness shows up as labels
-                    // lagging behind real planes on screen.
-                    let pos = aircraft.extrapolatedPosition(at: now)
-                    let ground = Geo.distance(
-                        fromLat: observerLat, lon: observerLon,
-                        toLat: pos.lat, lon: pos.lon
-                    )
-                    let bearing = Geo.bearing(
-                        fromLat: observerLat, lon: observerLon,
-                        toLat: pos.lat, lon: pos.lon
-                    )
-                    let elev = Geo.elevation(
-                        observerAltMeters: observerAlt,
-                        targetAltMeters: aircraft.altitudeMeters,
-                        groundDistanceMeters: ground
-                    )
-                    let dh = aircraft.altitudeMeters - observerAlt
-                    let slant = (ground * ground + dh * dh).squareRoot()
-
-                    return ObservedAircraft(
-                        aircraft: aircraft,
-                        bearingDeg: bearing,
-                        elevationDeg: elev,
-                        groundDistanceMeters: ground,
-                        slantDistanceMeters: slant
-                    )
-                }
-                .sorted { $0.slantDistanceMeters < $1.slantDistanceMeters }
-
-            self.observed = annotated
             self.lastError = nil
             self.lastFetched = Date()
             // Successful fetch — snap polling back to the base interval.
@@ -216,5 +218,53 @@ final class ADSBManager: ObservableObject {
         } catch {
             self.lastError = error.localizedDescription
         }
+    }
+
+    /// Build `observed` from `rawAircraft` using the given observer
+    /// position and "now" timestamp. Run frequently by the smoothness
+    /// loop and once per `refresh` immediately after fetch.
+    ///
+    /// Cheap: no I/O, only geometry. Safe to call at 1 Hz with 50+
+    /// aircraft in the bbox.
+    private func reAnnotate(observer: CLLocation, now: Date) {
+        let observerLat = observer.coordinate.latitude
+        let observerLon = observer.coordinate.longitude
+        let observerAlt = observer.altitude
+
+        let annotated = rawAircraft
+            .filter { !$0.onGround }
+            .map { aircraft -> ObservedAircraft in
+                // Forward-extrapolate the plane's position to "now"
+                // using its reported velocity + track. Re-running this
+                // each tick is what makes the on-screen box glide
+                // continuously between network refreshes.
+                let pos = aircraft.extrapolatedPosition(at: now)
+                let ground = Geo.distance(
+                    fromLat: observerLat, lon: observerLon,
+                    toLat: pos.lat, lon: pos.lon
+                )
+                let bearing = Geo.bearing(
+                    fromLat: observerLat, lon: observerLon,
+                    toLat: pos.lat, lon: pos.lon
+                )
+                let elev = Geo.elevation(
+                    observerAltMeters: observerAlt,
+                    targetAltMeters: aircraft.altitudeMeters,
+                    groundDistanceMeters: ground
+                )
+                let dh = aircraft.altitudeMeters - observerAlt
+                let slant = (ground * ground + dh * dh).squareRoot()
+
+                return ObservedAircraft(
+                    aircraft: aircraft,
+                    bearingDeg: bearing,
+                    elevationDeg: elev,
+                    groundDistanceMeters: ground,
+                    slantDistanceMeters: slant
+                )
+            }
+            .sorted { $0.slantDistanceMeters < $1.slantDistanceMeters }
+
+        self.observed = annotated
     }
 }
