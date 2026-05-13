@@ -38,20 +38,21 @@ Package.resolved
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcworkspace/xcuserdata/
 
-# Don't commit Xcode shared schemes — Xcode's "Edit Scheme..." dialog
-# saves environment variables (including credentials like
-# OPENSKY_CLIENT_SECRET) into the SHARED scheme by default. We've had
-# this leak TWICE. Schemes still work fine without being shared —
-# Xcode auto-creates a user-scheme on first open.
+# We commit exactly ONE shared scheme — Tailspot.xcscheme — so that
+# xcodebuild works on fresh clones without manual setup. Any OTHER
+# scheme file is ignored: Xcode's "Edit Scheme..." dialog saves
+# environment variables (including credentials like OPENSKY_CLIENT_SECRET)
+# into shared schemes by default, and we've had two leaks from this.
 #
-# Previous patterns missed the leading **/ and were root-anchored —
-# gitignore semantics treat a mid-path slash as anchored to the
-# .gitignore's directory, not "match anywhere". The actual scheme
-# path is nested under ios/Tailspot/, so the rule never fired.
-# Belt-and-suspenders: also gitignore *.xcscheme by filename.
-**/*.xcodeproj/xcshareddata/xcschemes/
+# IMPORTANT: edits to the tracked Tailspot.xcscheme are visible to git
+# (gitignore doesn't apply to already-tracked files). If you edit the
+# scheme in Xcode and Xcode rewrites the file with env vars in it,
+# THOSE CHANGES WILL BE STAGED. Always inspect the diff before commit.
+# Add env vars to a user-only scheme (xcuserdata/, gitignored), not
+# the shared one.
+**/*.xcodeproj/xcshareddata/xcschemes/*.xcscheme
+!**/*.xcodeproj/xcshareddata/xcschemes/Tailspot.xcscheme
 **/*.xcworkspace/xcshareddata/xcschemes/
-*.xcscheme
 
 # CocoaPods
 Pods/
