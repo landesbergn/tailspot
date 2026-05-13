@@ -32,6 +32,32 @@ struct ObservedAircraft: Identifiable, Sendable {
 }
 
 extension ObservedAircraft {
+    /// Whether this aircraft is plausibly visible to the naked eye
+    /// right now. Two filters:
+    ///
+    ///   1. `elevationDeg > 0` — the plane is above the user's geometric
+    ///      horizon (flat-Earth, since the curvature correction is small
+    ///      for the distances that pass filter #2).
+    ///   2. `slantDistanceMeters < maxVisibleDistanceMeters` — the plane
+    ///      is close enough to actually see. Reasoning: human visual
+    ///      acuity is ~1 arcminute. A 40 m wingspan at 100 km subtends
+    ///      ~1.4 arcmin (a speck, but visible); a 15 m small jet at
+    ///      100 km subtends ~0.5 arcmin (below the eye's threshold).
+    ///      100 km is a reasonable middle ground for "commercial
+    ///      traffic visible as a dot."
+    ///
+    /// Explicitly does NOT account for obstacles (buildings, hills),
+    /// weather (clouds, haze), or atmospheric scattering. Those are
+    /// real but introduce too much complexity for v1 POC.
+    var isLikelyVisibleToObserver: Bool {
+        elevationDeg > 0 && slantDistanceMeters < Self.maxVisibleDistanceMeters
+    }
+
+    /// Tunable. 100 km is the default — adjust if field testing shows
+    /// labels too aggressively pruned (commercial traffic that's
+    /// visibly there but past the cap).
+    static let maxVisibleDistanceMeters: Double = 100_000
+
     /// Project this aircraft into screen coordinates given the phone's
     /// current pose and the camera's FOV. Returns nil if off-screen.
     /// Default FOV values are estimates for the iPhone main wide camera

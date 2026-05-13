@@ -31,7 +31,13 @@ struct ContentView: View {
             // on-screen size; .position(_:) places each at its projected
             // pixel. The reticle itself is tappable — opens the detail sheet.
             GeometryReader { geo in
-                ForEach(adsb.observed) { obs in
+                // Only show AR labels for aircraft that are plausibly
+                // visible to the naked eye — above the horizon and
+                // close enough to actually see. Full list (with
+                // out-of-sight aircraft included) stays in the bottom
+                // panel for reference. Doesn't model obstacles,
+                // weather, etc. — see ObservedAircraft.isLikelyVisibleToObserver.
+                ForEach(adsb.observed.filter(\.isLikelyVisibleToObserver)) { obs in
                     if let pos = obs.screenPosition(
                         phoneHeadingDeg: location.heading ?? 0,
                         cameraElevationDeg: motion.cameraElevationDeg,

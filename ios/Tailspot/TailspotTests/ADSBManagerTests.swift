@@ -269,6 +269,62 @@ struct ADSBManagerTests {
         #expect(pos.lon == 0)
     }
 
+    // MARK: - Visibility filter
+
+    /// Construct a minimal ObservedAircraft for visibility-predicate testing.
+    /// Only the four geometric fields matter; the inner Aircraft is a stub.
+    private static func observed(
+        bearingDeg: Double = 0,
+        elevationDeg: Double,
+        groundDistanceMeters: Double = 0,
+        slantDistanceMeters: Double
+    ) -> ObservedAircraft {
+        let aircraft = Aircraft(
+            icao24: "test", callsign: nil, originCountry: "Test",
+            longitude: 0, latitude: 0,
+            altitudeMeters: 0,
+            velocityMps: nil, trackDeg: nil,
+            onGround: false,
+            positionTimestamp: nil
+        )
+        return ObservedAircraft(
+            aircraft: aircraft,
+            bearingDeg: bearingDeg,
+            elevationDeg: elevationDeg,
+            groundDistanceMeters: groundDistanceMeters,
+            slantDistanceMeters: slantDistanceMeters
+        )
+    }
+
+    @Test func visibleWhenAboveHorizonAndClose() {
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 20_000)
+        #expect(obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func notVisibleWhenBelowHorizon() {
+        let obs = Self.observed(elevationDeg: -5, slantDistanceMeters: 5_000)
+        #expect(!obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func notVisibleAtExactlyHorizon() {
+        // elevation == 0 is the geometric horizon — strictly below the
+        // visible threshold, so should NOT pass.
+        let obs = Self.observed(elevationDeg: 0, slantDistanceMeters: 5_000)
+        #expect(!obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func notVisibleWhenTooFar() {
+        // Just past the 100 km cap.
+        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 110_000)
+        #expect(!obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func visibleAtEdgeOfRange() {
+        // Just inside the 100 km cap — should pass.
+        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 99_000)
+        #expect(obs.isLikelyVisibleToObserver)
+    }
+
     @Test func mockSourceIntegrationProducesFiveAircraft() async {
         // Default ADSBManager uses real OpenSkyClient + MockADSBSource.
         // Flipping useMock and refreshing should hit MockADSBSource,
