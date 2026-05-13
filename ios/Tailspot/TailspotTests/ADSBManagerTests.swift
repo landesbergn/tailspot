@@ -46,6 +46,12 @@ struct ADSBManagerTests {
             if let error { throw error }
             return aircraft
         }
+
+        func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
+            // Test fixture: just return nil. Tests that exercise metadata
+            // will use MockADSBSource or inject test-specific metadata.
+            return nil
+        }
     }
 
     private struct TestError: Error {}

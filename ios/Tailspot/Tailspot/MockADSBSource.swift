@@ -102,4 +102,56 @@ nonisolated final class MockADSBSource: ADSBSource, Sendable {
             )
         }
     }
+
+    // MARK: - Metadata fixtures
+
+    /// Hand-rolled metadata for each of the five mock planes — good
+    /// enough to exercise the detail-view path end-to-end in MOCK mode.
+    private let metadataByIcao24: [String: AircraftMetadata] = [
+        "a3b15e": AircraftMetadata(
+            icao24: "a3b15e",
+            registration: "N12345",
+            manufacturerName: "BOEING",
+            manufacturerIcao: "BOEING",
+            model: "737-800",
+            typecode: "B738",
+            operatorName: "United Airlines"
+        ),
+        "a52f30": AircraftMetadata(
+            icao24: "a52f30",
+            registration: "N87654",
+            manufacturerName: "AIRBUS",
+            manufacturerIcao: "AIRBUS",
+            model: "A320-200",
+            typecode: "A320",
+            operatorName: "Southwest Airlines"
+        ),
+        "a91234": AircraftMetadata(
+            icao24: "a91234",
+            registration: "N201AS",
+            manufacturerName: "BOMBARDIER",
+            manufacturerIcao: "BOMBARDIER",
+            model: "CRJ-700",
+            typecode: "CRJ7",
+            operatorName: "Alaska Airlines"
+        ),
+        "a4abcd": AircraftMetadata(
+            icao24: "a4abcd",
+            registration: "N98765",
+            manufacturerName: "ATR",
+            manufacturerIcao: "ATR",
+            model: "ATR 72-600",
+            typecode: "AT76",
+            operatorName: "Delta Connection"
+        ),
+        // abc789 deliberately has NO metadata — exercises the 404/cache-miss
+        // path on tap.
+    ]
+
+    func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
+        // Match the small artificial latency from aircraftInBbox so the
+        // loading UI in AircraftDetailView behaves like the live source.
+        try? await Task.sleep(for: .milliseconds(100))
+        return metadataByIcao24[icao24.lowercased()]
+    }
 }

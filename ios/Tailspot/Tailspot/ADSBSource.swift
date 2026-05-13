@@ -24,4 +24,9 @@ nonisolated protocol ADSBSource: Sendable {
     func aircraftInBbox(
         lamin: Double, lomin: Double, lamax: Double, lomax: Double
     ) async throws -> [Aircraft]
+
+    /// Fetch per-aircraft metadata (manufacturer / model / registration /
+    /// operator) for a single icao24. Returns nil if the source has no
+    /// record. Throws on transport/auth errors.
+    func aircraftMetadata(icao24: String) async throws -> AircraftMetadata?
 }

@@ -143,6 +143,51 @@ nonisolated final class OpenSkyClient: ADSBSource, Sendable {
         let states: [FailableDecodable<Aircraft>]?
     }
 
+    // MARK: - Aircraft metadata
+
+    /// Fetch metadata for a single icao24 from OpenSky's
+    /// /metadata/aircraft/icao/{icao24} endpoint. Returns nil on 404
+    /// (OpenSky doesn't have this aircraft in its DB).
+    func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
+        // Trim & lowercase: OpenSky expects the bare 24-bit hex,
+        // and callsigns we hand in from Aircraft.icao24 already are lower.
+        let key = icao24.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !key.isEmpty else { return nil }
+
+        let url = base
+            .appendingPathComponent("metadata")
+            .appendingPathComponent("aircraft")
+            .appendingPathComponent("icao")
+            .appendingPathComponent(key)
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8.0
+
+        if let token = try await bearerTokenIfPossible() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: request)
+
+        if let http = response as? HTTPURLResponse {
+            if http.statusCode == 404 {
+                return nil
+            }
+            if http.statusCode == 429 {
+                throw ClientError.rateLimited
+            }
+            if http.statusCode != 200 {
+                throw ClientError.http(status: http.statusCode)
+            }
+        }
+
+        do {
+            return try JSONDecoder().decode(AircraftMetadata.self, from: data)
+        } catch {
+            throw ClientError.decoding(error)
+        }
+    }
+
     // MARK: - OAuth2
 
     /// Returns a valid bearer token if credentials are configured;
