@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
-# Intended to start a background `log stream` against the paired iPhone,
-# filtered to the Tailspot subsystem, redirected to a file so bin/log-tail
-# can read it.
+# Starts a background `idevicesyslog` against the paired iPhone (over
+# the libimobiledevice network pair), piped through grep so only lines
+# mentioning "tailspot" land in $TAILSPOT_LOG_FILE. idevicesyslog's
+# raw stream is ~250 KB/s of unrelated kernel/system noise — filtering
+# at write time keeps the log file usable.
 #
-# KNOWN GAP (2026-05-13): the macOS `log` command on this machine does
-# not accept --device / --device-name flags — it only streams from the
-# local Mac. The plan assumed otherwise. Until we have a working
-# device-side log capture (candidates: `idevicesyslog` from
-# libimobiledevice via Homebrew, or `xcrun devicectl device process
-# launch --console` blocking attach), this script is a graceful no-op:
-# it prints a notice and exits 0 so `bin/deploy` proceeds.
+# Idempotent: if the wrapper is already running (per pidfile + a
+# live-process check), exits 0.
 #
-# Tracking item: see PLAN.md §9 (deferred log-streaming follow-up).
+# Prerequisite: libimobiledevice via `brew install libimobiledevice`.
+#
+# KNOWN LIMITATION: idevicesyslog reads `com.apple.syslog_relay`,
+# which carries system-emitted lines ABOUT a process (sandbox denials,
+# network-extension events, crashes, etc.) but NOT `os.Logger` /
+# os_log output FROM the process. Apple routes unified-log emissions
+# through a different device service (`com.apple.os_trace_relay`)
+# that libimobiledevice doesn't expose. So Log.swift calls won't
+# appear here. For Logger output, use Xcode's Console (Cmd+Shift+C)
+# while the app is attached. Tracked: PLAN.md §9 future follow-up.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,17 +25,12 @@ source "$here/tools/deploy/config.sh"
 
 mkdir -p "$TAILSPOT_LOG_DIR"
 
-# Probe: does the host `log` binary even know about a --device flag?
-# The macOS `log` shipped on most current systems streams local-only.
-# Grepping --help is instant and side-effect-free.
-if ! log stream --help 2>&1 | grep -q -- "--device"; then
-  echo "log-start: device-side streaming not supported by this macOS \`log\`." >&2
-  echo "log-start: bin/log-tail will be empty until a working capture is wired up (see PLAN.md §9)." >&2
+if ! command -v idevicesyslog >/dev/null 2>&1; then
+  echo "log-start: idevicesyslog not installed; run \`brew install libimobiledevice\`" >&2
+  echo "log-start: bin/log-tail will be empty. Continuing without log capture." >&2
   exit 0
 fi
 
-# Below this point: the probe succeeded, so the host's `log` supports
-# device streaming. Idempotent guard.
 if [ -f "$TAILSPOT_LOG_PIDFILE" ]; then
   pid="$(cat "$TAILSPOT_LOG_PIDFILE")"
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
@@ -39,13 +40,13 @@ if [ -f "$TAILSPOT_LOG_PIDFILE" ]; then
   rm -f "$TAILSPOT_LOG_PIDFILE"
 fi
 
-predicate="subsystem == \"$TAILSPOT_LOG_SUBSYSTEM\""
-
-nohup log stream \
-  --device "$TAILSPOT_DEVICE_ID" \
-  --predicate "$predicate" \
-  --style syslog \
-  >"$TAILSPOT_LOG_FILE" 2>&1 &
+# Start the pipeline in a backgrounded subshell so $! captures the
+# wrapper PID; killing it tears down both idevicesyslog and grep.
+# `grep --line-buffered` ensures each matched line is flushed
+# immediately rather than buffered in 8 KB chunks — important for the
+# 1-line-at-a-time `bin/log-tail -f` UX.
+nohup bash -c "idevicesyslog --network --udid '$TAILSPOT_IOS_UDID' --no-colors 2>&1 | grep --line-buffered -i 'tailspot'" \
+  > "$TAILSPOT_LOG_FILE" 2>&1 &
 
 stream_pid=$!
 echo "$stream_pid" > "$TAILSPOT_LOG_PIDFILE"
@@ -53,8 +54,8 @@ echo "$stream_pid" > "$TAILSPOT_LOG_PIDFILE"
 sleep 1
 if ! kill -0 "$stream_pid" 2>/dev/null; then
   rm -f "$TAILSPOT_LOG_PIDFILE"
-  echo "log stream failed unexpectedly; see $TAILSPOT_LOG_FILE for diagnostics" >&2
+  echo "log stream wrapper exited; see $TAILSPOT_LOG_FILE for diagnostics" >&2
   exit 1
 fi
 
-echo "log-stream running (pid $stream_pid); output -> $TAILSPOT_LOG_FILE"
+echo "log-stream running (pid $stream_pid); filtered output -> $TAILSPOT_LOG_FILE"

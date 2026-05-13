@@ -7,6 +7,11 @@
 
 TAILSPOT_DEVICE_ID="B88009FD-BC73-575C-BF03-02A46C9DDC98"
 TAILSPOT_DEVICE_NAME="Noah's iPhone"
+# Legacy 40-char iOS UDID — used by idevicesyslog (libimobiledevice).
+# Different from TAILSPOT_DEVICE_ID, which is Apple's newer CoreDevice
+# UUID used by xcrun devicectl. Find with `idevice_id -l` after the
+# device is paired via Xcode.
+TAILSPOT_IOS_UDID="00008140-001A71D22113001C"
 
 TAILSPOT_SCHEME="Tailspot"
 TAILSPOT_PROJECT="ios/Tailspot/Tailspot.xcodeproj"
