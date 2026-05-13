@@ -112,6 +112,7 @@ struct ContentView: View {
             Group {
                 Text(formatLocation())
                 Text(formatHeading())
+                    .foregroundStyle(isHeadingAccuracyBad ? .red : .white)
                 Text(formatAttitude())
                 adsbStatusRow
                 if !cameraAuthorized {
@@ -215,6 +216,15 @@ struct ContentView: View {
         guard let h = location.heading else { return "Heading: waiting…" }
         let acc = location.headingAccuracy ?? -1
         return String(format: "Heading: %6.1f°  ±%.1f°", h, acc)
+    }
+
+    /// True when CL reports a poor heading fix (>15°). Drives the
+    /// red-text cue on the heading readout so the user notices the
+    /// compass needs calibration (figure-8 the phone). Negative
+    /// values mean "unknown" — treat as neutral, not bad.
+    private var isHeadingAccuracyBad: Bool {
+        guard let acc = location.headingAccuracy else { return false }
+        return acc > 15
     }
 
     private func formatAttitude() -> String {
