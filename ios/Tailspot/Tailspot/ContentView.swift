@@ -129,9 +129,13 @@ struct ContentView: View {
     // MARK: - Bottom: nearby-aircraft list
 
     private var aircraftList: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Same predicate as the AR layer: above horizon + within
+        // maxVisibleDistanceMeters. Keeps the bottom panel honest with
+        // what's on-screen instead of dumping the full 50 km bbox.
+        let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
+        return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Nearby aircraft (\(adsb.observed.count))")
+                Text("Nearby aircraft (\(visible.count))")
                     .font(.caption.bold())
                 Spacer()
                 if let err = adsb.lastError {
@@ -144,10 +148,10 @@ struct ContentView: View {
 
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(adsb.observed) { obs in
+                    ForEach(visible) { obs in
                         aircraftRow(obs)
                     }
-                    if adsb.observed.isEmpty {
+                    if visible.isEmpty {
                         Text(emptyListMessage)
                             .font(.caption.monospaced())
                             .foregroundStyle(.white.opacity(0.7))

@@ -320,14 +320,14 @@ struct ADSBManagerTests {
     }
 
     @Test func notVisibleWhenTooFar() {
-        // Just past the 100 km cap.
-        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 110_000)
+        // Just past the 30 km cap.
+        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 35_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func visibleAtEdgeOfRange() {
-        // Just inside the 100 km cap — should pass.
-        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 99_000)
+        // Just inside the 30 km cap — should pass.
+        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 29_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 

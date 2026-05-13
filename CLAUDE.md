@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Tap a reticle → `AircraftDetailView` sheet with every field we have (units: ft primary / m parens for altitude; mph primary / kt parens for speed).
 - Forward-extrapolation of ADS-B positions to "now" using each aircraft's track + velocity.
 - 1 Hz re-annotation loop in `ADSBManager` so reticles glide smoothly between 20 s network fetches.
-- Visibility filter: AR labels only appear for aircraft above the horizon AND within 100 km slant distance. Bottom list is unfiltered.
+- Visibility filter: AR labels AND the bottom list both show only aircraft above the horizon AND within 30 km slant distance. Anything past that is fetched (out to the 50 km bbox) but hidden — tune `ObservedAircraft.maxVisibleDistanceMeters` to change.
 - OAuth2 client-credentials auth against OpenSky (registered tier = 4000 credits/day vs 400 anonymous). 429-aware exponential backoff.
 - 44 unit tests in `TailspotTests/` covering geometry, OpenSky decoding (incl. FailableDecodable lossy behavior), annotation, sort order, error handling, extrapolation, visibility predicate, screen projection.
 
@@ -140,7 +140,7 @@ Pinned to `.portrait` in `LocationManager.init` so true-north heading is reporte
 
 ### Visibility filter
 
-`ObservedAircraft.isLikelyVisibleToObserver` (`elevationDeg > 0 && slantDistanceMeters < 100_000`) gates AR-overlay rendering in `ContentView`. The bottom list does NOT filter — it's the unfiltered reference / debug view. If a user reports "missing plane labels," check whether the plane is below horizon or past 100 km first; that's the filter doing its job, not a bug.
+`ObservedAircraft.isLikelyVisibleToObserver` (`elevationDeg > 0 && slantDistanceMeters < 30_000`) gates BOTH the AR overlay AND the bottom list in `ContentView`. (Earlier versions left the list unfiltered as a debug view; the 30 km cap was tightened from 100 km after field testing.) If a user reports "missing plane labels," check whether the plane is below horizon or past 30 km first — that's the filter doing its job, not a bug. Tune `maxVisibleDistanceMeters` to change.
 
 ### CMMotion / CLLocation / AVCapture concurrency
 
