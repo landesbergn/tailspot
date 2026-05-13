@@ -3,28 +3,33 @@
 //  Tailspot
 //
 //  Detail sheet shown when the user taps an aircraft's reticle in the AR
-//  view. Surfaces every field we have for the aircraft. Two fields we
-//  don't have yet (aircraft type + origin/destination) render as "—" with
-//  a footer note explaining what's needed to fill them in.
-//
-//  Pattern: NavigationStack inside a sheet — gives us the title bar plus
-//  a "Done" button. Using `List` with `Section` for the sectioned look.
+//  view. Surfaces every field we have, including per-icao24 metadata
+//  (manufacturer / model / registration / operator) fetched lazily
+//  from OpenSky on first appearance via ADSBManager.metadata(for:).
+//  Repeated taps on the same plane hit the in-memory MetadataCache.
 //
 
 import SwiftUI
 
 struct AircraftDetailView: View {
     let observed: ObservedAircraft
+    let manager: ADSBManager
     @Environment(\.dismiss) private var dismiss
+
+    @State private var metadata: AircraftMetadata?
+    @State private var didLoad = false
 
     var body: some View {
         NavigationStack {
             List {
                 Section("Identity") {
-                    row("Callsign", observed.aircraft.callsign ?? "—")
-                    row("ICAO24",   observed.aircraft.icao24)
-                    row("Country",  observed.aircraft.originCountry)
-                    row("Aircraft type", "—")
+                    row("Callsign",     observed.aircraft.callsign ?? "—")
+                    row("ICAO24",       observed.aircraft.icao24)
+                    row("Country",      observed.aircraft.originCountry)
+                    row("Registration", metadata?.registration ?? "—")
+                    row("Manufacturer", metadata?.manufacturerName ?? "—")
+                    row("Model",        metadata?.model ?? "—")
+                    row("Operator",     metadata?.operatorName ?? "—")
                 }
 
                 Section("Flight") {
@@ -42,7 +47,7 @@ struct AircraftDetailView: View {
                 }
 
                 Section {
-                    Text("Aircraft type and origin/destination aren't yet available — they require additional data sources beyond OpenSky's free /states/all endpoint. See PLAN.md.")
+                    Text(footerText)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -54,20 +59,29 @@ struct AircraftDetailView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .task {
+                guard !didLoad else { return }
+                didLoad = true
+                metadata = await manager.metadata(for: observed.aircraft.icao24)
+            }
         }
+    }
+
+    private var footerText: String {
+        if metadata == nil && didLoad {
+            return "OpenSky has no record for this aircraft. Origin/destination still requires a separate data source (see PLAN.md)."
+        }
+        return "Origin/destination requires a data source beyond OpenSky's /states/all. See PLAN.md."
     }
 
     // MARK: - Formatting
 
-    /// Altitude: feet primary, meters in parens. Whole-number formatted
-    /// with locale-appropriate thousand separators (`34,449 ft`).
     private var altitudeText: String {
         let m  = Int(observed.aircraft.altitudeMeters.rounded())
         let ft = Int((observed.aircraft.altitudeMeters * 3.28084).rounded())
         return "\(ft.formatted(.number)) ft (\(m.formatted(.number)) m)"
     }
 
-    /// Speed: mph primary, knots in parens.
     private var speedText: String {
         guard let mps = observed.aircraft.velocityMps else { return "—" }
         let mph = mps * 2.23694
