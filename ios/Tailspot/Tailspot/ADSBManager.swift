@@ -17,6 +17,7 @@
 import Foundation
 import Combine
 import CoreLocation
+import os
 
 /// An Aircraft annotated with its angular position and distance relative
 /// to a specific observer location. The geometry is computed once per
@@ -136,6 +137,9 @@ final class ADSBManager: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var reAnnotationTask: Task<Void, Never>?
     private var locationProvider: (@MainActor () -> CLLocation?)?
+    /// Per-icao24 metadata memoization. Lookups go through here lazily
+    /// when AircraftDetailView appears for a given aircraft.
+    private let metadataCache = MetadataCache()
 
     /// Default init keeps the production behavior unchanged. The
     /// parameters exist so tests can inject a fixture source — without
@@ -243,6 +247,29 @@ final class ADSBManager: ObservableObject {
             self.currentInterval = min(currentInterval * 2, maxBackoffInterval)
         } catch {
             self.lastError = error.localizedDescription
+        }
+    }
+
+    /// Resolve metadata for a single icao24, consulting the in-memory
+    /// cache first and falling back to the current source on miss.
+    /// A successful response (including a 404 / nil) is cached;
+    /// transport errors are NOT cached, so a later tap can retry.
+    func metadata(for icao24: String) async -> AircraftMetadata? {
+        switch await metadataCache.get(icao24: icao24) {
+        case .hit(let value):
+            return value
+        case .notFetched:
+            do {
+                let fetched = try await source.aircraftMetadata(icao24: icao24)
+                await metadataCache.set(icao24: icao24, value: fetched)
+                return fetched
+            } catch {
+                // Transport / auth / 429 — surface via lastError but
+                // do NOT cache. The next tap will retry.
+                Log.adsb.error("metadata lookup failed for \(icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                self.lastError = "Metadata lookup failed: \(error.localizedDescription)"
+                return nil
+            }
         }
     }
 
