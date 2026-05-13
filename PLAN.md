@@ -94,38 +94,53 @@ Open: airline livery as trade dress is generally fair to depict, but trademarks 
 
 Phase length assumes **solo dev, full-time**. With a team of 2–3 (iOS + backend + design), compress by ~40%. The brief did not specify team size — see §6.5.
 
-### Phase 0a — Friday proof of concept (3 days)
+### Phase 0a — Friday proof of concept ✅ DELIVERED (May 5–7, 2026)
 
-The narrowest possible demo: **on Noah's phone, a screen showing live aircraft labels at the right places in the sky**, no game, no auth, no backend, no polish. Existence proof that the idea is buildable.
+Original goal: *"on Noah's phone, a screen showing live aircraft labels at the right places in the sky."* Field-tested in Berkeley with real planes overhead — labels land on or near actual aircraft, system fundamentally works.
 
-**Scope (in):**
-- iOS app builds and runs on Noah's iPhone.
-- Camera feed as the background.
-- Live readout: GPS coordinates, compass heading, device pitch.
-- OpenSky API call (direct from device, not via backend) for aircraft inside ~50 km bbox around current position.
-- For each aircraft, compute true bearing + elevation from device.
-- Render a text label for each aircraft at its projected screen position; label includes callsign + altitude.
+**What actually shipped (more than the original scope):**
 
-**Scope (out):**
-- ARKit / drift correction — raw compass + pitch is good enough for a POC.
-- "Catch" interaction or any persistence.
-- Backend, auth, accounts, scoring, achievements, illustrated cards.
-- Visual polish, error states, calibration UX.
-- Forward-extrapolation of ADS-B positions (we'll find out if it's needed).
+Day 1 (Tue):
+- Xcode 16 / Swift 6 SwiftUI project on iPhone 16 / iOS 26.
+- `LocationManager` (CLLocation + CLHeading), `MotionManager` (CMDeviceMotion), `CameraPreview` (AVCaptureSession via UIViewRepresentable).
+- Live sensor readout overlay (GPS, true-north heading w/ accuracy, pitch/roll/cam-elevation).
 
-**Day-by-day (assuming 3 evenings of work):**
+Day 2 (Wed):
+- `OpenSkyClient` + `Aircraft` decoder (positional JSON, FailableDecodable for lossy per-element decoding).
+- `Geo` helpers: haversine distance, true bearing, elevation, projection (Geo.project, Geo.screenPosition).
+- `ADSBSource` protocol with `OpenSkyClient` + `MockADSBSource` (5 hand-picked synthetic planes at fixed bearings/distances, for couch-testing).
+- `ADSBManager` (@MainActor ObservableObject) polling the source, annotating each aircraft with bearing/elevation/distance from the user, sorting by slant distance.
+- Scrollable bottom list showing every plane in the 50 km bbox.
+- Live/Mock toggle in the UI (tap the ADSB status row).
 
-| Day | Goal |
-|---|---|
-| Tue (today) | Confirm prereqs (see §10). Scaffold Xcode project. App requests camera + location permissions and shows live GPS / heading / pitch readout on top of camera feed. |
-| Wed | OpenSky integration. Show a list of nearby aircraft (callsign, altitude, bearing-from-me, elevation-angle). Still scrolling list, not overlaid yet. |
-| Thu | Project each aircraft's bearing/elevation onto screen coordinates and render labels at those positions over the camera feed. |
-| Fri | Field test outside. Iterate on whatever is broken. Demo. |
+Day 3 (Thu):
+- AR label projection: per-aircraft cyan reticle box drawn at the plane's projected screen position via `obs.screenPosition(phoneHeadingDeg:cameraElevationDeg:in:)`.
+- Pitch-vs-camera-elevation bug fix: `CMAttitude.pitch ≈ +90°` when phone is held upright in portrait, so camera elevation = `90 − pitch`. Encoded in `MotionManager.cameraElevationDeg`.
+- Forward-extrapolation: `Aircraft.extrapolatedPosition(at:)` projects each plane along its track using its reported velocity to bring 5–15 s-old ADS-B positions to "now."
+- Tap-to-inspect: tapping a reticle presents `AircraftDetailView` with every available field (callsign / ICAO24 / country / altitude in ft (m) / speed in mph (kt) / track / bearing / elevation / distances).
 
-**Success criterion (loose, vs. Phase 0 main):**
-> Walk outside, point phone at a plane I can see overhead, and the corresponding label appears reasonably close to it. Doesn't have to be 80% accurate or work for multiple planes — that's Phase 0 main.
+Day 4+ (Fri–Wed, post-POC iteration):
+- OAuth2 client-credentials auth with the OpenSky API (registered tier = 4000 credits/day vs 400 anonymous). Token cached via `OSAllocatedUnfairLock`. Credentials read from `OPENSKY_CLIENT_ID`/`OPENSKY_CLIENT_SECRET` env vars.
+- 429-aware exponential backoff (up to 120 s) in `ADSBManager` so we stop hammering a rate-limited server.
+- **Smooth tracking**: split network polling (every 20 s) from re-annotation (every 1 s). Reticles glide continuously with each plane's projected motion between fetches rather than jumping every 20 s.
+- **Visibility filter**: `ObservedAircraft.isLikelyVisibleToObserver` — true when `elevationDeg > 0` AND `slantDistanceMeters < 100 km`. AR labels filter by this; bottom list does not.
+- 44 unit tests across `GeoTests`, `AircraftDecodingTests`, `ADSBManagerTests` covering geometry, OpenSky decode (including FailableDecodable's lossy behavior), annotation, sort order, error handling, extrapolation, visibility predicate, and screen projection (cardinal directions, FOV bounds, 0°/360° wraparound).
 
-This POC only proves "the pipeline runs end-to-end." The harder accuracy bar from §3.0 below (≥80%, ≥50 trials) is the **subsequent** Phase 0 work, which the replay harness and field testing serves.
+**Field test (Wed evening, Berkeley):**
+- Labels land on or near actual aircraft ("pretty impressive" per Noah).
+- Some planes don't appear at all — OpenSky free tier excludes MLAT, so most small GA, helicopters, military traffic are invisible. Coverage limit, not a bug.
+- Tracking was "very loosely" smooth — fixed by the 1 Hz re-annotation loop landed Wed evening.
+- See §3.0b for what comes next.
+
+### Phase 0b — POC retrospective / what's still on the table
+
+Things observed in field testing or left over from Phase 0a that aren't yet in code:
+
+1. **Visual confirmation** (per §1.1a) — labels track to *predicted* position, not actual visual plane position. Compass error (±5–15°) is the dominant offset source. Documented roadmap: Vision-framework + YOLOv8 COCO airplane class, lock reticle to detection when found, faint predicted reticle as fallback for cloudy days. **Postponed by user direction.**
+2. **Heading-accuracy color cue** — `headingAccuracy` is shown in the readout but Noah didn't notice the value during testing. Color the line red when `>15°` so it's actionable. ~10 min of work.
+3. **Aircraft type lookup** — OpenSky has a per-`icao24` metadata endpoint (`/metadata/aircraft/icao/{icao24}`) that returns manufacturer/model/registration. Fill the "Aircraft type: —" placeholder in `AircraftDetailView` and optionally on the compact label. Cache per-icao24 to keep credit usage low. ~45–60 min. **Queued as the next session's first piece.**
+4. **Origin/destination route info** — not in `/states/all`; needs a different API (FlightAware, ADSBexchange, etc.) or callsign-prefix → airline-schedule lookup. Deferred indefinitely.
+5. **Replay harness** (§3.0 main) — record sensor + ADS-B traces during a session, replay later for offline regression testing. Still not built. Phase 0 main blocker.
 
 ### Phase 0 — De-risk geometric ID (2–4 weeks after POC)
 
@@ -208,14 +223,15 @@ AR + outdoors + ADS-B-required is genuinely awkward to test. Layered approach:
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| 1 | Geometric ID accuracy below threshold in field | Medium | Critical | Phase 0 with hard success criterion; replay harness for fast iteration |
-| 2 | ADS-B commercial licensing forces costly vendor | High | High | Resolve in Phase 0 alongside monetization (§6.1); provider abstraction in code |
-| 3 | Compass calibration UX failure → user rage | High | High | Block ID when `headingAccuracy` is poor; mandatory calibration onboarding |
-| 4 | ADS-B 5–15s lag causes mis-identifies on fast aircraft | Medium | Medium | Forward-extrapolate positions; widen tolerance for high-velocity aircraft |
+| 1 | Geometric ID accuracy below threshold in field | Medium → Low | Critical | Phase 0a field test: labels land on/near planes. §3.0 main accuracy bar still TBD. |
+| 2 | ADS-B commercial licensing forces costly vendor | High | High | Resolved for v1: OpenSky free tier fits non-commercial use (§6.1) |
+| 3 | Compass calibration UX failure → user rage | High | High | Block ID when `headingAccuracy` is poor; mandatory calibration onboarding. Partially exposed via heading-accuracy in readout; color cue (§3.0b #2) pending. |
+| 4 | ADS-B 5–15s lag causes mis-identifies on fast aircraft | Medium → Low | Medium | `Aircraft.extrapolatedPosition(at:)` projects positions to "now" using velocity/track. Re-annotated every 1 s in ADSBManager. |
 | 5 | Photo / livery licensing | Low (with illustrated cards) | High | Commissioned cards strategy (§1.4) |
 | 6 | App Store rejection (camera + location + AR) | Medium | High | Clear permission strings; location-**when-in-use** only; explicit privacy explainers in onboarding |
 | 7 | ADS-B coverage gaps disappoint users in non-hub regions | Medium | Medium | Region-limited launch (§3.3); in-app messaging when no aircraft are in range |
 | 8 | Backend cost spike on virality | Low at v1 scale | Medium | Aggressive caching; rate limiting per user; alarms on egress |
+| 9 | **Secret leak via Xcode shared scheme** | High (occurred twice) | High | `.gitignore` blocks all shared schemes via `**/` pattern + `*.xcscheme` filename rule, allowing exactly the one committed `Tailspot.xcscheme` via `!` exception. **gitignore does not protect already-tracked files** — see CLAUDE.md for full guidance. |
 
 ---
 
@@ -263,47 +279,54 @@ Concrete bullets that reviewers and users care about:
 
 ---
 
-## 8. Repo structure (proposed)
+## 8. Repo structure (current)
 
 ```
 tailspot/
 ├─ PLAN.md                  ← this file
 ├─ README.md
+├─ CLAUDE.md                ← guidance for future Claude Code sessions
 ├─ .gitignore
-├─ ios/                     ← Xcode project (created Phase 0)
-│  ├─ Tailspot/
-│  ├─ TailspotTests/
-│  └─ TailspotUITests/
-├─ backend/                 ← Node/TS API (created Phase 1)
-│  ├─ src/
-│  │  ├─ adapters/          ← OpenSky, ADSBexchange, …
-│  │  ├─ routes/
-│  │  └─ validators/        ← catch validator
-│  └─ tests/
-├─ shared/                  ← schemas / type defs shared between ios + backend
-└─ tools/
-   └─ replay-harness/       ← Phase 0 sensor+ADS-B record/replay
+└─ ios/                     ← Xcode project
+   └─ Tailspot/
+      ├─ Tailspot.xcodeproj/
+      │  ├─ project.pbxproj
+      │  └─ xcshareddata/xcschemes/Tailspot.xcscheme  ← MUST stay secret-free
+      ├─ Tailspot/
+      │  ├─ TailspotApp.swift       — @main, owns the WindowGroup
+      │  ├─ ContentView.swift       — top-level view: camera + readout + AR + bottom list
+      │  ├─ AircraftDetailView.swift— tap-to-inspect detail sheet
+      │  ├─ CameraPreview.swift     — UIViewRepresentable wrapping AVCaptureSession
+      │  ├─ LocationManager.swift   — CLLocation + CLHeading wrapper
+      │  ├─ MotionManager.swift     — CMDeviceMotion wrapper (incl. cameraElevationDeg)
+      │  ├─ Geo.swift               — pure geometry: distance, bearing, elevation, project, screenPosition
+      │  ├─ Aircraft.swift          — Aircraft struct + Decodable + FailableDecodable + extrapolatedPosition
+      │  ├─ ADSBSource.swift        — protocol abstracting fetch
+      │  ├─ OpenSkyClient.swift     — ADSBSource for OpenSky (OAuth2 client-credentials)
+      │  ├─ MockADSBSource.swift    — ADSBSource for synthetic couch-testing data
+      │  └─ ADSBManager.swift       — @MainActor ObservableObject: polling, annotation, smoothness, visibility
+      ├─ TailspotTests/
+      │  ├─ TailspotTests.swift     — Xcode template placeholder (kept for noise; the real tests are below)
+      │  ├─ GeoTests.swift          — geometry + screen-projection tests
+      │  ├─ AircraftDecodingTests.swift — OpenSky positional JSON + FailableDecodable
+      │  └─ ADSBManagerTests.swift  — orchestration tests using injected FixedSource
+      └─ TailspotUITests/           — Xcode template scaffolding, not in regular test cadence
 ```
+
+Planned but not yet created:
+- `backend/` — Node/TS API (Phase 1)
+- `shared/` — schemas / type defs shared between ios + backend
+- `tools/replay-harness/` — Phase 0 main sensor+ADS-B record/replay
 
 ---
 
-## 9. Immediate next steps
+## 9. Immediate next steps (post-POC)
 
-1. **Confirm prerequisites in §10** so Tue work isn't blocked.
-2. **Tue evening:** scaffold Xcode project; permissions + sensors readout on camera view.
-3. **Wed–Thu:** OpenSky integration → projected labels (per §3.0a day-by-day).
-4. **Fri:** field test, iterate, demo.
-5. **Sat onward:** retrospective on what the POC taught us; commit to Phase 0 main scope.
+Friday POC (§3.0a) shipped a day early. Backlog ordered by impact:
 
-## 10. Prerequisites for the Friday POC
-
-Need to confirm before Claude starts writing Swift on Tue:
-
-1. **Mac with Xcode installed?** (Xcode 15+ for iOS 17 SwiftUI/SwiftData; free from the Mac App Store, ~10 GB and a long download.)
-2. **iPhone for testing?** What model and iOS version? The Simulator does not provide real GPS/compass/camera, so for this app, a physical device is required from day 1.
-3. **Apple Developer account?** Two paths:
-   - **Free Apple ID signing** — works for personal-device testing, but the build expires after 7 days and you need to re-sign / re-install. Fine for POC.
-   - **$99/yr paid program** — needed for TestFlight, App Store, and persistent installs. Not needed this week.
-   - Default: free signing for POC; pay if/when we want testers in Phase 1.
-4. **Field-test location?** Are you somewhere with regular overhead air traffic (near a major airport approach path, an urban area, etc.)? "Friday demo" requires a sky with planes in it.
-5. **Learning preference?** Do you want every step explained as we go (slower, more learning), or do you want code first and questions later (faster, learn ad hoc)?
+1. **Aircraft type lookup** (§3.0b #3) — first piece in the next session. ~45–60 min.
+2. **Heading-accuracy color cue** (§3.0b #2) — turn the heading readout red when `headingAccuracy > 15°`. ~10 min.
+3. **Rotate the leaked OpenSky client secret** — the value committed in commit `869d06d`'s scheme file is in git history and may exist in GitHub's dangling-objects cache for ~90 days. **This is a real cleanup item, not a hypothetical.** Regenerate on opensky-network.org's API console, update `OPENSKY_CLIENT_SECRET` in the user-only scheme.
+4. **Replay harness** (§3.0 main) — record `(sensor stream + ADS-B snapshot + observer pose)` tuples to disk during a session; replay offline through the ID engine. Phase 0 main infra. ~1.5 hr.
+5. **Visual confirmation** (§1.1a) — Vision + COCO airplane detection; deferred per user direction but documented.
+6. **Phase 0 main accuracy bar** — ≥80% correct ID across ≥50 trials in ≥3 sessions, per the original §3.0 success criterion. Needs the replay harness to be iterable.

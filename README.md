@@ -2,7 +2,7 @@
 
 iOS app that turns plane spotting into a collection game. Point your phone at a plane in the sky; an AR overlay identifies the aircraft, flight, and airline using live ADS-B data; catch it to your collection.
 
-**Status:** planning — see [PLAN.md](PLAN.md) for the full build/test/ship plan.
+**Status:** Friday POC (PLAN.md §3.0a) ✅ delivered May 5–7, 2026. Field-tested in Berkeley — AR labels track real aircraft. Catch flow, persistence, and backend are next phases. See [PLAN.md](PLAN.md) for the roadmap and [CLAUDE.md](CLAUDE.md) for working conventions.
 
 ## Goals (v1)
 
@@ -16,6 +16,14 @@ iOS app that turns plane spotting into a collection game. Point your phone at a 
 - Indoor / non-AR identification
 - Multiplayer, trading, Android
 
+## Build and run
+
+iOS app, built via Xcode (`⌘R`) on a physical iPhone. Simulator can't provide GPS/compass/camera, so device is required.
+
+For LIVE ADS-B data, register a free account at [opensky-network.org](https://opensky-network.org), then add `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` to a **user-only** Xcode scheme's Environment Variables. The MOCK toggle in the app works without credentials.
+
+Unit tests via `xcodebuild test -project ios/Tailspot/Tailspot.xcodeproj -scheme Tailspot -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' -only-testing:TailspotTests`.
+
 ## Repo layout
 
-See [PLAN.md §8](PLAN.md#8-repo-structure-proposed). Subdirectories will be created as each phase begins.
+See [PLAN.md §8](PLAN.md#8-repo-structure-current). `ios/Tailspot/` is the only thing that exists today; `backend/`, `shared/`, and `tools/replay-harness/` are planned.
