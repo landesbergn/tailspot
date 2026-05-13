@@ -40,11 +40,18 @@ Package.resolved
 
 # Don't commit Xcode shared schemes — Xcode's "Edit Scheme..." dialog
 # saves environment variables (including credentials like
-# OPENSKY_CLIENT_SECRET) into the SHARED scheme by default. We had a
-# secret-leak incident from this once. Schemes still work fine without
-# being shared — Xcode auto-creates a user-scheme on first open.
-*.xcodeproj/xcshareddata/xcschemes/
-*.xcworkspace/xcshareddata/xcschemes/
+# OPENSKY_CLIENT_SECRET) into the SHARED scheme by default. We've had
+# this leak TWICE. Schemes still work fine without being shared —
+# Xcode auto-creates a user-scheme on first open.
+#
+# Previous patterns missed the leading **/ and were root-anchored —
+# gitignore semantics treat a mid-path slash as anchored to the
+# .gitignore's directory, not "match anywhere". The actual scheme
+# path is nested under ios/Tailspot/, so the rule never fired.
+# Belt-and-suspenders: also gitignore *.xcscheme by filename.
+**/*.xcodeproj/xcshareddata/xcschemes/
+**/*.xcworkspace/xcshareddata/xcschemes/
+*.xcscheme
 
 # CocoaPods
 Pods/
