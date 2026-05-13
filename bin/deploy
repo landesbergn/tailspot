@@ -41,7 +41,9 @@ else
   "$here/bin/log-start"
 fi
 
-app_path="$here/$TAILSPOT_BUILD_DIR/Build/Products/Debug-iphoneos/Tailspot.app"
+# TAILSPOT_BUILD_DIR is absolute (see config.sh: outside iCloud-synced
+# Desktop so codesign doesn't choke on fileprovider xattrs).
+app_path="$TAILSPOT_BUILD_DIR/Build/Products/Debug-iphoneos/Tailspot.app"
 
 # Step 1: build (optional).
 if [ "$do_build" -eq 1 ]; then
@@ -49,7 +51,7 @@ if [ "$do_build" -eq 1 ]; then
     -project "$here/$TAILSPOT_PROJECT" \
     -scheme "$TAILSPOT_SCHEME" \
     -destination "platform=iOS,id=$TAILSPOT_DEVICE_ID" \
-    -derivedDataPath "$here/$TAILSPOT_BUILD_DIR"
+    -derivedDataPath "$TAILSPOT_BUILD_DIR"
 fi
 
 if [ "$dry_run" -eq 0 ] && [ ! -d "$app_path" ]; then

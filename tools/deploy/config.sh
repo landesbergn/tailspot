@@ -13,7 +13,12 @@ TAILSPOT_PROJECT="ios/Tailspot/Tailspot.xcodeproj"
 TAILSPOT_BUNDLE_ID="com.landesberg.Tailspot"
 TAILSPOT_LOG_SUBSYSTEM="com.landesberg.tailspot"
 
-TAILSPOT_BUILD_DIR="build"
+# Build artifacts live outside the repo (and outside the iCloud-synced
+# Desktop) because macOS's fileprovider tags any file under an iCloud-
+# managed folder with com.apple.FinderInfo / fpfs#P xattrs, which
+# codesign refuses to sign ("resource fork, Finder information, or
+# similar detritus not allowed"). Absolute path, not relative to $here.
+TAILSPOT_BUILD_DIR="$HOME/Library/Caches/tailspot-build"
 TAILSPOT_LOG_DIR="$HOME/Library/Logs/tailspot"
 TAILSPOT_LOG_FILE="$TAILSPOT_LOG_DIR/device.log"
 TAILSPOT_LOG_PIDFILE="$TAILSPOT_LOG_DIR/log-stream.pid"
