@@ -347,10 +347,11 @@ Friday POC (§3.0a) shipped early. The deploy loop (§3.0c) shipped May 13, 2026
 |---|------|------|---------|
 | 1 | ~~Remote-deploy loop + Log wrapper~~ ✅ shipped 2026-05-13 | — | Tooling investment that pays back on every subsequent item. |
 | 2 | ~~Aircraft type lookup~~ ✅ shipped 2026-05-13 | — | First product change through the new loop. |
-| 3 | **Fix device-side log streaming** | ~30 min | The deploy-loop ships without it (§3.0c). Likely path: `idevicesyslog` via Homebrew, wired into `bin/log-start` as the streaming backend. Required for the "tightest loop" Claude was originally building toward. |
-| 4 | **Heading-accuracy color cue** | ~10 min | First "trivial" iteration through the loop — proves the loop is fast for tiny UI changes. Turn the heading readout red when `headingAccuracy > 15°`. |
+| 3 | ~~Fix device-side log streaming~~ ✅ partial 2026-05-13 | — | `idevicesyslog` wired into `bin/log-start`; filters to `tailspot` substring. Catches system-emitted lines about Tailspot (sandbox denials, network-extension events, crashes), but **not** `os.Logger` output from the app itself — that flows through `com.apple.os_trace_relay`, which libimobiledevice doesn't expose. See item #10. |
+| 4 | ~~Heading-accuracy color cue~~ ✅ shipped 2026-05-13 | — | Red text on the heading line when `CLHeading.headingAccuracy > 15°`. Negative (unknown) treated as neutral. |
 | 5 | **Rotate leaked OpenSky client secret** | ~10 min | Long-standing security debt from commit `869d06d`. No code; regenerate on opensky-network.org, update the user-only scheme's env var. |
 | 6 | **Catch flow v0 — tap-Catch button + SwiftData persistence** | ~3–4 hr | First actual *game* mechanic. AircraftDetailView gets a "Catch" button; SwiftData stores a `Catch` model (icao24, callsign, model, timestamp, observer lat/lon, slant distance). Phase 1 work pulled forward because the deploy loop makes UI iteration cheap. |
 | 7 | **Hangar (collection) v0** | ~2–3 hr | List/grid of catches, grouped by airline or aircraft type, with tap-for-detail. Closes the product loop visually. |
 | 8 | **Replay harness** | ~1.5 hr | Phase 0-main infra. Becomes more valuable once a game exists to validate. |
 | 9 | **Visual confirmation (Vision + COCO airplane class)** | ~1 day | Per §1.1a. Hardest of these; defer until accuracy bar work (§3.0 main) starts. |
+| 10 | **Capture `os_log` output from the device** | ~1–2 hr | Remaining gap from #3. Candidates: in-app file logging (Logger mirrors to `Documents/tailspot.log`, retrieved via `xcrun devicectl device copy from`); or reverse-engineer Console.app's private framework path. Without this, `Log.swift` lines are visible in Xcode's Console (Cmd+Shift+C) but not in `bin/log-tail`. |
