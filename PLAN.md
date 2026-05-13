@@ -132,6 +132,16 @@ Day 4+ (Fri–Wed, post-POC iteration):
 - Tracking was "very loosely" smooth — fixed by the 1 Hz re-annotation loop landed Wed evening.
 - See §3.0b for what comes next.
 
+### Phase 0c — Remote-deploy loop ✅ DELIVERED (May 13, 2026)
+
+A Bash-driven loop for iterating on the phone without leaving the editor:
+
+- `bin/deploy [--no-build] [--no-launch] [--dry-run]` — builds via `xcodebuild`, installs via `xcrun devicectl`, launches the app on Noah's paired iPhone (UDID + config in `tools/deploy/config.sh`; override locally via gitignored `config.local.sh`).
+- `bin/log-start` / `bin/log-stop` / `bin/log-tail` — wrappers around a background `log stream` filtered on subsystem `com.landesberg.tailspot`. **Known gap:** the host macOS `log` binary on Noah's Mac does not accept `--device <UDID>`, so device-side streaming is currently a no-op (`log-start` exits 0 with a notice; `log-tail` is empty). Tracked in §9 as a follow-up; candidate fixes are `idevicesyslog` (libimobiledevice via Homebrew) or `xcrun devicectl device process launch --console` blocking attach.
+- All app-side logging now flows through `Log.swift` (`os.Logger` wrapper, categories: `openSky` / `adsb` / `location` / `motion` / `ui`) so the subsystem-predicate filter will catch everything when the streaming gap is fixed.
+
+Why: tightens the test-and-iterate loop. Claude can edit code, run the unit tests, push a build to the phone, and report back in a single chat turn — Noah picks up the phone and sees the new build already running. Log capture is the missing piece for the "tightest" loop but doesn't block the rest.
+
 ### Phase 0b — POC retrospective / what's still on the table
 
 Things observed in field testing or left over from Phase 0a that aren't yet in code:
@@ -287,6 +297,9 @@ tailspot/
 ├─ README.md
 ├─ CLAUDE.md                ← guidance for future Claude Code sessions
 ├─ .gitignore
+├─ bin/                     ← deploy / log-start / log-stop / log-tail (Phase 0c)
+├─ tools/
+│  └─ deploy/config.sh      ← UDID, scheme, paths (overridable via config.local.sh)
 └─ ios/                     ← Xcode project
    └─ Tailspot/
       ├─ Tailspot.xcodeproj/
@@ -301,6 +314,9 @@ tailspot/
       │  ├─ MotionManager.swift     — CMDeviceMotion wrapper (incl. cameraElevationDeg)
       │  ├─ Geo.swift               — pure geometry: distance, bearing, elevation, project, screenPosition
       │  ├─ Aircraft.swift          — Aircraft struct + Decodable + FailableDecodable + extrapolatedPosition
+      │  ├─ AircraftMetadata.swift  — Decodable struct from /metadata/aircraft/icao
+      │  ├─ MetadataCache.swift     — bounded LRU actor keyed by icao24
+      │  ├─ Log.swift               — os.Logger wrapper, subsystem com.landesberg.tailspot
       │  ├─ ADSBSource.swift        — protocol abstracting fetch
       │  ├─ OpenSkyClient.swift     — ADSBSource for OpenSky (OAuth2 client-credentials)
       │  ├─ MockADSBSource.swift    — ADSBSource for synthetic couch-testing data
@@ -309,7 +325,10 @@ tailspot/
       │  ├─ TailspotTests.swift     — Xcode template placeholder (kept for noise; the real tests are below)
       │  ├─ GeoTests.swift          — geometry + screen-projection tests
       │  ├─ AircraftDecodingTests.swift — OpenSky positional JSON + FailableDecodable
-      │  └─ ADSBManagerTests.swift  — orchestration tests using injected FixedSource
+      │  ├─ ADSBManagerTests.swift  — orchestration tests using injected FixedSource
+      │  ├─ AircraftMetadataDecodingTests.swift — payload + tolerant decode
+      │  ├─ MetadataCacheTests.swift            — LRU + miss-as-hit semantics
+      │  └─ ADSBManagerMetadataTests.swift      — cache consultation, dedupe, error path
       └─ TailspotUITests/           — Xcode template scaffolding, not in regular test cadence
 ```
 
@@ -322,11 +341,16 @@ Planned but not yet created:
 
 ## 9. Immediate next steps (post-POC)
 
-Friday POC (§3.0a) shipped a day early. Backlog ordered by impact:
+Friday POC (§3.0a) shipped early. The deploy loop (§3.0c) shipped May 13, 2026, alongside aircraft type lookup. Re-prioritized backlog after that:
 
-1. **Aircraft type lookup** (§3.0b #3) — first piece in the next session. ~45–60 min.
-2. **Heading-accuracy color cue** (§3.0b #2) — turn the heading readout red when `headingAccuracy > 15°`. ~10 min.
-3. **Rotate the leaked OpenSky client secret** — the value committed in commit `869d06d`'s scheme file is in git history and may exist in GitHub's dangling-objects cache for ~90 days. **This is a real cleanup item, not a hypothetical.** Regenerate on opensky-network.org's API console, update `OPENSKY_CLIENT_SECRET` in the user-only scheme.
-4. **Replay harness** (§3.0 main) — record `(sensor stream + ADS-B snapshot + observer pose)` tuples to disk during a session; replay offline through the ID engine. Phase 0 main infra. ~1.5 hr.
-5. **Visual confirmation** (§1.1a) — Vision + COCO airplane detection; deferred per user direction but documented.
-6. **Phase 0 main accuracy bar** — ≥80% correct ID across ≥50 trials in ≥3 sessions, per the original §3.0 success criterion. Needs the replay harness to be iterable.
+| # | Item | Est. | Why now |
+|---|------|------|---------|
+| 1 | ~~Remote-deploy loop + Log wrapper~~ ✅ shipped 2026-05-13 | — | Tooling investment that pays back on every subsequent item. |
+| 2 | ~~Aircraft type lookup~~ ✅ shipped 2026-05-13 | — | First product change through the new loop. |
+| 3 | **Fix device-side log streaming** | ~30 min | The deploy-loop ships without it (§3.0c). Likely path: `idevicesyslog` via Homebrew, wired into `bin/log-start` as the streaming backend. Required for the "tightest loop" Claude was originally building toward. |
+| 4 | **Heading-accuracy color cue** | ~10 min | First "trivial" iteration through the loop — proves the loop is fast for tiny UI changes. Turn the heading readout red when `headingAccuracy > 15°`. |
+| 5 | **Rotate leaked OpenSky client secret** | ~10 min | Long-standing security debt from commit `869d06d`. No code; regenerate on opensky-network.org, update the user-only scheme's env var. |
+| 6 | **Catch flow v0 — tap-Catch button + SwiftData persistence** | ~3–4 hr | First actual *game* mechanic. AircraftDetailView gets a "Catch" button; SwiftData stores a `Catch` model (icao24, callsign, model, timestamp, observer lat/lon, slant distance). Phase 1 work pulled forward because the deploy loop makes UI iteration cheap. |
+| 7 | **Hangar (collection) v0** | ~2–3 hr | List/grid of catches, grouped by airline or aircraft type, with tap-for-detail. Closes the product loop visually. |
+| 8 | **Replay harness** | ~1.5 hr | Phase 0-main infra. Becomes more valuable once a game exists to validate. |
+| 9 | **Visual confirmation (Vision + COCO airplane class)** | ~1 day | Per §1.1a. Hardest of these; defer until accuracy bar work (§3.0 main) starts. |

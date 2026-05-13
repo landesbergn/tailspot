@@ -20,6 +20,8 @@ iOS app that turns plane spotting into a collection game. Point your phone at a 
 
 iOS app, built via Xcode (`⌘R`) on a physical iPhone. Simulator can't provide GPS/compass/camera, so device is required.
 
+For tighter iteration there is also a Bash-driven deploy loop: `bin/deploy` builds, installs over the paired iPhone's wireless link, and launches the app; `bin/log-tail` (currently a stub — see PLAN.md §9 #3) is intended to surface filtered device logs once iOS log streaming is wired in. See [CLAUDE.md "Remote-deploy loop"](CLAUDE.md#remote-deploy-loop) for details.
+
 For LIVE ADS-B data, register a free account at [opensky-network.org](https://opensky-network.org), then add `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` to a **user-only** Xcode scheme's Environment Variables. The MOCK toggle in the app works without credentials.
 
 Unit tests via `xcodebuild test -project ios/Tailspot/Tailspot.xcodeproj -scheme Tailspot -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' -only-testing:TailspotTests`.

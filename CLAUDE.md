@@ -34,6 +34,19 @@ The iOS app is built and run from Xcode (`⌘R` on Noah's machine) on a physical
 
 The iOS Simulator cannot provide real GPS, compass, or camera, so a physical device is required for runtime testing of this app.
 
+### Remote-deploy loop
+
+For tighter iteration than ⌘R-in-Xcode, the repo ships a Bash-driven loop:
+
+- `bin/deploy [--no-build] [--no-launch] [--dry-run]` — builds via `xcodebuild`, installs via `xcrun devicectl`, launches the app on Noah's paired iPhone. The device UDID, scheme, and paths come from `tools/deploy/config.sh`; override locally via `tools/deploy/config.local.sh` (gitignored). Wireless dev pairing must already be active (confirm with `xcrun devicectl list devices`). `--launch` is implicit; use `--no-launch` to install without auto-starting.
+- `bin/log-tail [-n N] [-f]` — reads `~/Library/Logs/tailspot/device.log`. **Currently a no-op stub:** the host macOS `log` binary on this machine does not accept `--device <UDID>`, so `bin/log-start` exits 0 with a notice and no streaming runs. Fix planned (PLAN.md §9 #3); until then, inspect runtime behavior via Xcode's Console or `os_log` viewer.
+- All app-side logging flows through `Log.swift` (subsystem `com.landesberg.tailspot`).
+
+Rules:
+- **Run unit tests before `bin/deploy`** when touching testable code. The loop will happily deploy a broken build.
+- If `xcrun devicectl install` fails (e.g., "developer disk image could not be mounted"), surface the message and stop — don't silently retry. Most such failures need Noah's action: unlock the phone, re-pair via USB, or open Xcode once to mount the DDI.
+- The device UDID in `tools/deploy/config.sh` is Noah's. A different developer overrides via `tools/deploy/config.local.sh`.
+
 ### OpenSky credentials
 
 For LIVE mode the app authenticates via OAuth2 client-credentials. OpenSky's anonymous tier (400 credits/day) is exhausted in ~1.3 hr at the 20 s default poll rate; the registered tier (4000 credits/day) is comfortable for testing.
@@ -136,6 +149,20 @@ Pinned to `.portrait` in `LocationManager.init` so true-north heading is reporte
 - All `@Published` mutations must happen on the main thread. Background callbacks (CMMotion queue, AVCapture queue, URLSession completion) hop via `DispatchQueue.main.async` before mutating state. `ADSBManager` sidesteps this with `@MainActor` on the class.
 - Camera (`AVCaptureSession`) configuration and `startRunning` run on a dedicated serial `DispatchQueue` — never on main.
 - The motion-manager reference frame is `.xArbitraryZVertical` (gravity-aligned only). True-north alignment comes from `CLLocationManager`'s heading. Revisit when ARKit lands.
+
+### Logging through `Log.swift`
+
+All app-side logging flows through `Log.swift`, a thin enum of `os.Logger` instances grouped by category:
+
+```swift
+Log.openSky.info("token cache hit")
+Log.adsb.error("metadata lookup failed for \(icao, privacy: .public)")
+Log.ui.notice("camera setup failed")
+```
+
+The subsystem is always `"com.landesberg.tailspot"` — `bin/log-tail` predicates on this so the Mac sees a filtered stream instead of the device's full firehose. Use `privacy: .public` on string interpolations whose contents you actually want to read in `log` output (Apple redacts string interpolations by default).
+
+**Do not `print(...)` from app code.** Existing `print` calls were migrated; new ones won't be visible in the deploy-loop logs.
 
 ### OpenSky OAuth token caching
 
