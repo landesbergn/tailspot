@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$here/tools/deploy/config.sh"
+
+if [ ! -f "$TAILSPOT_LOG_PIDFILE" ]; then
+  echo "log-stream not running (no pidfile)"
+  exit 0
+fi
+
+pid="$(cat "$TAILSPOT_LOG_PIDFILE")"
+if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+  kill "$pid"
+  echo "stopped log-stream (pid $pid)"
+else
+  echo "pidfile present but process not running"
+fi
+rm -f "$TAILSPOT_LOG_PIDFILE"

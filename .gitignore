@@ -87,3 +87,7 @@ yarn-error.log*
 # Tooling / local
 .claude/
 tools/replay-harness/recordings/
+
+# Deploy-loop artifacts and per-user overrides
+/build/
+tools/deploy/config.local.sh

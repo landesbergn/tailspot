@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# bin/deploy [--no-build] [--no-launch] [--dry-run]
+#
+# Build the Tailspot iOS app for Noah's iPhone, install it over the
+# CoreDevice wireless link, and launch the app. Idempotently ensures
+# bin/log-start is running so device-side logs are captured to
+# $TAILSPOT_LOG_FILE for bin/log-tail to inspect.
+#
+# Exits non-zero on any step failure; stderr is preserved.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$here/tools/deploy/config.sh"
+
+do_build=1
+do_launch=1
+dry_run=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-build) do_build=0; shift ;;
+    --no-launch) do_launch=0; shift ;;
+    --dry-run) dry_run=1; shift ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+run() {
+  if [ "$dry_run" -eq 1 ]; then
+    echo "DRY: $*"
+  else
+    echo "+ $*"
+    "$@"
+  fi
+}
+
+# Step 0: ensure log stream is running (idempotent).
+if [ "$dry_run" -eq 1 ]; then
+  echo "DRY: bin/log-start"
+else
+  "$here/bin/log-start"
+fi
+
+app_path="$here/$TAILSPOT_BUILD_DIR/Build/Products/Debug-iphoneos/Tailspot.app"
+
+# Step 1: build (optional).
+if [ "$do_build" -eq 1 ]; then
+  run xcodebuild build \
+    -project "$here/$TAILSPOT_PROJECT" \
+    -scheme "$TAILSPOT_SCHEME" \
+    -destination "platform=iOS,id=$TAILSPOT_DEVICE_ID" \
+    -derivedDataPath "$here/$TAILSPOT_BUILD_DIR"
+fi
+
+if [ "$dry_run" -eq 0 ] && [ ! -d "$app_path" ]; then
+  echo "expected .app not found at $app_path" >&2
+  exit 1
+fi
+
+# Step 2: install.
+run xcrun devicectl device install app \
+  --device "$TAILSPOT_DEVICE_ID" \
+  "$app_path"
+
+# Step 3: launch (optional).
+if [ "$do_launch" -eq 1 ]; then
+  run xcrun devicectl device process launch \
+    --device "$TAILSPOT_DEVICE_ID" \
+    "$TAILSPOT_BUNDLE_ID"
+fi
+
+echo "deployed; log at $TAILSPOT_LOG_FILE"

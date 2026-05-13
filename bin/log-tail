@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Usage:
+#   bin/log-tail            last 200 lines
+#   bin/log-tail -f         follow
+#   bin/log-tail -n 500     last 500 lines
+#   bin/log-tail -n 500 -f  last 500 lines, then follow
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$here/tools/deploy/config.sh"
+
+lines=200
+follow=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n) lines="$2"; shift 2 ;;
+    -f) follow="-f"; shift ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [ ! -f "$TAILSPOT_LOG_FILE" ]; then
+  echo "no log file at $TAILSPOT_LOG_FILE — run bin/log-start first" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC2086
+tail -n "$lines" $follow "$TAILSPOT_LOG_FILE"

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Starts a background `log stream` against the paired iPhone, filtered
+# to the Tailspot subsystem, redirected to a file. Idempotent: if the
+# stream is already running (per pidfile + a live-process check), exits 0.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$here/tools/deploy/config.sh"
+
+mkdir -p "$TAILSPOT_LOG_DIR"
+
+if [ -f "$TAILSPOT_LOG_PIDFILE" ]; then
+  pid="$(cat "$TAILSPOT_LOG_PIDFILE")"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    echo "log-stream already running (pid $pid)"
+    exit 0
+  fi
+  # Stale pidfile — clean up.
+  rm -f "$TAILSPOT_LOG_PIDFILE"
+fi
+
+predicate="subsystem == \"$TAILSPOT_LOG_SUBSYSTEM\""
+
+# Try --device <UDID> first; on systems where that flag isn't accepted,
+# fall back to --device-name.
+nohup log stream \
+  --device "$TAILSPOT_DEVICE_ID" \
+  --predicate "$predicate" \
+  --style syslog \
+  >"$TAILSPOT_LOG_FILE" 2>&1 &
+
+stream_pid=$!
+echo "$stream_pid" > "$TAILSPOT_LOG_PIDFILE"
+
+# Brief wait + alive check; if the process dies immediately we likely
+# need the --device-name fallback.
+sleep 1
+if ! kill -0 "$stream_pid" 2>/dev/null; then
+  rm -f "$TAILSPOT_LOG_PIDFILE"
+  echo "log stream failed with --device UDID — retrying with --device-name"
+  nohup log stream \
+    --device-name "$TAILSPOT_DEVICE_NAME" \
+    --predicate "$predicate" \
+    --style syslog \
+    >"$TAILSPOT_LOG_FILE" 2>&1 &
+  stream_pid=$!
+  echo "$stream_pid" > "$TAILSPOT_LOG_PIDFILE"
+  sleep 1
+  if ! kill -0 "$stream_pid" 2>/dev/null; then
+    rm -f "$TAILSPOT_LOG_PIDFILE"
+    echo "log stream failed; see $TAILSPOT_LOG_FILE for diagnostics" >&2
+    exit 1
+  fi
+fi
+
+echo "log-stream running (pid $stream_pid); output -> $TAILSPOT_LOG_FILE"
