@@ -17,6 +17,11 @@ struct ContentView: View {
     @StateObject private var lockOn = LockOnEngine()
     @State private var cameraAuthorized = false
     @State private var selectedAircraft: ObservedAircraft?
+    /// Hidden by default. Tap the small wrench glyph in the top-right
+    /// to reveal the sensor readout (top) + nearby-aircraft list
+    /// (bottom). Field-testing UI is intentionally clean; raw sensor
+    /// dumps are for inspection, not normal use.
+    @State private var showDebug = false
 
     var body: some View {
         ZStack {
@@ -27,12 +32,12 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
             }
 
-            // Lock-on AR overlay. No labels show by default — just a
-            // small center crosshair. As the user aims at a plane
-            // (within lockZoneRadius of center), yellow brackets close
-            // in for ~0.6s, then snap green and a compact label appears
-            // identifying the plane. Tap the locked label to open the
-            // detail sheet (which contains the Catch button).
+            // Lock-on AR overlay. The view is clean by default — no
+            // crosshair, no per-aircraft labels. As the user aims at
+            // a plane (within lockZoneRadius of screen center), yellow
+            // brackets close in for ~0.6 s, then snap green and a
+            // compact label identifies the plane. Tap the locked
+            // label to open the detail sheet (with the Catch button).
             //
             // The 30 Hz TimelineView drives both the engine state
             // transitions and the bracket animation. The engine is a
@@ -57,10 +62,6 @@ struct ContentView: View {
                     let _ = lockOn.update(closestTargetIcao24: closest, now: now)
 
                     ZStack {
-                        centerCrosshair
-                            .position(x: geo.size.width / 2,
-                                      y: geo.size.height / 2)
-
                         if let icao = lockOn.state.targetIcao24,
                            let target = visible.first(where: { $0.aircraft.icao24 == icao }),
                            let pos = target.screenPosition(
@@ -79,14 +80,30 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                sensorReadout
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            // Debug overlays — hidden by default; revealed by the
+            // wrench toggle below.
+            if showDebug {
+                VStack(spacing: 0) {
+                    sensorReadout
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                aircraftList
+                    aircraftList
+                }
+                .transition(.opacity)
+            }
+
+            // Small discrete toggle in the top-trailing corner.
+            VStack {
+                HStack {
+                    Spacer()
+                    debugToggleButton
+                        .padding(.top, 8)
+                        .padding(.trailing, 12)
+                }
+                Spacer()
             }
         }
         .task {
@@ -100,27 +117,28 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Lock-on visuals
+    // MARK: - Debug toggle
 
-    /// Always-visible center crosshair. Small + with a hole in the
-    /// middle so it doesn't obscure tiny planes when one is right at
-    /// the camera center.
-    private var centerCrosshair: some View {
-        ZStack {
-            // Horizontal pair of ticks
-            HStack(spacing: 6) {
-                Capsule().frame(width: 8, height: 1.5)
-                Capsule().frame(width: 8, height: 1.5)
+    /// Small wrench glyph in the top-trailing corner; tap to toggle
+    /// the sensor readout + aircraft-list overlays. Low-contrast on
+    /// purpose so it doesn't compete with the AR view.
+    private var debugToggleButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                showDebug.toggle()
             }
-            // Vertical pair of ticks
-            VStack(spacing: 6) {
-                Capsule().frame(width: 1.5, height: 8)
-                Capsule().frame(width: 1.5, height: 8)
-            }
+        } label: {
+            Image(systemName: showDebug ? "wrench.fill" : "wrench")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white.opacity(showDebug ? 0.9 : 0.45))
+                .padding(8)
+                .background(.black.opacity(showDebug ? 0.45 : 0.20), in: .circle)
+                .shadow(color: .black.opacity(0.5), radius: 2)
         }
-        .foregroundStyle(Color.cyan.opacity(0.85))
-        .shadow(color: .black.opacity(0.5), radius: 1)
+        .accessibilityLabel(showDebug ? "Hide debug overlays" : "Show debug overlays")
     }
+
+    // MARK: - Lock-on visuals
 
     /// Brackets + label rendered at a target's projected screen
     /// position. Style + size depend on the lock-on state:
