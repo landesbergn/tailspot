@@ -22,6 +22,14 @@ struct ContentView: View {
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
     @State private var showDebug = false
+    /// Metadata for whatever plane the lock engine is currently
+    /// tracking. Fetched lazily through ADSBManager.metadata(for:),
+    /// which consults its in-memory cache first; only first time we
+    /// see an icao24 actually hits OpenSky. Kicked off the moment
+    /// acquisition starts (driven by .task(id:) on targetIcao24) so
+    /// by the time the lock snaps green, the label content is usually
+    /// already populated.
+    @State private var lockedMetadata: AircraftMetadata?
 
     var body: some View {
         ZStack {
@@ -70,7 +78,12 @@ struct ContentView: View {
                                in: geo.size
                            )
                         {
-                            lockOverlay(state: lockOn.state, target: target, now: now)
+                            lockOverlay(
+                                state: lockOn.state,
+                                target: target,
+                                metadata: lockedMetadata,
+                                now: now
+                            )
                                 .position(pos)
                                 .onTapGesture { selectedAircraft = target }
                         }
@@ -112,6 +125,16 @@ struct ContentView: View {
             motion.start()
             adsb.start { location.cllocation }
         }
+        // Re-runs whenever the lock engine switches to (or away from)
+        // a target icao. Hits ADSBManager.metadata(for:) — instant on
+        // a cache hit, single OpenSky call on miss.
+        .task(id: lockOn.state.targetIcao24) {
+            if let icao = lockOn.state.targetIcao24 {
+                lockedMetadata = await adsb.metadata(for: icao)
+            } else {
+                lockedMetadata = nil
+            }
+        }
         .sheet(item: $selectedAircraft) { obs in
             AircraftDetailView(observed: obs, manager: adsb, observerLocation: location.cllocation)
         }
@@ -146,12 +169,17 @@ struct ContentView: View {
     /// `locked` / `sticky` → solid green brackets at the steady size,
     /// with the identification label.
     @ViewBuilder
-    private func lockOverlay(state: LockOnEngine.State, target: ObservedAircraft, now: Date) -> some View {
+    private func lockOverlay(
+        state: LockOnEngine.State,
+        target: ObservedAircraft,
+        metadata: AircraftMetadata?,
+        now: Date
+    ) -> some View {
         let style = lockOverlayStyle(for: state, now: now)
         VStack(spacing: 4) {
             LockBrackets(boxSize: style.boxSize, color: style.color, opacity: style.opacity)
             if style.showLabel {
-                lockLabel(target)
+                lockLabel(target, metadata: metadata)
                     .opacity(style.opacity)
             }
         }
@@ -189,22 +217,49 @@ struct ContentView: View {
         }
     }
 
-    /// Compact identification card shown below a locked target.
-    /// Uses metadata we have access to via ADSBManager.metadata(for:);
-    /// since this is one-line per field, we don't await — show whatever's
-    /// in the cache right now and let the detail sheet (sheet-presented
-    /// on tap) do the async fetch.
-    private func lockLabel(_ obs: ObservedAircraft) -> some View {
+    /// Identification card shown below a locked target. Four lines
+    /// in decreasing emphasis: callsign, airline (operator), make +
+    /// model, altitude + speed. Lines for which we don't yet have
+    /// data are simply omitted — keeps the card from filling with
+    /// dashes while the metadata fetch is in flight.
+    private func lockLabel(_ obs: ObservedAircraft, metadata: AircraftMetadata?) -> some View {
         let cs = obs.aircraft.callsign ?? obs.aircraft.icao24
-        let dKm = obs.slantDistanceMeters / 1000
-        let fl = obs.aircraft.altitudeMeters / 30.48
-        return VStack(spacing: 1) {
+        let airline = metadata?.operatorName
+        let makeModel: String? = {
+            switch (metadata?.manufacturerName, metadata?.model) {
+            case let (mfg?, model?): return "\(mfg) \(model)"
+            case let (mfg?, nil):    return mfg
+            case let (nil, model?):  return model
+            default:                 return nil
+            }
+        }()
+        let altFt = Int((obs.aircraft.altitudeMeters * 3.28084).rounded())
+        let altText = "\(altFt.formatted(.number)) ft"
+        let speedText: String? = obs.aircraft.velocityMps.map {
+            "\(Int(($0 * 2.23694).rounded())) mph"
+        }
+        let stats = [altText, speedText].compactMap(\.self).joined(separator: "  ·  ")
+
+        return VStack(alignment: .leading, spacing: 1) {
             Text(cs)
                 .font(.caption.monospaced().bold())
-            Text(String(format: "FL%03.0f  %.1f km", fl, dKm))
+                .foregroundStyle(.white)
+
+            if let airline {
+                Text(airline)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.95))
+            }
+            if let makeModel {
+                Text(makeModel)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+
+            Text(stats)
                 .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.85))
         }
-        .foregroundStyle(.white)
         .shadow(color: .black, radius: 2)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
