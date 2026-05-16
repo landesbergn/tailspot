@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Stop-hook helper. Inspects the current repo state and tells Claude
+# to refresh the on-disk docs (CLAUDE.md / PLAN.md) before ending the
+# turn, IF the local branch has commits ahead of origin/main and
+# none of those commits touched the docs.
+#
+# Exit-0 silently in all happy paths:
+#   - cwd isn't a git repo
+#   - origin/main ref doesn't exist (fresh clone, unusual branch state)
+#   - no unpushed commits
+#   - unpushed commits did touch CLAUDE.md or PLAN.md
+#
+# Only when the local branch is ahead AND the docs were untouched does
+# the script emit a JSON `{ decision: "block", reason: "..." }` payload
+# on stdout. Stop hooks honor that: Claude does not stop, it continues
+# with the reason injected into context.
+#
+# Wired up via .claude/settings.json (Stop event). The point: keep
+# the docs in lock-step with code so any fresh session can resume from
+# a complete picture without spelunking the commit log.
+
+set -euo pipefail
+
+# Locate the repo root regardless of where Claude invoked the hook from.
+# If we're not in a git repo at all, no-op.
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$repo_root" || exit 0
+
+# If origin/main doesn't exist (just-cloned repo, unusual branch state),
+# we have no anchor to compare against — bail silently.
+git rev-parse --verify --quiet origin/main >/dev/null || exit 0
+
+# How many commits is HEAD ahead of origin/main?
+unpushed=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
+[ "$unpushed" = "0" ] && exit 0
+
+# Did any of those unpushed commits touch CLAUDE.md or PLAN.md?
+# --name-only emits one filename per line per commit; we grep for
+# exact matches at line start so a substring like "CLAUDE.md.bak"
+# wouldn't accidentally count.
+if git log origin/main..HEAD --name-only -- CLAUDE.md PLAN.md 2>/dev/null \
+   | grep -qE '^(CLAUDE\.md|PLAN\.md)$'
+then
+  exit 0
+fi
+
+# Stale. Build the JSON payload via jq so the reason is properly escaped.
+jq -nc \
+  --arg n "$unpushed" \
+  '{
+    decision: "block",
+    reason: ("There are " + $n + " unpushed commit(s) on main but neither CLAUDE.md nor PLAN.md has been touched in any of them. Before ending this session, refresh CLAUDE.md \"Current state\" and PLAN.md §9 (or the equivalent backlog section) to reflect what shipped, commit those updates, then push origin main. This keeps the on-disk docs aligned with code so a fresh session can resume cleanly without spelunking the commit log.")
+  }'
