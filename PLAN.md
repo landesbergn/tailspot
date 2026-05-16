@@ -320,7 +320,9 @@ tailspot/
       │  ├─ ADSBSource.swift        — protocol abstracting fetch
       │  ├─ OpenSkyClient.swift     — ADSBSource for OpenSky (OAuth2 client-credentials)
       │  ├─ MockADSBSource.swift    — ADSBSource for synthetic couch-testing data
-      │  └─ ADSBManager.swift       — @MainActor ObservableObject: polling, annotation, smoothness, visibility
+      │  ├─ ADSBManager.swift       — @MainActor ObservableObject: polling, annotation, smoothness, visibility, metadata(for:)
+      │  ├─ LockOnEngine.swift      — pure state machine for the AR lock-on interaction + closestTargetIcao24 helper
+      │  └─ Catch.swift             — @Model SwiftData row written when the user taps "Catch this plane"
       ├─ TailspotTests/
       │  ├─ TailspotTests.swift     — Xcode template placeholder (kept for noise; the real tests are below)
       │  ├─ GeoTests.swift          — geometry + screen-projection tests
@@ -328,7 +330,9 @@ tailspot/
       │  ├─ ADSBManagerTests.swift  — orchestration tests using injected FixedSource
       │  ├─ AircraftMetadataDecodingTests.swift — payload + tolerant decode
       │  ├─ MetadataCacheTests.swift            — LRU + miss-as-hit semantics
-      │  └─ ADSBManagerMetadataTests.swift      — cache consultation, dedupe, error path
+      │  ├─ ADSBManagerMetadataTests.swift      — cache consultation, dedupe, error path
+      │  ├─ CatchTests.swift                    — SwiftData insert/fetch (in-memory ModelContainer)
+      │  └─ LockOnEngineTests.swift             — full state-machine coverage
       └─ TailspotUITests/           — Xcode template scaffolding, not in regular test cadence
 ```
 
@@ -341,17 +345,27 @@ Planned but not yet created:
 
 ## 9. Immediate next steps (post-POC)
 
-Friday POC (§3.0a) shipped early. The deploy loop (§3.0c) shipped May 13, 2026, alongside aircraft type lookup. Re-prioritized backlog after that:
+Friday POC (§3.0a) shipped 2026-05-07. The deploy loop (§3.0c) shipped 2026-05-13. Through 2026-05-16, also delivered: aircraft type lookup, lock-on interaction, catch flow v0, clean default UI + debug toggle, 30 km visibility cap, heading-accuracy color cue, partial device log streaming.
 
-| # | Item | Est. | Why now |
-|---|------|------|---------|
-| 1 | ~~Remote-deploy loop + Log wrapper~~ ✅ shipped 2026-05-13 | — | Tooling investment that pays back on every subsequent item. |
-| 2 | ~~Aircraft type lookup~~ ✅ shipped 2026-05-13 | — | First product change through the new loop. |
-| 3 | ~~Fix device-side log streaming~~ ✅ partial 2026-05-13 | — | `idevicesyslog` wired into `bin/log-start`; filters to `tailspot` substring. Catches system-emitted lines about Tailspot (sandbox denials, network-extension events, crashes), but **not** `os.Logger` output from the app itself — that flows through `com.apple.os_trace_relay`, which libimobiledevice doesn't expose. See item #10. |
-| 4 | ~~Heading-accuracy color cue~~ ✅ shipped 2026-05-13 | — | Red text on the heading line when `CLHeading.headingAccuracy > 15°`. Negative (unknown) treated as neutral. |
-| 5 | **Rotate leaked OpenSky client secret** | ~10 min | Long-standing security debt from commit `869d06d`. No code; regenerate on opensky-network.org, update the user-only scheme's env var. |
-| 6 | **Catch flow v0 — tap-Catch button + SwiftData persistence** | ~3–4 hr | First actual *game* mechanic. AircraftDetailView gets a "Catch" button; SwiftData stores a `Catch` model (icao24, callsign, model, timestamp, observer lat/lon, slant distance). Phase 1 work pulled forward because the deploy loop makes UI iteration cheap. |
-| 7 | **Hangar (collection) v0** | ~2–3 hr | List/grid of catches, grouped by airline or aircraft type, with tap-for-detail. Closes the product loop visually. |
-| 8 | **Replay harness** | ~1.5 hr | Phase 0-main infra. Becomes more valuable once a game exists to validate. |
-| 9 | **Visual confirmation (Vision + COCO airplane class)** | ~1 day | Per §1.1a. Hardest of these; defer until accuracy bar work (§3.0 main) starts. |
-| 10 | **Capture `os_log` output from the device** | ~1–2 hr | Remaining gap from #3. Candidates: in-app file logging (Logger mirrors to `Documents/tailspot.log`, retrieved via `xcrun devicectl device copy from`); or reverse-engineer Console.app's private framework path. Without this, `Log.swift` lines are visible in Xcode's Console (Cmd+Shift+C) but not in `bin/log-tail`. |
+**Pending (priority order):**
+
+| # | Item | Est. | Why |
+|---|------|------|-----|
+| 1 | **Hangar (collection) v0** | ~2–3 hr | Catches persist in SwiftData today but are invisible — the user has no way to see what they've caught. List/grid grouped by airline or aircraft type with tap-for-detail closes the product loop. Highest user-visible payoff next. |
+| 2 | **Rotate leaked OpenSky client secret** | ~10 min | Long-standing security debt from commit `869d06d`. No code; regenerate on opensky-network.org, update the user-only scheme's env var. Independent of every other item. |
+| 3 | **Capture `os_log` output from the device** | ~1–2 hr | `bin/log-tail` currently sees system-emitted lines about Tailspot but not `os.Logger` calls from the app — those flow through `com.apple.os_trace_relay`, which libimobiledevice doesn't expose. Candidates: in-app file logging (`Log.swift` mirrors to `Documents/tailspot.log`, retrieved via `xcrun devicectl device copy from`); or wrap Console.app's private framework. Until this lands, use Xcode's Console (Cmd+Shift+C) for app-side logs. |
+| 4 | **Replay harness** | ~1.5 hr | Phase 0-main infra. Record `(sensor stream + ADS-B snapshot + observer pose)` to disk during a session; replay offline through the ID engine. Becomes more valuable once we want to validate lock-on accuracy across sessions. |
+| 5 | **Visual confirmation (Vision + COCO airplane class)** | ~1 day | Per §1.1a. Detect the actual plane image in the camera frame and lock the brackets to it rather than the compass-predicted position. Hardest of these; defer until the accuracy bar work (§3.0 main) starts. |
+| 6 | **Achievements / streaks / scoring** | open | Phase 2 work. Pulled from Phase 2 in the original roadmap — wait until Hangar exists and we have some real catch volume to design against. |
+
+**Shipped 2026-05-13 → 2026-05-16 (was queued in this section earlier):**
+
+- ~~Remote-deploy loop + `Log.swift`~~ ✅
+- ~~Aircraft type lookup~~ ✅
+- ~~Device-side log streaming~~ ✅ partial (system-level only; see Pending #3)
+- ~~Heading-accuracy color cue~~ ✅
+- ~~Tighter 30 km visibility cap, applied to bottom list too~~ ✅
+- ~~Catch flow v0 (button + `Catch` SwiftData model + container)~~ ✅
+- ~~AR lock-on interaction (acquire-on-aim → green brackets + label)~~ ✅
+- ~~Clean default UI; sensor readout + aircraft list behind a debug toggle~~ ✅
+- ~~Lock label content: airline + make/model + altitude + speed~~ ✅
