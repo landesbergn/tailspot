@@ -23,9 +23,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Visibility filter.** AR overlay AND debug aircraft list both show only aircraft above the horizon AND within 30 km slant distance. Bbox fetch is still 50 km — out-of-range planes are hidden, not dropped.
 - **Debug overlay, hidden by default.** Wrench glyph in the top-right toggles the sensor readout (top) and nearby-aircraft list (bottom). The LIVE/MOCK toggle lives in the sensor readout.
 - **Forward-extrapolation** of ADS-B positions to "now"; **1 Hz re-annotation** for smooth bracket tracking; **OAuth2 client-credentials** auth against OpenSky (4000 credits/day registered tier); **429-aware backoff**.
-- **82 unit tests** in `TailspotTests/` covering geometry, OpenSky decoding, annotation, sort, error handling, extrapolation, visibility predicate, screen projection, aircraft-metadata decoding, MetadataCache LRU+miss-as-hit semantics, ADSBManager metadata-cache-and-fallback, SwiftData Catch persistence (including the operatorName default), LockOnEngine state transitions (idle/acquiring/locked/sticky), and HangarGrouping (both modes, fallbacks, sort order, empty input, whitespace folding).
+- **Replay recorder v0.** Tap the **Record session** row in the debug overlay (just under the LIVE/MOCK row) — a 1 Hz loop captures one `tick` per second containing the full sensor state (GPS + heading + pitch/roll/yaw + camera elevation) plus a snapshot of every currently-visible aircraft. Lines append to `Documents/replays/replay-<utc>.jsonl` on the device. The line format is documented in `ReplayRecorder.swift`; retrieve via `xcrun devicectl device copy from <udid> --source Documents/replays --destination ./replays`. Round-trip tests + recorder lifecycle tests live in `ReplayRecorderTests.swift`. Phase 0 main infra per PLAN §3.0; *replay-into-the-engine* is a follow-up (file format is stable enough to support it now).
+- **93 unit tests** in `TailspotTests/` covering geometry, OpenSky decoding, annotation, sort, error handling, extrapolation, visibility predicate, screen projection, aircraft-metadata decoding, MetadataCache LRU+miss-as-hit semantics, ADSBManager metadata-cache-and-fallback, SwiftData Catch persistence (including the operatorName default), LockOnEngine state transitions (idle/acquiring/locked/sticky), HangarGrouping (both modes, fallbacks, sort order, empty input, whitespace folding), and the replay format (JSONL round-trip, partial-line tolerance, recorder lifecycle, Aircraft→AircraftSnapshot conversion).
 
-**Deliberately not yet built:** Hangar dedupe + delete (deferred from v0), backend, ARKit drift correction, achievements/scoring, visual confirmation (CV/ML on the camera feed), origin/destination route info, replay harness, device-side `os.Logger` capture (only system-emitted lines reach `bin/log-tail` today; see PLAN.md §9 #10). See PLAN.md §9 for the prioritized backlog. Don't try to "fix" what isn't built.
+**Deliberately not yet built:** Hangar dedupe + delete (deferred from v0), replay-through-engine (recorder ships but the offline replay/analysis side is future work), backend, ARKit drift correction, achievements/scoring, visual confirmation (CV/ML on the camera feed), origin/destination route info, device-side `os.Logger` capture (only system-emitted lines reach `bin/log-tail` today; see PLAN.md §9 #2). See PLAN.md §9 for the prioritized backlog. Don't try to "fix" what isn't built.
 
 ## Working model
 
@@ -102,6 +103,7 @@ The current suite (82 tests) covers:
 - `CatchTests`: SwiftData `Catch` insert/fetch (including `operatorName`), duplicates allowed, nil-optional metadata tolerated, `operatorName` defaults to nil when omitted. Uses `ModelConfiguration(isStoredInMemoryOnly: true)` so tests don't touch disk.
 - `LockOnEngineTests`: full state-machine coverage (idle / acquiring / locked / sticky) and `acquisitionProgress` ramp.
 - `HangarGroupingTests`: pure-function grouping for the Hangar view — both modes (aircraft type, airline), fallback chain (manufacturer-only / model-only / Unknown), Unknown bucket sorts last, rows within a group sort most-recent-first, empty input → empty array, whitespace trimming and empty-string folding for both modes.
+- `ReplayRecorderTests` + `ReplayJSONLTests`: JSONL one-line-per-event encoding, round-trip equality for session-start + ticks, partial-line tolerance (trailing line with no newline is dropped, not thrown), blank-line tolerance, recorder writes a session-start automatically, eventCount bumps, start-twice throws `alreadyRecording`, stop is idempotent, `recordTick` no-ops when not recording, `Aircraft → AircraftSnapshot` field preservation.
 
 `ADSBManager.init(liveSource:mockSource:)` has defaulted params so production uses real sources and tests substitute a `FixedSource` fixture. **Do not break this default-init shape** — `ContentView`'s `@StateObject private var adsb = ADSBManager()` depends on it.
 
@@ -213,6 +215,18 @@ Two grouping modes today: `.aircraftType` (manufacturer + model) and `.airline` 
 
 `CatchDetailView` is a **read-only snapshot** — no live re-fetch of metadata or position. A catch is a frozen moment; tomorrow's metadata/distance must not retroactively rewrite it. v0 has **no dedupe** (each tap = each row in its section) and **no delete UI**; both are deferred. If catches grow to hundreds, the per-body re-grouping in `HangarView.groupedList` will want memoization.
 
+### Replay recorder
+
+`ReplayRecorder` is a `@MainActor ObservableObject` that writes JSONL to `Documents/replays/replay-<utc>.jsonl`. One `session-start` header line, then one `tick` line per recorded moment. JSONL (not a single JSON array) so a crash mid-write leaves a still-decodable file — `ReplayJSONL.decode(_:)` drops a trailing partial line silently.
+
+`ReplayEvent` is a discriminated union: `case sessionStart(SessionStart)` and `case tick(Tick)`. Wire format keeps the `type` discriminator flat with the payload fields (`{"type":"tick", "timestamp": ..., "sensor": ..., "aircraft": [...]}`) so individual lines stay readable by eye. Bump `ReplayRecorder.schemaVersion` when an existing field's meaning changes.
+
+`AircraftSnapshot` is **separate from `Aircraft`** even though it carries the same fields. Aircraft has a positional OpenSky-shaped `Decodable`; the replay format wants stable named-key Codable. Keeping them separate means future OpenSky decoder changes don't ripple into recorded files.
+
+ContentView drives the recorder via a `.task(id: recorder.isRecording)` loop that fires `recordReplayTick()` once per second while recording, then exits when the user taps **Record session** off. The 1 Hz cadence is enough to drive lock-on / projection validation; visual-confirmation work that needs per-frame samples will want a faster tick (or a separate stream).
+
+Retrieve recorded files from the phone with: `xcrun devicectl device copy from <udid> --source Documents/replays --destination ./replays`. (The recorder doesn't ship a UI export today — `Documents/` is the universal escape hatch.)
+
 ### Debug overlay toggle
 
 The sensor readout and aircraft-list panels are hidden by default; a wrench glyph in the top-right corner toggles them via `@State var showDebug`. The LIVE/MOCK source toggle lives inside the sensor readout — so it's only reachable when debug is on. Field-testing UI stays clean.
@@ -244,12 +258,12 @@ PLAN.md §6 lists deferred questions with working defaults: photo strategy (illu
 
 ## Where to pick up
 
-PLAN.md §9 is the authoritative backlog. As of 2026-05-16, **Hangar v0 has shipped** (see "Hangar collection" pattern above). Top of the queue now:
+PLAN.md §9 is the authoritative backlog. As of 2026-05-17, **Hangar v0 and the replay recorder have shipped** (see "Hangar collection" and "Replay recorder" patterns above). Top of the queue now:
 
-1. **Rotate the leaked OpenSky client secret** (PLAN §9 #2; 10 min Noah action, no code). Pure-housekeeping; unblocked.
-2. **Capture `os_log` output from the device** (PLAN §9 #3) — `bin/log-tail` currently only sees system-emitted lines, not `Log.swift` calls. Candidates: in-app file logging that `Log.swift` mirrors to `Documents/`, or wrapping `xcrun devicectl device process launch --console`.
-3. **Replay harness** (PLAN §9 #4) — record `(sensor stream + ADS-B snapshot + observer pose)` to disk during a session; replay offline through the ID engine. Phase-0-main infra.
-4. **Hangar v1 polish** (not on PLAN.md yet; flag when relevant): dedupe (group repeat catches of the same icao24 with a "×N" badge), swipe-to-delete with confirm, illustrated cards for top type×airline combos. Defer until Noah has real catch volume to design against.
-5. **Visual confirmation** (Vision + COCO airplane class; PLAN §1.1a). Most invasive of the lot; tackle after replay harness exists so accuracy can be measured.
+1. **Rotate the leaked OpenSky client secret** (PLAN §9 #1; 10 min Noah action, no code). Pure-housekeeping; unblocked.
+2. **Capture `os_log` output from the device** (PLAN §9 #2) — `bin/log-tail` currently only sees system-emitted lines, not `Log.swift` calls. Candidates: in-app file logging that `Log.swift` mirrors to `Documents/`, or wrapping `xcrun devicectl device process launch --console`.
+3. **Replay-into-the-engine** (PLAN §9 #3 follow-up) — recorder ships, but the offline side that feeds events through projection / lock-on / future visual confirmation is still TODO. Probably a CLI or a Swift Testing harness that consumes a `.jsonl` and emits per-tick diagnostics.
+4. **Hangar v1 polish** (PLAN §9 #4): dedupe (×N badge for repeats of same icao24), swipe-to-delete with confirm, illustrated cards for top type×airline combos. Defer until Noah has real catch volume to design against.
+5. **Visual confirmation** (Vision + COCO airplane class; PLAN §1.1a). Most invasive; tackle once replay-into-engine exists so accuracy can be measured.
 
 **Using the deploy loop:** `bin/deploy` builds, installs, and launches on Noah's paired iPhone. Always `xcodebuild test ...` before deploying when product code changes. The phone has to be unlocked for `devicectl process launch` to succeed; on a Locked error, ask Noah to unlock and retry the launch step. If `xcodebuild` itself can't find the destination (UDID returns "Unable to find a destination"), check `xcrun devicectl list devices` — state `unavailable` means the phone needs USB re-pair or Xcode opened once to re-establish the handshake.

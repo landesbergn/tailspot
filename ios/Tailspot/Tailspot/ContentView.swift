@@ -10,12 +10,18 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import os
 
 struct ContentView: View {
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
     @StateObject private var lockOn = LockOnEngine()
+    /// Field-session recorder for replay/regression. Off by default;
+    /// the debug overlay carries a tap-to-start row. When active a 1 Hz
+    /// task captures the current sensor state + visible aircraft and
+    /// appends a tick line to `Documents/replays/replay-<utc>.jsonl`.
+    @StateObject private var recorder = ReplayRecorder()
     @State private var cameraAuthorized = false
     @State private var selectedAircraft: ObservedAircraft?
     /// Hidden by default. Tap the small wrench glyph in the top-right
@@ -149,6 +155,16 @@ struct ContentView: View {
                 lockedMetadata = await adsb.metadata(for: icao)
             } else {
                 lockedMetadata = nil
+            }
+        }
+        // 1 Hz replay capture loop. Re-launches whenever the recorder
+        // toggles on; tears down when it toggles off (Task is cancelled
+        // because .task(id:) re-runs on id change).
+        .task(id: recorder.isRecording) {
+            guard recorder.isRecording else { return }
+            while recorder.isRecording, !Task.isCancelled {
+                recordReplayTick()
+                try? await Task.sleep(for: .seconds(1))
             }
         }
         .sheet(item: $selectedAircraft) { obs in
@@ -327,6 +343,7 @@ struct ContentView: View {
                     .foregroundStyle(isHeadingAccuracyBad ? .red : .white)
                 Text(formatAttitude())
                 adsbStatusRow
+                recordingRow
                 if !cameraAuthorized {
                     Text("camera: not authorized")
                 }
@@ -483,6 +500,64 @@ struct ContentView: View {
         .onTapGesture {
             adsb.useMock.toggle()
         }
+    }
+
+    /// Tap-to-toggle row for the replay recorder. Idle → "Record
+    /// session"; active → "REC <count>  <basename>" with a red dot.
+    /// File lands in `Documents/replays/`; retrieve via
+    /// `xcrun devicectl device copy from <udid> --source Documents/replays`.
+    private var recordingRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: recorder.isRecording ? "record.circle.fill" : "record.circle")
+                .foregroundStyle(recorder.isRecording ? .red : .white.opacity(0.85))
+            if recorder.isRecording {
+                Text("REC \(recorder.eventCount)  \(recorder.currentFileURL?.lastPathComponent ?? "—")")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else {
+                Text("Record session")
+            }
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture {
+            toggleRecording()
+        }
+    }
+
+    private func toggleRecording() {
+        if recorder.isRecording {
+            recorder.stop()
+        } else {
+            do {
+                _ = try recorder.start()
+            } catch {
+                Log.ui.error("Failed to start replay recording: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// One tick's worth of sensor state + the currently-visible ADS-B
+    /// snapshot. Fed to the recorder by the 1 Hz loop above.
+    private func recordReplayTick() {
+        let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
+        let tick = ReplayEvent.Tick(
+            timestamp: Date(),
+            sensor: .init(
+                latitude: location.latitude,
+                longitude: location.longitude,
+                altitudeMeters: location.altitude,
+                horizontalAccuracyMeters: location.horizontalAccuracy,
+                headingDeg: location.heading,
+                headingAccuracyDeg: location.headingAccuracy,
+                pitchRad: motion.pitch,
+                rollRad: motion.roll,
+                yawRad: motion.yaw,
+                cameraElevationDeg: motion.cameraElevationDeg
+            ),
+            aircraft: visible.map { ReplayEvent.AircraftSnapshot($0.aircraft) }
+        )
+        recorder.recordTick(tick)
     }
 }
 
