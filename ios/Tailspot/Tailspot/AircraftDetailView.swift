@@ -117,6 +117,7 @@ struct AircraftDetailView: View {
             callsign: observed.aircraft.callsign,
             model: metadata?.model,
             manufacturer: metadata?.manufacturerName,
+            operatorName: metadata?.operatorName,
             caughtAt: Date(),
             observerLat: loc.coordinate.latitude,
             observerLon: loc.coordinate.longitude,

@@ -31,6 +31,7 @@ struct CatchTests {
             callsign: "UAL248",
             model: "737-800",
             manufacturer: "BOEING",
+            operatorName: "United Airlines",
             caughtAt: Date(timeIntervalSince1970: 1_715_000_000),
             observerLat: 37.87,
             observerLon: -122.27,
@@ -44,6 +45,28 @@ struct CatchTests {
         #expect(fetched.first?.icao24 == "a3b15e")
         #expect(fetched.first?.callsign == "UAL248")
         #expect(fetched.first?.model == "737-800")
+        #expect(fetched.first?.operatorName == "United Airlines")
+    }
+
+    @Test func operatorNameDefaultsToNilWhenOmitted() throws {
+        // operatorName was added after v0; existing call sites pass
+        // it via the default parameter. This pins that default so a
+        // future signature change can't silently re-introduce the
+        // "Hangar always shows Unknown airline" regression.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a3b15e",
+            callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>())
+        #expect(fetched.first?.operatorName == nil)
     }
 
     @Test func storesMultipleCatchesIncludingDuplicates() throws {

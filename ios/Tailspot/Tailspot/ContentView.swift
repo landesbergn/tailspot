@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import AVFoundation
 
 struct ContentView: View {
@@ -22,6 +23,14 @@ struct ContentView: View {
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
     @State private var showDebug = false
+    /// Drives the Hangar sheet (collection of past catches). Opened
+    /// via the tray glyph in the top-trailing corner.
+    @State private var showHangar = false
+    /// Lightweight @Query used only to render the catch-count badge
+    /// on the Hangar button. HangarView runs its own @Query for the
+    /// actual list — keeping these separate means ContentView's body
+    /// doesn't re-evaluate the full sorted list on every catch.
+    @Query private var catches: [Catch]
     /// Metadata for whatever plane the lock engine is currently
     /// tracking. Fetched lazily through ADSBManager.metadata(for:),
     /// which consults its in-memory cache first; only first time we
@@ -108,16 +117,23 @@ struct ContentView: View {
                 .transition(.opacity)
             }
 
-            // Small discrete toggle in the top-trailing corner.
+            // Top-trailing controls: hangar (collection) then debug
+            // wrench. Both are discrete so they don't compete with
+            // the AR overlay; hangar gets a small green count badge
+            // when there's something to see.
             VStack {
-                HStack {
+                HStack(spacing: 10) {
                     Spacer()
+                    hangarButton
                     debugToggleButton
-                        .padding(.top, 8)
-                        .padding(.trailing, 12)
                 }
+                .padding(.top, 8)
+                .padding(.trailing, 12)
                 Spacer()
             }
+        }
+        .sheet(isPresented: $showHangar) {
+            HangarView()
         }
         .task {
             await requestCameraPermission()
@@ -138,6 +154,38 @@ struct ContentView: View {
         .sheet(item: $selectedAircraft) { obs in
             AircraftDetailView(observed: obs, manager: adsb, observerLocation: location.cllocation)
         }
+    }
+
+    // MARK: - Hangar entry
+
+    /// Tray glyph in the top-trailing corner with a green count
+    /// badge. Tapping presents `HangarView` as a sheet. The badge
+    /// is hidden when the user has no catches yet — keeps the AR
+    /// view from showing a "0" they have no context for.
+    private var hangarButton: some View {
+        Button {
+            showHangar = true
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "tray.full.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(8)
+                    .background(.black.opacity(0.35), in: .circle)
+                    .shadow(color: .black.opacity(0.5), radius: 2)
+
+                if !catches.isEmpty {
+                    Text("\(catches.count)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.green, in: .capsule)
+                        .offset(x: 6, y: -4)
+                }
+            }
+        }
+        .accessibilityLabel("Open hangar (\(catches.count) catches)")
     }
 
     // MARK: - Debug toggle

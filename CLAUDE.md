@@ -15,16 +15,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Beyond the POC, currently shipping:**
 
 - **AR lock-on interaction.** Clean default view (just camera). Aim within ~80 px of a plane's projected position → yellow corner brackets close in for ~0.6 s → snap solid green with a label showing callsign / airline / make+model / altitude · speed. 2 s sticky-hold after target leaves. Tap the locked label → detail sheet. State machine in `LockOnEngine.swift`; visuals in `ContentView.swift`.
-- **Catch flow v0.** "Catch this plane" button in `AircraftDetailView` inserts a `Catch` SwiftData row (icao24, callsign, model, manufacturer, caughtAt, observer lat/lon, slant distance). `ModelContainer` set up in `TailspotApp`. Each tap is a discrete event; dedupe is a Hangar concern. **No Hangar view yet** — catches persist but aren't user-visible.
+- **Catch flow v0.** "Catch this plane" button in `AircraftDetailView` inserts a `Catch` SwiftData row (icao24, callsign, model, manufacturer, **operatorName**, caughtAt, observer lat/lon, slant distance). `ModelContainer` set up in `TailspotApp`. Each tap is a discrete event; dedupe is a Hangar concern.
+- **Hangar v0 (collection).** Tray glyph in the top-trailing corner of `ContentView` (with green count badge) opens `HangarView` as a sheet. Inset-grouped list of every `Catch`, sectioned by aircraft type (manufacturer + model) by default; segmented picker toggles to airline grouping (uses the new `operatorName` column). Tap any row → read-only `CatchDetailView` showing the frozen snapshot (no live re-fetch — a catch from yesterday should look the same tomorrow). v0 explicitly **does not dedupe** (5 catches of UAL248 = 5 rows) and **has no delete** — both deferred. Grouping logic is a pure function in `HangarGrouping.swift` with 7 dedicated tests.
 - **Aircraft type lookup.** Per-icao24 fetch from OpenSky's `/metadata/aircraft/icao/{icao24}` via `OpenSkyClient.aircraftMetadata`, lazily on lock-acquisition or detail-sheet appearance. In-memory LRU `MetadataCache` (cap 500) dedups; 404s are cached as known-misses.
 - **Live/Mock ADS-B toggle** (in the debug overlay). 5 hand-picked mock aircraft with metadata fixtures (BOEING 737-800 / AIRBUS A320 / etc.); the 5th has no metadata, intentionally, so the cache-miss path is field-testable.
 - **Heading-accuracy color cue.** Heading line in the sensor readout turns red when `CLHeading.headingAccuracy > 15°`.
 - **Visibility filter.** AR overlay AND debug aircraft list both show only aircraft above the horizon AND within 30 km slant distance. Bbox fetch is still 50 km — out-of-range planes are hidden, not dropped.
 - **Debug overlay, hidden by default.** Wrench glyph in the top-right toggles the sensor readout (top) and nearby-aircraft list (bottom). The LIVE/MOCK toggle lives in the sensor readout.
 - **Forward-extrapolation** of ADS-B positions to "now"; **1 Hz re-annotation** for smooth bracket tracking; **OAuth2 client-credentials** auth against OpenSky (4000 credits/day registered tier); **429-aware backoff**.
-- **74 unit tests** in `TailspotTests/` covering geometry, OpenSky decoding, annotation, sort, error handling, extrapolation, visibility predicate, screen projection, aircraft-metadata decoding, MetadataCache LRU+miss-as-hit semantics, ADSBManager metadata-cache-and-fallback, SwiftData Catch persistence, and LockOnEngine state transitions (idle/acquiring/locked/sticky).
+- **82 unit tests** in `TailspotTests/` covering geometry, OpenSky decoding, annotation, sort, error handling, extrapolation, visibility predicate, screen projection, aircraft-metadata decoding, MetadataCache LRU+miss-as-hit semantics, ADSBManager metadata-cache-and-fallback, SwiftData Catch persistence (including the operatorName default), LockOnEngine state transitions (idle/acquiring/locked/sticky), and HangarGrouping (both modes, fallbacks, sort order, empty input, whitespace folding).
 
-**Deliberately not yet built:** Hangar (collection view), backend, ARKit drift correction, achievements/scoring, visual confirmation (CV/ML on the camera feed), origin/destination route info, replay harness, device-side `os.Logger` capture (only system-emitted lines reach `bin/log-tail` today; see PLAN.md §9 #10). See PLAN.md §9 for the prioritized backlog. Don't try to "fix" what isn't built.
+**Deliberately not yet built:** Hangar dedupe + delete (deferred from v0), backend, ARKit drift correction, achievements/scoring, visual confirmation (CV/ML on the camera feed), origin/destination route info, replay harness, device-side `os.Logger` capture (only system-emitted lines reach `bin/log-tail` today; see PLAN.md §9 #10). See PLAN.md §9 for the prioritized backlog. Don't try to "fix" what isn't built.
 
 ## Working model
 
@@ -91,15 +92,16 @@ xcodebuild test \
 ```
 First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, OpenSky client, or anything they depend on).
 
-The current suite (74 tests) covers:
+The current suite (82 tests) covers:
 - `GeoTests`: distance, bearing (cardinal + 0/360 sweep), elevation, project round-trip, **screenPosition** (target straight ahead → center, out-of-FOV → nil, 0/360° wraparound from high & low headings, elevation above center).
 - `AircraftDecodingTests`: full positional-JSON decode, null-position throws, FailableDecodable swallows bad entries, callsign trim, geo-vs-baro altitude precedence, all-altitudes-null → 0.
 - `ADSBManagerTests`: annotation correctness, on-ground filtering, sort-by-slant-distance, error → `lastError` without crashing, success clears previous error, `lastFetched` timestamp, mock-source integration produces 5 aircraft, rate-limit error surfaces as backoff message, forward-extrapolation (moves along track / no-ops when timestamp/velocity missing / age-too-large), visibility predicate (above-horizon-and-close, below horizon, exactly-horizon, too-far, edge-of-range).
 - `AircraftMetadataDecodingTests`: full /metadata/aircraft/icao payload, tolerates missing/null optionals, throws on missing icao24.
 - `MetadataCacheTests`: not-fetched vs hit-nil-miss distinction, LRU eviction at cap.
 - `ADSBManagerMetadataTests`: cache consultation, dedupe of repeated lookups, errors don't poison the cache (use `CountingMetadataSource` fixture).
-- `CatchTests`: SwiftData `Catch` insert/fetch, duplicates allowed, nil-optional metadata tolerated. Uses `ModelConfiguration(isStoredInMemoryOnly: true)` so tests don't touch disk.
+- `CatchTests`: SwiftData `Catch` insert/fetch (including `operatorName`), duplicates allowed, nil-optional metadata tolerated, `operatorName` defaults to nil when omitted. Uses `ModelConfiguration(isStoredInMemoryOnly: true)` so tests don't touch disk.
 - `LockOnEngineTests`: full state-machine coverage (idle / acquiring / locked / sticky) and `acquisitionProgress` ramp.
+- `HangarGroupingTests`: pure-function grouping for the Hangar view — both modes (aircraft type, airline), fallback chain (manufacturer-only / model-only / Unknown), Unknown bucket sorts last, rows within a group sort most-recent-first, empty input → empty array, whitespace trimming and empty-string folding for both modes.
 
 `ADSBManager.init(liveSource:mockSource:)` has defaulted params so production uses real sources and tests substitute a `FixedSource` fixture. **Do not break this default-init shape** — `ContentView`'s `@StateObject private var adsb = ADSBManager()` depends on it.
 
@@ -201,7 +203,15 @@ Per-icao24 metadata (manufacturer / model / registration / operator) is fetched 
 
 ### Catch flow + SwiftData
 
-`Catch` is a v1 `@Model` class with a flat schema (icao24, callsign, model, manufacturer, caughtAt, observerLat/Lon, slantDistanceMeters). Duplicates of the same icao24 are explicitly allowed — dedupe is a Hangar concern, not a model concern. `ModelContainer` is created in `TailspotApp.init` and injected via `.modelContainer(_)`; views consume via `@Environment(\.modelContext)`. Tests use `ModelConfiguration(isStoredInMemoryOnly: true)` so the suite doesn't touch disk.
+`Catch` is a v1 `@Model` class with a flat schema (icao24, callsign, model, manufacturer, `operatorName`, caughtAt, observerLat/Lon, slantDistanceMeters). `operatorName` was added in Hangar v0; existing rows from before that field shipped come back as nil (SwiftData lightweight migration). Duplicates of the same icao24 are explicitly allowed — dedupe is a Hangar concern, not a model concern. `ModelContainer` is created in `TailspotApp.init` and injected via `.modelContainer(_)`; views consume via `@Environment(\.modelContext)`. Tests use `ModelConfiguration(isStoredInMemoryOnly: true)` so the suite doesn't touch disk.
+
+### Hangar collection
+
+`HangarView` is a sheet presented from `ContentView` (tray glyph in the top-trailing corner; green count badge fed by a lightweight `@Query` in ContentView). Inside the sheet a `@Query(sort: \Catch.caughtAt, order: .reverse)` powers an inset-grouped `List`, sectioned via `HangarGrouping.group(_:by:)` — a **pure function** in its own file so the grouping logic is unit-testable without spinning up SwiftUI. The grouping segmented picker lives inline as the first list section (not the toolbar), so the nav title can keep showing the catch count.
+
+Two grouping modes today: `.aircraftType` (manufacturer + model) and `.airline` (operatorName). Each mode has its own fallback chain ending in a single "Unknown" bucket that always sorts to the end. Row subtitles deliberately show whichever of (operator, type) ISN'T already in the section header so rows add information instead of restating it.
+
+`CatchDetailView` is a **read-only snapshot** — no live re-fetch of metadata or position. A catch is a frozen moment; tomorrow's metadata/distance must not retroactively rewrite it. v0 has **no dedupe** (each tap = each row in its section) and **no delete UI**; both are deferred. If catches grow to hundreds, the per-body re-grouping in `HangarView.groupedList` will want memoization.
 
 ### Debug overlay toggle
 
@@ -234,11 +244,12 @@ PLAN.md §6 lists deferred questions with working defaults: photo strategy (illu
 
 ## Where to pick up
 
-PLAN.md §9 is the authoritative backlog. As of 2026-05-16, the next item is **Hangar (collection) v0** — Catches are persisted in SwiftData via the `Catch` model but the user has no UI to see what they've caught. Build a list/grid view, grouped by airline or aircraft type, with tap-for-detail. Read `Catch.swift` + `TailspotApp.swift` for the `ModelContainer` setup; consume via `@Query` from a new `HangarView`. ~2–3 hr.
+PLAN.md §9 is the authoritative backlog. As of 2026-05-16, **Hangar v0 has shipped** (see "Hangar collection" pattern above). Top of the queue now:
 
-After Hangar:
-- Rotate the leaked OpenSky client secret (PLAN §9 #2; 10 min Noah action, no code).
-- Capture `os_log` output from the device (PLAN §9 #3) — `bin/log-tail` currently only sees system-emitted lines, not `Log.swift` calls.
-- Replay harness (PLAN §9 #4) for Phase 0 main accuracy validation.
+1. **Rotate the leaked OpenSky client secret** (PLAN §9 #2; 10 min Noah action, no code). Pure-housekeeping; unblocked.
+2. **Capture `os_log` output from the device** (PLAN §9 #3) — `bin/log-tail` currently only sees system-emitted lines, not `Log.swift` calls. Candidates: in-app file logging that `Log.swift` mirrors to `Documents/`, or wrapping `xcrun devicectl device process launch --console`.
+3. **Replay harness** (PLAN §9 #4) — record `(sensor stream + ADS-B snapshot + observer pose)` to disk during a session; replay offline through the ID engine. Phase-0-main infra.
+4. **Hangar v1 polish** (not on PLAN.md yet; flag when relevant): dedupe (group repeat catches of the same icao24 with a "×N" badge), swipe-to-delete with confirm, illustrated cards for top type×airline combos. Defer until Noah has real catch volume to design against.
+5. **Visual confirmation** (Vision + COCO airplane class; PLAN §1.1a). Most invasive of the lot; tackle after replay harness exists so accuracy can be measured.
 
-**Using the deploy loop:** `bin/deploy` builds, installs, and launches on Noah's paired iPhone. Always `xcodebuild test ...` before deploying when product code changes. The phone has to be unlocked for `devicectl process launch` to succeed; on a Locked error, ask Noah to unlock and retry the launch step.
+**Using the deploy loop:** `bin/deploy` builds, installs, and launches on Noah's paired iPhone. Always `xcodebuild test ...` before deploying when product code changes. The phone has to be unlocked for `devicectl process launch` to succeed; on a Locked error, ask Noah to unlock and retry the launch step. If `xcodebuild` itself can't find the destination (UDID returns "Unable to find a destination"), check `xcrun devicectl list devices` — state `unavailable` means the phone needs USB re-pair or Xcode opened once to re-establish the handshake.

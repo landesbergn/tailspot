@@ -32,6 +32,12 @@ final class Catch {
     var callsign: String?
     var model: String?
     var manufacturer: String?
+    /// Airline / operator name as reported by OpenSky's metadata
+    /// endpoint at catch time. Added in Hangar v0 so the collection
+    /// can group by airline as well as aircraft type. Optional and
+    /// nullable — older rows written before this field existed simply
+    /// have nil here (SwiftData lightweight migration).
+    var operatorName: String?
     var caughtAt: Date
     var observerLat: Double
     var observerLon: Double
@@ -42,6 +48,7 @@ final class Catch {
         callsign: String?,
         model: String?,
         manufacturer: String?,
+        operatorName: String? = nil,
         caughtAt: Date,
         observerLat: Double,
         observerLon: Double,
@@ -51,6 +58,7 @@ final class Catch {
         self.callsign = callsign
         self.model = model
         self.manufacturer = manufacturer
+        self.operatorName = operatorName
         self.caughtAt = caughtAt
         self.observerLat = observerLat
         self.observerLon = observerLon
