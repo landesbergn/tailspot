@@ -505,7 +505,10 @@ struct ContentView: View {
     /// Tap-to-toggle row for the replay recorder. Idle → "Record
     /// session"; active → "REC <count>  <basename>" with a red dot.
     /// File lands in `Documents/replays/`; retrieve via
-    /// `xcrun devicectl device copy from <udid> --source Documents/replays`.
+    /// `xcrun devicectl device copy from --device <udid>
+    /// --domain-type appDataContainer
+    /// --domain-identifier com.landesberg.Tailspot
+    /// --source Documents/replays --destination ./replays`.
     private var recordingRow: some View {
         HStack(spacing: 8) {
             Image(systemName: recorder.isRecording ? "record.circle.fill" : "record.circle")

@@ -20,8 +20,18 @@
 //  yet.
 //
 //  Files land in `Documents/replays/replay-<utc>.jsonl`. Retrieve
-//  via `xcrun devicectl device copy from B88009FD-... --source
-//  Documents/replays --destination ./replays`.
+//  with:
+//
+//    xcrun devicectl device copy from \
+//      --device <udid> \
+//      --domain-type appDataContainer \
+//      --domain-identifier com.landesberg.Tailspot \
+//      --source Documents/replays \
+//      --destination ./replays
+//
+//  The --domain-type / --domain-identifier pair is required —
+//  without them devicectl doesn't know which app's container to look
+//  in and the call fails with a (cryptic) error.
 //
 
 import Foundation
