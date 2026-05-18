@@ -20,13 +20,14 @@ struct ReplayAnalyzerTests {
     /// A sensor snapshot positioned in Berkeley, looking due west,
     /// camera horizontal. Easy to reason about projection from this
     /// pose (a target directly west should sit at horizontal center).
-    private func berkeleySensor(headingDeg: Double = 270, cameraEl: Double = 0) -> ReplayEvent.SensorSnapshot {
+    private func berkeleySensor(headingDeg: Double = 270, cameraEl: Double = 0, zoom: Double? = nil) -> ReplayEvent.SensorSnapshot {
         .init(
             latitude: 37.87, longitude: -122.27,
             altitudeMeters: 40, horizontalAccuracyMeters: 5,
             headingDeg: headingDeg, headingAccuracyDeg: 3,
             pitchRad: .pi / 2, rollRad: 0, yawRad: 0,
-            cameraElevationDeg: cameraEl
+            cameraElevationDeg: cameraEl,
+            zoomFactor: zoom
         )
     }
 
@@ -87,7 +88,8 @@ struct ReplayAnalyzerTests {
             latitude: nil, longitude: nil, altitudeMeters: nil,
             horizontalAccuracyMeters: nil, headingDeg: nil,
             headingAccuracyDeg: nil, pitchRad: 0, rollRad: 0,
-            yawRad: 0, cameraElevationDeg: 0
+            yawRad: 0, cameraElevationDeg: 0,
+            zoomFactor: nil
         )
         let report = ReplayAnalyzer().analyze([
             .tick(tick(at: 0, from: t0, sensor: sensorNoFix, aircraft: [westAircraft()]))

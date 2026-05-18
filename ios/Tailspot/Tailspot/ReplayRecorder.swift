@@ -78,6 +78,12 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
         let rollRad: Double
         let yawRad: Double
         let cameraElevationDeg: Double
+        /// Camera zoom factor at the moment of capture (1.0 = no zoom).
+        /// Optional for back-compat — recordings made before zoom shipped
+        /// don't have this field; analyzer treats nil as 1.0. Synthesized
+        /// `Codable` tolerates the missing key because the property is
+        /// `Optional`.
+        let zoomFactor: Double?
     }
 
     /// A flat snapshot of the fields we want to replay through the

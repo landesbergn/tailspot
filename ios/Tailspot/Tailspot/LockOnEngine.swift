@@ -128,13 +128,36 @@ final class LockOnEngine: ObservableObject {
         }
         return 0
     }
+
+    /// Jump straight to `locked(target)` — bypass the acquisition
+    /// animation. Used by tap-to-ID: when the user explicitly points
+    /// at a plane, making them wait `acquisitionDuration` for green
+    /// brackets feels wrong. update() can still walk the state forward
+    /// from here on the next tick (e.g., target leaves → sticky).
+    func forceLock(targetIcao24: String, now: Date = Date()) {
+        state = .locked(targetIcao24: targetIcao24, lockedAt: now)
+    }
 }
 
 // MARK: - Lock-zone helper
 
 /// Returns the icao24 of the visible aircraft whose projected screen
-/// position is closest to screen center, provided it falls within
-/// `lockZoneRadius` of center. Nil otherwise.
+/// position is closest to a reference point — by default the screen
+/// center — provided it falls within `lockZoneRadius` of that point.
+/// Nil otherwise.
+///
+/// Used in two modes by ContentView:
+///   - center-driven (default): `at` is nil; the lock follows whatever
+///     plane the user is aiming at.
+///   - tap-driven: `at` is the tap location; the lock pins to whatever
+///     plane the user explicitly pointed at.
+///
+/// `hfovDeg` / `vfovDeg` should reflect the camera's *effective* FOV —
+/// i.e., base FOV / current zoom factor — so the projection math
+/// matches what's on screen. `lockZoneRadius` stays in pixels (it's
+/// a UI affordance, not an angular tolerance): at high zoom the same
+/// 80 px covers a tighter angular wedge, which is exactly right for
+/// disambiguating planes that have spread apart on screen.
 ///
 /// Pure function; sits next to the engine because they're co-used.
 /// Doesn't know about SwiftUI — takes the inputs the engine needs
@@ -142,13 +165,15 @@ final class LockOnEngine: ObservableObject {
 @MainActor
 func closestTargetIcao24(
     in observed: [ObservedAircraft],
+    at point: CGPoint? = nil,
     phoneHeadingDeg: Double,
     cameraElevationDeg: Double,
     screenSize: CGSize,
+    hfovDeg: Double = 56,
+    vfovDeg: Double = 72,
     lockZoneRadius: CGFloat = 80
 ) -> String? {
-    let centerX = screenSize.width / 2
-    let centerY = screenSize.height / 2
+    let anchor = point ?? CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
 
     var bestIcao: String? = nil
     var bestDist: CGFloat = .infinity
@@ -157,11 +182,13 @@ func closestTargetIcao24(
         guard let pos = obs.screenPosition(
             phoneHeadingDeg: phoneHeadingDeg,
             cameraElevationDeg: cameraElevationDeg,
-            in: screenSize
+            in: screenSize,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
         ) else { continue }
 
-        let dx = pos.x - centerX
-        let dy = pos.y - centerY
+        let dx = pos.x - anchor.x
+        let dy = pos.y - anchor.y
         let dist = (dx*dx + dy*dy).squareRoot()
         if dist <= lockZoneRadius && dist < bestDist {
             bestDist = dist

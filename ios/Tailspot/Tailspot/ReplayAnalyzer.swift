@@ -110,6 +110,14 @@ struct ReplayAnalyzer {
     private func report(for tick: ReplayEvent.Tick, engine: LockOnEngine) -> ReplayTickReport {
         let observer = reconstructObserver(from: tick)
 
+        // Camera zoom changes the effective FOV: at 2× the same screen
+        // shows half the world horizontally. Divide the configured FOV
+        // by the tick's zoom (default 1.0 for back-compat with files
+        // recorded before the zoom field shipped).
+        let zoom = tick.sensor.zoomFactor ?? 1.0
+        let effectiveHfov = hfovDeg / zoom
+        let effectiveVfov = vfovDeg / zoom
+
         // Compute per-aircraft annotation. Ticks without a GPS fix
         // skip annotation entirely — we can't compute bearings without
         // an observer.
@@ -134,8 +142,8 @@ struct ReplayAnalyzer {
                     phoneHeadingDeg: tick.sensor.headingDeg ?? 0,
                     cameraElevationDeg: tick.sensor.cameraElevationDeg,
                     in: screenSize,
-                    hfovDeg: hfovDeg,
-                    vfovDeg: vfovDeg
+                    hfovDeg: effectiveHfov,
+                    vfovDeg: effectiveVfov
                 )
                 summaries.append(.init(
                     icao24: snap.icao24,
@@ -154,6 +162,8 @@ struct ReplayAnalyzer {
             phoneHeadingDeg: tick.sensor.headingDeg ?? 0,
             cameraElevationDeg: tick.sensor.cameraElevationDeg,
             screenSize: screenSize,
+            hfovDeg: effectiveHfov,
+            vfovDeg: effectiveVfov,
             lockZoneRadius: lockZoneRadius
         )
         engine.update(closestTargetIcao24: closest, now: tick.timestamp)

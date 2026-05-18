@@ -25,7 +25,8 @@ struct ReplayJSONLTests {
                 pitchRad: 1.1,
                 rollRad: 0.1,
                 yawRad: 0.05,
-                cameraElevationDeg: 27
+                cameraElevationDeg: 27,
+                zoomFactor: nil
             ),
             aircraft: [
                 .init(
@@ -115,7 +116,8 @@ struct ReplayRecorderTests {
                 latitude: 0, longitude: 0, altitudeMeters: nil,
                 horizontalAccuracyMeters: nil, headingDeg: nil,
                 headingAccuracyDeg: nil, pitchRad: 0, rollRad: 0,
-                yawRad: 0, cameraElevationDeg: 0
+                yawRad: 0, cameraElevationDeg: 0,
+                zoomFactor: nil
             ),
             aircraft: []
         )

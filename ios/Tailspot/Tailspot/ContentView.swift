@@ -13,6 +13,15 @@ import AVFoundation
 import os
 
 struct ContentView: View {
+    /// Camera FOV at 1× zoom (approximate for iPhone 16 main wide camera
+    /// in portrait). The effective FOV passed to projection math is
+    /// these divided by the current `zoom` factor — at 2× the visible
+    /// world halves horizontally and vertically. Refine when we query
+    /// `AVCaptureDevice.activeFormat.videoFieldOfView` (which gives
+    /// only horizontal); for v0 the approximation is good enough.
+    private static let baseHfovDeg: Double = 56
+    private static let baseVfovDeg: Double = 72
+
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
@@ -45,11 +54,28 @@ struct ContentView: View {
     /// by the time the lock snaps green, the label content is usually
     /// already populated.
     @State private var lockedMetadata: AircraftMetadata?
+    /// Camera zoom factor. 1.0 = default wide. Pinch gesture below
+    /// drives the binding; CameraPreview applies it via
+    /// AVCaptureDevice.videoZoomFactor. The projection math also reads
+    /// this to shrink the effective FOV so lock brackets stay glued
+    /// to planes as the user zooms in.
+    @State private var zoom: CGFloat = 1.0
+    /// Zoom at the moment the current pinch started — the gesture's
+    /// `magnification` value is a *relative* scale (1.0 at gesture
+    /// start), so we multiply against this to get the new absolute zoom.
+    @State private var zoomGestureBase: CGFloat = 1.0
+    /// When the user taps a plane directly, we pin the lock to that
+    /// icao24 — overriding the center-driven closest-target heuristic.
+    /// Tap-elsewhere clears; tap-same-plane toggles off; the plane
+    /// leaving visibility also clears. The pin is what makes the
+    /// engine `forceLock()` snap-green-instantly instead of running a
+    /// 0.6 s acquisition.
+    @State private var pinnedIcao: String?
 
     var body: some View {
         ZStack {
             if cameraAuthorized {
-                CameraPreview()
+                CameraPreview(zoomFactor: zoom)
                     .ignoresSafeArea()
             } else {
                 Color.black.ignoresSafeArea()
@@ -68,29 +94,78 @@ struct ContentView: View {
             // same target are idempotent — so calling it from inside
             // the TimelineView body is safe.
             GeometryReader { geo in
+                let effectiveHfov = Self.baseHfovDeg / zoom
+                let effectiveVfov = Self.baseVfovDeg / zoom
+
                 TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
                     let now = context.date
                     let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
                     let heading = location.heading ?? 0
                     let camEl = motion.cameraElevationDeg
 
-                    let closest = closestTargetIcao24(
+                    // Target choice: the explicit tap-pinned plane (if
+                    // still visible) wins; otherwise fall back to
+                    // whichever visible plane is nearest to screen
+                    // center. A pin pointing at a no-longer-visible
+                    // plane is ignored here; the .onChange on lockOn
+                    // state clears it for next frame.
+                    let centerClosest = closestTargetIcao24(
                         in: visible,
                         phoneHeadingDeg: heading,
                         cameraElevationDeg: camEl,
-                        screenSize: geo.size
+                        screenSize: geo.size,
+                        hfovDeg: effectiveHfov,
+                        vfovDeg: effectiveVfov
                     )
+                    let pinStillVisible = pinnedIcao.map { id in
+                        visible.contains { $0.aircraft.icao24 == id }
+                    } ?? false
+                    let engineTarget = pinStillVisible ? pinnedIcao : centerClosest
                     // `let _` so the void-returning call is legal
                     // inside @ViewBuilder (statements aren't otherwise).
-                    let _ = lockOn.update(closestTargetIcao24: closest, now: now)
+                    let _ = lockOn.update(closestTargetIcao24: engineTarget, now: now)
 
                     ZStack {
+                        // Background tap-and-pinch layer. Color.clear +
+                        // contentShape makes the whole AR area receive
+                        // gestures; the lock-label's own tap (further
+                        // up the Z-stack) still wins for taps that
+                        // land on it because innermost-first wins.
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        let next = zoomGestureBase * CGFloat(value)
+                                        zoom = min(max(CameraPreview.zoomRange.lowerBound, next),
+                                                   CameraPreview.zoomRange.upperBound)
+                                    }
+                                    .onEnded { _ in zoomGestureBase = zoom }
+                            )
+                            .simultaneousGesture(
+                                SpatialTapGesture()
+                                    .onEnded { event in
+                                        handleTap(
+                                            at: event.location,
+                                            in: geo.size,
+                                            visible: visible,
+                                            phoneHeadingDeg: heading,
+                                            cameraElevationDeg: camEl,
+                                            hfovDeg: effectiveHfov,
+                                            vfovDeg: effectiveVfov,
+                                            now: now
+                                        )
+                                    }
+                            )
+
                         if let icao = lockOn.state.targetIcao24,
                            let target = visible.first(where: { $0.aircraft.icao24 == icao }),
                            let pos = target.screenPosition(
                                phoneHeadingDeg: heading,
                                cameraElevationDeg: camEl,
-                               in: geo.size
+                               in: geo.size,
+                               hfovDeg: effectiveHfov,
+                               vfovDeg: effectiveVfov
                            )
                         {
                             lockOverlay(
@@ -107,6 +182,21 @@ struct ContentView: View {
                 }
             }
             .ignoresSafeArea()
+
+            // Zoom indicator. Faint pill in the top-center; hidden at 1.0×.
+            if zoom > 1.01 {
+                VStack {
+                    Text(String(format: "%.1f×", zoom))
+                        .font(.system(.caption, design: .monospaced).bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.55), in: .capsule)
+                        .padding(.top, 12)
+                        .transition(.opacity)
+                    Spacer()
+                }
+            }
 
             // Debug overlays — hidden by default; revealed by the
             // wrench toggle below.
@@ -155,6 +245,15 @@ struct ContentView: View {
                 lockedMetadata = await adsb.metadata(for: icao)
             } else {
                 lockedMetadata = nil
+            }
+        }
+        // Pin housekeeping. If the engine moved off the pinned plane
+        // (target left visibility → sticky → idle, or center-driven
+        // logic switched onto a different plane), clear the pin so
+        // we stop fighting the engine on the next frame.
+        .onChange(of: lockOn.state.targetIcao24) { _, newIcao in
+            if let pin = pinnedIcao, newIcao != pin {
+                pinnedIcao = nil
             }
         }
         // 1 Hz replay capture loop. Re-launches whenever the recorder
@@ -541,7 +640,9 @@ struct ContentView: View {
     }
 
     /// One tick's worth of sensor state + the currently-visible ADS-B
-    /// snapshot. Fed to the recorder by the 1 Hz loop above.
+    /// snapshot. Fed to the recorder by the 1 Hz loop above. Captures
+    /// the current zoom factor so the analyzer can reconstruct the
+    /// effective FOV when replaying.
     private func recordReplayTick() {
         let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
         let tick = ReplayEvent.Tick(
@@ -556,11 +657,61 @@ struct ContentView: View {
                 pitchRad: motion.pitch,
                 rollRad: motion.roll,
                 yawRad: motion.yaw,
-                cameraElevationDeg: motion.cameraElevationDeg
+                cameraElevationDeg: motion.cameraElevationDeg,
+                zoomFactor: Double(zoom)
             ),
             aircraft: visible.map { ReplayEvent.AircraftSnapshot($0.aircraft) }
         )
         recorder.recordTick(tick)
+    }
+
+    // MARK: - Tap-to-ID
+
+    /// Tap handler for the AR overlay. Three outcomes:
+    ///   - Tapped on (or very near) the currently-pinned plane → toggle
+    ///     off, fall back to center-driven lock.
+    ///   - Tapped near a different visible plane → pin to it and
+    ///     `forceLock` the engine straight to green (no acquisition
+    ///     delay — the tap is an explicit choice).
+    ///   - Tapped in empty sky (no plane within the tap zone) → clear
+    ///     any active pin.
+    ///
+    /// `tapZoneRadius` is generous (100 px) so users don't have to be
+    /// pixel-perfect; at high zoom planes are spread apart on screen
+    /// so the ambiguity is small.
+    private func handleTap(
+        at point: CGPoint,
+        in screenSize: CGSize,
+        visible: [ObservedAircraft],
+        phoneHeadingDeg: Double,
+        cameraElevationDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double,
+        now: Date
+    ) {
+        let hit = closestTargetIcao24(
+            in: visible,
+            at: point,
+            phoneHeadingDeg: phoneHeadingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            screenSize: screenSize,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg,
+            lockZoneRadius: 100
+        )
+        switch hit {
+        case nil:
+            // Empty-sky tap clears any pin.
+            pinnedIcao = nil
+        case pinnedIcao:
+            // Tap-same-plane toggles off — explicit "cancel."
+            pinnedIcao = nil
+        case let icao?:
+            pinnedIcao = icao
+            // Skip the 0.6 s acquisition animation; the user just
+            // pointed at this plane, snap-green is the right feel.
+            lockOn.forceLock(targetIcao24: icao, now: now)
+        }
     }
 }
 

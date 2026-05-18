@@ -29,6 +29,36 @@ struct LockOnEngineTests {
         #expect(e.state == .idle)
     }
 
+    @Test func forceLockJumpsStraightToLocked() {
+        // Tap-to-ID needs the engine in .locked instantly — no 0.6 s
+        // acquisition delay, since the user explicitly pointed at the
+        // plane. forceLock is what wires that up.
+        let e = engine()
+        e.forceLock(targetIcao24: "abc", now: t0)
+        if case .locked(let icao, let lockedAt) = e.state {
+            #expect(icao == "abc")
+            #expect(lockedAt == t0)
+        } else {
+            Issue.record("Expected .locked(abc) after forceLock, got \(e.state)")
+        }
+        // Outside .acquiring, progress is zero.
+        #expect(e.acquisitionProgress(now: t0) == 0)
+    }
+
+    @Test func forceLockReplacesPriorLock() {
+        // Tap-pinning a different plane mid-flight should hop instantly.
+        let e = engine()
+        e.update(closestTargetIcao24: "abc", now: t0)
+        e.update(closestTargetIcao24: "abc", now: t0.addingTimeInterval(1))
+        // Should be locked(abc).
+        e.forceLock(targetIcao24: "xyz", now: t0.addingTimeInterval(2))
+        if case .locked(let icao, _) = e.state {
+            #expect(icao == "xyz")
+        } else {
+            Issue.record("Expected .locked(xyz) after forceLock, got \(e.state)")
+        }
+    }
+
     @Test func idleEntersAcquiringWhenTargetAppears() {
         let e = engine()
         e.update(closestTargetIcao24: "abc", now: t0)
