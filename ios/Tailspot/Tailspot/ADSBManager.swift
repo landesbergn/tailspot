@@ -33,6 +33,45 @@ struct ObservedAircraft: Identifiable, Sendable {
 }
 
 extension ObservedAircraft {
+    /// Build an `ObservedAircraft` from a raw `Aircraft` + observer
+    /// pose at `now`. Forward-extrapolates the aircraft's position
+    /// to `now` using its reported track/velocity, then computes
+    /// the bearing/elevation/slant from the observer.
+    ///
+    /// Returns nil if the aircraft is reported on the ground — we
+    /// don't want labels for taxiing planes. Centralized here so the
+    /// replay analyzer can reuse the exact same geometry the live
+    /// path uses.
+    static func annotate(_ aircraft: Aircraft, observer: CLLocation, now: Date) -> ObservedAircraft? {
+        guard !aircraft.onGround else { return nil }
+        let pos = aircraft.extrapolatedPosition(at: now)
+        let observerLat = observer.coordinate.latitude
+        let observerLon = observer.coordinate.longitude
+        let observerAlt = observer.altitude
+        let ground = Geo.distance(
+            fromLat: observerLat, lon: observerLon,
+            toLat: pos.lat, lon: pos.lon
+        )
+        let bearing = Geo.bearing(
+            fromLat: observerLat, lon: observerLon,
+            toLat: pos.lat, lon: pos.lon
+        )
+        let elev = Geo.elevation(
+            observerAltMeters: observerAlt,
+            targetAltMeters: aircraft.altitudeMeters,
+            groundDistanceMeters: ground
+        )
+        let dh = aircraft.altitudeMeters - observerAlt
+        let slant = (ground * ground + dh * dh).squareRoot()
+        return ObservedAircraft(
+            aircraft: aircraft,
+            bearingDeg: bearing,
+            elevationDeg: elev,
+            groundDistanceMeters: ground,
+            slantDistanceMeters: slant
+        )
+    }
+
     /// Whether this aircraft is plausibly visible to the naked eye
     /// right now. Two filters:
     ///
@@ -276,46 +315,12 @@ final class ADSBManager: ObservableObject {
     /// loop and once per `refresh` immediately after fetch.
     ///
     /// Cheap: no I/O, only geometry. Safe to call at 1 Hz with 50+
-    /// aircraft in the bbox.
+    /// aircraft in the bbox. Annotation logic itself lives on
+    /// `ObservedAircraft.annotate(_:observer:now:)` so the replay
+    /// analyzer can reuse the exact same geometry.
     private func reAnnotate(observer: CLLocation, now: Date) {
-        let observerLat = observer.coordinate.latitude
-        let observerLon = observer.coordinate.longitude
-        let observerAlt = observer.altitude
-
-        let annotated = rawAircraft
-            .filter { !$0.onGround }
-            .map { aircraft -> ObservedAircraft in
-                // Forward-extrapolate the plane's position to "now"
-                // using its reported velocity + track. Re-running this
-                // each tick is what makes the on-screen box glide
-                // continuously between network refreshes.
-                let pos = aircraft.extrapolatedPosition(at: now)
-                let ground = Geo.distance(
-                    fromLat: observerLat, lon: observerLon,
-                    toLat: pos.lat, lon: pos.lon
-                )
-                let bearing = Geo.bearing(
-                    fromLat: observerLat, lon: observerLon,
-                    toLat: pos.lat, lon: pos.lon
-                )
-                let elev = Geo.elevation(
-                    observerAltMeters: observerAlt,
-                    targetAltMeters: aircraft.altitudeMeters,
-                    groundDistanceMeters: ground
-                )
-                let dh = aircraft.altitudeMeters - observerAlt
-                let slant = (ground * ground + dh * dh).squareRoot()
-
-                return ObservedAircraft(
-                    aircraft: aircraft,
-                    bearingDeg: bearing,
-                    elevationDeg: elev,
-                    groundDistanceMeters: ground,
-                    slantDistanceMeters: slant
-                )
-            }
+        self.observed = rawAircraft
+            .compactMap { ObservedAircraft.annotate($0, observer: observer, now: now) }
             .sorted { $0.slantDistanceMeters < $1.slantDistanceMeters }
-
-        self.observed = annotated
     }
 }
