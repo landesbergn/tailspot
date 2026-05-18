@@ -38,9 +38,15 @@ unpushed=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
 # --name-only emits one filename per line per commit; we grep for
 # exact matches at line start so a substring like "CLAUDE.md.bak"
 # wouldn't accidentally count.
-if git log origin/main..HEAD --name-only -- CLAUDE.md PLAN.md 2>/dev/null \
-   | grep -qE '^(CLAUDE\.md|PLAN\.md)$'
-then
+#
+# Capture-then-grep on purpose. The earlier `git log ... | grep -q ...`
+# form silently broke under `set -o pipefail`: grep -q closes its stdin
+# on the first match, git log gets SIGPIPE, and the pipeline exits
+# non-zero — making the if-branch falsely fail and the block message
+# fire even when the docs *were* touched. A here-string sidesteps the
+# pipeline entirely.
+docs_touched=$(git log origin/main..HEAD --name-only -- CLAUDE.md PLAN.md 2>/dev/null)
+if grep -qE '^(CLAUDE\.md|PLAN\.md)$' <<<"$docs_touched"; then
   exit 0
 fi
 
