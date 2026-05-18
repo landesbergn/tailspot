@@ -5,6 +5,11 @@
 Icon?
 ._*
 
+# Replay recordings pulled from the device. Contains live GPS + ADS-B
+# state — keep out of git so a casual `git add .` doesn't leak the
+# user's location history.
+/replays/
+
 # Xcode / iOS
 build/
 DerivedData/
