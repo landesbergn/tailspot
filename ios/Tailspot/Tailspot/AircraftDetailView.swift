@@ -34,6 +34,13 @@ struct AircraftDetailView: View {
     @State private var metadata: AircraftMetadata?
     @State private var didLoad = false
     @State private var caughtCount: Int = 0
+    /// Drives the full-screen catch-confirmed flash. Set true the
+    /// moment the user taps Catch; cleared (along with dismiss) after
+    /// a brief hold so the user actually sees the feedback land.
+    @State private var showCatchFlash = false
+    /// True when the just-caught plane is on the curated rare list.
+    /// The flash uses different text + an extra accent when rare.
+    @State private var caughtWasRare = false
 
     var body: some View {
         NavigationStack {
@@ -85,6 +92,46 @@ struct AircraftDetailView: View {
             // Haptic on each catch; the trigger value being a counter
             // (not a Bool) lets multiple consecutive catches each fire.
             .sensoryFeedback(.success, trigger: caughtCount)
+            .overlay {
+                if showCatchFlash {
+                    catchFlashOverlay
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    /// Full-screen confirmation that the catch was recorded. Brief
+    /// (~900ms total — fade in, hold, fade out + dismiss). Uses
+    /// alertNormal green for the standard catch; if the just-caught
+    /// plane was on the rare list, also adds a magenta "RARE" callout
+    /// so the user actually notices the milestone.
+    private var catchFlashOverlay: some View {
+        ZStack {
+            Brand.Color.alertNormal.opacity(0.25)
+                .ignoresSafeArea()
+            VStack(spacing: 14) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 96, weight: .bold))
+                    .foregroundStyle(Brand.Color.alertNormal)
+                    .shadow(color: .black.opacity(0.4), radius: 8)
+                Text("CAUGHT")
+                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                    .tracking(6)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 4)
+                if caughtWasRare {
+                    Text("RARE CATCH")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Brand.Color.alertAdvisory, in: .capsule)
+                        .shadow(color: .black.opacity(0.4), radius: 4)
+                }
+            }
         }
     }
 
@@ -131,7 +178,18 @@ struct AircraftDetailView: View {
         }
         caughtCount += 1
         Log.adsb.notice("Caught \(observed.aircraft.icao24, privacy: .public) (callsign=\(observed.aircraft.callsign ?? "—", privacy: .public))")
-        dismiss()
+
+        // Flash a confirmation BEFORE dismissing so the user actually
+        // sees the success-state. Rare catches get the magenta pill
+        // alongside the green check so the milestone reads.
+        caughtWasRare = HangarRarity.tier(for: c) == .rare
+        withAnimation(.easeOut(duration: 0.15)) {
+            showCatchFlash = true
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(750))
+            dismiss()
+        }
     }
 
     private var footerText: String {
