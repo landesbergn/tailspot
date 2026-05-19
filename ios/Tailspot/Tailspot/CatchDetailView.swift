@@ -27,7 +27,18 @@ struct CatchDetailView: View {
     /// section below.
     private var catchRecord: Catch { row.mostRecent }
 
-    @State private var photo: PlanePhoto?
+    /// Tri-state for the photo section so the view reserves space
+    /// while the API call is in flight — no layout shift when the
+    /// photo lands. `notAvailable` is a true miss (Planespotters has
+    /// no record); we still render a small placeholder so the section
+    /// height doesn't change.
+    private enum PhotoState: Equatable {
+        case loading
+        case loaded(PlanePhoto)
+        case notAvailable
+    }
+
+    @State private var photoState: PhotoState = .loading
     @State private var didLoadPhoto = false
 
     var body: some View {
@@ -51,7 +62,10 @@ struct CatchDetailView: View {
         .task {
             guard !didLoadPhoto else { return }
             didLoadPhoto = true
-            photo = await PlanespottersClient.shared.photo(for: catchRecord.icao24)
+            let fetched = await PlanespottersClient.shared.photo(for: catchRecord.icao24)
+            withAnimation(.easeInOut(duration: 0.3)) {
+                photoState = fetched.map(PhotoState.loaded) ?? .notAvailable
+            }
         }
     }
 
@@ -84,31 +98,28 @@ struct CatchDetailView: View {
 
     // MARK: - Photo section
 
-    @ViewBuilder
+    /// Always-rendered section that reserves the photo block from the
+    /// start so the page doesn't jump when the API lands. The outer
+    /// 220pt slab is constant; only the inner content swaps between
+    /// a spinner (loading), the photo (loaded), or a small "no photo"
+    /// affordance (Planespotters has no record).
     private var photoSection: some View {
-        if let photo {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    AsyncImage(url: photo.thumbnailLargeURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        case .failure:
-                            placeholderRect
-                        case .empty:
-                            placeholderRect.overlay(ProgressView())
-                        @unknown default:
-                            placeholderRect
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 220)
-                    .clipped()
-                    .cornerRadius(8)
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack {
+                    Brand.Color.bgElevated
+                    photoSlabContent
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 220)
+                .clipped()
+                .cornerRadius(8)
 
-                    // TOS attribution: photographer credit + link to Planespotters page.
+                // TOS attribution: photographer credit + link to
+                // Planespotters page. Only shown when loaded; we
+                // accept the small ~24pt growth on transition since
+                // the 220pt slab itself is already reserved.
+                if case .loaded(let photo) = photoState {
                     Button {
                         UIApplication.shared.open(photo.link)
                     } label: {
@@ -117,17 +128,49 @@ struct CatchDetailView: View {
                             .foregroundStyle(Brand.Color.textSecondary)
                     }
                     .buttonStyle(.plain)
+                    .transition(.opacity)
                 }
-                .padding(.vertical, 4)
             }
-            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+            .padding(.vertical, 4)
         }
+        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
     }
 
-    private var placeholderRect: some View {
-        Rectangle()
-            .fill(Brand.Color.bgElevated)
-            .frame(height: 220)
+    @ViewBuilder
+    private var photoSlabContent: some View {
+        switch photoState {
+        case .loading:
+            ProgressView()
+                .tint(Brand.Color.textSecondary)
+        case .loaded(let photo):
+            AsyncImage(url: photo.thumbnailLargeURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .transition(.opacity)
+                case .empty:
+                    ProgressView()
+                        .tint(Brand.Color.textSecondary)
+                case .failure:
+                    Image(systemName: "photo.badge.exclamationmark")
+                        .font(.title2)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        case .notAvailable:
+            VStack(spacing: 6) {
+                Image(systemName: "photo")
+                    .font(.title2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text("No photo available")
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+        }
     }
 
     // MARK: - Helpers
