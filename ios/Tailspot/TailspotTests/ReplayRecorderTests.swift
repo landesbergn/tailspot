@@ -75,6 +75,17 @@ struct ReplayJSONLTests {
         #expect(decoded == events)
     }
 
+    @Test func roundTripsTapPinAndUnpin() throws {
+        let events: [ReplayEvent] = [
+            .tapPin(.init(timestamp: Date(timeIntervalSince1970: 1_715_000_010), icao24: "abc")),
+            .unpin(.init(timestamp: Date(timeIntervalSince1970: 1_715_000_011))),
+        ]
+        var data = Data()
+        for e in events { data.append(try ReplayJSONL.line(for: e)) }
+        let decoded = try ReplayJSONL.decode(data)
+        #expect(decoded == events)
+    }
+
     @Test func dropsTrailingPartialLine() throws {
         // Simulate a crash mid-write: the last line has no trailing
         // newline. Decode should silently drop it and return only the
@@ -167,6 +178,33 @@ struct ReplayRecorderTests {
         // checking isRecording — guarded inside.
         let r = ReplayRecorder()
         r.recordTick(sampleTick())  // must not crash
+        #expect(r.eventCount == 0)
+        #expect(r.isRecording == false)
+    }
+
+    @Test func recordTapPinAndUnpinAppendLines() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let r = ReplayRecorder()
+        _ = try r.start(at: url)
+        r.recordTapPin(icao24: "abc", at: Date(timeIntervalSince1970: 1_715_000_010))
+        r.recordUnpin(at: Date(timeIntervalSince1970: 1_715_000_011))
+        #expect(r.eventCount == 3) // session-start + tapPin + unpin
+        r.stop()
+
+        let events = try ReplayJSONL.decode(Data(contentsOf: url))
+        #expect(events.count == 3)
+        if case .tapPin(let p) = events[1] {
+            #expect(p.icao24 == "abc")
+        } else { Issue.record("Expected tapPin second; got \(events[1])") }
+        if case .unpin = events[2] {} else { Issue.record("Expected unpin third") }
+    }
+
+    @Test func recordTapPinWhenNotRecordingIsANoop() {
+        let r = ReplayRecorder()
+        r.recordTapPin(icao24: "abc")
+        r.recordUnpin()
         #expect(r.eventCount == 0)
         #expect(r.isRecording == false)
     }

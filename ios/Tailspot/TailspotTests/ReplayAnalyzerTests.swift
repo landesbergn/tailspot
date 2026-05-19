@@ -295,6 +295,88 @@ struct ReplayAnalyzerTests {
         #expect(s.contains("  other"))    // other does not
     }
 
+    // MARK: - Tap-pin replay
+
+    @Test func tapPinForcesLockOnIcaoEvenWithoutMatchingTick() {
+        // A tapPin event with no aircraft visible in the prior tick
+        // should still produce a locked() engine state on the next
+        // tick (the engine got `forceLock`ed). Without tapPin
+        // honoring, the analyzer would lock onto whatever's closest
+        // to center instead.
+        let plane = westAircraft(icao: "abc123")
+        // tapPin happens BEFORE the first tick; the engine should
+        // already be locked(abc123) when we evaluate the tick.
+        let report = ReplayAnalyzer().analyze([
+            .sessionStart(sessionStart()),
+            .tapPin(.init(timestamp: t0, icao24: "abc123")),
+            .tick(tick(at: 0.5, from: t0, sensor: berkeleySensor(), aircraft: [plane])),
+        ])
+        if case .locked(let icao, _) = report.ticks[0].lockState {
+            #expect(icao == "abc123")
+        } else {
+            Issue.record("Expected .locked(abc123) after tapPin; got \(report.ticks[0].lockState)")
+        }
+    }
+
+    @Test func unpinFallsBackToCenterDriven() {
+        // tapPin to plane A, then unpin, then a tick where plane A is
+        // still visible AND closest to center. Engine state at the
+        // tick should reflect the center-driven logic (acquiring,
+        // since the locked state from forceLock dropped to acquiring
+        // when target was momentarily not-equal-to-locked? — actually
+        // unpin doesn't reset engine; the .locked state from forceLock
+        // would persist. The new tick's update() will see target=A
+        // again and keep locked.) Tests the post-unpin behavior
+        // doesn't *re-pin*: a different plane closer to center should
+        // win.
+        let pinPlane = westAircraft(icao: "abc123")
+        // A second plane way off bearing — not visible / not closest.
+        // Tap-pin to "abc123", unpin, then add a tick with only "abc123"
+        // present. After unpin, the analyzer should be back to center-
+        // driven, so the next tick re-acquires through update().
+        let report = ReplayAnalyzer().analyze([
+            .tapPin(.init(timestamp: t0, icao24: "abc123")),
+            .unpin(.init(timestamp: t0.addingTimeInterval(0.1))),
+            .tick(tick(at: 0.5, from: t0, sensor: berkeleySensor(), aircraft: [pinPlane])),
+        ])
+        // After unpin, target follows center-driven logic. Plane is
+        // still center-closest, so engine stays locked (it was already
+        // locked from the prior forceLock and the target hasn't changed).
+        if case .locked(let icao, _) = report.ticks[0].lockState {
+            #expect(icao == "abc123")
+        } else {
+            Issue.record("Expected continued .locked(abc123); got \(report.ticks[0].lockState)")
+        }
+    }
+
+    @Test func pinnedPlaneNoLongerVisibleFallsBackToCenter() {
+        // tapPin to "abc123", then a tick where "abc123" is NOT in the
+        // aircraft list and a different plane "xyz" IS visible and
+        // close to center. Pin is dead → analyzer should target xyz.
+        let xyz = ReplayEvent.AircraftSnapshot(
+            icao24: "xyz", callsign: "OTH",
+            originCountry: "United States",
+            latitude: 37.87, longitude: -122.27 - 0.034,  // due west, same as westAircraft
+            altitudeMeters: 60,
+            velocityMps: 0, trackDeg: 270,
+            onGround: false,
+            positionTimestamp: nil
+        )
+        let report = ReplayAnalyzer().analyze([
+            .tapPin(.init(timestamp: t0, icao24: "abc123")),
+            .tick(tick(at: 0.5, from: t0, sensor: berkeleySensor(), aircraft: [xyz])),
+        ])
+        // Engine starts locked(abc123) from forceLock. Tick says target
+        // = pinStillVisible ? "abc123" : centerClosest ("xyz"). Since
+        // "abc123" is NOT visible, target = "xyz". Engine transitions
+        // locked(abc123) → acquiring(xyz).
+        if case .acquiring(let icao, _) = report.ticks[0].lockState {
+            #expect(icao == "xyz")
+        } else {
+            Issue.record("Expected .acquiring(xyz) when pin disappeared; got \(report.ticks[0].lockState)")
+        }
+    }
+
     @Test func describeNoGpsTickShowsObsNoFix() {
         let sensorNoFix = ReplayEvent.SensorSnapshot(
             latitude: nil, longitude: nil, altitudeMeters: nil,

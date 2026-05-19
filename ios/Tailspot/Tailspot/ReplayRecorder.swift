@@ -50,6 +50,15 @@ import os
 nonisolated enum ReplayEvent: Equatable, Sendable {
     case sessionStart(SessionStart)
     case tick(Tick)
+    /// User explicitly pinned the lock to a specific aircraft via tap.
+    /// Recorded so the analyzer's lock-on path matches what live actually
+    /// did — without these, the analyzer would compute center-driven
+    /// locks and diverge whenever tap-to-ID was used.
+    case tapPin(TapPin)
+    /// User cleared the pin (tap-same-plane toggle, tap-empty-sky, or
+    /// pinned plane left visibility). Separate from `tapPin` rather than
+    /// folded into a nil-icao form so the wire format is unambiguous.
+    case unpin(Unpin)
 
     struct SessionStart: Codable, Equatable, Sendable {
         let timestamp: Date
@@ -65,6 +74,15 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
         let timestamp: Date
         let sensor: SensorSnapshot
         let aircraft: [AircraftSnapshot]
+    }
+
+    struct TapPin: Codable, Equatable, Sendable {
+        let timestamp: Date
+        let icao24: String
+    }
+
+    struct Unpin: Codable, Equatable, Sendable {
+        let timestamp: Date
     }
 
     struct SensorSnapshot: Codable, Equatable, Sendable {
@@ -129,7 +147,12 @@ nonisolated extension ReplayEvent: Codable {
     /// Keeping the discriminator flat (rather than nesting under a
     /// "payload" key) makes individual lines easier to read by eye.
     private enum CodingKeys: String, CodingKey { case type }
-    private enum Kind: String, Codable { case sessionStart = "session-start", tick }
+    private enum Kind: String, Codable {
+        case sessionStart = "session-start"
+        case tick
+        case tapPin = "tap-pin"
+        case unpin
+    }
 
     init(from decoder: Decoder) throws {
         let kindContainer = try decoder.container(keyedBy: CodingKeys.self)
@@ -139,6 +162,10 @@ nonisolated extension ReplayEvent: Codable {
             self = .sessionStart(try SessionStart(from: decoder))
         case .tick:
             self = .tick(try Tick(from: decoder))
+        case .tapPin:
+            self = .tapPin(try TapPin(from: decoder))
+        case .unpin:
+            self = .unpin(try Unpin(from: decoder))
         }
     }
 
@@ -151,6 +178,12 @@ nonisolated extension ReplayEvent: Codable {
         case .tick(let t):
             try c.encode(Kind.tick, forKey: .type)
             try t.encode(to: encoder)
+        case .tapPin(let p):
+            try c.encode(Kind.tapPin, forKey: .type)
+            try p.encode(to: encoder)
+        case .unpin(let u):
+            try c.encode(Kind.unpin, forKey: .type)
+            try u.encode(to: encoder)
         }
     }
 }
@@ -261,12 +294,31 @@ final class ReplayRecorder: ObservableObject {
     /// fire from a timer without checking isRecording themselves.
     func recordTick(_ tick: ReplayEvent.Tick) {
         guard isRecording else { return }
+        writeOrStop(.tick(tick))
+    }
+
+    /// Append a tap-pin event. Called from `ContentView.handleTap` when
+    /// the user explicitly pins onto a plane.
+    func recordTapPin(icao24: String, at now: Date = Date()) {
+        guard isRecording else { return }
+        writeOrStop(.tapPin(.init(timestamp: now, icao24: icao24)))
+    }
+
+    /// Append an unpin event. Called when the user clears the pin
+    /// (tap-empty-sky, tap-same-plane-toggle, or the pinned plane
+    /// leaving visibility).
+    func recordUnpin(at now: Date = Date()) {
+        guard isRecording else { return }
+        writeOrStop(.unpin(.init(timestamp: now)))
+    }
+
+    /// Common write+errstop helper. A failed write usually means the
+    /// disk filled or the file descriptor died — surface and stop;
+    /// silently dropping events would make the file deceptive.
+    private func writeOrStop(_ event: ReplayEvent) {
         do {
-            try writeLine(.tick(tick))
+            try writeLine(event)
         } catch {
-            // A failed write usually means the disk filled or the file
-            // descriptor died. Surface and stop — silently dropping
-            // events would make the file deceptive.
             Log.ui.error("Replay write failed: \(error.localizedDescription, privacy: .public)")
             stop()
         }

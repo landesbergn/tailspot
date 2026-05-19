@@ -738,12 +738,15 @@ struct ContentView: View {
         switch hit {
         case nil:
             // Empty-sky tap clears any pin.
+            if pinnedIcao != nil { recorder.recordUnpin(at: now) }
             pinnedIcao = nil
         case pinnedIcao:
             // Tap-same-plane toggles off — explicit "cancel."
+            recorder.recordUnpin(at: now)
             pinnedIcao = nil
         case let icao?:
             pinnedIcao = icao
+            recorder.recordTapPin(icao24: icao, at: now)
             // Skip the 0.6 s acquisition animation; the user just
             // pointed at this plane, snap-green is the right feel.
             lockOn.forceLock(targetIcao24: icao, now: now)

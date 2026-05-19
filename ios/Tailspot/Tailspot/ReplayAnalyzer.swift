@@ -198,18 +198,30 @@ struct ReplayAnalyzer {
     var lockZoneRadius: CGFloat = 80
 
     /// Analyze a sequence of events. `session-start` events update the
-    /// report header; `tick` events become one TickReport each.
+    /// report header; `tick` events become one TickReport each;
+    /// `tapPin` / `unpin` events update the running pin state and
+    /// (for tapPin) immediately `forceLock` the engine — matching
+    /// what ContentView does live.
     func analyze(_ events: [ReplayEvent]) -> ReplayReport {
         var sessionStart: ReplayEvent.SessionStart?
         let engine = LockOnEngine()
+        var pinnedIcao: String?
         var tickReports: [ReplayTickReport] = []
 
         for event in events {
             switch event {
             case .sessionStart(let s):
                 sessionStart = s
+            case .tapPin(let p):
+                pinnedIcao = p.icao24
+                engine.forceLock(targetIcao24: p.icao24, now: p.timestamp)
+            case .unpin:
+                pinnedIcao = nil
+                // Engine state isn't reset here — the next tick will
+                // drive it via update() with the center-driven target,
+                // mirroring ContentView's behavior.
             case .tick(let t):
-                tickReports.append(report(for: t, engine: engine))
+                tickReports.append(report(for: t, engine: engine, pinnedIcao: pinnedIcao))
             }
         }
 
@@ -224,7 +236,7 @@ struct ReplayAnalyzer {
 
     // MARK: - Internals
 
-    private func report(for tick: ReplayEvent.Tick, engine: LockOnEngine) -> ReplayTickReport {
+    private func report(for tick: ReplayEvent.Tick, engine: LockOnEngine, pinnedIcao: String? = nil) -> ReplayTickReport {
         let observer = reconstructObserver(from: tick)
 
         // Camera zoom changes the effective FOV: at 2× the same screen
@@ -283,7 +295,13 @@ struct ReplayAnalyzer {
             vfovDeg: effectiveVfov,
             lockZoneRadius: lockZoneRadius
         )
-        engine.update(closestTargetIcao24: closest, now: tick.timestamp)
+        // Match ContentView: if the pinned plane is still visible,
+        // it wins; otherwise fall back to the center-driven closest.
+        let pinStillVisible = pinnedIcao.map { id in
+            visibleObs.contains { $0.aircraft.icao24 == id }
+        } ?? false
+        let target = pinStillVisible ? pinnedIcao : closest
+        engine.update(closestTargetIcao24: target, now: tick.timestamp)
 
         return ReplayTickReport(
             timestamp: tick.timestamp,
