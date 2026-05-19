@@ -68,6 +68,123 @@ struct ReplayReport: Equatable, Sendable {
     let ticks: [ReplayTickReport]
 }
 
+// MARK: - Human-readable formatter
+
+nonisolated extension ReplayReport {
+    /// Multi-line String summary suitable for `Text(...).monospaced()`
+    /// in a debug viewer, or for piping into a terminal. Keeps the
+    /// structure flat (no nested indents past two levels) so it stays
+    /// readable on a phone screen.
+    ///
+    /// Fixed-width columns are used inside each per-aircraft row so
+    /// values line up visually — important for spotting outliers
+    /// quickly across many ticks.
+    func describe() -> String {
+        var lines: [String] = []
+
+        // Header
+        if let s = sessionStart {
+            lines.append("Tailspot replay  ·  \(Self.formatHeaderDate(s.timestamp))")
+            lines.append("\(s.deviceModel)  app \(s.appVersion)  schema \(s.schemaVersion)")
+        } else {
+            lines.append("Tailspot replay  ·  (no session-start header)")
+        }
+
+        let count = ticks.count
+        if count == 0 {
+            lines.append("0 ticks")
+            return lines.joined(separator: "\n")
+        }
+
+        if let first = ticks.first, let last = ticks.last {
+            let dur = last.timestamp.timeIntervalSince(first.timestamp)
+            lines.append("\(count) tick\(count == 1 ? "" : "s") (~\(String(format: "%.1f", dur)) s)")
+        }
+
+        // Per-tick blocks. Tick t=0 is the first tick's timestamp;
+        // subsequent ticks are offsets in seconds.
+        let base = ticks.first?.timestamp ?? Date()
+        for (i, tick) in ticks.enumerated() {
+            lines.append("")  // blank separator
+            lines.append(contentsOf: Self.describeTick(tick, index: i, base: base))
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Helpers (file-private would be nicer but extension doesn't allow it)
+
+    private static func describeTick(_ tick: ReplayTickReport, index: Int, base: Date) -> [String] {
+        var out: [String] = []
+        let offset = tick.timestamp.timeIntervalSince(base)
+        let obsStr: String
+        if let lat = tick.observerLatitude, let lon = tick.observerLongitude {
+            obsStr = String(format: "obs=(%.4f°, %.4f°)", lat, lon)
+        } else {
+            obsStr = "obs=(no fix)"
+        }
+        let hdgStr: String
+        if let h = tick.headingDeg {
+            hdgStr = String(format: "hdg=%5.1f°", h)
+        } else {
+            hdgStr = "hdg=  —"
+        }
+        // Zoom isn't in the report struct directly; ReplayTickReport
+        // doesn't carry it. (The analyzer already used it to compute
+        // FOV; surfacing here would require threading it through —
+        // skip for v0 to keep the formatter pure.)
+        out.append(String(format: "t=%+.1fs  \(obsStr)  \(hdgStr)  camEl=%+5.1f°",
+                          offset, tick.cameraElevationDeg))
+
+        // Aircraft summary: count + visible-count, then one row each.
+        let total = tick.aircraft.count
+        let vis = tick.visibleCount
+        out.append("  \(total) aircraft, \(vis) visible")
+
+        for ar in tick.aircraft {
+            out.append(describeAircraft(ar, closestIcao: tick.closestToCenterIcao24))
+        }
+
+        // Lock state.
+        out.append("  closest-to-center: \(tick.closestToCenterIcao24 ?? "—")")
+        out.append("  lock: \(describeLock(tick.lockState))")
+        return out
+    }
+
+    private static func describeAircraft(_ ar: ReplayTickReport.AircraftReport, closestIcao: String?) -> String {
+        let marker = (ar.icao24 == closestIcao) ? "·" : " "
+        let cs = (ar.callsign ?? "").padding(toLength: 8, withPad: " ", startingAt: 0)
+        let bearing = String(format: "brg=%5.1f°", ar.bearingDeg)
+        let elev = String(format: "el=%+5.1f°", ar.elevationDeg)
+        let slant = String(format: "slant=%5.1f km", ar.slantDistanceMeters / 1000)
+        let status: String
+        if !ar.isVisible {
+            status = "(out of range)"
+        } else if ar.screenPosition == nil {
+            status = "(off-screen)"
+        } else {
+            status = ""
+        }
+        return "   \(marker) \(ar.icao24)  \(cs)  \(bearing)  \(elev)  \(slant)  \(status)"
+    }
+
+    private static func describeLock(_ state: LockOnEngine.State) -> String {
+        switch state {
+        case .idle:                                 return "idle"
+        case .acquiring(let icao, _):               return "acquiring(\(icao))"
+        case .locked(let icao, _):                  return "locked(\(icao))"
+        case .sticky(let icao, _):                  return "sticky(\(icao))"
+        }
+    }
+
+    private static func formatHeaderDate(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss 'UTC'"
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f.string(from: d)
+    }
+}
+
 // MARK: - Analyzer
 
 /// Configuration for one analysis run. Defaults match an iPhone 16 in

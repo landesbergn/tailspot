@@ -231,4 +231,84 @@ struct ReplayAnalyzerTests {
         #expect(report.ticks.count == 1)
         #expect(report.ticks[0].aircraft.count == 1)
     }
+
+    // MARK: - describe() formatter
+
+    @Test func describeEmptyReport() {
+        let report = ReplayReport(sessionStart: nil, ticks: [])
+        let s = report.describe()
+        #expect(s.contains("no session-start header"))
+        #expect(s.contains("0 ticks"))
+    }
+
+    @Test func describeSessionOnlyShowsHeader() {
+        let report = ReplayReport(sessionStart: sessionStart(), ticks: [])
+        let s = report.describe()
+        // Header fields all appear in their canonical form.
+        #expect(s.contains("Tailspot replay"))
+        #expect(s.contains("iPhone17,3"))
+        #expect(s.contains("app 0.1.0"))
+        #expect(s.contains("schema 1"))
+    }
+
+    @Test func describeWithTickIncludesPoseAndAircraft() {
+        // Run the analyzer over a known fixture so the report's
+        // structure (visible count, closest, lock state) matches what
+        // describe() will format.
+        let report = ReplayAnalyzer().analyze([
+            .sessionStart(sessionStart()),
+            .tick(tick(at: 0, from: t0, sensor: berkeleySensor(), aircraft: [westAircraft()]))
+        ])
+        let s = report.describe()
+        // One tick → ~0.0s offset line.
+        #expect(s.contains("t=+0.0s"))
+        // Observer pose is printed.
+        #expect(s.contains("37.8700"))
+        #expect(s.contains("-122.2700"))
+        // Aircraft icao + callsign appear.
+        #expect(s.contains("abc123"))
+        // Lock state name appears (we acquire on first tick).
+        #expect(s.contains("acquiring"))
+    }
+
+    @Test func describeMarksClosestToCenterWithBullet() {
+        // Two aircraft, only one in the lock zone. The describe()
+        // output should annotate that row with a bullet, the other
+        // without. Use a far-off second plane that's still visible
+        // (close enough) but not within 80 px of center.
+        let other = ReplayEvent.AircraftSnapshot(
+            icao24: "other", callsign: "OTHER",
+            originCountry: "United States",
+            latitude: 37.87, longitude: -122.27 - 0.01,   // small offset west
+            altitudeMeters: 1500,                          // ~10° elevation → outside lock zone vertically
+            velocityMps: 0, trackDeg: nil,
+            onGround: false,
+            positionTimestamp: nil
+        )
+        let report = ReplayAnalyzer().analyze([
+            .tick(tick(at: 0, from: t0,
+                       sensor: berkeleySensor(),
+                       aircraft: [westAircraft(icao: "abc123"), other]))
+        ])
+        let s = report.describe()
+        #expect(s.contains("· abc123"))   // closest gets the bullet marker
+        #expect(s.contains("  other"))    // other does not
+    }
+
+    @Test func describeNoGpsTickShowsObsNoFix() {
+        let sensorNoFix = ReplayEvent.SensorSnapshot(
+            latitude: nil, longitude: nil, altitudeMeters: nil,
+            horizontalAccuracyMeters: nil, headingDeg: nil,
+            headingAccuracyDeg: nil, pitchRad: 0, rollRad: 0,
+            yawRad: 0, cameraElevationDeg: 0,
+            zoomFactor: nil
+        )
+        let report = ReplayAnalyzer().analyze([
+            .tick(tick(at: 0, from: t0, sensor: sensorNoFix, aircraft: []))
+        ])
+        let s = report.describe()
+        #expect(s.contains("obs=(no fix)"))
+        #expect(s.contains("hdg=  —"))
+        #expect(s.contains("lock: idle"))
+    }
 }

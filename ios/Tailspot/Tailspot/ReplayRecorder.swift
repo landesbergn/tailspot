@@ -316,6 +316,36 @@ final class ReplayRecorder: ObservableObject {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
     }
 
+    /// Find the most-recently-modified `.jsonl` in the standard
+    /// `Documents/replays/` directory. Returns nil if the directory
+    /// doesn't exist (no recording made yet) or contains no `.jsonl`
+    /// files. Used by the "Analyze last recording" debug row in
+    /// ContentView so the user can immediately inspect what the
+    /// engine saw without going through a file picker.
+    nonisolated static func mostRecentRecording() -> URL? {
+        let fm = FileManager.default
+        guard let docs = try? fm.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        ) else { return nil }
+        let dir = docs.appendingPathComponent("replays", isDirectory: true)
+        guard let entries = try? fm.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+        return entries
+            .filter { $0.pathExtension == "jsonl" }
+            .sorted { lhs, rhs in
+                let lm = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let rm = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return lm > rm
+            }
+            .first
+    }
+
     /// Coarse device model identifier (e.g., "iPhone17,3"). Recorded so
     /// a replay file alone is enough to interpret heading/pitch noise
     /// characteristics that vary by hardware.

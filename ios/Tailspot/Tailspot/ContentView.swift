@@ -71,6 +71,9 @@ struct ContentView: View {
     /// engine `forceLock()` snap-green-instantly instead of running a
     /// 0.6 s acquisition.
     @State private var pinnedIcao: String?
+    /// URL of the recording the user wants to analyze. Non-nil →
+    /// `ReplayReportView` sheet is presented for that file.
+    @State private var replayURL: URL?
 
     var body: some View {
         ZStack {
@@ -269,6 +272,16 @@ struct ContentView: View {
         .sheet(item: $selectedAircraft) { obs in
             AircraftDetailView(observed: obs, manager: adsb, observerLocation: location.cllocation)
         }
+        .sheet(isPresented: Binding(
+            get: { replayURL != nil },
+            set: { if !$0 { replayURL = nil } }
+        )) {
+            if let replayURL {
+                ReplayReportView(url: replayURL)
+            } else {
+                EmptyView()
+            }
+        }
     }
 
     // MARK: - Hangar entry
@@ -443,6 +456,7 @@ struct ContentView: View {
                 Text(formatAttitude())
                 adsbStatusRow
                 recordingRow
+                analyzeRow
                 if !cameraAuthorized {
                     Text("camera: not authorized")
                 }
@@ -636,6 +650,28 @@ struct ContentView: View {
             } catch {
                 Log.ui.error("Failed to start replay recording: \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    /// Debug-overlay row that loads the most recent recording from
+    /// `Documents/replays/` and presents `ReplayReportView`. Disabled
+    /// (greyed) when there are no recordings on disk — a one-off
+    /// FileManager check on every body eval is cheap enough.
+    private var analyzeRow: some View {
+        let latest = ReplayRecorder.mostRecentRecording()
+        return HStack(spacing: 8) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .foregroundStyle(latest == nil ? .gray : .white.opacity(0.85))
+            Text(latest.map { "Analyze \($0.lastPathComponent)" }
+                 ?? "No recordings yet")
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+        }
+        .contentShape(.rect)
+        .opacity(latest == nil ? 0.5 : 1.0)
+        .onTapGesture {
+            if let latest { replayURL = latest }
         }
     }
 
