@@ -98,40 +98,22 @@ struct CatchDetailView: View {
 
     // MARK: - Photo section
 
-    /// Always-rendered section that reserves the photo block from the
-    /// start so the page doesn't jump when the API lands. The outer
-    /// 220pt slab is constant; only the inner content swaps between
-    /// a spinner (loading), the photo (loaded), or a small "no photo"
-    /// affordance (Planespotters has no record).
+    /// Always-rendered photo slab — fixed 220pt height so the page
+    /// doesn't shift when the API resolves. The single 220pt block
+    /// holds (in order of stack): a bgElevated base, the per-state
+    /// content (spinner / photo / no-photo placeholder), and (when
+    /// loaded) an attribution chip overlaid on the bottom-leading
+    /// corner of the photo so the credit + tap-target are visually
+    /// attached to the image and can't clip against the row's edge.
     private var photoSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 6) {
-                ZStack {
-                    Brand.Color.bgElevated
-                    photoSlabContent
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 220)
-                .clipped()
-                .cornerRadius(8)
-
-                // TOS attribution: photographer credit + link to
-                // Planespotters page. Only shown when loaded; we
-                // accept the small ~24pt growth on transition since
-                // the 220pt slab itself is already reserved.
-                if case .loaded(let photo) = photoState {
-                    Button {
-                        UIApplication.shared.open(photo.link)
-                    } label: {
-                        Text("© \(photo.photographer) · planespotters.net")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                    .transition(.opacity)
-                }
+            ZStack {
+                Brand.Color.bgElevated
+                photoSlabContent
             }
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
     }
@@ -143,24 +125,7 @@ struct CatchDetailView: View {
             ProgressView()
                 .tint(Brand.Color.textSecondary)
         case .loaded(let photo):
-            AsyncImage(url: photo.thumbnailLargeURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .transition(.opacity)
-                case .empty:
-                    ProgressView()
-                        .tint(Brand.Color.textSecondary)
-                case .failure:
-                    Image(systemName: "photo.badge.exclamationmark")
-                        .font(.title2)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                @unknown default:
-                    EmptyView()
-                }
-            }
+            loadedPhotoView(photo)
         case .notAvailable:
             VStack(spacing: 6) {
                 Image(systemName: "photo")
@@ -171,6 +136,50 @@ struct CatchDetailView: View {
                     .foregroundStyle(Brand.Color.textTertiary)
             }
         }
+    }
+
+    /// The loaded-photo presentation: image fills the slab; attribution
+    /// chip overlays the bottom-leading corner. Whole thing is wrapped
+    /// in a Button so a tap anywhere on the photo opens the
+    /// Planespotters page in Safari (TOS attribution requirement).
+    private func loadedPhotoView(_ photo: PlanePhoto) -> some View {
+        Button {
+            UIApplication.shared.open(photo.link)
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                AsyncImage(url: photo.thumbnailLargeURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .transition(.opacity)
+                    case .empty:
+                        ProgressView()
+                            .tint(Brand.Color.textSecondary)
+                    case .failure:
+                        Image(systemName: "photo.badge.exclamationmark")
+                            .font(.title2)
+                            .foregroundStyle(Brand.Color.textTertiary)
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+
+                Text("© \(photo.photographer) · planespotters.net")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.55), in: .rect(cornerRadius: 4))
+                    .padding(8)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Helpers
