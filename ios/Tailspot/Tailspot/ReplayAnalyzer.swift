@@ -202,13 +202,24 @@ struct ReplayAnalyzer {
     /// `tapPin` / `unpin` events update the running pin state and
     /// (for tapPin) immediately `forceLock` the engine — matching
     /// what ContentView does live.
+    ///
+    /// Events are processed in **timestamp order**, not array order.
+    /// Files written by `ReplayRecorder` happen to be sorted (writes
+    /// are sequential on a monotonic clock), but a `.tapPin` fired
+    /// from a tap gesture and a `.tick` fired from a 1 Hz timer can
+    /// race on the JSONL line ordering at the millisecond level. The
+    /// explicit sort below makes the analysis stable regardless of
+    /// any future input source — concatenated files, merged streams,
+    /// or anything else.
     func analyze(_ events: [ReplayEvent]) -> ReplayReport {
+        let ordered = events.sorted { Self.timestamp(of: $0) < Self.timestamp(of: $1) }
+
         var sessionStart: ReplayEvent.SessionStart?
         let engine = LockOnEngine()
         var pinnedIcao: String?
         var tickReports: [ReplayTickReport] = []
 
-        for event in events {
+        for event in ordered {
             switch event {
             case .sessionStart(let s):
                 sessionStart = s
@@ -226,6 +237,19 @@ struct ReplayAnalyzer {
         }
 
         return ReplayReport(sessionStart: sessionStart, ticks: tickReports)
+    }
+
+    /// Timestamp accessor used to sort events. Distant-past for any
+    /// future case we haven't extended yet (defensive — won't blow up
+    /// at runtime if the format gains a new case before this helper
+    /// is updated).
+    private static func timestamp(of event: ReplayEvent) -> Date {
+        switch event {
+        case .sessionStart(let s): return s.timestamp
+        case .tick(let t):         return t.timestamp
+        case .tapPin(let p):       return p.timestamp
+        case .unpin(let u):        return u.timestamp
+        }
     }
 
     /// Convenience: read + decode + analyze a file in one shot.

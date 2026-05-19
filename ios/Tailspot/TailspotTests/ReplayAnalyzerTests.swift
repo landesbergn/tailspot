@@ -349,6 +349,29 @@ struct ReplayAnalyzerTests {
         }
     }
 
+    @Test func eventsOutOfOrderAreSortedByTimestamp() {
+        // Tap-pin events from user input can in principle race the
+        // 1 Hz tick writer at the millisecond level. The analyzer
+        // sorts by timestamp before processing so the outcome
+        // doesn't depend on the input array order.
+        let plane = westAircraft(icao: "abc123")
+        // Build events in reversed timestamp order to be sure the
+        // sort is doing the work.
+        let report = ReplayAnalyzer().analyze([
+            .tick(tick(at: 0.5, from: t0, sensor: berkeleySensor(), aircraft: [plane])),
+            .tapPin(.init(timestamp: t0, icao24: "abc123")),
+            .sessionStart(sessionStart()),
+        ])
+        // Despite the .tick being array-first, sorting should put
+        // sessionStart → tapPin → tick → analyzer locks(abc123).
+        #expect(report.sessionStart != nil)
+        if case .locked(let icao, _) = report.ticks[0].lockState {
+            #expect(icao == "abc123")
+        } else {
+            Issue.record("Expected .locked(abc123) after timestamp sort; got \(report.ticks[0].lockState)")
+        }
+    }
+
     @Test func pinnedPlaneNoLongerVisibleFallsBackToCenter() {
         // tapPin to "abc123", then a tick where "abc123" is NOT in the
         // aircraft list and a different plane "xyz" IS visible and
