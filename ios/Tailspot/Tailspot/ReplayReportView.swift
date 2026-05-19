@@ -50,7 +50,8 @@ struct ReplayReportView: View {
         } else {
             ScrollView {
                 Text(summary)
-                    .font(.system(.caption2, design: .monospaced))
+                    .font(Brand.Font.hudData)
+                    .foregroundStyle(Brand.Color.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
