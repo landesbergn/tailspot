@@ -74,165 +74,188 @@ struct ContentView: View {
     /// URL of the recording the user wants to analyze. Non-nil →
     /// `ReplayReportView` sheet is presented for that file.
     @State private var replayURL: URL?
+    /// Opacity of the launch splash screen. Starts at 1.0 (opaque),
+    /// animates to 0 after ~600ms, then the AR view underneath becomes
+    /// interactive. The splash absorbs taps for the first half of the
+    /// fade so no gestures fire while it's mostly visible.
+    @State private var splashOpacity: Double = 1.0
 
     var body: some View {
         ZStack {
-            if cameraAuthorized {
-                CameraPreview(zoomFactor: zoom)
-                    .ignoresSafeArea()
-            } else {
-                Brand.Color.bgPrimary.ignoresSafeArea()
-            }
+            // Main AR view and overlays (camera, lock brackets, debug panels, etc.)
+            ZStack {
+                if cameraAuthorized {
+                    CameraPreview(zoomFactor: zoom)
+                        .ignoresSafeArea()
+                } else {
+                    Brand.Color.bgPrimary.ignoresSafeArea()
+                }
 
-            // Lock-on AR overlay. The view is clean by default — no
-            // crosshair, no per-aircraft labels. As the user aims at
-            // a plane (within lockZoneRadius of screen center), yellow
-            // brackets close in for ~0.6 s, then snap green and a
-            // compact label identifies the plane. Tap the locked
-            // label to open the detail sheet (with the Catch button).
-            //
-            // The 30 Hz TimelineView drives both the engine state
-            // transitions and the bracket animation. The engine is a
-            // pure state machine — repeated update() calls with the
-            // same target are idempotent — so calling it from inside
-            // the TimelineView body is safe.
-            GeometryReader { geo in
-                let effectiveHfov = Self.baseHfovDeg / zoom
-                let effectiveVfov = Self.baseVfovDeg / zoom
+                // Lock-on AR overlay. The view is clean by default — no
+                // crosshair, no per-aircraft labels. As the user aims at
+                // a plane (within lockZoneRadius of screen center), yellow
+                // brackets close in for ~0.6 s, then snap green and a
+                // compact label identifies the plane. Tap the locked
+                // label to open the detail sheet (with the Catch button).
+                //
+                // The 30 Hz TimelineView drives both the engine state
+                // transitions and the bracket animation. The engine is a
+                // pure state machine — repeated update() calls with the
+                // same target are idempotent — so calling it from inside
+                // the TimelineView body is safe.
+                GeometryReader { geo in
+                    let effectiveHfov = Self.baseHfovDeg / zoom
+                    let effectiveVfov = Self.baseVfovDeg / zoom
 
-                TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
-                    let now = context.date
-                    let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
-                    let heading = location.heading ?? 0
-                    let camEl = motion.cameraElevationDeg
+                    TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
+                        let now = context.date
+                        let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
+                        let heading = location.heading ?? 0
+                        let camEl = motion.cameraElevationDeg
 
-                    // Target choice: the explicit tap-pinned plane (if
-                    // still visible) wins; otherwise fall back to
-                    // whichever visible plane is nearest to screen
-                    // center. A pin pointing at a no-longer-visible
-                    // plane is ignored here; the .onChange on lockOn
-                    // state clears it for next frame.
-                    let centerClosest = closestTargetIcao24(
-                        in: visible,
-                        phoneHeadingDeg: heading,
-                        cameraElevationDeg: camEl,
-                        screenSize: geo.size,
-                        hfovDeg: effectiveHfov,
-                        vfovDeg: effectiveVfov
-                    )
-                    let pinStillVisible = pinnedIcao.map { id in
-                        visible.contains { $0.aircraft.icao24 == id }
-                    } ?? false
-                    let engineTarget = pinStillVisible ? pinnedIcao : centerClosest
-                    // `let _` so the void-returning call is legal
-                    // inside @ViewBuilder (statements aren't otherwise).
-                    let _ = lockOn.update(closestTargetIcao24: engineTarget, now: now)
+                        // Target choice: the explicit tap-pinned plane (if
+                        // still visible) wins; otherwise fall back to
+                        // whichever visible plane is nearest to screen
+                        // center. A pin pointing at a no-longer-visible
+                        // plane is ignored here; the .onChange on lockOn
+                        // state clears it for next frame.
+                        let centerClosest = closestTargetIcao24(
+                            in: visible,
+                            phoneHeadingDeg: heading,
+                            cameraElevationDeg: camEl,
+                            screenSize: geo.size,
+                            hfovDeg: effectiveHfov,
+                            vfovDeg: effectiveVfov
+                        )
+                        let pinStillVisible = pinnedIcao.map { id in
+                            visible.contains { $0.aircraft.icao24 == id }
+                        } ?? false
+                        let engineTarget = pinStillVisible ? pinnedIcao : centerClosest
+                        // `let _` so the void-returning call is legal
+                        // inside @ViewBuilder (statements aren't otherwise).
+                        let _ = lockOn.update(closestTargetIcao24: engineTarget, now: now)
 
-                    ZStack {
-                        // Background tap-and-pinch layer. Color.clear +
-                        // contentShape makes the whole AR area receive
-                        // gestures; the lock-label's own tap (further
-                        // up the Z-stack) still wins for taps that
-                        // land on it because innermost-first wins.
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        let next = zoomGestureBase * CGFloat(value)
-                                        zoom = min(max(CameraPreview.zoomRange.lowerBound, next),
-                                                   CameraPreview.zoomRange.upperBound)
-                                    }
-                                    .onEnded { _ in zoomGestureBase = zoom }
-                            )
-                            .simultaneousGesture(
-                                SpatialTapGesture()
-                                    .onEnded { event in
-                                        handleTap(
-                                            at: event.location,
-                                            in: geo.size,
-                                            visible: visible,
-                                            phoneHeadingDeg: heading,
-                                            cameraElevationDeg: camEl,
-                                            hfovDeg: effectiveHfov,
-                                            vfovDeg: effectiveVfov,
-                                            now: now
-                                        )
-                                    }
-                            )
+                        ZStack {
+                            // Background tap-and-pinch layer. Color.clear +
+                            // contentShape makes the whole AR area receive
+                            // gestures; the lock-label's own tap (further
+                            // up the Z-stack) still wins for taps that
+                            // land on it because innermost-first wins.
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    MagnificationGesture()
+                                        .onChanged { value in
+                                            let next = zoomGestureBase * CGFloat(value)
+                                            zoom = min(max(CameraPreview.zoomRange.lowerBound, next),
+                                                       CameraPreview.zoomRange.upperBound)
+                                        }
+                                        .onEnded { _ in zoomGestureBase = zoom }
+                                )
+                                .simultaneousGesture(
+                                    SpatialTapGesture()
+                                        .onEnded { event in
+                                            handleTap(
+                                                at: event.location,
+                                                in: geo.size,
+                                                visible: visible,
+                                                phoneHeadingDeg: heading,
+                                                cameraElevationDeg: camEl,
+                                                hfovDeg: effectiveHfov,
+                                                vfovDeg: effectiveVfov,
+                                                now: now
+                                            )
+                                        }
+                                )
 
-                        if let icao = lockOn.state.targetIcao24,
-                           let target = visible.first(where: { $0.aircraft.icao24 == icao }),
-                           let pos = target.screenPosition(
-                               phoneHeadingDeg: heading,
-                               cameraElevationDeg: camEl,
-                               in: geo.size,
-                               hfovDeg: effectiveHfov,
-                               vfovDeg: effectiveVfov
-                           )
-                        {
-                            lockOverlay(
-                                state: lockOn.state,
-                                target: target,
-                                metadata: lockedMetadata,
-                                now: now
-                            )
-                                .position(pos)
-                                .onTapGesture { selectedAircraft = target }
+                            if let icao = lockOn.state.targetIcao24,
+                               let target = visible.first(where: { $0.aircraft.icao24 == icao }),
+                               let pos = target.screenPosition(
+                                   phoneHeadingDeg: heading,
+                                   cameraElevationDeg: camEl,
+                                   in: geo.size,
+                                   hfovDeg: effectiveHfov,
+                                   vfovDeg: effectiveVfov
+                               )
+                            {
+                                lockOverlay(
+                                    state: lockOn.state,
+                                    target: target,
+                                    metadata: lockedMetadata,
+                                    now: now
+                                )
+                                    .position(pos)
+                                    .onTapGesture { selectedAircraft = target }
+                            }
                         }
+                        .frame(width: geo.size.width, height: geo.size.height)
                     }
-                    .frame(width: geo.size.width, height: geo.size.height)
                 }
-            }
-            .ignoresSafeArea()
+                .ignoresSafeArea()
 
-            // Zoom indicator. Faint pill in the top-center; hidden at 1.0×.
-            if zoom > 1.01 {
+                // Zoom indicator. Faint pill in the top-center; hidden at 1.0×.
+                if zoom > 1.01 {
+                    VStack {
+                        Text(String(format: "%.1f×", zoom))
+                            .font(.system(.caption, design: .monospaced).bold())
+                            .foregroundStyle(Brand.Color.textPrimary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+                            .padding(.top, 12)
+                            .transition(.opacity)
+                        Spacer()
+                    }
+                }
+
+                // Debug overlays — hidden by default; revealed by the
+                // wrench toggle below.
+                if showDebug {
+                    VStack(spacing: 0) {
+                        sensorReadout
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Spacer(minLength: 0)
+
+                        aircraftList
+                    }
+                    .transition(.opacity)
+                }
+
+                // Top-trailing controls: hangar (collection) then debug
+                // wrench. Both are discrete so they don't compete with
+                // the AR overlay; hangar gets a small green count badge
+                // when there's something to see.
                 VStack {
-                    Text(String(format: "%.1f×", zoom))
-                        .font(.system(.caption, design: .monospaced).bold())
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
-                        .padding(.top, 12)
-                        .transition(.opacity)
+                    HStack(spacing: 10) {
+                        Spacer()
+                        hangarButton
+                        debugToggleButton
+                    }
+                    .padding(.top, 8)
+                    .padding(.trailing, 12)
                     Spacer()
                 }
             }
 
-            // Debug overlays — hidden by default; revealed by the
-            // wrench toggle below.
-            if showDebug {
-                VStack(spacing: 0) {
-                    sensorReadout
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Spacer(minLength: 0)
-
-                    aircraftList
-                }
-                .transition(.opacity)
-            }
-
-            // Top-trailing controls: hangar (collection) then debug
-            // wrench. Both are discrete so they don't compete with
-            // the AR overlay; hangar gets a small green count badge
-            // when there's something to see.
-            VStack {
-                HStack(spacing: 10) {
-                    Spacer()
-                    hangarButton
-                    debugToggleButton
-                }
-                .padding(.top, 8)
-                .padding(.trailing, 12)
-                Spacer()
-            }
+            // Launch splash screen: brand lockup centered on near-black
+            // background. Holds for ~600ms then crossfades to the AR view.
+            // Absorbs taps for the first half of its fade.
+            splashOverlay
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
+        }
+        .task {
+            // Dismiss the launch splash after ~600ms, then crossfade to
+            // the AR view over 400ms. This runs once when ContentView
+            // first appears (no id: to retrigger), so the splash fires
+            // exactly at launch.
+            try? await Task.sleep(for: .milliseconds(600))
+            withAnimation(.easeOut(duration: 0.4)) {
+                splashOpacity = 0
+            }
         }
         .task {
             await requestCameraPermission()
@@ -335,6 +358,32 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.5), radius: 2)
         }
         .accessibilityLabel(showDebug ? "Hide debug overlays" : "Show debug overlays")
+    }
+
+    // MARK: - Launch splash
+
+    /// Brand splash screen: centered airplane glyph + TAILSPOT wordmark
+    /// on a near-black background. Shown at launch for ~600ms, then
+    /// crossfades to transparent. The splash absorbs taps for the first
+    /// half of its fade to prevent accidental AR gestures mid-animation.
+    @ViewBuilder
+    private var splashOverlay: some View {
+        if splashOpacity > 0 {
+            ZStack {
+                Brand.Color.bgPrimary.ignoresSafeArea()
+                HStack(spacing: 14) {
+                    Image(systemName: "airplane")
+                        .font(.system(size: 56))
+                        .foregroundStyle(Brand.Color.cyan)
+                    Text("TAILSPOT")
+                        .font(.system(size: 32, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .tracking(4)
+                }
+            }
+            .opacity(splashOpacity)
+            .allowsHitTesting(splashOpacity > 0.5)
+        }
     }
 
     // MARK: - Lock-on visuals
