@@ -14,15 +14,21 @@
 
 import SwiftUI
 import SwiftData
+import os
 
 struct HangarView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     /// Pulled from the model container injected by TailspotApp. The
     /// @Query auto-updates when new Catches are inserted — so if you
     /// catch a plane, dismiss to the AR view, catch another, then
     /// come back, the list reflects both without manual refresh.
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @State private var grouping: HangarGrouping = .aircraftType
+    /// When non-nil, a delete-confirm alert is presented for this
+    /// row. Triggered by the swipe action; confirming wipes every
+    /// Catch in `row.allCatches`.
+    @State private var rowToDelete: HangarRow?
 
     var body: some View {
         NavigationStack {
@@ -89,9 +95,16 @@ struct HangarView: View {
 
             ForEach(groups) { group in
                 Section {
-                    ForEach(group.catches) { c in
-                        NavigationLink(value: c) {
-                            row(c)
+                    ForEach(group.rows) { row in
+                        NavigationLink(value: row.mostRecent) {
+                            rowView(row)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                rowToDelete = row
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 } header: {
@@ -100,19 +113,63 @@ struct HangarView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .alert(
+            deleteAlertTitle,
+            isPresented: Binding(
+                get: { rowToDelete != nil },
+                set: { if !$0 { rowToDelete = nil } }
+            )
+        ) {
+            Button("Delete", role: .destructive) {
+                if let row = rowToDelete { performDelete(row: row) }
+            }
+            Button("Cancel", role: .cancel) {
+                rowToDelete = nil
+            }
+        } message: {
+            Text("This can't be undone.")
+        }
+    }
+
+    /// Alert title built from the row's icao24 + count. Pluralizes the
+    /// noun so 1-catch reads naturally.
+    private var deleteAlertTitle: String {
+        guard let row = rowToDelete else { return "" }
+        let cs = row.mostRecent.callsign?.trimmedNonEmpty ?? row.icao24
+        if row.count == 1 {
+            return "Delete catch of \(cs)?"
+        }
+        return "Delete all \(row.count) catches of \(cs)?"
+    }
+
+    /// Drops every Catch in the row's `allCatches` from the SwiftData
+    /// store. @Query auto-refreshes; the row disappears from the
+    /// list as soon as the save completes. Group sections empty out
+    /// naturally if every row in them is deleted.
+    private func performDelete(row: HangarRow) {
+        for c in row.allCatches {
+            modelContext.delete(c)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            Log.adsb.error("Hangar delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        rowToDelete = nil
     }
 
     private func sectionHeader(_ group: HangarGroup) -> some View {
         HStack {
             Text(group.title)
             Spacer()
-            Text("\(group.catches.count)")
+            Text("\(group.rows.count)")
                 .foregroundStyle(Brand.Color.textSecondary)
                 .monospacedDigit()
         }
     }
 
-    private func row(_ c: Catch) -> some View {
+    private func rowView(_ row: HangarRow) -> some View {
+        let c = row.mostRecent
         let title = c.callsign?.trimmedNonEmpty ?? c.icao24
         let subtitle = rowSubtitle(c)
         return HStack(alignment: .center, spacing: 12) {
@@ -120,8 +177,18 @@ struct HangarView: View {
                 .foregroundStyle(Brand.Color.cyan)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(Brand.Font.hudCallsign)
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(Brand.Font.hudCallsign)
+                    if row.count > 1 {
+                        Text("×\(row.count)")
+                            .font(Brand.Font.caption)
+                            .foregroundStyle(Brand.Color.textPrimary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Brand.Color.bgElevated, in: .capsule)
+                    }
+                }
                 if let subtitle {
                     Text(subtitle)
                         .font(Brand.Font.caption)

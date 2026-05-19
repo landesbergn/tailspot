@@ -10,6 +10,9 @@ Icon?
 # user's location history.
 /replays/
 
+# Superpowers brainstorm scratch (mockups, server state, etc.). Local-only.
+/.superpowers/
+
 # Xcode / iOS
 build/
 DerivedData/
