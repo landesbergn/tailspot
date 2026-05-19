@@ -54,13 +54,25 @@ nonisolated struct PlanespottersClient: Sendable {
     private let session: URLSession
     private let baseURL: URL
     private let cache: PlanespottersCache
+    private let userAgent: String
+
+    /// Planespotters explicitly rejects "generic library User-Agent"
+    /// requests with HTTP 403 and an instructive error body. They
+    /// require a string that identifies the calling app plus a
+    /// contact URL — the format in their docs is
+    /// `MyFlightTracker/1.2 (+https://example.com/contact)`.
+    /// Bumping the version number here is fine if/when the integration
+    /// changes shape.
+    static let defaultUserAgent = "Tailspot/0.1 (+https://github.com/landesbergn/tailspot)"
 
     init(session: URLSession = .shared,
          baseURL: URL = URL(string: "https://api.planespotters.net/pub/photos/hex/")!,
-         cache: PlanespottersCache = PlanespottersCache()) {
+         cache: PlanespottersCache = PlanespottersCache(),
+         userAgent: String = PlanespottersClient.defaultUserAgent) {
         self.session = session
         self.baseURL = baseURL
         self.cache = cache
+        self.userAgent = userAgent
     }
 
     /// Fetches the first available photo for the given icao24, or nil if
@@ -72,8 +84,10 @@ nonisolated struct PlanespottersClient: Sendable {
             return cached
         }
         guard let url = URL(string: key, relativeTo: baseURL) else { return nil }
+        var request = URLRequest(url: url)
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 // Non-2xx — surface to log but don't poison the cache;
                 // a later display can retry.

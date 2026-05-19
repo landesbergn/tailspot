@@ -252,8 +252,8 @@ struct ContentView: View {
             // the AR view over 400ms. This runs once when ContentView
             // first appears (no id: to retrigger), so the splash fires
             // exactly at launch.
-            try? await Task.sleep(for: .milliseconds(600))
-            withAnimation(.easeOut(duration: 0.4)) {
+            try? await Task.sleep(for: .milliseconds(1400))
+            withAnimation(.easeOut(duration: 0.6)) {
                 splashOpacity = 0
             }
         }

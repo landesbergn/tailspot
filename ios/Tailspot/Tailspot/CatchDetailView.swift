@@ -18,7 +18,14 @@
 import SwiftUI
 
 struct CatchDetailView: View {
-    let catchRecord: Catch
+    /// A whole HangarRow — every catch sharing this icao24 plus the
+    /// "representative" most-recent catch used for identity fields.
+    let row: HangarRow
+
+    /// Convenience accessor for the most-recent catch, used for header
+    /// text + identity rows. The full list is rendered in the Catches
+    /// section below.
+    private var catchRecord: Catch { row.mostRecent }
 
     @State private var photo: PlanePhoto?
     @State private var didLoadPhoto = false
@@ -27,16 +34,16 @@ struct CatchDetailView: View {
         List {
             photoSection
             Section("Identity") {
-                row("Callsign", catchRecord.callsign ?? "—")
-                row("ICAO24",   catchRecord.icao24)
-                row("Aircraft", aircraftText)
-                row("Operator", catchRecord.operatorName ?? "—")
+                self.row("Callsign", catchRecord.callsign ?? "—")
+                self.row("ICAO24",   catchRecord.icao24)
+                self.row("Aircraft", aircraftText)
+                self.row("Operator", catchRecord.operatorName ?? "—")
             }
 
-            Section("When & where") {
-                row("Caught",          catchRecord.caughtAt.formatted(date: .abbreviated, time: .shortened))
-                row("From",            String(format: "%.4f°, %.4f°", catchRecord.observerLat, catchRecord.observerLon))
-                row("Slant distance",  String(format: "%.1f km", catchRecord.slantDistanceMeters / 1000))
+            Section(catchesSectionTitle) {
+                ForEach(row.allCatches) { c in
+                    catchTimelineRow(c)
+                }
             }
         }
         .navigationTitle(catchRecord.callsign?.trimmedNonEmpty ?? catchRecord.icao24)
@@ -46,6 +53,33 @@ struct CatchDetailView: View {
             didLoadPhoto = true
             photo = await PlanespottersClient.shared.photo(for: catchRecord.icao24)
         }
+    }
+
+    // MARK: - Catches timeline
+
+    private var catchesSectionTitle: String {
+        row.count == 1 ? "Caught once" : "Caught \(row.count) times"
+    }
+
+    /// One entry in the catch-history timeline. Top line = timestamp
+    /// (most prominent) + slant distance. Sub line = observer lat/lon.
+    private func catchTimelineRow(_ c: Catch) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(c.caughtAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(Brand.Font.body)
+                Spacer()
+                Text(String(format: "%.1f km", c.slantDistanceMeters / 1000))
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .monospacedDigit()
+            }
+            Text(String(format: "%.4f°, %.4f°", c.observerLat, c.observerLon))
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textTertiary)
+                .monospacedDigit()
+        }
+        .padding(.vertical, 2)
     }
 
     // MARK: - Photo section

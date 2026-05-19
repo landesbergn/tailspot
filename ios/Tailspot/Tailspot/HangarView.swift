@@ -60,8 +60,8 @@ struct HangarView: View {
                         }
                     }
                 }
-                .navigationDestination(for: Catch.self) { c in
-                    CatchDetailView(catchRecord: c)
+                .navigationDestination(for: HangarRow.self) { row in
+                    CatchDetailView(row: row)
                 }
         }
     }
@@ -96,7 +96,7 @@ struct HangarView: View {
             ForEach(groups) { group in
                 Section {
                     ForEach(group.rows) { row in
-                        NavigationLink(value: row.mostRecent) {
+                        NavigationLink(value: row) {
                             rowView(row)
                         }
                         .swipeActions(edge: .trailing) {
