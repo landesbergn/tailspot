@@ -8,14 +8,24 @@
 //  catch from yesterday look different tomorrow, which defeats the
 //  point of a collection.
 //
+//  The photoSection (top of the list) does make a live Planespotters
+//  fetch, which is intentional: photos aren't part of the catch
+//  snapshot, and the TOS prohibits caching image bytes to disk anyway.
+//  Showing the current photo for an icao24 is fine — it's more like
+//  a "what does this plane look like?" reference than a snapshot.
+//
 
 import SwiftUI
 
 struct CatchDetailView: View {
     let catchRecord: Catch
 
+    @State private var photo: PlanePhoto?
+    @State private var didLoadPhoto = false
+
     var body: some View {
         List {
+            photoSection
             Section("Identity") {
                 row("Callsign", catchRecord.callsign ?? "—")
                 row("ICAO24",   catchRecord.icao24)
@@ -31,7 +41,62 @@ struct CatchDetailView: View {
         }
         .navigationTitle(catchRecord.callsign?.trimmedNonEmpty ?? catchRecord.icao24)
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard !didLoadPhoto else { return }
+            didLoadPhoto = true
+            photo = await PlanespottersClient.shared.photo(for: catchRecord.icao24)
+        }
     }
+
+    // MARK: - Photo section
+
+    @ViewBuilder
+    private var photoSection: some View {
+        if let photo {
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    AsyncImage(url: photo.thumbnailLargeURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        case .failure:
+                            placeholderRect
+                        case .empty:
+                            placeholderRect.overlay(ProgressView())
+                        @unknown default:
+                            placeholderRect
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 220)
+                    .clipped()
+                    .cornerRadius(8)
+
+                    // TOS attribution: photographer credit + link to Planespotters page.
+                    Button {
+                        UIApplication.shared.open(photo.link)
+                    } label: {
+                        Text("© \(photo.photographer) · planespotters.net")
+                            .font(Brand.Font.caption)
+                            .foregroundStyle(Brand.Color.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 4)
+            }
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+        }
+    }
+
+    private var placeholderRect: some View {
+        Rectangle()
+            .fill(Brand.Color.bgElevated)
+            .frame(height: 220)
+    }
+
+    // MARK: - Helpers
 
     private var aircraftText: String {
         let key = HangarGrouping.key(for: catchRecord, mode: .aircraftType)
