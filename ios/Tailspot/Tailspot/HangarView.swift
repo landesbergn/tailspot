@@ -188,6 +188,15 @@ struct HangarView: View {
                             .padding(.vertical, 1)
                             .background(Brand.Color.bgElevated, in: .capsule)
                     }
+                    if row.rarity == .rare {
+                        Text("RARE")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .tracking(0.5)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Brand.Color.alertAdvisory, in: .capsule)
+                    }
                 }
                 if let subtitle {
                     Text(subtitle)
