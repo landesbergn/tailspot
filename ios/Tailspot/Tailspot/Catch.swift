@@ -38,6 +38,14 @@ final class Catch {
     /// nullable — older rows written before this field existed simply
     /// have nil here (SwiftData lightweight migration).
     var operatorName: String?
+    /// Filename (not full path) of the camera frame captured at the
+    /// moment of the auto-catch, saved at
+    /// `Documents/catches/<filename>.jpg`. Optional — catches written
+    /// before auto-catch shipped have nil; catches where the camera
+    /// capture failed also have nil. The file-on-disk approach keeps
+    /// photo bytes out of the SwiftData store so the DB doesn't bloat
+    /// as the collection grows.
+    var photoFilename: String?
     var caughtAt: Date
     var observerLat: Double
     var observerLon: Double
@@ -49,6 +57,7 @@ final class Catch {
         model: String?,
         manufacturer: String?,
         operatorName: String? = nil,
+        photoFilename: String? = nil,
         caughtAt: Date,
         observerLat: Double,
         observerLon: Double,
@@ -59,9 +68,64 @@ final class Catch {
         self.model = model
         self.manufacturer = manufacturer
         self.operatorName = operatorName
+        self.photoFilename = photoFilename
         self.caughtAt = caughtAt
         self.observerLat = observerLat
         self.observerLon = observerLon
         self.slantDistanceMeters = slantDistanceMeters
+    }
+}
+
+// MARK: - Photo file helpers
+
+/// Filesystem helpers for catch photos. Catches don't ship the photo
+/// bytes inside the SwiftData store — they ship a filename. The bytes
+/// live in `Documents/catches/<filename>.jpg`, which `Documents/` puts
+/// inside the app sandbox.
+nonisolated enum CatchPhotoStore {
+    /// The directory all catch photos live in. Created lazily.
+    static func directory() throws -> URL {
+        let docs = try FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let dir = docs.appendingPathComponent("catches", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Write `data` to a uniquely-named .jpg in the catches dir and
+    /// return the bare filename to stash on the `Catch`. Filename
+    /// embeds icao + epoch timestamp so it's grep-friendly during
+    /// debugging. Returns nil on any file-system error — we never
+    /// throw past this point; a Catch can exist without a photo.
+    static func save(_ data: Data, icao24: String, at timestamp: Date) -> String? {
+        do {
+            let dir = try directory()
+            let filename = "\(icao24.lowercased())_\(Int(timestamp.timeIntervalSince1970)).jpg"
+            let url = dir.appendingPathComponent(filename)
+            try data.write(to: url, options: .atomic)
+            return filename
+        } catch {
+            return nil
+        }
+    }
+
+    /// Resolve a bare filename to the full on-disk URL. Returns nil if
+    /// the file isn't present (e.g., user deleted Documents via Files
+    /// or the app sandbox got cleared).
+    static func url(forFilename filename: String) -> URL? {
+        guard let dir = try? directory() else { return nil }
+        let candidate = dir.appendingPathComponent(filename)
+        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+    }
+
+    /// Delete the photo file for a Catch being removed. Safe to call
+    /// with a nil filename (no-op) or a missing file (no-op).
+    static func delete(filename: String?) {
+        guard let filename, let url = url(forFilename: filename) else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 }

@@ -41,9 +41,20 @@ struct CatchDetailView: View {
     @State private var photoState: PhotoState = .loading
     @State private var didLoadPhoto = false
 
+    /// True when this catch was auto-captured with a camera photo.
+    /// Drives both the catch-photo hero rendering and the
+    /// Planespotters-fallback gate (we skip the live photo when the
+    /// user already has their own "moment" photo).
+    private var hasCatchPhoto: Bool {
+        catchRecord.photoFilename != nil
+    }
+
     var body: some View {
         List {
-            photoSection
+            catchPhotoSection
+            if !hasCatchPhoto {
+                photoSection
+            }
             Section("Identity") {
                 self.row("Callsign", catchRecord.callsign ?? "—")
                 self.row("ICAO24",   catchRecord.icao24)
@@ -60,12 +71,59 @@ struct CatchDetailView: View {
         .navigationTitle(catchRecord.callsign?.trimmedNonEmpty ?? catchRecord.icao24)
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            guard !didLoadPhoto else { return }
+            // Skip the Planespotters fetch when we already have the
+            // user's own catch photo — that's the hero and nothing
+            // else is going to render in the photo slot.
+            guard !didLoadPhoto, !hasCatchPhoto else { return }
             didLoadPhoto = true
             let fetched = await PlanespottersClient.shared.photo(for: catchRecord.icao24)
             withAnimation(.easeInOut(duration: 0.3)) {
                 photoState = fetched.map(PhotoState.loaded) ?? .notAvailable
             }
+        }
+    }
+
+    // MARK: - Catch photo (user's moment)
+
+    /// Hero section showing the user's actual catch photo when present.
+    /// Renders nothing when the catch was made before auto-catch
+    /// shipped (no `photoFilename`) — the Planespotters fallback takes
+    /// over downstream.
+    @ViewBuilder
+    private var catchPhotoSection: some View {
+        if let filename = catchRecord.photoFilename,
+           let fileURL = CatchPhotoStore.url(forFilename: filename) {
+            Section {
+                ZStack {
+                    Brand.Color.bgElevated
+                    AsyncImage(url: fileURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .transition(.opacity)
+                        case .empty:
+                            ProgressView().tint(Brand.Color.textSecondary)
+                        case .failure:
+                            VStack(spacing: 6) {
+                                Image(systemName: "photo.badge.exclamationmark")
+                                    .font(.title2)
+                                Text("Couldn't load catch photo")
+                                    .font(Brand.Font.caption)
+                            }
+                            .foregroundStyle(Brand.Color.textTertiary)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(3.0 / 2.0, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
         }
     }
 

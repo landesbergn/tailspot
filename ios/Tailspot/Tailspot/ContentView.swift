@@ -22,6 +22,13 @@ struct ContentView: View {
     private static let baseHfovDeg: Double = 56
     private static let baseVfovDeg: Double = 72
 
+    /// Seconds the user has to hold a tap-pinned plane locked before
+    /// the auto-catch fires. Long enough that brushes against the
+    /// screen don't accumulate trophies, short enough that intentional
+    /// catches feel responsive.
+    private static let autoCatchHoldDuration: TimeInterval = 3.0
+
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
@@ -74,6 +81,29 @@ struct ContentView: View {
     /// URL of the recording the user wants to analyze. Non-nil →
     /// `ReplayReportView` sheet is presented for that file.
     @State private var replayURL: URL?
+    /// Bridges to `PreviewView` so the auto-catch path can grab a
+    /// still photo. `PreviewView.bridgeCapture(to:)` installs the
+    /// capture closure at `makeUIView` time. Held via `@State` (not
+    /// `@StateObject`) — it's a one-method mailbox, not a publisher.
+    @State private var captureBridge = CameraCaptureBridge()
+    /// Running 3-second sustain timer for the currently-tap-pinned
+    /// plane. Cancelled and replaced whenever `pinnedIcao` changes.
+    @State private var autoCatchTask: Task<Void, Never>?
+    /// Latches the icao24 we've already auto-caught for the current
+    /// pin session so the timer fires exactly once per tap-pin. Reset
+    /// when `pinnedIcao` returns to nil (tap-elsewhere or tap-same-
+    /// plane-toggle), so re-pinning the same plane catches again.
+    @State private var autoCaughtPin: String?
+    /// Drives the brief success-confirmation overlay shown after an
+    /// auto-catch lands. The flash dismisses itself after ~900ms.
+    @State private var showCatchFlash = false
+    /// Whether the just-caught airframe was on the curated rare list
+    /// — flips the flash overlay's "RARE CATCH" sub-pill on so a
+    /// rare catch feels distinctly different.
+    @State private var caughtWasRare = false
+    /// Counter that triggers `sensoryFeedback(.success)` once per
+    /// catch (Bool trigger collapses repeats; a counter doesn't).
+    @State private var catchHaptic = 0
     /// Opacity of the launch splash screen. Starts at 1.0 (opaque),
     /// animates to 0 after ~600ms, then the AR view underneath becomes
     /// interactive. The splash absorbs taps for the first half of the
@@ -85,7 +115,7 @@ struct ContentView: View {
             // Main AR view and overlays (camera, lock brackets, debug panels, etc.)
             ZStack {
                 if cameraAuthorized {
-                    CameraPreview(zoomFactor: zoom)
+                    CameraPreview(zoomFactor: zoom, captureBridge: captureBridge)
                         .ignoresSafeArea()
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
@@ -280,6 +310,43 @@ struct ContentView: View {
                 pinnedIcao = nil
             }
         }
+        // Auto-catch trigger. A tap-pin starts a 3s sustain timer;
+        // if the user holds the pin (engine still locked on the same
+        // icao when the timer fires), we snap a Catch with a camera
+        // photo and dismiss the timer. Re-pinning the same plane
+        // after clearing → catches again.
+        .onChange(of: pinnedIcao) { _, newPin in
+            autoCatchTask?.cancel()
+            autoCatchTask = nil
+            guard let icao = newPin else {
+                // Pin cleared. Reset the per-pin guard so re-tapping
+                // this plane later catches again.
+                autoCaughtPin = nil
+                return
+            }
+            // Skip if we already caught this exact icao during the
+            // current pin session (shouldn't normally happen — pin
+            // clears between catches — but cheap guard).
+            guard icao != autoCaughtPin else { return }
+            autoCatchTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(Self.autoCatchHoldDuration))
+                guard !Task.isCancelled else { return }
+                guard pinnedIcao == icao else { return }
+                guard lockOn.state.targetIcao24 == icao else { return }
+                guard autoCaughtPin != icao else { return }
+                await performAutoCatch(icao: icao)
+            }
+        }
+        // Success haptic — counter (not Bool) lets multiple catches
+        // each fire.
+        .sensoryFeedback(.success, trigger: catchHaptic)
+        .overlay {
+            if showCatchFlash {
+                catchFlashOverlay
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
         // 1 Hz replay capture loop. Re-launches whenever the recorder
         // toggles on; tears down when it toggles off (Task is cancelled
         // because .task(id:) re-runs on id change).
@@ -301,6 +368,98 @@ struct ContentView: View {
                 ReplayReportView(url: replayURL)
             } else {
                 EmptyView()
+            }
+        }
+    }
+
+    // MARK: - Auto-catch
+
+    /// Build a `Catch` row from the currently-pinned plane, grab a
+    /// still photo from the camera, save the photo to disk, persist
+    /// the Catch, and flash a confirmation. Called once per pin
+    /// session after the sustain timer fires. Errors are surfaced to
+    /// the log but never bubble up — a Catch without a photo is still
+    /// a valid Catch.
+    private func performAutoCatch(icao: String) async {
+        let observed = adsb.observed.first { $0.aircraft.icao24 == icao }
+        let metadata = lockedMetadata
+        let now = Date()
+
+        // Grab a JPEG from AVCapturePhotoOutput. Capture before we
+        // mark caught so a slow capture doesn't double-fire if the
+        // user re-taps.
+        let photoData = await captureBridge.captureJPEG()
+        let photoFilename = photoData.flatMap {
+            CatchPhotoStore.save($0, icao24: icao, at: now)
+        }
+        if photoData == nil {
+            Log.adsb.notice("Auto-catch \(icao, privacy: .public): camera capture returned no data")
+        }
+
+        let row = Catch(
+            icao24: icao,
+            callsign: observed?.aircraft.callsign,
+            model: metadata?.model,
+            manufacturer: metadata?.manufacturerName,
+            operatorName: metadata?.operatorName,
+            photoFilename: photoFilename,
+            caughtAt: now,
+            observerLat: location.latitude ?? 0,
+            observerLon: location.longitude ?? 0,
+            slantDistanceMeters: observed?.slantDistanceMeters ?? 0
+        )
+        modelContext.insert(row)
+        do {
+            try modelContext.save()
+        } catch {
+            Log.adsb.error("Auto-catch save failed for \(icao, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+
+        autoCaughtPin = icao
+        caughtWasRare = HangarRarity.tier(for: row) == .rare
+        catchHaptic &+= 1   // overflow-safe ++; SwiftUI only cares that it changed
+        withAnimation(.easeOut(duration: 0.15)) {
+            showCatchFlash = true
+        }
+        Log.adsb.notice("Auto-caught \(icao, privacy: .public) (rare=\(self.caughtWasRare, privacy: .public))")
+
+        // Hide the flash after a beat — separate task so we can keep
+        // the main one tight.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(900))
+            withAnimation(.easeIn(duration: 0.35)) {
+                showCatchFlash = false
+            }
+        }
+    }
+
+    /// Full-screen flash shown briefly after an auto-catch. Green
+    /// checkmark + "CAUGHT" wordmark; magenta "RARE CATCH" sub-pill
+    /// when the just-caught airframe was on the rare list.
+    private var catchFlashOverlay: some View {
+        ZStack {
+            Brand.Color.alertNormal.opacity(0.25)
+                .ignoresSafeArea()
+            VStack(spacing: 14) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 96, weight: .bold))
+                    .foregroundStyle(Brand.Color.alertNormal)
+                    .shadow(color: .black.opacity(0.4), radius: 8)
+                Text("CAUGHT")
+                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                    .tracking(6)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 4)
+                if caughtWasRare {
+                    Text("RARE CATCH")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .tracking(2)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Brand.Color.alertAdvisory, in: .capsule)
+                        .shadow(color: .black.opacity(0.4), radius: 4)
+                }
             }
         }
     }
