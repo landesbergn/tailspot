@@ -42,7 +42,7 @@ struct CatchDetailView: View {
         HStack {
             Text(label)
             Spacer()
-            Text(value).foregroundStyle(.secondary)
+            Text(value).foregroundStyle(Brand.Color.textSecondary)
         }
     }
 }
