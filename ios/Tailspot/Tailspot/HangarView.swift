@@ -27,21 +27,37 @@ struct HangarView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(titleText)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Done") { dismiss() }
+                    }
+                    ToolbarItem(placement: .principal) {
+                        // Horizontal brand lockup: airplane glyph + TAILSPOT wordmark.
+                        HStack(spacing: 8) {
+                            Image(systemName: "airplane")
+                                .foregroundStyle(Brand.Color.cyan)
+                            Text("TAILSPOT")
+                                .font(Brand.Font.wordmark)
+                                .foregroundStyle(Brand.Color.textPrimary)
+                                .tracking(4)
+                        }
+                    }
+                    if !catches.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Text("\(catches.count)")
+                                .font(Brand.Font.hudCallsign)
+                                .foregroundStyle(Brand.Color.textPrimary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Brand.Color.bgElevated, in: .capsule)
+                        }
                     }
                 }
                 .navigationDestination(for: Catch.self) { c in
                     CatchDetailView(catchRecord: c)
                 }
         }
-    }
-
-    private var titleText: String {
-        catches.isEmpty ? "Hangar" : "Hangar  ·  \(catches.count)"
     }
 
     @ViewBuilder
@@ -91,7 +107,7 @@ struct HangarView: View {
             Text(group.title)
             Spacer()
             Text("\(group.catches.count)")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Brand.Color.textSecondary)
                 .monospacedDigit()
         }
     }
@@ -101,22 +117,22 @@ struct HangarView: View {
         let subtitle = rowSubtitle(c)
         return HStack(alignment: .center, spacing: 12) {
             Image(systemName: "airplane")
-                .foregroundStyle(.tint)
+                .foregroundStyle(Brand.Color.cyan)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.body.monospaced())
+                    .font(Brand.Font.hudCallsign)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
                         .lineLimit(1)
                 }
             }
             Spacer()
             Text(c.caughtAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
         }
         .padding(.vertical, 2)
