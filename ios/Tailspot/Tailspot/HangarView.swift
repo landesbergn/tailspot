@@ -84,6 +84,7 @@ struct HangarView: View {
         let groups = HangarGrouping.group(catches, by: grouping)
         return List {
             Section {
+                statsRow
                 Picker("Group by", selection: $grouping) {
                     Text("Type").tag(HangarGrouping.aircraftType)
                     Text("Airline").tag(HangarGrouping.airline)
@@ -156,6 +157,60 @@ struct HangarView: View {
             Log.adsb.error("Hangar delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
         rowToDelete = nil
+    }
+
+    /// Compact stats summary rendered above the grouping picker.
+    /// Three at-a-glance counts: total events caught, unique airframes
+    /// in the collection, and rare-tagged unique airframes. Pure-mono
+    /// numerics so the values line up across re-renders.
+    private var statsRow: some View {
+        HStack(spacing: 0) {
+            statPill(value: catches.count, label: "caught")
+            statDivider
+            statPill(value: uniqueIcaoCount, label: "unique")
+            statDivider
+            statPill(value: rareUniqueCount, label: "rare",
+                     valueColor: rareUniqueCount > 0 ? Brand.Color.alertAdvisory : Brand.Color.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowBackground(Color.clear)
+    }
+
+    /// One column of the stats row. `valueColor` defaults to textPrimary
+    /// — the rare column overrides to magenta when count > 0 so the
+    /// trophy reads at a glance.
+    private func statPill(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .foregroundStyle(valueColor)
+                .monospacedDigit()
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(Brand.Color.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var statDivider: some View {
+        Rectangle()
+            .fill(Brand.Color.bgElevated)
+            .frame(width: 1, height: 32)
+    }
+
+    private var uniqueIcaoCount: Int {
+        Set(catches.map(\.icao24)).count
+    }
+
+    private var rareUniqueCount: Int {
+        catches.reduce(into: Set<String>()) { acc, c in
+            if HangarRarity.tier(for: c) == .rare {
+                acc.insert(c.icao24)
+            }
+        }.count
     }
 
     private func sectionHeader(_ group: HangarGroup) -> some View {
