@@ -193,20 +193,18 @@ struct ContentView: View {
                 }
                 .ignoresSafeArea()
 
-                // Zoom indicator. Faint pill in the top-center; hidden at 1.0×.
-                if zoom > 1.01 {
-                    VStack {
-                        Text(String(format: "%.1f×", zoom))
-                            .font(.system(.caption, design: .monospaced).bold())
-                            .foregroundStyle(Brand.Color.textPrimary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
-                            .padding(.top, 12)
-                            .transition(.opacity)
-                        Spacer()
-                    }
+                // Top-center floating affordances: compass-caution
+                // badge (when the heading reading is unreliable) and
+                // the zoom indicator (when zoomed past 1×). Stacked so
+                // both can be present at once.
+                VStack(spacing: 8) {
+                    cautionBadge
+                    zoomPill
+                    Spacer()
                 }
+                .padding(.top, 12)
+                .animation(.easeInOut(duration: 0.2), value: isHeadingAccuracyBad)
+                .animation(.easeInOut(duration: 0.2), value: zoom > 1.01)
 
                 // Debug overlays — hidden by default; revealed by the
                 // wrench toggle below.
@@ -305,6 +303,58 @@ struct ContentView: View {
                 EmptyView()
             }
         }
+    }
+
+    // MARK: - Top-center overlays
+
+    /// Caution badge per the brand spec — amber-bordered pill that
+    /// surfaces a compass-bad warning in the main AR view (not just
+    /// the debug overlay, where most users never look). FAA caution
+    /// semantics: bad heading is "future action required" (recalibrate
+    /// via figure-8). Renders only when `isHeadingAccuracyBad`.
+    @ViewBuilder
+    private var cautionBadge: some View {
+        if isHeadingAccuracyBad {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Brand.Color.alertCaution)
+                Text("COMPASS \(formatHeadingAccuracyShort())")
+                    .font(Brand.Font.hudData)
+                    .fontWeight(.bold)
+                    .foregroundStyle(Brand.Color.alertCaution)
+                    .tracking(0.5)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Brand.Color.bgPrimary.opacity(0.92), in: .rect(cornerRadius: 4))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Brand.Color.alertCaution, lineWidth: 1)
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
+    /// Zoom indicator. Faint capsule top-center; hidden at 1.0×.
+    @ViewBuilder
+    private var zoomPill: some View {
+        if zoom > 1.01 {
+            Text(String(format: "%.1f×", zoom))
+                .font(.system(.caption, design: .monospaced).bold())
+                .foregroundStyle(Brand.Color.textPrimary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+                .transition(.opacity)
+        }
+    }
+
+    /// Compact form of the heading accuracy for the caution badge.
+    /// Returns "±N°" rounded to the nearest degree. Negative / nil
+    /// accuracy treated as unknown.
+    private func formatHeadingAccuracyShort() -> String {
+        guard let acc = location.headingAccuracy, acc >= 0 else { return "±?°" }
+        return String(format: "±%.0f°", acc)
     }
 
     // MARK: - Hangar entry
@@ -469,7 +519,10 @@ struct ContentView: View {
         let speedText: String? = obs.aircraft.velocityMps.map {
             "\(Int(($0 * 2.23694).rounded())) mph"
         }
-        let stats = [altText, speedText].compactMap(\.self).joined(separator: "  ·  ")
+        // Distance from the observer. Useful at-a-glance — currently
+        // the user has to tap into the detail sheet to see it.
+        let distText = String(format: "%.1f km", obs.slantDistanceMeters / 1000)
+        let stats = [altText, speedText, distText].compactMap(\.self).joined(separator: "  ·  ")
 
         return VStack(alignment: .leading, spacing: 1) {
             Text(cs)
