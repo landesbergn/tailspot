@@ -81,7 +81,7 @@ struct ContentView: View {
                 CameraPreview(zoomFactor: zoom)
                     .ignoresSafeArea()
             } else {
-                Color.black.ignoresSafeArea()
+                Brand.Color.bgPrimary.ignoresSafeArea()
             }
 
             // Lock-on AR overlay. The view is clean by default — no
@@ -191,10 +191,10 @@ struct ContentView: View {
                 VStack {
                     Text(String(format: "%.1f×", zoom))
                         .font(.system(.caption, design: .monospaced).bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Brand.Color.textPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(.black.opacity(0.55), in: .capsule)
+                        .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
                         .padding(.top, 12)
                         .transition(.opacity)
                     Spacer()
@@ -297,18 +297,18 @@ struct ContentView: View {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "tray.full.fill")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
                     .padding(8)
-                    .background(.black.opacity(0.35), in: .circle)
+                    .background(Brand.Color.bgPrimary.opacity(0.35), in: .circle)
                     .shadow(color: .black.opacity(0.5), radius: 2)
 
                 if !catches.isEmpty {
                     Text("\(catches.count)")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Brand.Color.textPrimary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(.green, in: .capsule)
+                        .background(Brand.Color.alertNormal, in: .capsule)
                         .offset(x: 6, y: -4)
                 }
             }
@@ -329,9 +329,9 @@ struct ContentView: View {
         } label: {
             Image(systemName: showDebug ? "wrench.fill" : "wrench")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.white.opacity(showDebug ? 0.9 : 0.45))
+                .foregroundStyle(Brand.Color.textPrimary.opacity(showDebug ? 0.9 : 0.45))
                 .padding(8)
-                .background(.black.opacity(showDebug ? 0.45 : 0.20), in: .circle)
+                .background(Brand.Color.bgPrimary.opacity(showDebug ? 0.45 : 0.20), in: .circle)
                 .shadow(color: .black.opacity(0.5), radius: 2)
         }
         .accessibilityLabel(showDebug ? "Hide debug overlays" : "Show debug overlays")
@@ -381,15 +381,15 @@ struct ContentView: View {
             let size = acquiringSizeMax - (acquiringSizeMax - lockedSize) * CGFloat(p)
             // Fade in as we acquire.
             let opacity = 0.35 + 0.55 * p
-            return .init(boxSize: size, color: .yellow, opacity: opacity, showLabel: false)
+            return .init(boxSize: size, color: Brand.Color.alertCaution, opacity: opacity, showLabel: false)
         case .locked:
-            return .init(boxSize: lockedSize, color: .green, opacity: 1.0, showLabel: true)
+            return .init(boxSize: lockedSize, color: Brand.Color.alertNormal, opacity: 1.0, showLabel: true)
         case .sticky(_, let lostAt):
             // Fade the brackets but keep them visible for the
             // stickyHoldDuration window so the user can read the label.
             let elapsed = now.timeIntervalSince(lostAt)
             let fade = max(0, 1 - elapsed / lockOn.stickyHoldDuration)
-            return .init(boxSize: lockedSize, color: .green, opacity: fade, showLabel: true)
+            return .init(boxSize: lockedSize, color: Brand.Color.alertNormal, opacity: fade, showLabel: true)
         }
     }
 
@@ -418,28 +418,28 @@ struct ContentView: View {
 
         return VStack(alignment: .leading, spacing: 1) {
             Text(cs)
-                .font(.caption.monospaced().bold())
-                .foregroundStyle(.white)
+                .font(Brand.Font.hudCallsign)
+                .foregroundStyle(Brand.Color.textPrimary)
 
             if let airline {
                 Text(airline)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.95))
+                    .font(Brand.Font.hudData)
+                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.95))
             }
             if let makeModel {
                 Text(makeModel)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(Brand.Font.hudData)
+                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
             }
 
             Text(stats)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.85))
+                .font(Brand.Font.hudData)
+                .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
         }
         .shadow(color: .black, radius: 2)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(.black.opacity(0.65), in: .rect(cornerRadius: 4))
+        .background(Brand.Color.bgPrimary.opacity(0.65), in: .rect(cornerRadius: 4))
     }
 
     // MARK: - Top: sensor readout
@@ -452,7 +452,7 @@ struct ContentView: View {
             Group {
                 Text(formatLocation())
                 Text(formatHeading())
-                    .foregroundStyle(isHeadingAccuracyBad ? .red : .white)
+                    .foregroundStyle(isHeadingAccuracyBad ? Brand.Color.alertWarning : Brand.Color.textPrimary)
                 Text(formatAttitude())
                 adsbStatusRow
                 recordingRow
@@ -463,9 +463,9 @@ struct ContentView: View {
             }
             .font(.system(.caption, design: .monospaced))
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Brand.Color.textPrimary)
         .padding(12)
-        .background(.black.opacity(0.55), in: .rect(cornerRadius: 12))
+        .background(Brand.Color.bgPrimary.opacity(0.55), in: .rect(cornerRadius: 12))
     }
 
     // MARK: - Bottom: nearby-aircraft list
@@ -484,7 +484,7 @@ struct ContentView: View {
                     Text(err).font(.caption2)
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Brand.Color.textPrimary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
 
@@ -496,7 +496,7 @@ struct ContentView: View {
                     if visible.isEmpty {
                         Text(emptyListMessage)
                             .font(.caption.monospaced())
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(Brand.Color.textPrimary.opacity(0.7))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                     }
@@ -505,7 +505,7 @@ struct ContentView: View {
             }
             .frame(maxHeight: 320)
         }
-        .background(.black.opacity(0.7))
+        .background(Brand.Color.bgPrimary.opacity(0.7))
     }
 
     private func aircraftRow(_ obs: ObservedAircraft) -> some View {
@@ -524,10 +524,10 @@ struct ContentView: View {
             Text(String(format: "%4.1fkm", dKm))
                 .frame(width: 60, alignment: .leading)
             Text(String(format: "FL%03.0f", altKm * 32.8))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(Brand.Color.textPrimary.opacity(0.7))
         }
         .font(.system(.caption2, design: .monospaced))
-        .foregroundStyle(.white)
+        .foregroundStyle(Brand.Color.textPrimary)
         .padding(.horizontal, 12)
         .padding(.vertical, 2)
     }
@@ -605,7 +605,7 @@ struct ContentView: View {
         HStack(spacing: 8) {
             Text(formatADSBStatus())
             Text(adsb.useMock ? "[MOCK]" : "[LIVE]")
-                .foregroundStyle(adsb.useMock ? .yellow : .green)
+                .foregroundStyle(adsb.useMock ? Brand.Color.alertCaution : Brand.Color.alertNormal)
                 .bold()
             Spacer()
         }
@@ -625,7 +625,7 @@ struct ContentView: View {
     private var recordingRow: some View {
         HStack(spacing: 8) {
             Image(systemName: recorder.isRecording ? "record.circle.fill" : "record.circle")
-                .foregroundStyle(recorder.isRecording ? .red : .white.opacity(0.85))
+                .foregroundStyle(recorder.isRecording ? Brand.Color.alertWarning : Brand.Color.textPrimary.opacity(0.85))
             if recorder.isRecording {
                 Text("REC \(recorder.eventCount)  \(recorder.currentFileURL?.lastPathComponent ?? "—")")
                     .lineLimit(1)
@@ -661,7 +661,7 @@ struct ContentView: View {
         let latest = ReplayRecorder.mostRecentRecording()
         return HStack(spacing: 8) {
             Image(systemName: "doc.text.magnifyingglass")
-                .foregroundStyle(latest == nil ? .gray : .white.opacity(0.85))
+                .foregroundStyle(latest == nil ? Brand.Color.textTertiary : Brand.Color.textPrimary.opacity(0.85))
             Text(latest.map { "Analyze \($0.lastPathComponent)" }
                  ?? "No recordings yet")
                 .lineLimit(1)
