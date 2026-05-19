@@ -357,6 +357,11 @@ Planned but not yet created:
 
 Friday POC (§3.0a) shipped 2026-05-07. The deploy loop (§3.0c) shipped 2026-05-13. Through 2026-05-17, also delivered: aircraft type lookup, lock-on interaction, catch flow v0, clean default UI + debug toggle, 30 km visibility cap, heading-accuracy color cue, partial device log streaming, **Hangar (collection) v0**, **Replay recorder v0**, **Replay analyzer v0**, **Camera zoom + Tap-to-ID**.
 
+**Visual identity spec approved 2026-05-18** — see `docs/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md`. Three implementation phases:
+- **Phase A** (tokens + light retheme, ~3–4 hr) — `Brand.swift` + migrate 6 view files. Next implementation candidate; tracked as Pending item below.
+- **Phase B** (component rebuild, ~1–2 d) — redesigned HUD label, Hangar dedupe + swipe-delete + rarity, brand splash screen.
+- **Phase C** (full identity, ~3–4 d) — app icon asset pipeline, onboarding flow, settings reskin.
+
 **Pending (priority order):**
 
 | # | Item | Est. | Why |

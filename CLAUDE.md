@@ -294,7 +294,11 @@ PLAN.md §6 lists deferred questions with working defaults: photo strategy (illu
 
 ## Where to pick up
 
-PLAN.md §9 is the authoritative backlog. As of 2026-05-18, **Hangar v0, the replay recorder + tap-pin capture, the replay analyzer (+ describe formatter + in-app loader), and camera zoom + tap-to-ID have all shipped**. Top of the queue now:
+PLAN.md §9 is the authoritative backlog. As of 2026-05-18, **Hangar v0, the replay recorder + tap-pin capture, the replay analyzer (+ describe formatter + in-app loader), and camera zoom + tap-to-ID have all shipped**.
+
+**A brand-identity spec was approved on 2026-05-18**: `docs/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md`. Phase A (tokens + light retheme — create `Brand.swift`, migrate 6 view files, swap red→amber for compass-bad and adopt magenta for tap-pin) is the next implementation candidate. Phases B and C are scoped but deferred to later sessions.
+
+Top of the queue now:
 
 1. **Capture `os_log` output from the device** (PLAN §9 #1) — `bin/log-tail` currently only sees system-emitted lines, not `Log.swift` calls. Candidates: in-app file logging that `Log.swift` mirrors to `Documents/`, or wrapping `xcrun devicectl device process launch --console`.
 2. **Hangar v1 polish** (PLAN §9 #2): dedupe, swipe-to-delete with confirm, illustrated cards. Defer until catch volume exists.
