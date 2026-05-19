@@ -98,76 +98,68 @@ struct CatchDetailView: View {
 
     // MARK: - Photo section
 
-    /// Always-rendered photo slab — fixed 220pt height so the page
-    /// doesn't shift when the API resolves. The single 220pt block
-    /// holds (in order of stack): a bgElevated base, the per-state
-    /// content (spinner / photo / no-photo placeholder), and (when
-    /// loaded) an attribution chip overlaid on the bottom-leading
-    /// corner of the photo so the credit + tap-target are visually
-    /// attached to the image and can't clip against the row's edge.
-    private var photoSection: some View {
-        Section {
-            ZStack {
-                Brand.Color.bgElevated
-                photoSlabContent
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
-    }
-
+    /// Photo section. Loading + loaded both render at a 3:2 aspect
+    /// ratio (matches the natural shape of Planespotters' thumbnail_large
+    /// at 420×280), with `.fit` aspect mode on the image so the whole
+    /// plane is always visible — wider/narrower photos letterbox
+    /// against the `bgElevated` base instead of being cropped.
+    /// `notAvailable` collapses to a compact ~40pt strip so a missing
+    /// photo doesn't bloat the page.
     @ViewBuilder
-    private var photoSlabContent: some View {
+    private var photoSection: some View {
         switch photoState {
         case .loading:
-            ProgressView()
-                .tint(Brand.Color.textSecondary)
+            Section { loadingSlab }
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
         case .loaded(let photo):
-            loadedPhotoView(photo)
+            Section { loadedPhotoView(photo) }
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
         case .notAvailable:
-            VStack(spacing: 6) {
-                Image(systemName: "photo")
-                    .font(.title2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text("No photo available")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-            }
+            Section { noPhotoStrip }
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
         }
     }
 
-    /// The loaded-photo presentation: image fills the slab; attribution
-    /// chip overlays the bottom-leading corner. Whole thing is wrapped
-    /// in a Button so a tap anywhere on the photo opens the
-    /// Planespotters page in Safari (TOS attribution requirement).
-    private func loadedPhotoView(_ photo: PlanePhoto) -> some View {
-        Button {
-            UIApplication.shared.open(photo.link)
-        } label: {
-            ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: photo.thumbnailLargeURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .transition(.opacity)
-                    case .empty:
-                        ProgressView()
-                            .tint(Brand.Color.textSecondary)
-                    case .failure:
-                        Image(systemName: "photo.badge.exclamationmark")
-                            .font(.title2)
-                            .foregroundStyle(Brand.Color.textTertiary)
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+    private var loadingSlab: some View {
+        ZStack {
+            Brand.Color.bgElevated
+            ProgressView().tint(Brand.Color.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(3.0 / 2.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
 
+    /// Loaded photo at 3:2 aspect with `.fit` so the entire airframe
+    /// is visible. Letterbox bands (if any) are `bgElevated`. Only the
+    /// attribution chip in the bottom-leading corner is tappable — the
+    /// photo itself is not a hyperlink (per UX preference).
+    private func loadedPhotoView(_ photo: PlanePhoto) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            Brand.Color.bgElevated
+
+            AsyncImage(url: photo.thumbnailLargeURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .transition(.opacity)
+                case .empty:
+                    ProgressView().tint(Brand.Color.textSecondary)
+                case .failure:
+                    Image(systemName: "photo.badge.exclamationmark")
+                        .font(.title2)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Button {
+                UIApplication.shared.open(photo.link)
+            } label: {
                 Text("© \(photo.photographer) · planespotters.net")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.white)
@@ -175,11 +167,32 @@ struct CatchDetailView: View {
                     .truncationMode(.tail)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(.black.opacity(0.55), in: .rect(cornerRadius: 4))
-                    .padding(8)
+                    .background(.black.opacity(0.6), in: .rect(cornerRadius: 4))
             }
+            .buttonStyle(.plain)
+            .padding(8)
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .aspectRatio(3.0 / 2.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// Compact "no photo" strip. Doesn't reserve hero-photo space when
+    /// Planespotters has no record for this icao24 — keeps the page
+    /// from feeling padded out by a void.
+    private var noPhotoStrip: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "photo")
+                .foregroundStyle(Brand.Color.textTertiary)
+            Text("No photo available")
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textTertiary)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 8))
     }
 
     // MARK: - Helpers
