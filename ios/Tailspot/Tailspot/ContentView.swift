@@ -373,10 +373,12 @@ struct ContentView: View {
     private func lockOverlayStyle(for state: LockOnEngine.State, now: Date) -> LockOverlayStyle {
         let lockedSize: CGFloat = 64
         let acquiringSizeMax: CGFloat = 150
-        // When the engine's current target is the tap-pinned plane,
-        // render the overlay in magenta (the FAA advisory color) so
-        // it reads as "explicitly selected" vs the cyan/green default.
-        let isPinTracking = (pinnedIcao != nil && state.targetIcao24 == pinnedIcao)
+        // Cyan is the brand color and it OWNS the lock indicator.
+        // Acquiring still uses amber to telegraph "warming up" via
+        // color (caution = "future action might be needed"), then
+        // snaps to brand cyan on lock. Tap-pin and auto-lock look
+        // identical — the user gets there via different paths but
+        // the result is the same "you have it."
         switch state {
         case .idle:
             return .init(boxSize: 0, color: .clear, opacity: 0, showLabel: false)
@@ -385,18 +387,15 @@ struct ContentView: View {
             let size = acquiringSizeMax - (acquiringSizeMax - lockedSize) * CGFloat(p)
             // Fade in as we acquire.
             let opacity = 0.35 + 0.55 * p
-            let color = isPinTracking ? Brand.Color.alertAdvisory : Brand.Color.alertCaution
-            return .init(boxSize: size, color: color, opacity: opacity, showLabel: false)
+            return .init(boxSize: size, color: Brand.Color.alertCaution, opacity: opacity, showLabel: false)
         case .locked:
-            let color = isPinTracking ? Brand.Color.alertAdvisory : Brand.Color.alertNormal
-            return .init(boxSize: lockedSize, color: color, opacity: 1.0, showLabel: true)
+            return .init(boxSize: lockedSize, color: Brand.Color.cyan, opacity: 1.0, showLabel: true)
         case .sticky(_, let lostAt):
             // Fade the brackets but keep them visible for the
             // stickyHoldDuration window so the user can read the label.
             let elapsed = now.timeIntervalSince(lostAt)
             let fade = max(0, 1 - elapsed / lockOn.stickyHoldDuration)
-            let color = isPinTracking ? Brand.Color.alertAdvisory : Brand.Color.alertNormal
-            return .init(boxSize: lockedSize, color: color, opacity: fade, showLabel: true)
+            return .init(boxSize: lockedSize, color: Brand.Color.cyan, opacity: fade, showLabel: true)
         }
     }
 
@@ -426,7 +425,7 @@ struct ContentView: View {
         return VStack(alignment: .leading, spacing: 1) {
             Text(cs)
                 .font(Brand.Font.hudCallsign)
-                .foregroundStyle(pinnedIcao == obs.aircraft.icao24 ? Brand.Color.alertAdvisory : Brand.Color.cyan)
+                .foregroundStyle(Brand.Color.cyan)
 
             if let airline {
                 Text(airline)
