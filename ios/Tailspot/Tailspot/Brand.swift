@@ -1,0 +1,66 @@
+//
+//  Brand.swift
+//  Tailspot
+//
+//  Single source of truth for the Tailspot visual identity.
+//  Every color or font value used across the app routes through
+//  here so a one-file edit re-themes the whole app.
+//
+//  Design spec: docs/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md
+//
+//  Two contexts share one brand:
+//    - AR view  → clinical pilot HUD (cyan, mono, restraint)
+//    - Hangar   → playful collector cards (carbon-dark base, magenta for rare)
+//
+//  Color tokens are FAA-aligned per 14 CFR 25.1322(e): amber is
+//  reserved for caution only, magenta is the advisory/pinned color,
+//  red is for true warnings (never as text on bg.primary), green is
+//  used sparingly for safe/acquired states.
+//
+
+import SwiftUI
+
+nonisolated enum Brand {
+
+    // MARK: - Color
+
+    nonisolated enum Color {
+        static let bgPrimary    = SwiftUI.Color(hex: 0x0A0E1A)
+        static let bgElevated   = SwiftUI.Color(hex: 0x1A2030)
+        static let bgSurface    = SwiftUI.Color(hex: 0x050810)
+
+        static let textPrimary   = SwiftUI.Color(hex: 0xE8F4FF)
+        static let textSecondary = SwiftUI.Color(hex: 0xA0B0C0)
+        static let textTertiary  = SwiftUI.Color(hex: 0x7F8B98)
+
+        static let cyan = SwiftUI.Color(hex: 0x00D4FF)
+
+        static let alertWarning  = SwiftUI.Color(hex: 0xFF5555)
+        static let alertCaution  = SwiftUI.Color(hex: 0xFFB800)
+        static let alertAdvisory = SwiftUI.Color(hex: 0xFF6BE6)
+        static let alertNormal   = SwiftUI.Color(hex: 0x3DD68C)
+    }
+
+    // MARK: - Font
+
+    nonisolated enum Font {
+        static let wordmark    = SwiftUI.Font.system(size: 24, weight: .bold,    design: .monospaced)
+        static let hudCallsign = SwiftUI.Font.system(size: 13, weight: .bold,    design: .monospaced)
+        static let hudData     = SwiftUI.Font.system(size: 10, weight: .regular, design: .monospaced)
+
+        static let cardTitle    = SwiftUI.Font.system(size: 17, weight: .semibold, design: .default)
+        static let cardSubtitle = SwiftUI.Font.system(size: 13, weight: .regular,  design: .default)
+        static let label        = SwiftUI.Font.system(size: 11, weight: .semibold, design: .default)
+        static let body         = SwiftUI.Font.system(size: 15, weight: .regular,  design: .default)
+        static let caption      = SwiftUI.Font.system(size: 12, weight: .regular,  design: .default)
+    }
+}
+
+nonisolated extension SwiftUI.Color {
+    init(hex: UInt32, alpha: Double = 1.0) {
+        let r = Double((hex >> 16) & 0xFF) / 255.0
+        let g = Double((hex >>  8) & 0xFF) / 255.0
+        let b = Double( hex        & 0xFF) / 255.0
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: alpha)
+    }
+}
