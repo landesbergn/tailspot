@@ -66,8 +66,8 @@ struct AircraftDetailView: View {
 
                 Section {
                     Text(footerText)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
                 }
             }
             .navigationTitle(observed.aircraft.callsign ?? observed.aircraft.icao24)
@@ -103,7 +103,7 @@ struct AircraftDetailView: View {
                 .padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.green)
+            .tint(Brand.Color.alertNormal)
             .disabled(observerLocation == nil)
         }
         .listRowBackground(Color.clear)
@@ -165,7 +165,7 @@ struct AircraftDetailView: View {
         HStack {
             Text(label)
             Spacer()
-            Text(value).foregroundStyle(.secondary)
+            Text(value).foregroundStyle(Brand.Color.textSecondary)
         }
     }
 }
