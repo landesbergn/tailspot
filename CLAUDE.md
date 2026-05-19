@@ -296,7 +296,7 @@ PLAN.md §6 lists deferred questions with working defaults: photo strategy (illu
 
 PLAN.md §9 is the authoritative backlog. As of 2026-05-18, **Hangar v0, the replay recorder + tap-pin capture, the replay analyzer (+ describe formatter + in-app loader), and camera zoom + tap-to-ID have all shipped**.
 
-**A brand-identity spec was approved on 2026-05-18**: `docs/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md`. Phase A (tokens + light retheme — create `Brand.swift`, migrate 6 view files, swap red→amber for compass-bad and adopt magenta for tap-pin) is the next implementation candidate. Phases B and C are scoped but deferred to later sessions.
+**A brand-identity spec was approved on 2026-05-18**: `docs/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md`. **Phase A has a written implementation plan**: `docs/superpowers/plans/2026-05-18-visual-identity-phase-a.md` — 8 tasks, ~35 steps, mechanical token migration of 5 view files plus two semantic fixes (compass red→amber, tap-pin cyan→magenta) and the brand lockup in the Hangar nav header. Phases B and C are scoped in the spec but deferred to later sessions.
 
 Top of the queue now:
 
