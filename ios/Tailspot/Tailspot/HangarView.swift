@@ -102,15 +102,21 @@ struct HangarView: View {
     }
 
     private var cardGrid: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                filterChips
-                    .padding(.top, 8)
-                    .padding(.bottom, 8)
+        // Chips live ABOVE the ScrollView in a fixed bar so taps on
+        // them don't race with the NavigationLink-wrapped grid
+        // underneath. Earlier nesting (chips inside the same outer
+        // ScrollView as the LazyVGrid) caused chip taps to fall
+        // through to the topmost NavigationLink.
+        VStack(spacing: 0) {
+            filterChips
+                .padding(.top, 4)
+                .padding(.bottom, 8)
+                .background(Brand.Color.bgPrimary)
 
+            ScrollView {
                 if filteredRows.isEmpty {
                     emptyFilterState
-                        .padding(.top, 24)
+                        .padding(.top, 32)
                 } else {
                     LazyVGrid(
                         columns: [
@@ -134,6 +140,7 @@ struct HangarView: View {
                         }
                     }
                     .padding(.horizontal, 16)
+                    .padding(.top, 4)
                     .padding(.bottom, 32)
                 }
             }
