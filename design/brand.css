@@ -1,0 +1,120 @@
+/* Tailspot design tokens — mirrored from ios/Tailspot/Tailspot/Brand.swift
+   Updated via Tweaks panel: hue, density, type, copy tone. */
+
+:root {
+  /* foundations */
+  --bg-primary: #0A0E1A;
+  --bg-elevated: #1A2030;
+  --bg-surface: #050810;
+
+  /* text */
+  --text-primary: #E8F4FF;
+  --text-secondary: #A0B0C0;
+  --text-tertiary: #7F8B98;
+
+  /* brand accent + alerts */
+  --accent: #00D4FF;
+  --alert-warning: #FF5555;
+  --alert-caution: #FFB800;
+  --alert-advisory: #FF6BE6;
+  --alert-normal: #3DD68C;
+
+  /* fonts */
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+
+  /* radii + spacing scale */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 18px;
+  --r-pill: 999px;
+
+  --pad: 1;     /* density multiplier, 0.85–1.2 */
+}
+
+/* ────────── HUD voice ────────── */
+.t-wordmark {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.t-hud-callsign {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+.t-hud-data {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: var(--text-primary);
+}
+.t-label {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ────────── Collector voice ────────── */
+.t-card-title { font-family: var(--font-sans); font-weight: 600; font-size: 17px; color: var(--text-primary); }
+.t-card-subtitle { font-family: var(--font-sans); font-weight: 400; font-size: 13px; color: var(--text-secondary); }
+.t-body { font-family: var(--font-sans); font-weight: 400; font-size: 15px; color: var(--text-primary); }
+.t-caption { font-family: var(--font-sans); font-weight: 400; font-size: 12px; color: var(--text-tertiary); }
+.t-display { font-family: var(--font-sans); font-weight: 700; font-size: 28px; letter-spacing: -0.4px; color: var(--text-primary); }
+
+/* ────────── Reusable HUD chrome ────────── */
+.hud-panel {
+  background: rgba(10, 14, 26, 0.88);
+  backdrop-filter: blur(8px) saturate(180%);
+  -webkit-backdrop-filter: blur(8px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-sm);
+}
+.hud-panel.pinned { border-color: var(--alert-advisory); }
+.hud-panel.locked { border-color: var(--alert-normal); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  background: rgba(232, 244, 255, 0.1);
+  color: var(--text-primary);
+}
+.pill.accent { background: rgba(0, 212, 255, 0.16); color: var(--accent); }
+.pill.advisory { background: rgba(255, 107, 230, 0.18); color: var(--alert-advisory); }
+.pill.normal { background: rgba(61, 214, 140, 0.16); color: var(--alert-normal); }
+.pill.caution { background: rgba(255, 184, 0, 0.16); color: var(--alert-caution); }
+
+/* Brackets reticle — used for the brand mark and as the lock-on overlay */
+.bracket {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent);
+}
+.bracket.tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.bracket.tr { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.bracket.bl { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.bracket.br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+.bracket-set.pinned .bracket { border-color: var(--alert-advisory); }
+.bracket-set.locked .bracket { border-color: var(--alert-normal); }
+
+/* Density helper */
+.dense { --pad: 0.85; }
+.airy { --pad: 1.2; }
