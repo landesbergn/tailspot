@@ -2,36 +2,37 @@
 //  CatchDetailView.swift
 //  Tailspot
 //
-//  Read-only detail for a single Catch row in the Hangar. The Catch
-//  is a frozen snapshot of what we knew at catch time — we don't try
-//  to re-fetch live metadata or position here; that would make a
-//  catch from yesterday look different tomorrow, which defeats the
-//  point of a collection.
+//  Read-only detail for a catch. Ported from the design canvas's
+//  `DetailA` (detail-hangar-profile.jsx) — photo-led collector card
+//  with floating chrome pills, badges over the photo edge, an EARNED
+//  rarity panel, a stat grid, and a CAUGHT AT panel. Replaces the
+//  earlier iOS-grouped-list layout that didn't match the canvas.
 //
-//  The photoSection (top of the list) does make a live Planespotters
-//  fetch, which is intentional: photos aren't part of the catch
-//  snapshot, and the TOS prohibits caching image bytes to disk anyway.
-//  Showing the current photo for an icao24 is fine — it's more like
-//  a "what does this plane look like?" reference than a snapshot.
+//  The Catch is a frozen snapshot of what we knew at catch time — we
+//  don't re-fetch live metadata or position. The Planespotters photo
+//  is the one exception (photos aren't part of the snapshot, and the
+//  TOS prohibits caching image bytes to disk anyway).
+//
+//  Stats grid is sized to what's actually in the SwiftData `Catch`
+//  model. Altitude / ground speed / aircraft heading / bearing are
+//  NOT yet captured at catch time — when those land on `Catch`, swap
+//  the catch-history-derived cells for the canvas's full 6-stat set.
 //
 
 import SwiftUI
 
 struct CatchDetailView: View {
-    /// A whole HangarRow — every catch sharing this icao24 plus the
-    /// "representative" most-recent catch used for identity fields.
     let row: HangarRow
 
-    /// Convenience accessor for the most-recent catch, used for header
-    /// text + identity rows. The full list is rendered in the Catches
-    /// section below.
-    private var catchRecord: Catch { row.mostRecent }
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
-    /// Tri-state for the photo section so the view reserves space
-    /// while the API call is in flight — no layout shift when the
-    /// photo lands. `notAvailable` is a true miss (Planespotters has
-    /// no record); we still render a small placeholder so the section
-    /// height doesn't change.
+    private var c: Catch { row.mostRecent }
+    private var rarity: Rarity { row.rarity }
+    private var type: AircraftType { row.aircraftType }
+
+    /// Tri-state for the photo: loading | loaded | not-available.
+    /// Keeps the hero from shifting once the network call settles.
     private enum PhotoState: Equatable {
         case loading
         case loaded(PlanePhoto)
@@ -41,218 +42,427 @@ struct CatchDetailView: View {
     @State private var photoState: PhotoState = .loading
     @State private var didLoadPhoto = false
 
-    /// True when this catch was auto-captured with a camera photo.
-    /// Drives both the catch-photo hero rendering and the
-    /// Planespotters-fallback gate (we skip the live photo when the
-    /// user already has their own "moment" photo).
-    private var hasCatchPhoto: Bool {
-        catchRecord.photoFilename != nil
-    }
+    private var hasCatchPhoto: Bool { c.photoFilename != nil }
+
+    private static let heroHeight: CGFloat = 320
 
     var body: some View {
-        List {
-            pokeCardSection
-            // The PokeCard's photo slot already renders the user's
-            // catch photo (when present) as the card's hero — showing
-            // it again full-width below was duplicate weight. When
-            // there's no catch photo, the card falls back to a
-            // rarity-tinted placeholder and the Planespotters section
-            // below provides the reference photo (with attribution).
-            if !hasCatchPhoto {
-                photoSection
-            }
-            Section("Identity") {
-                self.row("Callsign", catchRecord.callsign ?? "—")
-                self.row("ICAO24",   catchRecord.icao24)
-                self.row("Aircraft", aircraftText)
-                self.row("Operator", catchRecord.operatorName ?? "—")
-                self.row("Rarity",   catchRecord.resolvedRarity.label)
-                self.row("Type",     catchRecord.resolvedType.label)
-            }
+        ZStack(alignment: .top) {
+            Brand.Color.bgPrimary.ignoresSafeArea()
 
-            Section(catchesSectionTitle) {
-                ForEach(row.allCatches) { c in
-                    catchTimelineRow(c)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    photoHero
+                    contentColumn
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 40)
                 }
             }
+            .ignoresSafeArea(.container, edges: .top)
+
+            chromeBar
+                .padding(.top, 8)
         }
-        .navigationTitle(catchRecord.callsign?.trimmedNonEmpty ?? catchRecord.icao24)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .task {
-            // Skip the Planespotters fetch when we already have the
-            // user's own catch photo — that's the hero and nothing
-            // else is going to render in the photo slot.
-            guard !didLoadPhoto, !hasCatchPhoto else { return }
+            guard !didLoadPhoto, !hasCatchPhoto else {
+                if hasCatchPhoto { photoState = .notAvailable } // skip net call
+                didLoadPhoto = true
+                return
+            }
             didLoadPhoto = true
-            let fetched = await PlanespottersClient.shared.photo(for: catchRecord.icao24)
-            withAnimation(.easeInOut(duration: 0.3)) {
+            let fetched = await PlanespottersClient.shared.photo(for: c.icao24)
+            withAnimation(.easeInOut(duration: 0.25)) {
                 photoState = fetched.map(PhotoState.loaded) ?? .notAvailable
             }
         }
     }
 
-    // MARK: - PokeCard hero
+    // MARK: - Hero
 
-    /// The PokeCard hero — first thing the user sees on the detail
-    /// screen. Renders the catch as a 280×400 collectible with the
-    /// rarity-driven holo treatment. Background of the list section
-    /// is transparent so the card's own shadow + rarity glow read
-    /// against the table backdrop.
-    private var pokeCardSection: some View {
-        Section {
-            HStack {
-                Spacer(minLength: 0)
-                PokeCardView(
-                    plane: PokePlane(catchRecord: catchRecord),
-                    size: .lg
-                )
-                Spacer(minLength: 0)
+    /// Photo hero with bottom gradient fade and the rarity/type/time
+    /// badges anchored over the bottom of the photo (canvas top:230
+    /// in a 320pt photo = ~90pt above the bottom edge).
+    private var photoHero: some View {
+        ZStack(alignment: .bottomLeading) {
+            heroPhoto
+                .frame(height: Self.heroHeight)
+                .frame(maxWidth: .infinity)
+                .clipped()
+
+            // Fade transparent → bg-primary so the photo dissolves
+            // into the page rather than ending in a hard edge.
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.0),
+                    .init(color: .clear, location: 0.4),
+                    .init(color: Brand.Color.bgPrimary.opacity(0.85), location: 0.8),
+                    .init(color: Brand.Color.bgPrimary, location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: Self.heroHeight)
+            .allowsHitTesting(false)
+
+            // Badge row over the bottom-leading region.
+            HStack(spacing: 6) {
+                RarityBadge(rarity: rarity, size: .md)
+                TypeBadge(type: type, size: .md)
+                timeAgoPill
             }
-            .padding(.vertical, 20)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
+            .padding(.leading, 18)
+            .padding(.bottom, 24)
+        }
+        .frame(height: Self.heroHeight)
+    }
+
+    /// What's actually drawn behind the gradient: catch photo → live
+    /// Planespotters → striped rarity placeholder.
+    @ViewBuilder
+    private var heroPhoto: some View {
+        if hasCatchPhoto,
+           let fn = c.photoFilename,
+           let url = CatchPhotoStore.url(forFilename: fn) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let img):
+                    img.resizable().aspectRatio(contentMode: .fill)
+                case .empty, .failure:
+                    heroPlaceholder
+                @unknown default:
+                    heroPlaceholder
+                }
+            }
+        } else {
+            switch photoState {
+            case .loading:
+                heroPlaceholder
+                    .overlay(ProgressView().tint(Brand.Color.textSecondary))
+            case .loaded(let photo):
+                AsyncImage(url: photo.thumbnailLargeURL) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().aspectRatio(contentMode: .fill)
+                    case .empty:
+                        heroPlaceholder
+                            .overlay(ProgressView().tint(Brand.Color.textSecondary))
+                    case .failure:
+                        heroPlaceholder
+                    @unknown default:
+                        heroPlaceholder
+                    }
+                }
+            case .notAvailable:
+                heroPlaceholder
+            }
         }
     }
 
-    // MARK: - Catches timeline
-
-    private var catchesSectionTitle: String {
-        row.count == 1 ? "Caught once" : "Caught \(row.count) times"
+    /// Diagonal-striped fallback in the rarity tint, behind the
+    /// gradient fade so it doesn't dominate.
+    private var heroPlaceholder: some View {
+        ZStack {
+            Brand.Color.bgSurface
+            HeroStripesShape()
+                .stroke(rarity.tint.opacity(0.18), lineWidth: 10)
+                .clipped()
+        }
     }
 
-    /// One entry in the catch-history timeline. Top line = timestamp
-    /// (most prominent) + slant distance. Sub line = observer lat/lon.
-    private func catchTimelineRow(_ c: Catch) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(c.caughtAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(Brand.Font.body)
-                Spacer()
-                Text(String(format: "%.1f km", c.slantDistanceMeters / 1000))
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
+    /// "● 2m ago" — relative time pill in the alertNormal (green)
+    /// theme to match the canvas's `pill normal`.
+    private var timeAgoPill: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(Brand.Color.alertNormal)
+                .frame(width: 5, height: 5)
+            Text(c.caughtAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        }
+        .foregroundStyle(Brand.Color.alertNormal)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Brand.Color.alertNormal.opacity(0.16), in: .capsule)
+    }
+
+    // MARK: - Floating chrome
+
+    private var chromeBar: some View {
+        HStack {
+            chromePill(icon: "chevron.left") { dismiss() }
+            Spacer()
+            ShareLink(item: shareText) {
+                chromePillBody(icon: "square.and.arrow.up")
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// The canvas's `ChromePill` — translucent dark disc with a thin
+    /// hairline border, used as a back/share affordance over the hero.
+    private func chromePill(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            chromePillBody(icon: icon)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func chromePillBody(icon: String) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Brand.Color.textPrimary)
+            .frame(width: 36, height: 36)
+            .background(.ultraThinMaterial, in: .circle)
+            .overlay(Circle().strokeBorder(.white.opacity(0.10), lineWidth: 1))
+    }
+
+    /// Text rendered into the share sheet. Free text, no attachment —
+    /// keeps the share predictable across iOS share targets.
+    private var shareText: String {
+        let cs = c.callsign?.trimmedNonEmpty ?? c.icao24
+        let model = HangarGrouping.key(for: c, mode: .aircraftType)
+        let modelPart = model == HangarGrouping.unknownTitle ? "" : " · \(model)"
+        return "Caught \(cs)\(modelPart) on Tailspot"
+    }
+
+    // MARK: - Content column
+
+    private var contentColumn: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            headline
+            earnedPanel
+            statsGrid
+            caughtAtPanel
+            attribution
+        }
+    }
+
+    /// Display title: small cyan callsign · ICAO; large display model
+    /// title; muted operator subtitle.
+    private var headline: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(callsignLine)
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .tracking(0.4)
+                .foregroundStyle(Brand.Color.cyan)
+            Text(modelText)
+                .font(.system(size: 30, weight: .bold))
+                .tracking(-0.4)
+                .foregroundStyle(Brand.Color.textPrimary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Text(operatorText)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(Brand.Color.textSecondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var callsignLine: String {
+        let cs = c.callsign?.trimmedNonEmpty ?? c.icao24.uppercased()
+        return "\(cs) · \(c.icao24.uppercased())"
+    }
+    private var modelText: String {
+        let key = HangarGrouping.key(for: c, mode: .aircraftType)
+        return key == HangarGrouping.unknownTitle ? "Unknown aircraft" : key
+    }
+    private var operatorText: String {
+        c.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty ?? "—"
+    }
+
+    // MARK: - EARNED panel
+
+    /// Rarity-tinted box: +N pts (left), catch index (right). Bordered
+    /// with the rarity color, faint rarity-tinted background. Matches
+    /// canvas `DetailA` (line 47-62).
+    private var earnedPanel: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("EARNED")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(rarity.tint)
+                Text("+\(rarity.basePoints) pts")
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundStyle(rarity.tint)
                     .monospacedDigit()
             }
-            Text(String(format: "%.4f°, %.4f°", c.observerLat, c.observerLon))
-                .font(Brand.Font.caption)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(rarity.label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(typeLabel)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(rarity.tint.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(rarity.tint, lineWidth: 1)
+        )
+    }
+
+    private var typeLabel: String {
+        "Type · \(type.label.capitalized)"
+    }
+
+    // MARK: - Stats grid
+
+    /// 2-col grid of stat cells. Six cells sized to what the Catch
+    /// model actually carries — distance + icao24 from the snapshot,
+    /// plus four derived from the catch history (count, first-caught,
+    /// best range, total points).
+    private var statsGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ],
+            spacing: 10
+        ) {
+            statCell(label: "DISTANCE",
+                     value: distanceText,
+                     hint: "slant")
+            statCell(label: "ICAO24",
+                     value: c.icao24.uppercased(),
+                     hint: "hex")
+            statCell(label: "TIMES CAUGHT",
+                     value: "×\(row.count)",
+                     hint: row.count == 1 ? "first time" : nil)
+            statCell(label: "FIRST CAUGHT",
+                     value: firstCaughtDateText,
+                     hint: nil)
+            statCell(label: "BEST RANGE",
+                     value: bestRangeText,
+                     hint: "closest")
+            statCell(label: "POINTS",
+                     value: "+\(rarity.basePoints * row.count)",
+                     hint: "total")
+        }
+    }
+
+    private func statCell(label: String, value: String, hint: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+            Text(value)
+                .font(.system(size: 17, weight: .bold, design: .monospaced))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            if let hint {
+                Text(hint)
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            } else {
+                // Reserved spacer to keep cell heights consistent.
+                Text(" ")
+                    .font(.system(size: 10))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+    }
+
+    private var distanceText: String {
+        let km = c.slantDistanceMeters / 1000
+        guard km.isFinite, km > 0 else { return "—" }
+        return String(format: "%.1f km", km)
+    }
+    private var firstCaughtDateText: String {
+        let earliest = row.allCatches.last?.caughtAt ?? c.caughtAt
+        return earliest.formatted(.dateTime.month(.abbreviated).day())
+    }
+    private var bestRangeText: String {
+        let best = row.allCatches.map(\.slantDistanceMeters).min() ?? c.slantDistanceMeters
+        let km = best / 1000
+        guard km.isFinite, km > 0 else { return "—" }
+        return String(format: "%.1f km", km)
+    }
+
+    // MARK: - CAUGHT AT panel
+
+    private var caughtAtPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("CAUGHT AT")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+            Text(c.caughtAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Brand.Color.textPrimary)
+            Text(observerCoordText)
+                .font(.system(size: 12, weight: .regular, design: .monospaced))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
         }
-        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
     }
 
-    // MARK: - Photo section
+    private var observerCoordText: String {
+        let latH = c.observerLat >= 0 ? "N" : "S"
+        let lonH = c.observerLon >= 0 ? "E" : "W"
+        return String(format: "%.4f° %@, %.4f° %@",
+                      abs(c.observerLat), latH,
+                      abs(c.observerLon), lonH)
+    }
 
-    /// Photo section. Loading + loaded both render at a 3:2 aspect
-    /// ratio (matches the natural shape of Planespotters' thumbnail_large
-    /// at 420×280), with `.fit` aspect mode on the image so the whole
-    /// plane is always visible — wider/narrower photos letterbox
-    /// against the `bgElevated` base instead of being cropped.
-    /// `notAvailable` collapses to a compact ~40pt strip so a missing
-    /// photo doesn't bloat the page.
+    // MARK: - Attribution
+
+    /// Planespotters attribution chip (text button → opens the photo
+    /// page in Safari). Hidden when we're not showing a Planespotters
+    /// photo (catch-photo runs or notAvailable).
     @ViewBuilder
-    private var photoSection: some View {
-        switch photoState {
-        case .loading:
-            Section { loadingSlab }
-                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
-        case .loaded(let photo):
-            Section { loadedPhotoView(photo) }
-                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
-        case .notAvailable:
-            Section { noPhotoStrip }
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-        }
-    }
-
-    private var loadingSlab: some View {
-        ZStack {
-            Brand.Color.bgElevated
-            ProgressView().tint(Brand.Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(3.0 / 2.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    /// Loaded photo at 3:2 aspect with `.fit` so the entire airframe
-    /// is visible. Letterbox bands (if any) are `bgElevated`. Only the
-    /// attribution chip in the bottom-leading corner is tappable — the
-    /// photo itself is not a hyperlink (per UX preference).
-    private func loadedPhotoView(_ photo: PlanePhoto) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            Brand.Color.bgElevated
-
-            AsyncImage(url: photo.thumbnailLargeURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .transition(.opacity)
-                case .empty:
-                    ProgressView().tint(Brand.Color.textSecondary)
-                case .failure:
-                    Image(systemName: "photo.badge.exclamationmark")
-                        .font(.title2)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
+    private var attribution: some View {
+        if case .loaded(let photo) = photoState, !hasCatchPhoto {
             Button {
-                UIApplication.shared.open(photo.link)
+                openURL(photo.link)
             } label: {
                 Text("© \(photo.photographer) · planespotters.net")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.black.opacity(0.6), in: .rect(cornerRadius: 4))
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Brand.Color.textTertiary)
             }
             .buttonStyle(.plain)
-            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 4)
+        } else {
+            EmptyView()
         }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(3.0 / 2.0, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
+}
 
-    /// Compact "no photo" strip. Doesn't reserve hero-photo space when
-    /// Planespotters has no record for this icao24 — keeps the page
-    /// from feeling padded out by a void.
-    private var noPhotoStrip: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "photo")
-                .foregroundStyle(Brand.Color.textTertiary)
-            Text("No photo available")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
-            Spacer()
+/// Diagonal stripe pattern used in the hero placeholder. Same shape
+/// math as MiniCardView's StripesShape — duplicated here to avoid a
+/// cross-file private dependency.
+private struct HeroStripesShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let step: CGFloat = 18
+        var x = -rect.height
+        while x < rect.width + rect.height {
+            p.move(to: CGPoint(x: x, y: 0))
+            p.addLine(to: CGPoint(x: x + rect.height, y: rect.height))
+            x += step
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 8))
-    }
-
-    // MARK: - Helpers
-
-    private var aircraftText: String {
-        let key = HangarGrouping.key(for: catchRecord, mode: .aircraftType)
-        return key == HangarGrouping.unknownTitle ? "—" : key
-    }
-
-    private func row(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(value).foregroundStyle(Brand.Color.textSecondary)
-        }
+        return p
     }
 }
 
@@ -261,4 +471,5 @@ private extension String {
         let t = trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
     }
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

@@ -6,6 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, Phase 0 main next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-05-22 [HangarB grid + DetailA])
+
+**Hangar switched from list to card grid (HangarB).** First two passes implemented `HangarA` (list with section grouping); Noah called it out and asked for `HangarB` — the trading-card grid view. New shape:
+
+- **`MiniCardView.swift`** (new) — port of canvas `MiniCard` (detail-hangar-profile.jsx:408-440). Rounded 12pt card with vertical `bgElevated → bgSurface` gradient fill, 1pt solid rarity border, 2pt rarity-tinted top rail, header row (cyan callsign + small RarityBadge), 66pt photo slot (catch JPEG if present, else striped placeholder in the rarity tint), title (model + operator), footer row (small TypeBadge + ×N pill). Sized to whatever width LazyVGrid hands it; content-driven height. Diagonal stripe pattern in `StripesShape` matches the canvas `repeating-linear-gradient(135deg, ...)`.
+- **`HangarView` rebuilt as a 2-col `LazyVGrid`** over `Brand.Color.bgPrimary`, fed by `HangarGrouping.group(catches, by: .recent).first.rows` (dedup'd flat list). Section grouping is gone — filters replace it.
+- **`HangarFilter` enum** (`.all`, `.rarePlus`, `.type(AircraftType)`) plus a horizontal-scrolling filter chip row above the grid. Always shows "All · N"; appends "Rare+ · K" when K > 0; one chip per non-empty AircraftType bucket sorted by enum ordering. Active chip is cyan with dark text; inactive is `bgElevated` with secondary text.
+- **Delete moved from swipeActions to long-press context menu.** SwiftUI grid views don't support `swipeActions`, so the existing delete-confirmation alert is now triggered by tap-and-hold → Delete on the card. Same multi-catch-delete-all behavior as before.
+- **Segmented picker (By type / By airline / Recent) removed.** The Recent-mode dedupe path is what the grid uses internally; the visible knob is now the filter chips.
+
+**`CatchDetailView` rewritten as DetailA — photo-led collector card.** Old grouped-list layout is gone. New shape:
+
+- **320pt photo hero** with a top-to-bottom gradient fade from clear → `bgPrimary`. Source priority: user's catch photo → live Planespotters → diagonal-striped rarity-tinted placeholder. The Planespotters fetch is gated `!hasCatchPhoto` so we don't burn a network call when the user already has their own moment shot.
+- **Floating chrome pills** over the hero: `chevron.left` (dismiss) on the left, `square.and.arrow.up` (ShareLink) on the right. `.ultraThinMaterial`-filled discs with a 0.10-white border — matches canvas `ChromePill`. The system nav bar is hidden via `.toolbar(.hidden, for: .navigationBar)` + `.navigationBarBackButtonHidden(true)` so the chrome lives on the photo and not in a separate iOS bar.
+- **Badge row** anchored to the bottom-leading of the hero: medium RarityBadge + medium TypeBadge + relative-time pill (`● 2m ago`) in the `alertNormal` (green) theme.
+- **Headline:** small cyan callsign · ICAO line, big 30pt display model name, 13pt muted operator.
+- **EARNED panel:** rarity-tinted box. Left = `+\(rarity.basePoints) pts`. Right = rarity label + `Type · \(type)`. 1pt rarity border + 10% rarity-tinted background.
+- **2-col stats grid** sized to what the `Catch` model actually carries: `DISTANCE` (slant km) · `ICAO24` · `TIMES CAUGHT` (×N) · `FIRST CAUGHT` (earliest date in `allCatches`) · `BEST RANGE` (min slant across history) · `POINTS` (`basePoints * count`). The canvas's ALTITUDE / SPEED / BEARING / REGISTRATION cells need new fields on the `Catch` SwiftData model — flagged for follow-up; not faked.
+- **CAUGHT AT panel:** abbreviated date + time, then observer lat/lon with N/S/E/W hemisphere letters in mono.
+- **Planespotters attribution** at the bottom (text button → `openURL`), only rendered when the photo came from Planespotters (suppressed for catch-photo runs and notAvailable).
+
+The earlier PokeCardView hero + Identity rows + Caught-N-times timeline are removed — the new layout subsumes that information into the hero + EARNED + CAUGHT-AT structure. PokeCardView itself is still used by `CardReveal` (the catch-moment full-screen flash) so no code is unused.
+
 ## Current state (as of session ending 2026-05-22 [Hangar canvas port — second pass])
 
 **Hangar canvas — second-pass tightening (2026-05-22).** Per Noah's "closer but still doesn't match" — fixed the chrome and density that were still off:
