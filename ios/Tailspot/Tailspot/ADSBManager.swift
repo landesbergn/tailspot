@@ -128,6 +128,10 @@ final class ADSBManager: ObservableObject {
 
     @Published var observed: [ObservedAircraft] = []
     @Published var lastError: String?
+    /// True when the last error is auto-recovering (e.g. HTTP 429
+    /// backoff) and doesn't require user action. UI surfaces use
+    /// this to render the message in a softer, non-alarming style.
+    @Published var lastErrorIsTransient: Bool = false
     @Published var lastFetched: Date?
 
     /// Toggle between the live OpenSky source and a synthetic mock for
@@ -164,6 +168,14 @@ final class ADSBManager: ObservableObject {
     private let liveSource: ADSBSource
     private let mockSource: ADSBSource
     private var source: ADSBSource { useMock ? mockSource : liveSource }
+
+    /// Whether the live source has OAuth credentials. Surfaced for
+    /// the debug overlay so we can see at a glance whether the app
+    /// is using the registered tier (4000/day) or running anonymous
+    /// (400/day — exhausts in ~1.3h at the default poll rate).
+    var liveSourceIsAuthed: Bool {
+        (liveSource as? OpenSkyClient)?.hasCredentials ?? false
+    }
 
     /// The last-fetched aircraft list, kept raw (no annotation). The
     /// re-annotation tick reads from here, extrapolates to "now," and
@@ -274,16 +286,22 @@ final class ADSBManager: ObservableObject {
             self.reAnnotate(observer: location, now: Date())
 
             self.lastError = nil
+            self.lastErrorIsTransient = false
             self.lastFetched = Date()
             // Successful fetch — snap polling back to the base interval.
             self.currentInterval = pollInterval
         } catch OpenSkyClient.ClientError.rateLimited {
             // 429: over the daily quota or per-IP limit. Back off
-            // exponentially so we stop hammering OpenSky.
-            self.lastError = "Rate limit hit — backing off (next try in \(Int(min(currentInterval * 2, maxBackoffInterval)))s)"
+            // exponentially so we stop hammering OpenSky. The error
+            // is auto-recovering — UI marks it transient so the
+            // empty-sky pill doesn't render it as a screaming alert.
+            let nextSecs = Int(min(currentInterval * 2, maxBackoffInterval))
+            self.lastError = "API limit · retry in \(nextSecs)s"
+            self.lastErrorIsTransient = true
             self.currentInterval = min(currentInterval * 2, maxBackoffInterval)
         } catch {
             self.lastError = error.localizedDescription
+            self.lastErrorIsTransient = false
         }
     }
 

@@ -158,17 +158,34 @@ struct ADSBManagerTests {
 
     // MARK: - Error handling
 
-    @Test func rateLimitedErrorIsSurfacedAsBackoffMessage() async {
+    @Test func rateLimitedErrorIsSurfacedAsTransientBackoffMessage() async {
         // OpenSkyClient.ClientError.rateLimited is the typed signal that
         // ADSBManager catches specifically to apply backoff. Verify the
-        // user-facing lastError message reflects the backoff state.
+        // user-facing lastError message mentions the backoff and flags
+        // the error as transient so UI surfaces can render it softly
+        // (the system auto-recovers; no user action required).
         let source = FixedSource([], error: OpenSkyClient.ClientError.rateLimited)
         let manager = ADSBManager(liveSource: source, mockSource: source)
 
         await manager.refresh(around: Self.observer())
 
         let msg = manager.lastError ?? ""
-        #expect(msg.localizedCaseInsensitiveContains("rate limit"))
+        #expect(msg.localizedCaseInsensitiveContains("limit"))
+        #expect(msg.localizedCaseInsensitiveContains("retry"))
+        #expect(manager.lastErrorIsTransient)
+    }
+
+    @Test func nonTransientErrorClearsTransientFlag() async {
+        // A plain transport error is NOT auto-recovering — verify the
+        // transient flag stays false so UI surfaces treat it as a real
+        // alert.
+        let source = FixedSource([], error: TestError())
+        let manager = ADSBManager(liveSource: source, mockSource: source)
+
+        await manager.refresh(around: Self.observer())
+
+        #expect(manager.lastError != nil)
+        #expect(!manager.lastErrorIsTransient)
     }
 
     @Test func sourceErrorsLandInLastErrorWithoutCrashing() async {

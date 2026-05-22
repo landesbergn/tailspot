@@ -66,9 +66,52 @@ run xcrun devicectl device install app \
 
 # Step 3: launch (optional).
 if [ "$do_launch" -eq 1 ]; then
-  run xcrun devicectl device process launch \
-    --device "$TAILSPOT_DEVICE_ID" \
-    "$TAILSPOT_BUNDLE_ID"
+  # OpenSky OAuth credentials live in the user-only Xcode scheme
+  # (xcuserdata/, gitignored — see CLAUDE.md "Credentials and the
+  # shared-scheme trap"). Xcode injects them on ⌘R, but
+  # `devicectl process launch` does NOT — it spawns a clean
+  # environment. So we extract them from the scheme XML and forward
+  # them via --environment-variables. Without this, every deploy-loop
+  # launch runs OpenSky anonymous (400 credits/day) and hits the rate
+  # limit in ~1.3h.
+  scheme_path="$here/$TAILSPOT_PROJECT/xcuserdata/$USER.xcuserdatad/xcschemes/$TAILSPOT_SCHEME.xcscheme"
+  env_args=()
+  if [ -f "$scheme_path" ]; then
+    opensky_id="$(xmllint --xpath 'string(//EnvironmentVariable[@key="OPENSKY_CLIENT_ID"]/@value)' "$scheme_path" 2>/dev/null || true)"
+    opensky_secret="$(xmllint --xpath 'string(//EnvironmentVariable[@key="OPENSKY_CLIENT_SECRET"]/@value)' "$scheme_path" 2>/dev/null || true)"
+    if [ -n "$opensky_id" ] && [ -n "$opensky_secret" ]; then
+      env_json="$(OPENSKY_CLIENT_ID="$opensky_id" \
+                  OPENSKY_CLIENT_SECRET="$opensky_secret" \
+                  python3 -c 'import json,os; print(json.dumps({k: os.environ[k] for k in ("OPENSKY_CLIENT_ID","OPENSKY_CLIENT_SECRET")}))')"
+      env_args=(--environment-variables "$env_json")
+      echo "+ injecting OpenSky credentials from user scheme"
+    else
+      echo "warning: OPENSKY_CLIENT_ID/SECRET not found in $scheme_path — app will run anonymous (rate limited)" >&2
+    fi
+  else
+    echo "warning: user scheme not found at $scheme_path — app will run anonymous (rate limited)" >&2
+  fi
+  if [ "$dry_run" -eq 1 ]; then
+    # Don't echo the actual JSON — it contains the client secret.
+    echo "DRY: xcrun devicectl device process launch --device $TAILSPOT_DEVICE_ID [--environment-variables <redacted>] $TAILSPOT_BUNDLE_ID"
+  else
+    # Bypass `run` so the JSON-encoded env var dict isn't printed.
+    # Also export DEVICECTL_CHILD_<KEY> = <VALUE> as the alternative
+    # mechanism devicectl documents — some iOS launch paths honor one
+    # but not the other.
+    if [ -n "${opensky_id:-}" ] && [ -n "${opensky_secret:-}" ]; then
+      DEVICECTL_CHILD_OPENSKY_CLIENT_ID="$opensky_id" \
+      DEVICECTL_CHILD_OPENSKY_CLIENT_SECRET="$opensky_secret" \
+      xcrun devicectl device process launch \
+        --device "$TAILSPOT_DEVICE_ID" \
+        "${env_args[@]}" \
+        "$TAILSPOT_BUNDLE_ID"
+    else
+      xcrun devicectl device process launch \
+        --device "$TAILSPOT_DEVICE_ID" \
+        "$TAILSPOT_BUNDLE_ID"
+    fi
+  fi
 fi
 
 echo "deployed; log at $TAILSPOT_LOG_FILE"

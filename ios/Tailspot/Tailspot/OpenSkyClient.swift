@@ -67,6 +67,15 @@ nonisolated final class OpenSkyClient: ADSBSource, Sendable {
                 self.credentials = nil
             }
         }
+        Log.openSky.notice("OpenSkyClient init: credentials \(self.credentials == nil ? "MISSING (anonymous)" : "present (authed)", privacy: .public)")
+    }
+
+    /// True when the client has OAuth credentials and will run
+    /// against OpenSky's 4000-credit/day registered tier. False
+    /// means anonymous (400/day, exhausted in ~1.3h). Exposed so
+    /// the debug overlay can surface the auth state directly.
+    nonisolated var hasCredentials: Bool {
+        credentials != nil
     }
 
     enum ClientError: Error, LocalizedError {
