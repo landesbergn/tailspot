@@ -31,7 +31,11 @@ struct TailspotApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // RootView gates ContentView behind first-launch
+            // onboarding (latched in @AppStorage). After the user
+            // finishes onboarding once, RootView renders ContentView
+            // directly on every subsequent launch.
+            RootView()
                 .modelContainer(container)
         }
     }

@@ -50,6 +50,16 @@ final class Catch {
     var observerLat: Double
     var observerLon: Double
     var slantDistanceMeters: Double
+    /// Rarity tier snapshotted at catch time. Persisted as the raw
+    /// string value so SwiftData doesn't care about the Swift enum.
+    /// Optional + nil-by-default so lightweight migration covers
+    /// pre-existing rows; the `resolvedRarity` computed property
+    /// backfills via the classifier when nil.
+    var rarity: String?
+    /// Pokédex-style aircraft type snapshotted at catch time. Same
+    /// storage strategy as `rarity` — raw string, optional, backfilled
+    /// by the classifier when nil.
+    var aircraftType: String?
 
     init(
         icao24: String,
@@ -61,7 +71,9 @@ final class Catch {
         caughtAt: Date,
         observerLat: Double,
         observerLon: Double,
-        slantDistanceMeters: Double
+        slantDistanceMeters: Double,
+        rarity: Rarity? = nil,
+        aircraftType: AircraftType? = nil
     ) {
         self.icao24 = icao24
         self.callsign = callsign
@@ -73,6 +85,40 @@ final class Catch {
         self.observerLat = observerLat
         self.observerLon = observerLon
         self.slantDistanceMeters = slantDistanceMeters
+        // If the caller didn't explicitly classify, run the classifier
+        // at insert time so the row is born with a stable (rarity, type)
+        // pair. Rows written before this field existed end up with nil
+        // and get backfilled on read via `resolvedRarity` / `resolvedType`.
+        let (autoRarity, autoType) = AircraftClassifier.classify(
+            manufacturer: manufacturer,
+            model: model,
+            operatorName: operatorName
+        )
+        self.rarity = (rarity ?? autoRarity).rawValue
+        self.aircraftType = (aircraftType ?? autoType).rawValue
+    }
+
+    /// The rarity tier for this airframe. Prefers the snapshotted
+    /// value if present (a catch is a frozen moment), and falls back
+    /// to the classifier for older rows where the field is nil.
+    var resolvedRarity: Rarity {
+        if let raw = rarity, let r = Rarity(rawValue: raw) { return r }
+        return AircraftClassifier.classify(
+            manufacturer: manufacturer,
+            model: model,
+            operatorName: operatorName
+        ).rarity
+    }
+
+    /// The aircraft type for this airframe. Same fallback rules as
+    /// `resolvedRarity`.
+    var resolvedType: AircraftType {
+        if let raw = aircraftType, let t = AircraftType(rawValue: raw) { return t }
+        return AircraftClassifier.classify(
+            manufacturer: manufacturer,
+            model: model,
+            operatorName: operatorName
+        ).type
     }
 }
 

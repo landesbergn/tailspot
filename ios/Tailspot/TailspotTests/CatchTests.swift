@@ -113,4 +113,74 @@ struct CatchTests {
         #expect(fetched.first?.callsign == nil)
         #expect(fetched.first?.model == nil)
     }
+
+    // MARK: - Rarity / Type snapshotting
+
+    @Test func insertRunsClassifierAndSnapshotsRarityAndType() throws {
+        // New rows pick up rarity + type from the classifier at insert
+        // time so the catch is a frozen moment — re-classifying later
+        // can't retroactively change what tier the user "earned."
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a3b15e",
+            callsign: "UAL248",
+            model: "787-9",
+            manufacturer: "BOEING",
+            operatorName: "United Airlines",
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<Catch>()).first)
+        #expect(fetched.rarity == Rarity.rare.rawValue)
+        #expect(fetched.aircraftType == AircraftType.wide.rawValue)
+        #expect(fetched.resolvedRarity == .rare)
+        #expect(fetched.resolvedType == .wide)
+    }
+
+    @Test func resolvedRarityBackfillsFromClassifierWhenNil() {
+        // Legacy rows written before the rarity/type fields existed
+        // come back with nil. resolvedRarity must reproduce the
+        // classifier's verdict so the Hangar / Detail views don't
+        // render them all as Common.
+        let c = Catch(
+            icao24: "x",
+            callsign: nil,
+            model: "A380-800",
+            manufacturer: "AIRBUS",
+            operatorName: "British Airways",
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        // Simulate the "pre-existing row" state by nilling the fields
+        // the migration would have left empty.
+        c.rarity = nil
+        c.aircraftType = nil
+        #expect(c.resolvedRarity == .epic)
+        #expect(c.resolvedType == .wide)
+    }
+
+    @Test func explicitRarityOverridesClassifier() {
+        // The init takes optional rarity / aircraftType params so a
+        // caller can lock in a specific tier (e.g., the multi-catch
+        // mechanic or a future curated override). Verify the explicit
+        // value beats the classifier.
+        let c = Catch(
+            icao24: "x",
+            callsign: nil,
+            model: "737-800",
+            manufacturer: "BOEING",
+            operatorName: nil,
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0,
+            rarity: .legendary,
+            aircraftType: .heritage
+        )
+        #expect(c.resolvedRarity == .legendary)
+        #expect(c.resolvedType == .heritage)
+    }
 }

@@ -205,9 +205,12 @@ struct HangarView: View {
         Set(catches.map(\.icao24)).count
     }
 
+    /// Unique airframes catalogued at the .rare tier or higher (rare,
+    /// epic, legendary). Drives the rare-count stat pill — a "trophy"
+    /// number the user wants to see climb.
     private var rareUniqueCount: Int {
         catches.reduce(into: Set<String>()) { acc, c in
-            if HangarRarity.tier(for: c) == .rare {
+            if c.resolvedRarity.ordinal >= Rarity.rare.ordinal {
                 acc.insert(c.icao24)
             }
         }.count
@@ -227,10 +230,27 @@ struct HangarView: View {
         let c = row.mostRecent
         let title = c.callsign?.trimmedNonEmpty ?? c.icao24
         let subtitle = rowSubtitle(c)
-        return HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "airplane")
-                .foregroundStyle(Brand.Color.cyan)
-                .frame(width: 22)
+        let rarity = row.rarity
+        let type = row.aircraftType
+        return HStack(alignment: .center, spacing: 10) {
+            // Rarity-tinted leading stripe + type glyph well. Lets the
+            // row carry a strong rarity signal at a glance without
+            // needing a pill the user has to read.
+            ZStack {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(type.tint.opacity(0.18))
+                Text(type.glyph)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(type.tint)
+            }
+            .frame(width: 28, height: 32)
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(rarity.tint)
+                    .frame(width: 3)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(title)
@@ -243,14 +263,11 @@ struct HangarView: View {
                             .padding(.vertical, 1)
                             .background(Brand.Color.bgElevated, in: .capsule)
                     }
-                    if row.rarity == .rare {
-                        Text("RARE")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.white)
-                            .tracking(0.5)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Brand.Color.alertAdvisory, in: .capsule)
+                    // Rare+ tiers (rare/epic/legendary) get an inline
+                    // badge — common/uncommon stay quiet so the badge
+                    // population actually means something.
+                    if rarity.ordinal >= Rarity.rare.ordinal {
+                        RarityBadge(rarity: rarity, size: .sm)
                     }
                 }
                 if let subtitle {
@@ -299,13 +316,99 @@ struct HangarView: View {
 
     // MARK: - Empty state
 
+    /// The first-launch empty state — explains the catch loop and
+    /// previews the sets the user has to fill. Matches the design
+    /// canvas's "Go outside." treatment.
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("Hangar is empty", systemImage: "tray")
-        } description: {
-            Text("Lock onto a plane in the AR view, then tap **Catch this plane** to add it here.")
-                .multilineTextAlignment(.center)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                heroBlock
+                setsPreview
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
         }
+    }
+
+    private var heroBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack {
+                Circle().fill(Brand.Color.cyan.opacity(0.12))
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 28, weight: .regular))
+                    .foregroundStyle(Brand.Color.cyan)
+            }
+            .frame(width: 64, height: 64)
+            Text("Go outside.")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(Brand.Color.textPrimary)
+            Text("Tailspot needs a clear view of the sky. Point your phone up, hold a plane in the reticle to catch it.")
+                .font(Brand.Font.body)
+                .foregroundStyle(Brand.Color.textSecondary)
+            Button {
+                // Hangar is sheet-presented from ContentView, so
+                // dismissing it lands the user back in the AR view.
+                // If Hangar ever gets pushed inside a navigation
+                // stack instead, this needs to walk back further.
+                dismiss()
+            } label: {
+                Text("Open AR view")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.black.opacity(0.88))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Brand.Color.cyan, in: .rect(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+    }
+
+    /// Compact preview of the 4 most common type sets so the
+    /// first-launch user sees what they're collecting toward.
+    private var setsPreview: some View {
+        let previewSets: [PokeSet] = PokeSets.all.filter {
+            [.narrow, .wide, .regional, .heritage].contains($0.type)
+        }
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("SETS TO COLLECT")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+            VStack(spacing: 8) {
+                ForEach(previewSets) { set in
+                    setPreviewRow(set)
+                }
+            }
+        }
+    }
+
+    private func setPreviewRow(_ set: PokeSet) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6).fill(set.type.tint.opacity(0.20))
+                Text(set.type.glyph)
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundStyle(set.type.tint)
+            }
+            .frame(width: 30, height: 36)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(set.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                Text(set.type.summary)
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            Text("0 / \(set.entries.count)")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(Brand.Color.textTertiary)
+                .monospacedDigit()
+        }
+        .padding(12)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
     }
 }
 

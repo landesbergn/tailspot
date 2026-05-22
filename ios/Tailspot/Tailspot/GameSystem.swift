@@ -1,0 +1,272 @@
+//
+//  GameSystem.swift
+//  Tailspot
+//
+//  The Pokédex-style game spine: 5 rarity tiers + 7 aircraft types +
+//  a deterministic classifier that maps a (manufacturer, model,
+//  operatorName) triple to a (Rarity, AircraftType) pair.
+//
+//  Rarity drives all point math. Type drives set grouping and the
+//  glyph chip rendered on every card. Both are persisted on the
+//  Catch row (as raw strings) so a catch is a frozen moment — once
+//  caught, the tier and type are immutable even if we later refine
+//  the classifier.
+//
+//  Curation philosophy: we don't compute rarity from raw global
+//  fleet frequency. Frequency-driven rarity gets weird around hubs
+//  (a 787 isn't rare at SFO but is rare in Tulsa). The curated
+//  table reflects "how interesting is this airframe to a spotter,"
+//  not "how often does it fly overhead."
+//
+//  TODO: replace the rule-of-thumb model-substring table with a
+//  curated (type × livery × tier) table once the backend exists
+//  (PLAN §1.2). Until then the heuristic is conservative — most
+//  airframes resolve to (common, narrow), which keeps the rare
+//  signal meaningful.
+//
+
+import Foundation
+import SwiftUI
+
+// MARK: - Rarity
+
+nonisolated enum Rarity: String, CaseIterable, Equatable, Sendable {
+    case common
+    case uncommon
+    case rare
+    case epic
+    case legendary
+
+    /// Display label rendered on RarityBadge pills.
+    var label: String {
+        switch self {
+        case .common:    return "COMMON"
+        case .uncommon:  return "UNCOMMON"
+        case .rare:      return "RARE"
+        case .epic:      return "EPIC"
+        case .legendary: return "LEGENDARY"
+        }
+    }
+
+    /// Tier-tinted color used for badges, card borders, and accent
+    /// glows. Matches the design canvas's rarity palette exactly.
+    var tint: Color {
+        switch self {
+        case .common:    return Color(hex: 0x8595A5)
+        case .uncommon:  return Color(hex: 0x4ECCA3)
+        case .rare:      return Color(hex: 0x00D4FF)
+        case .epic:      return Color(hex: 0x9B5DE5)
+        case .legendary: return Color(hex: 0xFFB800)
+        }
+    }
+
+    /// Base points awarded for a catch at this tier. The *only*
+    /// input to point math (no XP multipliers, no golden hour, etc.).
+    var basePoints: Int {
+        switch self {
+        case .common:    return 10
+        case .uncommon:  return 25
+        case .rare:      return 100
+        case .epic:      return 500
+        case .legendary: return 2000
+        }
+    }
+
+    /// Ordering helper. `.common` is lowest; `.legendary` is highest.
+    var ordinal: Int { Self.allCases.firstIndex(of: self) ?? 0 }
+}
+
+// MARK: - AircraftType
+
+nonisolated enum AircraftType: String, CaseIterable, Equatable, Sendable {
+    case narrow
+    case wide
+    case regional
+    case biz
+    case mil
+    case ga
+    case heritage
+
+    /// Display label rendered on TypeBadge pills.
+    var label: String {
+        switch self {
+        case .narrow:   return "NARROW"
+        case .wide:     return "WIDE"
+        case .regional: return "REGIONAL"
+        case .biz:      return "BIZ"
+        case .mil:      return "MIL"
+        case .ga:       return "GA"
+        case .heritage: return "HERITAGE"
+        }
+    }
+
+    /// Single-letter glyph rendered in the badge's dark well.
+    var glyph: String {
+        switch self {
+        case .narrow:   return "N"
+        case .wide:     return "W"
+        case .regional: return "R"
+        case .biz:      return "B"
+        case .mil:      return "M"
+        case .ga:       return "G"
+        case .heritage: return "H"
+        }
+    }
+
+    /// Type-tinted color used as the pill background.
+    var tint: Color {
+        switch self {
+        case .narrow:   return Color(hex: 0x5B9DDB)
+        case .wide:     return Color(hex: 0x7E5FE6)
+        case .regional: return Color(hex: 0x3DD68C)
+        case .biz:      return Color(hex: 0xE6B847)
+        case .mil:      return Color(hex: 0x88936A)
+        case .ga:       return Color(hex: 0xE66B7A)
+        case .heritage: return Color(hex: 0xE68847)
+        }
+    }
+
+    /// Short descriptive copy shown on the Types reference screen.
+    var summary: String {
+        switch self {
+        case .narrow:   return "Single-aisle airliners"
+        case .wide:     return "Twin-aisle / heavies"
+        case .regional: return "Short-haul jets & turboprops"
+        case .biz:      return "Business jets"
+        case .mil:      return "Military aircraft"
+        case .ga:       return "General aviation"
+        case .heritage: return "Vintage & special-mission"
+        }
+    }
+}
+
+// MARK: - Classifier
+
+/// Deterministic classifier that resolves an airframe's
+/// (rarity, type) pair from its metadata.
+///
+/// Lookup priority:
+///   1. Exact model-string match (case-insensitive substring) against
+///      the curated rule table.
+///   2. Heuristic fallback — manufacturer + model words bucket into
+///      a default type, rarity stays `.common`.
+///
+/// Pure value-type, fully Sendable. Same input → same output forever;
+/// useful for backfill at read when an older Catch row has no stored
+/// rarity/type.
+nonisolated struct AircraftClassifier: Sendable {
+
+    /// Single curated rule. `modelTokens` are matched case-insensitively
+    /// against the model string; first hit wins. `operatorTokens` are
+    /// additional alternates that further filter — when non-empty,
+    /// at least one of the tokens must appear in the operator string
+    /// for the rule to match. (E.g., a VC-25-shaped 747 is only
+    /// legendary if it's operated by the USAF / Air Force.)
+    struct Rule: Sendable {
+        let modelTokens: [String]
+        let operatorTokens: [String]
+        let rarity: Rarity
+        let type: AircraftType
+
+        init(_ modelTokens: [String], operatorTokens: [String] = [], rarity: Rarity, type: AircraftType) {
+            self.modelTokens = modelTokens.map { $0.lowercased() }
+            self.operatorTokens = operatorTokens.map { $0.lowercased() }
+            self.rarity = rarity
+            self.type = type
+        }
+    }
+
+    /// Rules evaluated top-to-bottom; first match wins. Order rules
+    /// from most specific (operator-gated) to least specific.
+    static let rules: [Rule] = [
+        // ── Legendary — specific airframes, VIP / one-off / icons ──
+        Rule(["vc-25", "747-2"], operatorTokens: ["usaf", "air force"], rarity: .legendary, type: .mil),
+        Rule(["concorde"], rarity: .legendary, type: .heritage),
+        Rule(["sr-71", "u-2"], rarity: .legendary, type: .mil),
+        Rule(["b-2"], rarity: .legendary, type: .mil),
+        Rule(["747sp"], rarity: .legendary, type: .heritage),
+
+        // ── Epic — rare commercial heavies + retired-fleet types ──
+        Rule(["a380"], rarity: .epic, type: .wide),
+        Rule(["747-8"], rarity: .epic, type: .wide),
+        Rule(["a340"], rarity: .epic, type: .wide),
+        Rule(["c-5"], rarity: .epic, type: .mil),
+
+        // ── Rare — interesting commercial + workhorse military ──
+        Rule(["787"], rarity: .rare, type: .wide),
+        Rule(["a350"], rarity: .rare, type: .wide),
+        Rule(["777"], rarity: .rare, type: .wide),
+        Rule(["747"], rarity: .rare, type: .wide),
+        Rule(["c-130"], rarity: .rare, type: .mil),
+        Rule(["c-17"], rarity: .rare, type: .mil),
+        Rule(["kc-", "b-52", "b-1", "ah-", "uh-", "ch-"], rarity: .rare, type: .mil),
+
+        // ── Uncommon — newer airliner variants ──
+        Rule(["max"], rarity: .uncommon, type: .narrow),         // 737 MAX
+        Rule(["a220"], rarity: .uncommon, type: .narrow),
+        Rule(["e190", "e195"], rarity: .uncommon, type: .narrow),
+        Rule(["a330"], rarity: .uncommon, type: .wide),
+        Rule(["767"], rarity: .uncommon, type: .wide),
+
+        // ── Common — everyday narrow-bodies & regional jets ──
+        Rule(["737"], rarity: .common, type: .narrow),
+        Rule(["a320", "a319", "a321"], rarity: .common, type: .narrow),
+        Rule(["e175", "e170", "crj"], rarity: .common, type: .regional),
+        Rule(["dash 8", "atr"], rarity: .common, type: .regional),
+
+        // ── Business jets ──
+        Rule(["global 7500", "global 6500", "global 5000"], rarity: .uncommon, type: .biz),
+        Rule(["g650", "g700", "g500"], rarity: .uncommon, type: .biz),
+        Rule(["citation", "phenom", "learjet", "challenger", "falcon"], rarity: .common, type: .biz),
+
+        // ── General aviation ──
+        Rule(["cessna", "piper", "cirrus", "beechcraft", "diamond"], rarity: .common, type: .ga),
+    ]
+
+    /// Classify an aircraft. Manufacturer/model/operatorName may be
+    /// nil or empty — empty strings collapse to the default fallback
+    /// (`.common, .narrow`).
+    static func classify(
+        manufacturer: String?,
+        model: String?,
+        operatorName: String? = nil
+    ) -> (rarity: Rarity, type: AircraftType) {
+        let modelLower    = (model ?? "").lowercased()
+        let mfgLower      = (manufacturer ?? "").lowercased()
+        let operatorLower = (operatorName ?? "").lowercased()
+
+        // Combine manufacturer + model so a rule like "747" matches
+        // both "Boeing 747-400" (model="747-400") and a row where
+        // model="Boeing 747-400" with empty manufacturer.
+        let haystack = "\(mfgLower) \(modelLower)"
+
+        for rule in rules {
+            let modelHit = rule.modelTokens.contains { token in
+                haystack.contains(token)
+            }
+            guard modelHit else { continue }
+
+            if !rule.operatorTokens.isEmpty {
+                let opHit = rule.operatorTokens.contains { token in
+                    operatorLower.contains(token)
+                }
+                guard opHit else { continue }
+            }
+            return (rule.rarity, rule.type)
+        }
+
+        // Heuristic fallback when no rule matched. Manufacturer alone
+        // doesn't carry enough signal to pick a rarity above common,
+        // but it can hint at type (Embraer → regional, Cessna → GA).
+        let fallbackType: AircraftType = {
+            if haystack.contains("embraer") || haystack.contains("bombardier") {
+                return .regional
+            }
+            if haystack.contains("cessna") || haystack.contains("piper") {
+                return .ga
+            }
+            return .narrow
+        }()
+        return (.common, fallbackType)
+    }
+}

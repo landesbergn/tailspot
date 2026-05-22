@@ -34,10 +34,13 @@ struct HangarRow: Identifiable, Hashable {
 
     var id: String { icao24 }
 
-    /// Curated rarity classification of the underlying aircraft.
-    /// Derived from `mostRecent.model` so a stale row is fine — the
-    /// model string doesn't change between catches of the same icao24.
-    var rarity: HangarRarity { HangarRarity.tier(for: mostRecent) }
+    /// Snapshotted rarity tier from the most-recent catch. Reads the
+    /// stored value (a catch is a frozen moment) and falls back to
+    /// the classifier for pre-rarity-field rows.
+    var rarity: Rarity { mostRecent.resolvedRarity }
+
+    /// Snapshotted aircraft type from the most-recent catch.
+    var aircraftType: AircraftType { mostRecent.resolvedType }
 }
 
 /// A single bucket of dedup'd catch rows sharing a group key.

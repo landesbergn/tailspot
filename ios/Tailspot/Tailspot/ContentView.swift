@@ -48,6 +48,14 @@ struct ContentView: View {
     /// Drives the Hangar sheet (collection of past catches). Opened
     /// via the tray glyph in the top-trailing corner.
     @State private var showHangar = false
+    /// Drives the Profile sheet (gamification hub: stats, trophies,
+    /// sets, map, leaderboard, settings, notifications, share).
+    /// Opened via the person glyph in the top-trailing corner.
+    @State private var showProfile = false
+    /// Drives the compass calibration sheet. Tapping the AR
+    /// caution badge sets this true; the sheet explains what's
+    /// wrong and shows the figure-8 calibration motion.
+    @State private var showCompassSheet = false
     /// Lightweight @Query used only to render the catch-count badge
     /// on the Hangar button. HangarView runs its own @Query for the
     /// actual list — keeping these separate means ContentView's body
@@ -94,13 +102,20 @@ struct ContentView: View {
     /// when `pinnedIcao` returns to nil (tap-elsewhere or tap-same-
     /// plane-toggle), so re-pinning the same plane catches again.
     @State private var autoCaughtPin: String?
-    /// Drives the brief success-confirmation overlay shown after an
-    /// auto-catch lands. The flash dismisses itself after ~900ms.
-    @State private var showCatchFlash = false
-    /// Whether the just-caught airframe was on the curated rare list
-    /// — flips the flash overlay's "RARE CATCH" sub-pill on so a
-    /// rare catch feels distinctly different.
-    @State private var caughtWasRare = false
+    /// Carries the card-reveal moment data when a catch just landed.
+    /// Non-nil → full-screen reveal sheet is presented. Set inside
+    /// `performAutoCatch`; cleared by the user via the reveal's
+    /// dismiss buttons.
+    @State private var pendingReveal: PendingReveal?
+    /// Carries the multi-catch reveal payload when the user
+    /// captures N≥2 planes from a single frame. Non-nil → full-screen
+    /// `MultiCatchReveal` sheet is presented.
+    @State private var pendingMultiReveal: PendingMultiReveal?
+    /// Multi-catch zone radius in points. Wider than the single-catch
+    /// lock zone (80 px) so the frame meaningfully captures multiple
+    /// planes. Scales with zoom for the same reason `lockZoneRadius`
+    /// does inside `handleTap`.
+    private static let multiCatchBaseRadius: CGFloat = 180
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
@@ -165,6 +180,25 @@ struct ContentView: View {
                         // inside @ViewBuilder (statements aren't otherwise).
                         let _ = lockOn.update(closestTargetIcao24: engineTarget, now: now)
 
+                        // Multi-catch detection. Compute the icao24
+                        // list inside a wider center zone every tick.
+                        // Capped at 5 for UI sanity (the fan reveal
+                        // doesn't scale beyond 5 cards).
+                        let multiRadius = min(
+                            Self.multiCatchBaseRadius * zoom,
+                            min(geo.size.width, geo.size.height) / 2
+                        )
+                        let zone = icaosInZone(
+                            in: visible,
+                            phoneHeadingDeg: heading,
+                            cameraElevationDeg: camEl,
+                            screenSize: geo.size,
+                            hfovDeg: effectiveHfov,
+                            vfovDeg: effectiveVfov,
+                            zoneRadius: multiRadius
+                        )
+                        let multiCandidates = Array(zone.prefix(5))
+
                         ZStack {
                             // Background tap-and-pinch layer. Color.clear +
                             // contentShape makes the whole AR area receive
@@ -216,6 +250,40 @@ struct ContentView: View {
                                 )
                                     .position(pos)
                                     .onTapGesture { selectedAircraft = target }
+                            } else if visible.isEmpty {
+                                // Empty-sky overlay. Shown when nothing
+                                // is in view and no lock is engaged.
+                                // Quiet center reticle + a status pill
+                                // anchored low so it doesn't compete
+                                // with the top-center compass / zoom
+                                // affordances.
+                                emptySkyOverlay(rawCount: adsb.observed.count)
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .allowsHitTesting(false)
+                            }
+
+                            // Multi-catch capture frame + CTA. Only
+                            // renders when 2+ planes are in the wider
+                            // multi-catch zone AND nothing is pinned
+                            // (the pin flow is the single-catch path).
+                            // Suppressed during the single-catch
+                            // lock-on states so they don't fight
+                            // visually.
+                            if multiCandidates.count >= 2,
+                               pinnedIcao == nil,
+                               !lockOn.state.isLockedOrSticky
+                            {
+                                multiCatchFrame(radius: multiRadius)
+                                    .position(x: geo.size.width / 2,
+                                              y: geo.size.height / 2)
+                                    .allowsHitTesting(false)
+                                VStack {
+                                    Spacer()
+                                    multiCatchButton(candidates: multiCandidates)
+                                        .padding(.bottom, 40)
+                                }
+                                .frame(width: geo.size.width,
+                                       height: geo.size.height)
                             }
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
@@ -251,13 +319,15 @@ struct ContentView: View {
                     .transition(.opacity)
                 }
 
-                // Top-trailing controls: hangar (collection) then debug
-                // wrench. Both are discrete so they don't compete with
-                // the AR overlay; hangar gets a small green count badge
-                // when there's something to see.
+                // Top-trailing controls: profile (gamification hub),
+                // hangar (collection), debug wrench. Discrete so they
+                // don't compete with the AR overlay; hangar gets a
+                // small green count badge when there's something to
+                // see.
                 VStack {
                     HStack(spacing: 10) {
                         Spacer()
+                        profileButton
                         hangarButton
                         debugToggleButton
                     }
@@ -274,6 +344,12 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileScreen()
+        }
+        .sheet(isPresented: $showCompassSheet) {
+            CompassCalibrationSheet(location: location)
         }
         .task {
             // Dismiss the launch splash after ~600ms, then crossfade to
@@ -340,12 +416,36 @@ struct ContentView: View {
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
         .sensoryFeedback(.success, trigger: catchHaptic)
-        .overlay {
-            if showCatchFlash {
-                catchFlashOverlay
-                    .transition(.opacity)
-                    .allowsHitTesting(false)
-            }
+        // Card-reveal moment. Replaces the v0 green flash overlay.
+        // Presented full-screen so the rarity bloom + holo card fill
+        // the device. Dismiss path either closes the sheet (Keep
+        // spotting) or closes + opens the Hangar (View in Hangar).
+        .fullScreenCover(item: $pendingReveal) { reveal in
+            CardReveal(
+                plane: reveal.plane,
+                entryNumber: reveal.entryNumber,
+                onDismiss: { pendingReveal = nil },
+                onViewInHangar: {
+                    pendingReveal = nil
+                    showHangar = true
+                }
+            )
+            .presentationBackground(.clear)
+        }
+        // Multi-catch reveal — N≥2 PokeCards fanned out with combo
+        // math. Triggered by `performMultiCatch` after the user taps
+        // the magenta [N]× CATCH button.
+        .fullScreenCover(item: $pendingMultiReveal) { multi in
+            MultiCatchReveal(
+                planes: multi.planes,
+                lastEntryNumber: multi.lastEntryNumber,
+                onDismiss: { pendingMultiReveal = nil },
+                onViewInHangar: {
+                    pendingMultiReveal = nil
+                    showHangar = true
+                }
+            )
+            .presentationBackground(.clear)
         }
         // 1 Hz replay capture loop. Re-launches whenever the recorder
         // toggles on; tears down when it toggles off (Task is cancelled
@@ -416,52 +516,117 @@ struct ContentView: View {
         }
 
         autoCaughtPin = icao
-        caughtWasRare = HangarRarity.tier(for: row) == .rare
         catchHaptic &+= 1   // overflow-safe ++; SwiftUI only cares that it changed
-        withAnimation(.easeOut(duration: 0.15)) {
-            showCatchFlash = true
-        }
-        Log.adsb.notice("Auto-caught \(icao, privacy: .public) (rare=\(self.caughtWasRare, privacy: .public))")
+        Log.adsb.notice("Auto-caught \(icao, privacy: .public) (rarity=\(row.resolvedRarity.rawValue, privacy: .public))")
 
-        // Hide the flash after a beat — separate task so we can keep
-        // the main one tight.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(900))
-            withAnimation(.easeIn(duration: 0.35)) {
-                showCatchFlash = false
-            }
-        }
+        // Build the reveal payload. Entry number = count of unique
+        // icao24 in the Hangar AFTER this catch lands — the catch
+        // we just inserted is included in `catches` because the
+        // @Query auto-updates synchronously when the modelContext
+        // saves.
+        let uniqueIcaoCount = Set(catches.map(\.icao24)).count
+        let altFt = (observed?.aircraft.altitudeMeters).map { Int(($0 * 3.28084).rounded()) }
+        let speedKt: Int? = observed?.aircraft.velocityMps.map { Int(($0 * 1.94384).rounded()) }
+        let pokePlane = PokePlane(
+            callsign: row.callsign,
+            model: row.model,
+            carrier: row.operatorName,
+            rarity: row.resolvedRarity,
+            type: row.resolvedType,
+            altText: altFt.map { "\($0.formatted(.number)) ft" },
+            speedText: speedKt.map { "\($0) kt" },
+            distText: String(format: "%.1f km", row.slantDistanceMeters / 1000),
+            photoURL: photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+        )
+        pendingReveal = PendingReveal(plane: pokePlane, entryNumber: uniqueIcaoCount)
     }
 
-    /// Full-screen flash shown briefly after an auto-catch. Green
-    /// checkmark + "CAUGHT" wordmark; magenta "RARE CATCH" sub-pill
-    /// when the just-caught airframe was on the rare list.
-    private var catchFlashOverlay: some View {
-        ZStack {
-            Brand.Color.alertNormal.opacity(0.25)
-                .ignoresSafeArea()
-            VStack(spacing: 14) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 96, weight: .bold))
-                    .foregroundStyle(Brand.Color.alertNormal)
-                    .shadow(color: .black.opacity(0.4), radius: 8)
-                Text("CAUGHT")
-                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
-                    .tracking(6)
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.4), radius: 4)
-                if caughtWasRare {
-                    Text("RARE CATCH")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .tracking(2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Brand.Color.alertAdvisory, in: .capsule)
-                        .shadow(color: .black.opacity(0.4), radius: 4)
-                }
+    /// Snapshot of the catch needed to render the reveal sheet —
+    /// kept separate from the live Catch so the reveal stays stable
+    /// even if SwiftData state churns underneath.
+    struct PendingReveal: Identifiable, Equatable {
+        let id = UUID()
+        let plane: PokePlane
+        let entryNumber: Int
+    }
+
+    /// Snapshot of a multi-catch run for `MultiCatchReveal`.
+    struct PendingMultiReveal: Identifiable, Equatable {
+        let id = UUID()
+        let planes: [PokePlane]
+        let lastEntryNumber: Int
+    }
+
+    // MARK: - Multi-catch handler
+
+    /// Inserts a Catch row per icao24 in the input list and triggers
+    /// `MultiCatchReveal`. Unlike `performAutoCatch`, this is fired
+    /// explicitly by the user (button tap), not a sustain timer.
+    /// Camera is captured once and the photoFilename is attached to
+    /// each row.
+    @MainActor
+    private func performMultiCatch(icaos: [String]) async {
+        guard icaos.count >= 2 else { return }
+        let now = Date()
+        let photoData = await captureBridge.captureJPEG()
+
+        var planes: [PokePlane] = []
+
+        for icao in icaos {
+            let observed = adsb.observed.first { $0.aircraft.icao24 == icao }
+            // Each multi-catch row needs metadata. Walk the cache;
+            // a miss here means we fall back to nil — better than
+            // blocking the moment on a network round-trip.
+            let metadata = await adsb.metadata(for: icao)
+            let photoFilename = photoData.flatMap {
+                CatchPhotoStore.save($0, icao24: icao, at: now)
             }
+            let row = Catch(
+                icao24: icao,
+                callsign: observed?.aircraft.callsign,
+                model: metadata?.model,
+                manufacturer: metadata?.manufacturerName,
+                operatorName: metadata?.operatorName,
+                photoFilename: photoFilename,
+                caughtAt: now,
+                observerLat: location.latitude ?? 0,
+                observerLon: location.longitude ?? 0,
+                slantDistanceMeters: observed?.slantDistanceMeters ?? 0
+            )
+            modelContext.insert(row)
+
+            // Build a PokePlane for the reveal — use the just-saved
+            // photo so the fan shows the user's actual moment.
+            let altFt = (observed?.aircraft.altitudeMeters).map { Int(($0 * 3.28084).rounded()) }
+            let speedKt: Int? = observed?.aircraft.velocityMps.map { Int(($0 * 1.94384).rounded()) }
+            planes.append(PokePlane(
+                callsign: row.callsign,
+                model: row.model,
+                carrier: row.operatorName,
+                rarity: row.resolvedRarity,
+                type: row.resolvedType,
+                altText: altFt.map { "\($0.formatted(.number)) ft" },
+                speedText: speedKt.map { "\($0) kt" },
+                distText: String(format: "%.1f km", row.slantDistanceMeters / 1000),
+                photoURL: photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+            ))
         }
+
+        do {
+            try modelContext.save()
+        } catch {
+            Log.adsb.error("Multi-catch save failed: \(error.localizedDescription, privacy: .public)")
+        }
+
+        // Bump haptic counter so the user feels the catch.
+        catchHaptic &+= 1
+        Log.adsb.notice("Multi-caught \(icaos.count, privacy: .public) planes")
+
+        let uniqueIcaoCount = Set(catches.map(\.icao24)).count
+        pendingMultiReveal = PendingMultiReveal(
+            planes: planes,
+            lastEntryNumber: uniqueIcaoCount
+        )
     }
 
     // MARK: - Top-center overlays
@@ -471,25 +636,47 @@ struct ContentView: View {
     /// the debug overlay, where most users never look). FAA caution
     /// semantics: bad heading is "future action required" (recalibrate
     /// via figure-8). Renders only when `isHeadingAccuracyBad`.
+    ///
+    /// The badge is a Button — tapping it opens
+    /// `CompassCalibrationSheet` which explains what's wrong and how
+    /// to fix it (figure-8 in the air). The right chevron telegraphs
+    /// "tap me for more"; the second line gives the user the action
+    /// without needing to open the sheet.
     @ViewBuilder
     private var cautionBadge: some View {
         if isHeadingAccuracyBad {
-            HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Brand.Color.alertCaution)
-                Text("COMPASS \(formatHeadingAccuracyShort())")
-                    .font(Brand.Font.hudData)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Brand.Color.alertCaution)
-                    .tracking(0.5)
+            Button {
+                showCompassSheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Brand.Color.alertCaution)
+                        .font(.system(size: 13))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("COMPASS \(formatHeadingAccuracyShort())")
+                            .font(Brand.Font.hudData)
+                            .fontWeight(.bold)
+                            .foregroundStyle(Brand.Color.alertCaution)
+                            .tracking(0.5)
+                        Text("Tap to calibrate")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(Brand.Color.alertCaution.opacity(0.85))
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Brand.Color.alertCaution.opacity(0.7))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Brand.Color.bgPrimary.opacity(0.92), in: .rect(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Brand.Color.alertCaution, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Brand.Color.bgPrimary.opacity(0.92), in: .rect(cornerRadius: 4))
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Brand.Color.alertCaution, lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Tap to calibrate.")
             .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
@@ -548,6 +735,25 @@ struct ContentView: View {
         .accessibilityLabel("Open hangar (\(catches.count) catches)")
     }
 
+    // MARK: - Profile entry
+
+    /// Person glyph in the top-trailing corner; opens the
+    /// gamification hub (stats, trophies, sets, map, leaderboard,
+    /// settings). Sized + tinted to match the hangar/debug buttons.
+    private var profileButton: some View {
+        Button {
+            showProfile = true
+        } label: {
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
+                .padding(6)
+                .background(Brand.Color.bgPrimary.opacity(0.35), in: .circle)
+                .shadow(color: .black.opacity(0.5), radius: 2)
+        }
+        .accessibilityLabel("Open profile")
+    }
+
     // MARK: - Debug toggle
 
     /// Small wrench glyph in the top-trailing corner; tap to toggle
@@ -595,7 +801,120 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Lock-on visuals
+    // MARK: - Multi-catch visuals
+
+    /// The magenta dashed capture frame drawn around the multi-catch
+    /// zone. Pulses subtly so it reads as "live" without being a full
+    /// breathing animation.
+    private func multiCatchFrame(radius: CGFloat) -> some View {
+        let side = radius * 2
+        return TimelineView(.animation(minimumInterval: 1.0/30.0)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let phase = (cos(t * 3) + 1) / 2     // 0…1, ~1 s period
+            let glow = 0.35 + 0.25 * phase
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(
+                    Brand.Color.alertAdvisory,
+                    style: StrokeStyle(lineWidth: 2, dash: [10, 6])
+                )
+                .frame(width: side, height: side)
+                .shadow(color: Brand.Color.alertAdvisory.opacity(glow), radius: 18)
+        }
+    }
+
+    /// "[N]× CATCH" capture button. Magenta, brand-advisory tinted.
+    /// On tap: insert N Catch rows + present the multi-catch reveal.
+    private func multiCatchButton(candidates: [String]) -> some View {
+        let n = candidates.count
+        let mult = MultiCatchReveal.comboMultiplier(for: n)
+        let multStr = mult.truncatingRemainder(dividingBy: 1) == 0
+            ? String(format: "%.0f", mult)
+            : String(format: "%.1f", mult)
+        return Button {
+            Task { await performMultiCatch(icaos: candidates) }
+        } label: {
+            HStack(spacing: 10) {
+                Text("\(n)×")
+                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.black.opacity(0.92))
+                Text("CATCH")
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .tracking(2)
+                    .foregroundStyle(.black.opacity(0.92))
+                Text("· ×\(multStr) COMBO")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(.black.opacity(0.65))
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 14)
+            .background(Brand.Color.alertAdvisory, in: .capsule)
+            .shadow(color: Brand.Color.alertAdvisory.opacity(0.55), radius: 18, y: 6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Capture \(n) planes")
+    }
+
+    // MARK: - Empty-sky state
+
+    /// Overlay shown when no aircraft are above the horizon + within
+    /// the visibility cap. Restraint-first per the field feedback
+    /// (the chat-canvas "scanning screen" with radar pings was
+    /// noisy): faint center reticle + a status pill anchored well
+    /// below screen center so it doesn't fight the compass / zoom
+    /// pills up top.
+    ///
+    /// `rawCount` is the count of bbox-level aircraft (pre-visibility
+    /// filter). When > 0 we can tell the user "no aircraft in view ·
+    /// N in range" so they understand traffic IS there, just below
+    /// the horizon or past 30 km.
+    private func emptySkyOverlay(rawCount: Int) -> some View {
+        let lastErr = adsb.lastError
+        let neverFetched = adsb.lastFetched == nil && lastErr == nil
+        let pillText: String = {
+            if let lastErr { return lastErr.uppercased() }
+            if neverFetched { return "SCANNING SKY…" }
+            if rawCount > 0 {
+                return "NO AIRCRAFT IN VIEW · \(rawCount) IN RANGE"
+            }
+            return "NO AIRCRAFT IN RANGE"
+        }()
+        let pillTint: Color = lastErr != nil
+            ? Brand.Color.alertCaution
+            : Brand.Color.textSecondary
+        return GeometryReader { geo in
+            ZStack {
+                emptyReticle
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                VStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(pillTint)
+                            .frame(width: 6, height: 6)
+                            .modifier(EmptyPulse(active: lastErr == nil))
+                        Text(pillText)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .tracking(1.2)
+                            .foregroundStyle(pillTint)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+                    .padding(.bottom, geo.size.height * 0.18)
+                }
+            }
+        }
+    }
+
+    /// Faint cyan corner-bracket box at screen center. 88×88 px;
+    /// 24 % opacity so it stays out of the way until it becomes the
+    /// only thing on screen.
+    private var emptyReticle: some View {
+        LockBrackets(boxSize: 88, color: Brand.Color.cyan, opacity: 0.24)
+    }
+
+    // MARK: - Lock-on visuals (continued)
 
     /// Brackets + label rendered at a target's projected screen
     /// position. Style + size depend on the lock-on state:
@@ -657,11 +976,11 @@ struct ContentView: View {
         }
     }
 
-    /// Identification card shown below a locked target. Four lines
-    /// in decreasing emphasis: callsign, airline (operator), make +
-    /// model, altitude + speed. Lines for which we don't yet have
-    /// data are simply omitted — keeps the card from filling with
-    /// dashes while the metadata fetch is in flight.
+    /// Identification card shown below a locked target. Lines in
+    /// decreasing emphasis: callsign + rarity/type tags, airline,
+    /// make + model, altitude + speed + distance. Lines for which
+    /// we don't yet have data are simply omitted — keeps the card
+    /// from filling with dashes while the metadata fetch is in flight.
     private func lockLabel(_ obs: ObservedAircraft, metadata: AircraftMetadata?) -> some View {
         let cs = obs.aircraft.callsign ?? obs.aircraft.icao24
         let airline = metadata?.operatorName
@@ -683,10 +1002,29 @@ struct ContentView: View {
         let distText = String(format: "%.1f km", obs.slantDistanceMeters / 1000)
         let stats = [altText, speedText, distText].compactMap(\.self).joined(separator: "  ·  ")
 
-        return VStack(alignment: .leading, spacing: 1) {
+        // Classify on the fly — same heuristic the Catch will land
+        // with if the user catches this plane. Doing it inline (vs
+        // caching) is fine: the classifier is a quick substring scan
+        // and the lock label re-renders at 30 Hz with the same input.
+        let (rarity, type) = AircraftClassifier.classify(
+            manufacturer: metadata?.manufacturerName,
+            model: metadata?.model,
+            operatorName: metadata?.operatorName
+        )
+
+        return VStack(alignment: .leading, spacing: 3) {
             Text(cs)
                 .font(Brand.Font.hudCallsign)
                 .foregroundStyle(Brand.Color.cyan)
+
+            // Rarity + type tags — gives the user an instant tier
+            // read before tapping in. Only render when metadata has
+            // actually landed; pre-metadata the classifier would just
+            // default-bucket everything to (common, narrow) which is
+            // noise.
+            if metadata != nil {
+                TagRow(rarity: rarity, type: type, size: .sm)
+            }
 
             if let airline {
                 Text(airline)
@@ -831,13 +1169,16 @@ struct ContentView: View {
         return String(format: "Heading: %6.1f°  ±%.1f°", h, acc)
     }
 
-    /// True when CL reports a poor heading fix (>15°). Drives the
-    /// red-text cue on the heading readout so the user notices the
-    /// compass needs calibration (figure-8 the phone). Negative
-    /// values mean "unknown" — treat as neutral, not bad.
+    /// True when CL reports a poor heading fix (>10°). Drives the
+    /// caution badge + red heading readout so the user notices the
+    /// compass needs calibration (figure-8 the phone). Threshold
+    /// dropped from 15° to 10° after the 2026-05-19 field test:
+    /// 12.7° accuracy at 4× zoom puts the bracket >140 px off the
+    /// plane, but the badge never surfaced at the old threshold.
+    /// Negative values mean "unknown" — treat as neutral, not bad.
     private var isHeadingAccuracyBad: Bool {
         guard let acc = location.headingAccuracy else { return false }
-        return acc > 15
+        return acc > 10
     }
 
     private func formatAttitude() -> String {
@@ -979,9 +1320,17 @@ struct ContentView: View {
     ///   - Tapped in empty sky (no plane within the tap zone) → clear
     ///     any active pin.
     ///
-    /// `tapZoneRadius` is generous (100 px) so users don't have to be
-    /// pixel-perfect; at high zoom planes are spread apart on screen
-    /// so the ambiguity is small.
+    /// `tapZoneRadius` scales with the current zoom (`100 × zoom`, capped
+    /// at half the smaller screen dimension). The reason: brackets are
+    /// drawn at the geometric projection of each plane, but the compass
+    /// heading has real-world error (typically 5–15° in coastal /
+    /// bridge-heavy areas). At base zoom that error translates to ~35 px
+    /// of bracket-vs-plane disagreement; at 4× zoom it's ~140 px,
+    /// which would otherwise put the user's tap outside any fixed
+    /// pixel radius — they couldn't catch a plane they could clearly see.
+    /// Scaling keeps the *angular* tap tolerance constant across zoom.
+    /// The cap protects against turning the lock-on into a no-op when
+    /// the user zooms in dense traffic.
     private func handleTap(
         at point: CGPoint,
         in screenSize: CGSize,
@@ -992,6 +1341,8 @@ struct ContentView: View {
         vfovDeg: Double,
         now: Date
     ) {
+        let cap = min(screenSize.width, screenSize.height) / 2
+        let tapRadius = min(100 * zoom, cap)
         let hit = closestTargetIcao24(
             in: visible,
             at: point,
@@ -1000,7 +1351,7 @@ struct ContentView: View {
             screenSize: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg,
-            lockZoneRadius: 100
+            lockZoneRadius: tapRadius
         )
         switch hit {
         case nil:
@@ -1076,6 +1427,26 @@ private struct CornerBracket: Shape {
             p.addLine(to: CGPoint(x: rect.width, y: rect.height - armLength))
         }
         return p
+    }
+}
+
+// MARK: - Empty-sky pulse
+
+/// Slow 0.4 → 1.0 opacity breathe at ~1 Hz. Used on the empty-sky
+/// status dot so it telegraphs "actively scanning" without being
+/// a radar sweep. Disabled (`active: false`) when the pill is
+/// surfacing an error string — at that point we don't want the
+/// liveness signal contradicting the message.
+private struct EmptyPulse: ViewModifier {
+    let active: Bool
+    func body(content: Content) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            // Cosine breathing: 0.4 → 1.0 → 0.4 once per ~1.4 s.
+            let phase = (cos(t * 4.5) + 1) / 2     // 0…1
+            let opacity = active ? (0.4 + 0.6 * phase) : 1.0
+            content.opacity(opacity)
+        }
     }
 }
 

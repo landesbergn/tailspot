@@ -57,6 +57,17 @@ final class LockOnEngine: ObservableObject {
             case .acquiring(let t, _), .locked(let t, _), .sticky(let t, _): return t
             }
         }
+
+        /// True when the engine is actively presenting a lock or
+        /// holding sticky. Used by the multi-catch UI to suppress
+        /// the capture frame while a single-plane flow is in
+        /// progress so the two don't visually compete.
+        var isLockedOrSticky: Bool {
+            switch self {
+            case .locked, .sticky: return true
+            default: return false
+            }
+        }
     }
 
     @Published private(set) var state: State = .idle
@@ -197,4 +208,47 @@ func closestTargetIcao24(
     }
 
     return bestIcao
+}
+
+/// Returns icao24s sorted by distance-to-anchor (ascending) for every
+/// visible aircraft whose screen projection lands inside a circular
+/// `zoneRadius` around `point` (defaulting to screen center).
+///
+/// Companion to `closestTargetIcao24` — same geometry, different
+/// fan-out. Used by the multi-catch mechanic to find every plane
+/// inside a wider "capture frame" centered on the viewfinder.
+/// `zoneRadius` is in pixels, not angular degrees, so it scales
+/// the same way as `lockZoneRadius` (a UI affordance, not a
+/// tolerance).
+@MainActor
+func icaosInZone(
+    in observed: [ObservedAircraft],
+    at point: CGPoint? = nil,
+    phoneHeadingDeg: Double,
+    cameraElevationDeg: Double,
+    screenSize: CGSize,
+    hfovDeg: Double = 56,
+    vfovDeg: Double = 72,
+    zoneRadius: CGFloat = 180
+) -> [String] {
+    let anchor = point ?? CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
+
+    var hits: [(String, CGFloat)] = []
+    for obs in observed where obs.isLikelyVisibleToObserver {
+        guard let pos = obs.screenPosition(
+            phoneHeadingDeg: phoneHeadingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            in: screenSize,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
+        ) else { continue }
+
+        let dx = pos.x - anchor.x
+        let dy = pos.y - anchor.y
+        let dist = (dx*dx + dy*dy).squareRoot()
+        if dist <= zoneRadius {
+            hits.append((obs.aircraft.icao24, dist))
+        }
+    }
+    return hits.sorted { $0.1 < $1.1 }.map(\.0)
 }

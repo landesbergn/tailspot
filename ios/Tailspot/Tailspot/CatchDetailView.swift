@@ -51,7 +51,13 @@ struct CatchDetailView: View {
 
     var body: some View {
         List {
-            catchPhotoSection
+            pokeCardSection
+            // The PokeCard's photo slot already renders the user's
+            // catch photo (when present) as the card's hero — showing
+            // it again full-width below was duplicate weight. When
+            // there's no catch photo, the card falls back to a
+            // rarity-tinted placeholder and the Planespotters section
+            // below provides the reference photo (with attribution).
             if !hasCatchPhoto {
                 photoSection
             }
@@ -60,6 +66,8 @@ struct CatchDetailView: View {
                 self.row("ICAO24",   catchRecord.icao24)
                 self.row("Aircraft", aircraftText)
                 self.row("Operator", catchRecord.operatorName ?? "—")
+                self.row("Rarity",   catchRecord.resolvedRarity.label)
+                self.row("Type",     catchRecord.resolvedType.label)
             }
 
             Section(catchesSectionTitle) {
@@ -83,47 +91,26 @@ struct CatchDetailView: View {
         }
     }
 
-    // MARK: - Catch photo (user's moment)
+    // MARK: - PokeCard hero
 
-    /// Hero section showing the user's actual catch photo when present.
-    /// Renders nothing when the catch was made before auto-catch
-    /// shipped (no `photoFilename`) — the Planespotters fallback takes
-    /// over downstream.
-    @ViewBuilder
-    private var catchPhotoSection: some View {
-        if let filename = catchRecord.photoFilename,
-           let fileURL = CatchPhotoStore.url(forFilename: filename) {
-            Section {
-                ZStack {
-                    Brand.Color.bgElevated
-                    AsyncImage(url: fileURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .transition(.opacity)
-                        case .empty:
-                            ProgressView().tint(Brand.Color.textSecondary)
-                        case .failure:
-                            VStack(spacing: 6) {
-                                Image(systemName: "photo.badge.exclamationmark")
-                                    .font(.title2)
-                                Text("Couldn't load catch photo")
-                                    .font(Brand.Font.caption)
-                            }
-                            .foregroundStyle(Brand.Color.textTertiary)
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(3.0 / 2.0, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+    /// The PokeCard hero — first thing the user sees on the detail
+    /// screen. Renders the catch as a 280×400 collectible with the
+    /// rarity-driven holo treatment. Background of the list section
+    /// is transparent so the card's own shadow + rarity glow read
+    /// against the table backdrop.
+    private var pokeCardSection: some View {
+        Section {
+            HStack {
+                Spacer(minLength: 0)
+                PokeCardView(
+                    plane: PokePlane(catchRecord: catchRecord),
+                    size: .lg
+                )
+                Spacer(minLength: 0)
             }
-            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+            .padding(.vertical, 20)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
         }
     }
 
