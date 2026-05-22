@@ -22,11 +22,21 @@ struct ContentView: View {
     private static let baseHfovDeg: Double = 56
     private static let baseVfovDeg: Double = 72
 
-    /// Seconds the user has to hold a tap-pinned plane locked before
-    /// the auto-catch fires. Long enough that brushes against the
-    /// screen don't accumulate trophies, short enough that intentional
-    /// catches feel responsive.
-    private static let autoCatchHoldDuration: TimeInterval = 3.0
+    /// Compass accuracy must exceed this (degrees) for the caution
+    /// badge to be considered. Bumped from 10° to 25° because typical
+    /// urban CL readings are 10–20° even when the compass is fine —
+    /// 10° fired the badge constantly. At 25° the bracket-vs-plane
+    /// offset is unambiguously visible to the user, so the warning
+    /// carries information.
+    private static let compassBadThreshold: Double = 25
+    /// Hysteresis floor: once the badge is up, accuracy must improve
+    /// below this to dismiss. Prevents flicker when readings hover
+    /// at the bad threshold.
+    private static let compassGoodThreshold: Double = 15
+    /// Seconds of continuously-bad readings before the badge appears.
+    /// A momentary spike (passing under a bridge, briefly near a car)
+    /// shouldn't surface a warning.
+    private static let compassBadDebounce: TimeInterval = 4.0
 
     @Environment(\.modelContext) private var modelContext
     @StateObject private var location = LocationManager()
@@ -94,14 +104,20 @@ struct ContentView: View {
     /// capture closure at `makeUIView` time. Held via `@State` (not
     /// `@StateObject`) — it's a one-method mailbox, not a publisher.
     @State private var captureBridge = CameraCaptureBridge()
-    /// Running 3-second sustain timer for the currently-tap-pinned
-    /// plane. Cancelled and replaced whenever `pinnedIcao` changes.
-    @State private var autoCatchTask: Task<Void, Never>?
-    /// Latches the icao24 we've already auto-caught for the current
-    /// pin session so the timer fires exactly once per tap-pin. Reset
-    /// when `pinnedIcao` returns to nil (tap-elsewhere or tap-same-
-    /// plane-toggle), so re-pinning the same plane catches again.
-    @State private var autoCaughtPin: String?
+    /// Guards re-entry of the capture button while a catch is in
+    /// flight. Cleared when the user dismisses the reveal sheet.
+    @State private var captureInFlight = false
+    /// Latched compass warning. Set true after `compassBadDebounce`
+    /// seconds of continuously-bad readings; cleared when accuracy
+    /// crosses back under `compassGoodThreshold`. Drives the
+    /// caution badge so the badge isn't flicker-driven by every CL
+    /// heading update.
+    @State private var showCompassWarning = false
+    /// Debounce task that flips `showCompassWarning` to true after
+    /// the bad-reading streak is long enough. Cancelled on any good
+    /// reading so we don't show a stale warning after the compass
+    /// settles.
+    @State private var compassDebounceTask: Task<Void, Never>?
     /// Carries the card-reveal moment data when a catch just landed.
     /// Non-nil → full-screen reveal sheet is presented. Set inside
     /// `performAutoCatch`; cleared by the user via the reveal's
@@ -262,29 +278,39 @@ struct ContentView: View {
                                     .allowsHitTesting(false)
                             }
 
-                            // Multi-catch capture frame + CTA. Only
-                            // renders when 2+ planes are in the wider
-                            // multi-catch zone AND nothing is pinned
-                            // (the pin flow is the single-catch path).
-                            // Suppressed during the single-catch
-                            // lock-on states so they don't fight
-                            // visually.
-                            if multiCandidates.count >= 2,
-                               pinnedIcao == nil,
-                               !lockOn.state.isLockedOrSticky
-                            {
+                            // Multi-catch capture frame. Drawn when
+                            // 2+ planes are inside the wider multi-
+                            // catch zone AND nothing is pinned (pin
+                            // owns the single-catch path). The
+                            // floating button is gone — the bottom
+                            // capture bar takes over as the CTA, and
+                            // its appearance reacts to the same
+                            // condition.
+                            if isMultiCaptureActive(
+                                multiCandidates: multiCandidates
+                            ) {
                                 multiCatchFrame(radius: multiRadius)
                                     .position(x: geo.size.width / 2,
                                               y: geo.size.height / 2)
                                     .allowsHitTesting(false)
-                                VStack {
-                                    Spacer()
-                                    multiCatchButton(candidates: multiCandidates)
-                                        .padding(.bottom, 40)
-                                }
-                                .frame(width: geo.size.width,
-                                       height: geo.size.height)
                             }
+
+                            // Bottom capture bar: hangar tray (left),
+                            // big central capture button, profile
+                            // (right). Built inside the TimelineView
+                            // so the capture button's appearance and
+                            // payload react to the per-frame target
+                            // / multi-candidate computation.
+                            VStack {
+                                Spacer()
+                                captureBar(
+                                    singleTarget: lockOn.state.targetIcao24,
+                                    multiCandidates: multiCandidates
+                                )
+                                .padding(.bottom, 28)
+                            }
+                            .frame(width: geo.size.width,
+                                   height: geo.size.height)
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                     }
@@ -319,16 +345,13 @@ struct ContentView: View {
                     .transition(.opacity)
                 }
 
-                // Top-trailing controls: profile (gamification hub),
-                // hangar (collection), debug wrench. Discrete so they
-                // don't compete with the AR overlay; hangar gets a
-                // small green count badge when there's something to
-                // see.
+                // Top-trailing control: debug wrench only. Hangar
+                // and profile moved to the bottom capture bar so the
+                // primary action ("press capture") and the navigation
+                // (Hangar / Profile) live together at thumb height.
                 VStack {
                     HStack(spacing: 10) {
                         Spacer()
-                        profileButton
-                        hangarButton
                         debugToggleButton
                     }
                     .padding(.top, 8)
@@ -386,32 +409,12 @@ struct ContentView: View {
                 pinnedIcao = nil
             }
         }
-        // Auto-catch trigger. A tap-pin starts a 3s sustain timer;
-        // if the user holds the pin (engine still locked on the same
-        // icao when the timer fires), we snap a Catch with a camera
-        // photo and dismiss the timer. Re-pinning the same plane
-        // after clearing → catches again.
-        .onChange(of: pinnedIcao) { _, newPin in
-            autoCatchTask?.cancel()
-            autoCatchTask = nil
-            guard let icao = newPin else {
-                // Pin cleared. Reset the per-pin guard so re-tapping
-                // this plane later catches again.
-                autoCaughtPin = nil
-                return
-            }
-            // Skip if we already caught this exact icao during the
-            // current pin session (shouldn't normally happen — pin
-            // clears between catches — but cheap guard).
-            guard icao != autoCaughtPin else { return }
-            autoCatchTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(Self.autoCatchHoldDuration))
-                guard !Task.isCancelled else { return }
-                guard pinnedIcao == icao else { return }
-                guard lockOn.state.targetIcao24 == icao else { return }
-                guard autoCaughtPin != icao else { return }
-                await performAutoCatch(icao: icao)
-            }
+        // Compass-warning debounce. Watches CL's heading accuracy
+        // and only flips the badge on after a sustained-bad streak.
+        // Hysteresis floor on the dismiss side keeps the badge stable
+        // when accuracy hovers near the threshold.
+        .onChange(of: location.headingAccuracy ?? -1) { _, newAcc in
+            updateCompassWarning(accuracy: newAcc)
         }
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
@@ -424,9 +427,13 @@ struct ContentView: View {
             CardReveal(
                 plane: reveal.plane,
                 entryNumber: reveal.entryNumber,
-                onDismiss: { pendingReveal = nil },
+                onDismiss: {
+                    pendingReveal = nil
+                    captureInFlight = false
+                },
                 onViewInHangar: {
                     pendingReveal = nil
+                    captureInFlight = false
                     showHangar = true
                 }
             )
@@ -439,9 +446,13 @@ struct ContentView: View {
             MultiCatchReveal(
                 planes: multi.planes,
                 lastEntryNumber: multi.lastEntryNumber,
-                onDismiss: { pendingMultiReveal = nil },
+                onDismiss: {
+                    pendingMultiReveal = nil
+                    captureInFlight = false
+                },
                 onViewInHangar: {
                     pendingMultiReveal = nil
+                    captureInFlight = false
                     showHangar = true
                 }
             )
@@ -515,9 +526,8 @@ struct ContentView: View {
             Log.adsb.error("Auto-catch save failed for \(icao, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
 
-        autoCaughtPin = icao
         catchHaptic &+= 1   // overflow-safe ++; SwiftUI only cares that it changed
-        Log.adsb.notice("Auto-caught \(icao, privacy: .public) (rarity=\(row.resolvedRarity.rawValue, privacy: .public))")
+        Log.adsb.notice("Caught \(icao, privacy: .public) (rarity=\(row.resolvedRarity.rawValue, privacy: .public))")
 
         // Build the reveal payload. Entry number = count of unique
         // icao24 in the Hangar AFTER this catch lands — the catch
@@ -631,53 +641,35 @@ struct ContentView: View {
 
     // MARK: - Top-center overlays
 
-    /// Caution badge per the brand spec — amber-bordered pill that
-    /// surfaces a compass-bad warning in the main AR view (not just
-    /// the debug overlay, where most users never look). FAA caution
-    /// semantics: bad heading is "future action required" (recalibrate
-    /// via figure-8). Renders only when `isHeadingAccuracyBad`.
-    ///
-    /// The badge is a Button — tapping it opens
-    /// `CompassCalibrationSheet` which explains what's wrong and how
-    /// to fix it (figure-8 in the air). The right chevron telegraphs
-    /// "tap me for more"; the second line gives the user the action
-    /// without needing to open the sheet.
+    /// Compass-bad caution badge. Slim capsule with an amber dot +
+    /// "COMPASS ±N°" — quieter than the prior amber-bordered card so
+    /// it doesn't dominate the AR view when readings are mediocre.
+    /// Tap opens `CompassCalibrationSheet` for the figure-8
+    /// instructions. Surfaces only after `compassBadDebounce` seconds
+    /// of consistently-bad readings (see `updateCompassWarning`).
     @ViewBuilder
     private var cautionBadge: some View {
         if isHeadingAccuracyBad {
             Button {
                 showCompassSheet = true
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Brand.Color.alertCaution)
+                        .frame(width: 5, height: 5)
+                    Text("COMPASS \(formatHeadingAccuracyShort())")
+                        .font(.system(size: 10, weight: .bold,
+                                      design: .monospaced))
+                        .tracking(1.0)
                         .foregroundStyle(Brand.Color.alertCaution)
-                        .font(.system(size: 13))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("COMPASS \(formatHeadingAccuracyShort())")
-                            .font(Brand.Font.hudData)
-                            .fontWeight(.bold)
-                            .foregroundStyle(Brand.Color.alertCaution)
-                            .tracking(0.5)
-                        Text("Tap to calibrate")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(Brand.Color.alertCaution.opacity(0.85))
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Brand.Color.alertCaution.opacity(0.7))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Brand.Color.bgPrimary.opacity(0.92), in: .rect(cornerRadius: 6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Brand.Color.alertCaution, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Tap to calibrate.")
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(.opacity)
         }
     }
 
@@ -701,57 +693,6 @@ struct ContentView: View {
     private func formatHeadingAccuracyShort() -> String {
         guard let acc = location.headingAccuracy, acc >= 0 else { return "±?°" }
         return String(format: "±%.0f°", acc)
-    }
-
-    // MARK: - Hangar entry
-
-    /// Tray glyph in the top-trailing corner with a green count
-    /// badge. Tapping presents `HangarView` as a sheet. The badge
-    /// is hidden when the user has no catches yet — keeps the AR
-    /// view from showing a "0" they have no context for.
-    private var hangarButton: some View {
-        Button {
-            showHangar = true
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "tray.full.fill")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
-                    .padding(8)
-                    .background(Brand.Color.bgPrimary.opacity(0.35), in: .circle)
-                    .shadow(color: .black.opacity(0.5), radius: 2)
-
-                if !catches.isEmpty {
-                    Text("\(catches.count)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Brand.Color.alertNormal, in: .capsule)
-                        .offset(x: 6, y: -4)
-                }
-            }
-        }
-        .accessibilityLabel("Open hangar (\(catches.count) catches)")
-    }
-
-    // MARK: - Profile entry
-
-    /// Person glyph in the top-trailing corner; opens the
-    /// gamification hub (stats, trophies, sets, map, leaderboard,
-    /// settings). Sized + tinted to match the hangar/debug buttons.
-    private var profileButton: some View {
-        Button {
-            showProfile = true
-        } label: {
-            Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
-                .padding(6)
-                .background(Brand.Color.bgPrimary.opacity(0.35), in: .circle)
-                .shadow(color: .black.opacity(0.5), radius: 2)
-        }
-        .accessibilityLabel("Open profile")
     }
 
     // MARK: - Debug toggle
@@ -822,37 +763,238 @@ struct ContentView: View {
         }
     }
 
-    /// "[N]× CATCH" capture button. Magenta, brand-advisory tinted.
-    /// On tap: insert N Catch rows + present the multi-catch reveal.
-    private func multiCatchButton(candidates: [String]) -> some View {
-        let n = candidates.count
-        let mult = MultiCatchReveal.comboMultiplier(for: n)
-        let multStr = mult.truncatingRemainder(dividingBy: 1) == 0
-            ? String(format: "%.0f", mult)
-            : String(format: "%.1f", mult)
+    // MARK: - Bottom capture bar
+
+    /// Snapshot of the catch options visible to the user on the
+    /// current frame — used to drive the capture button's appearance
+    /// and payload. Computed inline at 30 Hz inside the TimelineView
+    /// so the button stays in sync with the lock-on / multi-zone
+    /// state without any extra plumbing.
+    private enum CaptureMode {
+        case idle
+        case single(icao: String)
+        case multi(icaos: [String])
+    }
+
+    /// True when the multi-catch capture frame should render and the
+    /// bottom button should switch to the magenta multi style.
+    /// The pin flow owns the single-catch path; a single lock that's
+    /// already engaged also takes precedence over multi.
+    private func isMultiCaptureActive(multiCandidates: [String]) -> Bool {
+        multiCandidates.count >= 2
+            && pinnedIcao == nil
+            && !lockOn.state.isLockedOrSticky
+    }
+
+    /// Decide the capture mode for the current frame. Single-lock
+    /// wins when an icao is being tracked (acquiring / locked /
+    /// sticky); multi wins only when the engine is idle and the
+    /// multi-zone has 2+ planes; otherwise idle.
+    private func captureMode(
+        singleTarget: String?,
+        multiCandidates: [String]
+    ) -> CaptureMode {
+        if let icao = singleTarget {
+            return .single(icao: icao)
+        }
+        if isMultiCaptureActive(multiCandidates: multiCandidates) {
+            return .multi(icaos: multiCandidates)
+        }
+        return .idle
+    }
+
+    /// Bottom capture bar — hangar (left), big central capture
+    /// button, profile (right). The central button changes color +
+    /// label based on the current capture mode (cyan + reticle for a
+    /// single lock, magenta with "N×" for a multi-zone catch, dimmed
+    /// for no available target). Direct tap = immediate catch; no
+    /// hold required.
+    private func captureBar(
+        singleTarget: String?,
+        multiCandidates: [String]
+    ) -> some View {
+        let mode = captureMode(
+            singleTarget: singleTarget,
+            multiCandidates: multiCandidates
+        )
+        return HStack {
+            bottomHangarButton
+            Spacer()
+            captureButton(mode: mode)
+            Spacer()
+            bottomProfileButton
+        }
+        .padding(.horizontal, 28)
+    }
+
+    /// Big central capture button. The visual + tap target the user
+    /// sees as the primary AR action.
+    @ViewBuilder
+    private func captureButton(mode: CaptureMode) -> some View {
+        switch mode {
+        case .idle:
+            captureButtonIdle
+        case .single(let icao):
+            captureButtonSingle(icao: icao)
+        case .multi(let icaos):
+            captureButtonMulti(icaos: icaos)
+        }
+    }
+
+    /// Cyan single-lock capture button. Glows + scales subtly when
+    /// the engine is fully locked (vs still acquiring) so the user
+    /// can read "ready to catch" at a glance.
+    private func captureButtonSingle(icao: String) -> some View {
+        let ready = lockOn.state.isLockedOrSticky
         return Button {
-            Task { await performMultiCatch(icaos: candidates) }
+            guard !captureInFlight else { return }
+            captureInFlight = true
+            Task { await performAutoCatch(icao: icao) }
         } label: {
-            HStack(spacing: 10) {
-                Text("\(n)×")
-                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(.black.opacity(0.92))
-                Text("CATCH")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .tracking(2)
-                    .foregroundStyle(.black.opacity(0.92))
-                Text("· ×\(multStr) COMBO")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.black.opacity(0.65))
+            ZStack {
+                Circle()
+                    .fill(Brand.Color.cyan)
+                Circle()
+                    .strokeBorder(Brand.Color.bgPrimary, lineWidth: 4)
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(Brand.Color.bgPrimary)
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 14)
-            .background(Brand.Color.alertAdvisory, in: .capsule)
-            .shadow(color: Brand.Color.alertAdvisory.opacity(0.55), radius: 18, y: 6)
+            .frame(width: 76, height: 76)
+            .shadow(color: Brand.Color.cyan.opacity(ready ? 0.55 : 0.3),
+                    radius: ready ? 22 : 12, y: 6)
+            .scaleEffect(ready ? 1.0 : 0.94)
+            .animation(.easeOut(duration: 0.18), value: ready)
         }
         .buttonStyle(.plain)
+        .disabled(captureInFlight)
+        .opacity(captureInFlight ? 0.5 : 1.0)
+        .accessibilityLabel("Capture aircraft")
+    }
+
+    /// Magenta multi-catch capture button. "N×" / "CATCH" stacked
+    /// matches the design canvas's `BottomControlsMulti`.
+    private func captureButtonMulti(icaos: [String]) -> some View {
+        let n = icaos.count
+        return Button {
+            guard !captureInFlight else { return }
+            captureInFlight = true
+            Task { await performMultiCatch(icaos: icaos) }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Brand.Color.alertAdvisory)
+                Circle()
+                    .strokeBorder(Brand.Color.bgPrimary, lineWidth: 4)
+                VStack(spacing: 0) {
+                    Text("\(n)×")
+                        .font(.system(size: 22, weight: .heavy,
+                                      design: .monospaced))
+                        .foregroundStyle(Brand.Color.bgPrimary)
+                    Text("CATCH")
+                        .font(.system(size: 9, weight: .bold,
+                                      design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(Brand.Color.bgPrimary)
+                }
+            }
+            .frame(width: 84, height: 84)
+            .shadow(color: Brand.Color.alertAdvisory.opacity(0.55),
+                    radius: 22, y: 6)
+        }
+        .buttonStyle(.plain)
+        .disabled(captureInFlight)
+        .opacity(captureInFlight ? 0.5 : 1.0)
         .accessibilityLabel("Capture \(n) planes")
+    }
+
+    /// Dimmed capture button shown when no plane is in range to
+    /// catch. Tappable but produces only a soft haptic — gives the
+    /// user feedback without firing a no-op catch.
+    private var captureButtonIdle: some View {
+        Button {
+            // Soft "nothing to catch" feedback so a press isn't
+            // silent. The same haptic counter the catch path uses
+            // would be too celebratory; a UISelectionFeedback-style
+            // bump (via .sensoryFeedback elsewhere) would be ideal,
+            // but a noop is acceptable for v1.
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Brand.Color.bgPrimary.opacity(0.6))
+                Circle()
+                    .strokeBorder(Brand.Color.textPrimary.opacity(0.25),
+                                  lineWidth: 2)
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.4))
+            }
+            .frame(width: 76, height: 76)
+        }
+        .buttonStyle(.plain)
+        .disabled(true)
+        .accessibilityLabel("Aim at a plane to capture")
+    }
+
+    /// Hangar button in the bottom bar. Square-ish 56×56 chip with
+    /// the count badge — matches the design canvas `BottomControls`.
+    private var bottomHangarButton: some View {
+        Button {
+            showHangar = true
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Brand.Color.bgPrimary.opacity(0.7))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(Brand.Color.textPrimary.opacity(0.08),
+                                          lineWidth: 1)
+                    )
+                    .frame(width: 56, height: 56)
+                HangarGlyph(
+                    lineWidth: 2,
+                    tint: Brand.Color.textPrimary.opacity(0.9)
+                )
+                .frame(width: 26, height: 26)
+                .frame(width: 56, height: 56)
+                if !catches.isEmpty {
+                    Text("\(catches.count)")
+                        .font(.system(size: 10, weight: .bold,
+                                      design: .monospaced))
+                        .foregroundStyle(Brand.Color.bgPrimary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Brand.Color.alertNormal, in: .capsule)
+                        .offset(x: 4, y: -4)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open hangar (\(catches.count) catches)")
+    }
+
+    /// Profile button in the bottom bar. Mirrors the hangar button's
+    /// visual weight so the two flank the capture button evenly.
+    private var bottomProfileButton: some View {
+        Button {
+            showProfile = true
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Brand.Color.bgPrimary.opacity(0.7))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(Brand.Color.textPrimary.opacity(0.08),
+                                          lineWidth: 1)
+                    )
+                    .frame(width: 56, height: 56)
+                Image(systemName: "person.fill")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.9))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open profile")
     }
 
     // MARK: - Empty-sky state
@@ -870,6 +1012,7 @@ struct ContentView: View {
     /// the horizon or past 30 km.
     private func emptySkyOverlay(rawCount: Int) -> some View {
         let lastErr = adsb.lastError
+        let transient = adsb.lastErrorIsTransient
         let neverFetched = adsb.lastFetched == nil && lastErr == nil
         let pillText: String = {
             if let lastErr { return lastErr.uppercased() }
@@ -879,7 +1022,11 @@ struct ContentView: View {
             }
             return "NO AIRCRAFT IN RANGE"
         }()
-        let pillTint: Color = lastErr != nil
+        // Hard errors (auth, transport) → amber caution. Transient
+        // errors (auto-recovering rate-limit backoff) and the neutral
+        // states share the textSecondary tint so the user isn't
+        // alarmed by a state the system is already handling.
+        let pillTint: Color = (lastErr != nil && !transient)
             ? Brand.Color.alertCaution
             : Brand.Color.textSecondary
         return GeometryReader { geo in
@@ -892,7 +1039,7 @@ struct ContentView: View {
                         Circle()
                             .fill(pillTint)
                             .frame(width: 6, height: 6)
-                            .modifier(EmptyPulse(active: lastErr == nil))
+                            .modifier(EmptyPulse(active: lastErr == nil || transient))
                         Text(pillText)
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .tracking(1.2)
@@ -1169,16 +1316,52 @@ struct ContentView: View {
         return String(format: "Heading: %6.1f°  ±%.1f°", h, acc)
     }
 
-    /// True when CL reports a poor heading fix (>10°). Drives the
-    /// caution badge + red heading readout so the user notices the
-    /// compass needs calibration (figure-8 the phone). Threshold
-    /// dropped from 15° to 10° after the 2026-05-19 field test:
-    /// 12.7° accuracy at 4× zoom puts the bracket >140 px off the
-    /// plane, but the badge never surfaced at the old threshold.
-    /// Negative values mean "unknown" — treat as neutral, not bad.
-    private var isHeadingAccuracyBad: Bool {
-        guard let acc = location.headingAccuracy else { return false }
-        return acc > 10
+    /// Reflects the latched compass-warning state — true only after
+    /// `compassBadDebounce` seconds of continuously-bad heading
+    /// accuracy. See `updateCompassWarning(accuracy:)`. Kept as a
+    /// property so the few call sites that read it (badge, debug
+    /// heading row) stay simple.
+    private var isHeadingAccuracyBad: Bool { showCompassWarning }
+
+    /// State machine driving the compass warning. Called from
+    /// `.onChange(of:location.headingAccuracy)`:
+    /// - Accuracy crosses `compassBadThreshold` → start a debounce
+    ///   task; if it stays bad for `compassBadDebounce` seconds, flip
+    ///   the badge on.
+    /// - Accuracy crosses `compassGoodThreshold` (hysteresis floor) →
+    ///   cancel any pending debounce and flip the badge off.
+    /// - Anything in between keeps the current state.
+    private func updateCompassWarning(accuracy: Double) {
+        let bad = accuracy > Self.compassBadThreshold
+        let good = accuracy >= 0 && accuracy < Self.compassGoodThreshold
+
+        if showCompassWarning {
+            if good {
+                showCompassWarning = false
+                compassDebounceTask?.cancel()
+                compassDebounceTask = nil
+            }
+            return
+        }
+
+        if bad {
+            // Already arming — let the existing task keep counting.
+            if compassDebounceTask != nil { return }
+            compassDebounceTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(Self.compassBadDebounce))
+                guard !Task.isCancelled else { return }
+                let acc = location.headingAccuracy ?? -1
+                if acc > Self.compassBadThreshold {
+                    showCompassWarning = true
+                }
+                compassDebounceTask = nil
+            }
+        } else {
+            // Accuracy improved (or went unknown) before the streak
+            // completed — reset the debounce.
+            compassDebounceTask?.cancel()
+            compassDebounceTask = nil
+        }
     }
 
     private func formatAttitude() -> String {
@@ -1208,13 +1391,23 @@ struct ContentView: View {
     }
 
     /// Tap-to-toggle row: shows the ADS-B status text plus a [LIVE] /
-    /// [MOCK] tag. Tapping anywhere on the row flips the source.
+    /// [MOCK] tag and the auth state ([AUTH] / [ANON]). Tapping
+    /// anywhere on the row flips the source. The auth tag is
+    /// purely diagnostic — it surfaces whether OpenSky credentials
+    /// reached the app process at launch.
     private var adsbStatusRow: some View {
         HStack(spacing: 8) {
             Text(formatADSBStatus())
             Text(adsb.useMock ? "[MOCK]" : "[LIVE]")
                 .foregroundStyle(adsb.useMock ? Brand.Color.alertCaution : Brand.Color.alertNormal)
                 .bold()
+            if !adsb.useMock {
+                Text(adsb.liveSourceIsAuthed ? "[AUTH]" : "[ANON]")
+                    .foregroundStyle(adsb.liveSourceIsAuthed
+                                     ? Brand.Color.alertNormal
+                                     : Brand.Color.alertCaution)
+                    .bold()
+            }
             Spacer()
         }
         .contentShape(.rect)        // make the whole row hit-testable

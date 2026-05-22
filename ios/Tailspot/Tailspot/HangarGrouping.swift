@@ -57,10 +57,20 @@ struct HangarGroup: Identifiable, Hashable {
 enum HangarGrouping {
     case aircraftType
     case airline
+    /// Single flat list of every dedup'd row, sorted by recency.
+    /// Dedupe still applies (catches sharing an icao24 collapse into
+    /// one ×N row); only the section grouping is suppressed. Matches
+    /// the design canvas's "Recent" segmented option.
+    case recent
 
     /// Title shown when a catch has no usable key for the selected
     /// grouping mode (e.g., no manufacturer + model, or no operator).
     static let unknownTitle = "Unknown"
+
+    /// Section title used for the single bucket produced in `.recent`
+    /// mode. Callers can choose to hide the header for this group
+    /// (since there's no meaningful subgroup to label).
+    static let recentTitle = "Recent"
 
     /// Returns ordered, deduped groups for the given catches.
     ///
@@ -69,6 +79,19 @@ enum HangarGrouping {
     /// most-recent catch in each row, descending. Empty input returns
     /// an empty array — callers render their own empty-state.
     static func group(_ catches: [Catch], by mode: HangarGrouping) -> [HangarGroup] {
+        // Recent mode skips bucketing entirely: every dedup'd row
+        // lands in a single chronological group.
+        if mode == .recent {
+            guard !catches.isEmpty else { return [] }
+            return [
+                HangarGroup(
+                    id: recentTitle,
+                    title: recentTitle,
+                    rows: dedupe(catches)
+                )
+            ]
+        }
+
         let buckets = Dictionary(grouping: catches) { key(for: $0, mode: mode) }
         return buckets
             .map { key, items in
@@ -125,6 +148,11 @@ enum HangarGrouping {
             return c.operatorName?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .nonEmpty ?? unknownTitle
+        case .recent:
+            // Recent mode doesn't bucket — every row goes into one
+            // group. Returning `recentTitle` keeps the function total
+            // for callers that introspect a single catch's key.
+            return recentTitle
         }
     }
 }

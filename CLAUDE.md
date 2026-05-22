@@ -6,6 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, Phase 0 main next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-05-22 [Hangar canvas port + AR capture-bar overhaul])
+
+**AR capture bar — landed 2026-05-22 (also bundles compass-debounce hysteresis).** The floating multi-catch capture button is gone; a unified bottom capture bar in `ContentView` now hosts the hangar glyph (left), a big central capture button, and the profile glyph (right). The capture button reads the per-frame target / multi-candidate state inside the `TimelineView`, exposes `captureMode`, and routes to `captureButtonSingle` / `captureButtonMulti` / `captureButtonIdle`. The legacy 3s sustained tap-pin auto-catch (`autoCatchHoldDuration` / `autoCatchTask` / `autoCaughtPin`) is **removed** — the user explicitly hits the capture button now. A `captureInFlight` flag guards re-entry. Compass-warning thresholds were tightened: `compassBadThreshold` bumped 10° → 25° (typical urban CL accuracy is 10–20° even when the compass is fine, so 10° fired the badge constantly), with hysteresis at 15° and a 4s continuous-bad-reading debounce before `showCompassWarning` flips on. `updateCompassWarning(accuracy:)` is the new entry point; `isHeadingAccuracyBad` proxies the latched state.
+
+**Hangar canvas-port pass — shipped 2026-05-22.** Two layered fixes addressing "the app still looks pretty different from the designs I shared with you":
+
+- **New `HangarGlyph.swift`** — peaked-roof pentagon + horizontal eaves line, ported verbatim from `design/brand-atoms.jsx:186` `Icon.hangar` SVG (`M3 11 L12 5 L21 11 L21 20 L3 20 Z` outer + `M3 11 H21` eaves). Replaces `tray.full.fill` in the bottom Hangar button (`ContentView.swift:954`). Sized to a 26×26 frame inside the existing 56×56 chip; `lineWidth: 2` matches the canvas stroke.
+- **`HangarView` chrome flipped to match `detail-hangar-profile.jsx` HangarA.** Rows are visually unchanged in data but resemble the canvas card style now:
+  - `List` style: `.insetGrouped` → `.plain` + `.scrollContentBackground(.hidden)` + `.background(Brand.Color.bgPrimary)` so the dark canvas base shows through.
+  - Rows: each is a `bgElevated` rounded card with a **3pt solid rarity-tinted left stripe at the card edge** (was inside the type-chip before — moved out per canvas). Type chip became **solid type-color (36×36) with dark glyph text** instead of faded-tint with type-color text. Row separators hidden; padding 12×14 with the row clipped to a 8pt corner radius.
+  - Section headers redesigned: small uppercase tracked label + `N CAUGHT` mono caption. Count is **total catch events, not unique-row count**, matching the canvas's "WIDE-BODY · 6 CAUGHT" semantics — uses `group.rows.reduce(0) { $0 + $1.count }`.
+  - 3rd segmented option added: **Recent** — single flat list of dedup'd rows sorted by recency, section header suppressed.
+
+  **Tradeoff documented:** `.plain` list style makes section headers sticky on scroll. The canvas doesn't show stickiness, but ditching `List` would mean rebuilding swipe-to-delete by hand. Accepted stickiness; revisit if Noah pushes back.
+
+- **`HangarGrouping.recent`** — new mode. Skips bucketing entirely: every dedup'd row lands in a single `HangarGroup` titled `recentTitle`, with rows sorted most-recent-first. `key(for:mode:)` returns `recentTitle` for completeness. `HangarGroupingTests` adds 3 cases: dedupe + sort, empty input, ignores grouping-key fields.
+- **`HangarView.rowSubtitle` extended** with `.recent` case — shows aircraft type as the subtitle since there's no section header to disambiguate.
+
+**Also landed 2026-05-22 — OpenSky credential propagation through the deploy loop.** `bin/deploy` now extracts `OPENSKY_CLIENT_ID` / `_SECRET` from the user-only scheme XML via `xmllint`, JSON-encodes them, and forwards via `xcrun devicectl device process launch --environment-variables` (plus the alternative `DEVICECTL_CHILD_*` env-var path for belt-and-suspenders). Without this, deploys ran the app anonymous (400 credits/day) and exhausted the OpenSky quota in ~1.3h. Dry-run output redacts the JSON. **Caveat: env vars only persist for that one launched process — if Noah relaunches via the home-screen icon, creds are gone and "API limit" returns.** Durable fix (xcconfig → Info.plist baking) is the obvious next step but not yet shipped. `ADSBManager` gained `lastErrorIsTransient` so the empty-sky pill can render auto-recovering 429 backoffs softly, plus `liveSourceIsAuthed` (proxies `OpenSkyClient.hasCredentials`) for the debug overlay; the 429 string changed from "Rate limit hit — backing off (next try in Ns)" to "API limit · retry in Ns". `OpenSkyClient.init` logs `credentials MISSING (anonymous)` vs `present (authed)` via `Log.openSky.notice` so device launches reveal auth state in the log stream.
+
 ## Current state (as of session ending 2026-05-21 [Design-canvas QA pass — 9 fixes landed])
 
 **Friday POC (§3.0a) DELIVERED May 5–7, 2026.** Field-tested in Berkeley with real planes; labels land on or near actual aircraft.

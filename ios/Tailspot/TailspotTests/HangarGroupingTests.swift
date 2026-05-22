@@ -174,4 +174,50 @@ struct HangarGroupingTests {
         #expect(groups[0].rows[0].count == 1)
         #expect(groups[0].rows[0].allCatches.count == 1)
     }
+
+    // MARK: - Recent mode
+
+    @Test func recentModeProducesSingleGroupWithDedupedRowsByRecency() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let groups = HangarGrouping.group([
+            // Three icaos across two manufacturers — recent mode flattens.
+            makeCatch(icao: "old", manufacturer: "AIRBUS", model: "A320", caughtAt: t0),
+            makeCatch(icao: "new", manufacturer: "BOEING", model: "737",  caughtAt: t0.addingTimeInterval(120)),
+            makeCatch(icao: "mid", manufacturer: "EMBRAER", model: "E175", caughtAt: t0.addingTimeInterval(60)),
+            // Two repeats of "new" — should dedupe into ×3.
+            makeCatch(icao: "new", manufacturer: "BOEING", model: "737",  caughtAt: t0.addingTimeInterval(90)),
+            makeCatch(icao: "new", manufacturer: "BOEING", model: "737",  caughtAt: t0.addingTimeInterval(30)),
+        ], by: .recent)
+
+        #expect(groups.count == 1)
+        let g = groups[0]
+        #expect(g.title == HangarGrouping.recentTitle)
+        #expect(g.id == HangarGrouping.recentTitle)
+        // 3 unique icaos → 3 rows.
+        #expect(g.rows.count == 3)
+        // Sorted most-recent-first by each row's mostRecent.caughtAt.
+        #expect(g.rows.map(\.icao24) == ["new", "mid", "old"])
+        #expect(g.rows[0].count == 3)
+        #expect(g.rows[1].count == 1)
+        #expect(g.rows[2].count == 1)
+    }
+
+    @Test func recentModeEmptyInputReturnsEmptyArray() {
+        let groups = HangarGrouping.group([], by: .recent)
+        #expect(groups.isEmpty)
+    }
+
+    @Test func recentModeIgnoresGroupingKeyFields() {
+        // Even if every catch lacks manufacturer/operator (would land in
+        // Unknown buckets in the other modes), recent mode flattens
+        // them all into one group keyed only by recency.
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "a", manufacturer: nil, model: nil, operatorName: nil),
+            makeCatch(icao: "b", manufacturer: nil, model: nil, operatorName: nil),
+        ], by: .recent)
+
+        #expect(groups.count == 1)
+        #expect(groups[0].title == HangarGrouping.recentTitle)
+        #expect(groups[0].rows.count == 2)
+    }
 }

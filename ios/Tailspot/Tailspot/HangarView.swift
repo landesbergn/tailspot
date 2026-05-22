@@ -86,13 +86,16 @@ struct HangarView: View {
             Section {
                 statsRow
                 Picker("Group by", selection: $grouping) {
-                    Text("Type").tag(HangarGrouping.aircraftType)
-                    Text("Airline").tag(HangarGrouping.airline)
+                    Text("By type").tag(HangarGrouping.aircraftType)
+                    Text("By airline").tag(HangarGrouping.airline)
+                    Text("Recent").tag(HangarGrouping.recent)
                 }
                 .pickerStyle(.segmented)
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
+            .listRowSeparator(.hidden)
 
             ForEach(groups) { group in
                 Section {
@@ -100,6 +103,9 @@ struct HangarView: View {
                         NavigationLink(value: row) {
                             rowView(row)
                         }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 rowToDelete = row
@@ -109,11 +115,17 @@ struct HangarView: View {
                         }
                     }
                 } header: {
-                    sectionHeader(group)
+                    // Recent mode is a single flat bucket — no header.
+                    if grouping != .recent {
+                        sectionHeader(group)
+                    }
                 }
+                .listSectionSeparator(.hidden)
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Brand.Color.bgPrimary)
         .alert(
             deleteAlertTitle,
             isPresented: Binding(
@@ -216,53 +228,59 @@ struct HangarView: View {
         }.count
     }
 
+    /// Section header in the canvas style: small uppercase mono label
+    /// on the left, "N CAUGHT" caption on the right where N is the
+    /// section's total catch-event count (not unique-row count) —
+    /// matches `WIDE-BODY · 6 CAUGHT` on detail-hangar-profile.jsx.
     private func sectionHeader(_ group: HangarGroup) -> some View {
-        HStack {
-            Text(group.title)
+        let totalEvents = group.rows.reduce(0) { $0 + $1.count }
+        return HStack {
+            Text(group.title.uppercased())
+                .font(.system(size: 10, weight: .semibold, design: .default))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
             Spacer()
-            Text("\(group.rows.count)")
-                .foregroundStyle(Brand.Color.textSecondary)
+            Text("\(totalEvents) CAUGHT")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
         }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
+        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 0, trailing: 16))
+        .textCase(nil)
     }
 
+    /// One Hangar row, rendered as a dark elevated card with a 3pt
+    /// solid rarity-tinted left stripe — matches the canvas's
+    /// `HangarRow` (detail-hangar-profile.jsx:298-336).
+    ///
+    /// Card layout: [type-glyph chip][callsign + rarity badge + model
+    /// · distance][×N + relative time]. The type chip is a solid
+    /// type-tinted square with the single-letter aircraft-type glyph
+    /// in dark text — the canvas's "playful collector" treatment.
     private func rowView(_ row: HangarRow) -> some View {
         let c = row.mostRecent
         let title = c.callsign?.trimmedNonEmpty ?? c.icao24
         let subtitle = rowSubtitle(c)
         let rarity = row.rarity
         let type = row.aircraftType
-        return HStack(alignment: .center, spacing: 10) {
-            // Rarity-tinted leading stripe + type glyph well. Lets the
-            // row carry a strong rarity signal at a glance without
-            // needing a pill the user has to read.
+        return HStack(alignment: .center, spacing: 12) {
+            // Type chip — solid type-tinted square with letter glyph.
             ZStack {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(type.tint.opacity(0.18))
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(type.tint)
                 Text(type.glyph)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundStyle(type.tint)
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.black.opacity(0.7))
             }
-            .frame(width: 28, height: 32)
-            .overlay(alignment: .leading) {
-                Rectangle()
-                    .fill(rarity.tint)
-                    .frame(width: 3)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .frame(width: 36, height: 36)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(title)
                         .font(Brand.Font.hudCallsign)
-                    if row.count > 1 {
-                        Text("×\(row.count)")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.textPrimary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Brand.Color.bgElevated, in: .capsule)
-                    }
+                        .foregroundStyle(Brand.Color.textPrimary)
                     // Rare+ tiers (rare/epic/legendary) get an inline
                     // badge — common/uncommon stay quiet so the badge
                     // population actually means something.
@@ -272,18 +290,47 @@ struct HangarView: View {
                 }
                 if let subtitle {
                     Text(subtitle)
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.textSecondary)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Brand.Color.textTertiary)
                         .lineLimit(1)
                 }
             }
-            Spacer()
-            Text(c.caughtAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
-                .monospacedDigit()
+            Spacer(minLength: 6)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                if row.count > 1 {
+                    Text("×\(row.count)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Brand.Color.textPrimary.opacity(0.1), in: .capsule)
+                }
+                Text(c.caughtAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .monospacedDigit()
+            }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Brand.Color.bgElevated)
+        )
+        .overlay(alignment: .leading) {
+            // Rarity-tinted left stripe — 3pt solid, inset slightly
+            // so it sits inside the card's rounded corner.
+            UnevenRoundedRectangle(
+                topLeadingRadius: 8,
+                bottomLeadingRadius: 8,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 0
+            )
+            .fill(rarity.tint)
+            .frame(width: 3)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     /// Subtitle composes whichever of (operator, type) ISN'T already
@@ -301,6 +348,12 @@ struct HangarView: View {
                 pieces.append(airlineText)
             }
         case .airline:
+            if typeText != HangarGrouping.unknownTitle {
+                pieces.append(typeText)
+            }
+        case .recent:
+            // No section header in recent mode — the subtitle does
+            // double duty as the at-a-glance type label.
             if typeText != HangarGrouping.unknownTitle {
                 pieces.append(typeText)
             }
