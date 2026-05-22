@@ -34,29 +34,36 @@ struct HangarView: View {
         NavigationStack {
             content
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(Brand.Color.bgPrimary, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Done") { dismiss() }
-                    }
-                    ToolbarItem(placement: .principal) {
-                        // Horizontal brand lockup: airplane glyph + TAILSPOT wordmark.
+                        // Canvas-style small Lockup — peaked-roof
+                        // hangar glyph + TAILSPOT wordmark at 13pt.
+                        // Replaces the iOS-default nav title.
                         HStack(spacing: 8) {
-                            Image(systemName: "airplane")
-                                .foregroundStyle(Brand.Color.cyan)
+                            HangarGlyph(
+                                lineWidth: 2,
+                                tint: Brand.Color.cyan
+                            )
+                            .frame(width: 22, height: 22)
                             Text("TAILSPOT")
-                                .font(Brand.Font.wordmark)
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .tracking(2)
                                 .foregroundStyle(Brand.Color.textPrimary)
-                                .tracking(4)
                         }
                     }
                     if !catches.isEmpty {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Text("\(catches.count)")
-                                .font(Brand.Font.hudCallsign)
-                                .foregroundStyle(Brand.Color.textPrimary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Brand.Color.bgElevated, in: .capsule)
+                            // Accent pill — "N catches" — matches
+                            // canvas `pill accent` on the right.
+                            Text("\(catches.count) catches")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .tracking(0.4)
+                                .foregroundStyle(Brand.Color.cyan)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Brand.Color.cyan.opacity(0.16), in: .capsule)
                         }
                     }
                 }
@@ -84,14 +91,13 @@ struct HangarView: View {
         let groups = HangarGrouping.group(catches, by: grouping)
         return List {
             Section {
-                statsRow
                 Picker("Group by", selection: $grouping) {
                     Text("By type").tag(HangarGrouping.aircraftType)
                     Text("By airline").tag(HangarGrouping.airline)
                     Text("Recent").tag(HangarGrouping.recent)
                 }
                 .pickerStyle(.segmented)
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
@@ -171,63 +177,6 @@ struct HangarView: View {
         rowToDelete = nil
     }
 
-    /// Compact stats summary rendered above the grouping picker.
-    /// Three at-a-glance counts: total events caught, unique airframes
-    /// in the collection, and rare-tagged unique airframes. Pure-mono
-    /// numerics so the values line up across re-renders.
-    private var statsRow: some View {
-        HStack(spacing: 0) {
-            statPill(value: catches.count, label: "caught")
-            statDivider
-            statPill(value: uniqueIcaoCount, label: "unique")
-            statDivider
-            statPill(value: rareUniqueCount, label: "rare",
-                     valueColor: rareUniqueCount > 0 ? Brand.Color.alertAdvisory : Brand.Color.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-        .listRowBackground(Color.clear)
-    }
-
-    /// One column of the stats row. `valueColor` defaults to textPrimary
-    /// — the rare column overrides to magenta when count > 0 so the
-    /// trophy reads at a glance.
-    private func statPill(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
-        VStack(spacing: 2) {
-            Text("\(value)")
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
-                .foregroundStyle(valueColor)
-                .monospacedDigit()
-            Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(1)
-                .foregroundStyle(Brand.Color.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var statDivider: some View {
-        Rectangle()
-            .fill(Brand.Color.bgElevated)
-            .frame(width: 1, height: 32)
-    }
-
-    private var uniqueIcaoCount: Int {
-        Set(catches.map(\.icao24)).count
-    }
-
-    /// Unique airframes catalogued at the .rare tier or higher (rare,
-    /// epic, legendary). Drives the rare-count stat pill — a "trophy"
-    /// number the user wants to see climb.
-    private var rareUniqueCount: Int {
-        catches.reduce(into: Set<String>()) { acc, c in
-            if c.resolvedRarity.ordinal >= Rarity.rare.ordinal {
-                acc.insert(c.icao24)
-            }
-        }.count
-    }
-
     /// Section header in the canvas style: small uppercase mono label
     /// on the left, "N CAUGHT" caption on the right where N is the
     /// section's total catch-event count (not unique-row count) —
@@ -280,7 +229,7 @@ struct HangarView: View {
                 HStack(spacing: 6) {
                     Text(title)
                         .font(Brand.Font.hudCallsign)
-                        .foregroundStyle(Brand.Color.textPrimary)
+                        .foregroundStyle(Brand.Color.cyan)
                     // Rare+ tiers (rare/epic/legendary) get an inline
                     // badge — common/uncommon stay quiet so the badge
                     // population actually means something.
@@ -312,7 +261,7 @@ struct HangarView: View {
                     .monospacedDigit()
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .padding(.horizontal, 14)
         .background(
             RoundedRectangle(cornerRadius: 8)
@@ -333,30 +282,16 @@ struct HangarView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    /// Subtitle composes whichever of (operator, type) ISN'T already
-    /// in the section header, plus the slant distance. Lets the row
-    /// add information rather than restate it.
+    /// Subtitle in canvas form: "{model} · {distance}". The model
+    /// text is always shown (so airline-grouped rows still tell the
+    /// reader what kind of plane it is, and recent rows aren't bare).
+    /// Section headers handle the airline/type disambiguation.
     private func rowSubtitle(_ c: Catch) -> String? {
         var pieces: [String] = []
 
         let typeText = HangarGrouping.key(for: c, mode: .aircraftType)
-        let airlineText = HangarGrouping.key(for: c, mode: .airline)
-
-        switch grouping {
-        case .aircraftType:
-            if airlineText != HangarGrouping.unknownTitle {
-                pieces.append(airlineText)
-            }
-        case .airline:
-            if typeText != HangarGrouping.unknownTitle {
-                pieces.append(typeText)
-            }
-        case .recent:
-            // No section header in recent mode — the subtitle does
-            // double duty as the at-a-glance type label.
-            if typeText != HangarGrouping.unknownTitle {
-                pieces.append(typeText)
-            }
+        if typeText != HangarGrouping.unknownTitle {
+            pieces.append(typeText)
         }
 
         let km = c.slantDistanceMeters / 1000
@@ -364,7 +299,7 @@ struct HangarView: View {
             pieces.append(String(format: "%.1f km", km))
         }
 
-        return pieces.isEmpty ? nil : pieces.joined(separator: "  ·  ")
+        return pieces.isEmpty ? nil : pieces.joined(separator: " · ")
     }
 
     // MARK: - Empty state

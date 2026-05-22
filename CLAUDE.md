@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, Phase 0 main next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-05-22 [Hangar canvas port — second pass])
+
+**Hangar canvas — second-pass tightening (2026-05-22).** Per Noah's "closer but still doesn't match" — fixed the chrome and density that were still off:
+
+- **Toolbar redesigned** to match canvas `HangarA` nav: small Lockup (cyan `HangarGlyph` + `TAILSPOT` at 13pt mono with 2pt tracking) on the left, accent pill (`"N catches"` in cyan on `cyan.opacity(0.16)`) on the right. Done button dropped; the sheet still dismisses via swipe-down. `toolbarBackground(Brand.Color.bgPrimary, for: .navigationBar)` so the nav background blends with the body — no system gray bar.
+- **Stats row removed.** The canvas never showed `caught / unique / rare` — they were a Tailspot addition. Dropped along with all four supporting methods (`statsRow`, `statPill`, `statDivider`, `uniqueIcaoCount`, `rareUniqueCount`).
+- **Cards slimmed.** Row vertical padding 12 → 10 to drop the crowded feeling. Subtitle simplified to canvas's `{model} · {distance}` form regardless of grouping mode (was switching between operator and type to avoid restating the section header — but the canvas just always shows the model). Single dot separator `" · "` instead of double-space.
+- **Callsigns are now cyan** — `.t-hud-callsign` in the canvas is `color: var(--accent)`, mine was rendering them in `textPrimary` (white). Fixed.
+
 ## Current state (as of session ending 2026-05-22 [Hangar canvas port + AR capture-bar overhaul])
 
 **AR capture bar — landed 2026-05-22 (also bundles compass-debounce hysteresis).** The floating multi-catch capture button is gone; a unified bottom capture bar in `ContentView` now hosts the hangar glyph (left), a big central capture button, and the profile glyph (right). The capture button reads the per-frame target / multi-candidate state inside the `TimelineView`, exposes `captureMode`, and routes to `captureButtonSingle` / `captureButtonMulti` / `captureButtonIdle`. The legacy 3s sustained tap-pin auto-catch (`autoCatchHoldDuration` / `autoCatchTask` / `autoCaughtPin`) is **removed** — the user explicitly hits the capture button now. A `captureInFlight` flag guards re-entry. Compass-warning thresholds were tightened: `compassBadThreshold` bumped 10° → 25° (typical urban CL accuracy is 10–20° even when the compass is fine, so 10° fired the badge constantly), with hysteresis at 15° and a 4s continuous-bad-reading debounce before `showCompassWarning` flips on. `updateCompassWarning(accuracy:)` is the new entry point; `isHeadingAccuracyBad` proxies the latched state.
