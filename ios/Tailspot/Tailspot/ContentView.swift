@@ -129,8 +129,8 @@ struct ContentView: View {
     @State private var compassDebounceTask: Task<Void, Never>?
     /// Carries the card-reveal moment data when a catch just landed.
     /// Non-nil → full-screen reveal sheet is presented. Set inside
-    /// `performAutoCatch`; cleared by the user via the reveal's
-    /// dismiss buttons.
+    /// `performCatch(mode:)` via `presentReveal`; cleared by the user
+    /// via the reveal's dismiss buttons.
     @State private var pendingReveal: PendingReveal?
     /// Carries the multi-catch reveal payload when the user
     /// captures N≥2 planes from a single frame. Non-nil → full-screen
@@ -496,8 +496,10 @@ struct ContentView: View {
             .presentationBackground(.clear)
         }
         // Multi-catch reveal — N≥2 PokeCards fanned out with combo
-        // math. Triggered by `performMultiCatch` after the user taps
-        // the magenta [N]× CATCH button.
+        // math. T8 routes every catch (single + multi) through the
+        // single-card `pendingReveal`; T11 will branch to this
+        // payload when the merged catch path produces ≥2 reveal
+        // entries. Sheet binding stays wired in the meantime.
         .fullScreenCover(item: $pendingMultiReveal) { multi in
             MultiCatchReveal(
                 planes: multi.planes,
@@ -552,81 +554,21 @@ struct ContentView: View {
             .joined(separator: ",")
     }
 
-    // MARK: - Auto-catch
-
-    /// Build a `Catch` row from the currently-pinned plane, grab a
-    /// still photo from the camera, save the photo to disk, persist
-    /// the Catch, and flash a confirmation. Called once per pin
-    /// session after the sustain timer fires. Errors are surfaced to
-    /// the log but never bubble up — a Catch without a photo is still
-    /// a valid Catch.
-    private func performAutoCatch(icao: String) async {
-        let observed = adsb.observed.first { $0.aircraft.icao24 == icao }
-        let metadata = lockedMetadata
-        let now = Date()
-
-        // Grab a JPEG from AVCapturePhotoOutput. Capture before we
-        // mark caught so a slow capture doesn't double-fire if the
-        // user re-taps.
-        let photoData = await captureBridge.captureJPEG()
-        let photoFilename = photoData.flatMap {
-            CatchPhotoStore.save($0, icao24: icao, at: now)
-        }
-        if photoData == nil {
-            Log.adsb.notice("Auto-catch \(icao, privacy: .public): camera capture returned no data")
-        }
-
-        let row = Catch(
-            icao24: icao,
-            callsign: observed?.aircraft.callsign,
-            model: metadata?.model,
-            manufacturer: metadata?.manufacturerName,
-            operatorName: metadata?.operatorName,
-            photoFilename: photoFilename,
-            caughtAt: now,
-            observerLat: location.latitude ?? 0,
-            observerLon: location.longitude ?? 0,
-            slantDistanceMeters: observed?.slantDistanceMeters ?? 0
-        )
-        modelContext.insert(row)
-        do {
-            try modelContext.save()
-        } catch {
-            Log.adsb.error("Auto-catch save failed for \(icao, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-
-        catchHaptic &+= 1   // overflow-safe ++; SwiftUI only cares that it changed
-        Log.adsb.notice("Caught \(icao, privacy: .public) (rarity=\(row.resolvedRarity.rawValue, privacy: .public))")
-
-        // Build the reveal payload. Entry number = count of unique
-        // icao24 in the Hangar AFTER this catch lands — the catch
-        // we just inserted is included in `catches` because the
-        // @Query auto-updates synchronously when the modelContext
-        // saves.
-        let uniqueIcaoCount = Set(catches.map(\.icao24)).count
-        let altFt = (observed?.aircraft.altitudeMeters).map { Int(($0 * 3.28084).rounded()) }
-        let speedKt: Int? = observed?.aircraft.velocityMps.map { Int(($0 * 1.94384).rounded()) }
-        let pokePlane = PokePlane(
-            callsign: row.callsign,
-            model: row.model,
-            carrier: row.operatorName,
-            rarity: row.resolvedRarity,
-            type: row.resolvedType,
-            altText: altFt.map { "\($0.formatted(.number)) ft" },
-            speedText: speedKt.map { "\($0) kt" },
-            distText: String(format: "%.1f km", row.slantDistanceMeters / 1000),
-            photoURL: photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
-        )
-        pendingReveal = PendingReveal(plane: pokePlane, entryNumber: uniqueIcaoCount)
-    }
+    // MARK: - Catch reveal payloads
 
     /// Snapshot of the catch needed to render the reveal sheet —
     /// kept separate from the live Catch so the reveal stays stable
     /// even if SwiftData state churns underneath.
+    ///
+    /// `isDuplicate` is set by `performCatch(mode:)` when the icao24
+    /// was already in the user's Hangar — T10 will render the
+    /// "ALREADY CAUGHT" stamp + quieter chrome based on this flag.
+    /// T8 just threads it through.
     struct PendingReveal: Identifiable, Equatable {
         let id = UUID()
         let plane: PokePlane
         let entryNumber: Int
+        var isDuplicate: Bool = false
     }
 
     /// Snapshot of a multi-catch run for `MultiCatchReveal`.
@@ -634,78 +576,6 @@ struct ContentView: View {
         let id = UUID()
         let planes: [PokePlane]
         let lastEntryNumber: Int
-    }
-
-    // MARK: - Multi-catch handler
-
-    /// Inserts a Catch row per icao24 in the input list and triggers
-    /// `MultiCatchReveal`. Unlike `performAutoCatch`, this is fired
-    /// explicitly by the user (button tap), not a sustain timer.
-    /// Camera is captured once and the photoFilename is attached to
-    /// each row.
-    @MainActor
-    private func performMultiCatch(icaos: [String]) async {
-        guard icaos.count >= 2 else { return }
-        let now = Date()
-        let photoData = await captureBridge.captureJPEG()
-
-        var planes: [PokePlane] = []
-
-        for icao in icaos {
-            let observed = adsb.observed.first { $0.aircraft.icao24 == icao }
-            // Each multi-catch row needs metadata. Walk the cache;
-            // a miss here means we fall back to nil — better than
-            // blocking the moment on a network round-trip.
-            let metadata = await adsb.metadata(for: icao)
-            let photoFilename = photoData.flatMap {
-                CatchPhotoStore.save($0, icao24: icao, at: now)
-            }
-            let row = Catch(
-                icao24: icao,
-                callsign: observed?.aircraft.callsign,
-                model: metadata?.model,
-                manufacturer: metadata?.manufacturerName,
-                operatorName: metadata?.operatorName,
-                photoFilename: photoFilename,
-                caughtAt: now,
-                observerLat: location.latitude ?? 0,
-                observerLon: location.longitude ?? 0,
-                slantDistanceMeters: observed?.slantDistanceMeters ?? 0
-            )
-            modelContext.insert(row)
-
-            // Build a PokePlane for the reveal — use the just-saved
-            // photo so the fan shows the user's actual moment.
-            let altFt = (observed?.aircraft.altitudeMeters).map { Int(($0 * 3.28084).rounded()) }
-            let speedKt: Int? = observed?.aircraft.velocityMps.map { Int(($0 * 1.94384).rounded()) }
-            planes.append(PokePlane(
-                callsign: row.callsign,
-                model: row.model,
-                carrier: row.operatorName,
-                rarity: row.resolvedRarity,
-                type: row.resolvedType,
-                altText: altFt.map { "\($0.formatted(.number)) ft" },
-                speedText: speedKt.map { "\($0) kt" },
-                distText: String(format: "%.1f km", row.slantDistanceMeters / 1000),
-                photoURL: photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
-            ))
-        }
-
-        do {
-            try modelContext.save()
-        } catch {
-            Log.adsb.error("Multi-catch save failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        // Bump haptic counter so the user feels the catch.
-        catchHaptic &+= 1
-        Log.adsb.notice("Multi-caught \(icaos.count, privacy: .public) planes")
-
-        let uniqueIcaoCount = Set(catches.map(\.icao24)).count
-        pendingMultiReveal = PendingMultiReveal(
-            planes: planes,
-            lastEntryNumber: uniqueIcaoCount
-        )
     }
 
     // MARK: - Top-center overlays
@@ -846,11 +716,181 @@ struct ContentView: View {
         .padding(.horizontal, 28)
     }
 
-    /// Catch-path stub. Task 8 implements the merged single + multi
-    /// capture path with its dedup gate; this lives in T7 only so
-    /// the unified button has something to call.
+    /// Merged capture path. Single entry point used by the unified
+    /// capture button regardless of whether the user is catching one
+    /// plane (pin or lone visible) or several (≥2 visible, no pin).
+    ///
+    /// Per-icao dedup gate: `Catch.exists(icao24:in:)` decides whether
+    /// to insert a new row or record the icao as a duplicate. New rows
+    /// share one JPEG (captured once, persisted per row to keep the
+    /// per-row `photoFilename` self-contained — same shape as the
+    /// old `performMultiCatch`). After all rows land, `presentReveal`
+    /// picks the appropriate reveal sheet payload.
+    ///
+    /// Re-entry is guarded by `captureInFlight`; the flag clears in
+    /// the reveal's dismiss callbacks (and on the fall-through where
+    /// no reveal is presented).
     private func performCatch(mode: CaptureMode) {
-        // Implemented in Task 8 (merged capture path with dedup gate).
+        let icaos: [String]
+        switch mode {
+        case .disabled:         return
+        case .single(let icao): icaos = [icao]
+        case .multi(let list):  icaos = list
+        }
+        guard !icaos.isEmpty else { return }
+        guard !captureInFlight else { return }
+        captureInFlight = true
+
+        // Snapshot observer pose + visible-aircraft map up front. The
+        // map is keyed by icao24 so the per-row loop is O(N) (not N×M
+        // linear scans).
+        let observerLat = location.latitude ?? 0
+        let observerLon = location.longitude ?? 0
+        let visibleByIcao = Dictionary(
+            uniqueKeysWithValues: adsb.observed.map { ($0.aircraft.icao24, $0) }
+        )
+
+        Task { @MainActor in
+            // One JPEG, reused for every new row in this catch. If the
+            // camera isn't ready (auth denied, session not running),
+            // `captureJPEG` returns nil — Catches are still valid
+            // without a photo. Capture first so a slow shutter doesn't
+            // double-fire the dedup gate when the user re-taps.
+            let photoData = await captureBridge.captureJPEG()
+            if photoData == nil {
+                Log.adsb.notice("Catch: camera capture returned no data")
+            }
+            let now = Date()
+
+            var newCatches: [Catch] = []
+            var duplicates: [String] = []
+
+            for icao in icaos {
+                if Catch.exists(icao24: icao, in: modelContext) {
+                    duplicates.append(icao)
+                    continue
+                }
+                // Metadata: prefer the locked one (pinned plane) when
+                // present, then the ambient prefetch cache, then a
+                // direct manager lookup as last resort.
+                let metadata: AircraftMetadata?
+                if let cached = ambientMetadata[icao] ?? nil {
+                    metadata = cached
+                } else if let locked = lockedMetadata,
+                          icao == lockOn.state.targetIcao24 {
+                    metadata = locked
+                } else {
+                    metadata = await adsb.metadata(for: icao)
+                }
+
+                let observed = visibleByIcao[icao]
+                let photoFilename = photoData.flatMap {
+                    CatchPhotoStore.save($0, icao24: icao, at: now)
+                }
+                let row = Catch(
+                    icao24: icao,
+                    callsign: observed?.aircraft.callsign,
+                    model: metadata?.model,
+                    manufacturer: metadata?.manufacturerName,
+                    operatorName: metadata?.operatorName,
+                    photoFilename: photoFilename,
+                    caughtAt: now,
+                    observerLat: observerLat,
+                    observerLon: observerLon,
+                    slantDistanceMeters: observed?.slantDistanceMeters ?? 0
+                )
+                modelContext.insert(row)
+                newCatches.append(row)
+            }
+
+            if !newCatches.isEmpty {
+                do {
+                    try modelContext.save()
+                } catch {
+                    Log.adsb.error("Catch save failed: \(error.localizedDescription, privacy: .public)")
+                }
+                // One haptic per catch event regardless of N — the
+                // reveal carries the multiplicity message.
+                catchHaptic &+= 1
+                Log.adsb.notice("Caught \(newCatches.count, privacy: .public) plane(s); \(duplicates.count, privacy: .public) duplicate(s)")
+            } else if !duplicates.isEmpty {
+                Log.adsb.notice("Catch: all \(duplicates.count, privacy: .public) target(s) already in Hangar")
+            }
+
+            presentReveal(newCatches: newCatches, duplicates: duplicates,
+                          visibleByIcao: visibleByIcao)
+        }
+    }
+
+    /// Picks the right reveal payload based on what landed. Today
+    /// (T8) every path funnels through the single-card `CardReveal`
+    /// using `pendingReveal`. T11 will branch to `MultiCatchReveal`
+    /// (via `pendingMultiReveal`, still declared above) when the
+    /// total catch count > 1.
+    ///
+    /// Duplicate-only case: synthesizes a `PokePlane` from the
+    /// already-stored row + (when available) the current live
+    /// observation for fresh alt/speed/distance.
+    private func presentReveal(
+        newCatches: [Catch],
+        duplicates: [String],
+        visibleByIcao: [String: ObservedAircraft]
+    ) {
+        let uniqueIcaoCount = Set(catches.map(\.icao24)).count
+
+        if let first = newCatches.first {
+            let observed = visibleByIcao[first.icao24]
+            let plane = pokePlane(from: first, observed: observed)
+            pendingReveal = PendingReveal(
+                plane: plane,
+                entryNumber: uniqueIcaoCount,
+                isDuplicate: false
+            )
+            return
+        }
+
+        if let dupIcao = duplicates.first {
+            let key = dupIcao.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let descriptor = FetchDescriptor<Catch>(
+                predicate: #Predicate { $0.icao24 == key }
+            )
+            if let existing = try? modelContext.fetch(descriptor).first {
+                let observed = visibleByIcao[dupIcao]
+                let plane = pokePlane(from: existing, observed: observed)
+                pendingReveal = PendingReveal(
+                    plane: plane,
+                    entryNumber: uniqueIcaoCount,
+                    isDuplicate: true
+                )
+                return
+            }
+        }
+
+        // Nothing to present (e.g., all icaos somehow vanished from
+        // the model store between the dedup check and the fetch). Drop
+        // the in-flight latch so the button isn't soft-locked.
+        captureInFlight = false
+    }
+
+    /// Build a presentational `PokePlane` from a stored `Catch`,
+    /// borrowing live alt/speed values from `observed` when the
+    /// catch is still in view. Used by both the new-catch and
+    /// duplicate paths so the reveal renders consistently.
+    private func pokePlane(from row: Catch, observed: ObservedAircraft?) -> PokePlane {
+        let altFt = (observed?.aircraft.altitudeMeters).map { Int(($0 * 3.28084).rounded()) }
+        let speedKt: Int? = observed?.aircraft.velocityMps.map { Int(($0 * 1.94384).rounded()) }
+        let distMeters = observed?.slantDistanceMeters ?? row.slantDistanceMeters
+        return PokePlane(
+            callsign: row.callsign,
+            model: row.model,
+            carrier: row.operatorName,
+            rarity: row.resolvedRarity,
+            type: row.resolvedType,
+            altText: altFt.map { "\($0.formatted(.number)) ft" },
+            speedText: speedKt.map { "\($0) kt" },
+            distText: String(format: "%.1f km", distMeters / 1000),
+            photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+        )
     }
 
     /// Big central capture button. A single circle that is always
