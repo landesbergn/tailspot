@@ -27,7 +27,7 @@ struct ClosestTargetTests {
     /// cap so all fixtures pass `isLikelyVisibleToObserver`. The
     /// underlying Aircraft's lat/lon don't matter — projection reads
     /// bearing/elevation directly off the ObservedAircraft.
-    private func obs(icao: String, bearingDeg: Double, elevationDeg: Double = 1.0) -> ObservedAircraft {
+    private func obs(icao: String, bearingDeg: Double, elevationDeg: Double = 5.0) -> ObservedAircraft {
         let aircraft = Aircraft(
             icao24: icao, callsign: nil,
             originCountry: "X",

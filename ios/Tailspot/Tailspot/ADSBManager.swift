@@ -75,21 +75,34 @@ extension ObservedAircraft {
     /// Whether this aircraft is plausibly visible to the naked eye
     /// right now. Two filters:
     ///
-    ///   1. `elevationDeg > 0` — the plane is above the user's geometric
-    ///      horizon (flat-Earth, since the curvature correction is small
-    ///      for the distances that pass filter #2).
-    ///   2. `slantDistanceMeters < maxVisibleDistanceMeters` — the plane
-    ///      is close enough to actually see. 30 km is the v1 cap,
-    ///      tuned from Berkeley field testing: most commercial traffic
-    ///      past 30 km is a speck against the sky and was producing
-    ///      clutter that distracted from the planes actually in view.
+    ///   1. `elevationDeg > minVisibleElevationDeg` — the plane is
+    ///      clearly above the user's visual horizon, with a buffer
+    ///      that accounts for terrestrial obstructions (hills,
+    ///      buildings, trees). Berkeley field testing surfaced
+    ///      labels for planes right at the geometric horizon line
+    ///      that were practically hidden behind the East Bay hills;
+    ///      a 3° buffer keeps the visible / not-visible read
+    ///      consistent with what the user actually sees in the sky.
+    ///   2. `slantDistanceMeters < maxVisibleDistanceMeters` — the
+    ///      plane is close enough to actually see. 30 km is the v1
+    ///      cap, tuned from Berkeley field testing.
     ///
-    /// Explicitly does NOT account for obstacles (buildings, hills),
-    /// weather (clouds, haze), or atmospheric scattering. Those are
-    /// real but introduce too much complexity for v1 POC.
+    /// Explicitly does NOT account for weather (clouds, haze) or
+    /// atmospheric scattering. Those are real but introduce too
+    /// much complexity for v1 POC.
     var isLikelyVisibleToObserver: Bool {
-        elevationDeg > 0 && slantDistanceMeters < Self.maxVisibleDistanceMeters
+        elevationDeg > Self.minVisibleElevationDeg
+            && slantDistanceMeters < Self.maxVisibleDistanceMeters
     }
+
+    /// Minimum elevation a plane must clear before we surface it in
+    /// the AR overlay. 3° is a modest buffer that filters out the
+    /// literal horizon-edge cases (elevation 0-2° = visually hidden
+    /// behind hills, skyline, trees) without being so aggressive
+    /// that legitimate commercial traffic at cruise distance gets
+    /// pruned. Tunable — bump if Berkeley field-testing still shows
+    /// label clutter at the horizon line.
+    static let minVisibleElevationDeg: Double = 3
 
     /// Tunable. 30 km is the default — adjust if field testing shows
     /// labels too aggressively pruned (commercial traffic that's

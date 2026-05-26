@@ -173,6 +173,11 @@ enum HangarGrouping {
     /// in `Sets.swift` (`PokeSets.matches(catch:entry:)`) so this
     /// resolver and `PokeSets.status` / `PokeSets.progress` stay in
     /// lockstep. Spec § 9.2 — no new matcher introduced here.
+    ///
+    /// **Deprecated for the Hangar Sets surface (2026-05-26).** The
+    /// revamped Hangar Sets tab now uses `modelGroups(in:type:)` to
+    /// derive the model layer dynamically. `resolveSlots` is kept for
+    /// any future surface that wants the locked-slot Pokédex treatment.
     nonisolated static func resolveSlots(for set: PokeSet, in rows: [HangarRow]) -> [ModelSlot] {
         set.entries.map { entry in
             let matchingTails = rows.filter { row in
@@ -180,6 +185,36 @@ enum HangarGrouping {
             }
             return ModelSlot(entry: entry, tails: matchingTails)
         }
+    }
+
+    /// Returns model groups for a single `AircraftType`, derived
+    /// entirely from the dedup'd `HangarRow` list — no curated entry
+    /// list, no enumeration of "possible" planes. Each group bundles
+    /// a model display string (the manufacturer + model concatenation
+    /// produced by `key(for:c:mode:.aircraftType)`) with the rows
+    /// that share it. Sorted by tail count desc, then alphabetical.
+    ///
+    /// Powers the Hangar Sets surface: tap a type tile → see the
+    /// model groups you've actually caught, no locked silhouettes.
+    /// The UI grows as the user catches new model strings; we don't
+    /// have to pre-enumerate the OpenSky model space.
+    nonisolated static func modelGroups(
+        in rows: [HangarRow],
+        type: AircraftType
+    ) -> [ModelGroup] {
+        let filtered = rows.filter { $0.aircraftType == type }
+        let buckets = Dictionary(grouping: filtered) { row in
+            key(for: row.mostRecent, mode: .aircraftType)
+        }
+        return buckets
+            .map { ModelGroup(model: $0.key, type: type, tails: $0.value) }
+            .sorted { lhs, rhs in
+                if lhs.tails.count != rhs.tails.count {
+                    return lhs.tails.count > rhs.tails.count
+                }
+                return lhs.model.localizedCaseInsensitiveCompare(rhs.model)
+                    == .orderedAscending
+            }
     }
 }
 

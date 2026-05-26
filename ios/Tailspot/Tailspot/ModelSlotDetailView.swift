@@ -3,14 +3,14 @@
 //  Tailspot
 //
 //  The screen between Set detail and Tail detail — lists every
-//  distinct tail (icao24) the user has caught of one model. Spec § 5.3.
+//  distinct tail (icao24) the user has caught of one model. The model
+//  is now derived from caught planes (no curated entry list), so the
+//  view takes a `ModelGroup` rather than a `PokeSetEntry`.
 //
-//  Reached by tapping a caught slot in `SetDetailView`. Each row is
-//  one `HangarRow` (collapsed by icao24) and pushes the existing
-//  `CatchDetailView` via the `HangarRow` navigation destination
-//  already wired up in `HangarView`. Task 18 will rewrite that detail
-//  screen with the PokeCard hero treatment; T17 stays scope-disciplined
-//  and only owns the tail-list surface.
+//  Reached by tapping a model row in `SetDetailView`. Each row is one
+//  `HangarRow` (collapsed by icao24) and pushes the existing
+//  `CatchDetailView` via the `HangarRow` navigation destination wired
+//  in `HangarView`.
 //
 
 import SwiftUI
@@ -18,46 +18,21 @@ import SwiftData
 
 struct ModelSlotDetailView: View {
     let set: PokeSet
-    let entry: PokeSetEntry
-
-    /// Same query shape as `SetDetailView` — the dedup'd flat row list
-    /// is the input to `PokeSets.matches` so this screen stays in
-    /// lockstep with its parent. Pulling the query here (rather than
-    /// threading state through the route value) keeps the route value
-    /// trivially `Hashable`.
-    @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
-
-    /// Collapse-by-icao24 first, then filter to just the rows whose
-    /// most-recent catch matches this slot's `modelTokens`. Mirrors the
-    /// resolver inside `HangarGrouping.resolveSlots` — using
-    /// `PokeSets.matches` directly keeps a single source of truth for
-    /// Catch → PokeSetEntry membership.
-    private var rows: [HangarRow] {
-        HangarGrouping.group(catches, by: .recent).first?.rows ?? []
-    }
-    private var tails: [HangarRow] {
-        rows.filter { PokeSets.matches(catch: $0.mostRecent, entry: entry) }
-    }
+    let group: ModelGroup
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                // Breadcrumb — `#NN · SET NAME` in muted mono. The
-                // index matches the `#NN` numbering used in the set
-                // grid so the user can trust the navigation chain.
-                Text("#\(String(format: "%02d", indexInSet)) · \(set.title.uppercased())")
+                Text(set.title.uppercased())
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)
 
-                // Hero — canonical model name, full strength.
-                Text(entry.canonicalName)
+                Text(displayModel)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
 
-                // Distinct-tail count in the set's type tint so the
-                // surface visually belongs to its parent set.
-                Text("\(tails.count) distinct tail\(tails.count == 1 ? "" : "s")")
+                Text("\(group.distinctTailCount) distinct tail\(group.distinctTailCount == 1 ? "" : "s")")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
                     .foregroundStyle(set.type.tint)
 
@@ -68,12 +43,8 @@ struct ModelSlotDetailView: View {
                     .padding(.top, 14)
                     .padding(.bottom, 4)
 
-                // Vertical list of tail rows. Each pushes a
-                // `HangarRow`, which `HangarView`'s existing
-                // `.navigationDestination(for: HangarRow.self)` resolves
-                // to `CatchDetailView`. T18 rewrites that destination.
                 VStack(spacing: 6) {
-                    ForEach(tails) { row in
+                    ForEach(group.tails) { row in
                         NavigationLink(value: row) {
                             tailRow(row)
                         }
@@ -90,20 +61,18 @@ struct ModelSlotDetailView: View {
         .toolbarBackground(.visible, for: .navigationBar)
     }
 
-    /// 1-based position of this entry within its parent set, used by
-    /// the breadcrumb. Falls back to 1 if (somehow) the entry isn't
-    /// found — better than crashing on a stale nav route.
-    private var indexInSet: Int {
-        (set.entries.firstIndex(where: { $0.id == entry.id }) ?? 0) + 1
+    /// Title-case the manufacturer prefix; leave the model
+    /// alphanumerics intact. Mirrors `SetDetailView.displayModel`.
+    private var displayModel: String {
+        let raw = group.model
+        if raw == HangarGrouping.unknownTitle { return "Unknown model" }
+        let parts = raw.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard parts.count == 2 else { return raw.capitalized }
+        let mfg = parts[0].lowercased().capitalized
+        let model = String(parts[1])
+        return "\(mfg) \(model)"
     }
 
-    /// One row per distinct tail. Layout per spec § 5.3:
-    ///  - 3pt rarity-tinted left rail (visual link to the PokeCard system)
-    ///  - cyan callsign (or icao24 fallback) in mono
-    ///  - icao24 · operator in muted mono
-    ///  - relative timestamp anchored right (uses `firstCatch.caughtAt`
-    ///    so the "when did I first catch this tail" reading is stable
-    ///    across multiple catches of the same airframe).
     private func tailRow(_ row: HangarRow) -> some View {
         let cs = row.mostRecent.callsign?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -132,8 +101,33 @@ struct ModelSlotDetailView: View {
     }
 }
 
+// MARK: - Navigation bridge
+
+/// Thin wrapper used by HangarView's `.navigationDestination(for:
+/// ModelSlotRoute.self)`. The route value (`set id` + `model name`)
+/// is intentionally Hashable + serialization-friendly; rebuilding
+/// the `ModelGroup` requires a live SwiftData query, which only a
+/// view can own. This wrapper performs that query and rebuilds the
+/// group on every render so model-name renaming or new catches
+/// surface immediately.
+struct ModelGroupBridge: View {
+    let set: PokeSet
+    let modelName: String
+
+    @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
+
+    private var group: ModelGroup {
+        let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+        let groups = HangarGrouping.modelGroups(in: rows, type: set.type)
+        return groups.first(where: { $0.model == modelName })
+            ?? ModelGroup(model: modelName, type: set.type, tails: [])
+    }
+
+    var body: some View {
+        ModelSlotDetailView(set: set, group: group)
+    }
+}
+
 private extension String {
-    /// Returns self if non-empty, otherwise nil. Used to fold a
-    /// whitespace-only or empty callsign into the icao24 fallback path.
     var nonEmpty: String? { isEmpty ? nil : self }
 }

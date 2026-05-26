@@ -56,13 +56,15 @@ struct HangarView: View {
                     }
                 }
                 .navigationDestination(for: ModelSlotRoute.self) { route in
-                    // Task 16 — pushes the (still-stubbed in Task 17)
-                    // `ModelSlotDetailView` for a single entry within a
-                    // set. Resolve both ids back to their live values;
-                    // a missing one no-ops rather than crashing.
-                    if let set = PokeSets.all.first(where: { $0.id == route.setId }),
-                       let entry = set.entries.first(where: { $0.id == route.entryId }) {
-                        ModelSlotDetailView(set: set, entry: entry)
+                    // Resolve the set, then rebuild the model group on
+                    // demand from current catches — the route only
+                    // carries stable strings (set id + model name).
+                    // The model layer is derived dynamically per the
+                    // 2026-05-26 Sets revamp, so a model that has been
+                    // un-caught since the navigation pushed degrades
+                    // to "no tails" gracefully rather than crashing.
+                    if let set = PokeSets.all.first(where: { $0.id == route.setId }) {
+                        ModelGroupBridge(set: set, modelName: route.model)
                     }
                 }
         }

@@ -38,7 +38,12 @@ struct ReplayAnalyzerTests {
     /// within the 80 px lock zone around screen center. Bumping the
     /// altitude into 500 m territory pushes it out of the lock zone
     /// (~8.7° → ~103 px above center on a 393×852 portrait screen).
-    private func westAircraft(icao: String = "abc123", altMeters: Double = 60) -> ReplayEvent.AircraftSnapshot {
+    ///
+    /// Default is 300 m: at 3 km horizontal that's ~4.95° elevation
+    /// (clears the 3° visibility buffer added 2026-05-26) and projects
+    /// ~59 px above screen center (comfortably inside the 80 px lock
+    /// zone). Tests that explicitly need a different altitude pass it.
+    private func westAircraft(icao: String = "abc123", altMeters: Double = 300) -> ReplayEvent.AircraftSnapshot {
         // 0.034° lon at lat 37.87 is roughly 3 km west.
         .init(
             icao24: icao, callsign: "FLY\(icao.suffix(3).uppercased())",
@@ -381,7 +386,7 @@ struct ReplayAnalyzerTests {
             icao24: "xyz", callsign: "OTH",
             originCountry: "United States",
             latitude: 37.87, longitude: -122.27 - 0.034,  // due west, same as westAircraft
-            altitudeMeters: 60,
+            altitudeMeters: 300,
             velocityMps: 0, trackDeg: 270,
             onGround: false,
             positionTimestamp: nil

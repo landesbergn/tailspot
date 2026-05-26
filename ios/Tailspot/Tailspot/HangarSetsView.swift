@@ -5,24 +5,25 @@
 //  Sets-view body for the Hangar sheet. Vertical list of 7 set tiles
 //  (one per AircraftType, in the curated order baked into
 //  `PokeSets.all`: Narrow / Wide / Regional / Biz / Mil / GA /
-//  Heritage). Each tile shows slot-progress + a thumbnail strip of
-//  caught vs locked model slots. Tap → SetDetailView (Task 16 fills
-//  it in; the stub at the bottom of this file is the temporary
-//  destination). Spec § 5.1.
+//  Heritage). Each tile shows the number of distinct tails the user
+//  has caught in that type — no curated enumeration, no locked
+//  silhouettes. Tap → SetDetailView, which lists the model groups the
+//  user has actually caught in that type.
+//
+//  Revamped 2026-05-26 per Noah's field-test feedback: "show the
+//  number of planes caught per category" rather than enumerate
+//  possible slots. Keeps the surface flexible as planes are added to
+//  the OpenSky model space over time.
 //
 
 import SwiftUI
 import SwiftData
 
 struct HangarSetsView: View {
-    /// Pulled from the model container injected by TailspotApp. The
-    /// @Query auto-updates when new Catches are inserted — so the set
-    /// tiles repopulate without us having to reach across to HangarView.
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
-    /// One flat dedup'd row list (Recent mode collapses by icao24 only,
-    /// without any section bucketing). `resolveSlots(for:in:)` then
-    /// pivots that into per-entry slots for each set.
+    /// One flat dedup'd row list (Recent mode collapses by icao24).
+    /// Each tile then filters to its own type.
     private var rows: [HangarRow] {
         HangarGrouping.group(catches, by: .recent).first?.rows ?? []
     }
@@ -31,8 +32,9 @@ struct HangarSetsView: View {
         ScrollView {
             VStack(spacing: 10) {
                 ForEach(PokeSets.all) { set in
+                    let tailCount = rows.filter { $0.aircraftType == set.type }.count
                     NavigationLink(value: SetDetailRoute(setId: set.id)) {
-                        SetTile(set: set, slots: HangarGrouping.resolveSlots(for: set, in: rows))
+                        SetTile(set: set, tailCount: tailCount)
                     }
                     .buttonStyle(.plain)
                 }
@@ -44,10 +46,9 @@ struct HangarSetsView: View {
     }
 }
 
-/// Stable navigation target — set identified by its `PokeSet.id` (a
-/// short stable string like "narrow", "wide", "regional"...).
-/// HangarView's NavigationStack resolves this into a `SetDetailView`
-/// by looking the set up in `PokeSets.all`.
+/// Stable navigation target — set identified by its `PokeSet.id`
+/// ("narrow", "wide", "regional"...). HangarView's NavigationStack
+/// resolves this into a `SetDetailView` by looking up `PokeSets.all`.
 struct SetDetailRoute: Hashable {
     let setId: String
 }
@@ -56,85 +57,50 @@ struct SetDetailRoute: Hashable {
 
 private struct SetTile: View {
     let set: PokeSet
-    let slots: [ModelSlot]
+    let tailCount: Int
 
-    private var caughtCount: Int { slots.filter(\.isCaught).count }
-    private var totalCount: Int { slots.count }
-    private var isLocked: Bool { caughtCount == 0 }
+    private var isLocked: Bool { tailCount == 0 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(set.type.tint)
-                    Text(set.type.glyph)
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.black.opacity(0.7))
-                }
-                .frame(width: 30, height: 30)
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(set.type.tint)
+                Text(set.type.glyph)
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.black.opacity(0.7))
+            }
+            .frame(width: 38, height: 38)
 
+            VStack(alignment: .leading, spacing: 2) {
                 Text(set.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
-                Spacer()
-                Text("\(caughtCount) / \(totalCount)")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(isLocked ? Brand.Color.textTertiary : set.type.tint)
+                Text(set.type.summary)
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 0) {
+                Text("\(tailCount)")
+                    .font(.system(size: 24, weight: .bold, design: .monospaced))
                     .monospacedDigit()
-            }
-
-            // Thumbnail strip — one cell per slot, left-to-right in
-            // entry order. Caught slots have a 1pt top rail in the
-            // type tint + a short model token label; locked slots show
-            // a centered "?".
-            HStack(spacing: 4) {
-                ForEach(slots) { slot in
-                    Group {
-                        if slot.isCaught {
-                            VStack(spacing: 0) {
-                                Rectangle().fill(set.type.tint).frame(height: 1)
-                                Text(shortLabel(for: slot.entry))
-                                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(Brand.Color.textPrimary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.6)
-                                    .frame(maxWidth: .infinity, minHeight: 21)
-                                    .background(Brand.Color.bgSurface)
-                            }
-                        } else {
-                            Text("?")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(Brand.Color.textTertiary.opacity(0.5))
-                                .frame(maxWidth: .infinity, minHeight: 22)
-                                .background(Brand.Color.bgSurface)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
-                }
+                    .foregroundStyle(isLocked ? Brand.Color.textTertiary : set.type.tint)
+                Text("caught")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(Brand.Color.textTertiary)
             }
         }
-        .padding(12)
+        .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
-        .opacity(isLocked ? 0.55 : 1.0)
-    }
-
-    /// Concise (~3–6 char) label for the thumbnail strip. `PokeSetEntry`
-    /// carries no dedicated short-name field today; the first entry in
-    /// `modelTokens` (e.g., "737-8", "a380", "c-130") is the closest
-    /// thing to a canonical short string and tends to read well in a
-    /// monospaced 8pt cell. We uppercase for visual consistency with
-    /// the wider HUD treatment. If a set ever ships with empty
-    /// `modelTokens`, fall back to the first 4 chars of canonicalName
-    /// so the cell isn't blank.
-    private func shortLabel(for entry: PokeSetEntry) -> String {
-        if let first = entry.modelTokens.first, !first.isEmpty {
-            return first.uppercased()
-        }
-        return String(entry.canonicalName.prefix(4)).uppercased()
+        .opacity(isLocked ? 0.6 : 1.0)
     }
 }
 
-// The real `SetDetailView` lives in `SetDetailView.swift` (Task 16).
+// The real `SetDetailView` lives in `SetDetailView.swift`.
 // Routing from `SetDetailRoute` is wired in `HangarView` via
 // `.navigationDestination(for: SetDetailRoute.self)`.

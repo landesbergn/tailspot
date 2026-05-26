@@ -338,14 +338,23 @@ struct ADSBManagerTests {
 
     @Test func notVisibleWhenTooFar() {
         // Just past the 30 km cap.
-        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 35_000)
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 35_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func visibleAtEdgeOfRange() {
-        // Just inside the 30 km cap — should pass.
-        let obs = Self.observed(elevationDeg: 5, slantDistanceMeters: 29_000)
+        // Just inside the 30 km cap and well above the visual horizon.
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 29_000)
         #expect(obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func notVisibleAtLowElevationBuffer() {
+        // Field-test fix: planes at very small positive elevation are
+        // practically hidden behind hills / urban skyline. The filter
+        // applies a buffer (>3° elevation) so the AR overlay matches
+        // what the user actually sees in the sky.
+        let obs = Self.observed(elevationDeg: 2, slantDistanceMeters: 10_000)
+        #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func mockSourceIntegrationProducesFiveAircraft() async {
