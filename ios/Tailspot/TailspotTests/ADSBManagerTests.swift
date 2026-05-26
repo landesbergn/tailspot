@@ -320,7 +320,7 @@ struct ADSBManagerTests {
     }
 
     @Test func visibleWhenAboveHorizonAndClose() {
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 20_000)
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 15_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 
@@ -337,14 +337,14 @@ struct ADSBManagerTests {
     }
 
     @Test func notVisibleWhenTooFar() {
-        // Just past the 30 km cap.
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 35_000)
+        // Just past the 20 km cap.
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 25_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func visibleAtEdgeOfRange() {
-        // Just inside the 30 km cap and well above the visual horizon.
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 29_000)
+        // Just inside the 20 km cap and well above the visual horizon.
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 19_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 

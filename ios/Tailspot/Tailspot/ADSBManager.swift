@@ -38,12 +38,21 @@ extension ObservedAircraft {
     /// to `now` using its reported track/velocity, then computes
     /// the bearing/elevation/slant from the observer.
     ///
-    /// Returns nil if the aircraft is reported on the ground — we
-    /// don't want labels for taxiing planes. Centralized here so the
-    /// replay analyzer can reuse the exact same geometry the live
-    /// path uses.
+    /// Returns nil if:
+    ///   - The aircraft is reported on the ground (taxiing → no label).
+    ///   - The last position update is older than `maxPositionAge` —
+    ///     stale rows are usually planes that just landed, lost ADS-B
+    ///     coverage, or otherwise dropped off radar. They show up as
+    ///     "ghost labels" hovering where the plane used to be.
+    ///
+    /// Centralized here so the replay analyzer can reuse the exact
+    /// same geometry the live path uses.
     static func annotate(_ aircraft: Aircraft, observer: CLLocation, now: Date) -> ObservedAircraft? {
         guard !aircraft.onGround else { return nil }
+        if let ts = aircraft.positionTimestamp,
+           now.timeIntervalSince(ts) > maxPositionAge {
+            return nil
+        }
         let pos = aircraft.extrapolatedPosition(at: now)
         let observerLat = observer.coordinate.latitude
         let observerLon = observer.coordinate.longitude
@@ -71,6 +80,14 @@ extension ObservedAircraft {
             slantDistanceMeters: slant
         )
     }
+
+    /// Drop aircraft whose last ADS-B position update is older than
+    /// this (seconds). OpenSky position timestamps update every few
+    /// seconds for in-flight aircraft; a stale row almost always means
+    /// the plane landed, lost coverage, or otherwise dropped off radar.
+    /// 60 s is a generous floor — well above the 20 s poll cadence and
+    /// the typical 5-15 s position-report lag.
+    static let maxPositionAge: TimeInterval = 60
 
     /// Whether this aircraft is plausibly visible to the naked eye
     /// right now. Two filters:
@@ -104,10 +121,13 @@ extension ObservedAircraft {
     /// label clutter at the horizon line.
     static let minVisibleElevationDeg: Double = 3
 
-    /// Tunable. 30 km is the default — adjust if field testing shows
-    /// labels too aggressively pruned (commercial traffic that's
-    /// visibly there but past the cap).
-    static let maxVisibleDistanceMeters: Double = 30_000
+    /// Tunable. 20 km is the default — Berkeley field testing (2026-05-26)
+    /// surfaced ghost labels for commercial traffic past 15-20 km that
+    /// the user couldn't actually spot in the sky. A 70 m wingspan
+    /// plane at 20 km subtends ~0.2° of visual angle — about 10× human
+    /// eye resolution — so it's near the practical naked-eye limit.
+    /// Adjust if field testing shows labels too aggressively pruned.
+    static let maxVisibleDistanceMeters: Double = 20_000
 
     /// Project this aircraft into screen coordinates given the phone's
     /// current pose and the camera's FOV. Returns nil if off-screen.
