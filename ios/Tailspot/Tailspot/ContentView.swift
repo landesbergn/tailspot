@@ -133,11 +133,6 @@ struct ContentView: View {
     /// captures N≥2 planes from a single frame. Non-nil → full-screen
     /// `MultiCatchReveal` sheet is presented.
     @State private var pendingMultiReveal: PendingMultiReveal?
-    /// Multi-catch zone radius in points. Wider than the single-catch
-    /// lock zone (80 px) so the frame meaningfully captures multiple
-    /// planes. Scales with zoom for the same reason `lockZoneRadius`
-    /// does inside `handleTap`.
-    private static let multiCatchBaseRadius: CGFloat = 180
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
@@ -207,25 +202,6 @@ struct ContentView: View {
                         // `let _` so the void-returning call is legal
                         // inside @ViewBuilder (statements aren't otherwise).
                         let _ = lockOn.update(closestTargetIcao24: engineTarget, now: now)
-
-                        // Multi-catch detection. Compute the icao24
-                        // list inside a wider center zone every tick.
-                        // Capped at 5 for UI sanity (the fan reveal
-                        // doesn't scale beyond 5 cards).
-                        let multiRadius = min(
-                            Self.multiCatchBaseRadius * zoom,
-                            min(geo.size.width, geo.size.height) / 2
-                        )
-                        let zone = icaosInZone(
-                            in: visible,
-                            phoneHeadingDeg: heading,
-                            cameraElevationDeg: camEl,
-                            screenSize: geo.size,
-                            hfovDeg: effectiveHfov,
-                            vfovDeg: effectiveVfov,
-                            zoneRadius: multiRadius
-                        )
-                        let multiCandidates = Array(zone.prefix(5))
 
                         ZStack {
                             // Background tap-and-pinch layer. Color.clear +
@@ -327,36 +303,42 @@ struct ContentView: View {
                                     .allowsHitTesting(false)
                             }
 
-                            // Multi-catch capture frame. Drawn when
-                            // 2+ planes are inside the wider multi-
-                            // catch zone AND nothing is pinned (pin
-                            // owns the single-catch path). The
-                            // floating button is gone — the bottom
-                            // capture bar takes over as the CTA, and
-                            // its appearance reacts to the same
-                            // condition.
-                            if isMultiCaptureActive(
-                                multiCandidates: multiCandidates
-                            ) {
-                                multiCatchFrame(radius: multiRadius)
-                                    .position(x: geo.size.width / 2,
-                                              y: geo.size.height / 2)
-                                    .allowsHitTesting(false)
-                            }
-
                             // Bottom capture bar: hangar tray (left),
                             // big central capture button, profile
                             // (right). Built inside the TimelineView
                             // so the capture button's appearance and
-                            // payload react to the per-frame target
-                            // / multi-candidate computation.
+                            // payload react to the per-frame visible
+                            // set + pin state.
+                            //
+                            // Spec § 3.2: a single always-present
+                            // capture button. The visible-count + pin
+                            // drive the mode (disabled / single /
+                            // multi). When in multi-mode a small
+                            // magenta ×N badge appears in the
+                            // top-right corner of the circle. The
+                            // floating magenta capture-zone overlay
+                            // was removed — the badge on the unified
+                            // button replaces it as the multi-mode
+                            // affordance.
+                            let visibleIcaos = visible.map(\.aircraft.icao24)
+                            let pinForCapture = lockOn.state.targetIcao24
+                            let mode: CaptureMode = {
+                                if let pin = pinForCapture,
+                                   visibleIcaos.contains(pin) {
+                                    return .single(pin)
+                                }
+                                if visibleIcaos.isEmpty {
+                                    return .disabled
+                                }
+                                if visibleIcaos.count == 1 {
+                                    return .single(visibleIcaos[0])
+                                }
+                                return .multi(visibleIcaos)
+                            }()
                             VStack {
                                 Spacer()
-                                captureBar(
-                                    singleTarget: lockOn.state.targetIcao24,
-                                    multiCandidates: multiCandidates
-                                )
-                                .padding(.bottom, 28)
+                                captureBar(mode: mode)
+                                    .padding(.bottom, 28)
                             }
                             .frame(width: geo.size.width,
                                    height: geo.size.height)
@@ -826,82 +808,32 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Multi-catch visuals
-
-    /// The magenta dashed capture frame drawn around the multi-catch
-    /// zone. Pulses subtly so it reads as "live" without being a full
-    /// breathing animation.
-    private func multiCatchFrame(radius: CGFloat) -> some View {
-        let side = radius * 2
-        return TimelineView(.animation(minimumInterval: 1.0/30.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (cos(t * 3) + 1) / 2     // 0…1, ~1 s period
-            let glow = 0.35 + 0.25 * phase
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(
-                    Brand.Color.alertAdvisory,
-                    style: StrokeStyle(lineWidth: 2, dash: [10, 6])
-                )
-                .frame(width: side, height: side)
-                .shadow(color: Brand.Color.alertAdvisory.opacity(glow), radius: 18)
-        }
-    }
-
     // MARK: - Bottom capture bar
 
     /// Snapshot of the catch options visible to the user on the
     /// current frame — used to drive the capture button's appearance
     /// and payload. Computed inline at 30 Hz inside the TimelineView
-    /// so the button stays in sync with the lock-on / multi-zone
-    /// state without any extra plumbing.
-    private enum CaptureMode {
-        case idle
-        case single(icao: String)
-        case multi(icaos: [String])
-    }
-
-    /// True when the multi-catch capture frame should render and the
-    /// bottom button should switch to the magenta multi style.
-    /// The pin flow owns the single-catch path; a single lock that's
-    /// already engaged also takes precedence over multi.
-    private func isMultiCaptureActive(multiCandidates: [String]) -> Bool {
-        multiCandidates.count >= 2
-            && pinnedIcao == nil
-            && !lockOn.state.isLockedOrSticky
-    }
-
-    /// Decide the capture mode for the current frame. Single-lock
-    /// wins when an icao is being tracked (locked / sticky); multi
-    /// wins only when the engine is idle and the multi-zone has 2+
-    /// planes; otherwise idle.
-    private func captureMode(
-        singleTarget: String?,
-        multiCandidates: [String]
-    ) -> CaptureMode {
-        if let icao = singleTarget {
-            return .single(icao: icao)
-        }
-        if isMultiCaptureActive(multiCandidates: multiCandidates) {
-            return .multi(icaos: multiCandidates)
-        }
-        return .idle
+    /// from the visible aircraft set + tap-pin so the button stays
+    /// in sync without any extra plumbing.
+    ///
+    /// Spec § 3.2:
+    /// - `.disabled` when no aircraft are visible (button faded).
+    /// - `.single(icao)` for either (a) an explicitly tap-pinned plane
+    ///   that is still visible, or (b) the lone visible plane.
+    /// - `.multi(icaos)` when ≥2 planes are visible and no pin is set;
+    ///   the unified button shows a magenta `×N` corner badge.
+    enum CaptureMode {
+        case disabled
+        case single(String)        // icao24
+        case multi([String])       // icao24 list
     }
 
     /// Bottom capture bar — hangar (left), big central capture
-    /// button, profile (right). The central button changes color +
-    /// label based on the current capture mode (cyan + reticle for a
-    /// single lock, magenta with "N×" for a multi-zone catch, dimmed
-    /// for no available target). Direct tap = immediate catch; no
-    /// hold required.
-    private func captureBar(
-        singleTarget: String?,
-        multiCandidates: [String]
-    ) -> some View {
-        let mode = captureMode(
-            singleTarget: singleTarget,
-            multiCandidates: multiCandidates
-        )
-        return HStack {
+    /// button, profile (right). The central button is a single
+    /// always-present circle; mode drives its enabled state and
+    /// whether a `×N` badge appears in the top-right corner.
+    private func captureBar(mode: CaptureMode) -> some View {
+        HStack {
             bottomHangarButton
             Spacer()
             captureButton(mode: mode)
@@ -911,113 +843,80 @@ struct ContentView: View {
         .padding(.horizontal, 28)
     }
 
-    /// Big central capture button. The visual + tap target the user
-    /// sees as the primary AR action.
-    @ViewBuilder
+    /// Catch-path stub. Task 8 implements the merged single + multi
+    /// capture path with its dedup gate; this lives in T7 only so
+    /// the unified button has something to call.
+    private func performCatch(mode: CaptureMode) {
+        // Implemented in Task 8 (merged capture path with dedup gate).
+    }
+
+    /// Big central capture button. A single circle that is always
+    /// present; multi-mode adds a small magenta `×N` badge in the
+    /// top-right corner.
     private func captureButton(mode: CaptureMode) -> some View {
-        switch mode {
-        case .idle:
-            captureButtonIdle
-        case .single(let icao):
-            captureButtonSingle(icao: icao)
-        case .multi(let icaos):
-            captureButtonMulti(icaos: icaos)
-        }
-    }
+        let isMulti: Bool = {
+            if case .multi = mode { return true }
+            return false
+        }()
+        let count: Int = {
+            if case .multi(let icaos) = mode { return icaos.count }
+            return 0
+        }()
+        let isEnabled: Bool = {
+            if case .disabled = mode { return false }
+            return true
+        }()
 
-    /// Cyan single-lock capture button. Glows + scales subtly when
-    /// the engine is locked or holding sticky so the user can read
-    /// "ready to catch" at a glance.
-    private func captureButtonSingle(icao: String) -> some View {
-        let ready = lockOn.state.isLockedOrSticky
         return Button {
-            guard !captureInFlight else { return }
-            captureInFlight = true
-            Task { await performAutoCatch(icao: icao) }
+            guard isEnabled else { return }
+            performCatch(mode: mode)
         } label: {
-            ZStack {
-                Circle()
-                    .fill(Brand.Color.cyan)
-                Circle()
-                    .strokeBorder(Brand.Color.bgPrimary, lineWidth: 4)
-                Image(systemName: "viewfinder")
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(Brand.Color.bgPrimary)
-            }
-            .frame(width: 76, height: 76)
-            .shadow(color: Brand.Color.cyan.opacity(ready ? 0.55 : 0.3),
-                    radius: ready ? 22 : 12, y: 6)
-            .scaleEffect(ready ? 1.0 : 0.94)
-            .animation(.easeOut(duration: 0.18), value: ready)
-        }
-        .buttonStyle(.plain)
-        .disabled(captureInFlight)
-        .opacity(captureInFlight ? 0.5 : 1.0)
-        .accessibilityLabel("Capture aircraft")
-    }
-
-    /// Magenta multi-catch capture button. "N×" / "CATCH" stacked
-    /// matches the design canvas's `BottomControlsMulti`.
-    private func captureButtonMulti(icaos: [String]) -> some View {
-        let n = icaos.count
-        return Button {
-            guard !captureInFlight else { return }
-            captureInFlight = true
-            Task { await performMultiCatch(icaos: icaos) }
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(Brand.Color.alertAdvisory)
-                Circle()
-                    .strokeBorder(Brand.Color.bgPrimary, lineWidth: 4)
-                VStack(spacing: 0) {
-                    Text("\(n)×")
-                        .font(.system(size: 22, weight: .heavy,
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    Circle()
+                        .fill(Brand.Color.bgPrimary.opacity(0.7))
+                        .frame(width: 72, height: 72)
+                    Circle()
+                        .strokeBorder(Brand.Color.cyan, lineWidth: 2.5)
+                        .frame(width: 72, height: 72)
+                    Circle()
+                        .fill(Brand.Color.cyan.opacity(0.15))
+                        .frame(width: 60, height: 60)
+                    Text("CAPTURE")
+                        .font(.system(size: 10, weight: .bold,
                                       design: .monospaced))
-                        .foregroundStyle(Brand.Color.bgPrimary)
-                    Text("CATCH")
+                        .tracking(0.6)
+                        .foregroundStyle(Brand.Color.cyan)
+                }
+                if isMulti {
+                    Text("×\(count)")
                         .font(.system(size: 9, weight: .bold,
                                       design: .monospaced))
-                        .tracking(1)
-                        .foregroundStyle(Brand.Color.bgPrimary)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Brand.Color.alertAdvisory, in: .capsule)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Brand.Color.bgPrimary,
+                                              lineWidth: 2)
+                        )
+                        .offset(x: 4, y: -4)
                 }
             }
-            .frame(width: 84, height: 84)
-            .shadow(color: Brand.Color.alertAdvisory.opacity(0.55),
-                    radius: 22, y: 6)
+            .opacity(isEnabled ? 1.0 : 0.4)
         }
         .buttonStyle(.plain)
-        .disabled(captureInFlight)
-        .opacity(captureInFlight ? 0.5 : 1.0)
-        .accessibilityLabel("Capture \(n) planes")
+        .disabled(!isEnabled)
+        .accessibilityLabel(captureA11y(mode: mode))
     }
 
-    /// Dimmed capture button shown when no plane is in range to
-    /// catch. Tappable but produces only a soft haptic — gives the
-    /// user feedback without firing a no-op catch.
-    private var captureButtonIdle: some View {
-        Button {
-            // Soft "nothing to catch" feedback so a press isn't
-            // silent. The same haptic counter the catch path uses
-            // would be too celebratory; a UISelectionFeedback-style
-            // bump (via .sensoryFeedback elsewhere) would be ideal,
-            // but a noop is acceptable for v1.
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(Brand.Color.bgPrimary.opacity(0.6))
-                Circle()
-                    .strokeBorder(Brand.Color.textPrimary.opacity(0.25),
-                                  lineWidth: 2)
-                Image(systemName: "viewfinder")
-                    .font(.system(size: 28, weight: .medium))
-                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.4))
-            }
-            .frame(width: 76, height: 76)
+    private func captureA11y(mode: CaptureMode) -> String {
+        switch mode {
+        case .disabled:         return "Capture (no aircraft in view)"
+        case .single(let icao): return "Capture \(icao)"
+        case .multi(let icaos): return "Capture \(icaos.count) aircraft"
         }
-        .buttonStyle(.plain)
-        .disabled(true)
-        .accessibilityLabel("Aim at a plane to capture")
     }
 
     /// Hangar button in the bottom bar. Square-ish 56×56 chip with
