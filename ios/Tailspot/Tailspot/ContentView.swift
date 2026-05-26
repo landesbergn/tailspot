@@ -79,6 +79,13 @@ struct ContentView: View {
     /// time the lock visuals render, the label content is usually
     /// already populated.
     @State private var lockedMetadata: AircraftMetadata?
+    /// Cache of metadata for every visible plane. Powers the ambient
+    /// per-plane label's rarity teaser — without prefetch, every
+    /// non-pinned label would render "COMMON" until that plane became
+    /// the pin. Driven by a `.task(id:)` keyed on the sorted set of
+    /// visible icao24s; the MetadataCache actor dedupes hits across
+    /// re-runs so this is cheap after the first fill.
+    @State private var ambientMetadata: [String: AircraftMetadata?] = [:]
     /// Camera zoom factor. 1.0 = default wide. Pinch gesture below
     /// drives the binding; CameraPreview applies it via
     /// AVCaptureDevice.videoZoomFactor. The projection math also reads
@@ -248,31 +255,58 @@ struct ContentView: View {
                                         }
                                 )
 
-                            if let icao = lockOn.state.targetIcao24,
-                               let target = visible.first(where: { $0.aircraft.icao24 == icao }),
-                               let pos = target.screenPosition(
-                                   phoneHeadingDeg: heading,
-                                   cameraElevationDeg: camEl,
-                                   in: geo.size,
-                                   hfovDeg: effectiveHfov,
-                                   vfovDeg: effectiveVfov
-                               )
-                            {
-                                lockOverlay(
-                                    state: lockOn.state,
-                                    target: target,
-                                    metadata: lockedMetadata,
-                                    now: now
-                                )
-                                    .position(pos)
-                                    .onTapGesture { selectedAircraft = target }
-                            } else if visible.isEmpty {
+                            // All-frame ambient labels. Every visible
+                            // plane gets a faint cyan corner-bracket
+                            // pair + small "callsign · RARITY" label
+                            // at its projected screen position. The
+                            // pinned plane (if any) renders brighter +
+                            // thicker brackets and an expanded label
+                            // that includes points; other planes dim
+                            // to ~35 % so the pin reads as primary.
+                            //
+                            // Tap handling lives on the underlying
+                            // Color.clear background layer above
+                            // (handleTap) — labels themselves are
+                            // `.allowsHitTesting(false)` so they
+                            // don't intercept taps meant for the
+                            // plane behind them.
+                            let pinnedIcaoForLabels = lockOn.state.targetIcao24
+                            ForEach(visible, id: \.aircraft.icao24) { obs in
+                                if let pos = obs.screenPosition(
+                                    phoneHeadingDeg: heading,
+                                    cameraElevationDeg: camEl,
+                                    in: geo.size,
+                                    hfovDeg: effectiveHfov,
+                                    vfovDeg: effectiveVfov
+                                ) {
+                                    let icao = obs.aircraft.icao24
+                                    let isPinned = icao == pinnedIcaoForLabels
+                                    // For the pinned plane prefer the
+                                    // already-loaded lockedMetadata
+                                    // (which the .task(id:) path keeps
+                                    // current); fall back to the
+                                    // ambient prefetch dict. The dict
+                                    // also catches every other visible
+                                    // plane.
+                                    let metaForPlane: AircraftMetadata? = isPinned
+                                        ? (lockedMetadata ?? (ambientMetadata[icao] ?? nil))
+                                        : (ambientMetadata[icao] ?? nil)
+                                    PlaneLabel(
+                                        aircraft: obs,
+                                        position: pos,
+                                        isPinned: isPinned,
+                                        isDimmed: pinnedIcaoForLabels != nil && !isPinned,
+                                        metadata: metaForPlane
+                                    )
+                                }
+                            }
+
+                            if visible.isEmpty {
                                 // Empty-sky overlay. Shown when nothing
-                                // is in view and no lock is engaged.
-                                // Quiet center reticle + a status pill
-                                // anchored low so it doesn't compete
-                                // with the top-center compass / zoom
-                                // affordances.
+                                // is in view. Quiet center reticle +
+                                // a status pill anchored low so it
+                                // doesn't compete with the top-center
+                                // compass / zoom affordances.
                                 emptySkyOverlay(rawCount: adsb.observed.count)
                                     .frame(width: geo.size.width, height: geo.size.height)
                                     .allowsHitTesting(false)
@@ -400,6 +434,22 @@ struct ContentView: View {
                 lockedMetadata = nil
             }
         }
+        // Ambient metadata prefetch for all-frame labels. The id is a
+        // content-keyed signature of the currently-visible icao24
+        // set (sorted, joined) so it only re-runs when membership
+        // actually changes — not on every TimelineView tick. The
+        // MetadataCache actor dedupes lookups, so the first sighting
+        // of an icao24 fires a single OpenSky request and every later
+        // observation is a free in-memory hit.
+        .task(id: visibleIcaoSignature) {
+            let icaos = adsb.observed
+                .filter(\.isLikelyVisibleToObserver)
+                .map(\.aircraft.icao24)
+            for icao in icaos where ambientMetadata[icao] == nil {
+                let value = await adsb.metadata(for: icao)
+                ambientMetadata[icao] = value
+            }
+        }
         // Pin housekeeping. If the engine moved off the pinned plane
         // (target left visibility → sticky → idle, or center-driven
         // logic switched onto a different plane), clear the pin so
@@ -481,6 +531,19 @@ struct ContentView: View {
                 EmptyView()
             }
         }
+    }
+
+    /// Content-keyed signature of the currently-visible icao24 set,
+    /// used as the id on the ambient-metadata prefetch task. Sorting
+    /// + joining ensures the value is stable across observed-array
+    /// re-orderings (which happen on every fetch) so the task only
+    /// re-runs when membership actually changes.
+    private var visibleIcaoSignature: String {
+        adsb.observed
+            .filter(\.isLikelyVisibleToObserver)
+            .map(\.aircraft.icao24)
+            .sorted()
+            .joined(separator: ",")
     }
 
     // MARK: - Auto-catch
@@ -1061,130 +1124,6 @@ struct ContentView: View {
         LockBrackets(boxSize: 88, color: Brand.Color.cyan, opacity: 0.24)
     }
 
-    // MARK: - Lock-on visuals (continued)
-
-    /// Brackets + label rendered at a target's projected screen
-    /// position. Style + size depend on the lock-on state:
-    /// `locked` / `sticky` → solid cyan brackets at the steady size,
-    /// with the identification label.
-    /// `idle` → nothing (sized to zero).
-    @ViewBuilder
-    private func lockOverlay(
-        state: LockOnEngine.State,
-        target: ObservedAircraft,
-        metadata: AircraftMetadata?,
-        now: Date
-    ) -> some View {
-        let style = lockOverlayStyle(for: state, now: now)
-        VStack(spacing: 4) {
-            LockBrackets(boxSize: style.boxSize, color: style.color, opacity: style.opacity)
-            if style.showLabel {
-                lockLabel(target, metadata: metadata)
-                    .opacity(style.opacity)
-            }
-        }
-        .contentShape(.rect)
-    }
-
-    /// Visual parameters derived from engine state + current time.
-    private struct LockOverlayStyle {
-        var boxSize: CGFloat
-        var color: Color
-        var opacity: Double
-        var showLabel: Bool
-    }
-
-    private func lockOverlayStyle(for state: LockOnEngine.State, now: Date) -> LockOverlayStyle {
-        let lockedSize: CGFloat = 64
-        // Cyan is the brand color and it OWNS the lock indicator.
-        // There's no acquiring state anymore — the user either has a
-        // pin (locked / sticky) or they don't (idle). Task 5 will
-        // rework this overlay around the all-frame ambient-label model.
-        switch state {
-        case .idle:
-            return .init(boxSize: 0, color: .clear, opacity: 0, showLabel: false)
-        case .locked:
-            return .init(boxSize: lockedSize, color: Brand.Color.cyan, opacity: 1.0, showLabel: true)
-        case .sticky(_, let lostAt):
-            // Fade the brackets but keep them visible for the
-            // stickyHoldDuration window so the user can read the label.
-            let elapsed = now.timeIntervalSince(lostAt)
-            let fade = max(0, 1 - elapsed / lockOn.stickyHoldDuration)
-            return .init(boxSize: lockedSize, color: Brand.Color.cyan, opacity: fade, showLabel: true)
-        }
-    }
-
-    /// Identification card shown below a locked target. Lines in
-    /// decreasing emphasis: callsign + rarity/type tags, airline,
-    /// make + model, altitude + speed + distance. Lines for which
-    /// we don't yet have data are simply omitted — keeps the card
-    /// from filling with dashes while the metadata fetch is in flight.
-    private func lockLabel(_ obs: ObservedAircraft, metadata: AircraftMetadata?) -> some View {
-        let cs = obs.aircraft.callsign ?? obs.aircraft.icao24
-        let airline = metadata?.operatorName
-        let makeModel: String? = {
-            switch (metadata?.manufacturerName, metadata?.model) {
-            case let (mfg?, model?): return "\(mfg) \(model)"
-            case let (mfg?, nil):    return mfg
-            case let (nil, model?):  return model
-            default:                 return nil
-            }
-        }()
-        let altFt = Int((obs.aircraft.altitudeMeters * 3.28084).rounded())
-        let altText = "\(altFt.formatted(.number)) ft"
-        let speedText: String? = obs.aircraft.velocityMps.map {
-            "\(Int(($0 * 2.23694).rounded())) mph"
-        }
-        // Distance from the observer. Useful at-a-glance — currently
-        // the user has to tap into the detail sheet to see it.
-        let distText = String(format: "%.1f km", obs.slantDistanceMeters / 1000)
-        let stats = [altText, speedText, distText].compactMap(\.self).joined(separator: "  ·  ")
-
-        // Classify on the fly — same heuristic the Catch will land
-        // with if the user catches this plane. Doing it inline (vs
-        // caching) is fine: the classifier is a quick substring scan
-        // and the lock label re-renders at 30 Hz with the same input.
-        let (rarity, type) = AircraftClassifier.classify(
-            manufacturer: metadata?.manufacturerName,
-            model: metadata?.model,
-            operatorName: metadata?.operatorName
-        )
-
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(cs)
-                .font(Brand.Font.hudCallsign)
-                .foregroundStyle(Brand.Color.cyan)
-
-            // Rarity + type tags — gives the user an instant tier
-            // read before tapping in. Only render when metadata has
-            // actually landed; pre-metadata the classifier would just
-            // default-bucket everything to (common, narrow) which is
-            // noise.
-            if metadata != nil {
-                TagRow(rarity: rarity, type: type, size: .sm)
-            }
-
-            if let airline {
-                Text(airline)
-                    .font(Brand.Font.hudData)
-                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.95))
-            }
-            if let makeModel {
-                Text(makeModel)
-                    .font(Brand.Font.hudData)
-                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
-            }
-
-            Text(stats)
-                .font(Brand.Font.hudData)
-                .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
-        }
-        .shadow(color: .black, radius: 2)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Brand.Color.bgPrimary.opacity(0.65), in: .rect(cornerRadius: 4))
-    }
-
     // MARK: - Top: sensor readout
 
     private var sensorReadout: some View {
@@ -1555,6 +1494,85 @@ struct ContentView: View {
             lockOn.forceLock(targetIcao24: icao, now: now)
         }
     }
+}
+
+// MARK: - Per-plane ambient label
+
+/// Per-plane label rendered above the aircraft's projected screen
+/// position. Every visible plane gets one: faint cyan corner brackets
+/// + a small "CALLSIGN · RARITY" pill. The pinned plane (if any) swaps
+/// to the bright/expanded variant — thicker, larger brackets and an
+/// expanded pill that includes the rarity's base-point award.
+///
+/// `.allowsHitTesting(false)` so taps fall through to the underlying
+/// gesture layer in ContentView (which handles pin/unpin). The
+/// dim/bright pin contrast is the only signal that a tap landed.
+private struct PlaneLabel: View {
+    let aircraft: ObservedAircraft
+    let position: CGPoint
+    let isPinned: Bool
+    /// True when something ELSE is pinned. Dims this label to ~35 %
+    /// so the pinned plane reads as primary.
+    let isDimmed: Bool
+    /// Cached metadata for this plane, if available. Drives the
+    /// rarity classification — without metadata the classifier
+    /// falls back to (.common, .narrow).
+    let metadata: AircraftMetadata?
+
+    var body: some View {
+        let (rarity, _) = AircraftClassifier.classify(
+            manufacturer: metadata?.manufacturerName,
+            model: metadata?.model,
+            operatorName: metadata?.operatorName
+        )
+        let callsign = aircraft.aircraft.callsign?
+            .trimmingCharacters(in: .whitespaces)
+            .nonEmpty
+            ?? aircraft.aircraft.icao24.uppercased()
+        let bracketBoxSize: CGFloat = isPinned ? 56 : 36
+        let bracketLineWidth: CGFloat = isPinned ? 2.5 : 1.2
+        let bracketOpacity: Double = isPinned ? 1.0 : 0.55
+
+        VStack(spacing: 2) {
+            LockBrackets(
+                boxSize: bracketBoxSize,
+                color: Brand.Color.cyan,
+                opacity: bracketOpacity,
+                lineWidth: bracketLineWidth
+            )
+            HStack(spacing: 4) {
+                Text(callsign)
+                    .font(.system(
+                        size: isPinned ? 11 : 9,
+                        weight: .bold,
+                        design: .monospaced
+                    ))
+                    .foregroundStyle(Brand.Color.cyan)
+                if isPinned {
+                    Text("· \(rarity.label) +\(rarity.basePoints)")
+                        .font(.system(size: 9, weight: .semibold,
+                                      design: .monospaced))
+                        .foregroundStyle(rarity.tint)
+                } else {
+                    Text("· \(rarity.label)")
+                        .font(.system(size: 8, weight: .semibold,
+                                      design: .monospaced))
+                        .foregroundStyle(rarity.tint)
+                }
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Brand.Color.bgPrimary.opacity(0.55),
+                        in: .rect(cornerRadius: 4))
+        }
+        .position(position)
+        .opacity(isDimmed ? 0.35 : 1.0)
+        .allowsHitTesting(false)
+    }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }
 
 // MARK: - Lock-on bracket shapes
