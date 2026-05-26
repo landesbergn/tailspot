@@ -49,7 +49,6 @@ struct ContentView: View {
     /// appends a tick line to `Documents/replays/replay-<utc>.jsonl`.
     @StateObject private var recorder = ReplayRecorder()
     @State private var cameraAuthorized = false
-    @State private var selectedAircraft: ObservedAircraft?
     /// Hidden by default. Tap the small wrench glyph in the top-right
     /// to reveal the sensor readout (top) + nearby-aircraft list
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
@@ -526,9 +525,6 @@ struct ContentView: View {
                 recordReplayTick()
                 try? await Task.sleep(for: .seconds(1))
             }
-        }
-        .sheet(item: $selectedAircraft) { obs in
-            AircraftDetailView(observed: obs, manager: adsb, observerLocation: location.cllocation)
         }
         .sheet(isPresented: Binding(
             get: { replayURL != nil },

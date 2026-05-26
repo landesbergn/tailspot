@@ -48,23 +48,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Open follow-ups (spec § 11):** Audio source can swap from `AudioServicesPlaySystemSoundID` to bundled AIFFs / `AVAudioEngine` synth if the chime ladder needs tuning. All-frame label density fallback at ≥10 visible planes (closest-5 + brackets-only for the rest) not implemented; punt until field-testing shows the need. `nextMilestoneLine` in SetDetailView is stubbed (returns nil) until a trophy-to-set mapping is wired. Some minor dead code: `HangarFilter` enum in `HangarView.swift` (T15 didn't claim it; safe to delete in a sweep). `LockOnEngine.icaosInZone` is now orphaned (no callers post-T7).
 
-## Current state (as of session ending 2026-05-25 [Capture & Hangar redesign spec])
-
-**Capture & Hangar redesign — spec landed 2026-05-25, awaiting implementation plan.** Noah surfaced that the core UX of capturing planes and viewing the collection wasn't right. Brainstormed through the model, alignment-checked section by section, and wrote a design spec at `docs/superpowers/specs/2026-05-25-capture-and-hangar-redesign-design.md`.
-
-**Headlines from the spec:**
-
-- **Capture model:** lock engine moves from "closest-to-center single target" to **all-frame** (every visible plane gets a faint label + bracket). Tap-pin overrides to single-mode; tap-empty either clears a pin or widens search to nearest visible plane. One always-live capture button (no separate multi-catch button, no magenta-dashed zone). Multi-catch reveal becomes *the* hype moment — staggered card fan-in with haptic taps + ascending audio chime + combo banner build (`CATCH ×1 → …×2 → COMBO ×3 +250 pts`).
-- **Duplicate catches:** quiet reveal with `ALREADY CAUGHT` diagonal stamp; **no DB row inserted, no score credit**. Catch insertion is gated on icao24 uniqueness.
-- **Hangar shell:** segmented switcher with **3 views — Sets (default) · Recent · Trophies**. Trophies *moves out of Profile* into the Hangar.
-- **Sets view:** rich tiles (thumbnail strip showing caught vs ? slots) → Set detail (model slot grid, each slot reads `×K tails`) → **new Model slot detail screen** (vertical list of distinct tails of that model) → Tail detail. Set tile count is **slot-level** progress (M filled slots / N total slots); per-model tail counts surface at the model-slot level.
-- **Tail detail:** PokeCard front-and-center (replaces DetailA's photo hero). The photo (catch JPEG or Planespotters) lives inside the PokeCard's photo slot. Below: EARNED panel + first-caught panel + Planespotters attribution. Stats grid and catch log are gone.
-- **Data:** add `ModelSlot` view-model `(entry: PokeSetEntry, tails: [HangarRow])` computed from existing `Sets.swift` matching. SwiftData `Catch.init` gains a uniqueness gate; existing `CatchTests::storesMultipleCatchesIncludingDuplicates` flips to `duplicateInsertIsRejected`.
-
-**Open follow-ups flagged in the spec § 11:** audio source for the reveal chime (system sound vs. bundled AIFF vs. AVAudioEngine synth), all-frame label density fallback when 10+ planes are visible, Profile → Hangar Trophies nav source-of-truth, model-slot back-navigation depth.
-
-Next step: writing-plans skill to produce a phased implementation plan.
-
 ## Current state (as of session ending 2026-05-22 [HangarB grid + DetailA])
 
 **Hangar switched from list to card grid (HangarB).** First two passes implemented `HangarA` (list with section grouping); Noah called it out and asked for `HangarB` — the trading-card grid view. New shape:
