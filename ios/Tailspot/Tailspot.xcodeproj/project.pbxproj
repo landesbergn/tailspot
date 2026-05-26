@@ -27,6 +27,9 @@
 		4F9708C72FAADF72007D8633 /* Tailspot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tailspot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4F9708D42FAADF73007D8633 /* TailspotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TailspotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4F9708DE2FAADF73007D8633 /* TailspotUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TailspotUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4F9709012FAADF73007D8633 /* Tailspot.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Tailspot.xcconfig; sourceTree = "<group>"; };
+		4F9709022FAADF73007D8633 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4F9709032FAADF73007D8633 /* Tailspot.secrets.example.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Tailspot.secrets.example.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +78,9 @@
 		4F9708BE2FAADF72007D8633 = {
 			isa = PBXGroup;
 			children = (
+				4F9709012FAADF73007D8633 /* Tailspot.xcconfig */,
+				4F9709032FAADF73007D8633 /* Tailspot.secrets.example.xcconfig */,
+				4F9709022FAADF73007D8633 /* Info.plist */,
 				4F9708C92FAADF72007D8633 /* Tailspot */,
 				4F9708D72FAADF73007D8633 /* TailspotTests */,
 				4F9708E12FAADF73007D8633 /* TailspotUITests */,
@@ -394,6 +400,7 @@
 		};
 		4F9708E92FAADF73007D8633 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4F9709012FAADF73007D8633 /* Tailspot.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -401,19 +408,12 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G9FJX2A5TA;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Tailspot uses your camera to show planes and the sky behind aircraft labels.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tailspot uses your location to identify aircraft you're pointing at by matching your viewing angle against live flight positions.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.landesberg.Tailspot;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -428,6 +428,7 @@
 		};
 		4F9708EA2FAADF73007D8633 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4F9709012FAADF73007D8633 /* Tailspot.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -435,19 +436,12 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G9FJX2A5TA;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Tailspot uses your camera to show planes and the sky behind aircraft labels.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tailspot uses your location to identify aircraft you're pointing at by matching your viewing angle against live flight positions.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.landesberg.Tailspot;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

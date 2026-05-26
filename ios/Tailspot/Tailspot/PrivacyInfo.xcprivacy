@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		PrivacyInfo.xcprivacy — App Store privacy manifest.
+		Required for App Store submission (iOS 17+); strongly
+		recommended for TestFlight. Declares (a) the categories of
+		required-reason APIs we use and the reason codes, and (b)
+		the categories of user data we collect, what we do with it,
+		and whether we link it to identity or use for tracking.
+
+		Tailspot v0:
+		  - No backend, no third-party SDKs, no analytics. Data stays
+		    on the device.
+		  - No user accounts, no authentication, no linking to identity.
+		  - No tracking (NSPrivacyTracking = false).
+
+		Required-reason APIs touched:
+		  - UserDefaults (via @AppStorage for onboarding state,
+		    handle, notification toggles, etc.)
+		  - FileTimestamp (via FileManager.attributesOfItem for
+		    "most recent recording" in the replay analyzer).
+
+		Data collected (on-device only):
+		  - Precise location (to match heading + GPS to ADS-B positions).
+		  - Photos (the JPEG snapped when catching a plane).
+
+		If/when the backend ships, this manifest will need updates:
+		  - Add networking required-reason if we exchange identifiers.
+		  - Declare data linked to user identity (handle, catches list).
+		  - Declare data shared with third-parties (OpenSky, if not
+		    proxied) under NSPrivacyCollectedDataTypeLinked.
+	-->
+
+	<key>NSPrivacyTracking</key>
+	<false/>
+
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- "Access info from the same app." -->
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- "Inside the app or group container." -->
+				<string>0A2A.1</string>
+			</array>
+		</dict>
+	</array>
+
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

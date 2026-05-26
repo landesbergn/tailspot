@@ -6,6 +6,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, Phase 0 main next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-05-26 [TestFlight v0 prep])
+
+**TestFlight v0 prep — landed 2026-05-26.** Everything required to
+build, sign, and upload a TestFlight build is in place. See
+`docs/testflight-handoff.md` for the step-by-step. Highlights:
+
+- **Credentials baked via xcconfig + Info.plist.** Tailspot.xcconfig
+  (committed) `#include?`s Tailspot.secrets.xcconfig (gitignored,
+  holds real OpenSky values). Build-time substitution flows into
+  Info.plist keys `OpenSkyClientID` / `OpenSkyClientSecret`. New
+  resolution order in `OpenSkyClient.init`: explicit creds → env
+  vars → `Bundle.main.infoDictionary` → nil/anonymous. Env-var path
+  preserves Noah's existing dev loop; the bundle path is the only
+  one that survives TestFlight / home-screen / `devicectl` launches.
+  **Security accepted:** the values are in the shipped binary,
+  extractable from any `.ipa`. v0 risk for 1-2 trusted testers;
+  backend proxy is the path for wider distribution (PLAN.md §1).
+- **Manual `Info.plist`** at `ios/Tailspot/Info.plist` replaces the
+  previously-auto-generated one. Adds `ITSAppUsesNonExemptEncryption=false`
+  and the custom OpenSky keys. The Tailspot target switched from
+  `GENERATE_INFOPLIST_FILE=YES` + `INFOPLIST_KEY_*` build settings to
+  `INFOPLIST_FILE=Info.plist`. The Info.plist sits at the project
+  root (outside the synchronized `Tailspot/` folder) so it's not
+  bundled as a duplicate resource.
+- **Privacy manifest** at `ios/Tailspot/Tailspot/PrivacyInfo.xcprivacy`.
+  Declares UserDefaults (`CA92.1`) + FileTimestamp (`0A2A.1`)
+  required-reason API usage, and the two data categories we collect
+  (precise location + photos — app-functionality only, not linked
+  to identity, not tracking). Update when the backend ships.
+- **Version + build number scheme.** `MARKETING_VERSION=0.1.0`,
+  `CURRENT_PROJECT_VERSION=1`. Bump `CURRENT_PROJECT_VERSION` on
+  every TestFlight upload (App Store Connect requires monotonic
+  per marketing version); bump `MARKETING_VERSION` on meaningful
+  feature drops.
+- **App icon.** Programmatically generated 1024×1024 PNGs (3
+  luminosity variants — light / dark / tinted) via
+  `tools/generate-app-icon.swift`. Cyan→navy gradient + HangarGlyph,
+  consistent with brand tokens. Re-run the script to regenerate,
+  or replace the PNGs directly in `AppIcon.appiconset/`.
+- **xcconfig precedence trick.** `Tailspot.xcconfig` defines
+  `OPENSKY_CLIENT_ID =` (empty) as default, then `#include?`s the
+  optional secrets file. Last-wins is xcconfig precedence — when
+  the secrets file is present its assignments override the empty
+  defaults; when missing, the empty defaults stand and Info.plist
+  resolves to empty strings (anonymous mode). The `?` on
+  `#include?` makes missing-file a no-error condition.
+
+**Tests:** 169 still pass. The credential change is additive (env-var
+fallback preserves existing tests that don't touch OpenSky live calls).
+
+**Open follow-ups specific to TestFlight:**
+- App Store Connect record creation, signing, Archive + Upload all
+  live in Apple UIs — see `docs/testflight-handoff.md`.
+- Designed app icon would replace the generated one; just swap the
+  PNGs in `AppIcon.appiconset/`.
+- Privacy policy URL needed if/when adding external testers (>10
+  beyond your team). Internal testers are sufficient for v0.
+
 ## Current state (as of session ending 2026-05-25 [Capture & Hangar redesign IMPLEMENTED])
 
 **Capture & Hangar redesign — landed 2026-05-25, end-to-end.** Spec at `docs/superpowers/specs/2026-05-25-capture-and-hangar-redesign-design.md`; plan at `docs/superpowers/plans/2026-05-25-capture-and-hangar-redesign.md` (20 phased tasks); subagent-driven execution committed 24 commits between `ba47e78` and `93eec57`. All 169 unit tests pass.

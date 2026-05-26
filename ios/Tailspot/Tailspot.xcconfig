@@ -1,0 +1,38 @@
+// Tailspot.xcconfig — committed, public build configuration.
+//
+// Real OpenSky credentials live in `Tailspot.secrets.xcconfig` next
+// to this file. That file is gitignored and never committed. It
+// defines OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET; we `#include?`
+// it (the `?` makes the include optional — missing file is fine, no
+// build error). When absent, the credentials below resolve to empty
+// strings, the app launches in OpenSky's anonymous tier
+// (400 credits/day, exhausted in ~1.3hr), and OpenSkyClient logs
+// "credentials MISSING (anonymous)" so you can tell from the device
+// log stream.
+//
+// To set up real credentials locally:
+//   1. Copy Tailspot.secrets.example.xcconfig to Tailspot.secrets.xcconfig
+//   2. Paste your OpenSky client ID + secret
+//   3. Clean build (xcodebuild clean / Cmd+Shift+K) — Xcode caches
+//      resolved Info.plist values per-build.
+//
+// Apple's INFOPLIST_KEY_<KeyName> mechanism merges arbitrary keys
+// into the auto-generated Info.plist, but only for Apple-sanctioned
+// keys. For custom keys (OpenSkyClientID / OpenSkyClientSecret) we
+// use a manual Info.plist with $(VAR) substitution — see
+// `ios/Tailspot/Info.plist`. The substitution happens at build time,
+// so the resolved values are baked into the shipped binary.
+
+// Defaults — empty when no secrets file is present. The empty
+// strings flow into Info.plist via $(OPENSKY_CLIENT_ID) substitution
+// there; OpenSkyClient treats empty Info.plist values as "no creds"
+// and falls back to anonymous mode.
+//
+// `#include?` (with the question mark) is the optional-include
+// directive — if the file is missing, no error. The secrets file,
+// when present, gets included AFTER these defaults, so its
+// assignments override (last-wins is xcconfig precedence).
+OPENSKY_CLIENT_ID =
+OPENSKY_CLIENT_SECRET =
+
+#include? "Tailspot.secrets.xcconfig"

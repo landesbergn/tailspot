@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Standard bundle keys. $(VAR) is Xcode build-setting substitution
+		— resolved at build time from xcconfig + project settings.
+	-->
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<!-- Permission strings (shown in iOS permission prompts). -->
+	<key>NSCameraUsageDescription</key>
+	<string>Tailspot uses your camera to show planes and the sky behind aircraft labels.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Tailspot uses your location to identify aircraft you're pointing at by matching your viewing angle against live flight positions.</string>
+
+	<!-- Supported orientations. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!--
+		Generated launch screen + scene manifest — match the
+		INFOPLIST_KEY_UILaunchScreen_Generation / SceneManifest_Generation
+		build settings the project previously used.
+	-->
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+
+	<!--
+		Export compliance — declares the app uses no non-exempt
+		encryption. Skips the App Store Connect export compliance
+		questionnaire on every TestFlight upload. We use only
+		standard HTTPS (URLSession) which is exempt under
+		EAR 740.17(b)(1) (mass-market software using publicly
+		available standards).
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!--
+		Custom keys for OpenSky OAuth2 credentials. Values are
+		substituted from xcconfig at build time. When the xcconfig
+		secrets file is missing the substitution resolves to empty
+		strings (and OpenSkyClient falls back to anonymous mode).
+
+		These values are present in the shipped binary — anyone with
+		the .ipa can extract them. v0 only; backend proxy for v1.
+	-->
+	<key>OpenSkyClientID</key>
+	<string>$(OPENSKY_CLIENT_ID)</string>
+	<key>OpenSkyClientSecret</key>
+	<string>$(OPENSKY_CLIENT_SECRET)</string>
+</dict>
+</plist>

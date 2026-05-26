@@ -39,11 +39,25 @@ nonisolated final class OpenSkyClient: ADSBSource, Sendable {
     )!
     private let session = URLSession.shared
 
-    /// OAuth2 client credentials. To set: in Xcode →
-    /// Product → Scheme → Edit Scheme → Run → Arguments → Environment
-    /// Variables, add OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET.
-    /// Scheme env vars live under xcuserdata/ which is gitignored, so
-    /// credentials never get committed.
+    /// OAuth2 client credentials. Resolution order:
+    ///   1. Explicit `credentials:` argument (tests).
+    ///   2. `OPENSKY_CLIENT_ID` / `_SECRET` process environment vars
+    ///      — populated for local dev via the user-only Xcode scheme.
+    ///      These don't survive home-screen relaunches or
+    ///      `devicectl process launch` from a fresh shell, which is
+    ///      why TestFlight builds can't rely on them.
+    ///   3. `OpenSkyClientID` / `OpenSkyClientSecret` from
+    ///      `Bundle.main.infoDictionary` — baked into Info.plist at
+    ///      build time via xcconfig substitution
+    ///      (`ios/Tailspot/Tailspot.secrets.xcconfig`). This is the
+    ///      path that survives every launch type (TestFlight, home
+    ///      screen, devicectl, simulator).
+    ///   4. nil → anonymous mode (400 credits/day per IP, exhausted
+    ///      in ~1.3hr).
+    /// Env-var first preserves the existing dev iteration loop —
+    /// Noah's xcscheme env vars stay authoritative for his machine;
+    /// the baked Info.plist values are the fallback for shipped
+    /// builds (and any tester install).
     private let credentials: (clientId: String, clientSecret: String)?
 
     /// Cached OAuth2 access token. Locked because OpenSkyClient is
@@ -58,16 +72,41 @@ nonisolated final class OpenSkyClient: ADSBSource, Sendable {
     init(credentials: (clientId: String, clientSecret: String)? = nil) {
         if let creds = credentials {
             self.credentials = creds
+            self.credentialSource = "explicit"
+        } else if let envCreds = Self.credentialsFromEnvironment() {
+            self.credentials = envCreds
+            self.credentialSource = "env"
+        } else if let bundleCreds = Self.credentialsFromBundle() {
+            self.credentials = bundleCreds
+            self.credentialSource = "bundle"
         } else {
-            let env = ProcessInfo.processInfo.environment
-            if let id = env["OPENSKY_CLIENT_ID"], !id.isEmpty,
-               let secret = env["OPENSKY_CLIENT_SECRET"], !secret.isEmpty {
-                self.credentials = (id, secret)
-            } else {
-                self.credentials = nil
-            }
+            self.credentials = nil
+            self.credentialSource = "none"
         }
-        Log.openSky.notice("OpenSkyClient init: credentials \(self.credentials == nil ? "MISSING (anonymous)" : "present (authed)", privacy: .public)")
+        Log.openSky.notice("OpenSkyClient init: credentials \(self.credentials == nil ? "MISSING (anonymous)" : "present (authed, source=\(self.credentialSource))", privacy: .public)")
+    }
+
+    /// Where the active credentials came from (for log/debug only).
+    /// One of: "explicit", "env", "bundle", "none". Not sensitive —
+    /// it names the source, not the value.
+    private let credentialSource: String
+
+    private static func credentialsFromEnvironment() -> (clientId: String, clientSecret: String)? {
+        let env = ProcessInfo.processInfo.environment
+        guard let id = env["OPENSKY_CLIENT_ID"], !id.isEmpty,
+              let secret = env["OPENSKY_CLIENT_SECRET"], !secret.isEmpty else {
+            return nil
+        }
+        return (id, secret)
+    }
+
+    private static func credentialsFromBundle() -> (clientId: String, clientSecret: String)? {
+        let info = Bundle.main.infoDictionary
+        guard let id = info?["OpenSkyClientID"] as? String, !id.isEmpty,
+              let secret = info?["OpenSkyClientSecret"] as? String, !secret.isEmpty else {
+            return nil
+        }
+        return (id, secret)
     }
 
     /// True when the client has OAuth credentials and will run

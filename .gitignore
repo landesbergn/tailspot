@@ -99,3 +99,12 @@ tools/replay-harness/recordings/
 # Deploy-loop artifacts and per-user overrides
 /build/
 tools/deploy/config.local.sh
+
+# OpenSky OAuth credentials baked into the build via xcconfig
+# substitution. The real secrets file lives next to the project at
+# ios/Tailspot/Tailspot.secrets.xcconfig and is optionally `#include?`d
+# by Tailspot.xcconfig. NEVER COMMIT the secrets file — the values
+# flow into Info.plist and ship in the binary; rotating after a leak
+# is the only mitigation. The committed
+# Tailspot.secrets.example.xcconfig is the template; copy and fill in.
+ios/Tailspot/Tailspot.secrets.xcconfig
