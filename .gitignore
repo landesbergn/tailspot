@@ -108,3 +108,9 @@ tools/deploy/config.local.sh
 # is the only mitigation. The committed
 # Tailspot.secrets.example.xcconfig is the template; copy and fill in.
 ios/Tailspot/Tailspot.secrets.xcconfig
+
+# One-off rendered HTML artifacts of docs/ markdown files. The markdown
+# is canonical and committed; HTML versions are local conveniences
+# (open in a browser for nicer formatting) and shouldn't bloat the
+# repo. Regenerate when needed.
+docs/*.html
