@@ -73,18 +73,12 @@ struct MiniCardView: View {
                     .lineLimit(1)
             }
 
-            // Footer — type badge + count pill.
+            // Footer — type badge only. T1+T8's dedup-on-insert means
+            // row.count is always 1 for new rows; the ×N pill never
+            // showed >1 going forward and was meaningless visual noise.
             HStack(alignment: .center) {
                 TypeBadge(type: type, size: .sm)
                 Spacer(minLength: 4)
-                if row.count > 1 {
-                    Text("×\(row.count)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.black.opacity(0.5), in: .capsule)
-                }
             }
         }
         .padding(10)
