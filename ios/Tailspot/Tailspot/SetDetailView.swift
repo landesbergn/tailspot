@@ -52,7 +52,11 @@ struct SetDetailView: View {
         }
         .background(Brand.Color.bgPrimary)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        // Keep the interactive-pop gesture (swipe-from-left-edge) by
+        // NOT setting `.navigationBarBackButtonHidden(true)` — that
+        // flag disables the gesture in addition to hiding the back
+        // button. The nav bar is hidden anyway via `.toolbar(.hidden)`
+        // so the system back button never renders.
     }
 
     // MARK: - Header

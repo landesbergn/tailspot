@@ -64,7 +64,11 @@ struct CatchDetailView: View {
                 .padding(.top, 8)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        // Preserves swipe-from-left-edge to pop. The floating chevron
+        // pill is the explicit back affordance; the swipe is the
+        // implicit one. `.navigationBarBackButtonHidden(true)` would
+        // disable the interactive pop gesture in addition to hiding
+        // the (already hidden) back button.
         .task {
             // Skip the net call when the user has a catch photo —
             // the card already paints that JPEG and attribution is

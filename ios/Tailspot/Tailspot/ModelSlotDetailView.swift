@@ -64,7 +64,9 @@ struct ModelSlotDetailView: View {
         }
         .background(Brand.Color.bgPrimary)
         .toolbar(.hidden, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
+        // Preserves swipe-from-left-edge to pop. See SetDetailView for
+        // the why — `.navigationBarBackButtonHidden(true)` disables the
+        // interactive pop gesture too, which we don't want.
     }
 
     /// Title-case the manufacturer prefix; leave the model
