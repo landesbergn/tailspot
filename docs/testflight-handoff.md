@@ -156,6 +156,50 @@ Suggested seed for v0:
 > **Feedback** welcome to noah.landesberg@gmail.com — what works,
 > what's broken, what's confusing.
 
+## Xcode Cloud (optional CI path)
+
+If you're using Xcode Cloud instead of (or in addition to) the manual
+Archive flow above, there are two settings to get right that aren't
+obvious from the default workflow setup.
+
+### 1. Workflow project path
+
+The repo's Xcode project sits at `ios/Tailspot/Tailspot.xcodeproj`,
+not at the repo root. Xcode Cloud's default workflow scans the root,
+finds nothing, and fails with the misleading error:
+
+> A scheme called Tailspot (Tailspot project) does not exist in
+> Tailspot.xcodeproj
+
+Fix: in Xcode → Cmd+9 (Report Navigator) → Cloud tab → right-click
+the workflow → Edit Workflow → on the build/archive action set
+**Project or Workspace** to `ios/Tailspot/Tailspot.xcodeproj`. Or in
+App Store Connect → Xcode Cloud → Manage Workflows → same fields.
+
+### 2. OpenSky credentials in CI
+
+`Tailspot.secrets.xcconfig` is gitignored, so Xcode Cloud's clone
+won't have it — the resulting build runs in anonymous OpenSky mode
+(400 credits/day, exhausted in ~1.3hr per IP). To fix:
+
+1. In your workflow → Environment → Environment Variables →
+   add two **secret** entries:
+   - `OPENSKY_CLIENT_ID`
+   - `OPENSKY_CLIENT_SECRET`
+2. The committed `ios/Tailspot/ci_scripts/ci_post_clone.sh` reads
+   those env vars and writes them to
+   `ios/Tailspot/Tailspot.secrets.xcconfig` before the build phase
+   runs. Xcode Cloud invokes this automatically — no further config
+   needed on your side.
+3. The build log will print a line like
+   `ci_post_clone: wrote .../Tailspot.secrets.xcconfig (lengths: id=8, secret=64)`
+   so you can confirm from the log that the script saw real strings.
+   Values are never logged.
+
+If the env vars are missing or empty, the script logs that it's
+skipping and the build still succeeds (anonymous mode). Fix when
+ready.
+
 ## Subsequent uploads
 
 Each new TestFlight build needs:

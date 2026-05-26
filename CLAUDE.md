@@ -64,6 +64,17 @@ fallback preserves existing tests that don't touch OpenSky live calls).
 - Privacy policy URL needed if/when adding external testers (>10
   beyond your team). Internal testers are sufficient for v0.
 
+**Xcode Cloud (added 2026-05-26):** `ios/Tailspot/ci_scripts/ci_post_clone.sh`
+materializes `Tailspot.secrets.xcconfig` from workflow env vars
+(`OPENSKY_CLIENT_ID` / `_SECRET`, both marked secret in the
+workflow's Environment Variables). Apple invokes the script
+automatically post-clone, pre-build. When env vars are absent the
+script no-ops and the build runs anonymous; build still succeeds.
+The other Xcode-Cloud gotcha: the workflow's "Project or Workspace"
+field defaults to repo root, but ours is at
+`ios/Tailspot/Tailspot.xcodeproj` — must be set explicitly in the
+workflow or builds fail with "scheme Tailspot does not exist".
+
 ## Current state (as of session ending 2026-05-25 [Capture & Hangar redesign IMPLEMENTED])
 
 **Capture & Hangar redesign — landed 2026-05-25, end-to-end.** Spec at `docs/superpowers/specs/2026-05-25-capture-and-hangar-redesign-design.md`; plan at `docs/superpowers/plans/2026-05-25-capture-and-hangar-redesign.md` (20 phased tasks); subagent-driven execution committed 24 commits between `ba47e78` and `93eec57`. All 169 unit tests pass.
