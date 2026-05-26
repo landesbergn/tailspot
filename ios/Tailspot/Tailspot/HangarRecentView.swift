@@ -1,0 +1,100 @@
+//
+//  HangarRecentView.swift
+//  Tailspot
+//
+//  Recent-view body for the Hangar sheet — chronological dedup'd
+//  MiniCard grid sorted by first-catch desc. No filters; that's a
+//  Sets-view affordance. Spec § 6.
+//
+
+import SwiftUI
+import SwiftData
+import os
+
+struct HangarRecentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
+    @State private var rowToDelete: HangarRow?
+
+    private var rows: [HangarRow] {
+        HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+    }
+
+    var body: some View {
+        ScrollView {
+            if rows.isEmpty {
+                Text("No catches yet")
+                    .font(Brand.Font.body)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .padding(.top, 32)
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12)
+                    ],
+                    spacing: 12
+                ) {
+                    ForEach(rows) { row in
+                        NavigationLink(value: row) {
+                            MiniCardView(row: row)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                rowToDelete = row
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 32)
+            }
+        }
+        .background(Brand.Color.bgPrimary)
+        .alert(
+            deleteAlertTitle,
+            isPresented: Binding(
+                get: { rowToDelete != nil },
+                set: { if !$0 { rowToDelete = nil } }
+            )
+        ) {
+            Button("Delete", role: .destructive) {
+                if let row = rowToDelete { performDelete(row: row) }
+            }
+            Button("Cancel", role: .cancel) {
+                rowToDelete = nil
+            }
+        } message: {
+            Text("This can't be undone.")
+        }
+    }
+
+    private var deleteAlertTitle: String {
+        guard let row = rowToDelete else { return "" }
+        let cs = row.mostRecent.callsign?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty ?? row.icao24
+        if row.count == 1 {
+            return "Delete catch of \(cs)?"
+        }
+        return "Delete all \(row.count) catches of \(cs)?"
+    }
+
+    private func performDelete(row: HangarRow) {
+        for c in row.allCatches {
+            modelContext.delete(c)
+        }
+        do { try modelContext.save() } catch {
+            Log.adsb.error("Hangar delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        rowToDelete = nil
+    }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
+}

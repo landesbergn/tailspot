@@ -3,25 +3,17 @@
 //  Tailspot
 //
 //  The collection view ("Hangar") — every catch the user has logged.
-//  Presented as a sheet from ContentView. Catches sharing an icao24
-//  collapse into one MiniCard with a ×N count badge (dedupe via
-//  HangarGrouping.recent → single chronological bucket).
-//
-//  Layout: nav (Lockup + count pill) → horizontal filter chips
-//  (All / Rare+ / per-AircraftType) → 2-col LazyVGrid of MiniCards.
-//  Matches `HangarB` on the design canvas (detail-hangar-profile.jsx).
-//
-//  Delete: tap-and-hold a card → context menu → Delete. Grid views
-//  don't get swipe-actions, so the gesture moved to long-press.
+//  Presented as a sheet from ContentView. Hosts the 3-segment shell
+//  (Sets / Recent / Trophies); each segment owns its own body and,
+//  where applicable, its own delete state. See `HangarRecentView`,
+//  `HangarSetsView`, `HangarTrophiesView`.
 //
 
 import SwiftUI
 import SwiftData
-import os
 
 struct HangarView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     /// Pulled from the model container injected by TailspotApp. The
     /// @Query auto-updates when new Catches are inserted — so if you
     /// catch a plane, dismiss to the AR view, catch another, then
@@ -31,10 +23,6 @@ struct HangarView: View {
     /// Persisted across launches via @AppStorage so the user lands
     /// on whichever view they were last using.
     @AppStorage("tailspot.hangar.view") private var rawSegment: String = HangarSegment.sets.rawValue
-    /// When non-nil, a delete-confirm alert is presented for this
-    /// row. Triggered by the context-menu Delete action; confirming
-    /// wipes every Catch in `row.allCatches`.
-    @State private var rowToDelete: HangarRow?
 
     /// Two-way binding into the @AppStorage-backed raw string —
     /// lets the segmented switcher work in `HangarSegment` units
@@ -106,46 +94,7 @@ struct HangarView: View {
                 }
             }
             .background(Brand.Color.bgPrimary)
-            .alert(
-                deleteAlertTitle,
-                isPresented: Binding(
-                    get: { rowToDelete != nil },
-                    set: { if !$0 { rowToDelete = nil } }
-                )
-            ) {
-                Button("Delete", role: .destructive) {
-                    if let row = rowToDelete { performDelete(row: row) }
-                }
-                Button("Cancel", role: .cancel) {
-                    rowToDelete = nil
-                }
-            } message: {
-                Text("This can't be undone.")
-            }
         }
-    }
-
-    // MARK: - Delete
-
-    private var deleteAlertTitle: String {
-        guard let row = rowToDelete else { return "" }
-        let cs = row.mostRecent.callsign?.trimmedNonEmpty ?? row.icao24
-        if row.count == 1 {
-            return "Delete catch of \(cs)?"
-        }
-        return "Delete all \(row.count) catches of \(cs)?"
-    }
-
-    private func performDelete(row: HangarRow) {
-        for c in row.allCatches {
-            modelContext.delete(c)
-        }
-        do {
-            try modelContext.save()
-        } catch {
-            Log.adsb.error("Hangar delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-        rowToDelete = nil
     }
 
     // MARK: - Empty state
@@ -261,35 +210,17 @@ enum HangarFilter: Hashable {
     }
 }
 
-private extension String {
-    /// Trim + nil-if-empty.
-    var trimmedNonEmpty: String? {
-        let t = trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? nil : t
-    }
-}
-
 // MARK: - Segment view stubs
 //
-// Temporary placeholders for the three Hangar segments. Each gets
-// fleshed out in a follow-up task:
+// Temporary placeholders for the two Hangar segments still pending
+// extraction:
 //   - HangarSetsView      → Task 15 (rich set tiles)
-//   - HangarRecentView    → Task 13 (extracted MiniCard grid)
 //   - HangarTrophiesView  → Task 14 (Trophies surface moves in)
 //
-// Inline keeps the diff small until those tasks land.
+// `HangarRecentView` lives in its own file as of Task 13.
 struct HangarSetsView: View {
     var body: some View {
         Text("Sets")
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Brand.Color.bgPrimary)
-    }
-}
-
-struct HangarRecentView: View {
-    var body: some View {
-        Text("Recent")
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Brand.Color.bgPrimary)
