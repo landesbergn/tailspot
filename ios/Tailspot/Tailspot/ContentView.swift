@@ -496,14 +496,14 @@ struct ContentView: View {
             )
             .presentationBackground(.clear)
         }
-        // Multi-catch reveal — N≥2 PokeCards fanned out with combo
-        // math. T8 routes every catch (single + multi) through the
-        // single-card `pendingReveal`; T11 will branch to this
-        // payload when the merged catch path produces ≥2 reveal
-        // entries. Sheet binding stays wired in the meantime.
+        // Multi-catch reveal — N≥2 PokeCards staggered in with a
+        // chime+haptic per fresh card, combo banner climbing across
+        // the reveal, ALREADY CAUGHT stamps inline on duplicates.
+        // T11 routes every (fresh+dup) total ≥ 2 through here from
+        // `presentReveal`.
         .fullScreenCover(item: $pendingMultiReveal) { multi in
             MultiCatchReveal(
-                planes: multi.planes,
+                entries: multi.entries,
                 lastEntryNumber: multi.lastEntryNumber,
                 onDismiss: {
                     pendingMultiReveal = nil
@@ -572,10 +572,13 @@ struct ContentView: View {
         var isDuplicate: Bool = false
     }
 
-    /// Snapshot of a multi-catch run for `MultiCatchReveal`.
+    /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
+    /// preserve both fresh + duplicate icaos so the reveal can render
+    /// the ALREADY CAUGHT stamp inline (T11). The dedupe + dedup-
+    /// counted combo math live in the view itself.
     struct PendingMultiReveal: Identifiable, Equatable {
         let id = UUID()
-        let planes: [PokePlane]
+        let entries: [MultiCatchReveal.Entry]
         let lastEntryNumber: Int
     }
 
@@ -830,21 +833,54 @@ struct ContentView: View {
         }
     }
 
-    /// Picks the right reveal payload based on what landed. Today
-    /// (T8) every path funnels through the single-card `CardReveal`
-    /// using `pendingReveal`. T11 will branch to `MultiCatchReveal`
-    /// (via `pendingMultiReveal`, still declared above) when the
-    /// total catch count > 1.
+    /// Picks the right reveal payload based on what landed.
     ///
-    /// Duplicate-only case: synthesizes a `PokePlane` from the
-    /// already-stored row + (when available) the current live
-    /// observation for fresh alt/speed/distance.
+    /// - Single (1 fresh OR 1 dup) → `CardReveal` via `pendingReveal`.
+    /// - Multi (≥2 combined fresh + dup) → `MultiCatchReveal` via
+    ///   `pendingMultiReveal`. Fresh and dup entries are interleaved
+    ///   in the same order they were captured; the reveal renders
+    ///   ALREADY CAUGHT stamps inline on dups and only credits fresh
+    ///   tails toward the combo + points (T11).
+    ///
+    /// Duplicate-only case (single dup): synthesizes a `PokePlane`
+    /// from the already-stored row + (when available) the current
+    /// live observation for fresh alt/speed/distance.
     private func presentReveal(
         newCatches: [Catch],
         duplicates: [String],
         visibleByIcao: [String: ObservedAircraft]
     ) {
         let uniqueIcaoCount = Set(catches.map(\.icao24)).count
+        let totalCount = newCatches.count + duplicates.count
+
+        // Multi path — combine fresh + dups into a single ordered
+        // entry list. Dup fetches that fail (icao vanished between
+        // the dedup gate and the fetch) are dropped silently rather
+        // than dropping the whole reveal.
+        if totalCount >= 2 {
+            var entries: [MultiCatchReveal.Entry] = []
+            for c in newCatches {
+                let observed = visibleByIcao[c.icao24]
+                let plane = pokePlane(from: c, observed: observed)
+                entries.append(.init(plane: plane, isDuplicate: false))
+            }
+            for dupIcao in duplicates {
+                if let existing = fetchExistingCatch(icao: dupIcao) {
+                    let observed = visibleByIcao[dupIcao]
+                    let plane = pokePlane(from: existing, observed: observed)
+                    entries.append(.init(plane: plane, isDuplicate: true))
+                }
+            }
+            if entries.count >= 2 {
+                pendingMultiReveal = PendingMultiReveal(
+                    entries: entries,
+                    lastEntryNumber: uniqueIcaoCount
+                )
+                return
+            }
+            // Degenerate: lost enough dup fetches that we're back
+            // below 2. Fall through to the single-card paths below.
+        }
 
         if let first = newCatches.first {
             let observed = visibleByIcao[first.icao24]
@@ -857,31 +893,35 @@ struct ContentView: View {
             return
         }
 
-        if let dupIcao = duplicates.first {
-            let key = dupIcao.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            // Sort + fetchLimit so pre-dedup legacy rows return their
-            // most-recent snapshot, not an arbitrary one.
-            var descriptor = FetchDescriptor<Catch>(
-                predicate: #Predicate { $0.icao24 == key },
-                sortBy: [SortDescriptor(\.caughtAt, order: .reverse)]
+        if let dupIcao = duplicates.first,
+           let existing = fetchExistingCatch(icao: dupIcao) {
+            let observed = visibleByIcao[dupIcao]
+            let plane = pokePlane(from: existing, observed: observed)
+            pendingReveal = PendingReveal(
+                plane: plane,
+                entryNumber: uniqueIcaoCount,
+                isDuplicate: true
             )
-            descriptor.fetchLimit = 1
-            if let existing = try? modelContext.fetch(descriptor).first {
-                let observed = visibleByIcao[dupIcao]
-                let plane = pokePlane(from: existing, observed: observed)
-                pendingReveal = PendingReveal(
-                    plane: plane,
-                    entryNumber: uniqueIcaoCount,
-                    isDuplicate: true
-                )
-                return
-            }
+            return
         }
 
         // Nothing to present (e.g., all icaos somehow vanished from
         // the model store between the dedup check and the fetch). Drop
         // the in-flight latch so the button isn't soft-locked.
         captureInFlight = false
+    }
+
+    /// Fetches the most-recent stored `Catch` for the given icao24,
+    /// or nil if none. Used by `presentReveal` to synthesize a
+    /// `PokePlane` for duplicate entries (both single + multi paths).
+    private func fetchExistingCatch(icao: String) -> Catch? {
+        let key = icao.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var descriptor = FetchDescriptor<Catch>(
+            predicate: #Predicate { $0.icao24 == key },
+            sortBy: [SortDescriptor(\.caughtAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
     }
 
     /// Build a presentational `PokePlane` from a stored `Catch`,

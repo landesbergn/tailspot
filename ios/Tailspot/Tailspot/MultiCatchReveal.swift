@@ -2,53 +2,93 @@
 //  MultiCatchReveal.swift
 //  Tailspot
 //
-//  The full-screen reveal that fires when the user captures
-//  multiple planes in a single frame. N cards fan out from
-//  center with rarity-driven holo treatment; a "combo math"
-//  receipt sits above them showing the base + multiplier ladder.
+//  The hype-peak full-screen reveal that fires when the user catches
+//  ≥2 planes in a single frame (T11). Cards stagger in one-at-a-time
+//  (~250 ms apart); each non-duplicate landing fires a haptic + chime
+//  via `RevealAudio.tap(step:)`. A combo banner builds across the
+//  reveal:
 //
-//  Combo multiplier (per the design canvas):
-//    2 in frame → ×1.5
-//    3 in frame → ×2.0
-//    4 in frame → ×2.5
-//    5+ in frame → ×3.0
+//    "CATCH ×1"  →  "COMBO ×2 +N pts"  →  "COMBO ×3 +M pts"  ...
+//
+//  Only fresh (non-duplicate) tails contribute to the combo count and
+//  the awarded points. Duplicates appear inline with an `ALREADY
+//  CAUGHT` stamp (reused styling from `CardReveal` T10) but don't
+//  bump the combo.
+//
+//  Combo multiplier (per the design canvas — preserved API; tests pin
+//  these values):
+//    2 fresh → ×1.5
+//    3 fresh → ×2.0
+//    4 fresh → ×2.5
+//    5+ fresh → ×3.0
 //
 //  Single-catch reveal (`CardReveal.swift`) handles the N=1 case;
-//  this view assumes `planes.count >= 2`.
+//  this view assumes `entries.count >= 2`.
 //
 
 import SwiftUI
 
 struct MultiCatchReveal: View {
-    let planes: [PokePlane]
-    /// First entry number in the run — caller computes this (count
-    /// of unique icao24 BEFORE the run minus 0..<N, or just the
-    /// count of unique icao24 after, displayed once).
+    /// Pairing of a card payload with a duplicate flag. Duplicates
+    /// render inline with the ALREADY CAUGHT stamp but don't contribute
+    /// to the combo math (no points, no chime).
+    struct Entry: Identifiable, Equatable {
+        let id = UUID()
+        let plane: PokePlane
+        let isDuplicate: Bool
+    }
+
+    let entries: [Entry]
+    /// First entry number in the run — caller computes this. Shown in
+    /// the status pill as a quiet "ENTRY #N" tag at the top.
     let lastEntryNumber: Int
     let onDismiss: () -> Void
     let onViewInHangar: () -> Void
 
-    @State private var animateIn = false
-    @State private var revealedCount = 0
-    /// Index of the currently-frontmost card. Drives a subtle
-    /// elevation effect — the front card sits a hair higher.
-    @State private var frontIndex: Int = 0
+    /// 0..<entries.count as the stagger advances. -1 = pre-stagger.
+    @State private var revealedIndex: Int = -1
 
+    /// Time between successive card lands. 0.25 s matches spec § 3.3.
+    private static let stagger: TimeInterval = 0.25
+    /// Cap the fan to 5 cards visually even if more entries arrive
+    /// (defensive — `performCatch` already gates at ≤5 from the AR
+    /// zone, but the math should still degrade gracefully).
     private static let maxFan = 5
 
-    private var totalBase: Int {
-        planes.reduce(0) { $0 + $1.rarity.basePoints }
+    // MARK: - Combo math (running totals based on revealedIndex)
+
+    /// Up-to-`revealedIndex` slice — what the user can see right now.
+    private var visibleEntries: ArraySlice<Entry> {
+        guard revealedIndex >= 0 else { return entries.prefix(0) }
+        return entries.prefix(revealedIndex + 1)
     }
 
-    private var multiplier: Double {
-        Self.comboMultiplier(for: planes.count)
+    /// Count of fresh (non-duplicate) cards revealed so far.
+    private var freshSoFar: Int {
+        visibleEntries.filter { !$0.isDuplicate }.count
     }
 
-    private var totalAwarded: Int {
-        Int((Double(totalBase) * multiplier).rounded())
+    /// Total fresh count at the end of the run — pins the multiplier.
+    private var totalFresh: Int {
+        entries.filter { !$0.isDuplicate }.count
     }
 
-    /// Combo multiplier as a function of fan size.
+    /// Base points across all currently-visible fresh cards.
+    private var baseSoFar: Int {
+        visibleEntries
+            .filter { !$0.isDuplicate }
+            .reduce(0) { $0 + $1.plane.rarity.basePoints }
+    }
+
+    /// Points awarded so far (base × multiplier). Multiplier is keyed
+    /// to the *final* fresh count (not the running one) so the banner
+    /// uses the same multiplier the receipt will close with.
+    private var awardedSoFar: Int {
+        Int((Double(baseSoFar) * Self.comboMultiplier(for: totalFresh)).rounded())
+    }
+
+    /// Combo multiplier as a function of fresh-catch count. (Tests
+    /// pin these values; the API is preserved from the prior version.)
     static func comboMultiplier(for n: Int) -> Double {
         switch n {
         case ..<2: return 1.0
@@ -66,45 +106,55 @@ struct MultiCatchReveal: View {
 
             VStack(spacing: 14) {
                 statusPill
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : -8)
+                    .opacity(revealedIndex >= 0 ? 1 : 0)
+                    .offset(y: revealedIndex >= 0 ? 0 : -8)
+
+                comboBanner
+                    .opacity(revealedIndex >= 0 ? 1 : 0)
+                    .animation(.easeOut(duration: 0.2), value: freshSoFar)
 
                 Spacer(minLength: 0)
 
                 fan
-                    .opacity(animateIn ? 1 : 0)
-                    .scaleEffect(animateIn ? 1 : 0.8)
 
                 Spacer(minLength: 0)
 
-                receipt
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 8)
-
-                buttons
-                    .opacity(animateIn ? 1 : 0)
-                    .offset(y: animateIn ? 0 : 12)
+                // Receipt + dismiss button reveal only after the last
+                // card has landed so the eye stays on the cards
+                // during stagger.
+                if revealedIndex >= entries.count - 1 {
+                    receipt
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    buttons
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
             }
             .padding(.top, 64)
             .padding(.horizontal, 20)
             .padding(.bottom, 28)
+            .animation(.spring(response: 0.45, dampingFraction: 0.78),
+                       value: revealedIndex)
         }
         .background(.black)
-        .onAppear {
-            // Stagger card reveal: each new card lands ~150ms after
-            // the previous, capped at `maxFan`. Front-of-stack walks
-            // through them so the eye gets pulled left-to-right.
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
-                animateIn = true
-            }
-            let count = min(planes.count, Self.maxFan)
-            for i in 0..<count {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.20 * Double(i)) {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                        revealedCount = i + 1
-                        frontIndex = i
-                    }
+        .task {
+            // Initial settle frame before the stagger so the backdrop
+            // can paint without the first card popping in mid-fade.
+            try? await Task.sleep(for: .milliseconds(120))
+            for i in 0..<entries.count {
+                revealedIndex = i
+                let entry = entries[i]
+                // Haptic + chime only for fresh tails. Duplicates land
+                // silently so the chime ladder reads as the new-catch
+                // count.
+                if !entry.isDuplicate {
+                    // Use the count of fresh cards landed so far as
+                    // the chime step — so the chime ladder ascends
+                    // 1→2→3 even if a dup sits between two fresh.
+                    let freshStep = entries.prefix(i + 1)
+                        .filter { !$0.isDuplicate }.count - 1
+                    RevealAudio.tap(step: max(0, freshStep))
                 }
+                try? await Task.sleep(for: .seconds(Self.stagger))
             }
         }
     }
@@ -144,7 +194,7 @@ struct MultiCatchReveal: View {
             Circle().fill(Brand.Color.alertAdvisory)
                 .frame(width: 8, height: 8)
                 .shadow(color: Brand.Color.alertAdvisory.opacity(0.6), radius: 4)
-            Text("\(planes.count)× MULTI-CATCH · COMBO ×\(formatMultiplier(multiplier))")
+            Text("\(entries.count)× MULTI-CATCH · ENTRY #\(lastEntryNumber)")
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -161,53 +211,121 @@ struct MultiCatchReveal: View {
             : String(format: "%.1f", x)
     }
 
+    // MARK: - Combo banner (T11)
+
+    /// Builds across the stagger. Reads "CATCH ×1" at the first fresh
+    /// tail; flips to "COMBO ×N +M pts" once a second fresh tail
+    /// lands. Duplicate-only states (e.g., first card revealed is a
+    /// dup) read as "DUPLICATE" until a fresh tail arrives.
+    @ViewBuilder
+    private var comboBanner: some View {
+        let label: String
+        let isComboLive = freshSoFar >= 2
+        if freshSoFar == 0 {
+            // Edge case: dup revealed first. Quiet placeholder so the
+            // banner slot doesn't pop later.
+            label = "ALREADY CAUGHT"
+        } else if freshSoFar == 1 {
+            label = "CATCH ×1"
+        } else {
+            label = "COMBO ×\(freshSoFar) +\(awardedSoFar) pts"
+        }
+        let tint: Color = isComboLive
+            ? Brand.Color.alertAdvisory
+            : (freshSoFar == 0 ? Brand.Color.alertWarning : Brand.Color.cyan)
+        return Text(label)
+            .font(.system(size: 14, weight: .bold, design: .monospaced))
+            .tracking(2)
+            .foregroundStyle(tint)
+            .monospacedDigit()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(tint.opacity(0.16), in: .capsule)
+            .overlay(Capsule().strokeBorder(tint.opacity(0.55), lineWidth: 1))
+            .scaleEffect(isComboLive ? 1.02 : 1.0)
+    }
+
     // MARK: - Fan
 
     private var fan: some View {
         // Lay out up to `maxFan` cards arranged on an arc. Use
         // medium card size (220×308) so up to 5 fit comfortably on
         // an iPhone-width sheet.
-        let count = min(planes.count, Self.maxFan)
+        let count = min(entries.count, Self.maxFan)
         // Total spread in degrees; widens with count but caps so
         // edge cards stay readable.
         let totalSpread: Double = {
             switch count {
-            case 2:  return 16
-            case 3:  return 30
-            case 4:  return 44
-            default: return 56
+            case ..<2: return 0
+            case 2:    return 16
+            case 3:    return 30
+            case 4:    return 44
+            default:   return 56
             }
         }()
-        let step = count == 1 ? 0 : totalSpread / Double(count - 1)
+        let step = count <= 1 ? 0 : totalSpread / Double(count - 1)
+        let halfCount = Double(count) / 2.0
         return ZStack {
-            ForEach(0..<count, id: \.self) { i in
+            ForEach(Array(entries.prefix(count).enumerated()), id: \.element.id) { i, entry in
                 let angle = -totalSpread/2 + step * Double(i)
-                let isFront = i == frontIndex
-                let visible = i < revealedCount
-                PokeCardView(
-                    plane: planes[i],
-                    size: .md,
-                    holoIntensity: 0.65,
-                    rotation: .degrees(angle)
-                )
-                .offset(x: CGFloat(i - count/2) * 28, y: isFront ? -8 : 0)
-                .zIndex(isFront ? 1000 : Double(i))
-                .opacity(visible ? 1 : 0)
-                .scaleEffect(visible ? 1 : 0.6)
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                        frontIndex = i
+                let visible = i <= revealedIndex
+                // Offset cards horizontally from center; symmetric.
+                let xOffset = (Double(i) - halfCount + 0.5) * 28
+                ZStack {
+                    PokeCardView(
+                        plane: entry.plane,
+                        size: .md,
+                        holoIntensity: entry.isDuplicate ? 0.25 : 0.65,
+                        rotation: .degrees(angle)
+                    )
+                    if entry.isDuplicate {
+                        alreadyCaughtStampSmall
+                            .rotationEffect(.degrees(angle))
+                            .allowsHitTesting(false)
                     }
                 }
+                .offset(x: CGFloat(xOffset), y: visible ? 0 : 40)
+                .zIndex(Double(i))
+                .opacity(visible ? 1 : 0)
+                .scaleEffect(visible ? 1 : 0.6)
+                .animation(.spring(response: 0.45, dampingFraction: 0.7),
+                           value: revealedIndex)
             }
         }
         .frame(height: 320)
     }
 
-    // MARK: - Receipt
+    /// Smaller version of CardReveal's diagonal ALREADY CAUGHT stamp.
+    /// Intentionally inlined (rather than imported) so MultiCatchReveal
+    /// stays self-contained — see T10 comment in CardReveal.swift for
+    /// the full-size source.
+    private var alreadyCaughtStampSmall: some View {
+        Text("ALREADY\nCAUGHT")
+            .font(.system(size: 14, weight: .black, design: .monospaced))
+            .tracking(1.5)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(Brand.Color.alertWarning)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Brand.Color.bgPrimary.opacity(0.85))
+            .overlay(
+                Rectangle()
+                    .strokeBorder(Brand.Color.alertWarning, lineWidth: 1.5)
+            )
+            .rotationEffect(.degrees(-18))
+            .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 1)
+    }
+
+    // MARK: - Receipt (final state)
 
     private var receipt: some View {
-        VStack(spacing: 6) {
+        let totalBase = entries
+            .filter { !$0.isDuplicate }
+            .reduce(0) { $0 + $1.plane.rarity.basePoints }
+        let multiplier = Self.comboMultiplier(for: totalFresh)
+        let totalAwarded = Int((Double(totalBase) * multiplier).rounded())
+        let dupCount = entries.filter(\.isDuplicate).count
+        return VStack(spacing: 6) {
             HStack {
                 Text("Base")
                     .font(Brand.Font.caption)
@@ -227,6 +345,18 @@ struct MultiCatchReveal: View {
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundStyle(Brand.Color.alertAdvisory)
                     .monospacedDigit()
+            }
+            if dupCount > 0 {
+                HStack {
+                    Text("Already in Hangar")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.alertWarning)
+                    Spacer()
+                    Text("×\(dupCount)")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Brand.Color.alertWarning)
+                        .monospacedDigit()
+                }
             }
             Divider().background(Brand.Color.textTertiary.opacity(0.3)).padding(.vertical, 2)
             HStack {
@@ -279,14 +409,27 @@ struct MultiCatchReveal: View {
     }
 }
 
-#Preview {
+#Preview("Multi (3 fresh)") {
     MultiCatchReveal(
-        planes: [
-            .init(callsign: "UAL248", model: "Boeing 787-9", carrier: "United", rarity: .rare, type: .wide),
-            .init(callsign: "DAL2104", model: "Airbus A320", carrier: "Delta", rarity: .common, type: .narrow),
-            .init(callsign: "ASA1276", model: "Boeing 737 MAX", carrier: "Alaska", rarity: .uncommon, type: .narrow),
+        entries: [
+            .init(plane: .init(callsign: "UAL248", model: "Boeing 787-9", carrier: "United", rarity: .rare, type: .wide), isDuplicate: false),
+            .init(plane: .init(callsign: "DAL2104", model: "Airbus A320", carrier: "Delta", rarity: .common, type: .narrow), isDuplicate: false),
+            .init(plane: .init(callsign: "ASA1276", model: "Boeing 737 MAX", carrier: "Alaska", rarity: .uncommon, type: .narrow), isDuplicate: false),
         ],
         lastEntryNumber: 48,
+        onDismiss: {},
+        onViewInHangar: {}
+    )
+}
+
+#Preview("Multi (2 fresh + 1 dup)") {
+    MultiCatchReveal(
+        entries: [
+            .init(plane: .init(callsign: "UAL248", model: "Boeing 787-9", carrier: "United", rarity: .rare, type: .wide), isDuplicate: false),
+            .init(plane: .init(callsign: "DAL2104", model: "Airbus A320", carrier: "Delta", rarity: .common, type: .narrow), isDuplicate: true),
+            .init(plane: .init(callsign: "ASA1276", model: "Boeing 737 MAX", carrier: "Alaska", rarity: .uncommon, type: .narrow), isDuplicate: false),
+        ],
+        lastEntryNumber: 49,
         onDismiss: {},
         onViewInHangar: {}
     )
