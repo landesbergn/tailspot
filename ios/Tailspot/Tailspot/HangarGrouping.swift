@@ -34,6 +34,13 @@ struct HangarRow: Identifiable, Hashable {
 
     var id: String { icao24 }
 
+    /// Earliest catch in the row's history. With Task 8's dedup-on-insert
+    /// going forward there's only ever one Catch per icao24, so this
+    /// equals `mostRecent`. Legacy multi-catch rows (pre-dedup) surface
+    /// the original moment here — used by CatchDetailView's First-caught
+    /// panel.
+    var firstCatch: Catch { allCatches.last ?? mostRecent }
+
     /// Snapshotted rarity tier from the most-recent catch. Reads the
     /// stored value (a catch is a frozen moment) and falls back to
     /// the classifier for pre-rarity-field rows.

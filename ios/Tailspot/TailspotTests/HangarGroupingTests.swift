@@ -95,6 +95,20 @@ struct HangarGroupingTests {
         #expect(icaos == ["b", "c", "a"])
     }
 
+    @Test func hangarRowFirstCatchIsEarliestInAllCatches() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "x", manufacturer: "BOEING", model: "737", caughtAt: t0.addingTimeInterval(120)),
+            makeCatch(icao: "x", manufacturer: "BOEING", model: "737", caughtAt: t0),
+            makeCatch(icao: "x", manufacturer: "BOEING", model: "737", caughtAt: t0.addingTimeInterval(60)),
+        ], by: .aircraftType)
+
+        let row = groups[0].rows[0]
+        #expect(row.icao24 == "x")
+        #expect(row.firstCatch.caughtAt == t0)
+        #expect(row.mostRecent.caughtAt == t0.addingTimeInterval(120))
+    }
+
     @Test func emptyInputReturnsEmptyArray() {
         let groups = HangarGrouping.group([], by: .aircraftType)
         #expect(groups.isEmpty)
