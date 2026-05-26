@@ -491,7 +491,8 @@ struct ContentView: View {
                     pendingReveal = nil
                     captureInFlight = false
                     showHangar = true
-                }
+                },
+                isDuplicate: reveal.isDuplicate
             )
             .presentationBackground(.clear)
         }

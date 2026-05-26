@@ -30,6 +30,12 @@ struct CardReveal: View {
     /// Tailspot's call site dismisses the reveal AND opens the
     /// Hangar sheet.
     let onViewInHangar: () -> Void
+    /// Re-catch of a plane already in the Hangar. When true, the reveal
+    /// still fires (per spec § 3.4) but the rarity bloom + light rays
+    /// are suppressed and a diagonal red `ALREADY CAUGHT` stamp is
+    /// laid over the card front. T8 threads the flag through
+    /// `PendingReveal`; T10 makes the view consume it.
+    var isDuplicate: Bool = false
 
     @State private var showingBack = false
     @State private var animateIn = false
@@ -87,31 +93,37 @@ struct CardReveal: View {
     private var backdrop: some View {
         ZStack {
             // Tier-tinted radial bloom (subtle on common/uncommon,
-            // strong on rare+).
-            let bloomOpacity: Double = {
-                switch plane.rarity {
-                case .common:    return 0.10
-                case .uncommon:  return 0.18
-                case .rare:      return 0.28
-                case .epic:      return 0.36
-                case .legendary: return 0.48
+            // strong on rare+). Suppressed entirely on duplicate
+            // catches — the bloom is the loud "you got something new"
+            // signal that the ALREADY CAUGHT stamp explicitly
+            // contradicts. Spec § 3.4.
+            if !isDuplicate {
+                let bloomOpacity: Double = {
+                    switch plane.rarity {
+                    case .common:    return 0.10
+                    case .uncommon:  return 0.18
+                    case .rare:      return 0.28
+                    case .epic:      return 0.36
+                    case .legendary: return 0.48
+                    }
+                }()
+                RadialGradient(
+                    gradient: Gradient(colors: [
+                        plane.rarity.tint.opacity(bloomOpacity), .clear,
+                    ]),
+                    center: UnitPoint(x: 0.5, y: 0.42),
+                    startRadius: 0,
+                    endRadius: 380
+                )
+                .blendMode(.screen)
+                // Light rays — only show on rare+ tiers, kept restrained
+                // so the card stays the focal point. Also suppressed on
+                // duplicates by the surrounding `if !isDuplicate`.
+                if plane.rarity.ordinal >= Rarity.rare.ordinal {
+                    lightRays
+                        .blendMode(.screen)
+                        .opacity(0.35)
                 }
-            }()
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    plane.rarity.tint.opacity(bloomOpacity), .clear,
-                ]),
-                center: UnitPoint(x: 0.5, y: 0.42),
-                startRadius: 0,
-                endRadius: 380
-            )
-            .blendMode(.screen)
-            // Light rays — only show on rare+ tiers, kept restrained
-            // so the card stays the focal point.
-            if plane.rarity.ordinal >= Rarity.rare.ordinal {
-                lightRays
-                    .blendMode(.screen)
-                    .opacity(0.35)
             }
         }
     }
@@ -141,11 +153,19 @@ struct CardReveal: View {
     // MARK: - Status pill
 
     private var statusPill: some View {
-        HStack(spacing: 8) {
-            Circle().fill(Brand.Color.alertNormal)
+        // Duplicate path swaps the green "NEW CARD" pill for an amber
+        // "RE-CATCH" pill so the top chrome telegraphs the duplicate
+        // state before the eye even reaches the stamp. Entry # still
+        // shown — useful as a "this is the Nth unique" cue.
+        let dotColor = isDuplicate ? Brand.Color.alertCaution : Brand.Color.alertNormal
+        let label    = isDuplicate
+            ? "RE-CATCH · ENTRY #\(String(format: "%03d", entryNumber))"
+            : "NEW CARD · ENTRY #\(String(format: "%03d", entryNumber))"
+        return HStack(spacing: 8) {
+            Circle().fill(dotColor)
                 .frame(width: 8, height: 8)
-                .shadow(color: Brand.Color.alertNormal.opacity(0.6), radius: 4)
-            Text("NEW CARD · ENTRY #\(String(format: "%03d", entryNumber))")
+                .shadow(color: dotColor.opacity(0.6), radius: 4)
+            Text(label)
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -170,6 +190,16 @@ struct CardReveal: View {
                     ))
             } else {
                 PokeCardView(plane: plane, size: .lg)
+                    .overlay {
+                        // Diagonal red-bordered "ALREADY CAUGHT" stamp,
+                        // shown only on the card front for duplicates.
+                        // Hidden on the Pokédex back so the spec sheet
+                        // stays legible. Spec § 3.4.
+                        if isDuplicate {
+                            alreadyCaughtStamp
+                                .accessibilityLabel("Already caught")
+                        }
+                    }
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.92).combined(with: .opacity),
                         removal:   .scale(scale: 1.08).combined(with: .opacity)
@@ -183,6 +213,27 @@ struct CardReveal: View {
         }
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(showingBack ? "Show card front" : "Show card details on back")
+    }
+
+    /// Trading-card "stamp" overlay laid diagonally across the PokeCard
+    /// front when the catch is a re-catch. Modeled after physical
+    /// stamps — monospaced bold all-caps with a hard rectangular
+    /// border in `Brand.Color.alertWarning`.
+    private var alreadyCaughtStamp: some View {
+        Text("ALREADY\nCAUGHT")
+            .font(.system(size: 26, weight: .black, design: .monospaced))
+            .tracking(2)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(Brand.Color.alertWarning)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Brand.Color.bgPrimary.opacity(0.85))
+            .overlay(
+                Rectangle()
+                    .strokeBorder(Brand.Color.alertWarning, lineWidth: 2.5)
+            )
+            .rotationEffect(.degrees(-18))
+            .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
     }
 
     // MARK: - Buttons
@@ -309,7 +360,7 @@ private extension String {
     }
 }
 
-#Preview {
+#Preview("New catch") {
     CardReveal(
         plane: .init(
             callsign: "BAW286",
@@ -324,5 +375,24 @@ private extension String {
         entryNumber: 48,
         onDismiss: {},
         onViewInHangar: {}
+    )
+}
+
+#Preview("Re-catch (duplicate)") {
+    CardReveal(
+        plane: .init(
+            callsign: "BAW286",
+            model: "Airbus A380",
+            carrier: "British Airways",
+            rarity: .epic,
+            type: .wide,
+            altText: "FL360",
+            speedText: "488 kt",
+            distText: "9 km"
+        ),
+        entryNumber: 48,
+        onDismiss: {},
+        onViewInHangar: {},
+        isDuplicate: true
     )
 }
