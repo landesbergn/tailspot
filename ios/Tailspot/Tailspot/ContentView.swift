@@ -746,8 +746,13 @@ struct ContentView: View {
         // linear scans).
         let observerLat = location.latitude ?? 0
         let observerLon = location.longitude ?? 0
+        // `Dictionary(uniquingKeysWith:)` over `uniqueKeysWithValues:` —
+        // if upstream ever emits two observations with the same icao24
+        // (reannotation race, future provider quirk) we deduplicate
+        // instead of crashing the catch button.
         let visibleByIcao = Dictionary(
-            uniqueKeysWithValues: adsb.observed.map { ($0.aircraft.icao24, $0) }
+            adsb.observed.map { ($0.aircraft.icao24, $0) },
+            uniquingKeysWith: { first, _ in first }
         )
 
         Task { @MainActor in
@@ -770,15 +775,17 @@ struct ContentView: View {
                     duplicates.append(icao)
                     continue
                 }
-                // Metadata: prefer the locked one (pinned plane) when
-                // present, then the ambient prefetch cache, then a
-                // direct manager lookup as last resort.
+                // Metadata: prefer the locked one (pinned plane,
+                // manually resolved on lock) when this icao is the
+                // pin, then the ambient prefetch cache, then a direct
+                // manager lookup. Reordered so the pinned-snapshot
+                // wins over a possibly-stale ambient hit.
                 let metadata: AircraftMetadata?
-                if let cached = ambientMetadata[icao] ?? nil {
-                    metadata = cached
-                } else if let locked = lockedMetadata,
-                          icao == lockOn.state.targetIcao24 {
+                if let locked = lockedMetadata,
+                   icao == lockOn.state.targetIcao24 {
                     metadata = locked
+                } else if let cached = ambientMetadata[icao] ?? nil {
+                    metadata = cached
                 } else {
                     metadata = await adsb.metadata(for: icao)
                 }
@@ -851,9 +858,13 @@ struct ContentView: View {
 
         if let dupIcao = duplicates.first {
             let key = dupIcao.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let descriptor = FetchDescriptor<Catch>(
-                predicate: #Predicate { $0.icao24 == key }
+            // Sort + fetchLimit so pre-dedup legacy rows return their
+            // most-recent snapshot, not an arbitrary one.
+            var descriptor = FetchDescriptor<Catch>(
+                predicate: #Predicate { $0.icao24 == key },
+                sortBy: [SortDescriptor(\.caughtAt, order: .reverse)]
             )
+            descriptor.fetchLimit = 1
             if let existing = try? modelContext.fetch(descriptor).first {
                 let observed = visibleByIcao[dupIcao]
                 let plane = pokePlane(from: existing, observed: observed)
