@@ -74,14 +74,23 @@ struct HangarView: View {
                     CatchDetailView(row: row)
                 }
                 .navigationDestination(for: SetDetailRoute.self) { route in
-                    // Task 15 wires this; Task 16 replaces the SetDetailView
-                    // stub (which lives in HangarSetsView.swift) with the
-                    // real model-slot grid. If a set id ever fails to
-                    // resolve (e.g., we deleted a set from PokeSets.all
-                    // but a stale nav value lingered), fall through to an
-                    // empty view rather than crashing.
+                    // Task 16 — real `SetDetailView` (model-slot grid)
+                    // lives in `SetDetailView.swift`. If a set id ever
+                    // fails to resolve (e.g., we deleted an entry from
+                    // PokeSets.all but a stale nav value lingered),
+                    // fall through to an empty view rather than crash.
                     if let set = PokeSets.all.first(where: { $0.id == route.setId }) {
                         SetDetailView(set: set)
+                    }
+                }
+                .navigationDestination(for: ModelSlotRoute.self) { route in
+                    // Task 16 — pushes the (still-stubbed in Task 17)
+                    // `ModelSlotDetailView` for a single entry within a
+                    // set. Resolve both ids back to their live values;
+                    // a missing one no-ops rather than crashing.
+                    if let set = PokeSets.all.first(where: { $0.id == route.setId }),
+                       let entry = set.entries.first(where: { $0.id == route.entryId }) {
+                        ModelSlotDetailView(set: set, entry: entry)
                     }
                 }
         }

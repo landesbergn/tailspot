@@ -135,18 +135,6 @@ private struct SetTile: View {
     }
 }
 
-// MARK: - SetDetailView stub (Task 16 fleshes out)
-
-/// Temporary destination wired by `HangarView`'s navigationDestination
-/// for `SetDetailRoute`. Task 16 replaces this with the real model-slot
-/// grid; keeping the stub colocated with its consumer means the swap
-/// is a single-file delete-and-replace.
-struct SetDetailView: View {
-    let set: PokeSet
-    var body: some View {
-        Text(set.title)
-            .foregroundStyle(Brand.Color.textPrimary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Brand.Color.bgPrimary)
-    }
-}
+// The real `SetDetailView` lives in `SetDetailView.swift` (Task 16).
+// Routing from `SetDetailRoute` is wired in `HangarView` via
+// `.navigationDestination(for: SetDetailRoute.self)`.
