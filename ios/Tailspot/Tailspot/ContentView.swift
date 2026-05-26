@@ -1510,6 +1510,9 @@ struct ContentView: View {
         ) {
             if icao == pinned {
                 // Tap-same-plane toggles off — explicit "cancel."
+                // Both writes required: T5's .onChange housekeeping
+                // covers engine → view only; without unpin() the engine
+                // would still hold .locked until forced.
                 recorder.recordUnpin(at: now)
                 pinnedIcao = nil
                 lockOn.unpin()
