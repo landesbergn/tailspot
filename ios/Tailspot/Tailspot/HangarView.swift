@@ -36,40 +36,12 @@ struct HangarView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(Brand.Color.bgPrimary, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        // Canvas-style small Lockup — peaked-roof
-                        // hangar glyph + TAILSPOT wordmark at 13pt.
-                        HStack(spacing: 8) {
-                            HangarGlyph(
-                                lineWidth: 2,
-                                tint: Brand.Color.cyan
-                            )
-                            .frame(width: 22, height: 22)
-                            Text("TAILSPOT")
-                                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                .tracking(2)
-                                .foregroundStyle(Brand.Color.textPrimary)
-                        }
-                    }
-                    if !catches.isEmpty {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            // Accent pill — `N catches` — matches
-                            // canvas `pill accent` on the right.
-                            Text("\(catches.count) catches")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .tracking(0.4)
-                                .foregroundStyle(Brand.Color.cyan)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(Brand.Color.cyan.opacity(0.16), in: .capsule)
-                        }
-                    }
-                }
+            VStack(spacing: 0) {
+                customTopBar
+                content
+            }
+                .toolbar(.hidden, for: .navigationBar)
+                .background(Brand.Color.bgPrimary)
                 .navigationDestination(for: HangarRow.self) { row in
                     CatchDetailView(row: row)
                 }
@@ -93,6 +65,45 @@ struct HangarView: View {
                         ModelSlotDetailView(set: set, entry: entry)
                     }
                 }
+        }
+    }
+
+    // MARK: - Custom top bar
+    //
+    // The system nav bar's toolbar items kept clipping the Lockup and
+    // truncating the trailing "N catches" pill (iOS's inline-mode auto
+    // layout squeezes both leading + trailing items when they fight
+    // for space). The canvas design renders a custom top bar inline,
+    // not a system nav bar — so we do the same.
+
+    private var customTopBar: some View {
+        HStack(spacing: 8) {
+            HangarGlyph(lineWidth: 2, tint: Brand.Color.cyan)
+                .frame(width: 22, height: 22)
+            Text("TAILSPOT")
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .tracking(2)
+                .foregroundStyle(Brand.Color.textPrimary)
+            Spacer(minLength: 8)
+            if !catches.isEmpty {
+                Text("\(catches.count) catches")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .tracking(0.4)
+                    .foregroundStyle(Brand.Color.cyan)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Brand.Color.cyan.opacity(0.16), in: .capsule)
+                    .fixedSize()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(Brand.Color.bgPrimary)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Brand.Color.textPrimary.opacity(0.04))
+                .frame(height: 1)
         }
     }
 

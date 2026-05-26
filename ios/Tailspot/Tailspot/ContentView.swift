@@ -322,20 +322,37 @@ struct ContentView: View {
                             // was removed — the badge on the unified
                             // button replaces it as the multi-mode
                             // affordance.
-                            let visibleIcaos = visible.map(\.aircraft.icao24)
+                            // CaptureMode is derived from planes that
+                            // actually project onto the camera frame at
+                            // the current heading/zoom — NOT from the
+                            // wider bbox set. `isLikelyVisibleToObserver`
+                            // alone includes everything above-horizon
+                            // within 30 km, even if it's behind the user;
+                            // that produced a persistent `×N` badge for
+                            // ambient traffic the user wasn't pointing at.
+                            let onScreenIcaos: [String] = visible.compactMap { obs in
+                                guard obs.screenPosition(
+                                    phoneHeadingDeg: heading,
+                                    cameraElevationDeg: camEl,
+                                    in: geo.size,
+                                    hfovDeg: effectiveHfov,
+                                    vfovDeg: effectiveVfov
+                                ) != nil else { return nil }
+                                return obs.aircraft.icao24
+                            }
                             let pinForCapture = lockOn.state.targetIcao24
                             let mode: CaptureMode = {
                                 if let pin = pinForCapture,
-                                   visibleIcaos.contains(pin) {
+                                   onScreenIcaos.contains(pin) {
                                     return .single(pin)
                                 }
-                                if visibleIcaos.isEmpty {
+                                if onScreenIcaos.isEmpty {
                                     return .disabled
                                 }
-                                if visibleIcaos.count == 1 {
-                                    return .single(visibleIcaos[0])
+                                if onScreenIcaos.count == 1 {
+                                    return .single(onScreenIcaos[0])
                                 }
-                                return .multi(visibleIcaos)
+                                return .multi(onScreenIcaos)
                             }()
                             VStack {
                                 Spacer()
