@@ -74,9 +74,9 @@ struct ContentView: View {
     /// Metadata for whatever plane the lock engine is currently
     /// tracking. Fetched lazily through ADSBManager.metadata(for:),
     /// which consults its in-memory cache first; only first time we
-    /// see an icao24 actually hits OpenSky. Kicked off the moment
-    /// acquisition starts (driven by .task(id:) on targetIcao24) so
-    /// by the time the lock snaps green, the label content is usually
+    /// see an icao24 actually hits OpenSky. Kicked off the moment a
+    /// pin lands (driven by .task(id:) on targetIcao24) so by the
+    /// time the lock visuals render, the label content is usually
     /// already populated.
     @State private var lockedMetadata: AircraftMetadata?
     /// Camera zoom factor. 1.0 = default wide. Pinch gesture below
@@ -92,9 +92,8 @@ struct ContentView: View {
     /// When the user taps a plane directly, we pin the lock to that
     /// icao24 — overriding the center-driven closest-target heuristic.
     /// Tap-elsewhere clears; tap-same-plane toggles off; the plane
-    /// leaving visibility also clears. The pin is what makes the
-    /// engine `forceLock()` snap-green-instantly instead of running a
-    /// 0.6 s acquisition.
+    /// leaving visibility also clears. Taps drive `forceLock()` on
+    /// the engine — the only way into `.locked` after Task 4.
     @State private var pinnedIcao: String?
     /// URL of the recording the user wants to analyze. Non-nil →
     /// `ReplayReportView` sheet is presented for that file.
@@ -153,17 +152,18 @@ struct ContentView: View {
                 }
 
                 // Lock-on AR overlay. The view is clean by default — no
-                // crosshair, no per-aircraft labels. As the user aims at
-                // a plane (within lockZoneRadius of screen center), yellow
-                // brackets close in for ~0.6 s, then snap green and a
-                // compact label identifies the plane. Tap the locked
-                // label to open the detail sheet (with the Catch button).
+                // crosshair, no per-aircraft labels (Task 5 will add
+                // ambient labels). The user taps a plane to pin it; the
+                // engine jumps straight to .locked via forceLock(), and
+                // the label renders at the pinned plane's projected
+                // position. Tap the locked label to open the detail
+                // sheet (with the Catch button).
                 //
-                // The 30 Hz TimelineView drives both the engine state
-                // transitions and the bracket animation. The engine is a
-                // pure state machine — repeated update() calls with the
-                // same target are idempotent — so calling it from inside
-                // the TimelineView body is safe.
+                // The 30 Hz TimelineView drives engine state transitions
+                // (e.g., pinned plane leaving the lock zone → sticky →
+                // idle). The engine is a pure state machine — repeated
+                // update() calls with the same target are idempotent —
+                // so calling it from inside the TimelineView body is safe.
                 GeometryReader { geo in
                     let effectiveHfov = Self.baseHfovDeg / zoom
                     let effectiveVfov = Self.baseVfovDeg / zoom
@@ -787,9 +787,9 @@ struct ContentView: View {
     }
 
     /// Decide the capture mode for the current frame. Single-lock
-    /// wins when an icao is being tracked (acquiring / locked /
-    /// sticky); multi wins only when the engine is idle and the
-    /// multi-zone has 2+ planes; otherwise idle.
+    /// wins when an icao is being tracked (locked / sticky); multi
+    /// wins only when the engine is idle and the multi-zone has 2+
+    /// planes; otherwise idle.
     private func captureMode(
         singleTarget: String?,
         multiCandidates: [String]
@@ -842,8 +842,8 @@ struct ContentView: View {
     }
 
     /// Cyan single-lock capture button. Glows + scales subtly when
-    /// the engine is fully locked (vs still acquiring) so the user
-    /// can read "ready to catch" at a glance.
+    /// the engine is locked or holding sticky so the user can read
+    /// "ready to catch" at a glance.
     private func captureButtonSingle(icao: String) -> some View {
         let ready = lockOn.state.isLockedOrSticky
         return Button {
@@ -1065,9 +1065,9 @@ struct ContentView: View {
 
     /// Brackets + label rendered at a target's projected screen
     /// position. Style + size depend on the lock-on state:
-    /// `acquiring` → yellow brackets easing inward from a larger box;
-    /// `locked` / `sticky` → solid green brackets at the steady size,
+    /// `locked` / `sticky` → solid cyan brackets at the steady size,
     /// with the identification label.
+    /// `idle` → nothing (sized to zero).
     @ViewBuilder
     private func lockOverlay(
         state: LockOnEngine.State,
@@ -1096,22 +1096,13 @@ struct ContentView: View {
 
     private func lockOverlayStyle(for state: LockOnEngine.State, now: Date) -> LockOverlayStyle {
         let lockedSize: CGFloat = 64
-        let acquiringSizeMax: CGFloat = 150
         // Cyan is the brand color and it OWNS the lock indicator.
-        // Acquiring still uses amber to telegraph "warming up" via
-        // color (caution = "future action might be needed"), then
-        // snaps to brand cyan on lock. Tap-pin and auto-lock look
-        // identical — the user gets there via different paths but
-        // the result is the same "you have it."
+        // There's no acquiring state anymore — the user either has a
+        // pin (locked / sticky) or they don't (idle). Task 5 will
+        // rework this overlay around the all-frame ambient-label model.
         switch state {
         case .idle:
             return .init(boxSize: 0, color: .clear, opacity: 0, showLabel: false)
-        case .acquiring:
-            let p = lockOn.acquisitionProgress(now: now)
-            let size = acquiringSizeMax - (acquiringSizeMax - lockedSize) * CGFloat(p)
-            // Fade in as we acquire.
-            let opacity = 0.35 + 0.55 * p
-            return .init(boxSize: size, color: Brand.Color.alertCaution, opacity: opacity, showLabel: false)
         case .locked:
             return .init(boxSize: lockedSize, color: Brand.Color.cyan, opacity: 1.0, showLabel: true)
         case .sticky(_, let lostAt):
@@ -1508,8 +1499,8 @@ struct ContentView: View {
     ///   - Tapped on (or very near) the currently-pinned plane → toggle
     ///     off, fall back to center-driven lock.
     ///   - Tapped near a different visible plane → pin to it and
-    ///     `forceLock` the engine straight to green (no acquisition
-    ///     delay — the tap is an explicit choice).
+    ///     `forceLock` the engine straight to a locked state (the tap
+    ///     is an explicit choice, no acquisition delay).
     ///   - Tapped in empty sky (no plane within the tap zone) → clear
     ///     any active pin.
     ///
@@ -1558,8 +1549,9 @@ struct ContentView: View {
         case let icao?:
             pinnedIcao = icao
             recorder.recordTapPin(icao24: icao, at: now)
-            // Skip the 0.6 s acquisition animation; the user just
-            // pointed at this plane, snap-green is the right feel.
+            // forceLock is the only way into .locked — the user just
+            // pointed at this plane, so the engine jumps straight to
+            // a locked state.
             lockOn.forceLock(targetIcao24: icao, now: now)
         }
     }

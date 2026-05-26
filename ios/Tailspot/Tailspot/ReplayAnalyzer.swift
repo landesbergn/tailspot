@@ -44,7 +44,7 @@ struct ReplayTickReport: Equatable, Sendable {
     /// screen center within the lock-zone radius, or nil.
     let closestToCenterIcao24: String?
     /// Lock-on engine state after processing this tick. Lets a caller
-    /// see acquisition→locked→sticky progression across the session.
+    /// see idle → locked → sticky progression across the session.
     let lockState: LockOnEngine.State
 
     struct AircraftReport: Equatable, Sendable {
@@ -171,7 +171,6 @@ nonisolated extension ReplayReport {
     private static func describeLock(_ state: LockOnEngine.State) -> String {
         switch state {
         case .idle:                                 return "idle"
-        case .acquiring(let icao, _):               return "acquiring(\(icao))"
         case .locked(let icao, _):                  return "locked(\(icao))"
         case .sticky(let icao, _):                  return "sticky(\(icao))"
         }

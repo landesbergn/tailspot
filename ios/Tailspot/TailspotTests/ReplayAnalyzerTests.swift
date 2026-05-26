@@ -105,7 +105,11 @@ struct ReplayAnalyzerTests {
 
     // MARK: - Annotation
 
-    @Test func tickWithVisibleAircraftAnnotatesAndAcquires() {
+    @Test func tickWithVisibleAircraftAnnotatesAndStaysIdle() {
+        // No auto-acquire after Task 4 — the engine stays idle until a
+        // tapPin event drives it through forceLock(). The analyzer
+        // still computes closestToCenter for the ambient-label path,
+        // but lockState only changes on explicit pin events.
         let report = ReplayAnalyzer().analyze([
             .sessionStart(sessionStart()),
             .tick(tick(at: 0, from: t0, sensor: berkeleySensor(),
@@ -122,13 +126,10 @@ struct ReplayAnalyzerTests {
         #expect(ar.elevationDeg > 0)
         #expect(ar.isVisible)
         #expect(ar.screenPosition != nil)
-        // First tick with a target in the lock zone → acquiring.
+        // Closest-to-center is still computed (used elsewhere); the
+        // engine just doesn't auto-lock on it.
         #expect(r.closestToCenterIcao24 == "abc123")
-        if case .acquiring(let t, _) = r.lockState {
-            #expect(t == "abc123")
-        } else {
-            Issue.record("Expected .acquiring after first tick, got \(r.lockState)")
-        }
+        #expect(r.lockState == .idle)
     }
 
     @Test func belowHorizonOrFarAircraftIsNotVisible() {
@@ -176,24 +177,18 @@ struct ReplayAnalyzerTests {
 
     // MARK: - Lock-on progression
 
-    @Test func lockGraduatesFromAcquiringToLockedAfterAcquisitionDuration() {
-        // Drive the engine with the same target across enough ticks
-        // to exceed acquisitionDuration (default 0.6 s). 1 Hz ticks
-        // at +0, +0.7 s do it.
+    @Test func ticksAloneNeverEnterLocked() {
+        // Without a tapPin, no number of ticks should auto-acquire.
+        // The engine only enters .locked via explicit forceLock now.
         let sensor = berkeleySensor()
         let plane = westAircraft(icao: "abc123")
         let report = ReplayAnalyzer().analyze([
             .tick(tick(at: 0.0, from: t0, sensor: sensor, aircraft: [plane])),
             .tick(tick(at: 0.7, from: t0, sensor: sensor, aircraft: [plane])),
+            .tick(tick(at: 1.4, from: t0, sensor: sensor, aircraft: [plane])),
         ])
-        // Tick 0: acquiring; Tick 1: locked (>= 0.6 s elapsed).
-        if case .acquiring = report.ticks[0].lockState {} else {
-            Issue.record("Tick 0 should be acquiring, got \(report.ticks[0].lockState)")
-        }
-        if case .locked(let t, _) = report.ticks[1].lockState {
-            #expect(t == "abc123")
-        } else {
-            Issue.record("Tick 1 should be locked, got \(report.ticks[1].lockState)")
+        for r in report.ticks {
+            #expect(r.lockState == .idle)
         }
     }
 
@@ -201,16 +196,17 @@ struct ReplayAnalyzerTests {
         let sensor = berkeleySensor()
         let plane = westAircraft(icao: "abc123")
         let report = ReplayAnalyzer().analyze([
-            // 0.0s + 0.7s with target: ends up locked
-            .tick(tick(at: 0.0, from: t0, sensor: sensor, aircraft: [plane])),
-            .tick(tick(at: 0.7, from: t0, sensor: sensor, aircraft: [plane])),
-            // 1.5s with no aircraft → loses the target → sticky
-            .tick(tick(at: 1.5, from: t0, sensor: sensor, aircraft: [])),
+            // tapPin drives the engine into .locked
+            .tapPin(.init(timestamp: t0, icao24: "abc123")),
+            // Tick with the same target → stays locked.
+            .tick(tick(at: 0.1, from: t0, sensor: sensor, aircraft: [plane])),
+            // Later tick with no aircraft → loses target → sticky.
+            .tick(tick(at: 1.0, from: t0, sensor: sensor, aircraft: [])),
         ])
-        if case .sticky(let t, _) = report.ticks[2].lockState {
+        if case .sticky(let t, _) = report.ticks[1].lockState {
             #expect(t == "abc123")
         } else {
-            Issue.record("Tick 2 should be sticky, got \(report.ticks[2].lockState)")
+            Issue.record("Tick 1 should be sticky, got \(report.ticks[1].lockState)")
         }
     }
 
@@ -254,7 +250,9 @@ struct ReplayAnalyzerTests {
     @Test func describeWithTickIncludesPoseAndAircraft() {
         // Run the analyzer over a known fixture so the report's
         // structure (visible count, closest, lock state) matches what
-        // describe() will format.
+        // describe() will format. With Task 4 the engine no longer
+        // auto-acquires, so the lock state on a tick-only session
+        // stays "idle".
         let report = ReplayAnalyzer().analyze([
             .sessionStart(sessionStart()),
             .tick(tick(at: 0, from: t0, sensor: berkeleySensor(), aircraft: [westAircraft()]))
@@ -267,8 +265,8 @@ struct ReplayAnalyzerTests {
         #expect(s.contains("-122.2700"))
         // Aircraft icao + callsign appear.
         #expect(s.contains("abc123"))
-        // Lock state name appears (we acquire on first tick).
-        #expect(s.contains("acquiring"))
+        // Lock state name appears — no auto-acquire, so still idle.
+        #expect(s.contains("lock: idle"))
     }
 
     @Test func describeMarksClosestToCenterWithBullet() {
@@ -375,7 +373,10 @@ struct ReplayAnalyzerTests {
     @Test func pinnedPlaneNoLongerVisibleFallsBackToCenter() {
         // tapPin to "abc123", then a tick where "abc123" is NOT in the
         // aircraft list and a different plane "xyz" IS visible and
-        // close to center. Pin is dead → analyzer should target xyz.
+        // close to center. Pin is dead — the analyzer fell back to
+        // center-driven, so update() sees "xyz" while the engine is
+        // .locked(abc123). With Task 4 there's no acquiring anymore:
+        // the engine drops the lock to .sticky(abc123).
         let xyz = ReplayEvent.AircraftSnapshot(
             icao24: "xyz", callsign: "OTH",
             originCountry: "United States",
@@ -392,11 +393,12 @@ struct ReplayAnalyzerTests {
         // Engine starts locked(abc123) from forceLock. Tick says target
         // = pinStillVisible ? "abc123" : centerClosest ("xyz"). Since
         // "abc123" is NOT visible, target = "xyz". Engine transitions
-        // locked(abc123) → acquiring(xyz).
-        if case .acquiring(let icao, _) = report.ticks[0].lockState {
-            #expect(icao == "xyz")
+        // locked(abc123) → sticky(abc123): a different closest target
+        // doesn't steal the lock, it just bumps it into sticky-hold.
+        if case .sticky(let icao, _) = report.ticks[0].lockState {
+            #expect(icao == "abc123")
         } else {
-            Issue.record("Expected .acquiring(xyz) when pin disappeared; got \(report.ticks[0].lockState)")
+            Issue.record("Expected .sticky(abc123) when pin disappeared; got \(report.ticks[0].lockState)")
         }
     }
 

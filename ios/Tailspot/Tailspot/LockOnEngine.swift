@@ -2,34 +2,30 @@
 //  LockOnEngine.swift
 //  Tailspot
 //
-//  State machine for the AR lock-on interaction. The AR view defaults
-//  to a clean sky with a tiny center crosshair — labels don't appear
-//  automatically. The user aims at a plane; after a brief acquisition
-//  window the engine "locks on" and the view renders identifying info
-//  for that one plane. Inspired by HUD lock-on affordances in
-//  fighter-jet sims (think Top Gun).
+//  State machine for the AR pin interaction. Per the Task 4 redesign,
+//  labels for visible planes are now ambient — every visible plane
+//  carries its own per-plane label, rendered by the AR overlay
+//  independently of this engine. The "lock" concept only applies to
+//  an explicit pin: the user taps a plane (or empty sky) to drive
+//  state through here. There is no auto-acquire: `update()` never
+//  drives idle → locked on its own.
 //
 //  The engine is intentionally a pure state machine — it doesn't know
-//  about SwiftUI or screen geometry. The view computes "what's the
-//  closest visible plane to screen center" each frame and feeds it in
-//  via update(closestTargetIcao24:now:). The state transitions are
-//  testable without any UI scaffolding.
+//  about SwiftUI or screen geometry. ContentView calls forceLock() on
+//  tap, unpin() on tap-empty, and update() each frame with whichever
+//  visible plane is closest to the pinned target so the engine can
+//  detect the pinned plane leaving the lock zone.
 //
 //  State transitions (target = the closest icao24, or nil):
 //
-//    idle           target=nil   → idle
-//    idle           target=X     → acquiring(X)
-//    acquiring(X)   target=X & age >= acqDur  → locked(X)
-//    acquiring(X)   target=X & age <  acqDur  → acquiring(X)
-//    acquiring(X)   target=Y     → acquiring(Y)        (restart)
-//    acquiring(X)   target=nil   → idle                (acq cancelled)
+//    idle           target=*     → idle                 (no auto-acquire)
+//    forceLock(X)                → locked(X)            (any state)
 //    locked(X)      target=X     → locked(X)
-//    locked(X)      target=Y     → acquiring(Y)        (new target)
-//    locked(X)      target=nil   → sticky(X)           (grace period)
-//    sticky(X)      target=X     → locked(X)           (recovered)
-//    sticky(X)      target=Y     → acquiring(Y)
-//    sticky(X) & age <  stickyDur target=nil → sticky(X)
-//    sticky(X) & age >= stickyDur target=nil → idle
+//    locked(X)      target=Y|nil → sticky(X)            (pin lost)
+//    sticky(X)      target=X     → locked(X)            (recovered)
+//    sticky(X) & age <  stickyDur target≠X → sticky(X)
+//    sticky(X) & age >= stickyDur target≠X → idle
+//    unpin()                     → idle                 (any state)
 //
 //  Sticky hold gives the user time to read the label after panning
 //  off (compass jitter alone can move the projected position out of
@@ -45,35 +41,32 @@ final class LockOnEngine: ObservableObject {
 
     enum State: Equatable {
         case idle
-        case acquiring(targetIcao24: String, startedAt: Date)
         case locked(targetIcao24: String, lockedAt: Date)
         case sticky(targetIcao24: String, lostAt: Date)
 
-        /// The icao24 of whichever aircraft the engine is currently
-        /// thinking about. Nil only when idle.
+        /// The icao24 of whichever aircraft is currently locked / held.
+        /// Nil only when idle.
         var targetIcao24: String? {
             switch self {
             case .idle: return nil
-            case .acquiring(let t, _), .locked(let t, _), .sticky(let t, _): return t
+            case .locked(let t, _), .sticky(let t, _): return t
             }
         }
 
-        /// True when the engine is actively presenting a lock or
-        /// holding sticky. Used by the multi-catch UI to suppress
-        /// the capture frame while a single-plane flow is in
-        /// progress so the two don't visually compete.
+        /// True when actively presenting a lock or holding sticky. Used
+        /// by the multi-catch UI to suppress the capture frame while a
+        /// pinned-plane flow is in progress so the two don't visually
+        /// compete.
         var isLockedOrSticky: Bool {
             switch self {
             case .locked, .sticky: return true
-            default: return false
+            case .idle: return false
             }
         }
     }
 
     @Published private(set) var state: State = .idle
 
-    /// How long acquisition runs before the lock snaps to `locked`.
-    var acquisitionDuration: TimeInterval = 0.6
     /// How long a lock holds after the closest-target signal drops.
     /// Lets the user read the label even if compass jitter moves the
     /// projected position out of the lock zone briefly.
@@ -81,28 +74,17 @@ final class LockOnEngine: ObservableObject {
 
     /// Drive the state machine one tick forward. Call from the view
     /// at 30+ Hz with the icao24 of whichever visible aircraft is
-    /// closest to screen center (within the lock-zone radius), or
-    /// nil if no plane is in the zone. `now` is injected for tests.
+    /// closest to the pinned target (or nil if none). `now` is
+    /// injected for tests.
+    ///
+    /// This does NOT auto-acquire from idle. `forceLock()` is the only
+    /// entry into `.locked`.
     func update(closestTargetIcao24: String?, now: Date = Date()) {
         switch state {
         case .idle:
-            if let icao = closestTargetIcao24 {
-                state = .acquiring(targetIcao24: icao, startedAt: now)
-            }
-
-        case .acquiring(let oldIcao, let startedAt):
-            guard let icao = closestTargetIcao24 else {
-                state = .idle
-                return
-            }
-            if icao == oldIcao {
-                if now.timeIntervalSince(startedAt) >= acquisitionDuration {
-                    state = .locked(targetIcao24: icao, lockedAt: now)
-                }
-                // else: keep acquiring
-            } else {
-                state = .acquiring(targetIcao24: icao, startedAt: now)
-            }
+            // No auto-acquire — the engine only enters locked via
+            // forceLock(). update() doesn't drive idle → locked anymore.
+            break
 
         case .locked(let oldIcao, _):
             guard let icao = closestTargetIcao24 else {
@@ -110,43 +92,34 @@ final class LockOnEngine: ObservableObject {
                 return
             }
             if icao != oldIcao {
-                state = .acquiring(targetIcao24: icao, startedAt: now)
+                // The currently-locked plane is no longer the closest —
+                // hold sticky on the old one. The user can tap to re-pin
+                // if they want a different target.
+                state = .sticky(targetIcao24: oldIcao, lostAt: now)
             }
-            // else: stay locked
 
         case .sticky(let oldIcao, let lostAt):
-            guard let icao = closestTargetIcao24 else {
-                if now.timeIntervalSince(lostAt) >= stickyHoldDuration {
-                    state = .idle
-                }
-                return
-            }
-            if icao == oldIcao {
+            if let icao = closestTargetIcao24, icao == oldIcao {
                 state = .locked(targetIcao24: icao, lockedAt: now)
-            } else {
-                state = .acquiring(targetIcao24: icao, startedAt: now)
+            } else if now.timeIntervalSince(lostAt) >= stickyHoldDuration {
+                state = .idle
             }
         }
     }
 
-    /// Progress through acquisition, 0..1. Useful for animation —
-    /// the corner brackets ease from 0 (large/faint) to 1 (small/solid)
-    /// over `acquisitionDuration`. Returns 0 unless in `.acquiring`.
-    func acquisitionProgress(now: Date = Date()) -> Double {
-        if case .acquiring(_, let startedAt) = state {
-            let elapsed = now.timeIntervalSince(startedAt)
-            return min(1, max(0, elapsed / acquisitionDuration))
-        }
-        return 0
-    }
-
-    /// Jump straight to `locked(target)` — bypass the acquisition
-    /// animation. Used by tap-to-ID: when the user explicitly points
-    /// at a plane, making them wait `acquisitionDuration` for green
-    /// brackets feels wrong. update() can still walk the state forward
-    /// from here on the next tick (e.g., target leaves → sticky).
+    /// Jump straight to `locked(target)`. Used by tap-to-pin: when the
+    /// user explicitly points at a plane, this is the only path into
+    /// `.locked`. update() can still walk the state forward from here
+    /// on the next tick (e.g., target leaves → sticky).
     func forceLock(targetIcao24: String, now: Date = Date()) {
         state = .locked(targetIcao24: targetIcao24, lockedAt: now)
+    }
+
+    /// Clear any active lock/sticky and return to idle. Used by
+    /// ContentView when the user taps empty sky while a pin is in
+    /// effect.
+    func unpin() {
+        state = .idle
     }
 }
 

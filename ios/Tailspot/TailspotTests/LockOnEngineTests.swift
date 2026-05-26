@@ -5,6 +5,11 @@
 //  State-transition tests for the lock-on machine. All dates are
 //  injected so the tests are deterministic — no real timers.
 //
+//  The engine is now a 3-state machine (idle / locked / sticky) with
+//  no auto-acquire — `forceLock` is the only way to enter `.locked`.
+//  Labels for visible planes are rendered ambiently per-plane by the
+//  AR overlay (see Task 5), not driven off engine state.
+//
 
 import Testing
 import Foundation
@@ -18,7 +23,6 @@ struct LockOnEngineTests {
 
     private func engine() -> LockOnEngine {
         let e = LockOnEngine()
-        e.acquisitionDuration = 0.6
         e.stickyHoldDuration = 2.0
         return e
     }
@@ -29,28 +33,30 @@ struct LockOnEngineTests {
         #expect(e.state == .idle)
     }
 
-    @Test func forceLockJumpsStraightToLocked() {
-        // Tap-to-ID needs the engine in .locked instantly — no 0.6 s
-        // acquisition delay, since the user explicitly pointed at the
-        // plane. forceLock is what wires that up.
+    @Test func idleStaysIdleEvenWithVisibleTarget() {
+        // No auto-acquire: update() does not drive idle → locked.
+        // The user must tap to pin (which calls forceLock).
         let e = engine()
+        e.update(closestTargetIcao24: "abc", now: t0)
+        #expect(e.state == .idle)
+    }
+
+    @Test func forceLockMovesIdleToLocked() {
+        let e = engine()
+        #expect(e.state == .idle)
         e.forceLock(targetIcao24: "abc", now: t0)
-        if case .locked(let icao, let lockedAt) = e.state {
-            #expect(icao == "abc")
+        if case .locked(let t, let lockedAt) = e.state {
+            #expect(t == "abc")
             #expect(lockedAt == t0)
         } else {
-            Issue.record("Expected .locked(abc) after forceLock, got \(e.state)")
+            Issue.record("Expected .locked after forceLock, got \(e.state)")
         }
-        // Outside .acquiring, progress is zero.
-        #expect(e.acquisitionProgress(now: t0) == 0)
     }
 
     @Test func forceLockReplacesPriorLock() {
         // Tap-pinning a different plane mid-flight should hop instantly.
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        e.update(closestTargetIcao24: "abc", now: t0.addingTimeInterval(1))
-        // Should be locked(abc).
+        e.forceLock(targetIcao24: "abc", now: t0)
         e.forceLock(targetIcao24: "xyz", now: t0.addingTimeInterval(2))
         if case .locked(let icao, _) = e.state {
             #expect(icao == "xyz")
@@ -59,128 +65,133 @@ struct LockOnEngineTests {
         }
     }
 
-    @Test func idleEntersAcquiringWhenTargetAppears() {
+    @Test func updateWithNilFromLockedMovesToSticky() {
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        #expect(e.state == .acquiring(targetIcao24: "abc", startedAt: t0))
+        e.forceLock(targetIcao24: "abc", now: t0)
+        e.update(closestTargetIcao24: nil, now: t0)
+        if case .sticky(let t, _) = e.state {
+            #expect(t == "abc")
+        } else {
+            Issue.record("Expected .sticky after losing target, got \(e.state)")
+        }
     }
 
-    @Test func acquiringSameTargetBeforeDurationStaysAcquiring() {
+    @Test func lockedHoldsWithSameTarget() {
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        e.update(closestTargetIcao24: "abc", now: t0.addingTimeInterval(0.3))
-        // startedAt is preserved
-        #expect(e.state == .acquiring(targetIcao24: "abc", startedAt: t0))
+        e.forceLock(targetIcao24: "abc", now: t0)
+        e.update(closestTargetIcao24: "abc", now: t0.addingTimeInterval(0.1))
+        if case .locked(let t, let lockedAt) = e.state {
+            #expect(t == "abc")
+            // lockedAt is preserved (no re-lock).
+            #expect(lockedAt == t0)
+        } else {
+            Issue.record("Expected .locked(abc) to hold, got \(e.state)")
+        }
     }
 
-    @Test func acquiringSameTargetAfterDurationSnapsToLocked() {
+    @Test func lockedWithDifferentClosestTargetGoesSticky() {
+        // The locked plane is no longer the closest — hold sticky on
+        // the original pin. The user can tap to re-pin if they want
+        // a different target.
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let lockTime = t0.addingTimeInterval(0.7)
-        e.update(closestTargetIcao24: "abc", now: lockTime)
-        #expect(e.state == .locked(targetIcao24: "abc", lockedAt: lockTime))
+        e.forceLock(targetIcao24: "abc", now: t0)
+        let lostTime = t0.addingTimeInterval(0.5)
+        e.update(closestTargetIcao24: "xyz", now: lostTime)
+        if case .sticky(let t, let lostAt) = e.state {
+            #expect(t == "abc")
+            #expect(lostAt == lostTime)
+        } else {
+            Issue.record("Expected .sticky(abc) when a different plane is closest, got \(e.state)")
+        }
     }
 
-    @Test func acquiringDifferentTargetRestartsAcquisition() {
+    @Test func stickyExpiresToIdleAfterDuration() {
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let switchTime = t0.addingTimeInterval(0.4)
-        e.update(closestTargetIcao24: "xyz", now: switchTime)
-        #expect(e.state == .acquiring(targetIcao24: "xyz", startedAt: switchTime))
-    }
-
-    @Test func acquiringLostTargetReturnsToIdle() {
-        let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
+        e.stickyHoldDuration = 0.1
+        e.forceLock(targetIcao24: "abc", now: t0)
+        e.update(closestTargetIcao24: nil, now: t0)
         e.update(closestTargetIcao24: nil, now: t0.addingTimeInterval(0.2))
         #expect(e.state == .idle)
     }
 
-    @Test func lockedStaysLockedWithSameTarget() {
+    @Test func stickyHoldsBeforeDurationElapses() {
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let lockTime = t0.addingTimeInterval(0.7)
-        e.update(closestTargetIcao24: "abc", now: lockTime)
-        // Now locked. Another update with same target should stay.
-        e.update(closestTargetIcao24: "abc", now: lockTime.addingTimeInterval(0.1))
-        #expect(e.state == .locked(targetIcao24: "abc", lockedAt: lockTime))
-    }
-
-    @Test func lockedDifferentTargetRestartsAcquisition() {
-        let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let lockTime = t0.addingTimeInterval(0.7)
-        e.update(closestTargetIcao24: "abc", now: lockTime)
-        let switchTime = lockTime.addingTimeInterval(0.5)
-        e.update(closestTargetIcao24: "xyz", now: switchTime)
-        #expect(e.state == .acquiring(targetIcao24: "xyz", startedAt: switchTime))
-    }
-
-    @Test func lockedLostTargetGoesSticky() {
-        let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let lockTime = t0.addingTimeInterval(0.7)
-        e.update(closestTargetIcao24: "abc", now: lockTime)
-        let lostTime = lockTime.addingTimeInterval(0.5)
+        e.forceLock(targetIcao24: "abc", now: t0)
+        let lostTime = t0.addingTimeInterval(0.1)
         e.update(closestTargetIcao24: nil, now: lostTime)
-        #expect(e.state == .sticky(targetIcao24: "abc", lostAt: lostTime))
+        // Before hold expires: still sticky.
+        e.update(closestTargetIcao24: nil, now: lostTime.addingTimeInterval(1.0))
+        if case .sticky(let t, _) = e.state {
+            #expect(t == "abc")
+        } else {
+            Issue.record("Expected .sticky to hold before duration, got \(e.state)")
+        }
     }
 
-    @Test func stickyRecoveredTargetReturnsToLocked() {
+    @Test func stickyRecoversToLockedOnSameTarget() {
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let lockTime = t0.addingTimeInterval(0.7)
-        e.update(closestTargetIcao24: "abc", now: lockTime)
-        e.update(closestTargetIcao24: nil, now: lockTime.addingTimeInterval(0.5))
-        // Recover
-        let recoverTime = lockTime.addingTimeInterval(1.0)
+        e.forceLock(targetIcao24: "abc", now: t0)
+        e.update(closestTargetIcao24: nil, now: t0)
+        let recoverTime = t0.addingTimeInterval(0.5)
         e.update(closestTargetIcao24: "abc", now: recoverTime)
-        #expect(e.state == .locked(targetIcao24: "abc", lockedAt: recoverTime))
+        if case .locked(let t, let lockedAt) = e.state {
+            #expect(t == "abc")
+            #expect(lockedAt == recoverTime)
+        } else {
+            Issue.record("Expected .locked after sticky recovery, got \(e.state)")
+        }
     }
 
-    @Test func stickyDifferentTargetRestartsAcquisition() {
+    @Test func stickyIgnoresDifferentTargets() {
+        // While sticky-holding "abc", a different closest plane should
+        // not steal the lock — only the original target can recover it,
+        // or the hold expires to idle. (User can tap-pin if they want
+        // a new target.)
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let lockTime = t0.addingTimeInterval(0.7)
-        e.update(closestTargetIcao24: "abc", now: lockTime)
-        e.update(closestTargetIcao24: nil, now: lockTime.addingTimeInterval(0.5))
-        let switchTime = lockTime.addingTimeInterval(1.0)
-        e.update(closestTargetIcao24: "xyz", now: switchTime)
-        #expect(e.state == .acquiring(targetIcao24: "xyz", startedAt: switchTime))
-    }
-
-    @Test func stickyDecaysToIdleAfterHoldDuration() {
-        let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        let lockTime = t0.addingTimeInterval(0.7)
-        e.update(closestTargetIcao24: "abc", now: lockTime)
-        let lostTime = lockTime.addingTimeInterval(0.5)
+        e.forceLock(targetIcao24: "abc", now: t0)
+        let lostTime = t0.addingTimeInterval(0.1)
         e.update(closestTargetIcao24: nil, now: lostTime)
-        // Before hold: still sticky
-        e.update(closestTargetIcao24: nil, now: lostTime.addingTimeInterval(1.5))
-        #expect(e.state == .sticky(targetIcao24: "abc", lostAt: lostTime))
-        // After hold: idle
-        e.update(closestTargetIcao24: nil, now: lostTime.addingTimeInterval(2.5))
+        e.update(closestTargetIcao24: "xyz", now: lostTime.addingTimeInterval(0.5))
+        // Still sticky on abc.
+        if case .sticky(let t, _) = e.state {
+            #expect(t == "abc")
+        } else {
+            Issue.record("Expected .sticky(abc) to stay when a different plane appears, got \(e.state)")
+        }
+    }
+
+    @Test func unpinClearsActiveLock() {
+        let e = engine()
+        e.forceLock(targetIcao24: "abc", now: t0)
+        e.unpin()
         #expect(e.state == .idle)
     }
 
-    @Test func acquisitionProgressIsZeroOutsideAcquiring() {
+    @Test func unpinClearsSticky() {
         let e = engine()
-        #expect(e.acquisitionProgress() == 0)
-        e.update(closestTargetIcao24: "abc", now: t0)
-        e.update(closestTargetIcao24: "abc", now: t0.addingTimeInterval(0.7))
-        // Now locked
-        #expect(e.acquisitionProgress(now: t0.addingTimeInterval(1.0)) == 0)
+        e.forceLock(targetIcao24: "abc", now: t0)
+        e.update(closestTargetIcao24: nil, now: t0)
+        e.unpin()
+        #expect(e.state == .idle)
     }
 
-    @Test func acquisitionProgressRampsZeroToOne() {
+    @Test func isLockedOrStickyReflectsState() {
         let e = engine()
-        e.update(closestTargetIcao24: "abc", now: t0)
-        #expect(e.acquisitionProgress(now: t0) == 0)
-        // Midway. abs() guard around float jitter from 0.3 / 0.6.
-        let mid = e.acquisitionProgress(now: t0.addingTimeInterval(0.3))
-        #expect(abs(mid - 0.5) < 0.001)
-        // Caps at 1
-        #expect(e.acquisitionProgress(now: t0.addingTimeInterval(10)) == 1)
+        #expect(e.state.isLockedOrSticky == false)
+        e.forceLock(targetIcao24: "abc", now: t0)
+        #expect(e.state.isLockedOrSticky == true)
+        e.update(closestTargetIcao24: nil, now: t0)
+        #expect(e.state.isLockedOrSticky == true) // sticky
+        e.unpin()
+        #expect(e.state.isLockedOrSticky == false)
+    }
+
+    @Test func targetIcao24ReflectsState() {
+        let e = engine()
+        #expect(e.state.targetIcao24 == nil)
+        e.forceLock(targetIcao24: "abc", now: t0)
+        #expect(e.state.targetIcao24 == "abc")
+        e.update(closestTargetIcao24: nil, now: t0)
+        #expect(e.state.targetIcao24 == "abc") // sticky still carries it
     }
 }
