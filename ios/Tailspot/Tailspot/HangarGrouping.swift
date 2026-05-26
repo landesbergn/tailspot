@@ -178,7 +178,13 @@ enum HangarGrouping {
     /// revamped Hangar Sets tab now uses `modelGroups(in:type:)` to
     /// derive the model layer dynamically. `resolveSlots` is kept for
     /// any future surface that wants the locked-slot Pokédex treatment.
-    nonisolated static func resolveSlots(for set: PokeSet, in rows: [HangarRow]) -> [ModelSlot] {
+    ///
+    /// Implicitly MainActor (Xcode 26 default): `HangarRow.mostRecent`
+    /// is a `Catch` which is @MainActor via SwiftData's `@Model`. The
+    /// earlier `nonisolated` annotation triggered Swift 6 warnings;
+    /// callers (UI + tests) are already on MainActor, so the constraint
+    /// is free.
+    static func resolveSlots(for set: PokeSet, in rows: [HangarRow]) -> [ModelSlot] {
         set.entries.map { entry in
             let matchingTails = rows.filter { row in
                 PokeSets.matches(catch: row.mostRecent, entry: entry)
@@ -198,7 +204,9 @@ enum HangarGrouping {
     /// model groups you've actually caught, no locked silhouettes.
     /// The UI grows as the user catches new model strings; we don't
     /// have to pre-enumerate the OpenSky model space.
-    nonisolated static func modelGroups(
+    /// Implicitly MainActor for the same reason as `resolveSlots`
+    /// above — touches `HangarRow.mostRecent` which is @MainActor.
+    static func modelGroups(
         in rows: [HangarRow],
         type: AircraftType
     ) -> [ModelGroup] {

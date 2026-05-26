@@ -217,7 +217,10 @@ struct MultiCatchReveal: View {
     /// tail; flips to "COMBO ×N +M pts" once a second fresh tail
     /// lands. Duplicate-only states (e.g., first card revealed is a
     /// dup) read as "DUPLICATE" until a fresh tail arrives.
-    @ViewBuilder
+    ///
+    /// Plain `some View` getter (no `@ViewBuilder`) because we need
+    /// the `let` declarations + explicit `return` — the builder DSL
+    /// would treat the `return` as disabling itself and warn.
     private var comboBanner: some View {
         let label: String
         let isComboLive = freshSoFar >= 2

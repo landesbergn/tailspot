@@ -17,7 +17,14 @@
 
 import os
 
-enum Log {
+/// `nonisolated` so the Logger statics can be referenced from any
+/// isolation context — including the nonisolated `OpenSkyClient` and
+/// background queue callbacks (`AVCapturePhotoCaptureDelegate`).
+/// Without this the Xcode 26 default-MainActor isolation makes
+/// `Log.openSky.notice(...)` an error in Swift 6 mode when called
+/// outside MainActor. `Logger` itself is `Sendable`, so exposing the
+/// statics across actors is safe.
+nonisolated enum Log {
     static let openSky  = Logger(subsystem: "com.landesberg.tailspot", category: "openSky")
     static let adsb     = Logger(subsystem: "com.landesberg.tailspot", category: "adsb")
     static let location = Logger(subsystem: "com.landesberg.tailspot", category: "location")

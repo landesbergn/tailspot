@@ -81,8 +81,11 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
 
     /// The progress metric this achievement tracks. Resolved against
     /// a `TrophyProgressInputs` value (totals derived from the Hangar
-    /// contents) at evaluation time.
-    let progress: (TrophyProgressInputs) -> Int
+    /// contents) at evaluation time. Marked `@Sendable` because
+    /// `Achievement` claims Sendable conformance; the closures in
+    /// `Trophies.all` only read fields off the passed-in inputs (no
+    /// captured state), so they're trivially Sendable in practice.
+    let progress: @Sendable (TrophyProgressInputs) -> Int
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
 }

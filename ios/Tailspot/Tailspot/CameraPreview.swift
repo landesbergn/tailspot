@@ -164,7 +164,15 @@ final class PreviewView: UIView {
     /// error) to a closure. PreviewView keeps a reference in
     /// `pendingCaptureDelegates` until the callback fires because
     /// AVCapturePhotoOutput's delegate property is weak.
-    private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+    ///
+    /// `nonisolated` so the AVCapturePhotoCaptureDelegate conformance
+    /// is also nonisolated — AVFoundation invokes the protocol method
+    /// on a background queue, not MainActor. Under Xcode 26's
+    /// default-MainActor isolation the conformance would otherwise be
+    /// main-actor-bound and emit a Swift 6 warning. The completion
+    /// closure runs on that background queue; existing callers hop to
+    /// MainActor before touching UI state.
+    private final nonisolated class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
         let completion: (Data?) -> Void
         init(completion: @escaping (Data?) -> Void) { self.completion = completion }
 
