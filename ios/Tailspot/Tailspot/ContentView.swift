@@ -146,6 +146,11 @@ struct ContentView: View {
     /// interactive. The splash absorbs taps for the first half of the
     /// fade so no gestures fire while it's mostly visible.
     @State private var splashOpacity: Double = 1.0
+    /// Active empty-tap ripple, if any: (tap point, timestamp). Set by
+    /// `showEmptyTapRipple` when a tap lands in truly empty sky (no
+    /// plane within the widened 250 px search). Auto-clears after 1.0 s
+    /// so the ripple doesn't linger.
+    @State private var emptyRipple: (CGPoint, Date)? = nil
 
     var body: some View {
         ZStack {
@@ -309,6 +314,16 @@ struct ContentView: View {
                                 // compass / zoom affordances.
                                 emptySkyOverlay(rawCount: adsb.observed.count)
                                     .frame(width: geo.size.width, height: geo.size.height)
+                                    .allowsHitTesting(false)
+                            }
+
+                            // Empty-tap ripple. Shown when a tap lands
+                            // on truly empty sky (no plane within the
+                            // widened 250 px search). Brief cyan ring
+                            // + NO AIRCRAFT HERE text at the tap point;
+                            // auto-clears after 1 s.
+                            if let (point, since) = emptyRipple {
+                                EmptyTapRippleView(at: point, since: since)
                                     .allowsHitTesting(false)
                             }
 
@@ -1470,9 +1485,20 @@ struct ContentView: View {
         vfovDeg: Double,
         now: Date
     ) {
+        // Spec § 3.1: four-branch behavior.
+        //   1. Tap directly on a plane (≤100 px) → pin (toggle if same).
+        //   2. Tap empty sky while pinned        → clear pin.
+        //   3. Tap empty sky while not pinned    → widen radius to
+        //      250 px and pin the nearest visible plane to the tap.
+        //   4. Truly empty frame                 → ripple at tap point.
         let cap = min(screenSize.width, screenSize.height) / 2
-        let tapRadius = min(100 * zoom, cap)
-        let hit = closestTargetIcao24(
+        let pinned = pinnedIcao
+
+        // (1) Narrow-radius hit-test: ≤100 px (scaled by zoom, capped
+        // at half the screen) so a deliberate tap on a labeled plane
+        // pins immediately.
+        let narrowRadius = min(100 * zoom, cap)
+        if let icao = closestTargetIcao24(
             in: visible,
             at: point,
             phoneHeadingDeg: phoneHeadingDeg,
@@ -1480,24 +1506,65 @@ struct ContentView: View {
             screenSize: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg,
-            lockZoneRadius: tapRadius
-        )
-        switch hit {
-        case nil:
-            // Empty-sky tap clears any pin.
-            if pinnedIcao != nil { recorder.recordUnpin(at: now) }
-            pinnedIcao = nil
-        case pinnedIcao:
-            // Tap-same-plane toggles off — explicit "cancel."
+            lockZoneRadius: narrowRadius
+        ) {
+            if icao == pinned {
+                // Tap-same-plane toggles off — explicit "cancel."
+                recorder.recordUnpin(at: now)
+                pinnedIcao = nil
+                lockOn.unpin()
+            } else {
+                pinnedIcao = icao
+                recorder.recordTapPin(icao24: icao, at: now)
+                // forceLock is the only way into .locked — the user
+                // just pointed at this plane, so the engine jumps
+                // straight to a locked state.
+                lockOn.forceLock(targetIcao24: icao, now: now)
+            }
+            return
+        }
+
+        // (2) Empty sky while pinned → clear the pin.
+        if pinned != nil {
             recorder.recordUnpin(at: now)
             pinnedIcao = nil
-        case let icao?:
+            lockOn.unpin()
+            return
+        }
+
+        // (3) Empty sky, no pin → "try harder": widen to 250 px and
+        // pin the nearest visible plane (if any falls inside).
+        let wideRadius = min(250 * zoom, cap)
+        if let icao = closestTargetIcao24(
+            in: visible,
+            at: point,
+            phoneHeadingDeg: phoneHeadingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            screenSize: screenSize,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg,
+            lockZoneRadius: wideRadius
+        ) {
             pinnedIcao = icao
             recorder.recordTapPin(icao24: icao, at: now)
-            // forceLock is the only way into .locked — the user just
-            // pointed at this plane, so the engine jumps straight to
-            // a locked state.
             lockOn.forceLock(targetIcao24: icao, now: now)
+            return
+        }
+
+        // (4) Truly empty frame — brief NO AIRCRAFT HERE ripple at
+        // the tap point.
+        showEmptyTapRipple(at: point)
+    }
+
+    /// Trigger a brief NO AIRCRAFT HERE ripple at the given tap
+    /// location. Auto-clears after 1.0 s.
+    private func showEmptyTapRipple(at point: CGPoint) {
+        let now = Date()
+        emptyRipple = (point, now)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if let r = emptyRipple, r.1 == now {
+                emptyRipple = nil
+            }
         }
     }
 }
@@ -1655,6 +1722,43 @@ private struct EmptyPulse: ViewModifier {
             let phase = (cos(t * 4.5) + 1) / 2     // 0…1
             let opacity = active ? (0.4 + 0.6 * phase) : 1.0
             content.opacity(opacity)
+        }
+    }
+}
+
+// MARK: - Empty-tap ripple
+
+/// Brief NO AIRCRAFT HERE feedback at the tap point. Shown when the
+/// user taps an area with no nearby visible aircraft (after the
+/// widened 250 px search has also come up empty). Expands a thin
+/// cyan ring from 20 → 100 pt over ~0.8 s and fades both ring and
+/// caption to zero. `since` is the trigger timestamp — read by the
+/// inner `TimelineView` to drive the animation off the date diff
+/// rather than `.withAnimation`, so the view is self-contained.
+private struct EmptyTapRippleView: View {
+    let at: CGPoint
+    let since: Date
+
+    var body: some View {
+        TimelineView(.animation) { ctx in
+            let dt = ctx.date.timeIntervalSince(since)
+            let progress = min(1.0, dt / 0.8)
+            ZStack {
+                Circle()
+                    .stroke(Brand.Color.cyan.opacity(1.0 - progress),
+                            lineWidth: 1.5)
+                    .frame(width: CGFloat(20 + progress * 80),
+                           height: CGFloat(20 + progress * 80))
+                if progress < 0.95 {
+                    Text("NO AIRCRAFT HERE")
+                        .font(.system(size: 9, weight: .semibold,
+                                      design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(Brand.Color.cyan.opacity(1.0 - progress))
+                        .padding(.top, 60)
+                }
+            }
+            .position(at)
         }
     }
 }
