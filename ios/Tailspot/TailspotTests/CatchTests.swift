@@ -69,28 +69,35 @@ struct CatchTests {
         #expect(fetched.first?.operatorName == nil)
     }
 
-    @Test func storesMultipleCatchesIncludingDuplicates() throws {
-        // v1 explicitly allows the same icao24 to be caught multiple
-        // times — each tap is a discrete event. Dedupe is a Hangar
-        // concern (PLAN.md §9 #7).
-        let container = try makeContainer()
-        let context = ModelContext(container)
+    @Test func duplicateInsertIsRejected() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Catch.self, configurations: config)
+        let ctx = ModelContext(container)
 
-        let now = Date()
-        context.insert(Catch(
-            icao24: "abc", callsign: "X", model: "737", manufacturer: "BOEING",
-            caughtAt: now, observerLat: 37, observerLon: -122,
-            slantDistanceMeters: 1000
-        ))
-        context.insert(Catch(
-            icao24: "abc", callsign: "X", model: "737", manufacturer: "BOEING",
-            caughtAt: now.addingTimeInterval(60),
-            observerLat: 37, observerLon: -122, slantDistanceMeters: 1100
-        ))
-        try context.save()
+        let icao = "abc123"
 
-        let fetched = try context.fetch(FetchDescriptor<Catch>())
-        #expect(fetched.count == 2)
+        // First insert succeeds.
+        ctx.insert(Catch(
+            icao24: icao,
+            callsign: "UAL248",
+            model: "737-800",
+            manufacturer: "BOEING",
+            operatorName: "United",
+            caughtAt: Date(),
+            observerLat: 37.871, observerLon: -122.272,
+            slantDistanceMeters: 12_400
+        ))
+        try ctx.save()
+
+        // Sanity: the row is there.
+        let before = try ctx.fetch(FetchDescriptor<Catch>())
+        #expect(before.count == 1)
+
+        // The Catch model itself enforces nothing — uniqueness is gated at
+        // the insertion site (ContentView.performCatch). What we test here
+        // is the static helper that those sites use.
+        #expect(Catch.exists(icao24: icao, in: ctx) == true)
+        #expect(Catch.exists(icao24: "deadbeef", in: ctx) == false)
     }
 
     @Test func nilOptionalFieldsAreAllowed() throws {

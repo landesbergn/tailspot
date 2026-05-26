@@ -120,6 +120,19 @@ final class Catch {
             operatorName: operatorName
         ).type
     }
+
+    /// Returns true when at least one `Catch` row with the given icao24
+    /// (case-insensitive comparison after trim) exists in the context.
+    /// Used by the capture path to gate insertion — duplicates render as
+    /// quiet "ALREADY CAUGHT" reveals but don't add a new row.
+    nonisolated static func exists(icao24: String, in context: ModelContext) -> Bool {
+        let key = icao24.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else { return false }
+        let predicate = #Predicate<Catch> { $0.icao24 == key }
+        var descriptor = FetchDescriptor<Catch>(predicate: predicate)
+        descriptor.fetchLimit = 1
+        return ((try? context.fetch(descriptor).first) != nil)
+    }
 }
 
 // MARK: - Photo file helpers
