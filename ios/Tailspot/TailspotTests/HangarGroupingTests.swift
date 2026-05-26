@@ -234,4 +234,35 @@ struct HangarGroupingTests {
         #expect(groups[0].title == HangarGrouping.recentTitle)
         #expect(groups[0].rows.count == 2)
     }
+
+    // MARK: - resolveSlots
+
+    @Test func resolveSlotsForSetGroupsCaughtTailsByEntry() throws {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        // Two 737s (different tails), one A320 — narrow-body.
+        let catches = [
+            makeCatch(icao: "boeing1", manufacturer: "BOEING", model: "737-800", caughtAt: t0),
+            makeCatch(icao: "boeing2", manufacturer: "BOEING", model: "737-800", caughtAt: t0.addingTimeInterval(60)),
+            makeCatch(icao: "airbus1", manufacturer: "AIRBUS", model: "A320",    caughtAt: t0.addingTimeInterval(30)),
+        ]
+        let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+        #expect(rows.count == 3)
+
+        // Find the narrow-body set in PokeSets.all.
+        guard let narrow = PokeSets.all.first(where: { $0.type == .narrow }) else {
+            Issue.record("No narrow-body set declared in PokeSets.all")
+            return
+        }
+
+        let slots = HangarGrouping.resolveSlots(for: narrow, in: rows)
+        #expect(slots.count == narrow.entries.count)
+
+        // The 737-800 slot has 2 distinct tails.
+        let b737 = slots.first(where: { $0.entry.modelTokens.contains(where: { $0.localizedCaseInsensitiveContains("737") }) })
+        #expect(b737?.tails.count == 2)
+
+        // The A320 slot has 1.
+        let a320 = slots.first(where: { $0.entry.modelTokens.contains(where: { $0.localizedCaseInsensitiveContains("a320") }) })
+        #expect(a320?.tails.count == 1)
+    }
 }

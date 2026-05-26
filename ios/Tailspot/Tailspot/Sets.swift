@@ -189,17 +189,26 @@ nonisolated enum PokeSets {
         case caught(catchedExample: Catch)
     }
 
+    /// True when the given catch's model matches any of the entry's
+    /// `modelTokens` (case-insensitive substring on `c.model`). The
+    /// single source of truth for Catch → PokeSetEntry membership;
+    /// `status(of:against:)`, `progress(of:against:)`, and
+    /// `HangarGrouping.resolveSlots(for:in:)` all pivot on this so a
+    /// future tweak to the matching rule lands in every caller at
+    /// once.
+    nonisolated static func matches(catch c: Catch, entry: PokeSetEntry) -> Bool {
+        guard let model = c.model?.lowercased(), !model.isEmpty else { return false }
+        return entry.modelTokens.contains { token in
+            model.contains(token.lowercased())
+        }
+    }
+
     /// Walk a single set's entries and resolve each against the
     /// caught planes. First matching catch (by `modelTokens`
     /// substring on `c.model`) fills the slot.
     static func status(of set: PokeSet, against catches: [Catch]) -> [(PokeSetEntry, SlotStatus)] {
         set.entries.map { entry in
-            let hit = catches.first { c in
-                guard let model = c.model?.lowercased(), !model.isEmpty else { return false }
-                return entry.modelTokens.contains { token in
-                    model.contains(token.lowercased())
-                }
-            }
+            let hit = catches.first { matches(catch: $0, entry: entry) }
             return (entry, hit.map(SlotStatus.caught) ?? .locked)
         }
     }

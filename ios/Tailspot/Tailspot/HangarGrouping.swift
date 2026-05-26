@@ -162,6 +162,25 @@ enum HangarGrouping {
             return recentTitle
         }
     }
+
+    /// Returns one `ModelSlot` per entry in the given set, with the
+    /// dedup'd HangarRows that fall into each slot attached. Rows that
+    /// don't match any entry in the set are dropped from the result —
+    /// sets are a curated lens, not a universal bucket; those rows
+    /// still surface in Recent. Empty `tails` means the slot is locked.
+    ///
+    /// The Catch → PokeSetEntry pairing reuses the existing matcher
+    /// in `Sets.swift` (`PokeSets.matches(catch:entry:)`) so this
+    /// resolver and `PokeSets.status` / `PokeSets.progress` stay in
+    /// lockstep. Spec § 9.2 — no new matcher introduced here.
+    static func resolveSlots(for set: PokeSet, in rows: [HangarRow]) -> [ModelSlot] {
+        set.entries.map { entry in
+            let matchingTails = rows.filter { row in
+                PokeSets.matches(catch: row.mostRecent, entry: entry)
+            }
+            return ModelSlot(entry: entry, tails: matchingTails)
+        }
+    }
 }
 
 private extension String {
