@@ -6,6 +6,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, Phase 0 main next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-05-25 [Capture & Hangar redesign IMPLEMENTED])
+
+**Capture & Hangar redesign — landed 2026-05-25, end-to-end.** Spec at `docs/superpowers/specs/2026-05-25-capture-and-hangar-redesign-design.md`; plan at `docs/superpowers/plans/2026-05-25-capture-and-hangar-redesign.md` (20 phased tasks); subagent-driven execution committed 24 commits between `ba47e78` and `93eec57`. All 169 unit tests pass.
+
+**Catch model & engine spine (T1–T4):**
+- `Catch.exists(icao24:in:)` static helper gates insertion. `CatchTests::duplicateInsertIsRejected` replaces the old `storesMultipleCatchesIncludingDuplicates`.
+- `HangarRow.firstCatch` returns the earliest catch in `allCatches` (used by `CatchDetailView`'s first-caught panel for legacy multi-catch rows).
+- New `ModelSlot.swift` — view-model bundling `(entry: PokeSetEntry, tails: [HangarRow])`. `HangarGrouping.resolveSlots(for:in:)` produces `[ModelSlot]` for a given set, reusing the existing `Sets.swift` matcher (now exposed as `PokeSets.matches(catch:entry:)`).
+- `LockOnEngine` simplified to 3 states (`idle / locked / sticky`). `.acquiring`, `acquisitionDuration`, `acquisitionProgress` removed. `forceLock` is the only entry to `.locked`; new `unpin()` returns to idle.
+
+**Capture flow (T5–T8):**
+- AR overlay renders **ambient labels on every visible plane** — faint cyan corner-bracket pair + `callsign · RARITY` label via new `PlaneLabel` + `LockBrackets` private structs in `ContentView`. Pinned plane brightens (56×56, 2.5pt strokes, full opacity); others dim to ~35%. Per-plane metadata via `ambientMetadata` content-keyed `.task(id: visibleIcaoSignature)` prefetch, pruned to currently-visible icaos so the view dict doesn't grow monotonically.
+- Tap behavior is 4-branch: ≤100px hit on plane → toggle pin / re-pin; empty sky with pin → clear pin; empty sky without pin → widen to 250px and pin nearest; truly empty → brief `NO AIRCRAFT HERE` cyan ripple. Radii scale with zoom (capped at half-screen).
+- Capture button is unified — `CaptureMode { .disabled, .single, .multi }` derived per-frame. Magenta `×N` badge in the top-right corner only for multi (no pin, ≥2 visible). Disabled (~40% opacity) when frame is empty. The prior multi-catch button + magenta-zone overlay are deleted.
+- `performCatch(mode:)` merges the old `performAutoCatch` / `performMultiCatch` paths into one entry. Per-icao `Catch.exists` gate; new tails inserted; duplicates accumulated in a separate list. One JPEG captured per fire, attached to each new row. `captureInFlight` flag guards re-entry. `presentReveal(newCatches:duplicates:)` routes ≤1 to single CardReveal and ≥2 to staggered MultiCatchReveal.
+
+**Reveal moments (T9–T11):**
+- New `RevealAudio.swift` — thin wrapper around `AudioServicesPlaySystemSoundID` + `UIImpactFeedbackGenerator`. 5-rung ascending chime ladder (Tink → BeginRecording → Anticipate → Headset In → Photo Shutter).
+- `CardReveal` gains `isDuplicate: Bool = false`. On duplicate: diagonal red-bordered `ALREADY CAUGHT` stamp over the card front (hidden on flip-back); rarity bloom + rare+ light rays gated off; status pill swaps green NEW CARD → amber RE-CATCH. The PokeCard itself still renders (back-flip works).
+- `MultiCatchReveal` reworked around a state-driven stagger: `@State revealedIndex` ticks via a `.task` loop, sleeping ~250ms between cards. Each non-duplicate landing fires `RevealAudio.tap(step:)` with a fresh-count-based step (chime ladder ascends by new tails, not absolute index). Combo banner builds: `CATCH ×1 → COMBO ×N +M pts` (magenta accent). Dups render inline with a smaller stamp and don't contribute to the combo. `comboMultiplier(for:)` static API preserved for `MultiCatchComboTests`.
+
+**Hangar shell + 3-view structure (T12–T14):**
+- New `HangarSegmentedSwitcher.swift` — cyan-on-bgElevated 3-segment control. `HangarSegment { .sets, .recent, .trophies }`. Default `.sets`. Persists via `@AppStorage("tailspot.hangar.view")`.
+- `HangarView` body is now just toolbar (Lockup + count pill) + switcher + the three view bodies; filter chips, the inline `LazyVGrid`, and the per-grid delete state are all gone (delete moved into `HangarRecentView`).
+- New `HangarRecentView.swift` — chronological dedup'd MiniCard grid sorted by first-catch desc; long-press → context-menu Delete with confirmation alert. Owns its own `rowToDelete` state.
+- New `HangarTrophiesView.swift` — the inner body of the former standalone `TrophiesScreen` extracted intact (hero strip + Earned / In progress / Locked partition + 13-achievement × 4-tier ladder with hex-frame icons). `TrophiesScreen.swift` reduced to a 21-line thin wrapper for any remaining standalone push paths. `ProfileScreen` lost its `RECENT MEDALS` strip + the Trophies callsite (Trophies is now Hangar-only; Map stays on Profile).
+
+**Sets drill-down (T15–T17):**
+- New `HangarSetsView.swift` — vertical list of 7 rich set tiles (one per `AircraftType`, ordered Narrow / Wide / Regional / Biz / Mil / GA / Heritage per `PokeSets.all`). Each tile = type-glyph chip + set title + slot-progress `M / N` + thumbnail strip (caught slots get a 1pt type-tint top rail + `entry.modelTokens.first?.uppercased()` label; locked slots show centered `?`). 0/N sets fade to 55% opacity. Tap → `SetDetailRoute(setId: String)`.
+- New `SetDetailView.swift` — set detail screen. Header (40pt type chip + set title + `M of N caught` mono + 3pt progress bar + optional next-milestone teaser). 2-col `LazyVGrid` of slot cells. Caught cell: 2pt rarity top rail + `#NN` prefix + `entry.canonicalName` + `×K tails` count in type tint. Locked cell: dim `?` + canonicalName; tap → `.sheet(item:)` `LockedSlotHint` (~220pt detent) with `entry.summary` as the secondary hint line.
+- New `ModelSlotDetailView.swift` — between Set detail and Tail detail. Header: `#NN · SET-NAME` breadcrumb + canonical model name + `K distinct tail(s)`. Vertical list of `HangarRow`s for tails of this model: 3pt rarity left rail + cyan callsign + `icao24 · operator` muted mono + right-aligned relative `firstCatch.caughtAt`. Tap → `HangarRow` (resolves to `CatchDetailView`).
+
+**Tail detail rewrite (T18):**
+- `CatchDetailView` rewritten per spec § 8 (net -222 lines). **PokeCard `.lg` is the hero, front-and-center.** Floating chrome pills (chevron-back + ShareLink) on `.ultraThinMaterial` discs; system nav bar hidden via `.toolbar(.hidden, for: .navigationBar)` + `.navigationBarBackButtonHidden(true)`. Below the card: EARNED panel (rarity-tinted, `+basePoints pts`, rarity label + type) and First-caught panel (earliest `Catch.caughtAt` + observer lat/lon with N/S/E/W). Planespotters attribution chip only when a Planespotters photo is rendered. **Dropped:** 320pt photo hero, 6-cell stats grid, catch-log timeline, separate headline block. Photo-slot priority owned by `PokePlane.photoURL`: catch JPEG → Planespotters thumbnail (fetched on `.task` for the no-JPEG case, then `PokePlane` rebuilt with the URL) → striped rarity placeholder (PokeCard's own fallback).
+
+**MiniCard cleanup (T19):**
+- `MiniCardView` drops the `×N` count pill — post-T1/T8 dedup means `row.count` is always 1 going forward and the badge was meaningless visual noise.
+
+**Tests:** 169 pass. New tests added: `duplicateInsertIsRejected`, `hangarRowFirstCatchIsEarliestInAllCatches`, `resolveSlotsForSetGroupsCaughtTailsByEntry`, `idleStaysIdleEvenWithVisibleTarget`, `forceLockMovesIdleToLocked`, `updateWithNilFromLockedMovesToSticky`, `stickyExpiresToIdleAfterDuration`, `stickyRecoversToLockedOnSameTarget`, `ticksAloneNeverEnterLocked`, `unpinClearsActiveLock`, `unpinClearsSticky`, plus follow-up assertions. Removed `.acquiring`-state tests.
+
+**Open follow-ups (spec § 11):** Audio source can swap from `AudioServicesPlaySystemSoundID` to bundled AIFFs / `AVAudioEngine` synth if the chime ladder needs tuning. All-frame label density fallback at ≥10 visible planes (closest-5 + brackets-only for the rest) not implemented; punt until field-testing shows the need. `nextMilestoneLine` in SetDetailView is stubbed (returns nil) until a trophy-to-set mapping is wired. Some minor dead code: `HangarFilter` enum in `HangarView.swift` (T15 didn't claim it; safe to delete in a sweep). `LockOnEngine.icaosInZone` is now orphaned (no callers post-T7).
+
 ## Current state (as of session ending 2026-05-25 [Capture & Hangar redesign spec])
 
 **Capture & Hangar redesign — spec landed 2026-05-25, awaiting implementation plan.** Noah surfaced that the core UX of capturing planes and viewing the collection wasn't right. Brainstormed through the model, alignment-checked section by section, and wrote a design spec at `docs/superpowers/specs/2026-05-25-capture-and-hangar-redesign-design.md`.
