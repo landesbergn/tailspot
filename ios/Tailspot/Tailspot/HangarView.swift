@@ -73,6 +73,17 @@ struct HangarView: View {
                 .navigationDestination(for: HangarRow.self) { row in
                     CatchDetailView(row: row)
                 }
+                .navigationDestination(for: SetDetailRoute.self) { route in
+                    // Task 15 wires this; Task 16 replaces the SetDetailView
+                    // stub (which lives in HangarSetsView.swift) with the
+                    // real model-slot grid. If a set id ever fails to
+                    // resolve (e.g., we deleted a set from PokeSets.all
+                    // but a stale nav value lingered), fall through to an
+                    // empty view rather than crashing.
+                    if let set = PokeSets.all.first(where: { $0.id == route.setId }) {
+                        SetDetailView(set: set)
+                    }
+                }
         }
     }
 
@@ -210,22 +221,10 @@ enum HangarFilter: Hashable {
     }
 }
 
-// MARK: - Segment view stubs
-//
-// Temporary placeholder for the one Hangar segment still pending
-// extraction:
-//   - HangarSetsView      → Task 15 (rich set tiles)
-//
-// `HangarRecentView` lives in its own file as of Task 13.
-// `HangarTrophiesView` lives in its own file as of Task 14.
-struct HangarSetsView: View {
-    var body: some View {
-        Text("Sets")
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Brand.Color.bgPrimary)
-    }
-}
+// All three Hangar segment views now live in their own files:
+//   - HangarRecentView   → HangarRecentView.swift   (Task 13)
+//   - HangarTrophiesView → HangarTrophiesView.swift (Task 14)
+//   - HangarSetsView     → HangarSetsView.swift     (Task 15)
 
 #Preview {
     HangarView()
