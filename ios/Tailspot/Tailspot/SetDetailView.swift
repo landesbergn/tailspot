@@ -31,22 +31,28 @@ struct SetDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                if groups.isEmpty {
-                    emptyHint
-                } else {
-                    modelList
+        VStack(spacing: 0) {
+            // Custom back bar — HangarView hides the system nav bar
+            // so the push transition shifts content if we let it come
+            // back here. Use a matching custom chrome instead.
+            HangarChildBar(title: set.title)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    header
+                    if groups.isEmpty {
+                        emptyHint
+                    } else {
+                        modelList
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
         }
         .background(Brand.Color.bgPrimary)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Brand.Color.bgPrimary, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
     }
 
     // MARK: - Header

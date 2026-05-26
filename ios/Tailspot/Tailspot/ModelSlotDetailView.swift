@@ -21,44 +21,50 @@ struct ModelSlotDetailView: View {
     let group: ModelGroup
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(set.title.uppercased())
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(Brand.Color.textTertiary)
+        VStack(spacing: 0) {
+            // Custom back bar — HangarView hides the system nav bar
+            // so the push transition shifts content if we let it come
+            // back here. Use a matching custom chrome instead.
+            HangarChildBar(title: displayModel)
 
-                Text(displayModel)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Brand.Color.textPrimary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(set.title.uppercased())
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(Brand.Color.textTertiary)
 
-                Text("\(group.distinctTailCount) distinct tail\(group.distinctTailCount == 1 ? "" : "s")")
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(set.type.tint)
+                    Text(displayModel)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Brand.Color.textPrimary)
 
-                Text("TAILS YOU'VE CAUGHT")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .padding(.top, 14)
-                    .padding(.bottom, 4)
+                    Text("\(group.distinctTailCount) distinct tail\(group.distinctTailCount == 1 ? "" : "s")")
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(set.type.tint)
 
-                VStack(spacing: 6) {
-                    ForEach(group.tails) { row in
-                        NavigationLink(value: row) {
-                            tailRow(row)
+                    Text("TAILS YOU'VE CAUGHT")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .padding(.top, 14)
+                        .padding(.bottom, 4)
+
+                    VStack(spacing: 6) {
+                        ForEach(group.tails) { row in
+                            NavigationLink(value: row) {
+                                tailRow(row)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
         .background(Brand.Color.bgPrimary)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Brand.Color.bgPrimary, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
     }
 
     /// Title-case the manufacturer prefix; leave the model
