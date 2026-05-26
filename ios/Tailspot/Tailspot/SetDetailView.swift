@@ -256,35 +256,4 @@ private struct LockedSlotHint: View {
     }
 }
 
-// MARK: - ModelSlotDetailView stub (Task 17 fleshes out)
-
-/// Temporary destination for `ModelSlotRoute`. Task 17 replaces this
-/// with the per-slot tail list (every HangarRow that matched the
-/// slot, each with its catch count + most-recent catch). Kept here
-/// next to `SetDetailView` for the same delete-and-replace ergonomics
-/// the T15 stub used.
-struct ModelSlotDetailView: View {
-    let set: PokeSet
-    let entry: PokeSetEntry
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(entry.canonicalName)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(Brand.Color.textPrimary)
-            Text(set.title.uppercased())
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(1.0)
-                .foregroundStyle(set.type.tint)
-            Text(entry.summary)
-                .font(Brand.Font.body)
-                .foregroundStyle(Brand.Color.textSecondary)
-            Spacer()
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Brand.Color.bgPrimary)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Brand.Color.bgPrimary, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-    }
-}
+// `ModelSlotDetailView` lives in `ModelSlotDetailView.swift` (Task 17).
