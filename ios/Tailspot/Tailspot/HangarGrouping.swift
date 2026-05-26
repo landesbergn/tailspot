@@ -173,7 +173,7 @@ enum HangarGrouping {
     /// in `Sets.swift` (`PokeSets.matches(catch:entry:)`) so this
     /// resolver and `PokeSets.status` / `PokeSets.progress` stay in
     /// lockstep. Spec § 9.2 — no new matcher introduced here.
-    static func resolveSlots(for set: PokeSet, in rows: [HangarRow]) -> [ModelSlot] {
+    nonisolated static func resolveSlots(for set: PokeSet, in rows: [HangarRow]) -> [ModelSlot] {
         set.entries.map { entry in
             let matchingTails = rows.filter { row in
                 PokeSets.matches(catch: row.mostRecent, entry: entry)
