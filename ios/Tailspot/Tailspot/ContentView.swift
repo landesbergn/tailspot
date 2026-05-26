@@ -445,6 +445,12 @@ struct ContentView: View {
             let icaos = adsb.observed
                 .filter(\.isLikelyVisibleToObserver)
                 .map(\.aircraft.icao24)
+            // Prune session-stale entries. `ambientMetadata` is a view-
+            // local mirror of the bounded MetadataCache actor; without
+            // this filter the dict would grow unboundedly over a long
+            // session as planes leave + re-enter the visible set.
+            let currentSet = Set(icaos)
+            ambientMetadata = ambientMetadata.filter { currentSet.contains($0.key) }
             for icao in icaos where ambientMetadata[icao] == nil {
                 let value = await adsb.metadata(for: icao)
                 ambientMetadata[icao] = value
