@@ -3,9 +3,11 @@
 //  Tailspot
 //
 //  The gamification hub: total points, global rank (placeholder
-//  pending backend), four-stat grid, rarity breakdown strip, recent
-//  trophies row, plus navigation entries to Trophies, Sets, Map,
-//  Leaderboard, Rarity / Types reference, Settings, and Share.
+//  pending backend), four-stat grid, rarity breakdown strip, plus
+//  navigation entries to Sets, Map, Leaderboard, Rarity / Types
+//  reference, Settings, and Share. Trophies have moved into the
+//  Hangar's Trophies segment (Spec § 4.2, § 7) and no longer have
+//  an entry on this screen.
 //
 //  Stats derived entirely from the on-device Hangar — no server
 //  required for v1.
@@ -30,7 +32,6 @@ struct ProfileScreen: View {
                     identityHeader
                     statsRow
                     rarityStrip
-                    recentTrophies
                     quickLinks
                     sectionLinks
                 }
@@ -221,56 +222,6 @@ struct ProfileScreen: View {
                             .foregroundStyle(Brand.Color.textTertiary)
                     }
                     .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
-    }
-
-    // MARK: - Recent trophies
-
-    private var recentTrophies: some View {
-        let unlocked = Trophies.roster
-            .compactMap { ach -> (Achievement, TrophyTier)? in
-                guard let t = ach.currentTier(inputs: inputs) else { return nil }
-                return (ach, t)
-            }
-            .prefix(6)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("TROPHIES")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Spacer()
-                NavigationLink {
-                    TrophiesScreen()
-                } label: {
-                    Text("See all")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Brand.Color.cyan)
-                }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    if unlocked.isEmpty {
-                        Text("Catch a plane to start earning trophies.")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.textSecondary)
-                            .padding(.vertical, 12)
-                    } else {
-                        ForEach(unlocked, id: \.0.id) { ach, tier in
-                            VStack(spacing: 6) {
-                                TrophyView(tier: tier, iconName: ach.iconName, size: 56)
-                                Text(ach.title)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(Brand.Color.textPrimary)
-                                    .lineLimit(1)
-                            }
-                            .frame(width: 80)
-                        }
-                    }
                 }
             }
         }

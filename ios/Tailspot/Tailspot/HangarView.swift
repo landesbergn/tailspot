@@ -212,24 +212,15 @@ enum HangarFilter: Hashable {
 
 // MARK: - Segment view stubs
 //
-// Temporary placeholders for the two Hangar segments still pending
+// Temporary placeholder for the one Hangar segment still pending
 // extraction:
 //   - HangarSetsView      → Task 15 (rich set tiles)
-//   - HangarTrophiesView  → Task 14 (Trophies surface moves in)
 //
 // `HangarRecentView` lives in its own file as of Task 13.
+// `HangarTrophiesView` lives in its own file as of Task 14.
 struct HangarSetsView: View {
     var body: some View {
         Text("Sets")
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Brand.Color.bgPrimary)
-    }
-}
-
-struct HangarTrophiesView: View {
-    var body: some View {
-        Text("Trophies")
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Brand.Color.bgPrimary)
