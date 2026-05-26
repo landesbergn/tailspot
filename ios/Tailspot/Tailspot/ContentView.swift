@@ -112,6 +112,9 @@ struct ContentView: View {
     @State private var captureBridge = CameraCaptureBridge()
     /// Guards re-entry of the capture button while a catch is in
     /// flight. Cleared when the user dismisses the reveal sheet.
+    /// NOTE: T7 un-wired the read at the button site when collapsing
+    /// the multi-button chrome. T8 will re-wire inside the new merged
+    /// `performCatch(mode:)`. Reveal-dismiss callbacks still clear it.
     @State private var captureInFlight = false
     /// Latched compass warning. Set true after `compassBadDebounce`
     /// seconds of continuously-bad readings; cleared when accuracy
@@ -822,7 +825,7 @@ struct ContentView: View {
     ///   that is still visible, or (b) the lone visible plane.
     /// - `.multi(icaos)` when ≥2 planes are visible and no pin is set;
     ///   the unified button shows a magenta `×N` corner badge.
-    enum CaptureMode {
+    private enum CaptureMode {
         case disabled
         case single(String)        // icao24
         case multi([String])       // icao24 list
