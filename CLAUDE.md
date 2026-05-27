@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Read PLAN.md first
 
-`PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, Phase 0 main next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
+`PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, design-canvas port ✅, TestFlight v0 shipping to internal testers ✅, backend next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
 ## Current state (as of session ending 2026-05-26 [TestFlight v0 prep])
 
@@ -59,21 +59,63 @@ fallback preserves existing tests that don't touch OpenSky live calls).
 **Open follow-ups specific to TestFlight:**
 - App Store Connect record creation, signing, Archive + Upload all
   live in Apple UIs — see `docs/testflight-handoff.md`.
-- Designed app icon would replace the generated one; just swap the
-  PNGs in `AppIcon.appiconset/`.
 - Privacy policy URL needed if/when adding external testers (>10
   beyond your team). Internal testers are sufficient for v0.
 
-**Xcode Cloud (added 2026-05-26):** `ios/Tailspot/ci_scripts/ci_post_clone.sh`
-materializes `Tailspot.secrets.xcconfig` from workflow env vars
-(`OPENSKY_CLIENT_ID` / `_SECRET`, both marked secret in the
-workflow's Environment Variables). Apple invokes the script
-automatically post-clone, pre-build. When env vars are absent the
-script no-ops and the build runs anonymous; build still succeeds.
-The other Xcode-Cloud gotcha: the workflow's "Project or Workspace"
-field defaults to repo root, but ours is at
-`ios/Tailspot/Tailspot.xcodeproj` — must be set explicitly in the
-workflow or builds fail with "scheme Tailspot does not exist".
+**Xcode Cloud (added 2026-05-26):** Apple's CI runs two scripts
+checked into `ios/Tailspot/ci_scripts/`:
+
+- `ci_post_clone.sh` materializes `Tailspot.secrets.xcconfig` from
+  workflow env vars (`OPENSKY_CLIENT_ID` / `_SECRET`, both marked
+  secret in the workflow's Environment Variables). When env vars
+  are absent the script no-ops; build runs anonymous.
+- `ci_pre_xcodebuild.sh` seds `CURRENT_PROJECT_VERSION` in
+  `project.pbxproj` to match Apple's `CI_BUILD_NUMBER` before
+  archive. Without this every CI archive shipped with
+  `CFBundleVersion=1` and App Store Connect silently dropped
+  subsequent uploads as duplicates — Xcode Cloud reported "build
+  succeeded" while TestFlight stayed pinned to Build 1 forever.
+  Local builds keep the committed value (1); only Xcode Cloud
+  rewrites.
+
+**Xcode Cloud setup gotchas that ate hours this session:**
+1. Workflow's "Project or Workspace" field defaults to repo root;
+   our project is at `ios/Tailspot/Tailspot.xcodeproj` — must be set
+   explicitly or builds fail with the misleading "scheme Tailspot
+   does not exist" error.
+2. Workflow needs a TestFlight distribution **Post-Action**
+   ("TestFlight Internal Testing"), separate from the Archive
+   action. Without it, the archive succeeds but never reaches
+   TestFlight.
+3. Don't put trailing whitespace/newlines in env-var values; App
+   Store Connect's UI rejects with "invalid value due to invalid
+   value" without saying which character offended.
+
+**Post-TestFlight polish landed same day (2026-05-26):**
+- App icon swapped from the generated HangarGlyph-on-gradient to
+  the B-lockon concept (cyan AR corner brackets framing a white
+  airplane symbol on a navy gradient — references the AR mechanic).
+  Generator: `tools/generate-icon-options.swift`. Picked variant's
+  three PNGs (light/dark/tinted) committed in `AppIcon.appiconset/`;
+  `tools/icon-options/` is gitignored.
+- `ComingSoonPill` + `ComingSoonBanner` components (`ComingSoonPill.swift`).
+  Applied to Leaderboard, Public Hangar, and Notifications screens
+  with amber `hammer.fill` glyph so testers know these are mocks
+  pending backend.
+- Debug wrench toggle in `ContentView` wrapped in `#if DEBUG`.
+  TestFlight (Release) builds show no wrench; local Xcode dev
+  (Debug) keeps it.
+- 8 Swift 6 prep warnings cleared (Log isolation, PhotoCaptureDelegate
+  nonisolated, HangarGrouping no longer claims nonisolated when it
+  touches `@MainActor Catch` state, MultiCatchReveal @ViewBuilder
+  drop, Trophies closure @Sendable).
+- Hangar glyph swapped to SF Symbol `airplane.path.dotted` (plane
+  with dashed trail). Replaces the hand-drawn peaked-pentagon Shape
+  in `HangarGlyph.swift`. Callers unchanged — same `HangarGlyph(tint:)`
+  API, `lineWidth` retained as unused param for source compat.
+- Settings → bottom of page renders `Tailspot 0.1.0 (build N) · tap
+  to copy`. Tap copies the version line to the clipboard with a
+  soft haptic; testers paste it verbatim into bug reports.
 
 ## Current state (as of session ending 2026-05-25 [Capture & Hangar redesign IMPLEMENTED])
 
@@ -294,16 +336,17 @@ The current suite (82 tests) covers:
 
 `ADSBManager.init(liveSource:mockSource:)` has defaulted params so production uses real sources and tests substitute a `FixedSource` fixture. **Do not break this default-init shape** — `ContentView`'s `@StateObject private var adsb = ADSBManager()` depends on it.
 
-## Credentials and the shared-scheme trap
+## Credentials: xcconfig is canonical, scheme env vars are a footgun
 
-**This bit me twice. Read it.** Xcode's `Edit Scheme… → Environment Variables` writes those values into the *shared* scheme (`xcshareddata/xcschemes/Tailspot.xcscheme`) by default. If you `git add ios/` afterwards, the file with the credentials gets staged and committed.
+**Canonical path (post-TestFlight):** `ios/Tailspot/Tailspot.secrets.xcconfig` (gitignored) holds the real OpenSky values; the committed `Tailspot.xcconfig` `#include?`s it; Info.plist substitutes `$(OPENSKY_CLIENT_ID)` / `$(OPENSKY_CLIENT_SECRET)`; `OpenSkyClient.init` reads them from `Bundle.main.infoDictionary` at runtime. Same file Xcode Cloud writes via `ci_post_clone.sh` from workflow env vars. **One source of truth.**
 
-Rules:
+**The xcscheme path still works but is deprecated** — `OpenSkyClient.init` checks `ProcessInfo.environment` after explicit creds but before the bundle. The historical pattern was to add env vars to a user-only xcscheme. **Don't.** A stale xcscheme value silently wins over a fresh secrets file (this bit us once already this session — fresh xcconfig creds didn't work because the user had an old xcscheme value still set from earlier). If you must use the scheme path for dev, keep one source populated, not both.
 
-1. **Add env vars to a user-only scheme**, not the shared one. In Xcode's `Manage Schemes…` dialog, uncheck the "Shared" column for your local copy, or duplicate the scheme as user-only. User-only schemes go to `xcuserdata/` which is `.gitignore`d.
-2. **`.gitignore` allows exactly one shared scheme file** (`Tailspot.xcscheme`) via a `!` exception, so `xcodebuild` can find a scheme on fresh clone. **Every other `*.xcscheme` is ignored.** Gitignore rules are at the top of the file.
-3. **Gitignore does NOT protect already-tracked files.** If Xcode rewrites `Tailspot.xcscheme` with env vars (because someone edited the shared scheme), those changes will stage. **Always `git diff` the staged set before committing.** Look for `OPENSKY_CLIENT_SECRET` or `EnvironmentVariable` in the diff.
-4. **If a secret leaks anyway**: tell Noah immediately, rotate the secret on OpenSky's API console (don't wait), and either force-push (destructive — requires explicit user authorization) or accept the leak in git log and rely on rotation as the actual fix. Both leaks in this repo's history are recoverable from GitHub's dangling-objects cache for ~90 days — rotation is the mitigation.
+Rules that still apply:
+
+1. **The committed shared scheme is bare** — no env vars. `.gitignore` allows exactly one shared scheme file (`Tailspot.xcscheme`) via a `!` exception so `xcodebuild` works on fresh clones; every other `*.xcscheme` is ignored, but **gitignore does NOT protect already-tracked files**. If you ever do touch the shared scheme, **always `git diff` the staged set before committing**. Look for `OPENSKY_CLIENT_SECRET`, `EnvironmentVariable`, or `paste-your-` (the placeholder text in `Tailspot.secrets.example.xcconfig` — finding this in a diff means you staged the example template, not the real secrets file, which is fine; finding the real secret means abort).
+2. **If a secret leaks**: tell Noah immediately, rotate on OpenSky's API console (don't wait), update `Tailspot.secrets.xcconfig` locally, push a new build to Xcode Cloud (which picks up the new env vars). Both prior leaks in this repo's history are still recoverable from GitHub's dangling-objects cache; rotation is the actual mitigation, not history rewriting.
+3. **Rotation warns testers.** The secret is baked into shipped binaries; rotating it OAuth-fails every old TestFlight build until the tester updates. Communicate ahead of any rotation (see Workflow notes).
 
 ## MainActor default isolation (Xcode 26)
 
@@ -485,7 +528,9 @@ PLAN.md §6 lists deferred questions with working defaults: photo strategy (illu
 
 ## Where to pick up
 
-PLAN.md §9 is the authoritative backlog. As of 2026-05-20, **the full design-canvas port (Phase 2)** is the most recent ship — card-reveal catch moment, card flip-back, Trophies (13 achievements × 4 tiers × 15 custom icons), Sets (7 typed Pokédex sets, 39 entries, locked silhouettes), Rarity + Types reference screens, Profile hub (stats + trophies + sets + map + leaderboard links), MapKit map of all catches, mock anonymous Leaderboard + ShareLink card + placeholder Public Hangar, Settings (handle + privacy + notifications), Notifications screen, and 4-step Onboarding gated by @AppStorage. Earlier deliveries: Hangar v1 (dedupe + swipe-delete), replay recorder + tap-pin capture, replay analyzer (+ describe + in-app loader), camera zoom + tap-to-ID, Brand-tokens Phase A, Planespotters photo integration, auto-catch with camera capture, Game-system spine Phase 1.
+PLAN.md §9 is the authoritative backlog. **As of 2026-05-26, TestFlight v0 is live** — internal testers can install Build 11+ (the first build with the CFBundleVersion-bump CI script working end-to-end). The app icon is the B-lockon concept; Hangar glyph is SF Symbol `airplane.path.dotted`; mock surfaces have `ComingSoonBanner`s; debug wrench is gated to Debug builds; Settings shows a tap-to-copy version footer. See the Current state entry at the top.
+
+Earlier landings (left for context): full design-canvas port (Trophies, Sets, Profile hub, MapKit map, mock Leaderboard + ShareLink, Settings, Notifications, 4-step Onboarding); Capture & Hangar redesign (all-frame ambient labels, unified capture button with multi-catch, 3-state lock engine, segmented Hangar with Sets/Recent/Trophies, model-slot drill-down, PokeCard-first tail detail); Hangar v1 (dedupe + swipe-delete); replay recorder + analyzer; camera zoom + tap-to-ID; Brand tokens; Planespotters photo integration; Game-system spine.
 
 Top of the queue now (per PLAN.md §9):
 
