@@ -120,3 +120,8 @@ docs/*.html
 # fodder. Re-run the script when you want to iterate; the picked
 # variant is installed into Assets.xcassets/AppIcon.appiconset/.
 tools/icon-options/
+
+# Hangar glyph option PNGs produced by tools/generate-hangar-options.swift.
+# Same deal — the script regenerates them, the picked glyph is wired
+# into HangarGlyph.swift directly.
+tools/hangar-options/
