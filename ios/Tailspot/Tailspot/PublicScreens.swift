@@ -66,6 +66,14 @@ struct LeaderboardScreen: View {
 
     var body: some View {
         List {
+            // Mock-surface banner so testers know the rows aren't
+            // real — backend ships in a later phase (PLAN §9).
+            Section {
+                ComingSoonBanner(message: "Mock leaderboard. Live data ships with the backend.")
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
             Section {
                 podium
                     .listRowInsets(EdgeInsets())
@@ -359,10 +367,7 @@ struct PublicHangarScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
-                Text("Public hangars ship with the backend. Previewing layout only.")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .padding(.bottom, 8)
+                ComingSoonBanner(message: "Public hangars ship with the backend. Previewing layout only.")
                 Text("RECENT CATCHES")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .tracking(1.2)

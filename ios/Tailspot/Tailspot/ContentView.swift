@@ -399,6 +399,12 @@ struct ContentView: View {
                 // and profile moved to the bottom capture bar so the
                 // primary action ("press capture") and the navigation
                 // (Hangar / Profile) live together at thumb height.
+                //
+                // `#if DEBUG` so the wrench (and the panels it toggles)
+                // is absent from TestFlight / App Store Release builds —
+                // testers see a clean AR view, not the sensor readout
+                // dev affordance. Local Xcode Run builds keep it.
+                #if DEBUG
                 VStack {
                     HStack(spacing: 10) {
                         Spacer()
@@ -408,6 +414,7 @@ struct ContentView: View {
                     .padding(.trailing, 12)
                     Spacer()
                 }
+                #endif
             }
 
             // Launch splash screen: brand lockup centered on near-black

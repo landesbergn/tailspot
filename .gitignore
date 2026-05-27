@@ -114,3 +114,9 @@ ios/Tailspot/Tailspot.secrets.xcconfig
 # (open in a browser for nicer formatting) and shouldn't bloat the
 # repo. Regenerate when needed.
 docs/*.html
+
+# Icon option PNGs produced by tools/generate-icon-options.swift. The
+# script is the canonical source; the output PNGs are just review
+# fodder. Re-run the script when you want to iterate; the picked
+# variant is installed into Assets.xcassets/AppIcon.appiconset/.
+tools/icon-options/

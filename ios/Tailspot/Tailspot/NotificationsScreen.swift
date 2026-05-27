@@ -29,6 +29,15 @@ struct NotificationsScreen: View {
 
     var body: some View {
         List {
+            // Mock-surface banner — toggles persist (@AppStorage) but
+            // no push delivery until backend ships. Make sure testers
+            // don't expect alerts.
+            Section {
+                ComingSoonBanner(message: "Toggles save your preferences. Pushes ship with the backend.")
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
             Section {
                 rarePreview
                     .listRowInsets(EdgeInsets())
