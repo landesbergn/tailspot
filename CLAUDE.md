@@ -258,11 +258,9 @@ The point: a session can be cleared at any time and the next agent reads docs th
 
 For LIVE mode the app authenticates via OAuth2 client-credentials. OpenSky's anonymous tier (400 credits/day) is exhausted in ~1.3 hr at the 20 s default poll rate; the registered tier (4000 credits/day) is comfortable for testing.
 
-Read at runtime from process environment:
-- `OPENSKY_CLIENT_ID`
-- `OPENSKY_CLIENT_SECRET`
+**Canonical path (post-TestFlight):** edit `ios/Tailspot/Tailspot.secrets.xcconfig` (gitignored) with your OpenSky `client_id` + `client_secret`. The committed `Tailspot.xcconfig` `#include?`s it, which feeds Info.plist via `$(OPENSKY_CLIENT_ID)` substitution; `OpenSkyClient.init` reads them from `Bundle.main.infoDictionary` at runtime. Same file Xcode Cloud reads (via `ci_post_clone.sh` writing it from workflow env vars).
 
-These belong in the **user-only** Xcode scheme (Edit Scheme → Run → Arguments → Environment Variables), so they get saved under `xcuserdata/` and stay out of git. See "Credentials and the shared-scheme trap" below for the rules that prevent these from leaking.
+`OpenSkyClient.init`'s resolution order is **explicit → env vars → Bundle**. Env vars from the user-only xcscheme still work, but **prefer the xcconfig path**: a stale xcscheme value will silently win over a fresh secrets file and waste a debugging hour (this happened once already this session). Single source of truth = the xcconfig.
 
 OpenSky's OAuth endpoint is on the **older Keycloak path with the `/auth/` prefix** — `https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token`. The modern path without `/auth/` returns 404. This is empirically verified and documented in a comment in `OpenSkyClient.swift`. The API docs are at https://openskynetwork.github.io/opensky-api/rest.html.
 
@@ -467,10 +465,19 @@ See PLAN.md §8 for the file-by-file layout. Quick highlights:
 
 ## Workflow notes
 
-- **Run tests before committing** when touching Geo / Aircraft / ADSBManager / OpenSky / Mock / their tests. See the `xcodebuild test` command in the Tests section.
-- **Inspect `git diff --cached` before every commit** for `OPENSKY`, `client_secret`, or `EnvironmentVariable` strings. If you see them, abort and fix the scheme before committing.
+**Now that TestFlight is shipping to real testers** (since 2026-05-26), `main` is a tester-facing branch: any push there can be picked up by the next Xcode Cloud build and installed on a tester's phone. The rules below changed accordingly.
+
+- **`main` is shippable.** Don't push WIP. For changes that take more than a day, work on a feature branch and merge to main only when the change is tested locally. Single-commit fixes can go to main if tested first.
+- **Build numbers auto-bump in CI.** `ios/Tailspot/ci_scripts/ci_pre_xcodebuild.sh` rewrites `CURRENT_PROJECT_VERSION` to match `CI_BUILD_NUMBER` for every Xcode Cloud archive. **Don't touch `CURRENT_PROJECT_VERSION` in `project.pbxproj` manually** — the committed value stays at `1`; CI changes it per-build.
+- **Bump `MARKETING_VERSION` deliberately.** Edit `project.pbxproj` to go `0.1.0 → 0.1.1` for a bugfix batch, `0.2.0` for a new feature surface, etc. Bump this for any TestFlight build that introduces user-visible changes you want testers to notice in the version string. Build number stays auto-incrementing.
+- **Run tests before pushing.** `xcodebuild test ...` (see Tests section). When touching Geo / Aircraft / ADSBManager / OpenSky / Mock / their tests, a green local run is non-negotiable — failing tests waste a 5-15 minute CI cycle.
+- **Inspect `git diff --cached` before every commit** for `OPENSKY`, `client_secret`, or `EnvironmentVariable` strings. If you see them, abort and fix the scheme before committing. Two leaks in this repo's history already.
+- **SwiftData migrations stay lightweight.** Once testers have catches, every model change must be additive (new optional fields with defaults). Breaking schema changes lose tester data. If you ever need a breaking change, bump model version explicitly with a custom migration.
+- **Don't rotate OpenSky creds without warning testers.** The secret is in the shipped binary; rotating it OAuth-fails every old TestFlight build until the tester updates. They'll see "API limit" forever. Communicate ahead of rotations. The real fix is the backend proxy (PLAN.md §1).
+- **Watch crash logs.** App Store Connect → Tailspot → TestFlight → Crashes aggregates them from real testers — free diagnostic surface, check after every TestFlight build.
+- **Settings → bottom of page shows the version + build, tap to copy.** When a tester reports a bug, ask them to tap the footer in Settings; they paste `Tailspot 0.1.0 (build N)` directly into the report.
 - **Don't force-push to `main` without explicit user authorization.** The auto-mode classifier will deny it. If a leak requires history rewriting, surface the request to Noah with the trade-offs spelled out and let him decide.
-- **Don't commit credentials in any form** — not in `.swift` files, not in `.xcscheme` files, not in plist values, not in commit messages.
+- **Don't commit credentials in any form** — not in `.swift` files, not in `.xcscheme` files, not in plist values, not in commit messages, not in `Tailspot.secrets.xcconfig` (gitignored, but verify it's not staged before committing).
 
 ## Open questions still on the table
 

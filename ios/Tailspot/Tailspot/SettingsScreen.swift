@@ -63,15 +63,48 @@ struct SettingsScreen: View {
             }
 
             Section("About") {
-                LabeledLink(label: "Version", value: Bundle.main.shortVersion)
-                LabeledLink(label: "Build", value: Bundle.main.buildNumber)
                 LabeledLink(label: "Data source", value: "OpenSky Network")
                 LabeledLink(label: "Photos", value: "Planespotters.net")
+            }
+
+            // Version/build footer at the page bottom — tester-visible,
+            // tap-to-copy so bug reports can paste an exact identifier.
+            // Replaces the separate Version + Build rows we used to
+            // have inside About.
+            Section {
+            } footer: {
+                versionFooter
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// "Tailspot 0.1.0 (build N) · tap to copy". Tap copies the same
+    /// string to the clipboard so a tester reporting a bug can paste
+    /// it verbatim into a message — no "what version are you on?"
+    /// back-and-forth.
+    private var versionFooter: some View {
+        Button {
+            UIPasteboard.general.string = Bundle.main.tailspotVersionLine
+            // Light haptic confirms the copy without yanking focus.
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        } label: {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Text(Bundle.main.tailspotVersionLine)
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(" · tap to copy")
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -93,6 +126,11 @@ private extension Bundle {
     }
     var buildNumber: String {
         (object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "—"
+    }
+    /// Combined "Tailspot X.Y.Z (build N)" string — used by the
+    /// Settings footer for both display and clipboard payload.
+    var tailspotVersionLine: String {
+        "Tailspot \(shortVersion) (build \(buildNumber))"
     }
 }
 
