@@ -330,16 +330,26 @@ struct ContentView: View {
                             // within 30 km, even if it's behind the user;
                             // that produced a persistent `×N` badge for
                             // ambient traffic the user wasn't pointing at.
-                            let onScreenIcaos: [String] = visible.compactMap { obs in
-                                guard obs.screenPosition(
+                            // Project each visible plane to screen once
+                            // and stash the icao→position pair. Drives
+                            // both the capture-mode decision and the
+                            // bracket-overlay snapshot that the catch
+                            // path draws onto the saved photo.
+                            let onScreenProjected: [(icao: String, position: CGPoint)] = visible.compactMap { obs in
+                                guard let pos = obs.screenPosition(
                                     phoneHeadingDeg: heading,
                                     cameraElevationDeg: camEl,
                                     in: geo.size,
                                     hfovDeg: effectiveHfov,
                                     vfovDeg: effectiveVfov
-                                ) != nil else { return nil }
-                                return obs.aircraft.icao24
+                                ) else { return nil }
+                                return (obs.aircraft.icao24, pos)
                             }
+                            let onScreenIcaos: [String] = onScreenProjected.map(\.icao)
+                            let onScreenPositions: [String: CGPoint] = Dictionary(
+                                onScreenProjected.map { ($0.icao, $0.position) },
+                                uniquingKeysWith: { first, _ in first }
+                            )
                             let pinForCapture = lockOn.state.targetIcao24
                             let mode: CaptureMode = {
                                 if let pin = pinForCapture,
@@ -356,8 +366,12 @@ struct ContentView: View {
                             }()
                             VStack {
                                 Spacer()
-                                captureBar(mode: mode)
-                                    .padding(.bottom, 28)
+                                captureBar(
+                                    mode: mode,
+                                    screenSize: geo.size,
+                                    positions: onScreenPositions
+                                )
+                                .padding(.bottom, 28)
                             }
                             .frame(width: geo.size.width,
                                    height: geo.size.height)
@@ -729,11 +743,15 @@ struct ContentView: View {
     /// button, profile (right). The central button is a single
     /// always-present circle; mode drives its enabled state and
     /// whether a `×N` badge appears in the top-right corner.
-    private func captureBar(mode: CaptureMode) -> some View {
+    private func captureBar(
+        mode: CaptureMode,
+        screenSize: CGSize,
+        positions: [String: CGPoint]
+    ) -> some View {
         HStack {
             bottomHangarButton
             Spacer()
-            captureButton(mode: mode)
+            captureButton(mode: mode, screenSize: screenSize, positions: positions)
             Spacer()
             bottomProfileButton
         }
@@ -754,7 +772,11 @@ struct ContentView: View {
     /// Re-entry is guarded by `captureInFlight`; the flag clears in
     /// the reveal's dismiss callbacks (and on the fall-through where
     /// no reveal is presented).
-    private func performCatch(mode: CaptureMode) {
+    private func performCatch(
+        mode: CaptureMode,
+        screenSize: CGSize,
+        positions: [String: CGPoint]
+    ) {
         let icaos: [String]
         switch mode {
         case .disabled:         return
@@ -815,8 +837,26 @@ struct ContentView: View {
                 }
 
                 let observed = visibleByIcao[icao]
-                let photoFilename = photoData.flatMap {
-                    CatchPhotoStore.save($0, icao24: icao, at: now)
+                // Superimpose the cyan lock-on bracket around the plane
+                // at its captured-frame screen position so the saved
+                // JPEG records which plane this catch represents. If the
+                // plane has no recorded position (unusual — it was on
+                // screen when the button rendered, but the dict missed)
+                // we fall back to the raw photo bytes.
+                let photoFilename: String? = photoData.flatMap { data -> String? in
+                    let toSave: Data
+                    if let pos = positions[icao] {
+                        let overlay = CatchPhotoComposer.BracketOverlay(
+                            screenPosition: pos,
+                            screenSize: screenSize
+                        )
+                        toSave = CatchPhotoComposer.compose(
+                            jpegData: data, overlay: overlay
+                        ) ?? data
+                    } else {
+                        toSave = data
+                    }
+                    return CatchPhotoStore.save(toSave, icao24: icao, at: now)
                 }
                 let row = Catch(
                     icao24: icao,
@@ -968,7 +1008,11 @@ struct ContentView: View {
     /// Big central capture button. A single circle that is always
     /// present; multi-mode adds a small magenta `×N` badge in the
     /// top-right corner.
-    private func captureButton(mode: CaptureMode) -> some View {
+    private func captureButton(
+        mode: CaptureMode,
+        screenSize: CGSize,
+        positions: [String: CGPoint]
+    ) -> some View {
         let isMulti: Bool = {
             if case .multi = mode { return true }
             return false
@@ -984,7 +1028,7 @@ struct ContentView: View {
 
         return Button {
             guard isEnabled else { return }
-            performCatch(mode: mode)
+            performCatch(mode: mode, screenSize: screenSize, positions: positions)
         } label: {
             ZStack(alignment: .topTrailing) {
                 ZStack {
