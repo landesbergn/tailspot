@@ -35,7 +35,7 @@ struct RarityReferenceScreen: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("FIVE TIERS")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.cyan)
             Text("Every plane has a tier.")
@@ -52,7 +52,7 @@ struct RarityReferenceScreen: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 10).fill(r.tint.opacity(0.18))
                 Text("\(r.basePoints)")
-                    .font(.system(size: 18, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 18, weight: .heavy))
                     .foregroundStyle(r.tint)
             }
             .frame(width: 64, height: 64)
@@ -68,7 +68,7 @@ struct RarityReferenceScreen: View {
                     .foregroundStyle(Brand.Color.textSecondary)
                     .lineLimit(2)
                 Text("Base \(r.basePoints) pt")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .bold))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .tracking(0.6)
             }
@@ -117,7 +117,7 @@ struct TypesReferenceScreen: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("SEVEN TYPES")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.cyan)
             Text("How we bucket the sky.")
@@ -131,13 +131,13 @@ struct TypesReferenceScreen: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 12).fill(t.tint.opacity(0.18))
                 Text(t.glyph)
-                    .font(.system(size: 30, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 30, weight: .bold))
                     .foregroundStyle(t.tint)
             }
             .frame(height: 76)
             VStack(alignment: .leading, spacing: 3) {
                 Text(t.label)
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
                     .tracking(0.6)
                     .foregroundStyle(t.tint)
                 Text(t.summary)

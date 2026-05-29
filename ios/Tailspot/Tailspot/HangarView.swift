@@ -83,13 +83,13 @@ struct HangarView: View {
             HangarGlyph(lineWidth: 2, tint: Brand.Color.cyan)
                 .frame(width: 22, height: 22)
             Text("TAILSPOT")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 13, weight: .bold))
                 .tracking(2)
                 .foregroundStyle(Brand.Color.textPrimary)
             Spacer(minLength: 8)
             if !catches.isEmpty {
                 Text("\(catches.count) catches")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 11, weight: .bold))
                     .tracking(0.4)
                     .foregroundStyle(Brand.Color.cyan)
                     .padding(.horizontal, 10)
@@ -159,7 +159,7 @@ struct HangarView: View {
             Text("Go outside.")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text("Tailspot needs a clear view of the sky. Point your phone up, hold a plane in the reticle to catch it.")
+            Text("Tailspot needs a clear view of the sky. Point your phone up, aim at a plane, then tap to catch it.")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
             Button {
@@ -185,7 +185,7 @@ struct HangarView: View {
         }
         return VStack(alignment: .leading, spacing: 10) {
             Text("SETS TO COLLECT")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
             VStack(spacing: 8) {
@@ -201,7 +201,7 @@ struct HangarView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 6).fill(set.type.tint.opacity(0.20))
                 Text(set.type.glyph)
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 14, weight: .bold))
                     .foregroundStyle(set.type.tint)
             }
             .frame(width: 30, height: 36)
@@ -216,7 +216,7 @@ struct HangarView: View {
             }
             Spacer(minLength: 4)
             Text("0 / \(set.entries.count)")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 12, weight: .bold))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
         }

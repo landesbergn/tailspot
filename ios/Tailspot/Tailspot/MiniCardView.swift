@@ -45,7 +45,7 @@ struct MiniCardView: View {
             // Header — callsign + small rarity badge.
             HStack(alignment: .center) {
                 Text(callsign)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 11, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
                     .tracking(0.3)
                     .lineLimit(1)
@@ -139,7 +139,7 @@ struct MiniCardView: View {
             StripesShape()
                 .stroke(rarity.tint.opacity(0.20), lineWidth: 6)
             Text(modelText.split(separator: " ").first.map(String.init)?.uppercased() ?? "")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary.opacity(0.7))
         }

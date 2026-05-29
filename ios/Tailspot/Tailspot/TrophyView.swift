@@ -386,7 +386,7 @@ private struct CenturionIcon: View {
             CenturionLaurels()
                 .stroke(color.opacity(0.7), style: .init(lineWidth: 1.6 * s, lineCap: .round))
             Text("100")
-                .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9 * s, weight: .bold))
                 .foregroundStyle(color)
         }
         .frame(width: size, height: size)

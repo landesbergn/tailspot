@@ -44,9 +44,38 @@ nonisolated enum Brand {
     // MARK: - Font
 
     nonisolated enum Font {
-        static let wordmark    = SwiftUI.Font.system(size: 24, weight: .bold,    design: .monospaced)
-        static let hudCallsign = SwiftUI.Font.system(size: 13, weight: .bold,    design: .monospaced)
-        static let hudData     = SwiftUI.Font.system(size: 10, weight: .regular, design: .monospaced)
+        /// Aviation-flavored monospace. B612 Mono is Airbus's cockpit
+        /// display font (SIL OFL 1.1, bundled via UIAppFonts in Info.plist).
+        /// Used for callsigns, ICAO codes, headings, badge labels, and the
+        /// wordmark — anywhere a pilot would expect a fixed-pitch readout.
+        ///
+        /// B612 Mono ships in Regular + Bold physical weights only. SwiftUI
+        /// weight requests map down: regular/medium/light → Regular face;
+        /// semibold/bold/heavy/black → Bold face. Italic is bundled but
+        /// callers must select it explicitly via `mono(size:weight:italic:)`.
+        static func mono(size: CGFloat,
+                         weight: SwiftUI.Font.Weight = .regular,
+                         italic: Bool = false) -> SwiftUI.Font {
+            let isBold: Bool
+            switch weight {
+            case .ultraLight, .thin, .light, .regular, .medium:
+                isBold = false
+            default:
+                isBold = true
+            }
+            let name: String
+            switch (isBold, italic) {
+            case (false, false): name = "B612Mono-Regular"
+            case (true,  false): name = "B612Mono-Bold"
+            case (false, true):  name = "B612Mono-Italic"
+            case (true,  true):  name = "B612Mono-BoldItalic"
+            }
+            return .custom(name, size: size)
+        }
+
+        static let wordmark    = mono(size: 24, weight: .bold)
+        static let hudCallsign = mono(size: 13, weight: .bold)
+        static let hudData     = mono(size: 10, weight: .regular)
 
         static let cardTitle    = SwiftUI.Font.system(size: 17, weight: .semibold, design: .default)
         static let cardSubtitle = SwiftUI.Font.system(size: 13, weight: .regular,  design: .default)

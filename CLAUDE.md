@@ -6,9 +6,85 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, design-canvas port ✅, TestFlight v0 shipping to internal testers ✅, backend next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-05-29 [typography + onboarding shipped])
+
+**Shipping as TestFlight v0.1.2.** Second feature drop today. The
+2026-05-27 "first-tester feedback" work that had been sitting in a
+local stash on Noah's machine now lands on main. Four UX fixes:
+
+1. **"Reticles" copy dropped.** Two user-visible strings used the
+   word (OnboardingFlow permissions step + HangarView empty state).
+   Replaced with plainer language ("labels match the plane in view",
+   "aim at a plane, then tap to catch it").
+
+2. **Aviation typography — SF Pro + B612 Mono.** SF Pro stays for
+   body/UI text (iOS-native); monospace swaps from SF Mono to
+   **B612 Mono** (Airbus's open-source cockpit MFD font, SIL OFL 1.1).
+   This is where the aviation feel hits hardest — callsigns, ICAO
+   codes, headings, badge labels, wordmark. Files at
+   `ios/Tailspot/Tailspot/B612Mono-{Regular,Bold,Italic,BoldItalic}.ttf`
+   (~530KB total), registered in Info.plist via `UIAppFonts`. All
+   137 ad-hoc `.system(... design: .monospaced)` callsites swept to
+   `Brand.Font.mono(size:weight:italic:)` (new helper). B612 Mono
+   ships in Regular + Bold only; SwiftUI weight requests map
+   regular/medium → Regular, semibold/bold/heavy/black → Bold.
+   `Brand.Font.wordmark` / `hudCallsign` / `hudData` retained as
+   thin aliases over the helper. Process note: the perl sweep
+   initially used `[^,]+?` which over-matched across `.system(...)`
+   boundaries (regex spanned past `)` and ate `design: .monospaced`
+   from a sibling callsite); reverted and re-ran with `[^,)]+?`.
+   Document the safer form if doing any similar sweep again.
+
+3. **Permission prompts moved into onboarding step 2.** Previously
+   iOS surfaced the camera + location alerts at the end of
+   onboarding when ContentView mounted — testers found the gap
+   confusing. Now `OnboardingFlow.advance()` triggers
+   `requestSystemPermissions()` when leaving the Permissions step,
+   firing `AVCaptureDevice.requestAccess(for: .video)` plus
+   `LocationManager.requestPermissionAndStart()` via a transient
+   `@StateObject` LocationManager. CMMotion needs no prompt and
+   stays informational on the row. ContentView still creates its
+   own LocationManager later; iOS just doesn't re-prompt because
+   auth state is already decided.
+
+4. **Figure-8 calibration step removed from onboarding.** Awkward
+   and rarely needed at launch. `totalSteps` dropped to 3 (Welcome
+   → Permissions → Handle). The compass-warning badge in the AR
+   view still opens `CompassCalibrationSheet` (with the figure-8
+   animation) when accuracy genuinely degrades — same in-app
+   trigger, just no upfront prompt. `Figure8Animation` struct
+   retained for the sheet.
+
+**Tests:** 176 still pass (no behavioral tests touched — the sweep
+changed presentation only). Font loading is exercised by the host-
+app build that runs before the test suite, so a missing or
+unregistered .ttf would break the build.
+
+**External TestFlight remains approved** (since 2026-05-26 Build 18).
+v0.1.2 builds auto-approve for external testers via App Store
+Connect → TestFlight → External Testing.
+
+**MARKETING_VERSION bumped 0.1.1 → 0.1.2.** CFBundleVersion stays
+at 1 locally; Xcode Cloud's `ci_pre_xcodebuild.sh` rewrites per
+archive.
+
+**Open follow-ups specific to this round:**
+- Field-test the new typography on device. The B612 Mono swap is
+  unmissable but its weight mapping (collapses 4 SwiftUI weights
+  into 2 physical faces) may look slightly heavier than SF Mono
+  did at small sizes. Calibrate if needed.
+- The semantic-size patterns (`.system(.body, design: .monospaced)`
+  etc.) were converted to fixed sizes (17 / 12 / 11). This loses
+  Dynamic Type scaling for those few callsites. Acceptable for v0
+  but worth a `Brand.Font.mono(_:weight:)` TextStyle overload if
+  Dynamic Type matters later.
+- `design/font-explorer.html` — side-by-side font preview built
+  during the typography decision. Reference material; remove if
+  it gets stale.
+
 ## Current state (as of session ending 2026-05-29 [catch-photo bracket overlay + bigger reticles])
 
-**Shipping as TestFlight v0.1.1.** First post-v0 feature drop. Two
+**Shipped as TestFlight v0.1.1.** First post-v0 feature drop. Two
 landings on main this session, both user-visible to testers.
 
 1. **Catch photos now show which plane you caught.** New
@@ -72,12 +148,6 @@ Xcode Cloud's `ci_pre_xcodebuild.sh` rewrites it to
   (PLAN §9 #3 Vision + COCO airplane class) — let the bracket
   snap to the detected airplane bbox rather than the prediction.
   Until that lands, the bigger box is the cheap forgiveness.
-- The typography sweep + onboarding fixes (B612 Mono, "reticles"
-  copy, permissions in onboarding step 2, figure-8 removed) from
-  the prior session were NOT pushed — they're sitting in a stash
-  on Noah's machine (`stash@{0}`). When they land, the
-  `ContentView.swift` `captureBar`/`captureButton` area is the
-  likely merge-conflict surface against this session's wiring.
 
 ## Current state (as of session ending 2026-05-26 [TestFlight v0 prep])
 
@@ -190,146 +260,6 @@ checked into `ios/Tailspot/ci_scripts/`:
   to copy`. Tap copies the version line to the clipboard with a
   soft haptic; testers paste it verbatim into bug reports.
 
-## Current state (as of session ending 2026-05-25 [Capture & Hangar redesign IMPLEMENTED])
-
-**Capture & Hangar redesign — landed 2026-05-25, end-to-end.** Spec at `docs/superpowers/specs/2026-05-25-capture-and-hangar-redesign-design.md`; plan at `docs/superpowers/plans/2026-05-25-capture-and-hangar-redesign.md` (20 phased tasks); subagent-driven execution committed 24 commits between `ba47e78` and `93eec57`. All 169 unit tests pass.
-
-**Catch model & engine spine (T1–T4):**
-- `Catch.exists(icao24:in:)` static helper gates insertion. `CatchTests::duplicateInsertIsRejected` replaces the old `storesMultipleCatchesIncludingDuplicates`.
-- `HangarRow.firstCatch` returns the earliest catch in `allCatches` (used by `CatchDetailView`'s first-caught panel for legacy multi-catch rows).
-- New `ModelSlot.swift` — view-model bundling `(entry: PokeSetEntry, tails: [HangarRow])`. `HangarGrouping.resolveSlots(for:in:)` produces `[ModelSlot]` for a given set, reusing the existing `Sets.swift` matcher (now exposed as `PokeSets.matches(catch:entry:)`).
-- `LockOnEngine` simplified to 3 states (`idle / locked / sticky`). `.acquiring`, `acquisitionDuration`, `acquisitionProgress` removed. `forceLock` is the only entry to `.locked`; new `unpin()` returns to idle.
-
-**Capture flow (T5–T8):**
-- AR overlay renders **ambient labels on every visible plane** — faint cyan corner-bracket pair + `callsign · RARITY` label via new `PlaneLabel` + `LockBrackets` private structs in `ContentView`. Pinned plane brightens (56×56, 2.5pt strokes, full opacity); others dim to ~35%. Per-plane metadata via `ambientMetadata` content-keyed `.task(id: visibleIcaoSignature)` prefetch, pruned to currently-visible icaos so the view dict doesn't grow monotonically.
-- Tap behavior is 4-branch: ≤100px hit on plane → toggle pin / re-pin; empty sky with pin → clear pin; empty sky without pin → widen to 250px and pin nearest; truly empty → brief `NO AIRCRAFT HERE` cyan ripple. Radii scale with zoom (capped at half-screen).
-- Capture button is unified — `CaptureMode { .disabled, .single, .multi }` derived per-frame. Magenta `×N` badge in the top-right corner only for multi (no pin, ≥2 visible). Disabled (~40% opacity) when frame is empty. The prior multi-catch button + magenta-zone overlay are deleted.
-- `performCatch(mode:)` merges the old `performAutoCatch` / `performMultiCatch` paths into one entry. Per-icao `Catch.exists` gate; new tails inserted; duplicates accumulated in a separate list. One JPEG captured per fire, attached to each new row. `captureInFlight` flag guards re-entry. `presentReveal(newCatches:duplicates:)` routes ≤1 to single CardReveal and ≥2 to staggered MultiCatchReveal.
-
-**Reveal moments (T9–T11):**
-- New `RevealAudio.swift` — thin wrapper around `AudioServicesPlaySystemSoundID` + `UIImpactFeedbackGenerator`. 5-rung ascending chime ladder (Tink → BeginRecording → Anticipate → Headset In → Photo Shutter).
-- `CardReveal` gains `isDuplicate: Bool = false`. On duplicate: diagonal red-bordered `ALREADY CAUGHT` stamp over the card front (hidden on flip-back); rarity bloom + rare+ light rays gated off; status pill swaps green NEW CARD → amber RE-CATCH. The PokeCard itself still renders (back-flip works).
-- `MultiCatchReveal` reworked around a state-driven stagger: `@State revealedIndex` ticks via a `.task` loop, sleeping ~250ms between cards. Each non-duplicate landing fires `RevealAudio.tap(step:)` with a fresh-count-based step (chime ladder ascends by new tails, not absolute index). Combo banner builds: `CATCH ×1 → COMBO ×N +M pts` (magenta accent). Dups render inline with a smaller stamp and don't contribute to the combo. `comboMultiplier(for:)` static API preserved for `MultiCatchComboTests`.
-
-**Hangar shell + 3-view structure (T12–T14):**
-- New `HangarSegmentedSwitcher.swift` — cyan-on-bgElevated 3-segment control. `HangarSegment { .sets, .recent, .trophies }`. Default `.sets`. Persists via `@AppStorage("tailspot.hangar.view")`.
-- `HangarView` body is now just toolbar (Lockup + count pill) + switcher + the three view bodies; filter chips, the inline `LazyVGrid`, and the per-grid delete state are all gone (delete moved into `HangarRecentView`).
-- New `HangarRecentView.swift` — chronological dedup'd MiniCard grid sorted by first-catch desc; long-press → context-menu Delete with confirmation alert. Owns its own `rowToDelete` state.
-- New `HangarTrophiesView.swift` — the inner body of the former standalone `TrophiesScreen` extracted intact (hero strip + Earned / In progress / Locked partition + 13-achievement × 4-tier ladder with hex-frame icons). `TrophiesScreen.swift` reduced to a 21-line thin wrapper for any remaining standalone push paths. `ProfileScreen` lost its `RECENT MEDALS` strip + the Trophies callsite (Trophies is now Hangar-only; Map stays on Profile).
-
-**Sets drill-down (T15–T17):**
-- New `HangarSetsView.swift` — vertical list of 7 rich set tiles (one per `AircraftType`, ordered Narrow / Wide / Regional / Biz / Mil / GA / Heritage per `PokeSets.all`). Each tile = type-glyph chip + set title + slot-progress `M / N` + thumbnail strip (caught slots get a 1pt type-tint top rail + `entry.modelTokens.first?.uppercased()` label; locked slots show centered `?`). 0/N sets fade to 55% opacity. Tap → `SetDetailRoute(setId: String)`.
-- New `SetDetailView.swift` — set detail screen. Header (40pt type chip + set title + `M of N caught` mono + 3pt progress bar + optional next-milestone teaser). 2-col `LazyVGrid` of slot cells. Caught cell: 2pt rarity top rail + `#NN` prefix + `entry.canonicalName` + `×K tails` count in type tint. Locked cell: dim `?` + canonicalName; tap → `.sheet(item:)` `LockedSlotHint` (~220pt detent) with `entry.summary` as the secondary hint line.
-- New `ModelSlotDetailView.swift` — between Set detail and Tail detail. Header: `#NN · SET-NAME` breadcrumb + canonical model name + `K distinct tail(s)`. Vertical list of `HangarRow`s for tails of this model: 3pt rarity left rail + cyan callsign + `icao24 · operator` muted mono + right-aligned relative `firstCatch.caughtAt`. Tap → `HangarRow` (resolves to `CatchDetailView`).
-
-**Tail detail rewrite (T18):**
-- `CatchDetailView` rewritten per spec § 8 (net -222 lines). **PokeCard `.lg` is the hero, front-and-center.** Floating chrome pills (chevron-back + ShareLink) on `.ultraThinMaterial` discs; system nav bar hidden via `.toolbar(.hidden, for: .navigationBar)` + `.navigationBarBackButtonHidden(true)`. Below the card: EARNED panel (rarity-tinted, `+basePoints pts`, rarity label + type) and First-caught panel (earliest `Catch.caughtAt` + observer lat/lon with N/S/E/W). Planespotters attribution chip only when a Planespotters photo is rendered. **Dropped:** 320pt photo hero, 6-cell stats grid, catch-log timeline, separate headline block. Photo-slot priority owned by `PokePlane.photoURL`: catch JPEG → Planespotters thumbnail (fetched on `.task` for the no-JPEG case, then `PokePlane` rebuilt with the URL) → striped rarity placeholder (PokeCard's own fallback).
-
-**MiniCard cleanup (T19):**
-- `MiniCardView` drops the `×N` count pill — post-T1/T8 dedup means `row.count` is always 1 going forward and the badge was meaningless visual noise.
-
-**Tests:** 169 pass. New tests added: `duplicateInsertIsRejected`, `hangarRowFirstCatchIsEarliestInAllCatches`, `resolveSlotsForSetGroupsCaughtTailsByEntry`, `idleStaysIdleEvenWithVisibleTarget`, `forceLockMovesIdleToLocked`, `updateWithNilFromLockedMovesToSticky`, `stickyExpiresToIdleAfterDuration`, `stickyRecoversToLockedOnSameTarget`, `ticksAloneNeverEnterLocked`, `unpinClearsActiveLock`, `unpinClearsSticky`, plus follow-up assertions. Removed `.acquiring`-state tests.
-
-**Open follow-ups (spec § 11):** Audio source can swap from `AudioServicesPlaySystemSoundID` to bundled AIFFs / `AVAudioEngine` synth if the chime ladder needs tuning. All-frame label density fallback at ≥10 visible planes (closest-5 + brackets-only for the rest) not implemented; punt until field-testing shows the need. `nextMilestoneLine` in SetDetailView is stubbed (returns nil) until a trophy-to-set mapping is wired. Some minor dead code: `HangarFilter` enum in `HangarView.swift` (T15 didn't claim it; safe to delete in a sweep). `LockOnEngine.icaosInZone` is now orphaned (no callers post-T7).
-
-## Current state (as of session ending 2026-05-22 [HangarB grid + DetailA])
-
-**Hangar switched from list to card grid (HangarB).** First two passes implemented `HangarA` (list with section grouping); Noah called it out and asked for `HangarB` — the trading-card grid view. New shape:
-
-- **`MiniCardView.swift`** (new) — port of canvas `MiniCard` (detail-hangar-profile.jsx:408-440). Rounded 12pt card with vertical `bgElevated → bgSurface` gradient fill, 1pt solid rarity border, 2pt rarity-tinted top rail, header row (cyan callsign + small RarityBadge), 66pt photo slot (catch JPEG if present, else striped placeholder in the rarity tint), title (model + operator), footer row (small TypeBadge + ×N pill). Sized to whatever width LazyVGrid hands it; content-driven height. Diagonal stripe pattern in `StripesShape` matches the canvas `repeating-linear-gradient(135deg, ...)`.
-- **`HangarView` rebuilt as a 2-col `LazyVGrid`** over `Brand.Color.bgPrimary`, fed by `HangarGrouping.group(catches, by: .recent).first.rows` (dedup'd flat list). Section grouping is gone — filters replace it.
-- **`HangarFilter` enum** (`.all`, `.rarePlus`, `.type(AircraftType)`) plus a horizontal-scrolling filter chip row above the grid. Always shows "All · N"; appends "Rare+ · K" when K > 0; one chip per non-empty AircraftType bucket sorted by enum ordering. Active chip is cyan with dark text; inactive is `bgElevated` with secondary text.
-- **Delete moved from swipeActions to long-press context menu.** SwiftUI grid views don't support `swipeActions`, so the existing delete-confirmation alert is now triggered by tap-and-hold → Delete on the card. Same multi-catch-delete-all behavior as before.
-- **Segmented picker (By type / By airline / Recent) removed.** The Recent-mode dedupe path is what the grid uses internally; the visible knob is now the filter chips.
-
-**`CatchDetailView` rewritten as DetailA — photo-led collector card.** Old grouped-list layout is gone. New shape:
-
-- **320pt photo hero** with a top-to-bottom gradient fade from clear → `bgPrimary`. Source priority: user's catch photo → live Planespotters → diagonal-striped rarity-tinted placeholder. The Planespotters fetch is gated `!hasCatchPhoto` so we don't burn a network call when the user already has their own moment shot.
-- **Floating chrome pills** over the hero: `chevron.left` (dismiss) on the left, `square.and.arrow.up` (ShareLink) on the right. `.ultraThinMaterial`-filled discs with a 0.10-white border — matches canvas `ChromePill`. The system nav bar is hidden via `.toolbar(.hidden, for: .navigationBar)` + `.navigationBarBackButtonHidden(true)` so the chrome lives on the photo and not in a separate iOS bar.
-- **Badge row** anchored to the bottom-leading of the hero: medium RarityBadge + medium TypeBadge + relative-time pill (`● 2m ago`) in the `alertNormal` (green) theme.
-- **Headline:** small cyan callsign · ICAO line, big 30pt display model name, 13pt muted operator.
-- **EARNED panel:** rarity-tinted box. Left = `+\(rarity.basePoints) pts`. Right = rarity label + `Type · \(type)`. 1pt rarity border + 10% rarity-tinted background.
-- **2-col stats grid** sized to what the `Catch` model actually carries: `DISTANCE` (slant km) · `ICAO24` · `TIMES CAUGHT` (×N) · `FIRST CAUGHT` (earliest date in `allCatches`) · `BEST RANGE` (min slant across history) · `POINTS` (`basePoints * count`). The canvas's ALTITUDE / SPEED / BEARING / REGISTRATION cells need new fields on the `Catch` SwiftData model — flagged for follow-up; not faked.
-- **CAUGHT AT panel:** abbreviated date + time, then observer lat/lon with N/S/E/W hemisphere letters in mono.
-- **Planespotters attribution** at the bottom (text button → `openURL`), only rendered when the photo came from Planespotters (suppressed for catch-photo runs and notAvailable).
-
-The earlier PokeCardView hero + Identity rows + Caught-N-times timeline are removed — the new layout subsumes that information into the hero + EARNED + CAUGHT-AT structure. PokeCardView itself is still used by `CardReveal` (the catch-moment full-screen flash) so no code is unused.
-
-## Current state (as of session ending 2026-05-22 [Hangar canvas port — second pass])
-
-**Hangar canvas — second-pass tightening (2026-05-22).** Per Noah's "closer but still doesn't match" — fixed the chrome and density that were still off:
-
-- **Toolbar redesigned** to match canvas `HangarA` nav: small Lockup (cyan `HangarGlyph` + `TAILSPOT` at 13pt mono with 2pt tracking) on the left, accent pill (`"N catches"` in cyan on `cyan.opacity(0.16)`) on the right. Done button dropped; the sheet still dismisses via swipe-down. `toolbarBackground(Brand.Color.bgPrimary, for: .navigationBar)` so the nav background blends with the body — no system gray bar.
-- **Stats row removed.** The canvas never showed `caught / unique / rare` — they were a Tailspot addition. Dropped along with all four supporting methods (`statsRow`, `statPill`, `statDivider`, `uniqueIcaoCount`, `rareUniqueCount`).
-- **Cards slimmed.** Row vertical padding 12 → 10 to drop the crowded feeling. Subtitle simplified to canvas's `{model} · {distance}` form regardless of grouping mode (was switching between operator and type to avoid restating the section header — but the canvas just always shows the model). Single dot separator `" · "` instead of double-space.
-- **Callsigns are now cyan** — `.t-hud-callsign` in the canvas is `color: var(--accent)`, mine was rendering them in `textPrimary` (white). Fixed.
-
-## Current state (as of session ending 2026-05-22 [Hangar canvas port + AR capture-bar overhaul])
-
-**AR capture bar — landed 2026-05-22 (also bundles compass-debounce hysteresis).** The floating multi-catch capture button is gone; a unified bottom capture bar in `ContentView` now hosts the hangar glyph (left), a big central capture button, and the profile glyph (right). The capture button reads the per-frame target / multi-candidate state inside the `TimelineView`, exposes `captureMode`, and routes to `captureButtonSingle` / `captureButtonMulti` / `captureButtonIdle`. The legacy 3s sustained tap-pin auto-catch (`autoCatchHoldDuration` / `autoCatchTask` / `autoCaughtPin`) is **removed** — the user explicitly hits the capture button now. A `captureInFlight` flag guards re-entry. Compass-warning thresholds were tightened: `compassBadThreshold` bumped 10° → 25° (typical urban CL accuracy is 10–20° even when the compass is fine, so 10° fired the badge constantly), with hysteresis at 15° and a 4s continuous-bad-reading debounce before `showCompassWarning` flips on. `updateCompassWarning(accuracy:)` is the new entry point; `isHeadingAccuracyBad` proxies the latched state.
-
-**Hangar canvas-port pass — shipped 2026-05-22.** Two layered fixes addressing "the app still looks pretty different from the designs I shared with you":
-
-- **New `HangarGlyph.swift`** — peaked-roof pentagon + horizontal eaves line, ported verbatim from `design/brand-atoms.jsx:186` `Icon.hangar` SVG (`M3 11 L12 5 L21 11 L21 20 L3 20 Z` outer + `M3 11 H21` eaves). Replaces `tray.full.fill` in the bottom Hangar button (`ContentView.swift:954`). Sized to a 26×26 frame inside the existing 56×56 chip; `lineWidth: 2` matches the canvas stroke.
-- **`HangarView` chrome flipped to match `detail-hangar-profile.jsx` HangarA.** Rows are visually unchanged in data but resemble the canvas card style now:
-  - `List` style: `.insetGrouped` → `.plain` + `.scrollContentBackground(.hidden)` + `.background(Brand.Color.bgPrimary)` so the dark canvas base shows through.
-  - Rows: each is a `bgElevated` rounded card with a **3pt solid rarity-tinted left stripe at the card edge** (was inside the type-chip before — moved out per canvas). Type chip became **solid type-color (36×36) with dark glyph text** instead of faded-tint with type-color text. Row separators hidden; padding 12×14 with the row clipped to a 8pt corner radius.
-  - Section headers redesigned: small uppercase tracked label + `N CAUGHT` mono caption. Count is **total catch events, not unique-row count**, matching the canvas's "WIDE-BODY · 6 CAUGHT" semantics — uses `group.rows.reduce(0) { $0 + $1.count }`.
-  - 3rd segmented option added: **Recent** — single flat list of dedup'd rows sorted by recency, section header suppressed.
-
-  **Tradeoff documented:** `.plain` list style makes section headers sticky on scroll. The canvas doesn't show stickiness, but ditching `List` would mean rebuilding swipe-to-delete by hand. Accepted stickiness; revisit if Noah pushes back.
-
-- **`HangarGrouping.recent`** — new mode. Skips bucketing entirely: every dedup'd row lands in a single `HangarGroup` titled `recentTitle`, with rows sorted most-recent-first. `key(for:mode:)` returns `recentTitle` for completeness. `HangarGroupingTests` adds 3 cases: dedupe + sort, empty input, ignores grouping-key fields.
-- **`HangarView.rowSubtitle` extended** with `.recent` case — shows aircraft type as the subtitle since there's no section header to disambiguate.
-
-**Also landed 2026-05-22 — OpenSky credential propagation through the deploy loop.** `bin/deploy` now extracts `OPENSKY_CLIENT_ID` / `_SECRET` from the user-only scheme XML via `xmllint`, JSON-encodes them, and forwards via `xcrun devicectl device process launch --environment-variables` (plus the alternative `DEVICECTL_CHILD_*` env-var path for belt-and-suspenders). Without this, deploys ran the app anonymous (400 credits/day) and exhausted the OpenSky quota in ~1.3h. Dry-run output redacts the JSON. **Caveat: env vars only persist for that one launched process — if Noah relaunches via the home-screen icon, creds are gone and "API limit" returns.** Durable fix (xcconfig → Info.plist baking) is the obvious next step but not yet shipped. `ADSBManager` gained `lastErrorIsTransient` so the empty-sky pill can render auto-recovering 429 backoffs softly, plus `liveSourceIsAuthed` (proxies `OpenSkyClient.hasCredentials`) for the debug overlay; the 429 string changed from "Rate limit hit — backing off (next try in Ns)" to "API limit · retry in Ns". `OpenSkyClient.init` logs `credentials MISSING (anonymous)` vs `present (authed)` via `Log.openSky.notice` so device launches reveal auth state in the log stream.
-
-## Current state (as of session ending 2026-05-21 [Design-canvas QA pass — 9 fixes landed])
-
-**Friday POC (§3.0a) DELIVERED May 5–7, 2026.** Field-tested in Berkeley with real planes; labels land on or near actual aircraft.
-
-**Phase 0c — Remote-deploy loop (§3.0c) DELIVERED 2026-05-13.** Bash-driven build / install / launch / log-stream pipeline so Claude can iterate directly on Noah's paired iPhone. See "Remote-deploy loop" below.
-
-**Beyond the POC, currently shipping:**
-
-- **Game-system spine — Pokédex rarity + types + PokeCard.** Shipped 2026-05-20 as Phase 1 of the design-canvas handoff (claude.ai/design; 33 artboards captured in `design/`). `GameSystem.swift` defines `Rarity` (5 tiers — `.common` 10pt, `.uncommon` 25, `.rare` 100, `.epic` 500, `.legendary` 2000 — with `.tint` colors `0x8595A5 / 0x4ECCA3 / 0x00D4FF / 0x9B5DE5 / 0xFFB800` and an `ordinal` helper) and `AircraftType` (7 categories — `.narrow .wide .regional .biz .mil .ga .heritage` — each with a single-letter glyph + tint color). `AircraftClassifier.classify(manufacturer:model:operatorName:)` is a deterministic curated rule table: first matching `Rule` wins; operator-token gate is **any-of** (so the operator-gated VC-25 rule only fires when operator contains "usaf" or "air force", and a civilian 747-2 falls through to the rare 747 bucket). `Catch` gained `rarity: String?` + `aircraftType: String?` raw-value columns (SwiftData lightweight migration tolerates nil for pre-existing rows); the init runs the classifier so new rows are born with a snapshotted (rarity, type) pair, and `resolvedRarity`/`resolvedType` computed properties backfill via the classifier on read for legacy rows. `HangarRarity` (binary common/rare) was deleted — subsumed by the new system. **HangarRow.rarity now returns `Rarity`, not `HangarRarity`.** `BadgeViews.swift` ships SwiftUI `RarityBadge` (mono-font tier-tinted pill with bordered chip styling; legendary gets a leading ★), `TypeBadge` (rounded chip with dark-circle glyph well + label on type-tinted background), and `TagRow` (combined). `PokeCardView` is the hero collectible: 3 sizes (`sm` 150×210 / `md` 220×308 / `lg` 280×400), rarity-tinted 5pt top rail, 1.5pt rarity border + 18pt rarity glow + 20pt drop shadow, rare+ tiers get a conic-gradient holo wash blended `.overlay` + a diagonal foil shine blended `.screen`, legendary additionally gets 4 radial gold-dust hot-spots blended `.screen`. Photo slot uses the catch's `photoFilename` on disk if present, otherwise a striped placeholder in the rarity tint. Applied to: (1) `CatchDetailView` — the PokeCard is the first List section, hero size `.lg`, sits above the existing catch-photo / Planespotters / Identity / Caught-N-times sections; Identity gains "Rarity" + "Type" rows. (2) Hangar row — the leading airplane glyph is replaced by a type-glyph chip with a rarity-tinted 3pt vertical stripe; inline `RarityBadge` (size `.sm`) appears next to the callsign for rare+ tiers only (common/uncommon stay quiet). The "rare unique" stat pill now counts unique airframes at rare-or-higher. (3) AR lock label — adds a `TagRow` (`.sm`) right under the callsign once metadata has landed, so users get an instant tier read before tapping in. Catch-flash overlay's RARE-CATCH sub-pill triggers on rare+ (`row.resolvedRarity.ordinal >= Rarity.rare.ordinal`). The handoff prototype source lives in `design/` (HTML/JSX, ~340K) — open with `python3 -m http.server 4173 --directory design && open http://127.0.0.1:4173/`.
-
-  **All visible surfaces of the design canvas are ported.** Backend-dependent surfaces (Leaderboard, Public Hangar, real push notifications) ship as preview UI with mock data.
-
-- **Design-canvas QA pass — shipped 2026-05-21 (Phase 3 follow-up).** Reviewed every screen against the design canvas's accessibility tree and landed 9 structural fixes: (1) `TrophiesScreen` now partitions the roster into **Earned** / **In progress** (locked but ≥25% to next tier) / **Locked** (rendered as "???" hidden-trophy rows so the user has discoverable surface). Hero strip headline shows "N of M · K close to unlocking" when applicable. **Note: numerator semantic is "achievements with at least one tier unlocked", not "total tier-unlocks" — design canvas shows the latter; we accept the mismatch.** (2) `OnboardingFlow` step 4 (Pick a handle) gained an inline `availabilityPill` (● AVAILABLE / TOO SHORT / BAD CHARS), a 2×2 suggestions grid with 4 handles, and a Public-profile toggle (binds to the same `@AppStorage("tailspot.profile.public")` key as `SettingsScreen` — canonical default `true`). Step label changed to "FINAL STEP · PUBLIC HANDLE". (3) `ProfileScreen` identity hero rebuilt with an avatar disc showing user initials + handle row + "joined <Month YYYY>" derived from earliest catch + a "PUBLIC" pill in the top-right. (4) `ProfileScreen` stats row swapped "Longest km" → "Medals" (count of unlocked achievements) to match the design's 4-stat row CATCHES / UNIQUE / RARE+ / MEDALS. (5) `CardReveal` adds a "tap card to flip" / "tap card to flip back" hint between the card and the buttons. (6) `SetsScreen` set-detail tiles now show numbered prefixes (`#01`, `#02`...) in the top-leading corner; uncaught entries read "Not yet caught" instead of "???". Browser hero gained a "POKÉDEX-STYLE" tagline + "Sets by type" sub-headline. (7) `HangarView` empty state rebuilt: scroll view with a hero block ("Go outside.") + magnifying-glass disc + "Open AR view" button, followed by a **SETS TO COLLECT** preview row of Narrow / Wide / Regional / Heritage with type tints + entry counts. Replaces the bare `ContentUnavailableView`. (8) `NotificationsScreen` rewritten into the design's section structure: **PUSH** (master allow) / **NEARBY AIRCRAFT** (rare-or-epic / legendary / first-of-type / multi-catch) / **PROGRESS** (trophies / set-complete / weekly) / **QUIET HOURS** (overnight / weekends). 9 toggles, all @AppStorage-backed. (9) `LeaderboardScreen` adds a "CLIMB" coaching banner below the rows when the user is outside the top 10, computed from the gap between the user and the rank-10 row.
-
-- **Phase 3 — AR ergonomics + multi-catch, shipped 2026-05-21.** The compass caution badge is now interactive — tap opens `CompassCalibrationSheet` (`CompassCalibrationSheet.swift`) which explains the magnetometer-drift cause, shows the figure-8 motion via the (now shared) `Figure8Animation` view, and renders a live HEADING / ACCURACY readout with a `calibratedThisSession` latch that flips the sheet's headline + dismiss button to a green "All good" state once accuracy drops under ±10°. Empty-sky AR state: `ContentView.emptySkyOverlay(rawCount:)` renders a faint 88×88 center reticle plus a status pill at ~82% screen height — "SCANNING SKY…" / "NO AIRCRAFT IN VIEW · N IN RANGE" / "NO AIRCRAFT IN RANGE" depending on `adsb.observed.count` and `adsb.lastFetched`. Status dot uses an `EmptyPulse` ViewModifier for breathing animation (disabled when an error is surfaced — the message wins). Multi-catch mechanic (`MultiCatchReveal.swift` + `ContentView` integration): `icaosInZone(...)` (sibling to `closestTargetIcao24` in `LockOnEngine.swift`) returns every visible icao24 whose screen projection lands inside a `zoneRadius` circle around the screen center. When ≥2 are present AND no plane is pinned AND the engine isn't `.locked`/`.sticky`, the AR view paints a pulsing magenta-dashed capture frame (RoundedRectangle, lineWidth 2, dash [10, 6]) and surfaces a "[N]× CATCH · ×M COMBO" magenta capture button at the bottom. Tap fires `performMultiCatch(icaos:)` — captures one JPEG, inserts N Catch rows (each with its own copy of the photo), and presents the new `MultiCatchReveal` full-screen sheet: magenta backdrop, staggered fan of up to 5 PokeCards with rarity holo, three-line combo receipt (Base / Combo (+pts) / Awarded), View-in-Hangar / Keep-spotting buttons. Combo multiplier ladder: 2→×1.5, 3→×2.0, 4→×2.5, 5+→×3.0 (exposed as `MultiCatchReveal.comboMultiplier(for:)` for testing). Single-catch path (`performAutoCatch` + tap-pin) is unchanged. `LockOnEngine.State` gained an `isLockedOrSticky` convenience for the suppression check.
-
-- **Phase 2 — every other surface from the canvas, shipped 2026-05-20.** Card-reveal catch moment (`CardReveal.swift` + `CardBackView`) replaces the green flash; full-screen takeover with rarity bloom + light rays (rare+), entry-pill, holo PokeCard at `.lg`, tap to flip to the Pokédex back. Trophies (`Trophies.swift` + `TrophyView.swift` + `TrophiesScreen.swift`): 13 achievements with 4-tier ladders (bronze/silver/gold/platinum), 15 custom `Shape`-based hex-framed icons ported from the canvas SVGs, derived purely from Hangar contents via `TrophyProgressInputs`. Sets (`Sets.swift` + `SetsScreen.swift`): 7 Pokédex sets organized by `AircraftType`, 39 curated `PokeSetEntry` slots with locked-silhouette grid + completion pills. Rarity / Types reference (`ReferenceScreens.swift`): static doc surfaces explaining the 5 tiers + 7 types. Profile (`ProfileScreen.swift`): the gamification hub — `ProfileStats` aggregate (totalPoints = Σ basePoints, unique airframes, rare+ unique, longest slant km, per-rarity counts), identity hero + 4-stat row + rarity breakdown strip + horizontal recent-trophies row + quick links + section links. Map (`MapScreen.swift`): MapKit `Map` (iOS 17+ API) with one rarity-tinted pin per catch, legendary halo, rarity filter chips, auto-fit camera. Leaderboard / Share / Public hangar (`PublicScreens.swift`): mock anonymous-global leaderboard with the user injected by points; `ShareCardSheet` using `ImageRenderer` + `ShareLink`; placeholder public-hangar screen reachable from leaderboard rows. Settings (`SettingsScreen.swift`) + Notifications (`NotificationsScreen.swift`) with @AppStorage toggles for handle, public-hangar, rare-alerts, etc. (no real push delivery until backend). Onboarding (`OnboardingFlow.swift` + `RootView`): 4-step flow gated by `@AppStorage("tailspot.onboarding.completed")`. `TailspotApp` now hosts `RootView` so onboarding lands before AR on first launch. `ContentView` gained a `profileButton` next to the hangar/debug buttons, and `performAutoCatch` triggers `pendingReveal` (full-screen `CardReveal` sheet) instead of the old 900 ms green flash.
-
-  **Where things live (Phase 2 file map):**
-  - Game system: `GameSystem.swift` (Rarity / AircraftType / classifier — Phase 1), `Sets.swift`, `Trophies.swift`
-  - Components: `BadgeViews.swift` (RarityBadge / TypeBadge / TagRow), `PokeCardView.swift`, `TrophyView.swift` (+ 15 icon shapes + HexShape)
-  - Screens: `CardReveal.swift`, `TrophiesScreen.swift`, `SetsScreen.swift`, `ReferenceScreens.swift`, `ProfileScreen.swift`, `MapScreen.swift`, `PublicScreens.swift`, `SettingsScreen.swift`, `NotificationsScreen.swift`, `OnboardingFlow.swift`
-  - Stats: `ProfileStats` lives in `ProfileScreen.swift`; `TrophyProgressInputs` + `Trophies.inputs(from:)` live in `Trophies.swift`; `PokeSets.status(of:against:)` + `PokeSets.progress(of:against:)` live in `Sets.swift`.
-
-  **Don't refactor the v0 AR / catch flow further** — the next priorities (PLAN §9) are backend wiring and the multi-catch AR mechanic. Visual surfaces are largely settled; field-test before iterating further.
-
-- **AR lock-on interaction.** Clean default view (just camera). Aim within ~80 px of a plane's projected position → yellow corner brackets close in for ~0.6 s → snap solid green with a label showing callsign / airline / make+model / altitude · speed. 2 s sticky-hold after target leaves. Tap the locked label → detail sheet. **Tap any visible plane** → pin the lock to it instantly (no acquisition delay; engine `forceLock`), with explicit-pin precedence over the center-driven heuristic. Tap the pinned plane again to unpin; tap empty sky to clear. State machine in `LockOnEngine.swift`; visuals + gestures in `ContentView.swift`.
-- **Brand tokens (Phase A).** Every color and font in the SwiftUI views routes through `Brand.swift` — a single-file edit re-themes the whole app. FAA-aligned semantics: cyan brand accent (brackets, callsigns, wordmark, **lock indicator at all locked-ish states**), amber for caution (acquiring + true cautions), red for warnings (never as text on `bg.primary`). Horizontal brand lockup (airplane glyph + TAILSPOT in SF Mono) replaces the title in the Hangar nav. Spec: `docs/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md`; plan: `docs/superpowers/plans/2026-05-18-visual-identity-phase-a.md`. **Field-tested 2026-05-18:** per Noah's call, the spec's magenta-for-tap-pin and green-for-locked were dropped — cyan owns the lock indicator from acquisition complete onward, whether reached via auto-lock or tap. The `Brand.Color.alertAdvisory` (magenta) and `Brand.Color.alertNormal` (green) tokens still exist but no longer appear in the AR view; reserve for future use (rare-aircraft tag, catch-confirmed flash).
-- **Pinch-to-zoom.** Camera supports 1×–5× digital zoom via `AVCaptureDevice.videoZoomFactor`. The projection math reads the current zoom and divides the effective FOV (`baseHfov/zoom`, `baseVfov/zoom`) so lock brackets stay glued to planes as the user zooms in. A faint `2.0×` pill appears in the top-center while zoomed. Pinch gesture lives on a `Color.clear` background layer alongside the tap-to-ID `SpatialTapGesture`, both attached `.simultaneously` so they don't fight; the locked label's own tap (further up the Z-stack) still wins for label hits.
-- **Catch flow v0.** "Catch this plane" button in `AircraftDetailView` inserts a `Catch` SwiftData row (icao24, callsign, model, manufacturer, **operatorName**, caughtAt, observer lat/lon, slant distance). `ModelContainer` set up in `TailspotApp`. Each tap is a discrete event; dedupe is a Hangar concern.
-- **Hangar v1 (collection).** Tray glyph in the top-trailing corner of `ContentView` (with green count badge) opens `HangarView` as a sheet. Inset-grouped list of every `Catch`, sectioned by aircraft type (manufacturer + model) by default; segmented picker toggles to airline grouping (uses the `operatorName` column). **Catches sharing an icao24 collapse into one row** with a `×N` count pill; tap → read-only `CatchDetailView` of the most-recent catch (no live re-fetch — a catch from yesterday should look the same tomorrow). **Swipe-to-delete** with a confirm alert wipes every catch sharing that row's icao24. Grouping + dedupe logic is a pure function in `HangarGrouping.swift` (`HangarRow` collapses by icao24); 9 dedicated tests.
-- **Aircraft type lookup.** Per-icao24 fetch from OpenSky's `/metadata/aircraft/icao/{icao24}` via `OpenSkyClient.aircraftMetadata`, lazily on lock-acquisition or detail-sheet appearance. In-memory LRU `MetadataCache` (cap 500) dedups; 404s are cached as known-misses.
-- **Live/Mock ADS-B toggle** (in the debug overlay). 5 hand-picked mock aircraft with metadata fixtures (BOEING 737-800 / AIRBUS A320 / etc.); the 5th has no metadata, intentionally, so the cache-miss path is field-testable.
-- **Heading-accuracy color cue.** Heading line in the sensor readout turns red when `CLHeading.headingAccuracy > 15°`.
-- **Visibility filter.** AR overlay AND debug aircraft list both show only aircraft above the horizon AND within 30 km slant distance. Bbox fetch is still 50 km — out-of-range planes are hidden, not dropped.
-- **Debug overlay, hidden by default.** Wrench glyph in the top-right toggles the sensor readout (top) and nearby-aircraft list (bottom). The LIVE/MOCK toggle lives in the sensor readout.
-- **Forward-extrapolation** of ADS-B positions to "now"; **1 Hz re-annotation** for smooth bracket tracking; **OAuth2 client-credentials** auth against OpenSky (4000 credits/day registered tier); **429-aware backoff**.
-- **Replay recorder v0.** Tap the **Record session** row in the debug overlay (just under the LIVE/MOCK row) — a 1 Hz loop captures one `tick` per second containing the full sensor state (GPS + heading + pitch/roll/yaw + camera elevation) plus a snapshot of every currently-visible aircraft. Lines append to `Documents/replays/replay-<utc>.jsonl` on the device. The line format is documented in `ReplayRecorder.swift`; retrieve via `xcrun devicectl device copy from --device <udid> --domain-type appDataContainer --domain-identifier com.landesberg.Tailspot --source Documents/replays --destination ./replays`. Round-trip tests + recorder lifecycle tests live in `ReplayRecorderTests.swift`.
-- **Replay analyzer v0.** `ReplayAnalyzer` reads a recorded `.jsonl` (or an in-memory `[ReplayEvent]`) and runs each tick back through the same annotation + visibility + lock-on logic the live app uses, emitting one `ReplayTickReport` per tick (per-aircraft bearing/elevation/slant + visibility flag + screen projection, plus the closest-to-center icao24 and the lock-on engine state after the tick). The annotation logic itself lives on `ObservedAircraft.annotate(_:observer:now:)` — both the live `ADSBManager.reAnnotate` and the analyzer call it, so engine tweaks land in both paths simultaneously.
-- **Replay report viewer.** `ReplayReport.describe()` formats the analyzer output as a multi-line monospaced String (header + per-tick blocks with observer pose, sorted aircraft, closest-to-center marker, lock state). `ReplayReportView` is a SwiftUI sheet that loads + analyzes + displays the report. The debug overlay has an "Analyze last recording" row backed by `ReplayRecorder.mostRecentRecording()` (most-recently-modified `.jsonl` in `Documents/replays/`); greyed out when no recordings exist.
-- **Planespotters photo integration.** `PlanespottersClient` (`nonisolated struct`, `Sendable`) fetches photo metadata by icao24 from `https://api.planespotters.net/pub/photos/hex/{icao24}` (unauthenticated; misses return empty array, not 404). **Required: a descriptive `User-Agent` header** — Planespotters returns HTTP 403 to generic `URLSession` UAs with an instructive error body. Tailspot sends `Tailspot/0.1 (+https://github.com/landesbergn/tailspot)` (see `PlanespottersClient.defaultUserAgent`). Returns `PlanePhoto?` (thumbnailLargeURL, thumbnailURL, photographer, Planespotters link). Per TOS: no disk caching — image bytes load via `AsyncImage` which uses iOS's URLCache; API response memoized in `PlanespottersCache` actor (cap 200, keyed lowercase icao24, per-session only). `CatchDetailView` (which now takes a `HangarRow`, not a single `Catch`) renders a hero photo section above Identity; hidden when no photo. Attribution: `"© [photographer] · planespotters.net"` text-button opens Safari via `UIApplication.shared.open(photo.link)`. `PlanespottersClient.shared` singleton shares the cache across all views.
-- **CatchDetailView shows full catch history.** Now takes a `HangarRow` (not just one `Catch`). Sections: photo (live, hidden if Planespotters has no record) → Identity (from the most-recent catch — callsign, icao, type, operator) → "Caught N times" listing every catch event chronologically with date+time, slant distance, and observer lat/lon. Tap the row in Hangar drills into this view.
-- **~164 unit tests** in `TailspotTests/` covering geometry, OpenSky decoding, annotation, sort, error handling, extrapolation, visibility predicate, screen projection, aircraft-metadata decoding, MetadataCache LRU+miss-as-hit semantics, ADSBManager metadata-cache-and-fallback, SwiftData Catch persistence (including the operatorName default, **classifier-driven rarity/type snapshotting at insert, classifier backfill for nil legacy fields, explicit init-time rarity overriding classifier**), LockOnEngine state transitions (idle/acquiring/locked/sticky/**forceLock**), HangarGrouping (both modes, fallbacks, sort order, empty input, whitespace folding), the replay format (JSONL round-trip incl. **tapPin/unpin**, partial-line tolerance, recorder lifecycle, Aircraft→AircraftSnapshot conversion), the replay analyzer (empty input, session-start header, GPS-less tick skips annotation, on-ground drop, visibility filter, lock acquires → locks → goes sticky across multi-tick sequences, file-based analyze round-trip, `describe()` formatter, **tap-pin forces lock, unpin falls back, dead-pin falls back to center-driven**), `closestTargetIcao24` (center-default, empty zone returns nil, tap point picks nearest plane, empty-sky tap returns nil, narrow FOV/zoom pushes off-axis planes out of zone), BrandColorHexTests (hex helper round-trip), **PlanespottersClientTests** (wire-format decode, empty-array miss, PlanePhoto value construction, bad-URL guard, cache notFetched-vs-hit-nil), **AircraftClassifierTests** (legendary VC-25 + SR-71 + B-2, epic A380 + 747-8, rare 787 + A350 + 777 + 747 + C-130 + KC-, uncommon A220 + 737 MAX, common 737NG + A320 + E175 + Cessna 172, operator gate any-of semantics, case-insensitive matching, nil-input defaults, Embraer-with-no-model regional hint, determinism — same input same output, plus a regression test that every entry from the legacy `HangarRarity.rareModelTokens` list still resolves to rare-or-higher), and **GameSystemEnumTests** (base-points ladder, monotonic ordinals, every type has non-empty display fields, rarity rawValue round-trip).
-
-**Deliberately not yet built (from the design canvas in `design/`):** the card-reveal catch moment, multi-catch 3-fan, Pokédex card-flip back, Trophies screen + custom hex-frame illustrations, Sets / Pokédex set-detail, anonymous-global leaderboard, share card, public-hangar visit, world map of catches, Profile / Settings / Notifications screens, 4-step onboarding + handle setup, Rarity / Types reference screens. **Other deliberately-not-built items:** backend, ARKit drift correction, visual confirmation (CV/ML on the camera feed), origin/destination route info, device-side `os.Logger` capture (only system-emitted lines reach `bin/log-tail` today; see PLAN.md §9 #4). See PLAN.md §9 for the prioritized backlog. Don't try to "fix" what isn't built.
-
 ## Working model
 
 - Solo developer (Noah) with no prior iOS experience. Claude writes code; Noah runs it on his iPhone 16 (iOS 26.3.1) and reports back.
@@ -393,19 +323,19 @@ xcodebuild test \
 ```
 First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, OpenSky client, or anything they depend on).
 
-The current suite (82 tests) covers:
-- `GeoTests`: distance, bearing (cardinal + 0/360 sweep), elevation, project round-trip, **screenPosition** (target straight ahead → center, out-of-FOV → nil, 0/360° wraparound from high & low headings, elevation above center).
-- `AircraftDecodingTests`: full positional-JSON decode, null-position throws, FailableDecodable swallows bad entries, callsign trim, geo-vs-baro altitude precedence, all-altitudes-null → 0.
-- `ADSBManagerTests`: annotation correctness, on-ground filtering, sort-by-slant-distance, error → `lastError` without crashing, success clears previous error, `lastFetched` timestamp, mock-source integration produces 5 aircraft, rate-limit error surfaces as backoff message, forward-extrapolation (moves along track / no-ops when timestamp/velocity missing / age-too-large), visibility predicate (above-horizon-and-close, below horizon, exactly-horizon, too-far, edge-of-range).
-- `AircraftMetadataDecodingTests`: full /metadata/aircraft/icao payload, tolerates missing/null optionals, throws on missing icao24.
-- `MetadataCacheTests`: not-fetched vs hit-nil-miss distinction, LRU eviction at cap.
-- `ADSBManagerMetadataTests`: cache consultation, dedupe of repeated lookups, errors don't poison the cache (use `CountingMetadataSource` fixture).
-- `CatchTests`: SwiftData `Catch` insert/fetch (including `operatorName`), duplicates allowed, nil-optional metadata tolerated, `operatorName` defaults to nil when omitted. Uses `ModelConfiguration(isStoredInMemoryOnly: true)` so tests don't touch disk.
-- `LockOnEngineTests`: full state-machine coverage (idle / acquiring / locked / sticky) and `acquisitionProgress` ramp.
-- `HangarGroupingTests`: pure-function grouping for the Hangar view — both modes (aircraft type, airline), fallback chain (manufacturer-only / model-only / Unknown), Unknown bucket sorts last, rows within a group sort most-recent-first, empty input → empty array, whitespace trimming and empty-string folding for both modes.
-- `ReplayRecorderTests` + `ReplayJSONLTests`: JSONL one-line-per-event encoding, round-trip equality for session-start + ticks, partial-line tolerance (trailing line with no newline is dropped, not thrown), blank-line tolerance, recorder writes a session-start automatically, eventCount bumps, start-twice throws `alreadyRecording`, stop is idempotent, `recordTick` no-ops when not recording, `Aircraft → AircraftSnapshot` field preservation.
-- `ReplayAnalyzerTests`: empty events → empty report, session-start populates header, tick without GPS skips annotation, visible aircraft annotates + acquires lock on first tick, below-horizon/far aircraft fails visibility filter, on-ground aircraft is dropped entirely, lock graduates acquiring → locked after `acquisitionDuration`, lock → sticky when target disappears, file-based `analyze(fileURL:)` round-trips through `ReplayRecorder` + `ReplayJSONL`.
-- `ClosestTargetTests`: standalone tests for `closestTargetIcao24` — center default picks nearest, all-off-axis returns nil, `at: tapPoint` overrides center, tap-in-empty-sky returns nil, narrow FOV (zoom > 1) pushes off-axis planes out of the lock zone.
+The current suite is **169 tests** across `TailspotTests/`, broadly:
+
+- **Geometry / projection** — `GeoTests`, `ClosestTargetTests` (FOV/zoom-aware lock zone).
+- **OpenSky wire format** — `AircraftDecodingTests`, `AircraftMetadataDecodingTests`.
+- **Manager + cache** — `ADSBManagerTests` (annotation, sort, errors, extrapolation, visibility predicate, rate-limit backoff), `ADSBManagerMetadataTests`, `MetadataCacheTests`.
+- **Catch + Hangar** — `CatchTests` (SwiftData insert/fetch, classifier-driven rarity/type snapshot, duplicate-rejection via `Catch.exists`), `HangarGroupingTests`, `ModelSlot` resolution.
+- **Lock-on** — `LockOnEngineTests` covers the post-T4 3-state machine (idle / locked / sticky), `forceLock`, `unpin`.
+- **Replay** — `ReplayRecorderTests`, `ReplayJSONLTests` (tapPin/unpin events), `ReplayAnalyzerTests`.
+- **Game system** — `GameSystemEnumTests`, `AircraftClassifierTests` (curated rule table, operator any-of gate, legacy-token regression).
+- **Photos + brand** — `PlanespottersClientTests`, `BrandColorHexTests`.
+- **Multi-catch** — `MultiCatchComboTests` (combo-multiplier ladder).
+
+Look in `TailspotTests/` directly for the per-`@Test` enumeration — keeping it inline here drifted out of date and is no longer worth maintaining.
 
 `ADSBManager.init(liveSource:mockSource:)` has defaulted params so production uses real sources and tests substitute a `FixedSource` fixture. **Do not break this default-init shape** — `ContentView`'s `@StateObject private var adsb = ADSBManager()` depends on it.
 

@@ -27,7 +27,7 @@ struct SettingsScreen: View {
                         .multilineTextAlignment(.trailing)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .font(.system(.body, design: .monospaced))
+                        .font(Brand.Font.mono(size: 17))
                 }
             } header: {
                 Text("Identity")
@@ -94,10 +94,10 @@ struct SettingsScreen: View {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
                 Text(Bundle.main.tailspotVersionLine)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .font(Brand.Font.mono(size: 11, weight: .regular))
                     .foregroundStyle(Brand.Color.textTertiary)
                 Text(" · tap to copy")
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .font(Brand.Font.mono(size: 11, weight: .regular))
                     .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
                 Spacer(minLength: 0)
             }

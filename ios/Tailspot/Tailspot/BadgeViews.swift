@@ -31,7 +31,7 @@ struct RarityBadge: View {
                     .font(.system(size: m.fontSize - 1, weight: .bold))
             }
             Text(rarity.label)
-                .font(.system(size: m.fontSize, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: m.fontSize, weight: .bold))
                 .tracking(0.8)
         }
         .padding(.horizontal, m.padX)
@@ -56,7 +56,7 @@ struct TypeBadge: View {
         let m = size.metrics
         HStack(spacing: 4) {
             Text(type.glyph)
-                .font(.system(size: m.fontSize - 1, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: m.fontSize - 1, weight: .bold))
                 .foregroundStyle(.white.opacity(0.95))
                 .frame(width: m.glyphSize, height: m.glyphSize)
                 .background(.black.opacity(0.22), in: .circle)

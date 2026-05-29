@@ -2,13 +2,14 @@
 //  OnboardingFlow.swift
 //  Tailspot
 //
-//  Four-step onboarding presented before the AR view becomes
+//  Three-step onboarding presented before the AR view becomes
 //  reachable on first launch:
 //
 //   1. Welcome — brand lockup + value pitch + CTA.
-//   2. Permissions — what we'll ask for and why.
-//   3. Compass calibration — the figure-8 prompt.
-//   4. Pick a handle — seeds the public leaderboard identity.
+//   2. Permissions — what we'll ask for and why. iOS prompts fire
+//      on advance, not at the end of onboarding (testers reported
+//      the end-of-flow prompt timing as confusing).
+//   3. Pick a handle — seeds the public leaderboard identity.
 //
 //  Completion latches in @AppStorage so subsequent launches skip
 //  the flow entirely.
@@ -16,6 +17,7 @@
 
 import SwiftUI
 import SwiftData
+import AVFoundation
 
 // MARK: - Gate
 
@@ -70,8 +72,14 @@ struct OnboardingFlow: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
     @AppStorage("tailspot.profile.public") private var publicProfile: Bool = true
     @State private var draftHandle: String = ""
+    /// Held as a @StateObject so its CLLocationManager delegate stays
+    /// alive long enough for iOS to surface the prompt and receive the
+    /// user's answer. Discarded when onboarding completes; ContentView
+    /// then creates its own LocationManager.
+    @StateObject private var locationForPermissions = LocationManager()
+    @State private var permissionsRequested = false
 
-    private let totalSteps = 4
+    private let totalSteps = 3
 
     /// Suggested handles offered in the handle step. Picked up at
     /// init time and stay fixed for the duration of the flow — no
@@ -124,7 +132,6 @@ struct OnboardingFlow: View {
         switch step {
         case 0: welcomeStep
         case 1: permissionsStep
-        case 2: calibrationStep
         default: handleStep
         }
     }
@@ -134,7 +141,7 @@ struct OnboardingFlow: View {
     private var welcomeStep: some View {
         VStack(alignment: .leading, spacing: 18) {
             lockup
-            stepLabel("STEP 1 / 4")
+            stepLabel("STEP 1 / 3")
             Text("Spot every plane overhead.")
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -173,8 +180,8 @@ struct OnboardingFlow: View {
 
     private var permissionsStep: some View {
         VStack(alignment: .leading, spacing: 18) {
-            stepLabel("STEP 2 / 4 · PERMISSIONS")
-            Text("Three permissions to read the sky.")
+            stepLabel("STEP 2 / 3 · PERMISSIONS")
+            Text("Three things we need to read the sky.")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
             VStack(spacing: 10) {
@@ -183,10 +190,10 @@ struct OnboardingFlow: View {
                 permissionRow(glyph: "camera.fill",    title: "Camera",
                               body: "Used for AR overlay only. Tailspot never records or transmits the camera feed.")
                 permissionRow(glyph: "gyroscope",      title: "Motion & orientation",
-                              body: "Read your pitch and heading so reticles land on the right plane.")
+                              body: "Read which way you're aiming so the labels match the plane in view.")
             }
             .padding(.top, 4)
-            Text("You'll be asked once for each on the next screen.")
+            Text("Tap below — iOS will ask for camera and location.")
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textTertiary)
         }
@@ -213,39 +220,7 @@ struct OnboardingFlow: View {
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
     }
 
-    // MARK: - Step 3: Calibration
-
-    private var calibrationStep: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            stepLabel("STEP 3 / 4 · COMPASS")
-            Text("Trace a figure-8 in the air.")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundStyle(Brand.Color.textPrimary)
-            Text("iPhone compasses drift near cars and buildings. A quick calibration brings accuracy to ±2°.")
-                .font(.system(size: 13))
-                .foregroundStyle(Brand.Color.textSecondary)
-            Figure8Animation()
-                .frame(maxWidth: .infinity)
-                .frame(height: 240)
-                .padding(.top, 4)
-            HStack(spacing: 14) {
-                Text("HDG")
-                    .font(Brand.Font.hudData)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text("287°")
-                    .font(Brand.Font.hudCallsign)
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text("±8°")
-                    .font(Brand.Font.hudData)
-                    .foregroundStyle(Brand.Color.alertCaution)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 8))
-        }
-    }
-
-    // MARK: - Step 4: Handle
+    // MARK: - Step 3: Handle
 
     private var handleStep: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -260,15 +235,15 @@ struct OnboardingFlow: View {
             // Input row + inline availability pill.
             VStack(alignment: .leading, spacing: 6) {
                 Text("HANDLE")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 HStack {
                     Text("@")
-                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 22, weight: .bold))
                         .foregroundStyle(Brand.Color.textTertiary)
                     TextField("spotter_42", text: $draftHandle)
-                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 22, weight: .bold))
                         .foregroundStyle(Brand.Color.textPrimary)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -298,7 +273,7 @@ struct OnboardingFlow: View {
             // Suggestion chips.
             VStack(alignment: .leading, spacing: 8) {
                 Text("SUGGESTIONS")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 LazyVGrid(
@@ -315,7 +290,7 @@ struct OnboardingFlow: View {
                                 Text(s)
                                     .foregroundStyle(Brand.Color.textPrimary)
                             }
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 13, weight: .semibold))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
@@ -366,7 +341,7 @@ struct OnboardingFlow: View {
         return HStack(spacing: 4) {
             Circle().fill(tint).frame(width: 6, height: 6)
             Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9, weight: .bold))
                 .tracking(0.8)
                 .foregroundStyle(tint)
         }
@@ -428,7 +403,6 @@ struct OnboardingFlow: View {
         switch step {
         case 0: return "Get started"
         case 1: return "Allow permissions"
-        case 2: return "Continue"
         default: return "Start spotting"
         }
     }
@@ -442,6 +416,9 @@ struct OnboardingFlow: View {
     }
 
     private func advance() {
+        if step == 1 {
+            requestSystemPermissions()
+        }
         if step < totalSteps - 1 {
             withAnimation { step += 1 }
         } else {
@@ -449,6 +426,17 @@ struct OnboardingFlow: View {
             handle = draftHandle.trimmingCharacters(in: .whitespacesAndNewlines)
             onFinish()
         }
+    }
+
+    /// Fire camera + location prompts when the user advances out of the
+    /// permissions step. iOS surfaces them modally and queues automatically,
+    /// so the user dismisses both before the next step appears. CMMotion
+    /// doesn't gate on permission so there's no prompt for the motion row.
+    private func requestSystemPermissions() {
+        guard !permissionsRequested else { return }
+        permissionsRequested = true
+        AVCaptureDevice.requestAccess(for: .video) { _ in }
+        locationForPermissions.requestPermissionAndStart()
     }
 
     // MARK: - Bits
@@ -459,7 +447,7 @@ struct OnboardingFlow: View {
                 .font(.system(size: 22))
                 .foregroundStyle(Brand.Color.cyan)
             Text("TAILSPOT")
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 22, weight: .bold))
                 .tracking(3)
                 .foregroundStyle(Brand.Color.textPrimary)
         }
@@ -467,7 +455,7 @@ struct OnboardingFlow: View {
 
     private func stepLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .font(Brand.Font.mono(size: 10, weight: .semibold))
             .tracking(1.4)
             .foregroundStyle(Brand.Color.cyan)
     }

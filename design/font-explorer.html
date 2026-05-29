@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Tailspot · font explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&family=Aldrich&family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg-primary:  #0A0E1A;
+      --bg-elevated: #1A2030;
+      --bg-surface:  #050810;
+      --text-primary:   #E8F4FF;
+      --text-secondary: #A0B0C0;
+      --text-tertiary:  #7F8B98;
+      --cyan: #00D4FF;
+      --rare: #00D4FF;
+      --legendary: #FFB800;
+      --alert-normal: #3DD68C;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      padding: 40px 24px 80px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin: 0 0 6px;
+    }
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 15px;
+      margin: 0 0 32px;
+      max-width: 720px;
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .col {
+      background: var(--bg-elevated);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      padding: 22px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+    .col header {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 14px;
+    }
+    .col h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin: 0 0 4px;
+      font-family: var(--font-mono);
+    }
+    .col .pitch {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin: 0;
+      line-height: 1.4;
+    }
+
+    /* Each column overrides --font-sans / --font-mono. */
+    .col-current {
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    .col-sf-b612 {
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+      --font-mono: "B612 Mono", ui-monospace, monospace;
+    }
+    .col-b612 {
+      --font-sans: "B612", -apple-system, system-ui, sans-serif;
+      --font-mono: "B612 Mono", ui-monospace, monospace;
+    }
+    .col-roboto {
+      --font-sans: "Roboto", -apple-system, system-ui, sans-serif;
+      --font-mono: "Roboto Mono", ui-monospace, monospace;
+    }
+    .col-aldrich {
+      --font-sans: "Aldrich", -apple-system, system-ui, sans-serif;
+      --font-mono: "Space Mono", ui-monospace, monospace;
+    }
+    .col-plex {
+      --font-sans: "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    /* Atoms — all read from the column's --font-sans / --font-mono. */
+    .lockup {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .lockup .glyph {
+      width: 28px; height: 28px;
+      display: grid; place-items: center;
+      color: var(--cyan);
+      font-size: 22px;
+    }
+    .lockup .wordmark {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 22px;
+      letter-spacing: 3px;
+      color: var(--text-primary);
+    }
+
+    .ar-label {
+      background: rgba(0, 212, 255, 0.10);
+      border: 1px solid rgba(0, 212, 255, 0.35);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 4px;
+      max-width: 240px;
+    }
+    .ar-label .callsign {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--cyan);
+      letter-spacing: 0.5px;
+    }
+    .ar-label .model {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .ar-label .data {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+    }
+
+    .hangar-row {
+      background: var(--bg-surface);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex; align-items: center; gap: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .hangar-row .type {
+      width: 36px; height: 36px;
+      background: rgba(0, 212, 255, 0.18);
+      border-radius: 6px;
+      display: grid; place-items: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--cyan);
+    }
+    .hangar-row .center {
+      display: flex; flex-direction: column; gap: 3px; flex: 1;
+    }
+    .hangar-row .title {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--cyan);
+    }
+    .hangar-row .sub {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .hangar-row .stat {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--legendary);
+    }
+
+    .stat-pill {
+      display: inline-flex;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 18px;
+      color: #000;
+      background: var(--cyan);
+      padding: 6px 14px;
+      border-radius: 999px;
+      letter-spacing: 0.5px;
+    }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 1.2px;
+      color: var(--rare);
+      background: rgba(0,212,255,0.16);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(0,212,255,0.30);
+      text-transform: uppercase;
+    }
+
+    .body-text {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      max-width: 100%;
+    }
+
+    .data-row {
+      display: flex; gap: 12px; align-items: baseline;
+      font-family: var(--font-mono);
+    }
+    .data-row .label {
+      font-size: 10px; letter-spacing: 1.4px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+    }
+    .data-row .value {
+      font-size: 14px; font-weight: 700;
+      color: var(--text-primary);
+    }
+    .data-row .unit {
+      font-size: 11px; color: var(--alert-normal);
+    }
+
+    .footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-tertiary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .footer code {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      background: rgba(255,255,255,0.06);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tailspot font explorer</h1>
+  <p class="subtitle">
+    Same UI atoms rendered in six typography directions on the Tailspot dark
+    palette. Each column overrides only the sans + mono pair. Pick whichever
+    feels right for pilots / avgeeks; we'll wire it into <code>Brand.swift</code>.
+  </p>
+
+  <div class="grid">
+    <!-- 1. Current -->
+    <div class="col col-current">
+      <header>
+        <h2>Current · SF Pro + SF Mono</h2>
+        <p class="pitch">What's shipping today. The "Claude feel" tester reported.</p>
+      </header>
+      <div class="lockup">
+        <span class="glyph">&#9992;</span>
+        <span class="wordmark">TAILSPOT</span>
+      </div>
+      <div class="ar-label">
+        <span class="callsign">UAL248</span>
+        <span class="model">Boeing 787-9</span>
+        <span class="data">FL370 · 478 kt · 12 km</span>
+      </div>
+      <div class="hangar-row">
+        <div class="type">W</div>
+        <div class="center">
+          <div class="title">UAL248</div>
+          <div class="sub">787-9 · United · 12 km</div>
+        </div>
+        <div class="stat">×3</div>
+      </div>
+      <div>
+        <span class="badge">★ Legendary</span>
+        <span class="badge" style="margin-left:6px">Wide-body</span>
+      </div>
+      <div class="stat-pill">+150 pts</div>
+      <div class="data-row">
+        <span class="label">HDG</span>
+        <span class="value">287°</span>
+        <span class="unit">±2°</span>
+      </div>
+      <p class="body-text">Spot every plane overhead. Tailspot uses live ADS-B
+        data to identify aircraft you're looking at, then lets you catch them
+        to your Hangar.</p>
+    </div>
+
+    <!-- 2. SF Pro + B612 Mono (recommended) -->
+    <div class="col col-sf-b612">
+      <header>
+        <h2>SF Pro + B612 Mono · recommended</h2>
+        <p class="pitch">Keep iOS sans. Swap only the mono to Airbus's cockpit
+          font. Where aviation reads hardest: callsigns, codes, headings.</p>
+      </header>
+      <div class="lockup">
+        <span class="glyph">&#9992;</span>
+        <span class="wordmark">TAILSPOT</span>
+      </div>
+      <div class="ar-label">
+        <span class="callsign">UAL248</span>
+        <span class="model">Boeing 787-9</span>
+        <span class="data">FL370 · 478 kt · 12 km</span>
+      </div>
+      <div class="hangar-row">
+        <div class="type">W</div>
+        <div class="center">
+          <div class="title">UAL248</div>
+          <div class="sub">787-9 · United · 12 km</div>
+        </div>
+        <div class="stat">×3</div>
+      </div>
+      <div>
+        <span class="badge">★ Legendary</span>
+        <span class="badge" style="margin-left:6px">Wide-body</span>
+      </div>
+      <div class="stat-pill">+150 pts</div>
+      <div class="data-row">
+        <span class="label">HDG</span>
+        <span class="value">287°</span>
+        <span class="unit">±2°</span>
+      </div>
+      <p class="body-text">Spot every plane overhead. Tailspot uses live ADS-B
+        data to identify aircraft you're looking at, then lets you catch them
+        to your Hangar.</p>
+    </div>
+
+    <!-- 3. Full B612 -->
+    <div class="col col-b612">
+      <header>
+        <h2>Full B612 (sans + mono)</h2>
+        <p class="pitch">Cockpit-authentic top to bottom. Slightly more
+          utilitarian body text than SF Pro.</p>
+      </header>
+      <div class="lockup">
+        <span class="glyph">&#9992;</span>
+        <span class="wordmark">TAILSPOT</span>
+      </div>
+      <div class="ar-label">
+        <span class="callsign">UAL248</span>
+        <span class="model">Boeing 787-9</span>
+        <span class="data">FL370 · 478 kt · 12 km</span>
+      </div>
+      <div class="hangar-row">
+        <div class="type">W</div>
+        <div class="center">
+          <div class="title">UAL248</div>
+          <div class="sub">787-9 · United · 12 km</div>
+        </div>
+        <div class="stat">×3</div>
+      </div>
+      <div>
+        <span class="badge">★ Legendary</span>
+        <span class="badge" style="margin-left:6px">Wide-body</span>
+      </div>
+      <div class="stat-pill">+150 pts</div>
+      <div class="data-row">
+        <span class="label">HDG</span>
+        <span class="value">287°</span>
+        <span class="unit">±2°</span>
+      </div>
+      <p class="body-text">Spot every plane overhead. Tailspot uses live ADS-B
+        data to identify aircraft you're looking at, then lets you catch them
+        to your Hangar.</p>
+    </div>
+
+    <!-- 4. Roboto + Roboto Mono -->
+    <div class="col col-roboto">
+      <header>
+        <h2>Roboto + Roboto Mono</h2>
+        <p class="pitch">FlightRadar24 / FlightAware flavor. Modern
+          airline-tech, less specifically cockpit.</p>
+      </header>
+      <div class="lockup">
+        <span class="glyph">&#9992;</span>
+        <span class="wordmark">TAILSPOT</span>
+      </div>
+      <div class="ar-label">
+        <span class="callsign">UAL248</span>
+        <span class="model">Boeing 787-9</span>
+        <span class="data">FL370 · 478 kt · 12 km</span>
+      </div>
+      <div class="hangar-row">
+        <div class="type">W</div>
+        <div class="center">
+          <div class="title">UAL248</div>
+          <div class="sub">787-9 · United · 12 km</div>
+        </div>
+        <div class="stat">×3</div>
+      </div>
+      <div>
+        <span class="badge">★ Legendary</span>
+        <span class="badge" style="margin-left:6px">Wide-body</span>
+      </div>
+      <div class="stat-pill">+150 pts</div>
+      <div class="data-row">
+        <span class="label">HDG</span>
+        <span class="value">287°</span>
+        <span class="unit">±2°</span>
+      </div>
+      <p class="body-text">Spot every plane overhead. Tailspot uses live ADS-B
+        data to identify aircraft you're looking at, then lets you catch them
+        to your Hangar.</p>
+    </div>
+
+    <!-- 5. Aldrich + Space Mono -->
+    <div class="col col-aldrich">
+      <header>
+        <h2>Aldrich + Space Mono</h2>
+        <p class="pitch">Retro aerospace · Pan Am / mission-control. Distinct
+          but trades cockpit authenticity for nostalgia.</p>
+      </header>
+      <div class="lockup">
+        <span class="glyph">&#9992;</span>
+        <span class="wordmark">TAILSPOT</span>
+      </div>
+      <div class="ar-label">
+        <span class="callsign">UAL248</span>
+        <span class="model">Boeing 787-9</span>
+        <span class="data">FL370 · 478 kt · 12 km</span>
+      </div>
+      <div class="hangar-row">
+        <div class="type">W</div>
+        <div class="center">
+          <div class="title">UAL248</div>
+          <div class="sub">787-9 · United · 12 km</div>
+        </div>
+        <div class="stat">×3</div>
+      </div>
+      <div>
+        <span class="badge">★ Legendary</span>
+        <span class="badge" style="margin-left:6px">Wide-body</span>
+      </div>
+      <div class="stat-pill">+150 pts</div>
+      <div class="data-row">
+        <span class="label">HDG</span>
+        <span class="value">287°</span>
+        <span class="unit">±2°</span>
+      </div>
+      <p class="body-text">Spot every plane overhead. Tailspot uses live ADS-B
+        data to identify aircraft you're looking at, then lets you catch them
+        to your Hangar.</p>
+    </div>
+
+    <!-- 6. IBM Plex (alt modern technical) -->
+    <div class="col col-plex">
+      <header>
+        <h2>IBM Plex Sans + IBM Plex Mono</h2>
+        <p class="pitch">Modern technical · IBM's open-source family. Strong
+          on data; less specifically aviation. Wildcard.</p>
+      </header>
+      <div class="lockup">
+        <span class="glyph">&#9992;</span>
+        <span class="wordmark">TAILSPOT</span>
+      </div>
+      <div class="ar-label">
+        <span class="callsign">UAL248</span>
+        <span class="model">Boeing 787-9</span>
+        <span class="data">FL370 · 478 kt · 12 km</span>
+      </div>
+      <div class="hangar-row">
+        <div class="type">W</div>
+        <div class="center">
+          <div class="title">UAL248</div>
+          <div class="sub">787-9 · United · 12 km</div>
+        </div>
+        <div class="stat">×3</div>
+      </div>
+      <div>
+        <span class="badge">★ Legendary</span>
+        <span class="badge" style="margin-left:6px">Wide-body</span>
+      </div>
+      <div class="stat-pill">+150 pts</div>
+      <div class="data-row">
+        <span class="label">HDG</span>
+        <span class="value">287°</span>
+        <span class="unit">±2°</span>
+      </div>
+      <p class="body-text">Spot every plane overhead. Tailspot uses live ADS-B
+        data to identify aircraft you're looking at, then lets you catch them
+        to your Hangar.</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Serve via <code>python3 -m http.server 4173 --directory design</code>
+    and open <code>http://127.0.0.1:4173/font-explorer.html</code>.
+    Fonts load from Google Fonts at runtime; iOS will need them bundled in
+    the app (we'll add the .ttf files to <code>ios/Tailspot/Tailspot/</code>
+    and register in Info.plist via <code>UIAppFonts</code>).
+  </div>
+</body>
+</html>

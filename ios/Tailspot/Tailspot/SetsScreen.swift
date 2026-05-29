@@ -42,7 +42,7 @@ struct SetsScreen: View {
         let total = totals.reduce(0) { $0 + $1.total }
         return VStack(alignment: .leading, spacing: 6) {
             Text("POKÉDEX-STYLE")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Brand.Color.cyan)
             Text("Sets by type")
@@ -50,7 +50,7 @@ struct SetsScreen: View {
                 .foregroundStyle(Brand.Color.textPrimary)
             HStack(spacing: 12) {
                 Text("\(caught)")
-                    .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 32, weight: .heavy))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .monospacedDigit()
                 VStack(alignment: .leading, spacing: 0) {
@@ -58,7 +58,7 @@ struct SetsScreen: View {
                         .font(Brand.Font.cardSubtitle)
                         .foregroundStyle(Brand.Color.textSecondary)
                     Text("ACROSS \(PokeSets.all.count) SETS")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .tracking(1)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
@@ -80,7 +80,7 @@ struct SetsScreen: View {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(set.type.tint.opacity(0.20))
                 Text(set.type.glyph)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 16, weight: .bold))
                     .foregroundStyle(set.type.tint)
             }
             .frame(width: 36, height: 40)
@@ -91,7 +91,7 @@ struct SetsScreen: View {
                         .foregroundStyle(Brand.Color.textPrimary)
                     if complete {
                         Text("COMPLETE")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 9, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
@@ -100,7 +100,7 @@ struct SetsScreen: View {
                 }
                 HStack(spacing: 8) {
                     Text("\(progress.caught) / \(progress.total)")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 11, weight: .semibold))
                         .foregroundStyle(Brand.Color.textSecondary)
                         .monospacedDigit()
                     GeometryReader { geo in
@@ -153,7 +153,7 @@ struct SetDetailScreen: View {
     private var pokedexLabel: some View {
         HStack {
             Text("POKÉDEX · \(set.entries.count) ENTRIES")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Brand.Color.textTertiary)
             Spacer()
@@ -168,7 +168,7 @@ struct SetDetailScreen: View {
                 TypeBadge(type: set.type, size: .lg)
                 Spacer()
                 Text("\(progress.caught) / \(progress.total)")
-                    .font(.system(size: 18, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 18, weight: .heavy))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .monospacedDigit()
             }
@@ -213,7 +213,7 @@ struct SetDetailScreen: View {
                 VStack {
                     HStack {
                         Text(String(format: "#%02d", index))
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 9, weight: .bold))
                             .tracking(0.8)
                             .foregroundStyle(Brand.Color.textTertiary)
                             .padding(8)

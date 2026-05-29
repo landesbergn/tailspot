@@ -90,7 +90,7 @@ struct CompassCalibrationSheet: View {
     private var headlineBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(calibratedThisSession ? "COMPASS · CALIBRATED" : "COMPASS · CALIBRATE")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(calibratedThisSession ? Brand.Color.alertNormal : Brand.Color.alertCaution)
             Text(calibratedThisSession
@@ -113,22 +113,22 @@ struct CompassCalibrationSheet: View {
         return HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("HEADING")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Text(headingText)
-                    .font(.system(size: 28, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 28, weight: .heavy))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .monospacedDigit()
             }
             Rectangle().fill(Brand.Color.bgPrimary.opacity(0.6)).frame(width: 1, height: 44)
             VStack(alignment: .leading, spacing: 4) {
                 Text("ACCURACY")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Text(accuracyText)
-                    .font(.system(size: 28, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 28, weight: .heavy))
                     .foregroundStyle(tint)
                     .monospacedDigit()
             }
@@ -155,7 +155,7 @@ struct CompassCalibrationSheet: View {
     private var animationBlock: some View {
         VStack(spacing: 8) {
             Text(calibratedThisSession ? "WHEN YOU NEED TO RECALIBRATE" : "TRACE A FIGURE-8")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Brand.Color.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)

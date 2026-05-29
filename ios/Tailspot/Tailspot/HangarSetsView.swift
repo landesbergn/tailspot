@@ -67,7 +67,7 @@ private struct SetTile: View {
                 RoundedRectangle(cornerRadius: 7)
                     .fill(set.type.tint)
                 Text(set.type.glyph)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 16, weight: .bold))
                     .foregroundStyle(.black.opacity(0.7))
             }
             .frame(width: 38, height: 38)
@@ -86,11 +86,11 @@ private struct SetTile: View {
 
             VStack(alignment: .trailing, spacing: 0) {
                 Text("\(tailCount)")
-                    .font(.system(size: 24, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 24, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(isLocked ? Brand.Color.textTertiary : set.type.tint)
                 Text("caught")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)
             }

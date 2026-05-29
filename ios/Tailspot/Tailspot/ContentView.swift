@@ -635,8 +635,7 @@ struct ContentView: View {
                         .fill(Brand.Color.alertCaution)
                         .frame(width: 5, height: 5)
                     Text("COMPASS \(formatHeadingAccuracyShort())")
-                        .font(.system(size: 10, weight: .bold,
-                                      design: .monospaced))
+                        .font(Brand.Font.mono(size: 10, weight: .bold))
                         .tracking(1.0)
                         .foregroundStyle(Brand.Color.alertCaution)
                 }
@@ -655,7 +654,7 @@ struct ContentView: View {
     private var zoomPill: some View {
         if zoom > 1.01 {
             Text(String(format: "%.1f×", zoom))
-                .font(.system(.caption, design: .monospaced).bold())
+                .font(Brand.Font.mono(size: 12, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
@@ -709,7 +708,7 @@ struct ContentView: View {
                         .font(.system(size: 56))
                         .foregroundStyle(Brand.Color.cyan)
                     Text("TAILSPOT")
-                        .font(.system(size: 32, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 32, weight: .bold))
                         .foregroundStyle(Brand.Color.textPrimary)
                         .tracking(4)
                 }
@@ -1042,15 +1041,13 @@ struct ContentView: View {
                         .fill(Brand.Color.cyan.opacity(0.15))
                         .frame(width: 60, height: 60)
                     Text("CAPTURE")
-                        .font(.system(size: 10, weight: .bold,
-                                      design: .monospaced))
+                        .font(Brand.Font.mono(size: 10, weight: .bold))
                         .tracking(0.6)
                         .foregroundStyle(Brand.Color.cyan)
                 }
                 if isMulti {
                     Text("×\(count)")
-                        .font(.system(size: 9, weight: .bold,
-                                      design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -1101,8 +1098,7 @@ struct ContentView: View {
                 .frame(width: 56, height: 56)
                 if !catches.isEmpty {
                     Text("\(catches.count)")
-                        .font(.system(size: 10, weight: .bold,
-                                      design: .monospaced))
+                        .font(Brand.Font.mono(size: 10, weight: .bold))
                         .foregroundStyle(Brand.Color.bgPrimary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -1183,7 +1179,7 @@ struct ContentView: View {
                             .frame(width: 6, height: 6)
                             .modifier(EmptyPulse(active: lastErr == nil || transient))
                         Text(pillText)
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(1.2)
                             .foregroundStyle(pillTint)
                     }
@@ -1222,7 +1218,7 @@ struct ContentView: View {
                     Text("camera: not authorized")
                 }
             }
-            .font(.system(.caption, design: .monospaced))
+            .font(Brand.Font.mono(size: 12))
         }
         .foregroundStyle(Brand.Color.textPrimary)
         .padding(12)
@@ -1256,7 +1252,7 @@ struct ContentView: View {
                     }
                     if visible.isEmpty {
                         Text(emptyListMessage)
-                            .font(.caption.monospaced())
+                            .font(Brand.Font.mono(size: 12))
                             .foregroundStyle(Brand.Color.textPrimary.opacity(0.7))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -1287,7 +1283,7 @@ struct ContentView: View {
             Text(String(format: "FL%03.0f", altKm * 32.8))
                 .foregroundStyle(Brand.Color.textPrimary.opacity(0.7))
         }
-        .font(.system(.caption2, design: .monospaced))
+        .font(Brand.Font.mono(size: 11))
         .foregroundStyle(Brand.Color.textPrimary)
         .padding(.horizontal, 12)
         .padding(.vertical, 2)
@@ -1676,21 +1672,15 @@ private struct PlaneLabel: View {
             )
             HStack(spacing: 4) {
                 Text(callsign)
-                    .font(.system(
-                        size: isPinned ? 11 : 9,
-                        weight: .bold,
-                        design: .monospaced
-                    ))
+                    .font(Brand.Font.mono(size: isPinned ? 11 : 9, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
                 if isPinned {
                     Text("· \(rarity.label) +\(rarity.basePoints)")
-                        .font(.system(size: 9, weight: .semibold,
-                                      design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .foregroundStyle(rarity.tint)
                 } else {
                     Text("· \(rarity.label)")
-                        .font(.system(size: 8, weight: .semibold,
-                                      design: .monospaced))
+                        .font(Brand.Font.mono(size: 8, weight: .semibold))
                         .foregroundStyle(rarity.tint)
                 }
             }
@@ -1812,8 +1802,7 @@ private struct EmptyTapRippleView: View {
                            height: CGFloat(20 + progress * 80))
                 if progress < 0.95 {
                     Text("NO AIRCRAFT HERE")
-                        .font(.system(size: 9, weight: .semibold,
-                                      design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.cyan.opacity(1.0 - progress))
                         .padding(.top, 60)

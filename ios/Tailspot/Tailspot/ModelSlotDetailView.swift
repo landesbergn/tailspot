@@ -30,7 +30,7 @@ struct ModelSlotDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(set.title.uppercased())
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 10, weight: .semibold))
                         .tracking(1)
                         .foregroundStyle(Brand.Color.textTertiary)
 
@@ -39,11 +39,11 @@ struct ModelSlotDetailView: View {
                         .foregroundStyle(Brand.Color.textPrimary)
 
                     Text("\(group.distinctTailCount) distinct tail\(group.distinctTailCount == 1 ? "" : "s")")
-                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .font(Brand.Font.mono(size: 11, weight: .regular))
                         .foregroundStyle(set.type.tint)
 
                     Text("TAILS YOU'VE CAUGHT")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                         .padding(.top, 14)
@@ -91,15 +91,15 @@ struct ModelSlotDetailView: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 2) {
                 Text(cs)
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
                 Text("\(row.icao24) · \(row.mostRecent.operatorName ?? "—")")
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .regular))
                     .foregroundStyle(Brand.Color.textTertiary)
             }
             Spacer()
             Text(row.firstCatch.caughtAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .regular))
                 .foregroundStyle(Brand.Color.textTertiary)
         }
         .padding(.vertical, 8)

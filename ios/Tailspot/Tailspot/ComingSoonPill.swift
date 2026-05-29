@@ -26,12 +26,12 @@ struct ComingSoonPill: View {
             Image(systemName: "hammer.fill")
                 .font(.system(size: 11, weight: .semibold))
             Text("COMING SOON")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .bold))
                 .tracking(1.4)
             if let subtitle {
                 Text("·").foregroundStyle(Brand.Color.alertWarning.opacity(0.5))
                 Text(subtitle)
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .regular))
                     .foregroundStyle(Brand.Color.alertWarning.opacity(0.85))
             }
         }

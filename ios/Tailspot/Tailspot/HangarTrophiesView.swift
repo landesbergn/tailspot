@@ -131,7 +131,7 @@ struct HangarTrophiesView: View {
             VStack(spacing: 2) {
                 HStack(spacing: 6) {
                     Text("\(unlockedCount)")
-                        .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                        .font(Brand.Font.mono(size: 32, weight: .heavy))
                         .foregroundStyle(Brand.Color.textPrimary)
                         .monospacedDigit()
                     Text("of \(Trophies.roster.count)")
@@ -141,12 +141,12 @@ struct HangarTrophiesView: View {
                 }
                 if !inProgressTrophies.isEmpty {
                     Text("\(inProgressTrophies.count) close to unlocking")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 11, weight: .semibold))
                         .tracking(0.6)
                         .foregroundStyle(Brand.Color.cyan)
                 } else {
                     Text("UNLOCKED")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 10, weight: .semibold))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
@@ -166,7 +166,7 @@ struct HangarTrophiesView: View {
             TrophyView(tier: tier, iconName: rep, size: 44, locked: count == 0)
                 .opacity(count == 0 ? 0.55 : 1)
             Text("\(count)")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 14, weight: .bold))
                 .foregroundStyle(Color(hex: tier.outerHex))
                 .monospacedDigit()
         }
@@ -222,12 +222,12 @@ struct HangarTrophiesView: View {
             HStack(spacing: 6) {
                 if let current {
                     Text(current.label)
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .bold))
                         .foregroundStyle(Color(hex: current.outerHex))
                         .tracking(0.8)
                 }
                 Text("\(progress) / \(next.at)")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 11, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()
                 Spacer(minLength: 6)
@@ -236,7 +236,7 @@ struct HangarTrophiesView: View {
             }
         } else if let current {
             Text("\(current.label) · MAX")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .bold))
                 .foregroundStyle(Color(hex: current.outerHex))
                 .tracking(0.8)
         }

@@ -88,13 +88,13 @@ struct ProfileScreen: View {
                     Circle()
                         .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1.5)
                     Text(initials)
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 18, weight: .bold))
                         .foregroundStyle(Brand.Color.cyan)
                 }
                 .frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("@\(handle)")
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 20, weight: .bold))
                         .tracking(0.4)
                         .foregroundStyle(Brand.Color.textPrimary)
                     if let joined = joinedDateLabel {
@@ -109,7 +109,7 @@ struct ProfileScreen: View {
                 }
                 Spacer()
                 Text("PUBLIC")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 9, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.alertNormal)
                     .padding(.horizontal, 6)
@@ -120,11 +120,11 @@ struct ProfileScreen: View {
             HStack(spacing: 16) {
                 VStack(spacing: 2) {
                     Text(stats.totalPoints.formatted(.number))
-                        .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                        .font(Brand.Font.mono(size: 32, weight: .heavy))
                         .foregroundStyle(Brand.Color.cyan)
                         .monospacedDigit()
                     Text("TOTAL POINTS")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
@@ -133,10 +133,10 @@ struct ProfileScreen: View {
                     .frame(width: 1, height: 40)
                 VStack(spacing: 2) {
                     Text("—")
-                        .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                        .font(Brand.Font.mono(size: 32, weight: .heavy))
                         .foregroundStyle(Brand.Color.textPrimary)
                     Text("GLOBAL RANK")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
@@ -162,11 +162,11 @@ struct ProfileScreen: View {
     private func statTile(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
         VStack(spacing: 3) {
             Text("\(value)")
-                .font(.system(size: 22, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 22, weight: .bold))
                 .foregroundStyle(valueColor)
                 .monospacedDigit()
             Text(label.uppercased())
-                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 8, weight: .semibold))
                 .tracking(1)
                 .foregroundStyle(Brand.Color.textTertiary)
         }
@@ -180,7 +180,7 @@ struct ProfileScreen: View {
     private var rarityStrip: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("BREAKDOWN BY RARITY")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
             HStack(spacing: 0) {
@@ -213,11 +213,11 @@ struct ProfileScreen: View {
                     let count = stats.countsByRarity[r] ?? 0
                     VStack(spacing: 1) {
                         Text("\(count)")
-                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 13, weight: .bold))
                             .foregroundStyle(count > 0 ? r.tint : Brand.Color.textTertiary)
                             .monospacedDigit()
                         Text(r.label)
-                            .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 7, weight: .semibold))
                             .tracking(0.6)
                             .foregroundStyle(Brand.Color.textTertiary)
                     }

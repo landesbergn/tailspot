@@ -195,7 +195,7 @@ struct MultiCatchReveal: View {
                 .frame(width: 8, height: 8)
                 .shadow(color: Brand.Color.alertAdvisory.opacity(0.6), radius: 4)
             Text("\(entries.count)× MULTI-CATCH · ENTRY #\(lastEntryNumber)")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 11, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textPrimary)
         }
@@ -237,7 +237,7 @@ struct MultiCatchReveal: View {
             ? Brand.Color.alertAdvisory
             : (freshSoFar == 0 ? Brand.Color.alertWarning : Brand.Color.cyan)
         return Text(label)
-            .font(.system(size: 14, weight: .bold, design: .monospaced))
+            .font(Brand.Font.mono(size: 14, weight: .bold))
             .tracking(2)
             .foregroundStyle(tint)
             .monospacedDigit()
@@ -304,7 +304,7 @@ struct MultiCatchReveal: View {
     /// the full-size source.
     private var alreadyCaughtStampSmall: some View {
         Text("ALREADY\nCAUGHT")
-            .font(.system(size: 14, weight: .black, design: .monospaced))
+            .font(Brand.Font.mono(size: 14, weight: .black))
             .tracking(1.5)
             .multilineTextAlignment(.center)
             .foregroundStyle(Brand.Color.alertWarning)
@@ -335,7 +335,7 @@ struct MultiCatchReveal: View {
                     .foregroundStyle(Brand.Color.textSecondary)
                 Spacer()
                 Text("\(totalBase) pt")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .monospacedDigit()
             }
@@ -345,7 +345,7 @@ struct MultiCatchReveal: View {
                     .foregroundStyle(Brand.Color.alertAdvisory)
                 Spacer()
                 Text("+\(totalAwarded - totalBase) pt")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
                     .foregroundStyle(Brand.Color.alertAdvisory)
                     .monospacedDigit()
             }
@@ -356,7 +356,7 @@ struct MultiCatchReveal: View {
                         .foregroundStyle(Brand.Color.alertWarning)
                     Spacer()
                     Text("×\(dupCount)")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 12, weight: .bold))
                         .foregroundStyle(Brand.Color.alertWarning)
                         .monospacedDigit()
                 }
@@ -364,12 +364,12 @@ struct MultiCatchReveal: View {
             Divider().background(Brand.Color.textTertiary.opacity(0.3)).padding(.vertical, 2)
             HStack {
                 Text("AWARDED")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Spacer()
                 Text("+\(totalAwarded.formatted(.number)) pt")
-                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 22, weight: .heavy))
                     .foregroundStyle(Brand.Color.cyan)
                     .monospacedDigit()
             }

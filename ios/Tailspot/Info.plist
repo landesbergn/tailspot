@@ -85,5 +85,23 @@
 	<string>$(OPENSKY_CLIENT_ID)</string>
 	<key>OpenSkyClientSecret</key>
 	<string>$(OPENSKY_CLIENT_SECRET)</string>
+
+	<!--
+		Bundled custom fonts. B612 Mono is open source (SIL OFL 1.1)
+		and was designed by Airbus for cockpit MFD displays — used
+		throughout the app for callsigns, ICAO codes, headings, and
+		HUD readouts so the typography reads "aviation" rather than
+		"generic monospace."
+
+		Files live in Tailspot/Fonts/. Reference by PostScript name
+		via SwiftUI Font.custom(_:size:); see Brand.Font.mono(...).
+	-->
+	<key>UIAppFonts</key>
+	<array>
+		<string>B612Mono-Regular.ttf</string>
+		<string>B612Mono-Bold.ttf</string>
+		<string>B612Mono-Italic.ttf</string>
+		<string>B612Mono-BoldItalic.ttf</string>
+	</array>
 </dict>
 </plist>

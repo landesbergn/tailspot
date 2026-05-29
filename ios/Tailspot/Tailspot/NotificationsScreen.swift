@@ -92,7 +92,7 @@ struct NotificationsScreen: View {
     private var rarePreview: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("PREVIEW")
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
                 .padding(.horizontal, 16)
@@ -109,7 +109,7 @@ struct NotificationsScreen: View {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack {
                         Text("TAILSPOT")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(1)
                             .foregroundStyle(Brand.Color.textSecondary)
                         Spacer()

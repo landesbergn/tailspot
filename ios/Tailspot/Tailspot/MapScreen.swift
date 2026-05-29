@@ -118,7 +118,7 @@ struct MapScreen: View {
     private func filterChip(label: String, tint: Color, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9, weight: .bold))
                 .tracking(0.8)
                 .foregroundStyle(active ? .black.opacity(0.85) : tint)
                 .padding(.horizontal, 8)
@@ -148,11 +148,11 @@ struct MapScreen: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(unique)")
-                    .font(.system(size: 18, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 18, weight: .heavy))
                     .foregroundStyle(Brand.Color.cyan)
                     .monospacedDigit()
                 Text("UNIQUE")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)
             }

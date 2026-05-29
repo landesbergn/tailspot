@@ -130,7 +130,7 @@ struct CatchDetailView: View {
                     .tracking(1.2)
                     .foregroundStyle(rarity.tint)
                 Text("+\(rarity.basePoints) pts")
-                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 22, weight: .bold))
                     .foregroundStyle(rarity.tint)
                     .monospacedDigit()
             }
@@ -141,7 +141,7 @@ struct CatchDetailView: View {
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Text("Type · \(type.label.capitalized)")
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .regular))
                     .foregroundStyle(Brand.Color.textTertiary)
             }
         }
@@ -170,7 +170,7 @@ struct CatchDetailView: View {
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(Brand.Color.textPrimary)
             Text(observerCoordText)
-                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                .font(Brand.Font.mono(size: 12, weight: .regular))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
         }

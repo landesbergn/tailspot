@@ -64,7 +64,7 @@ struct CardReveal: View {
                 // so the gesture is always documented in the same
                 // spot.
                 Text(showingBack ? "tap card to flip back" : "tap card to flip")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                     .opacity(animateIn ? 0.8 : 0)
@@ -166,7 +166,7 @@ struct CardReveal: View {
                 .frame(width: 8, height: 8)
                 .shadow(color: dotColor.opacity(0.6), radius: 4)
             Text(label)
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 11, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textPrimary)
         }
@@ -221,7 +221,7 @@ struct CardReveal: View {
     /// border in `Brand.Color.alertWarning`.
     private var alreadyCaughtStamp: some View {
         Text("ALREADY\nCAUGHT")
-            .font(.system(size: 26, weight: .black, design: .monospaced))
+            .font(Brand.Font.mono(size: 26, weight: .black))
             .tracking(2)
             .multilineTextAlignment(.center)
             .foregroundStyle(Brand.Color.alertWarning)
@@ -288,7 +288,7 @@ struct CardBackView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Text("POKÉDEX ENTRY")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(1.6)
                             .foregroundStyle(Brand.Color.textTertiary)
                         Spacer()
@@ -314,12 +314,12 @@ struct CardBackView: View {
                         TypeBadge(type: plane.type, size: .sm)
                         Spacer()
                         Text("+\(plane.rarity.basePoints) pt")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 14, weight: .bold))
                             .foregroundStyle(plane.rarity.tint)
                     }
                     Spacer(minLength: 0)
                     Text("TAILSPOT · TAP TO FLIP")
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 8, weight: .semibold))
                         .tracking(1.4)
                         .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -340,12 +340,12 @@ struct CardBackView: View {
     private func statBlock(_ label: String, _ value: String) -> some View {
         HStack {
             Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1)
                 .foregroundStyle(Brand.Color.textTertiary)
                 .frame(width: 70, alignment: .leading)
             Text(value)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 12, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .monospacedDigit()
             Spacer()

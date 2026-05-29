@@ -109,7 +109,7 @@ struct LeaderboardScreen: View {
                 Section {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("CLIMB")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 9, weight: .bold))
                             .tracking(1)
                             .foregroundStyle(Brand.Color.cyan)
                         Text(climb.headline)
@@ -172,11 +172,11 @@ struct LeaderboardScreen: View {
         return VStack(spacing: 6) {
             if let row {
                 Text("@\(row.handle)")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .lineLimit(1)
                 Text("\(row.points.formatted(.number))")
-                    .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 13, weight: .heavy))
                     .foregroundStyle(tint)
                     .monospacedDigit()
             }
@@ -184,7 +184,7 @@ struct LeaderboardScreen: View {
                 RoundedRectangle(cornerRadius: 6).fill(tint.opacity(0.18))
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(tint, lineWidth: 1))
                 Text("\(rank)")
-                    .font(.system(size: 28, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 28, weight: .heavy))
                     .foregroundStyle(tint)
                     .padding(.top, 8)
             }
@@ -196,21 +196,21 @@ struct LeaderboardScreen: View {
     private func leaderRow(_ row: LeaderRow) -> some View {
         HStack(spacing: 12) {
             Text("\(row.rank ?? 0)")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 14, weight: .bold))
                 .foregroundStyle(row.isMe ? Brand.Color.cyan : Brand.Color.textTertiary)
                 .monospacedDigit()
                 .frame(width: 30, alignment: .leading)
             Text("@\(row.handle)")
-                .font(.system(size: 14, weight: row.isMe ? .bold : .regular, design: .monospaced))
+                .font(Brand.Font.mono(size: 14, weight: row.isMe ? .bold : .regular))
                 .foregroundStyle(Brand.Color.textPrimary)
             Spacer()
             Text("\(row.points.formatted(.number))")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 13, weight: .bold))
                 .foregroundStyle(row.isMe ? Brand.Color.cyan : Brand.Color.textPrimary)
                 .monospacedDigit()
             if row.isMe {
                 Text("YOU")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 9, weight: .bold))
                     .foregroundStyle(.black.opacity(0.85))
                     .padding(.horizontal, 5).padding(.vertical, 1)
                     .background(Brand.Color.cyan, in: .capsule)
@@ -303,21 +303,21 @@ struct ShareCardSheet: View {
                         .foregroundStyle(Brand.Color.cyan)
                         .font(.system(size: 20))
                     Text("TAILSPOT")
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 18, weight: .bold))
                         .tracking(2)
                         .foregroundStyle(Brand.Color.textPrimary)
                     Spacer()
                     Text("@\(handle)")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 13, weight: .bold))
                         .foregroundStyle(Brand.Color.cyan)
                 }
                 Spacer(minLength: 0)
                 Text(stats.totalPoints.formatted(.number))
-                    .font(.system(size: 64, weight: .heavy, design: .monospaced))
+                    .font(Brand.Font.mono(size: 64, weight: .heavy))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .monospacedDigit()
                 Text("TOTAL POINTS")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Divider().background(Brand.Color.textTertiary.opacity(0.3))
@@ -347,11 +347,11 @@ struct ShareCardSheet: View {
     private func statTile(label: String, value: Int, tint: Color = Brand.Color.textPrimary) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("\(value)")
-                .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                .font(Brand.Font.mono(size: 22, weight: .heavy))
                 .foregroundStyle(tint)
                 .monospacedDigit()
             Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1)
                 .foregroundStyle(Brand.Color.textTertiary)
         }
@@ -369,7 +369,7 @@ struct PublicHangarScreen: View {
                 header
                 ComingSoonBanner(message: "Public hangars ship with the backend. Previewing layout only.")
                 Text("RECENT CATCHES")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -405,12 +405,12 @@ struct PublicHangarScreen: View {
                     .frame(width: 56, height: 56)
                     .overlay(
                         Text(String(handle.prefix(2)).uppercased())
-                            .font(.system(size: 18, weight: .bold, design: .monospaced))
+                            .font(Brand.Font.mono(size: 18, weight: .bold))
                             .foregroundStyle(Brand.Color.cyan)
                     )
                 VStack(alignment: .leading, spacing: 2) {
                     Text("@\(handle)")
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .font(Brand.Font.mono(size: 20, weight: .bold))
                         .foregroundStyle(Brand.Color.textPrimary)
                     Text("128 catches · 88 unique · 14 rare+")
                         .font(Brand.Font.caption)

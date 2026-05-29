@@ -238,7 +238,7 @@ struct PokeCardView: View {
             // Top row — callsign + rarity badge
             HStack {
                 Text(plane.callsign?.trimmedNonEmpty ?? "—")
-                    .font(.system(size: dims.titleFont, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: dims.titleFont, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
                     .lineLimit(1)
                 Spacer(minLength: 4)
@@ -276,7 +276,7 @@ struct PokeCardView: View {
                 TypeBadge(type: plane.type, size: dims.badge)
                 Spacer(minLength: 4)
                 Text("+\(plane.rarity.basePoints) pt")
-                    .font(.system(size: dims.pointsFont + 2, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: dims.pointsFont + 2, weight: .bold))
                     .foregroundStyle(plane.rarity.tint)
                     .monospacedDigit()
             }
@@ -355,11 +355,11 @@ struct PokeCardView: View {
     private func statChip(label: String, value: String) -> some View {
         VStack(spacing: 1) {
             Text(label)
-                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .font(Brand.Font.mono(size: 8, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(Brand.Color.textTertiary)
             Text(value)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(Brand.Font.mono(size: 10, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

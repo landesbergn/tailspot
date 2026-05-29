@@ -66,7 +66,7 @@ struct SetDetailView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8).fill(set.type.tint)
                 Text(set.type.glyph)
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 18, weight: .bold))
                     .foregroundStyle(.black.opacity(0.75))
             }
             .frame(width: 40, height: 40)
@@ -75,7 +75,7 @@ struct SetDetailView: View {
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(tailCountLine)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 11, weight: .semibold))
                     .tracking(0.4)
                     .foregroundStyle(tailCount > 0 ? set.type.tint : Brand.Color.textTertiary)
                     .monospacedDigit()
@@ -121,11 +121,11 @@ struct SetDetailView: View {
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 0) {
                 Text("×\(group.distinctTailCount)")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 16, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(set.type.tint)
                 Text(group.distinctTailCount == 1 ? "tail" : "tails")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(Brand.Color.textTertiary)
             }
