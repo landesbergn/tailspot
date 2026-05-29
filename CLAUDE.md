@@ -6,6 +6,79 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, design-canvas port ✅, TestFlight v0 shipping to internal testers ✅, backend next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-05-29 [catch-photo bracket overlay + bigger reticles])
+
+**Shipping as TestFlight v0.1.1.** First post-v0 feature drop. Two
+landings on main this session, both user-visible to testers.
+
+1. **Catch photos now show which plane you caught.** New
+   `CatchPhotoComposer` (pure CG/UIKit, no SwiftUI) decodes the
+   captured JPEG, runs the screen→photo pixel transform assuming
+   `.resizeAspectFill` (which `CameraPreview` uses), and re-renders
+   with the cyan corner-bracket box drawn at the plane's on-screen
+   position at capture time. Multi-catch saves one bracket per
+   plane on each plane's own photo file.
+
+   The path is: ContentView projects every visible plane to screen
+   once per TimelineView frame (`onScreenProjected: [(icao, pos)]`),
+   stashes the icao→position map, and threads `screenSize` +
+   `positions` through `captureBar` → `captureButton` →
+   `performCatch`. At save time the loop looks up `positions[icao]`,
+   builds a `CatchPhotoComposer.BracketOverlay`, and calls
+   `compose(jpegData:overlay:)`. Fall-through: if compose returns
+   nil (bad JPEG, zero-area screen) OR positions misses the icao
+   (the plane was on-screen when the button rendered but not in
+   the dict at fire time), we save the raw JPEG. No catch is lost.
+
+   `AspectFillTransform` factored out as its own struct so the
+   coordinate math is unit-testable without touching UIImage.
+   Tests cover same-aspect, wide-photo crops-sides, tall-photo
+   crops-top, iPhone 12MP sanity, the compose smoke path, and
+   invalid-input fall-throughs (176 tests total — added 7).
+
+2. **Bigger lock-on reticles** for alignment forgiveness. The 56pt
+   pinned bracket read tight in field testing: small sensor noise
+   or HFOV mis-cal pushed the plane just outside the box. New
+   sizes — pinned 140, ambient 96, empty-sky center 200, photo
+   overlay 140 (matches pinned so saved photos show the same
+   framing). Arm length stays `max(8, boxSize * 0.22)`, so arms
+   scale proportionally.
+
+**Tests:** 176 pass (169 baseline + 7 for CatchPhotoComposer).
+Reticle bumps don't touch tests — they're presentation constants.
+
+**Doc-staleness hook now guards on main.** `bin/doc-staleness-check`
+used to false-fire on feature branches (its check is HEAD-vs-
+`origin/main`, which is always ahead on a feature branch even when
+that branch is fully pushed to its own remote). Added a one-line
+guard: `[ "$current_branch" = "main" ] || exit 0`. Feature-branch
+sessions no longer get blocked by the Stop hook — doc updates
+land with the merge into main, where the hook still fires.
+
+**MARKETING_VERSION bumped 0.1.0 → 0.1.1** (two configs in
+`project.pbxproj`). `CURRENT_PROJECT_VERSION` stays at 1 locally;
+Xcode Cloud's `ci_pre_xcodebuild.sh` rewrites it to
+`CI_BUILD_NUMBER` per archive.
+
+**Open follow-ups specific to this round:**
+- Field-test the new 140pt pinned reticle. If still too tight,
+  bump further; if too loose, dial back. The photo-overlay constant
+  in `CatchPhotoComposer.bracketScreenBoxSize` must stay in lockstep
+  with the live `LockBrackets` size in `ContentView` so saved photos
+  match what testers saw.
+- The bracket's center is the *predicted* screen position (from
+  ADS-B + extrapolation + projection). Eventually the long-term
+  fix for "box should land on the actual plane" is CV detection
+  (PLAN §9 #3 Vision + COCO airplane class) — let the bracket
+  snap to the detected airplane bbox rather than the prediction.
+  Until that lands, the bigger box is the cheap forgiveness.
+- The typography sweep + onboarding fixes (B612 Mono, "reticles"
+  copy, permissions in onboarding step 2, figure-8 removed) from
+  the prior session were NOT pushed — they're sitting in a stash
+  on Noah's machine (`stash@{0}`). When they land, the
+  `ContentView.swift` `captureBar`/`captureButton` area is the
+  likely merge-conflict surface against this session's wiring.
+
 ## Current state (as of session ending 2026-05-26 [TestFlight v0 prep])
 
 **TestFlight v0 prep — landed 2026-05-26.** Everything required to
@@ -518,7 +591,7 @@ See PLAN.md §8 for the file-by-file layout. Quick highlights:
 - **SwiftData migrations stay lightweight.** Once testers have catches, every model change must be additive (new optional fields with defaults). Breaking schema changes lose tester data. If you ever need a breaking change, bump model version explicitly with a custom migration.
 - **Don't rotate OpenSky creds without warning testers.** The secret is in the shipped binary; rotating it OAuth-fails every old TestFlight build until the tester updates. They'll see "API limit" forever. Communicate ahead of rotations. The real fix is the backend proxy (PLAN.md §1).
 - **Watch crash logs.** App Store Connect → Tailspot → TestFlight → Crashes aggregates them from real testers — free diagnostic surface, check after every TestFlight build.
-- **Settings → bottom of page shows the version + build, tap to copy.** When a tester reports a bug, ask them to tap the footer in Settings; they paste `Tailspot 0.1.0 (build N)` directly into the report.
+- **Settings → bottom of page shows the version + build, tap to copy.** When a tester reports a bug, ask them to tap the footer in Settings; they paste `Tailspot 0.1.1 (build N)` directly into the report.
 - **Don't force-push to `main` without explicit user authorization.** The auto-mode classifier will deny it. If a leak requires history rewriting, surface the request to Noah with the trade-offs spelled out and let him decide.
 - **Don't commit credentials in any form** — not in `.swift` files, not in `.xcscheme` files, not in plist values, not in commit messages, not in `Tailspot.secrets.xcconfig` (gitignored, but verify it's not staged before committing).
 

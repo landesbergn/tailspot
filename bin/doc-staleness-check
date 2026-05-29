@@ -30,6 +30,14 @@ cd "$repo_root" || exit 0
 # we have no anchor to compare against — bail silently.
 git rev-parse --verify --quiet origin/main >/dev/null || exit 0
 
+# Only enforce the doc-staleness rule when HEAD is on `main`. Feature
+# branches legitimately diverge from origin/main without owing doc
+# updates yet — those land with the merge into main. Without this
+# guard the hook false-fires on every Claude turn that's working on
+# a feature branch.
+current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+[ "$current_branch" = "main" ] || exit 0
+
 # How many commits is HEAD ahead of origin/main?
 unpushed=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
 [ "$unpushed" = "0" ] && exit 0
