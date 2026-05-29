@@ -34,7 +34,7 @@ nonisolated enum CatchPhotoComposer {
     /// in `ContentView` so the drawn-on-photo bracket reads the same
     /// size as what the user saw in the AR view. Scaled to photo pixels
     /// by 1 / aspectFillScale inside `compose(...)`.
-    static let bracketScreenBoxSize: CGFloat = 56
+    static let bracketScreenBoxSize: CGFloat = 140
     static let bracketScreenLineWidth: CGFloat = 2.5
 
     /// Cyan from `Brand.Color.cyan` (0x00D4FF). Duplicated here as a

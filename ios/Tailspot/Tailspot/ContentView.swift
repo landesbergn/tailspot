@@ -1196,11 +1196,11 @@ struct ContentView: View {
         }
     }
 
-    /// Faint cyan corner-bracket box at screen center. 88×88 px;
+    /// Faint cyan corner-bracket box at screen center. 200×200 px;
     /// 24 % opacity so it stays out of the way until it becomes the
     /// only thing on screen.
     private var emptyReticle: some View {
-        LockBrackets(boxSize: 88, color: Brand.Color.cyan, opacity: 0.24)
+        LockBrackets(boxSize: 200, color: Brand.Color.cyan, opacity: 0.24)
     }
 
     // MARK: - Top: sensor readout
@@ -1663,7 +1663,7 @@ private struct PlaneLabel: View {
             .trimmingCharacters(in: .whitespaces)
             .nonEmpty
             ?? aircraft.aircraft.icao24.uppercased()
-        let bracketBoxSize: CGFloat = isPinned ? 56 : 36
+        let bracketBoxSize: CGFloat = isPinned ? 140 : 96
         let bracketLineWidth: CGFloat = isPinned ? 2.5 : 1.2
         let bracketOpacity: Double = isPinned ? 1.0 : 0.55
 
