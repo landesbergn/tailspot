@@ -323,7 +323,7 @@ xcodebuild test \
 ```
 First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, OpenSky client, or anything they depend on).
 
-The current suite is **169 tests** across `TailspotTests/`, broadly:
+The current suite is **193 tests** across `TailspotTests/`, broadly:
 
 - **Geometry / projection** — `GeoTests`, `ClosestTargetTests` (FOV/zoom-aware lock zone).
 - **OpenSky wire format** — `AircraftDecodingTests`, `AircraftMetadataDecodingTests`.
@@ -332,8 +332,10 @@ The current suite is **169 tests** across `TailspotTests/`, broadly:
 - **Lock-on** — `LockOnEngineTests` covers the post-T4 3-state machine (idle / locked / sticky), `forceLock`, `unpin`.
 - **Replay** — `ReplayRecorderTests`, `ReplayJSONLTests` (tapPin/unpin events), `ReplayAnalyzerTests`.
 - **Game system** — `GameSystemEnumTests`, `AircraftClassifierTests` (curated rule table, operator any-of gate, legacy-token regression).
-- **Photos + brand** — `PlanespottersClientTests`, `BrandColorHexTests`.
+- **Photos + brand** — `PlanespottersClientTests`, `BrandTests`.
 - **Multi-catch** — `MultiCatchComboTests` (combo-multiplier ladder).
+- **Catch photo** — `CatchPhotoComposerTests` (aspect-fill transform + bracket compose).
+- **Trophies** — `TrophiesTests`.
 
 Look in `TailspotTests/` directly for the per-`@Test` enumeration — keeping it inline here drifted out of date and is no longer worth maintaining.
 
