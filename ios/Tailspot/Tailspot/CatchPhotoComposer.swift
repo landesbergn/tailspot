@@ -143,7 +143,14 @@ nonisolated enum CatchPhotoComposer {
 ///
 /// Factored out and made internal so the math is unit-testable without
 /// spinning up UIImage / CoreGraphics.
-struct AspectFillTransform: Equatable {
+///
+/// `nonisolated` because it's pure geometry (CGFloat/CGPoint/CGSize, no
+/// main-thread state) called from `CatchPhotoComposer.compose` — which
+/// runs off-main on the photo-capture path. Without this, Xcode 26's
+/// default MainActor isolation makes `scale`/`photoPoint` main-isolated
+/// and the nonisolated `compose` call site warns (and would hard-error
+/// under Swift 6 language mode). Same pattern as `Aircraft`/`Geo`.
+nonisolated struct AspectFillTransform: Equatable {
     let screenSize: CGSize
     let photoSize: CGSize
 
