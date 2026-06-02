@@ -30,6 +30,14 @@ final class MotionManager: ObservableObject {
     @Published var roll: Double = 0    // tilt left / right
     @Published var yaw: Double = 0     // rotation around vertical
 
+    // Gravity vector in the device reference frame (CMDeviceMotion.gravity),
+    // ~1 g in magnitude. Camera elevation is derived from this rather than
+    // from `pitch`, because gravity has no gimbal-lock singularity at the
+    // portrait hold (see `cameraElevationDeg`).
+    @Published var gravityX: Double = 0
+    @Published var gravityY: Double = 0
+    @Published var gravityZ: Double = 0
+
     func start() {
         guard manager.isDeviceMotionAvailable else {
             Log.motion.notice("Device motion not available on this device")
@@ -45,6 +53,9 @@ final class MotionManager: ObservableObject {
                 self.pitch = motion.attitude.pitch
                 self.roll = motion.attitude.roll
                 self.yaw = motion.attitude.yaw
+                self.gravityX = motion.gravity.x
+                self.gravityY = motion.gravity.y
+                self.gravityZ = motion.gravity.z
             }
         }
     }
@@ -53,17 +64,40 @@ final class MotionManager: ObservableObject {
         manager.stopDeviceMotionUpdates()
     }
 
-    /// Camera elevation above the horizon, in degrees, derived from
-    /// CMAttitude.pitch.
+    /// Camera (rear-facing) bore-sight elevation above the horizon, in
+    /// degrees. Positive = pointing up, negative = pointing down.
     ///
-    /// In the `.xArbitraryZVertical` reference frame:
-    ///   pitch =   0  → phone flat on its back  → camera pointing straight up (elevation +90°)
-    ///   pitch = +π/2 → phone upright (portrait) → camera pointing at horizon  (elevation 0°)
-    /// Hence the complement: cameraElevation = π/2 − pitch.
+    /// Derived from the GRAVITY vector, NOT from `CMAttitude.pitch`. The
+    /// old `90 − pitch` formula was correct in the upper hemisphere but
+    /// broke below the horizon: `pitch` is an Euler angle bounded to ±90°
+    /// with a gimbal-lock singularity exactly at the upright-portrait /
+    /// horizon-pointing pose (pitch ≈ +90°). Tilting the camera *below*
+    /// the horizon makes pitch reflect back down (and roll flip ±180°)
+    /// instead of passing 90°, so `90 − pitch` returned a POSITIVE value
+    /// when it should be negative — inverting the AR label's vertical
+    /// tracking (label slid down as you tilted down). Confirmed in a
+    /// 2026-06-02 field replay: pitch peaked at ~89° and reflected while
+    /// roll swung ±150°, and the derived elevation never went negative.
     ///
-    /// Assumes the device is in roughly portrait orientation. At
-    /// significant roll (phone tilted sideways) or near pitch ≈ ±π/2
-    /// (gimbal lock), this single-axis derivation breaks down — Phase 0
-    /// main will replace it with a 3D rotation-matrix approach.
-    var cameraElevationDeg: Double { 90 - pitch * 180 / .pi }
+    /// `asin(gravity.z)` is the camera axis's true angle above the
+    /// horizontal plane — continuous through the horizon, singularity-free
+    /// at the portrait hold, and invariant to roll. Apple's convention
+    /// puts gravity at (0,0,−1) when the screen faces up (rear camera then
+    /// points straight down → −90°), so the elevation is exactly
+    /// `asin(gravity.z / |gravity|)`.
+    var cameraElevationDeg: Double {
+        Self.cameraElevationDeg(gravityX: gravityX, gravityY: gravityY, gravityZ: gravityZ)
+    }
+
+    /// Pure, testable derivation of rear-camera elevation from a gravity
+    /// vector in the device frame. Normalizes magnitude and clamps so a
+    /// transient non-unit gravity can't push `asin` out of domain.
+    nonisolated static func cameraElevationDeg(
+        gravityX: Double, gravityY: Double, gravityZ: Double
+    ) -> Double {
+        let mag = (gravityX * gravityX + gravityY * gravityY + gravityZ * gravityZ).squareRoot()
+        guard mag > 0 else { return 0 }
+        let s = max(-1.0, min(1.0, gravityZ / mag))
+        return asin(s) * 180 / .pi
+    }
 }
