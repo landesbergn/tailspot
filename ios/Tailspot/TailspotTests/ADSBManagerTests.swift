@@ -337,24 +337,65 @@ struct ADSBManagerTests {
     }
 
     @Test func notVisibleWhenTooFar() {
-        // Just past the 20 km cap.
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 25_000)
+        // Just past the 35 km cap (raised from 20 km on 2026-06-01).
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 40_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func visibleAtEdgeOfRange() {
-        // Just inside the 20 km cap and well above the visual horizon.
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 19_000)
+        // Just inside the 35 km cap and well above the visual horizon.
+        // 25-33 km corridor jets are exactly what the old 20 km cap deleted.
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 33_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 
     @Test func notVisibleAtLowElevationBuffer() {
-        // Field-test fix: planes at very small positive elevation are
-        // practically hidden behind hills / urban skyline. The filter
-        // applies a buffer (>3° elevation) so the AR overlay matches
-        // what the user actually sees in the sky.
-        let obs = Self.observed(elevationDeg: 2, slantDistanceMeters: 10_000)
+        // Planes right at the horizon are hidden behind hills / urban
+        // skyline. The filter keeps a small buffer (>1° elevation, lowered
+        // from 3° on 2026-06-01 after 3° was deleting visible low traffic).
+        let obs = Self.observed(elevationDeg: 0.5, slantDistanceMeters: 10_000)
         #expect(!obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func visibleAtLowElevationAboveBuffer() {
+        // 2° clears the buffer after the 3° → 1° loosening (2026-06-01):
+        // low approach/departure traffic over the bay is in plain sight.
+        let obs = Self.observed(elevationDeg: 2, slantDistanceMeters: 10_000)
+        #expect(obs.isLikelyVisibleToObserver)
+    }
+
+    // MARK: - Freshness (maxPositionAge)
+
+    @Test func annotateKeepsRecentPosition() {
+        // 120 s old < the 150 s default floor → annotated, not dropped.
+        let now = Date()
+        let ac = Self.aircraftAt(bearing: 0, distanceMeters: 10_000,
+                                 altitudeMeters: 5_000, icao: "fresh",
+                                 positionTimestamp: now.addingTimeInterval(-120))
+        #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now) != nil)
+    }
+
+    @Test func annotateDropsStalePosition() {
+        // 200 s old > the 150 s default floor → dropped as a ghost.
+        let now = Date()
+        let ac = Self.aircraftAt(bearing: 0, distanceMeters: 10_000,
+                                 altitudeMeters: 5_000, icao: "stale",
+                                 positionTimestamp: now.addingTimeInterval(-200))
+        #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now) == nil)
+    }
+
+    @Test func annotateRespectsWidenedAgeDuringBackoff() {
+        // The backoff-aware reAnnotate path passes a larger maxPositionAge
+        // so a plane that's stale vs the base floor still survives during a
+        // 429 poll gap (250 s = 150 base + 100 s overdue at the 120 s cap).
+        // Without that widening the whole sky blanks mid-backoff.
+        let now = Date()
+        let ac = Self.aircraftAt(bearing: 0, distanceMeters: 10_000,
+                                 altitudeMeters: 5_000, icao: "backoff",
+                                 positionTimestamp: now.addingTimeInterval(-200))
+        #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now) == nil)
+        #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now,
+                                          maxPositionAge: 250) != nil)
     }
 
     @Test func mockSourceIntegrationProducesFiveAircraft() async {

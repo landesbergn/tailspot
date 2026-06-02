@@ -47,7 +47,12 @@ extension ObservedAircraft {
     ///
     /// Centralized here so the replay analyzer can reuse the exact
     /// same geometry the live path uses.
-    static func annotate(_ aircraft: Aircraft, observer: CLLocation, now: Date) -> ObservedAircraft? {
+    static func annotate(
+        _ aircraft: Aircraft,
+        observer: CLLocation,
+        now: Date,
+        maxPositionAge: TimeInterval = ObservedAircraft.maxPositionAge
+    ) -> ObservedAircraft? {
         guard !aircraft.onGround else { return nil }
         if let ts = aircraft.positionTimestamp,
            now.timeIntervalSince(ts) > maxPositionAge {
@@ -83,11 +88,18 @@ extension ObservedAircraft {
 
     /// Drop aircraft whose last ADS-B position update is older than
     /// this (seconds). OpenSky position timestamps update every few
-    /// seconds for in-flight aircraft; a stale row almost always means
-    /// the plane landed, lost coverage, or otherwise dropped off radar.
-    /// 60 s is a generous floor — well above the 20 s poll cadence and
-    /// the typical 5-15 s position-report lag.
-    static let maxPositionAge: TimeInterval = 60
+    /// seconds for in-flight aircraft; a stale row usually means the
+    /// plane landed, lost coverage, or dropped off radar — a "ghost".
+    ///
+    /// Raised 60 → 150 on 2026-06-01. The old 60 s floor deleted labels
+    /// for genuinely-visible planes whose free-tier OpenSky position was
+    /// merely slow to refresh — and, worse, during 429 backoff (poll gap
+    /// up to 120 s) it aged out EVERY plane at once, reading in the field
+    /// as "no planes at all" until an app restart forced a fresh poll.
+    /// `reAnnotate` additionally grows this allowance by however overdue
+    /// polling is (see its `effectiveMaxAge`), so a backoff gap can't
+    /// blank the whole sky.
+    static let maxPositionAge: TimeInterval = 150
 
     /// Whether this aircraft is plausibly visible to the naked eye
     /// right now. Two filters:
@@ -113,21 +125,25 @@ extension ObservedAircraft {
     }
 
     /// Minimum elevation a plane must clear before we surface it in
-    /// the AR overlay. 3° is a modest buffer that filters out the
-    /// literal horizon-edge cases (elevation 0-2° = visually hidden
-    /// behind hills, skyline, trees) without being so aggressive
-    /// that legitimate commercial traffic at cruise distance gets
-    /// pruned. Tunable — bump if Berkeley field-testing still shows
-    /// label clutter at the horizon line.
-    static let minVisibleElevationDeg: Double = 3
+    /// the AR overlay. A small buffer trims the literal horizon-edge
+    /// ghosts (planes hidden behind hills / skyline / trees).
+    ///
+    /// Lowered 3 → 1 on 2026-06-01: replaying a real Berkeley session
+    /// showed 3° was deleting visible approach/departure traffic at
+    /// 1-3° elevation (low over the bay is still in plain sight). 1°
+    /// keeps sub-horizon ghosts out without pruning visible low traffic.
+    static let minVisibleElevationDeg: Double = 1
 
-    /// Tunable. 20 km is the default — Berkeley field testing (2026-05-26)
-    /// surfaced ghost labels for commercial traffic past 15-20 km that
-    /// the user couldn't actually spot in the sky. A 70 m wingspan
-    /// plane at 20 km subtends ~0.2° of visual angle — about 10× human
-    /// eye resolution — so it's near the practical naked-eye limit.
-    /// Adjust if field testing shows labels too aggressively pruned.
-    static let maxVisibleDistanceMeters: Double = 20_000
+    /// Tunable cap on how far a plane can be and still get a label.
+    ///
+    /// Raised 20 → 35 km on 2026-06-01. The 20 km cap (set 2026-05-26 to
+    /// kill far-away ghosts) over-corrected: replaying a real Berkeley
+    /// session showed it deleted 44 of 71 historically-visible planes —
+    /// SFO/OAK corridor jets at 21-28 km are plainly visible (a contrail
+    /// or fuselage glint reads well past the "0.2° subtends" resolution
+    /// limit, which conflated *resolving the airframe* with *seeing the
+    /// plane*). 35 km keeps a cap on truly-invisible distant traffic.
+    static let maxVisibleDistanceMeters: Double = 35_000
 
     /// Project this aircraft into screen coordinates given the phone's
     /// current pose and the camera's FOV. Returns nil if off-screen.
@@ -156,10 +172,35 @@ extension ObservedAircraft {
     }
 }
 
+/// Per-cycle counts of where aircraft drop out of the AR overlay:
+/// `fetched → onGround → stale → belowElevation → tooFar → shown`.
+/// Diagnostic instrumentation added 2026-06-01 to localize which filter
+/// clause is pruning genuinely-visible traffic. Surfaced on-screen and via
+/// os_log so a single field session pinpoints the culprit.
+///
+/// `belowElevation` and `tooFar` are counted independently — a plane
+/// failing both is tallied in each, so the columns localize blame, they
+/// don't partition. `shown` is the authoritative "what the user sees".
+struct VisibilityDiagnostic: Equatable, Sendable {
+    var fetched = 0
+    var onGround = 0
+    var stale = 0
+    var belowElevation = 0
+    var tooFar = 0
+    var shown = 0
+}
+
 @MainActor
 final class ADSBManager: ObservableObject {
 
     @Published var observed: [ObservedAircraft] = []
+    /// Latest visibility-funnel counts (see `VisibilityDiagnostic`). Updated
+    /// every `reAnnotate` tick; drives the temporary on-screen tracked/shown
+    /// readout while we validate the 2026-06-01 visibility re-tune.
+    @Published var diagnostic = VisibilityDiagnostic()
+    /// Last funnel we emitted to os_log — so the 1 Hz reAnnotate loop only
+    /// logs when the counts actually change, not 60× a minute.
+    private var lastLoggedDiagnostic: VisibilityDiagnostic?
     @Published var lastError: String?
     /// True when the last error is auto-recovering (e.g. HTTP 429
     /// backoff) and doesn't require user action. UI surfaces use
@@ -316,7 +357,9 @@ final class ADSBManager: ObservableObject {
                 lomax: observerLon + dLon
             )
             self.rawAircraft = raw
-            self.reAnnotate(observer: location, now: Date())
+            // verbose: log per-plane drop reasons once per network poll
+            // (not on the 1 Hz smoothness tick) so the field log isn't spammed.
+            self.reAnnotate(observer: location, now: Date(), verbose: true)
 
             self.lastError = nil
             self.lastErrorIsTransient = false
@@ -369,9 +412,65 @@ final class ADSBManager: ObservableObject {
     /// aircraft in the bbox. Annotation logic itself lives on
     /// `ObservedAircraft.annotate(_:observer:now:)` so the replay
     /// analyzer can reuse the exact same geometry.
-    private func reAnnotate(observer: CLLocation, now: Date) {
-        self.observed = rawAircraft
-            .compactMap { ObservedAircraft.annotate($0, observer: observer, now: now) }
+    private func reAnnotate(observer: CLLocation, now: Date, verbose: Bool = false) {
+        // During 429 backoff we poll slowly, so the freshest data we hold is
+        // legitimately older than at the base cadence. Grow the staleness
+        // allowance by however overdue polling is, so a backoff gap doesn't
+        // age out every plane at once (the "no planes + restart fixes it"
+        // failure). At the base 20 s cadence the extra term is 0.
+        let effectiveMaxAge = ObservedAircraft.maxPositionAge
+            + max(0, currentInterval - pollInterval)
+
+        let annotated = rawAircraft
+            .compactMap {
+                ObservedAircraft.annotate($0, observer: observer, now: now,
+                                          maxPositionAge: effectiveMaxAge)
+            }
             .sorted { $0.slantDistanceMeters < $1.slantDistanceMeters }
+        self.observed = annotated
+
+        updateDiagnostic(now: now, effectiveMaxAge: effectiveMaxAge,
+                         annotated: annotated, verbose: verbose)
+    }
+
+    /// Compute the visibility funnel for instrumentation. Does NOT change
+    /// what `observed` holds (consumers still apply `isLikelyVisibleToObserver`
+    /// themselves) — this is counts + optional per-plane logs only.
+    private func updateDiagnostic(now: Date, effectiveMaxAge: TimeInterval,
+                                  annotated: [ObservedAircraft], verbose: Bool) {
+        var diag = VisibilityDiagnostic()
+        diag.fetched = rawAircraft.count
+
+        // onGround + stale are dropped inside annotate(); re-derive their
+        // counts here from the raw set so the funnel adds up.
+        for ac in rawAircraft {
+            if ac.onGround { diag.onGround += 1; continue }
+            if let ts = ac.positionTimestamp, now.timeIntervalSince(ts) > effectiveMaxAge {
+                diag.stale += 1
+                if verbose {
+                    Log.adsb.info("drop STALE \(ac.callsign ?? ac.icao24, privacy: .public) age=\(Int(now.timeIntervalSince(ts)))s (limit \(Int(effectiveMaxAge))s)")
+                }
+            }
+        }
+
+        for obs in annotated {
+            let belowElev = obs.elevationDeg <= ObservedAircraft.minVisibleElevationDeg
+            let tooFar = obs.slantDistanceMeters >= ObservedAircraft.maxVisibleDistanceMeters
+            if belowElev { diag.belowElevation += 1 }
+            if tooFar { diag.tooFar += 1 }
+            if verbose && (belowElev || tooFar) {
+                let why = [belowElev ? "low-elev" : nil, tooFar ? "too-far" : nil]
+                    .compactMap { $0 }.joined(separator: "+")
+                Log.adsb.info("drop \(why, privacy: .public) \(obs.aircraft.callsign ?? obs.aircraft.icao24, privacy: .public) elev=\(String(format: "%.1f", obs.elevationDeg))° dist=\(String(format: "%.1f", obs.slantDistanceMeters / 1000))km")
+            }
+        }
+
+        diag.shown = annotated.filter(\.isLikelyVisibleToObserver).count
+        self.diagnostic = diag
+
+        if diag != lastLoggedDiagnostic {
+            Log.adsb.info("visibility funnel: fetched=\(diag.fetched) onGround=\(diag.onGround) stale=\(diag.stale) lowElev=\(diag.belowElevation) tooFar=\(diag.tooFar) → shown=\(diag.shown)")
+            lastLoggedDiagnostic = diag
+        }
     }
 }

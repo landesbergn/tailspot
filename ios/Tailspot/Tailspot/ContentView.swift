@@ -394,6 +394,23 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.2), value: isHeadingAccuracyBad)
                 .animation(.easeInOut(duration: 0.2), value: zoom > 1.01)
 
+                // TEMP diagnostic (2026-06-01): on-screen visibility funnel.
+                // The field build has no debug wrench on Release, so surface
+                // the tracked/shown counts here to confirm the visibility
+                // re-tune (distance 35 km / elev 1° / freshness 150 s) is
+                // letting genuinely-visible planes through. Remove once the
+                // field test confirms the new thresholds.
+                VStack {
+                    HStack {
+                        visibilityDiagnosticReadout
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.top, 12)
+                .padding(.leading, 12)
+                .allowsHitTesting(false)
+
                 // Debug overlays — hidden by default; revealed by the
                 // wrench toggle below.
                 if showDebug {
@@ -617,6 +634,38 @@ struct ContentView: View {
     }
 
     // MARK: - Top-center overlays
+
+    /// TEMP (2026-06-01) on-screen visibility funnel. Lets Noah confirm the
+    /// re-tuned thresholds (35 km / 1° / 150 s) in the field without the
+    /// debug wrench (which `#if DEBUG` strips from Release/TestFlight). Tints
+    /// amber when planes are tracked but none are shown — the exact "no
+    /// planes" failure we're chasing. Remove after the field test confirms.
+    private var visibilityDiagnosticReadout: some View {
+        let d = adsb.diagnostic
+        let air = max(0, d.fetched - d.onGround)
+        // One glance disambiguates all three "no planes" causes:
+        //   air>0, shown=0      → the visibility filter is eating planes
+        //   air=0 + "ANON"      → anonymous OpenSky tier (creds didn't bake) → daily quota
+        //   air=0 + "API limit" → 429 rate-limit backoff
+        //   air=0, no flag      → genuinely no ADS-B coverage here right now
+        let anon = !adsb.useMock && !adsb.liveSourceIsAuthed
+        // `el` lets you confirm the gravity-based elevation fix live: tilt
+        // the phone down and it should go NEGATIVE (camera below horizon),
+        // not stay positive like the old gimbal-locked pitch formula.
+        let el = Int(motion.cameraElevationDeg.rounded())
+        var line = "air \(air) · shown \(d.shown) · el \(el)°  ·  lowElev \(d.belowElevation) far \(d.tooFar) stale \(d.stale)"
+        if anon { line += "  · ANON" }
+        if let err = adsb.lastError { line += "  · \(err)" }
+        let alert = (d.shown == 0 && air > 0) || anon || adsb.lastError != nil
+        return Text(line)
+            .font(Brand.Font.mono(size: 10, weight: .semibold))
+            .foregroundStyle(alert ? Brand.Color.alertCaution : Brand.Color.textSecondary)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Brand.Color.bgPrimary.opacity(0.5), in: .capsule)
+    }
 
     /// Compass-bad caution badge. Slim capsule with an amber dot +
     /// "COMPASS ±N°" — quieter than the prior amber-bordered card so
