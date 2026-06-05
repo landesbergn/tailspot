@@ -105,24 +105,48 @@ extension ObservedAircraft {
     /// right now. Two filters:
     ///
     ///   1. `elevationDeg > minVisibleElevationDeg` — the plane is
-    ///      clearly above the user's visual horizon, with a buffer
-    ///      that accounts for terrestrial obstructions (hills,
-    ///      buildings, trees). Berkeley field testing surfaced
-    ///      labels for planes right at the geometric horizon line
-    ///      that were practically hidden behind the East Bay hills;
-    ///      a 3° buffer keeps the visible / not-visible read
-    ///      consistent with what the user actually sees in the sky.
-    ///   2. `slantDistanceMeters < maxVisibleDistanceMeters` — the
-    ///      plane is close enough to actually see. 30 km is the v1
-    ///      cap, tuned from Berkeley field testing.
+    ///      above the user's visual horizon, with a small buffer for
+    ///      terrestrial obstructions (hills, buildings, trees).
+    ///   2. `slantDistanceMeters < maxVisibleDistance(forElevationDeg:)`
+    ///      — an elevation-DEPENDENT cap: ~12 km near the horizon
+    ///      (haze + clutter band) opening to 35 km by 10° (clean-sky
+    ///      band). See `maxVisibleDistance` for the field data behind
+    ///      the curve.
     ///
-    /// Explicitly does NOT account for weather (clouds, haze) or
-    /// atmospheric scattering. Those are real but introduce too
-    /// much complexity for v1 POC.
+    /// Explicitly does NOT account for weather (clouds, haze vary by
+    /// day) or atmospheric scattering. The curve encodes a typical Bay
+    /// Area day; per-condition adjustment is out of scope for v0.
     var isLikelyVisibleToObserver: Bool {
         elevationDeg > Self.minVisibleElevationDeg
-            && slantDistanceMeters < Self.maxVisibleDistanceMeters
+            && slantDistanceMeters < Self.maxVisibleDistance(forElevationDeg: elevationDeg)
     }
+
+    /// Elevation-dependent distance cap. A flat cap can't separate real
+    /// sightings from ghosts: near the horizon (1-4°) you look through
+    /// maximum atmosphere, haze, and terrain/building clutter, so only
+    /// close planes actually read to the eye; by ~10° the background is
+    /// clean sky and genuinely-distant traffic (contrails, climbing jets)
+    /// is visible. Fitted to field data (2026-06-04 session): the one
+    /// truly-visible plane was 6 km @ 16°; the seven ghosts were all
+    /// 20-34 km at 1-3.6°. Linear ramp from `nearVisibleDistanceMeters`
+    /// at the elevation floor up to `maxVisibleDistanceMeters` at
+    /// `fullVisibilityElevationDeg`.
+    static func maxVisibleDistance(forElevationDeg elevationDeg: Double) -> Double {
+        if elevationDeg >= fullVisibilityElevationDeg { return maxVisibleDistanceMeters }
+        let f = (elevationDeg - minVisibleElevationDeg)
+            / (fullVisibilityElevationDeg - minVisibleElevationDeg)
+        return nearVisibleDistanceMeters
+            + max(0, f) * (maxVisibleDistanceMeters - nearVisibleDistanceMeters)
+    }
+
+    /// Distance allowed right at the elevation floor (1°). Low-and-far is
+    /// the classic ghost signature; low-and-near (approach traffic over
+    /// the bay) is real. Tunable.
+    static let nearVisibleDistanceMeters: Double = 12_000
+
+    /// Elevation at which the full `maxVisibleDistanceMeters` applies —
+    /// high enough that the plane sits against open sky. Tunable.
+    static let fullVisibilityElevationDeg: Double = 10
 
     /// Minimum elevation a plane must clear before we surface it in
     /// the AR overlay. A small buffer trims the literal horizon-edge
@@ -134,15 +158,17 @@ extension ObservedAircraft {
     /// keeps sub-horizon ghosts out without pruning visible low traffic.
     static let minVisibleElevationDeg: Double = 1
 
-    /// Tunable cap on how far a plane can be and still get a label.
+    /// The FAR end of the distance cap — applies at and above
+    /// `fullVisibilityElevationDeg`, where the plane sits against open
+    /// sky (contrails, climbing jets read at real distance).
     ///
-    /// Raised 20 → 35 km on 2026-06-01. The 20 km cap (set 2026-05-26 to
-    /// kill far-away ghosts) over-corrected: replaying a real Berkeley
-    /// session showed it deleted 44 of 71 historically-visible planes —
-    /// SFO/OAK corridor jets at 21-28 km are plainly visible (a contrail
-    /// or fuselage glint reads well past the "0.2° subtends" resolution
-    /// limit, which conflated *resolving the airframe* with *seeing the
-    /// plane*). 35 km keeps a cap on truly-invisible distant traffic.
+    /// History: 30 km originally; tightened to 20 km on 2026-05-26 (which
+    /// over-pruned — deleted 44 of 71 historically-visible planes in a
+    /// replayed session); raised to a flat 35 km on 2026-06-01 (which
+    /// over-admitted — far low-elevation ghosts). Since 2026-06-04 the
+    /// effective cap is the elevation-dependent curve in
+    /// `maxVisibleDistance(forElevationDeg:)`; this constant is its
+    /// upper plateau.
     static let maxVisibleDistanceMeters: Double = 35_000
 
     /// Project this aircraft into screen coordinates given the phone's
@@ -455,7 +481,8 @@ final class ADSBManager: ObservableObject {
 
         for obs in annotated {
             let belowElev = obs.elevationDeg <= ObservedAircraft.minVisibleElevationDeg
-            let tooFar = obs.slantDistanceMeters >= ObservedAircraft.maxVisibleDistanceMeters
+            let tooFar = obs.slantDistanceMeters
+                >= ObservedAircraft.maxVisibleDistance(forElevationDeg: obs.elevationDeg)
             if belowElev { diag.belowElevation += 1 }
             if tooFar { diag.tooFar += 1 }
             if verbose && (belowElev || tooFar) {

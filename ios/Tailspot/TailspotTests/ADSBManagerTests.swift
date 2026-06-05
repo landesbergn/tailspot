@@ -360,8 +360,49 @@ struct ADSBManagerTests {
     @Test func visibleAtLowElevationAboveBuffer() {
         // 2° clears the buffer after the 3° → 1° loosening (2026-06-01):
         // low approach/departure traffic over the bay is in plain sight.
+        // At 2° the elevation-dependent cap is ~14.6 km, so 10 km passes.
         let obs = Self.observed(elevationDeg: 2, slantDistanceMeters: 10_000)
         #expect(obs.isLikelyVisibleToObserver)
+    }
+
+    // MARK: - Elevation-dependent distance cap (2026-06-04 field fit)
+
+    @Test func farLowElevationGhostIsFiltered() {
+        // The 2026-06-04 field session's ghost signature: 21 km @ 3.5°
+        // (N2838Q) was labeled but invisible — far + low is haze/clutter.
+        // The curve caps 3.5° at ~18.4 km.
+        let obs = Self.observed(elevationDeg: 3.5, slantDistanceMeters: 21_000)
+        #expect(!obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func farHighElevationJetIsKept() {
+        // Same session, the keep case: 20.5 km @ 11° (SKW5983, climbing
+        // jet against open sky) — at ≥10° the full 35 km cap applies.
+        let obs = Self.observed(elevationDeg: 11, slantDistanceMeters: 20_500)
+        #expect(obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func climbingJetAtMidElevationIsKept() {
+        // A climbing 737 at 25 km ≈ 7° elevation is plainly visible; the
+        // curve allows ~27.3 km there. This is the case the flat 20 km
+        // cap wrongly deleted in May.
+        let obs = Self.observed(elevationDeg: 7, slantDistanceMeters: 25_000)
+        #expect(obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func distanceCapCurveShape() {
+        // Floor: ~12 km right at the 1° elevation floor.
+        #expect(abs(ObservedAircraft.maxVisibleDistance(forElevationDeg: 1) - 12_000) < 1)
+        // Plateau: full 35 km at and above 10°.
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 10) == 35_000)
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 45) == 35_000)
+        // Monotonic between floor and plateau.
+        var last = 0.0
+        for e in stride(from: 1.0, through: 10.0, by: 0.5) {
+            let d = ObservedAircraft.maxVisibleDistance(forElevationDeg: e)
+            #expect(d >= last)
+            last = d
+        }
     }
 
     // MARK: - Freshness (maxPositionAge)
