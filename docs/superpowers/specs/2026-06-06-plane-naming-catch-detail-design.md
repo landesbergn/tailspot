@@ -55,15 +55,39 @@ static func canonical(typecode: String?, manufacturer: String?, model: String?) 
 
 Resolution order:
 
-1. **ICAO type-designator table hit** → official make + model. The table
-   is **small and verified, not large and recalled**: start with the
-   ~30–40 designators that actually fly the SFO/OAK corridor (Boeing
-   737/747/757/767/777/787 + MAX variants, Airbus A220/A320 family incl.
-   neo, A330/A350/A380, Embraer E170/E175/E190/E195, CRJ family, Dash 8,
-   ATR, common GA singles, common bizjets, C-130/C-17/KC-135). Every
-   entry verified against ICAO DOC 8643 — NOT typed from memory. The mock
-   fixtures already pin `B738`/`A320`/`CRJ7`/`AT76` as anchors. The
-   string fallback catches the long tail; grow the table over time.
+1. **ICAO type-designator table hit** → official make + model. The
+   table is the **complete DOC 8643 designator set (~2,700 entries),
+   generated from ICAO's official data — never typed from memory.**
+   Noah's direction (2026-06-06): full coverage, not a corridor subset;
+   the app must work everywhere.
+
+   **Generator tool** (`tools/generate-aircraft-types.py`, follows the
+   `tools/generate-app-icon.swift` checked-in-generator precedent):
+   - Fetches `https://doc8643.icao.int/external/aircrafttypes` (POST,
+     empty body → 7,260 rows; verified working 2026-06-06).
+   - Reduces multiple manufacturer/model rows per designator to one
+     canonical (make, model) pair: most frequent manufacturer wins;
+     among its rows, the shortest `ModelFullName` (the base model).
+   - Applies deterministic display polish: title-case manufacturers
+     with an exceptions list (ATR, SAAB…), Airbus hyphen style
+     `A-320neo` → `A320neo` / `A-220-300` → `A220-300`.
+   - A small in-script override map handles designators where the
+     deterministic rule picks a poor representative (e.g., shared
+     designators like `C172`, which covers Cessna and Reims builds).
+   - Emits `AircraftTypes.json`, checked into the app bundle
+     (~150–250 KB — smaller than the B612 fonts). Re-run the script to
+     refresh when ICAO updates; the output diff is reviewable.
+   - DOC 8643 designator data is factual reference data used by
+     effectively every flight-tracking app; the generator header cites
+     the source and fetch date.
+
+   Runtime: lazy `static let` decode of the bundled JSON into a
+   `[String: CanonicalName]` on first use (one-time, milliseconds for
+   ~2,700 entries), `nonisolated`/`Sendable`. A missing or corrupt
+   resource degrades to the string fallback — never crashes.
+
+   The mock fixtures already pin `B738`/`A320`/`CRJ7`/`AT76`; tests
+   assert those resolve through the real bundled table.
 2. **String cleanup fallback** (covers rows with no typecode):
    - Strip Boeing customer codes: variant digit + 2-char customer code
      after the dash → variant-hundred. `737-8H4` → `737-800`;
@@ -129,10 +153,14 @@ Geocoding API: **decided at build time, not in this spec.** Candidates
 are `CLGeocoder.reverseGeocodeLocation` and the newer MapKit reverse-
 geocoding request; write it against the deployment target and let
 deprecation warnings pick. Wrapped in one small helper
-(`ReverseGeocode.cityState(lat:lon:) async -> String?`) so the choice is
-one line to change. Output format "City, ST" (admin-area abbreviation
-when available, else full region name) is a pure formatting function
-with tests; the network wrapper itself stays thin and untested.
+(`ReverseGeocode.placeName(lat:lon:) async -> String?`) so the choice is
+one line to change. Output formatting is **locale-aware, not
+US-hardcoded** (the app must work for everyone): "City, ST" when the
+placemark has an admin-area abbreviation (US/CA style), "City, Region"
+with the full region name otherwise, "City, Country" when there's no
+admin area at all, and the country alone as the last resort. The
+formatting is a pure function over placemark fields with tests for each
+shape; the network wrapper itself stays thin and untested.
 
 ## D. `CatchDetailView` upgrades
 
@@ -190,11 +218,16 @@ Mechanics, in `CatchDetailView.task`:
 
 ## F. Tests
 
-- **`AircraftNamingTests` (new):** typecode table hits; customer-code
-  stripping incl. all-digit codes (`777-322` → `777-300`); suffix
-  preservation (`777-3F2ER` → `777-300ER`); **idempotence on clean
-  inputs** (`737-800`, `787-9`, `737 MAX 8`, `747-8` unchanged); casing
-  exceptions (ATR); manufacturer-dedupe; all-nil → nil.
+- **`AircraftNamingTests` (new):** bundled-table integrity (loads, has
+  > 2,500 entries, spot-checks: `B738` → Boeing 737-800, `B77W` →
+  Boeing 777-300ER, `A20N` → Airbus A320neo, `BCS3` → Airbus A220-300,
+  plus the four mock-fixture designators); customer-code stripping
+  incl. all-digit codes (`777-322` → `777-300`); suffix preservation
+  (`777-3F2ER` → `777-300ER`); **idempotence on clean inputs**
+  (`737-800`, `787-9`, `737 MAX 8`, `747-8` unchanged); casing
+  exceptions (ATR); manufacturer-dedupe; all-nil → nil; missing
+  resource degrades to string fallback. The python generator itself is
+  not Swift-tested — its checked-in OUTPUT is what the suite pins.
 - **`HangarGroupingTests`:** canonical collapsing (two customer-code
   variants of the same model land in one `ModelGroup`); Unknown sorts
   last in `modelGroups`.
@@ -217,7 +250,11 @@ Mechanics, in `CatchDetailView.task`:
 ## Out of scope
 
 - Recovering ALT/SPD for pre-existing catches (impossible).
-- Full FAA/DOC 8643 dataset bundling (rejected in design conversation —
-  US-only / size / N-number-join complexity for coverage we don't need).
+- FAA registry (ACFTREF) bundling — US-only and keyed by N-number;
+  superseded by the full ICAO DOC 8643 table above, which is global.
+  (An earlier draft limited the table to a hand-curated SFO/OAK subset;
+  Noah rejected that — full coverage is in scope.)
+- Localizing UI strings ("Unknown", panel labels) — naming data is now
+  global, but UI copy localization is a separate effort.
 - Dynamic Type, dedupe-across-models, CV bracket-snap — unrelated
   backlog items.
