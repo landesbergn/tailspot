@@ -6,6 +6,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, design-canvas port ✅, TestFlight v0 shipping to internal testers ✅, backend next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-06-06 [AR tracking overhaul — recall, elevation, ground-truth visibility])
+
+**Shipping as TestFlight v0.1.3.** The arc of this multi-day round: Noah
+reported planes "identifying / locking on less reliably" + "labels far
+off." Systematic diagnosis (git archaeology + offline replay analysis +
+field recordings) found and fixed four distinct problems:
+
+1. **Recall regression — the 2026-05-26 visibility triple-tightening.**
+   20 km cap + 3° floor + 60 s freshness deleted ~73% of historically-
+   visible planes (replayed against a real session). The 60 s freshness
+   also interacted with 429 backoff (poll gap up to 120 s) to age out
+   EVERY plane at once — the "no planes at all, restart fixes it"
+   mechanism. Freshness now 150 s and **backoff-aware** (allowance grows
+   by how overdue polling is; see `reAnnotate`'s `effectiveMaxAge`).
+
+2. **Camera-elevation gimbal lock.** `90 − CMAttitude.pitch` breaks at
+   the upright-portrait pose: pitch is Euler-bounded at ±90°, so tilting
+   the camera below the horizon made pitch *reflect* (roll flips ±180°)
+   and elevation went the wrong way — labels slid DOWN as you tilted
+   down. Confirmed in a field replay (pitch peaked ~89° and bounced).
+   Fixed: `cameraElevationDeg = asin(gravity.z)` — continuous through
+   the horizon, roll-invariant, singularity-free. `MotionManagerTests`
+   pins anchor poses + through-horizon monotonicity.
+
+3. **Precision — ghost labels.** Solved by **the pin protocol**, the
+   methodology discovery of this round: while recording a replay, the
+   user tap-pins each plane they can ACTUALLY see; pins land in the
+   JSONL with callsigns, so every recording becomes labeled ground
+   truth. 4 sessions / 21 labeled planes produced a decisive split:
+   every confirmed sighting was an airliner ≤ 8.3 km; ghosts included
+   an 11 km/17.4° 737 in daylight and a 4.8 km/8° Cessna. Naked-eye
+   spotting is a single-digit-km activity. The filter is now:
+   - `maxVisibleDistance(forElevationDeg:)` — 4.5 km at the 1° floor
+     ramping to a 13 km plateau at 30° (plateau kept for near-overhead
+     cruise/contrail traffic, which no ghost observation contradicts);
+   - `Aircraft.isLikelySmallAirframe` (US registration callsign pattern
+     `N`+digit) **halves the cap** — GA airframes subtend ~⅓ of an
+     airliner at the same distance. Separates all 21 ground-truth
+     planes correctly; `ADSBManagerTests` pins every confirmed sighting
+     and ghost class as regression tests. Don't re-tune without new
+     pin-protocol data.
+
+4. **`VisibilityDiagnostic` funnel + TEMP on-screen readout.** Per-tick
+   counts (`fetched → onGround → stale → lowElev → far → shown`) via
+   os_log + an always-visible readout strip in ContentView showing
+   `air N · shown M · el E° · …` plus `ANON` / API-limit flags.
+   **Deliberately ships in 0.1.3** (Release has no debug wrench;
+   testers become sensors and can report the numbers). Remove after
+   the TestFlight round validates the re-tune.
+
+Also: `AspectFillTransform` marked `nonisolated` (cleared the four
+Swift 6 MainActor warnings from Build 21 — would be hard errors under
+Swift 6 language mode); mock templates retuned so couch-testing shows
+4 visible planes + 1 deliberately-filtered far one.
+
+**Known limitation (next round's work):** horizontal label offset.
+Field-quantified: urban compass wobbles ±20° within seconds (one 165°
+jump in 1 s) while CL claims ±10°, and the separable (dB,dE) projection
+exaggerates horizontal offsets by ~1/cos(camElev) at high pitch (~25%
+at 40°). The fix ladder: CV bracket-snap (PLAN §9 Pending #3, the real
+answer) and/or proper 3D rotation projection in `Geo.screenPosition`.
+
+**Tests: 213 pass.** `MARKETING_VERSION` 0.1.2 → 0.1.3. The replay
+pull command (`xcrun devicectl device copy from … Documents/replays`)
+plus offline python analysis of the JSONL was the workhorse instrument
+all round — see Replay recorder section.
+
 ## Current state (as of session ending 2026-05-29 [typography + onboarding shipped])
 
 **Shipping as TestFlight v0.1.2.** Second feature drop today. The
