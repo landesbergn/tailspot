@@ -71,15 +71,28 @@ Resolution order:
    - Applies deterministic display polish: title-case manufacturers
      with an exceptions list (ATR, SAAB…), Airbus hyphen style
      `A-320neo` → `A320neo` / `A-220-300` → `A220-300`.
-   - A small in-script override map handles designators where the
+   - An in-script override map handles designators where the
      deterministic rule picks a poor representative (e.g., shared
      designators like `C172`, which covers Cessna and Reims builds).
+     **The override map is populated from post-generation review, not
+     written from guesses up front:** after generating, pull ~25
+     designators at random across categories (helicopters, gliders,
+     GA, military, airliners) and read them. Names that read like a
+     database dump get an override entry; regenerate and re-review.
+     This review is an explicit implementation task — the table isn't
+     done until it passes.
    - Emits `AircraftTypes.json`, checked into the app bundle
-     (~150–250 KB — smaller than the B612 fonts). Re-run the script to
-     refresh when ICAO updates; the output diff is reviewable.
-   - DOC 8643 designator data is factual reference data used by
-     effectively every flight-tracking app; the generator header cites
-     the source and fetch date.
+     (~150–250 KB — smaller than the B612 fonts). **The checked-in
+     JSON diff is the verification surface** — review it after every
+     regeneration. Re-run the script to refresh when ICAO updates.
+   - Licensing: the endpoint is publicly accessible without auth
+     (verified 2026-06-06); designator→model mappings are factual
+     reference data bundled by flight trackers industry-wide. No
+     explicit redistribution terms were located in this session's
+     check — a proper licensing pass belongs on the pre-App-Store
+     release checklist. Clean fallback if ICAO's terms disappoint:
+     FAA Order JO 7360.1 (US-government work, public domain) carries
+     substantially the same designator→model data.
 
    Runtime: lazy `static let` decode of the bundled JSON into a
    `[String: CanonicalName]` on first use (one-time, milliseconds for
@@ -218,10 +231,20 @@ Mechanics, in `CatchDetailView.task`:
 
 ## F. Tests
 
-- **`AircraftNamingTests` (new):** bundled-table integrity (loads, has
-  > 2,500 entries, spot-checks: `B738` → Boeing 737-800, `B77W` →
-  Boeing 777-300ER, `A20N` → Airbus A320neo, `BCS3` → Airbus A220-300,
-  plus the four mock-fixture designators); customer-code stripping
+- **`AircraftNamingTests` (new):** bundled-table integrity is
+  **structural across the whole table, not just spot-values** —
+  spot-checks tell you nothing about the other ~2,690 entries:
+  - loads; entry count in [2,500, 3,000];
+  - every entry has non-empty, whitespace-trimmed make AND model, no
+    double spaces;
+  - no raw-source artifacts: no Airbus entry retains the `A-320`
+    hyphen style; no make is fully upper-case unless on the known
+    exceptions list (ATR, PZL, …);
+  - spot-checks on top: `B738` → Boeing 737-800, `B77W` → Boeing
+    777-300ER, `A20N` → Airbus A320neo, `BCS3` → Airbus A220-300,
+    plus the four mock-fixture designators.
+
+  Also: customer-code stripping
   incl. all-digit codes (`777-322` → `777-300`); suffix preservation
   (`777-3F2ER` → `777-300ER`); **idempotence on clean inputs**
   (`737-800`, `787-9`, `737 MAX 8`, `747-8` unchanged); casing
