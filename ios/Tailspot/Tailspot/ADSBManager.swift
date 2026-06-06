@@ -124,13 +124,19 @@ extension ObservedAircraft {
     /// Elevation-dependent distance cap. A flat cap can't separate real
     /// sightings from ghosts: near the horizon (1-4°) you look through
     /// maximum atmosphere, haze, and terrain/building clutter, so only
-    /// close planes actually read to the eye; by ~10° the background is
-    /// clean sky and genuinely-distant traffic (contrails, climbing jets)
-    /// is visible. Fitted to field data (2026-06-04 session): the one
-    /// truly-visible plane was 6 km @ 16°; the seven ghosts were all
-    /// 20-34 km at 1-3.6°. Linear ramp from `nearVisibleDistanceMeters`
-    /// at the elevation floor up to `maxVisibleDistanceMeters` at
-    /// `fullVisibilityElevationDeg`.
+    /// close planes actually read to the eye; higher up the background
+    /// clears and the allowance grows. Linear ramp from
+    /// `nearVisibleDistanceMeters` at the elevation floor up to
+    /// `maxVisibleDistanceMeters` at `fullVisibilityElevationDeg`.
+    ///
+    /// Fitted to tap-pin ground truth from three field sessions
+    /// (2026-06-04 night, 2026-06-06 day): every confirmed-visible plane
+    /// was < 10 km (4.7 km @ 36°, 5.8 km @ 16°); all eleven confirmed
+    /// ghosts were ≥ 20 km — including high-elevation ones (33 km @ 10.8°
+    /// in daylight, 20 km @ 11° at night). The current constants separate
+    /// that data 13/13. If a contrail-heavy day ever shows real planes
+    /// being pruned, raise the plateau — but distant-airframe visibility
+    /// has so far been intuition, not observation.
     static func maxVisibleDistance(forElevationDeg elevationDeg: Double) -> Double {
         if elevationDeg >= fullVisibilityElevationDeg { return maxVisibleDistanceMeters }
         let f = (elevationDeg - minVisibleElevationDeg)
@@ -145,8 +151,10 @@ extension ObservedAircraft {
     static let nearVisibleDistanceMeters: Double = 12_000
 
     /// Elevation at which the full `maxVisibleDistanceMeters` applies —
-    /// high enough that the plane sits against open sky. Tunable.
-    static let fullVisibilityElevationDeg: Double = 10
+    /// high enough that the plane sits against open sky. Raised 10 → 20
+    /// on 2026-06-06: a daytime ghost at 33 km / 10.8° slipped exactly
+    /// over the 10° plateau edge. Tunable.
+    static let fullVisibilityElevationDeg: Double = 20
 
     /// Minimum elevation a plane must clear before we surface it in
     /// the AR overlay. A small buffer trims the literal horizon-edge
@@ -160,16 +168,16 @@ extension ObservedAircraft {
 
     /// The FAR end of the distance cap — applies at and above
     /// `fullVisibilityElevationDeg`, where the plane sits against open
-    /// sky (contrails, climbing jets read at real distance).
+    /// sky.
     ///
-    /// History: 30 km originally; tightened to 20 km on 2026-05-26 (which
-    /// over-pruned — deleted 44 of 71 historically-visible planes in a
-    /// replayed session); raised to a flat 35 km on 2026-06-01 (which
-    /// over-admitted — far low-elevation ghosts). Since 2026-06-04 the
-    /// effective cap is the elevation-dependent curve in
-    /// `maxVisibleDistance(forElevationDeg:)`; this constant is its
-    /// upper plateau.
-    static let maxVisibleDistanceMeters: Double = 35_000
+    /// History: 30 km originally; tightened to a flat 20 km on 2026-05-26;
+    /// raised to a flat 35 km on 2026-06-01 (over-admitted ghosts);
+    /// elevation-dependent curve since 2026-06-04; plateau lowered
+    /// 35 → 25 km on 2026-06-06 after tap-pin ground truth showed zero
+    /// confirmed sightings beyond 20 km in either day or night sessions.
+    /// This constant is the curve's upper plateau — see
+    /// `maxVisibleDistance(forElevationDeg:)`.
+    static let maxVisibleDistanceMeters: Double = 25_000
 
     /// Project this aircraft into screen coordinates given the phone's
     /// current pose and the camera's FOV. Returns nil if off-screen.

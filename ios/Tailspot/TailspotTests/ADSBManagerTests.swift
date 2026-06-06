@@ -337,15 +337,14 @@ struct ADSBManagerTests {
     }
 
     @Test func notVisibleWhenTooFar() {
-        // Just past the 35 km cap (raised from 20 km on 2026-06-01).
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 40_000)
+        // Past the 25 km plateau even at high elevation.
+        let obs = Self.observed(elevationDeg: 25, slantDistanceMeters: 40_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func visibleAtEdgeOfRange() {
-        // Just inside the 35 km cap and well above the visual horizon.
-        // 25-33 km corridor jets are exactly what the old 20 km cap deleted.
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 33_000)
+        // Just inside the 25 km plateau, well into the open-sky band.
+        let obs = Self.observed(elevationDeg: 25, slantDistanceMeters: 24_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 
@@ -370,35 +369,43 @@ struct ADSBManagerTests {
     @Test func farLowElevationGhostIsFiltered() {
         // The 2026-06-04 field session's ghost signature: 21 km @ 3.5°
         // (N2838Q) was labeled but invisible — far + low is haze/clutter.
-        // The curve caps 3.5° at ~18.4 km.
+        // The curve caps 3.5° at ~13.7 km.
         let obs = Self.observed(elevationDeg: 3.5, slantDistanceMeters: 21_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
-    @Test func farHighElevationJetIsKept() {
-        // Same session, the keep case: 20.5 km @ 11° (SKW5983, climbing
-        // jet against open sky) — at ≥10° the full 35 km cap applies.
+    @Test func nightHighElevationGhostIsFiltered() {
+        // 2026-06-04 night session: 20.5 km @ 11° (SKW5983) was labeled
+        // but NOT visible — tap-pin ground truth. High elevation does not
+        // rescue a 20 km airframe. Cap at 11° is ~18.8 km.
         let obs = Self.observed(elevationDeg: 11, slantDistanceMeters: 20_500)
-        #expect(obs.isLikelyVisibleToObserver)
+        #expect(!obs.isLikelyVisibleToObserver)
     }
 
-    @Test func climbingJetAtMidElevationIsKept() {
-        // A climbing 737 at 25 km ≈ 7° elevation is plainly visible; the
-        // curve allows ~27.3 km there. This is the case the flat 20 km
-        // cap wrongly deleted in May.
-        let obs = Self.observed(elevationDeg: 7, slantDistanceMeters: 25_000)
-        #expect(obs.isLikelyVisibleToObserver)
+    @Test func daytimeMidElevationGhostIsFiltered() {
+        // 2026-06-06 daytime session: 33.3 km @ 10.8° (TZP30) was the
+        // reported false positive — it slipped exactly over the old 10°
+        // plateau edge into the flat 35 km allowance. Now capped ~18.7 km.
+        let obs = Self.observed(elevationDeg: 10.8, slantDistanceMeters: 33_300)
+        #expect(!obs.isLikelyVisibleToObserver)
+    }
+
+    @Test func confirmedSightingsAreKept() {
+        // The two tap-pin-confirmed real sightings across sessions:
+        // DAL640 4.7 km @ 36° (day) and FDX5991 5.8 km @ 16° (night).
+        #expect(Self.observed(elevationDeg: 36, slantDistanceMeters: 4_700).isLikelyVisibleToObserver)
+        #expect(Self.observed(elevationDeg: 16, slantDistanceMeters: 5_800).isLikelyVisibleToObserver)
     }
 
     @Test func distanceCapCurveShape() {
         // Floor: ~12 km right at the 1° elevation floor.
         #expect(abs(ObservedAircraft.maxVisibleDistance(forElevationDeg: 1) - 12_000) < 1)
-        // Plateau: full 35 km at and above 10°.
-        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 10) == 35_000)
-        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 45) == 35_000)
+        // Plateau: full 25 km at and above 20°.
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 20) == 25_000)
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 45) == 25_000)
         // Monotonic between floor and plateau.
         var last = 0.0
-        for e in stride(from: 1.0, through: 10.0, by: 0.5) {
+        for e in stride(from: 1.0, through: 20.0, by: 0.5) {
             let d = ObservedAircraft.maxVisibleDistance(forElevationDeg: e)
             #expect(d >= last)
             last = d
