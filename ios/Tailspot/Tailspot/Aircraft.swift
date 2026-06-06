@@ -42,6 +42,19 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     let positionTimestamp: Date?
 
     var id: String { icao24 }
+
+    /// Heuristic: is this a small (GA-sized) airframe? US general-aviation
+    /// aircraft fly under their registration as the callsign — `N` followed
+    /// by a digit (N3001B, N21866) — while airline/cargo/charter traffic
+    /// uses ICAO three-letter prefixes (UAL, DAL, FDX, SKW…). Used by the
+    /// visibility filter to halve the distance cap for airframes with a
+    /// fraction of an airliner's visual size. Imperfect (a bizjet can file
+    /// under its N-number) but field-accurate so far: every confirmed-ghost
+    /// N-number, zero confirmed-visible ones.
+    var isLikelySmallAirframe: Bool {
+        guard let cs = callsign, cs.count >= 2 else { return false }
+        return cs.first == "N" && cs[cs.index(after: cs.startIndex)].isNumber
+    }
 }
 
 extension Aircraft {

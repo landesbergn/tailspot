@@ -300,10 +300,11 @@ struct ADSBManagerTests {
         bearingDeg: Double = 0,
         elevationDeg: Double,
         groundDistanceMeters: Double = 0,
-        slantDistanceMeters: Double
+        slantDistanceMeters: Double,
+        callsign: String? = nil
     ) -> ObservedAircraft {
         let aircraft = Aircraft(
-            icao24: "test", callsign: nil, originCountry: "Test",
+            icao24: "test", callsign: callsign, originCountry: "Test",
             longitude: 0, latitude: 0,
             altitudeMeters: 0,
             velocityMps: nil, trackDeg: nil,
@@ -320,7 +321,8 @@ struct ADSBManagerTests {
     }
 
     @Test func visibleWhenAboveHorizonAndClose() {
-        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 15_000)
+        // 5 km @ 10° — comfortably inside the ~7.1 km cap at that angle.
+        let obs = Self.observed(elevationDeg: 10, slantDistanceMeters: 5_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 
@@ -337,14 +339,15 @@ struct ADSBManagerTests {
     }
 
     @Test func notVisibleWhenTooFar() {
-        // Past the 25 km plateau even at high elevation.
-        let obs = Self.observed(elevationDeg: 25, slantDistanceMeters: 40_000)
+        // Past the 13 km plateau even at high elevation.
+        let obs = Self.observed(elevationDeg: 45, slantDistanceMeters: 15_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func visibleAtEdgeOfRange() {
-        // Just inside the 25 km plateau, well into the open-sky band.
-        let obs = Self.observed(elevationDeg: 25, slantDistanceMeters: 24_000)
+        // Just inside the 13 km plateau, near-overhead — the contrail /
+        // cruise-traffic case the plateau exists for.
+        let obs = Self.observed(elevationDeg: 35, slantDistanceMeters: 12_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 
@@ -357,10 +360,9 @@ struct ADSBManagerTests {
     }
 
     @Test func visibleAtLowElevationAboveBuffer() {
-        // 2° clears the buffer after the 3° → 1° loosening (2026-06-01):
-        // low approach/departure traffic over the bay is in plain sight.
-        // At 2° the elevation-dependent cap is ~14.6 km, so 10 km passes.
-        let obs = Self.observed(elevationDeg: 2, slantDistanceMeters: 10_000)
+        // Low elevation still admits genuinely-close traffic: 4 km @ 2°
+        // (short final over the bay) is inside the ~4.8 km cap there.
+        let obs = Self.observed(elevationDeg: 2, slantDistanceMeters: 4_000)
         #expect(obs.isLikelyVisibleToObserver)
     }
 
@@ -369,7 +371,6 @@ struct ADSBManagerTests {
     @Test func farLowElevationGhostIsFiltered() {
         // The 2026-06-04 field session's ghost signature: 21 km @ 3.5°
         // (N2838Q) was labeled but invisible — far + low is haze/clutter.
-        // The curve caps 3.5° at ~13.7 km.
         let obs = Self.observed(elevationDeg: 3.5, slantDistanceMeters: 21_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
@@ -377,35 +378,79 @@ struct ADSBManagerTests {
     @Test func nightHighElevationGhostIsFiltered() {
         // 2026-06-04 night session: 20.5 km @ 11° (SKW5983) was labeled
         // but NOT visible — tap-pin ground truth. High elevation does not
-        // rescue a 20 km airframe. Cap at 11° is ~18.8 km.
+        // rescue a distant airframe.
         let obs = Self.observed(elevationDeg: 11, slantDistanceMeters: 20_500)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
     @Test func daytimeMidElevationGhostIsFiltered() {
         // 2026-06-06 daytime session: 33.3 km @ 10.8° (TZP30) was the
-        // reported false positive — it slipped exactly over the old 10°
-        // plateau edge into the flat 35 km allowance. Now capped ~18.7 km.
+        // reported false positive that motivated moving the plateau off
+        // the 10° edge.
         let obs = Self.observed(elevationDeg: 10.8, slantDistanceMeters: 33_300)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
+    @Test func urbanCloseGhostsAreFiltered() {
+        // 2026-06-06 09:08 session — Noah confirmed NONE of these were
+        // visible despite all being within 13 km. Naked-eye spotting is a
+        // single-digit-km activity:
+        //   REH1   9.3 km @ 1.9° (381 m medevac helo, below the roofline)
+        //   N21866 6.3 km @ 4.1°
+        //   VJA534 8.1 km @ 12.3°
+        //   SWA3042 11 km @ 17.4° (737 in daylight — still invisible)
+        #expect(!Self.observed(elevationDeg: 1.9, slantDistanceMeters: 9_300).isLikelyVisibleToObserver)
+        #expect(!Self.observed(elevationDeg: 4.1, slantDistanceMeters: 6_300).isLikelyVisibleToObserver)
+        #expect(!Self.observed(elevationDeg: 12.3, slantDistanceMeters: 8_100).isLikelyVisibleToObserver)
+        #expect(!Self.observed(elevationDeg: 17.4, slantDistanceMeters: 11_000).isLikelyVisibleToObserver)
+    }
+
     @Test func confirmedSightingsAreKept() {
-        // The two tap-pin-confirmed real sightings across sessions:
-        // DAL640 4.7 km @ 36° (day) and FDX5991 5.8 km @ 16° (night).
-        #expect(Self.observed(elevationDeg: 36, slantDistanceMeters: 4_700).isLikelyVisibleToObserver)
-        #expect(Self.observed(elevationDeg: 16, slantDistanceMeters: 5_800).isLikelyVisibleToObserver)
+        // Every tap-pin-confirmed real sighting across sessions:
+        //   UAL8205 4.1 km @ 46° (day), DAL640 4.7 km @ 36° (day),
+        //   FDX5991 5.8 km @ 16° (night), SKW5405 8.3 km @ 20.7° (day).
+        #expect(Self.observed(elevationDeg: 46, slantDistanceMeters: 4_100, callsign: "UAL8205").isLikelyVisibleToObserver)
+        #expect(Self.observed(elevationDeg: 36, slantDistanceMeters: 4_700, callsign: "DAL640").isLikelyVisibleToObserver)
+        #expect(Self.observed(elevationDeg: 16, slantDistanceMeters: 5_800, callsign: "FDX5991").isLikelyVisibleToObserver)
+        #expect(Self.observed(elevationDeg: 20.7, slantDistanceMeters: 8_300, callsign: "SKW5405").isLikelyVisibleToObserver)
+    }
+
+    @Test func smallAirframeGetsHalvedCap() {
+        // N3001B, confirmed ghost at 4.8 km / 8.0° (2026-06-06 09:13
+        // session): inside the airliner cap (~6.6 km at 8°) but a GA
+        // single subtends a third of an airliner — the N-number heuristic
+        // halves its cap to ~3.3 km. The identical geometry under an
+        // airline callsign stays visible.
+        #expect(!Self.observed(elevationDeg: 8, slantDistanceMeters: 4_800, callsign: "N3001B").isLikelyVisibleToObserver)
+        #expect(Self.observed(elevationDeg: 8, slantDistanceMeters: 4_800, callsign: "SKW123").isLikelyVisibleToObserver)
+        // And a genuinely-close GA plane still shows (2 km @ 8°).
+        #expect(Self.observed(elevationDeg: 8, slantDistanceMeters: 2_000, callsign: "N3001B").isLikelyVisibleToObserver)
+    }
+
+    @Test func smallAirframeHeuristic() {
+        func ac(_ cs: String?) -> Aircraft {
+            Aircraft(icao24: "x", callsign: cs, originCountry: "US",
+                     longitude: 0, latitude: 0, altitudeMeters: 0,
+                     velocityMps: nil, trackDeg: nil, onGround: false,
+                     positionTimestamp: nil)
+        }
+        #expect(ac("N3001B").isLikelySmallAirframe)
+        #expect(ac("N21866").isLikelySmallAirframe)
+        #expect(!ac("UAL8205").isLikelySmallAirframe)   // airline ICAO prefix
+        #expect(!ac("NKS123").isLikelySmallAirframe)    // Spirit (NKS) — N + letter
+        #expect(!ac(nil).isLikelySmallAirframe)
+        #expect(!ac("N").isLikelySmallAirframe)
     }
 
     @Test func distanceCapCurveShape() {
-        // Floor: ~12 km right at the 1° elevation floor.
-        #expect(abs(ObservedAircraft.maxVisibleDistance(forElevationDeg: 1) - 12_000) < 1)
-        // Plateau: full 25 km at and above 20°.
-        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 20) == 25_000)
-        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 45) == 25_000)
+        // Floor: ~4.5 km right at the 1° elevation floor.
+        #expect(abs(ObservedAircraft.maxVisibleDistance(forElevationDeg: 1) - 4_500) < 1)
+        // Plateau: full 13 km at and above 30°.
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 30) == 13_000)
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 60) == 13_000)
         // Monotonic between floor and plateau.
         var last = 0.0
-        for e in stride(from: 1.0, through: 20.0, by: 0.5) {
+        for e in stride(from: 1.0, through: 30.0, by: 0.5) {
             let d = ObservedAircraft.maxVisibleDistance(forElevationDeg: e)
             #expect(d >= last)
             last = d

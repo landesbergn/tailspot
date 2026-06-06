@@ -38,31 +38,37 @@ nonisolated final class MockADSBSource: ADSBSource, Sendable {
     /// distances, and altitudes — chosen so all have positive elevation
     /// (visible above horizon) and span a reasonable range of "feels
     /// like a small plane on approach" → "feels like a 747 at cruise".
+    // Distances retuned 2026-06-06 for the ground-truth visibility curve
+    // (~4.5 km near the horizon → 13 km plateau above 30°): four templates
+    // sit INSIDE the curve so mock mode shows labels on the couch, and one
+    // (ASA12) sits far outside it to exercise the filter — it appears in
+    // the debug list but never in AR.
     private let templates: [Template] = [
-        // NE, mid-distance, cruise altitude — this is your "test target".
-        // Should land near bearing 045°, elevation ~23°.
+        // NE, near-overhead cruise — the contrail case the 13 km plateau
+        // exists for. Elevation ~74°, slant ~10.9 km.
         Template(icao24: "a3b15e", callsign: "UAL248",  originCountry: "United States",
-                 bearingDeg:  45, groundDistanceKm: 25, altitudeMeters: 10_500,
+                 bearingDeg:  45, groundDistanceKm: 3, altitudeMeters: 10_500,
                  trackDeg: 270, velocityMps: 240),
 
-        // SE, close, lower altitude — feels like approach traffic.
+        // SE, close, lower altitude — approach traffic. ~24°, ~4.4 km.
         Template(icao24: "a52f30", callsign: "SWA1841", originCountry: "United States",
-                 bearingDeg: 135, groundDistanceKm:  8, altitudeMeters:  1_800,
+                 bearingDeg: 135, groundDistanceKm:  4, altitudeMeters:  1_800,
                  trackDeg: 220, velocityMps: 180),
 
-        // West, far, high cruise — feels like overhead traffic.
+        // West, far, high cruise — deliberately OUTSIDE the visibility
+        // curve (~16°, 41 km): exercises the filter in mock mode.
         Template(icao24: "a91234", callsign: "ASA12",   originCountry: "United States",
                  bearingDeg: 270, groundDistanceKm: 40, altitudeMeters: 11_500,
                  trackDeg:  90, velocityMps: 260),
 
-        // North, mid-distance, mid-altitude — small jet.
+        // North, mid-distance, mid-altitude — small jet. ~37°, ~7.5 km.
         Template(icao24: "a4abcd", callsign: "DAL567",  originCountry: "United States",
-                 bearingDeg:   0, groundDistanceKm: 15, altitudeMeters:  4_500,
+                 bearingDeg:   0, groundDistanceKm: 6, altitudeMeters:  4_500,
                  trackDeg: 180, velocityMps: 200),
 
-        // SSW, close, high — should produce a steep elevation (~37°).
+        // SSW, close, high — steep elevation (~61°), slant ~10.3 km.
         Template(icao24: "abc789", callsign: "JBU412",  originCountry: "United States",
-                 bearingDeg: 200, groundDistanceKm: 12, altitudeMeters:  9_000,
+                 bearingDeg: 200, groundDistanceKm: 5, altitudeMeters:  9_000,
                  trackDeg:  30, velocityMps: 230),
     ]
 

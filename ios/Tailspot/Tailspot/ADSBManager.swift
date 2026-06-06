@@ -118,8 +118,28 @@ extension ObservedAircraft {
     /// Area day; per-condition adjustment is out of scope for v0.
     var isLikelyVisibleToObserver: Bool {
         elevationDeg > Self.minVisibleElevationDeg
-            && slantDistanceMeters < Self.maxVisibleDistance(forElevationDeg: elevationDeg)
+            && slantDistanceMeters < visibilityCapMeters
     }
+
+    /// The effective distance cap for THIS aircraft: the elevation curve,
+    /// halved for small airframes. Field data 2026-06-06: N3001B (a GA
+    /// single at 4.8 km / 8°) was confirmed invisible while airliners at
+    /// 5.8-8.3 km were confirmed visible — a ~10 m airframe subtends a
+    /// third of an airliner's visual angle at the same distance, and
+    /// geometry alone can't express that. Small is detected by the US
+    /// registration callsign pattern (`N` + digit): GA flies under its
+    /// tail number, airlines under ICAO prefixes (UAL/DAL/FDX/...).
+    var visibilityCapMeters: Double {
+        let base = Self.maxVisibleDistance(forElevationDeg: elevationDeg)
+        return aircraft.isLikelySmallAirframe
+            ? base * Self.smallAirframeVisibilityFactor
+            : base
+    }
+
+    /// Cap multiplier for GA-sized airframes. 0.5 hides the confirmed
+    /// N3001B ghost (4.8 km @ 8° → cap ~3.3 km) while leaving a real
+    /// pattern-traffic window inside ~2-3 km. Tunable.
+    static let smallAirframeVisibilityFactor: Double = 0.5
 
     /// Elevation-dependent distance cap. A flat cap can't separate real
     /// sightings from ghosts: near the horizon (1-4°) you look through
@@ -129,14 +149,17 @@ extension ObservedAircraft {
     /// `nearVisibleDistanceMeters` at the elevation floor up to
     /// `maxVisibleDistanceMeters` at `fullVisibilityElevationDeg`.
     ///
-    /// Fitted to tap-pin ground truth from three field sessions
-    /// (2026-06-04 night, 2026-06-06 day): every confirmed-visible plane
-    /// was < 10 km (4.7 km @ 36°, 5.8 km @ 16°); all eleven confirmed
-    /// ghosts were ≥ 20 km — including high-elevation ones (33 km @ 10.8°
-    /// in daylight, 20 km @ 11° at night). The current constants separate
-    /// that data 13/13. If a contrail-heavy day ever shows real planes
-    /// being pruned, raise the plateau — but distant-airframe visibility
-    /// has so far been intuition, not observation.
+    /// Fitted to tap-pin ground truth from four field sessions
+    /// (2026-06-04 night → 2026-06-06 day, 19 labeled planes): every
+    /// confirmed sighting was ≤ 5.8 km (4.1 km @ 46°, 4.7 km @ 36°,
+    /// 5.8 km @ 16°); every confirmed ghost was ≥ 6.3 km — at every
+    /// elevation tested (6.3 km @ 4°, 8.1 km @ 12°, 11 km @ 17.4°,
+    /// 33 km @ 10.8°). The current constants separate that data 19/19.
+    /// Naked-eye spotting is a single-digit-km activity; the 13 km
+    /// plateau above 30° exists only for near-overhead cruise traffic
+    /// (contrails), which no ghost observation contradicts. If a
+    /// contrail day shows real pruning, raise the plateau — distant-
+    /// airframe visibility has so far been intuition, never observation.
     static func maxVisibleDistance(forElevationDeg elevationDeg: Double) -> Double {
         if elevationDeg >= fullVisibilityElevationDeg { return maxVisibleDistanceMeters }
         let f = (elevationDeg - minVisibleElevationDeg)
@@ -145,16 +168,17 @@ extension ObservedAircraft {
             + max(0, f) * (maxVisibleDistanceMeters - nearVisibleDistanceMeters)
     }
 
-    /// Distance allowed right at the elevation floor (1°). Low-and-far is
-    /// the classic ghost signature; low-and-near (approach traffic over
-    /// the bay) is real. Tunable.
-    static let nearVisibleDistanceMeters: Double = 12_000
+    /// Distance allowed right at the elevation floor (1°). Lowered
+    /// 12 → 4.5 km on 2026-06-06: a 381 m-altitude medevac helicopter at
+    /// 9.3 km / 1.9° (REH1) was confirmed invisible — low-elevation
+    /// aircraft sit below the urban roofline almost immediately. Tunable.
+    static let nearVisibleDistanceMeters: Double = 4_500
 
-    /// Elevation at which the full `maxVisibleDistanceMeters` applies —
-    /// high enough that the plane sits against open sky. Raised 10 → 20
-    /// on 2026-06-06: a daytime ghost at 33 km / 10.8° slipped exactly
-    /// over the 10° plateau edge. Tunable.
-    static let fullVisibilityElevationDeg: Double = 20
+    /// Elevation at which the full `maxVisibleDistanceMeters` applies.
+    /// 30° keeps a path in for near-overhead cruise traffic (the contrail
+    /// case: slant 10-12 km nearly straight up) while staying below every
+    /// confirmed ghost, all of which sat at ≤ 17.4°. Tunable.
+    static let fullVisibilityElevationDeg: Double = 30
 
     /// Minimum elevation a plane must clear before we surface it in
     /// the AR overlay. A small buffer trims the literal horizon-edge
@@ -170,14 +194,17 @@ extension ObservedAircraft {
     /// `fullVisibilityElevationDeg`, where the plane sits against open
     /// sky.
     ///
-    /// History: 30 km originally; tightened to a flat 20 km on 2026-05-26;
-    /// raised to a flat 35 km on 2026-06-01 (over-admitted ghosts);
-    /// elevation-dependent curve since 2026-06-04; plateau lowered
-    /// 35 → 25 km on 2026-06-06 after tap-pin ground truth showed zero
-    /// confirmed sightings beyond 20 km in either day or night sessions.
+    /// History: 30 km originally; flat 20 km (2026-05-26); flat 35 km
+    /// (2026-06-01); elevation curve with 25 km plateau (2026-06-04/06).
+    /// Lowered to 13 km on 2026-06-06 when the pin protocol delivered
+    /// decisive ground truth: across 19 labeled planes, every confirmed
+    /// sighting was ≤ 5.8 km and every confirmed ghost ≥ 6.3 km — at all
+    /// elevations (an 11 km / 17.4° 737 was invisible in daylight).
+    /// Naked-eye spotting range is single-digit km; 13 km at the 30°
+    /// plateau exists for near-overhead cruise traffic with contrails.
     /// This constant is the curve's upper plateau — see
     /// `maxVisibleDistance(forElevationDeg:)`.
-    static let maxVisibleDistanceMeters: Double = 25_000
+    static let maxVisibleDistanceMeters: Double = 13_000
 
     /// Project this aircraft into screen coordinates given the phone's
     /// current pose and the camera's FOV. Returns nil if off-screen.
@@ -489,8 +516,7 @@ final class ADSBManager: ObservableObject {
 
         for obs in annotated {
             let belowElev = obs.elevationDeg <= ObservedAircraft.minVisibleElevationDeg
-            let tooFar = obs.slantDistanceMeters
-                >= ObservedAircraft.maxVisibleDistance(forElevationDeg: obs.elevationDeg)
+            let tooFar = obs.slantDistanceMeters >= obs.visibilityCapMeters
             if belowElev { diag.belowElevation += 1 }
             if tooFar { diag.tooFar += 1 }
             if verbose && (belowElev || tooFar) {
