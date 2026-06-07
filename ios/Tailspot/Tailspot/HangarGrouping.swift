@@ -198,7 +198,8 @@ enum HangarGrouping {
     /// list, no enumeration of "possible" planes. Each group bundles
     /// a model display string (the manufacturer + model concatenation
     /// produced by `key(for:c:mode:.aircraftType)`) with the rows
-    /// that share it. Sorted by tail count desc, then alphabetical.
+    /// that share it. Sorted alphabetically (A–Z) by canonical model
+    /// name; the Unknown bucket is always pinned last.
     ///
     /// Powers the Hangar Sets surface: tap a type tile → see the
     /// model groups you've actually caught, no locked silhouettes.
@@ -217,14 +218,12 @@ enum HangarGrouping {
         return buckets
             .map { ModelGroup(model: $0.key, type: type, tails: $0.value) }
             .sorted { lhs, rhs in
-                // Unknown pins to the END regardless of tail count —
-                // it's a junk drawer, not a headline.
+                // Unknown pins to the END (junk drawer, not a headline);
+                // everything else is A–Z by canonical model name, which
+                // is exactly what the Set detail list displays.
                 let lUnknown = lhs.model == unknownTitle
                 let rUnknown = rhs.model == unknownTitle
                 if lUnknown != rUnknown { return rUnknown }
-                if lhs.tails.count != rhs.tails.count {
-                    return lhs.tails.count > rhs.tails.count
-                }
                 return lhs.model.localizedCaseInsensitiveCompare(rhs.model)
                     == .orderedAscending
             }
