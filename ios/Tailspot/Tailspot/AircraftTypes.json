@@ -1,0 +1,10450 @@
+{
+ "A002": {
+  "make": "Irkut",
+  "model": "A-002"
+ },
+ "A1": {
+  "make": "Douglas",
+  "model": "AD Skyraider"
+ },
+ "A10": {
+  "make": "Fairchild (1)",
+  "model": "A-10 Thunderbolt 2"
+ },
+ "A109": {
+  "make": "Agusta",
+  "model": "A-109"
+ },
+ "A119": {
+  "make": "Agusta",
+  "model": "A-119 Koala"
+ },
+ "A122": {
+  "make": "Aerotec (1)",
+  "model": "T-23 Uirapuru"
+ },
+ "A124": {
+  "make": "Antonov",
+  "model": "An-124 Ruslan"
+ },
+ "A129": {
+  "make": "Agusta",
+  "model": "T-129"
+ },
+ "A139": {
+  "make": "AgustaWestland",
+  "model": "AW-139"
+ },
+ "A140": {
+  "make": "Antonov",
+  "model": "An-140"
+ },
+ "A148": {
+  "make": "Antonov",
+  "model": "An-148"
+ },
+ "A149": {
+  "make": "AgustaWestland",
+  "model": "AW-149"
+ },
+ "A158": {
+  "make": "Antonov",
+  "model": "An-158"
+ },
+ "A169": {
+  "make": "AgustaWestland",
+  "model": "AW-169"
+ },
+ "A178": {
+  "make": "Antonov",
+  "model": "An-178"
+ },
+ "A189": {
+  "make": "AgustaWestland",
+  "model": "AW-189"
+ },
+ "A19": {
+  "make": "Aeropract",
+  "model": "A-19"
+ },
+ "A19N": {
+  "make": "Airbus",
+  "model": "A319neo"
+ },
+ "A20": {
+  "make": "Douglas",
+  "model": "A-20 Havoc"
+ },
+ "A205": {
+  "make": "Oskbes-Mai",
+  "model": "MAI-205"
+ },
+ "A20N": {
+  "make": "Airbus",
+  "model": "A320neo"
+ },
+ "A21": {
+  "make": "Aeropract",
+  "model": "A-21 Solo"
+ },
+ "A210": {
+  "make": "Aquila",
+  "model": "A-210"
+ },
+ "A211": {
+  "make": "Alfa-M",
+  "model": "A-211"
+ },
+ "A21N": {
+  "make": "Airbus",
+  "model": "A321neo"
+ },
+ "A22": {
+  "make": "Sadler",
+  "model": "A-22 Piranha"
+ },
+ "A223": {
+  "make": "Oskbes-Mai",
+  "model": "MAI-223 Kityonok"
+ },
+ "A23": {
+  "make": "Aeropract",
+  "model": "A-23 Dragon"
+ },
+ "A25": {
+  "make": "Aeropract",
+  "model": "A-25 Breeze"
+ },
+ "A251": {
+  "make": "Aviatik-Alyans",
+  "model": "Aleks-251"
+ },
+ "A27": {
+  "make": "Aeropract",
+  "model": "A-27"
+ },
+ "A270": {
+  "make": "Aero (2)",
+  "model": "Ae-270 Propjet"
+ },
+ "A29": {
+  "make": "Avantage",
+  "model": "A-29"
+ },
+ "A2RT": {
+  "make": "Kazan",
+  "model": "Ansat 2RT"
+ },
+ "A3": {
+  "make": "Douglas",
+  "model": "A-3 Skywarrior"
+ },
+ "A306": {
+  "make": "Airbus",
+  "model": "A300B4-600"
+ },
+ "A30B": {
+  "make": "Airbus",
+  "model": "A300B4-2"
+ },
+ "A31": {
+  "make": "Avantage",
+  "model": "A-31 Spectrum"
+ },
+ "A310": {
+  "make": "Airbus",
+  "model": "T-22"
+ },
+ "A318": {
+  "make": "Airbus",
+  "model": "A318"
+ },
+ "A319": {
+  "make": "Airbus",
+  "model": "A319"
+ },
+ "A320": {
+  "make": "Airbus",
+  "model": "A320"
+ },
+ "A321": {
+  "make": "Airbus",
+  "model": "A321"
+ },
+ "A33": {
+  "make": "Aeropract",
+  "model": "A-33"
+ },
+ "A332": {
+  "make": "Airbus",
+  "model": "A330-200"
+ },
+ "A333": {
+  "make": "Airbus",
+  "model": "A330-300"
+ },
+ "A337": {
+  "make": "Airbus",
+  "model": "A330-700 Beluga XL"
+ },
+ "A338": {
+  "make": "Airbus",
+  "model": "A330-800"
+ },
+ "A339": {
+  "make": "Airbus",
+  "model": "A330-900"
+ },
+ "A342": {
+  "make": "Airbus",
+  "model": "A340-200"
+ },
+ "A343": {
+  "make": "Airbus",
+  "model": "A340-300"
+ },
+ "A345": {
+  "make": "Airbus",
+  "model": "A340-500"
+ },
+ "A346": {
+  "make": "Airbus",
+  "model": "A340-600"
+ },
+ "A35": {
+  "make": "Avantage",
+  "model": "A-35 Scanner"
+ },
+ "A359": {
+  "make": "Airbus",
+  "model": "A350-900 XWB"
+ },
+ "A35K": {
+  "make": "Airbus",
+  "model": "A350-1000 XWB"
+ },
+ "A37": {
+  "make": "Cessna",
+  "model": "318D Dragonfly"
+ },
+ "A388": {
+  "make": "Airbus",
+  "model": "A380-800"
+ },
+ "A3ST": {
+  "make": "Airbus",
+  "model": "A300ST Beluga"
+ },
+ "A4": {
+  "make": "McDonnell Douglas",
+  "model": "A-4 Skyhawk"
+ },
+ "A400": {
+  "make": "Airbus",
+  "model": "T-23"
+ },
+ "A411": {
+  "make": "Oskbes-Mai",
+  "model": "MAI-411"
+ },
+ "A5": {
+  "make": "Icon",
+  "model": "A-5"
+ },
+ "A50": {
+  "make": "Beriev",
+  "model": "A-50"
+ },
+ "A500": {
+  "make": "Adam (2)",
+  "model": "A-500"
+ },
+ "A504": {
+  "make": "Avro",
+  "model": "504"
+ },
+ "A6": {
+  "make": "Grumman",
+  "model": "A-6 Intruder"
+ },
+ "A600": {
+  "make": "Rotorway",
+  "model": "A-600 Talon"
+ },
+ "A660": {
+  "make": "Ayres",
+  "model": "S-2R-T660 Turbo Thrush"
+ },
+ "A700": {
+  "make": "Adam (2)",
+  "model": "A-700 AdamJet"
+ },
+ "A743": {
+  "make": "Antonov",
+  "model": "An-74-300"
+ },
+ "A748": {
+  "make": "Hawker Siddeley",
+  "model": "C-91"
+ },
+ "A890": {
+  "make": "Aviatika",
+  "model": "MAI-890"
+ },
+ "A9": {
+  "make": "North American Rockwell",
+  "model": "A-9 Quail Commander"
+ },
+ "A900": {
+  "make": "Aviatika",
+  "model": "MAI-900 Acrobat"
+ },
+ "A910": {
+  "make": "Aviatika",
+  "model": "MAI-910"
+ },
+ "AA1": {
+  "make": "Grumman American",
+  "model": "AA-1 Tr2"
+ },
+ "AA37": {
+  "make": "Aeropract",
+  "model": "A-37"
+ },
+ "AA5": {
+  "make": "Grumman American",
+  "model": "AA-5 Tiger"
+ },
+ "AAT3": {
+  "make": "Aero (3)",
+  "model": "AT-3"
+ },
+ "AAT4": {
+  "make": "Aero (3)",
+  "model": "AT-4"
+ },
+ "AB11": {
+  "make": "Aero Boero",
+  "model": "AB-115"
+ },
+ "AB15": {
+  "make": "Aero Boero",
+  "model": "AB-150"
+ },
+ "AB18": {
+  "make": "Aero Boero",
+  "model": "AB-180"
+ },
+ "AB95": {
+  "make": "Aero Boero",
+  "model": "AB-95"
+ },
+ "AC10": {
+  "make": "Fd-Composites",
+  "model": "ArrowCopter"
+ },
+ "AC11": {
+  "make": "Rockwell",
+  "model": "112 Commander 112"
+ },
+ "AC31": {
+  "make": "Avicopter",
+  "model": "AC-311"
+ },
+ "AC33": {
+  "make": "Avicopter",
+  "model": "AC-313"
+ },
+ "AC4": {
+  "make": "Light Wing",
+  "model": "AC-4"
+ },
+ "AC50": {
+  "make": "North American Rockwell",
+  "model": "500 Commander 500"
+ },
+ "AC52": {
+  "make": "Aero (1)",
+  "model": "Commander 520"
+ },
+ "AC56": {
+  "make": "Aero (1)",
+  "model": "Commander 560"
+ },
+ "AC5A": {
+  "make": "Nanjing",
+  "model": "AC-500 Aircar"
+ },
+ "AC68": {
+  "make": "Aero (1)",
+  "model": "Commander 680E"
+ },
+ "AC6L": {
+  "make": "North American Rockwell",
+  "model": "685 Commander 685"
+ },
+ "AC72": {
+  "make": "Aero (1)",
+  "model": "Commander 720 Alti Cruiser"
+ },
+ "AC80": {
+  "make": "North American Rockwell",
+  "model": "681 Hawk Commander"
+ },
+ "AC90": {
+  "make": "Gulfstream Aerospace",
+  "model": "690 Jetprop Commander 840"
+ },
+ "AC95": {
+  "make": "Gulfstream Aerospace",
+  "model": "695 Jetprop Commander 980"
+ },
+ "ACAM": {
+  "make": "Leza-Lockwood",
+  "model": "Air Cam"
+ },
+ "ACAR": {
+  "make": "Auster",
+  "model": "J-5B Autocar"
+ },
+ "ACED": {
+  "make": "Powell",
+  "model": "P-70 Acey Deucy"
+ },
+ "ACR2": {
+  "make": "Acro Sport",
+  "model": "Acro-Sport 2"
+ },
+ "ACRD": {
+  "make": "Avia (3)",
+  "model": "Accord"
+ },
+ "ACRO": {
+  "make": "Acro Sport",
+  "model": "Acro-Sport 1"
+ },
+ "ACSR": {
+  "make": "Victa",
+  "model": "Aircruiser"
+ },
+ "AD20": {
+  "make": "Beijing Keyuan",
+  "model": "AD-200"
+ },
+ "ADEL": {
+  "make": "Ustinov",
+  "model": "Adel"
+ },
+ "ADVE": {
+  "make": "Auster",
+  "model": "J-5 Adventurer"
+ },
+ "ADVN": {
+  "make": "Adventure Air",
+  "model": "Adventurer"
+ },
+ "AE45": {
+  "make": "Let",
+  "model": "Aero 45"
+ },
+ "AEA1": {
+  "make": "American Eagle",
+  "model": "A-1"
+ },
+ "AERK": {
+  "make": "Aeronca",
+  "model": "K Scout"
+ },
+ "AEST": {
+  "make": "Aerostar (1)",
+  "model": "600"
+ },
+ "AFOX": {
+  "make": "Halley",
+  "model": "Apollo Fox"
+ },
+ "AG02": {
+  "make": "Gatard",
+  "model": "AG-02 Poussin"
+ },
+ "AG04": {
+  "make": "Gatard",
+  "model": "AG-04 Pigeon"
+ },
+ "AG1": {
+  "make": "Halley",
+  "model": "Apollo AG-1 Gyro"
+ },
+ "AG10": {
+  "make": "Caiga",
+  "model": "AG-100"
+ },
+ "AG14": {
+  "make": "Anderson-Greenwood",
+  "model": "14"
+ },
+ "AG60": {
+  "make": "Caiga",
+  "model": "AG-600 Kunlong"
+ },
+ "AGSH": {
+  "make": "Aero Gare",
+  "model": "Sea Hawker"
+ },
+ "AI10": {
+  "make": "Ikar",
+  "model": "Ai-10 Ikar"
+ },
+ "AIGT": {
+  "make": "Auster",
+  "model": "J-5F Aiglet Trainer"
+ },
+ "AIRD": {
+  "make": "Beagle-Auster",
+  "model": "A-109 Airedale"
+ },
+ "AIRL": {
+  "make": "Aeronix",
+  "model": "Airelle"
+ },
+ "AJ27": {
+  "make": "Comac",
+  "model": "C-909"
+ },
+ "AJET": {
+  "make": "Aoi",
+  "model": "Alpha Jet"
+ },
+ "AKNC": {
+  "make": "Baykar",
+  "model": "Bayraktar Akıncı"
+ },
+ "AKOY": {
+  "make": "Lisa",
+  "model": "Akoya"
+ },
+ "AKRO": {
+  "make": "Stephens",
+  "model": "Akro"
+ },
+ "ALBU": {
+  "make": "Aviation Development",
+  "model": "Alaskan Bushmaster"
+ },
+ "ALC1": {
+  "make": "Altair Coelho",
+  "model": "AC-11"
+ },
+ "ALGR": {
+  "make": "Fantasy Air",
+  "model": "Allegro"
+ },
+ "ALH": {
+  "make": "Hindustan",
+  "model": "ALH Dhruv"
+ },
+ "ALIG": {
+  "make": "Arion",
+  "model": "LS-1 Lightning"
+ },
+ "ALIZ": {
+  "make": "Breguet",
+  "model": "1050 Alizé"
+ },
+ "ALO2": {
+  "make": "Sud",
+  "model": "SA-318 Alouette 2"
+ },
+ "ALO3": {
+  "make": "Hindustan",
+  "model": "SA-316 Chetak"
+ },
+ "ALPI": {
+  "make": "Auster",
+  "model": "J-5Q Alpine"
+ },
+ "ALSL": {
+  "make": "Airlony",
+  "model": "Skylane"
+ },
+ "ALTO": {
+  "make": "Direct Fly",
+  "model": "Alto"
+ },
+ "AM3": {
+  "make": "Aerfer-Aermacchi",
+  "model": "AM-3"
+ },
+ "AMX": {
+  "make": "Amx",
+  "model": "A-1"
+ },
+ "AN12": {
+  "make": "Antonov",
+  "model": "An-12"
+ },
+ "AN2": {
+  "make": "Aicsa",
+  "model": "An-2"
+ },
+ "AN22": {
+  "make": "Antonov",
+  "model": "An-22 Antheus"
+ },
+ "AN24": {
+  "make": "Xian",
+  "model": "Y-7E"
+ },
+ "AN26": {
+  "make": "Antonov",
+  "model": "An-26"
+ },
+ "AN28": {
+  "make": "Pzl-Mielec",
+  "model": "An-28"
+ },
+ "AN3": {
+  "make": "Antonov",
+  "model": "An-3"
+ },
+ "AN30": {
+  "make": "Antonov",
+  "model": "An-30"
+ },
+ "AN32": {
+  "make": "Antonov",
+  "model": "An-32"
+ },
+ "AN38": {
+  "make": "Antonov",
+  "model": "An-38"
+ },
+ "AN70": {
+  "make": "Antonov",
+  "model": "An-70"
+ },
+ "AN72": {
+  "make": "Antonov",
+  "model": "An-72"
+ },
+ "AN8": {
+  "make": "Antonov",
+  "model": "An-8"
+ },
+ "ANDR": {
+  "make": "Millioud",
+  "model": "Andromède"
+ },
+ "ANGL": {
+  "make": "Angel",
+  "model": "44 Angel"
+ },
+ "ANKA": {
+  "make": "Tai",
+  "model": "Anka"
+ },
+ "ANSN": {
+  "make": "Avro",
+  "model": "652 Anson"
+ },
+ "ANST": {
+  "make": "Kazan",
+  "model": "Ansat"
+ },
+ "AP20": {
+  "make": "Aeroprakt",
+  "model": "A-20"
+ },
+ "AP22": {
+  "make": "Aeroprakt",
+  "model": "A-22"
+ },
+ "AP24": {
+  "make": "Aeroprakt",
+  "model": "A-24 Viking"
+ },
+ "AP26": {
+  "make": "Aeroprakt",
+  "model": "A-26 Twin Vista"
+ },
+ "AP28": {
+  "make": "Aeroprakt",
+  "model": "A-28 Victor"
+ },
+ "AP32": {
+  "make": "Aeroprakt",
+  "model": "A-32 Vixxen"
+ },
+ "AP36": {
+  "make": "Aeroprakt",
+  "model": "A-36 Vulcan"
+ },
+ "APM2": {
+  "make": "Issoire",
+  "model": "APM-21 Lion"
+ },
+ "APM3": {
+  "make": "Issoire",
+  "model": "APM-30 Lion"
+ },
+ "APM4": {
+  "make": "Issoire",
+  "model": "APM-40 Simba"
+ },
+ "APUP": {
+  "make": "Aeropup",
+  "model": "Aeropup"
+ },
+ "AR1": {
+  "make": "Silverlight",
+  "model": "AR-1 American Ranger 1"
+ },
+ "AR11": {
+  "make": "Aeronca",
+  "model": "11 Chief"
+ },
+ "AR15": {
+  "make": "Aeronca",
+  "model": "15 Sedan"
+ },
+ "AR50": {
+  "make": "Aeronca",
+  "model": "50 Chief"
+ },
+ "AR5T": {
+  "make": "Aeronca",
+  "model": "50 Tandem"
+ },
+ "AR65": {
+  "make": "Aeronca",
+  "model": "65 Super Chief"
+ },
+ "AR6T": {
+  "make": "Aeronca",
+  "model": "60 Tandem"
+ },
+ "ARES": {
+  "make": "Rutan",
+  "model": "151 Ares"
+ },
+ "ARV1": {
+  "make": "Arv",
+  "model": "ARV-1 Super 2"
+ },
+ "ARVA": {
+  "make": "Iai",
+  "model": "101 Arava"
+ },
+ "ARWF": {
+  "make": "Arrow (1)",
+  "model": "F Sport"
+ },
+ "AS02": {
+  "make": "Ffa",
+  "model": "AS-202-18 Wren"
+ },
+ "AS14": {
+  "make": "Schleicher",
+  "model": "ASK-14"
+ },
+ "AS16": {
+  "make": "Schleicher",
+  "model": "ASK-16"
+ },
+ "AS2T": {
+  "make": "Ffa",
+  "model": "AS-202-32TP Turbine Bravo"
+ },
+ "AS32": {
+  "make": "Aerospatiale",
+  "model": "HD-21"
+ },
+ "AS3B": {
+  "make": "Aerospatiale",
+  "model": "AS-532A2 Cougar Mk2"
+ },
+ "AS50": {
+  "make": "Airbus Helicopters",
+  "model": "H-125 Fennec"
+ },
+ "AS55": {
+  "make": "Eurocopter",
+  "model": "AS-555 Fennec"
+ },
+ "AS65": {
+  "make": "Aerospatiale",
+  "model": "HH-65 Dolphin"
+ },
+ "AS80": {
+  "make": "Starck",
+  "model": "AS-80 Holiday"
+ },
+ "ASDR": {
+  "make": "Wild",
+  "model": "Ascender"
+ },
+ "ASO4": {
+  "make": "Asso Aerei",
+  "model": "Asso 4 Whisky"
+ },
+ "ASO5": {
+  "make": "Asso Aerei",
+  "model": "Asso 5 Champion"
+ },
+ "ASOX": {
+  "make": "Asso Aerei",
+  "model": "Asso 10 Jewel"
+ },
+ "ASTO": {
+  "make": "Tecnam",
+  "model": "Astore"
+ },
+ "ASTR": {
+  "make": "Iai",
+  "model": "1125 Astra"
+ },
+ "AT1": {
+  "make": "Antoniewski",
+  "model": "AT-1"
+ },
+ "AT2P": {
+  "make": "Air Tractor",
+  "model": "AT-250"
+ },
+ "AT3": {
+  "make": "Aidc",
+  "model": "AT-3 Tzu-Chung"
+ },
+ "AT3P": {
+  "make": "Air Tractor",
+  "model": "AT-300"
+ },
+ "AT3T": {
+  "make": "Air Tractor",
+  "model": "AT-302"
+ },
+ "AT43": {
+  "make": "ATR",
+  "model": "ATR-42-300"
+ },
+ "AT44": {
+  "make": "ATR",
+  "model": "ATR-42-400"
+ },
+ "AT45": {
+  "make": "ATR",
+  "model": "ATR-42-500"
+ },
+ "AT46": {
+  "make": "ATR",
+  "model": "ATR-42-600"
+ },
+ "AT5P": {
+  "make": "Air Tractor",
+  "model": "AT-501"
+ },
+ "AT5T": {
+  "make": "Air Tractor",
+  "model": "AT-502"
+ },
+ "AT6T": {
+  "make": "Air Tractor",
+  "model": "AT-602"
+ },
+ "AT72": {
+  "make": "ATR",
+  "model": "ATR-72-201"
+ },
+ "AT73": {
+  "make": "ATR",
+  "model": "ATR-72-211"
+ },
+ "AT75": {
+  "make": "ATR",
+  "model": "ATR-72-500"
+ },
+ "AT76": {
+  "make": "ATR",
+  "model": "ATR-72-600"
+ },
+ "AT8T": {
+  "make": "Air Tractor",
+  "model": "AT-802"
+ },
+ "ATAC": {
+  "make": "Aircraft Technologies",
+  "model": "Acro 1"
+ },
+ "ATIS": {
+  "make": "Aircraft Technologies",
+  "model": "Atlantis"
+ },
+ "ATL": {
+  "make": "Robin",
+  "model": "ATL"
+ },
+ "ATLA": {
+  "make": "Dassault",
+  "model": "Atlantique 2"
+ },
+ "ATP": {
+  "make": "British Aerospace",
+  "model": "ATP"
+ },
+ "ATTL": {
+  "make": "Euronef",
+  "model": "ATTL-1"
+ },
+ "AU11": {
+  "make": "Beagle-Auster",
+  "model": "E-3 Auster AOP11"
+ },
+ "AUJ2": {
+  "make": "Auster",
+  "model": "J-2 Arrow"
+ },
+ "AUJ4": {
+  "make": "Auster",
+  "model": "J-4 Archer"
+ },
+ "AURA": {
+  "make": "Sunward",
+  "model": "SA60 Aurora"
+ },
+ "AUS3": {
+  "make": "Taylorcraft (2)",
+  "model": "E"
+ },
+ "AUS4": {
+  "make": "Taylorcraft (2)",
+  "model": "G"
+ },
+ "AUS5": {
+  "make": "Auster",
+  "model": "J"
+ },
+ "AUS6": {
+  "make": "Auster",
+  "model": "K"
+ },
+ "AUS7": {
+  "make": "Auster",
+  "model": "Q"
+ },
+ "AUS9": {
+  "make": "Auster",
+  "model": "B5"
+ },
+ "AV68": {
+  "make": "Alpla",
+  "model": "AVO-68 Samburo"
+ },
+ "AVAM": {
+  "make": "Avid",
+  "model": "Catalina"
+ },
+ "AVID": {
+  "make": "Airdale",
+  "model": "Flyer"
+ },
+ "AVIN": {
+  "make": "Avro",
+  "model": "594 Avian"
+ },
+ "AVTR": {
+  "make": "Aero Adventure",
+  "model": "Aventura 2"
+ },
+ "AXE": {
+  "make": "Skyfly",
+  "model": "Axe"
+ },
+ "B06": {
+  "make": "Bell",
+  "model": "406"
+ },
+ "B06T": {
+  "make": "Bell",
+  "model": "206LT TwinRanger"
+ },
+ "B1": {
+  "make": "Rockwell",
+  "model": "B-1 Lancer"
+ },
+ "B103": {
+  "make": "Beriev",
+  "model": "Be-103 Bekas"
+ },
+ "B105": {
+  "make": "MBB",
+  "model": "BO 105"
+ },
+ "B14A": {
+  "make": "Bellanca",
+  "model": "14 Junior"
+ },
+ "B14B": {
+  "make": "Downer",
+  "model": "14 Bellanca 260"
+ },
+ "B14C": {
+  "make": "Bellanca",
+  "model": "14 Bellanca 260A"
+ },
+ "B150": {
+  "make": "Winner",
+  "model": "B-150"
+ },
+ "B17": {
+  "make": "Boeing",
+  "model": "B-17 Flying Fortress"
+ },
+ "B18T": {
+  "make": "Hamilton",
+  "model": "Westwind 2"
+ },
+ "B190": {
+  "make": "Beech",
+  "model": "1900"
+ },
+ "B2": {
+  "make": "Northrop Grumman",
+  "model": "B-2 Spirit"
+ },
+ "B209": {
+  "make": "Bolkow",
+  "model": "BO-209 Monsun"
+ },
+ "B21": {
+  "make": "Northrop Grumman",
+  "model": "B-21 Raider"
+ },
+ "B212": {
+  "make": "Bell",
+  "model": "212"
+ },
+ "B214": {
+  "make": "Bell",
+  "model": "214B"
+ },
+ "B222": {
+  "make": "Bell",
+  "model": "222"
+ },
+ "B23": {
+  "make": "Douglas",
+  "model": "B-23 Dragon"
+ },
+ "B230": {
+  "make": "Bell",
+  "model": "230"
+ },
+ "B23E": {
+  "make": "Brm Aero",
+  "model": "Bristell B23 Energic"
+ },
+ "B24": {
+  "make": "Consolidated",
+  "model": "B-24 Liberator"
+ },
+ "B25": {
+  "make": "North American",
+  "model": "PBJ Mitchell"
+ },
+ "B26": {
+  "make": "Douglas",
+  "model": "A-26 Invader"
+ },
+ "B26M": {
+  "make": "Martin",
+  "model": "179 Marauder"
+ },
+ "B29": {
+  "make": "Boeing",
+  "model": "B-29 Superfortress"
+ },
+ "B305": {
+  "make": "Brantly",
+  "model": "305"
+ },
+ "B350": {
+  "make": "Hawker Beechcraft",
+  "model": "DT-05"
+ },
+ "B360": {
+  "make": "Yakovlev Aircraft",
+  "model": "Bear 360"
+ },
+ "B36T": {
+  "make": "Allison",
+  "model": "36 Turbine Bonanza"
+ },
+ "B37M": {
+  "make": "Boeing",
+  "model": "737 MAX 7"
+ },
+ "B38M": {
+  "make": "Boeing",
+  "model": "737 MAX 8"
+ },
+ "B39M": {
+  "make": "Boeing",
+  "model": "737 MAX 9"
+ },
+ "B3XM": {
+  "make": "Boeing",
+  "model": "737 MAX 10"
+ },
+ "B407": {
+  "make": "Bell",
+  "model": "407"
+ },
+ "B412": {
+  "make": "Bell",
+  "model": "412"
+ },
+ "B427": {
+  "make": "Bell",
+  "model": "427"
+ },
+ "B429": {
+  "make": "Bell",
+  "model": "429 GlobalRanger"
+ },
+ "B430": {
+  "make": "Bell",
+  "model": "430"
+ },
+ "B461": {
+  "make": "British Aerospace",
+  "model": "BAe-146-100"
+ },
+ "B462": {
+  "make": "British Aerospace",
+  "model": "BAe-146-200"
+ },
+ "B463": {
+  "make": "British Aerospace",
+  "model": "BAe-146-300"
+ },
+ "B47G": {
+  "make": "Bell",
+  "model": "47D"
+ },
+ "B47J": {
+  "make": "Bell",
+  "model": "HH-13"
+ },
+ "B47T": {
+  "make": "Soloy",
+  "model": "Bell 47"
+ },
+ "B505": {
+  "make": "Bell",
+  "model": "505 Jet Ranger X"
+ },
+ "B52": {
+  "make": "Boeing",
+  "model": "B-52 Stratofortress"
+ },
+ "B525": {
+  "make": "Bell",
+  "model": "525 Relentless"
+ },
+ "B58T": {
+  "make": "Beech",
+  "model": "58TC Baron"
+ },
+ "B60": {
+  "make": "Boisavia",
+  "model": "B-60 Mercurey"
+ },
+ "B609": {
+  "make": "AgustaWestland",
+  "model": "AW-609"
+ },
+ "B60T": {
+  "make": "Beech",
+  "model": "60 Royal Turbine Duke"
+ },
+ "B701": {
+  "make": "Boeing",
+  "model": "707-100"
+ },
+ "B703": {
+  "make": "Boeing",
+  "model": "C-18"
+ },
+ "B712": {
+  "make": "Boeing",
+  "model": "717-200"
+ },
+ "B720": {
+  "make": "Boeing",
+  "model": "720"
+ },
+ "B721": {
+  "make": "Boeing",
+  "model": "727-100"
+ },
+ "B722": {
+  "make": "Boeing",
+  "model": "727-200"
+ },
+ "B732": {
+  "make": "Boeing",
+  "model": "737-200"
+ },
+ "B733": {
+  "make": "Boeing",
+  "model": "737-300"
+ },
+ "B734": {
+  "make": "Boeing",
+  "model": "737-400"
+ },
+ "B735": {
+  "make": "Boeing",
+  "model": "737-500"
+ },
+ "B736": {
+  "make": "Boeing",
+  "model": "737-600"
+ },
+ "B737": {
+  "make": "Boeing",
+  "model": "737-700"
+ },
+ "B738": {
+  "make": "Boeing",
+  "model": "737-800"
+ },
+ "B739": {
+  "make": "Boeing",
+  "model": "737-900"
+ },
+ "B741": {
+  "make": "Boeing",
+  "model": "747-100"
+ },
+ "B742": {
+  "make": "Boeing",
+  "model": "747-200"
+ },
+ "B743": {
+  "make": "Boeing",
+  "model": "747-300"
+ },
+ "B744": {
+  "make": "Boeing",
+  "model": "747-400"
+ },
+ "B748": {
+  "make": "Boeing",
+  "model": "747-8"
+ },
+ "B74R": {
+  "make": "Boeing",
+  "model": "747SR"
+ },
+ "B74S": {
+  "make": "Boeing",
+  "model": "747SP"
+ },
+ "B752": {
+  "make": "Boeing",
+  "model": "757-200"
+ },
+ "B753": {
+  "make": "Boeing",
+  "model": "757-300"
+ },
+ "B762": {
+  "make": "Boeing",
+  "model": "767-200"
+ },
+ "B763": {
+  "make": "Boeing",
+  "model": "767-300"
+ },
+ "B764": {
+  "make": "Boeing",
+  "model": "767-400"
+ },
+ "B772": {
+  "make": "Boeing",
+  "model": "777-200"
+ },
+ "B773": {
+  "make": "Boeing",
+  "model": "777-300"
+ },
+ "B778": {
+  "make": "Boeing",
+  "model": "777-8"
+ },
+ "B779": {
+  "make": "Boeing",
+  "model": "777-9"
+ },
+ "B77L": {
+  "make": "Boeing",
+  "model": "777-200LR"
+ },
+ "B77W": {
+  "make": "Boeing",
+  "model": "777-300ER"
+ },
+ "B788": {
+  "make": "Boeing",
+  "model": "787-8 Dreamliner"
+ },
+ "B789": {
+  "make": "Boeing",
+  "model": "787-9 Dreamliner"
+ },
+ "B78X": {
+  "make": "Boeing",
+  "model": "787-10 Dreamliner"
+ },
+ "BA11": {
+  "make": "Bac",
+  "model": "111 One-Eleven"
+ },
+ "BABY": {
+  "make": "Canadian Home Rotors",
+  "model": "Safari"
+ },
+ "BARC": {
+  "make": "Buethe",
+  "model": "Barracuda"
+ },
+ "BASS": {
+  "make": "Beagle",
+  "model": "B-206"
+ },
+ "BBAT": {
+  "make": "Bradley",
+  "model": "BA-100 Aerobat"
+ },
+ "BBIR": {
+  "make": "Hovey",
+  "model": "Beta Bird"
+ },
+ "BCA3": {
+  "make": "Buhl",
+  "model": "CA-3 Sport Airsedan"
+ },
+ "BCAT": {
+  "make": "Grumman",
+  "model": "F8F Bearcat"
+ },
+ "BCMP": {
+  "make": "Avipro",
+  "model": "Bearhawk Companion"
+ },
+ "BCS1": {
+  "make": "Airbus",
+  "model": "A220-100"
+ },
+ "BCS3": {
+  "make": "Airbus",
+  "model": "A220-300"
+ },
+ "BD10": {
+  "make": "Peregrine",
+  "model": "PJ-2 Falcon"
+ },
+ "BD17": {
+  "make": "Bede",
+  "model": "BD-17 Nuggett"
+ },
+ "BD4": {
+  "make": "Bede",
+  "model": "BD-4"
+ },
+ "BD5": {
+  "make": "Bede",
+  "model": "BD-5B Micro"
+ },
+ "BD5J": {
+  "make": "Alturair",
+  "model": "BD-5J Micro"
+ },
+ "BD5T": {
+  "make": "Bd-Micro",
+  "model": "BD-5T Micro"
+ },
+ "BDOG": {
+  "make": "Scottish Aviation",
+  "model": "Sk61"
+ },
+ "BE10": {
+  "make": "Beech",
+  "model": "U-21F Ute"
+ },
+ "BE12": {
+  "make": "Beriev",
+  "model": "Be-12 Tchaika"
+ },
+ "BE17": {
+  "make": "Beech",
+  "model": "17 Staggerwing"
+ },
+ "BE18": {
+  "make": "Beech",
+  "model": "18 (piston)"
+ },
+ "BE19": {
+  "make": "Beech",
+  "model": "19 Sport"
+ },
+ "BE20": {
+  "make": "Beechcraft",
+  "model": "200 Super King Air"
+ },
+ "BE22": {
+  "make": "Beechcraft",
+  "model": "220 Denali"
+ },
+ "BE23": {
+  "make": "Beech",
+  "model": "23 Musketeer"
+ },
+ "BE24": {
+  "make": "Beech",
+  "model": "24 Sierra"
+ },
+ "BE30": {
+  "make": "Beech",
+  "model": "300 Super King Air"
+ },
+ "BE32": {
+  "make": "Beriev",
+  "model": "Be-30"
+ },
+ "BE33": {
+  "make": "Beech",
+  "model": "E-24"
+ },
+ "BE35": {
+  "make": "Beech",
+  "model": "35 Bonanza"
+ },
+ "BE36": {
+  "make": "Beech",
+  "model": "36 Bonanza 36"
+ },
+ "BE40": {
+  "make": "Beech",
+  "model": "T-400"
+ },
+ "BE4W": {
+  "make": "Raytheon",
+  "model": "Hawker 400XT"
+ },
+ "BE50": {
+  "make": "Beech",
+  "model": "RU-8 Seminole"
+ },
+ "BE55": {
+  "make": "Beech",
+  "model": "55 Baron"
+ },
+ "BE56": {
+  "make": "Beech",
+  "model": "56 Turbo Baron"
+ },
+ "BE58": {
+  "make": "Beechcraft",
+  "model": "58 Baron"
+ },
+ "BE60": {
+  "make": "Beech",
+  "model": "60 Duke"
+ },
+ "BE65": {
+  "make": "Beech",
+  "model": "65 Queen Air"
+ },
+ "BE70": {
+  "make": "Beech",
+  "model": "70 Queen Air"
+ },
+ "BE76": {
+  "make": "Beech",
+  "model": "76 Duchess"
+ },
+ "BE77": {
+  "make": "Beech",
+  "model": "77 Skipper"
+ },
+ "BE80": {
+  "make": "Beech",
+  "model": "80 Zamir"
+ },
+ "BE88": {
+  "make": "Beech",
+  "model": "88 Queen Air"
+ },
+ "BE95": {
+  "make": "Beech",
+  "model": "95 Travel Air"
+ },
+ "BE99": {
+  "make": "Beech",
+  "model": "99 Airliner"
+ },
+ "BE9L": {
+  "make": "Beechcraft",
+  "model": "90 King Air"
+ },
+ "BE9T": {
+  "make": "Beech",
+  "model": "90 (F90) King Air"
+ },
+ "BEA5": {
+  "make": "Avipro",
+  "model": "Bearhawk 5"
+ },
+ "BEAR": {
+  "make": "Avipro",
+  "model": "Bearhawk"
+ },
+ "BELF": {
+  "make": "Short",
+  "model": "SC-5 Belfast"
+ },
+ "BER2": {
+  "make": "Beriev",
+  "model": "Be-200 Altair"
+ },
+ "BER4": {
+  "make": "Beriev",
+  "model": "A-40 Albatross"
+ },
+ "BETA": {
+  "make": "Rollason",
+  "model": "Beta"
+ },
+ "BEVR": {
+  "make": "Asap",
+  "model": "Beaver"
+ },
+ "BF19": {
+  "make": "Podesva",
+  "model": "Bf-109G-2"
+ },
+ "BFIT": {
+  "make": "Bristol",
+  "model": "F-2B Fighter"
+ },
+ "BILO": {
+  "make": "Pena",
+  "model": "Bilouis"
+ },
+ "BIPL": {
+  "make": "Eaa",
+  "model": "Biplane"
+ },
+ "BIRD": {
+  "make": "Taylor (3)",
+  "model": "TA-2 Bird"
+ },
+ "BISC": {
+  "make": "Bilsam",
+  "model": "Sky Cruiser"
+ },
+ "BK17": {
+  "make": "Eurocopter-Kawasaki",
+  "model": "BK-117B"
+ },
+ "BKUT": {
+  "make": "Berkut",
+  "model": "Berkut"
+ },
+ "BL11": {
+  "make": "Bleriot",
+  "model": "11"
+ },
+ "BL17": {
+  "make": "Bellanca",
+  "model": "17 Viking"
+ },
+ "BL19": {
+  "make": "Aviabellanca",
+  "model": "19 Skyrocket"
+ },
+ "BL8": {
+  "make": "American Champion",
+  "model": "8 Scout"
+ },
+ "BLBU": {
+  "make": "Ameur",
+  "model": "Altania"
+ },
+ "BLCF": {
+  "make": "Boeing",
+  "model": "747-400LCF Dreamlifter"
+ },
+ "BLEN": {
+  "make": "Bristol",
+  "model": "149 Blenheim"
+ },
+ "BLKS": {
+  "make": "Aircraft Spruce",
+  "model": "Baby Lakes"
+ },
+ "BLSA": {
+  "make": "Avipro",
+  "model": "Bearhawk LSA"
+ },
+ "BM6": {
+  "make": "Maranda",
+  "model": "BM-6 Lark"
+ },
+ "BMAN": {
+  "make": "Aak",
+  "model": "Bushman"
+ },
+ "BN2P": {
+  "make": "Britten-Norman",
+  "model": "BN-2 Islander"
+ },
+ "BN2T": {
+  "make": "Britten-Norman",
+  "model": "BN-2T Defender 4000"
+ },
+ "BO40": {
+  "make": "Boeing",
+  "model": "40"
+ },
+ "BOBC": {
+  "make": "Tlac",
+  "model": "Bobcat"
+ },
+ "BOLT": {
+  "make": "Steen",
+  "model": "Skybolt"
+ },
+ "BOOM": {
+  "make": "Rutan",
+  "model": "202 Boomerang"
+ },
+ "BPAT": {
+  "make": "Avipro",
+  "model": "Bearhawk Patrol"
+ },
+ "BPUM": {
+  "make": "Bdc Aero",
+  "model": "Puma"
+ },
+ "BR14": {
+  "make": "Breguet",
+  "model": "14 Replica"
+ },
+ "BR23": {
+  "make": "Brm Aero",
+  "model": "Bristell B23"
+ },
+ "BR54": {
+  "make": "Barnett",
+  "model": "BRC-540"
+ },
+ "BR60": {
+  "make": "Brumby",
+  "model": "600"
+ },
+ "BR61": {
+  "make": "Brumby",
+  "model": "610 Evolution"
+ },
+ "BR8": {
+  "make": "Brm Aero",
+  "model": "Bristell B8"
+ },
+ "BRAV": {
+  "make": "Tecnam",
+  "model": "P-2004 Bravo"
+ },
+ "BRB2": {
+  "make": "Brantly-Hynes",
+  "model": "B-2"
+ },
+ "BREZ": {
+  "make": "Aerostyle",
+  "model": "Breezer"
+ },
+ "BROU": {
+  "make": "Max Holste",
+  "model": "MH-1521 Broussard"
+ },
+ "BS60": {
+  "make": "Beech-Sferma",
+  "model": "60 Marquis"
+ },
+ "BSTP": {
+  "make": "Bell",
+  "model": "214ST SuperTransport"
+ },
+ "BSWN": {
+  "make": "Dronamics",
+  "model": "Black Swan"
+ },
+ "BT36": {
+  "make": "Beech",
+  "model": "A36TC Bonanza"
+ },
+ "BT7": {
+  "make": "Boeing",
+  "model": "BTX-1"
+ },
+ "BTB2": {
+  "make": "Baykar",
+  "model": "Bayraktar TB-2"
+ },
+ "BTB3": {
+  "make": "Baykar",
+  "model": "Bayraktar TB-3"
+ },
+ "BTUB": {
+  "make": "Kimbrel",
+  "model": "Dormoy Bathtub"
+ },
+ "BU20": {
+  "make": "Aircraft Hydro-Forming",
+  "model": "Bushmaster 2000"
+ },
+ "BU31": {
+  "make": "Dornier",
+  "model": "DoBü-131 Lerche"
+ },
+ "BU33": {
+  "make": "Bitz",
+  "model": "Bü-133 Jungmeister"
+ },
+ "BU81": {
+  "make": "Zlin",
+  "model": "C-6"
+ },
+ "BUC": {
+  "make": "Hawker Siddeley",
+  "model": "Buccaneer"
+ },
+ "BUCA": {
+  "make": "Advanced Aeromarine",
+  "model": "Mallard"
+ },
+ "BUSH": {
+  "make": "Rainbow Skyreach",
+  "model": "BushCat"
+ },
+ "BW60": {
+  "make": "Blackwing",
+  "model": "BW-600"
+ },
+ "BW6T": {
+  "make": "Blackwing",
+  "model": "BW-635"
+ },
+ "BX2": {
+  "make": "Brandli",
+  "model": "BX-2 Cherry"
+ },
+ "C02T": {
+  "make": "Aji",
+  "model": "Turbo Star 402"
+ },
+ "C04T": {
+  "make": "Cessna",
+  "model": "404 (turbine)"
+ },
+ "C06T": {
+  "make": "Cessna",
+  "model": "206 (turbine)"
+ },
+ "C07T": {
+  "make": "Cessna",
+  "model": "207 (turbine)"
+ },
+ "C1": {
+  "make": "Kawasaki",
+  "model": "C-1"
+ },
+ "C101": {
+  "make": "CASA",
+  "model": "E-25"
+ },
+ "C10T": {
+  "make": "Advanced Aircraft",
+  "model": "Spirit 750"
+ },
+ "C119": {
+  "make": "Fairchild (1)",
+  "model": "R4Q Flying Boxcar"
+ },
+ "C120": {
+  "make": "Cessna",
+  "model": "120"
+ },
+ "C123": {
+  "make": "Fairchild (1)",
+  "model": "C-123 Provider"
+ },
+ "C130": {
+  "make": "Lockheed",
+  "model": "EC-130 Aya"
+ },
+ "C135": {
+  "make": "Boeing",
+  "model": "NC-135"
+ },
+ "C140": {
+  "make": "Cessna",
+  "model": "140"
+ },
+ "C14T": {
+  "make": "Aji",
+  "model": "Turbo Star 414"
+ },
+ "C15": {
+  "make": "McDonnell Douglas",
+  "model": "YC-15"
+ },
+ "C150": {
+  "make": "Cessna",
+  "model": "150"
+ },
+ "C152": {
+  "make": "Cessna",
+  "model": "152"
+ },
+ "C160": {
+  "make": "Transall",
+  "model": "C-160"
+ },
+ "C162": {
+  "make": "Cessna",
+  "model": "162 Skycatcher"
+ },
+ "C17": {
+  "make": "Boeing",
+  "model": "C-17 Globemaster 3"
+ },
+ "C170": {
+  "make": "Cessna",
+  "model": "170"
+ },
+ "C172": {
+  "make": "Cessna",
+  "model": "172"
+ },
+ "C175": {
+  "make": "Cessna",
+  "model": "175"
+ },
+ "C177": {
+  "make": "Cessna",
+  "model": "177"
+ },
+ "C180": {
+  "make": "Cessna",
+  "model": "180"
+ },
+ "C182": {
+  "make": "Cessna",
+  "model": "182 Skylane"
+ },
+ "C185": {
+  "make": "Cessna",
+  "model": "U-17A"
+ },
+ "C188": {
+  "make": "Cessna",
+  "model": "188 AgWagon"
+ },
+ "C190": {
+  "make": "Cessna",
+  "model": "190"
+ },
+ "C195": {
+  "make": "Cessna",
+  "model": "195"
+ },
+ "C2": {
+  "make": "Grumman",
+  "model": "C-2 Greyhound"
+ },
+ "C205": {
+  "make": "Cessna",
+  "model": "205"
+ },
+ "C206": {
+  "make": "Cessna",
+  "model": "206 Stationair"
+ },
+ "C207": {
+  "make": "Cessna",
+  "model": "207 Skywagon 207"
+ },
+ "C208": {
+  "make": "Cessna",
+  "model": "208 Caravan"
+ },
+ "C210": {
+  "make": "Cessna",
+  "model": "210"
+ },
+ "C212": {
+  "make": "CASA",
+  "model": "C-212 Aviocar"
+ },
+ "C21T": {
+  "make": "Riley",
+  "model": "Turbine Eagle 421"
+ },
+ "C22J": {
+  "make": "Caproni Vizzola",
+  "model": "C-22J Ventura"
+ },
+ "C240": {
+  "make": "Cessna",
+  "model": "T240 TTx"
+ },
+ "C25A": {
+  "make": "Cessna",
+  "model": "525A Citation CJ2"
+ },
+ "C25B": {
+  "make": "Cessna",
+  "model": "525B Citation CJ3"
+ },
+ "C25C": {
+  "make": "Cessna",
+  "model": "525C Citation CJ4"
+ },
+ "C25M": {
+  "make": "Cessna",
+  "model": "525 Citation M2"
+ },
+ "C270": {
+  "make": "Caudron",
+  "model": "C-270 Luciole"
+ },
+ "C27J": {
+  "make": "Alenia Aermacchi",
+  "model": "C-27J Spartan"
+ },
+ "C295": {
+  "make": "CASA",
+  "model": "T-21"
+ },
+ "C303": {
+  "make": "Aviones Colombia",
+  "model": "T303"
+ },
+ "C306": {
+  "make": "Cea-Ufmg",
+  "model": "CB-10 Triathlon"
+ },
+ "C309": {
+  "make": "Cea-Ufmg",
+  "model": "CEA-309 Mehari"
+ },
+ "C30J": {
+  "make": "Lockheed Martin",
+  "model": "AC-130J Ghostrider"
+ },
+ "C310": {
+  "make": "Riley",
+  "model": "65"
+ },
+ "C311": {
+  "make": "Cea-Ufmg",
+  "model": "CEA-311 Anequim"
+ },
+ "C320": {
+  "make": "Cessna",
+  "model": "320 Skyknight"
+ },
+ "C335": {
+  "make": "Cessna",
+  "model": "335"
+ },
+ "C336": {
+  "make": "Cessna",
+  "model": "336 Skymaster"
+ },
+ "C337": {
+  "make": "Cessna",
+  "model": "337 Super Skymaster"
+ },
+ "C340": {
+  "make": "Riley",
+  "model": "Super 340"
+ },
+ "C365": {
+  "make": "Ekw",
+  "model": "C-3605"
+ },
+ "C402": {
+  "make": "Cessna",
+  "model": "402"
+ },
+ "C404": {
+  "make": "Cessna",
+  "model": "404 Titan"
+ },
+ "C408": {
+  "make": "Cessna",
+  "model": "408 SkyCourier"
+ },
+ "C411": {
+  "make": "Cessna",
+  "model": "411"
+ },
+ "C414": {
+  "make": "Cessna",
+  "model": "414"
+ },
+ "C42": {
+  "make": "Ikarus",
+  "model": "C-42"
+ },
+ "C421": {
+  "make": "Cessna",
+  "model": "421"
+ },
+ "C425": {
+  "make": "Cessna",
+  "model": "425 Corsair"
+ },
+ "C441": {
+  "make": "Cessna",
+  "model": "441 Conquest"
+ },
+ "C46": {
+  "make": "Curtiss",
+  "model": "C-46 Commando"
+ },
+ "C500": {
+  "make": "Cessna",
+  "model": "500 Citation"
+ },
+ "C501": {
+  "make": "Cessna",
+  "model": "501 Citation 1SP"
+ },
+ "C510": {
+  "make": "Cessna",
+  "model": "510 Citation Mustang"
+ },
+ "C525": {
+  "make": "Cessna",
+  "model": "525 CitationJet"
+ },
+ "C550": {
+  "make": "Cessna",
+  "model": "550 Citation II"
+ },
+ "C551": {
+  "make": "Cessna",
+  "model": "551 Citation 2SP"
+ },
+ "C55B": {
+  "make": "Cessna",
+  "model": "550B Citation Bravo"
+ },
+ "C560": {
+  "make": "Cessna",
+  "model": "560 Citation V"
+ },
+ "C56X": {
+  "make": "Cessna",
+  "model": "560XL Citation XLS"
+ },
+ "C5M": {
+  "make": "Lockheed",
+  "model": "C-5 Super Galaxy"
+ },
+ "C650": {
+  "make": "Cessna",
+  "model": "650 Citation VII"
+ },
+ "C680": {
+  "make": "Cessna",
+  "model": "680 Citation Sovereign"
+ },
+ "C68A": {
+  "make": "Cessna",
+  "model": "680A Citation Latitude"
+ },
+ "C700": {
+  "make": "Cessna",
+  "model": "700 Citation Longitude"
+ },
+ "C72R": {
+  "make": "Aviones Colombia",
+  "model": "172RG"
+ },
+ "C750": {
+  "make": "Cessna",
+  "model": "750 Citation 10"
+ },
+ "C77R": {
+  "make": "Aviones Colombia",
+  "model": "177RG"
+ },
+ "C82": {
+  "make": "Fairchild (1)",
+  "model": "C-82 Packet"
+ },
+ "C82R": {
+  "make": "Aviones Colombia",
+  "model": "R182"
+ },
+ "C82S": {
+  "make": "Cessna",
+  "model": "T182 Turbo Skylane"
+ },
+ "C82T": {
+  "make": "Cessna",
+  "model": "TR182 Turbo Skylane RG"
+ },
+ "C919": {
+  "make": "Comac",
+  "model": "C-919"
+ },
+ "C97": {
+  "make": "Boeing",
+  "model": "C-97 Stratofreighter"
+ },
+ "CA12": {
+  "make": "Comp Air",
+  "model": "CA-12 Comp Air 12"
+ },
+ "CA19": {
+  "make": "Commonwealth (1)",
+  "model": "CA-13 Boomerang"
+ },
+ "CA1P": {
+  "make": "Aerocomp",
+  "model": "CA-10 Comp Air 10"
+ },
+ "CA1T": {
+  "make": "Aerocomp",
+  "model": "CA-10T Comp Air 10T"
+ },
+ "CA25": {
+  "make": "Commonwealth (1)",
+  "model": "CA-25 Winjeel"
+ },
+ "CA3": {
+  "make": "Aerocomp",
+  "model": "CA-3 Comp Air 3"
+ },
+ "CA4": {
+  "make": "Aerocomp",
+  "model": "CA-4 Comp Air 4"
+ },
+ "CA41": {
+  "make": "Corvus",
+  "model": "CA-41 Racer"
+ },
+ "CA6": {
+  "make": "Aerocomp",
+  "model": "CA-6 Comp Air 6"
+ },
+ "CA61": {
+  "make": "Cvjetkovic",
+  "model": "CA-61 Mini Ace"
+ },
+ "CA65": {
+  "make": "Cvjetkovic",
+  "model": "CA-65 Skyfly"
+ },
+ "CA7P": {
+  "make": "Aerocomp",
+  "model": "CA-7P Comp Air 7P"
+ },
+ "CA7T": {
+  "make": "Aerocomp",
+  "model": "CA-7T Comp Air 7T"
+ },
+ "CA8": {
+  "make": "Aerocomp",
+  "model": "CA-8 Comp Air 8"
+ },
+ "CA9": {
+  "make": "Comp Air",
+  "model": "CA-9 Comp Air 9"
+ },
+ "CABI": {
+  "make": "Universal Composite",
+  "model": "Carbon Bird"
+ },
+ "CABN": {
+  "make": "Paramount",
+  "model": "Cabinaire"
+ },
+ "CAD2": {
+  "make": "Class",
+  "model": "Bush Caddy R-80"
+ },
+ "CAD4": {
+  "make": "Class",
+  "model": "Bush Caddy L-160"
+ },
+ "CAML": {
+  "make": "Sopwith",
+  "model": "Camel"
+ },
+ "CAMP": {
+  "make": "Grega",
+  "model": "GN-1 Aircamper"
+ },
+ "CAN4": {
+  "make": "Campana",
+  "model": "AN-4"
+ },
+ "CAPL": {
+  "make": "Capella",
+  "model": "Capella"
+ },
+ "CAR": {
+  "make": "Aerocar",
+  "model": "Aerocar"
+ },
+ "CARV": {
+  "make": "Aviation Traders",
+  "model": "ATL-98 Carvair"
+ },
+ "CASS": {
+  "make": "Cassutt",
+  "model": "Special"
+ },
+ "CAT": {
+  "make": "Canadian Vickers",
+  "model": "Canso"
+ },
+ "CAT1": {
+  "make": "Creative Flight",
+  "model": "MPA Aerocat SR"
+ },
+ "CAT2": {
+  "make": "Creative Flight",
+  "model": "MPA Aerocat TR"
+ },
+ "CAW": {
+  "make": "Cessna",
+  "model": "AW"
+ },
+ "CB1": {
+  "make": "Hatz",
+  "model": "CB-1 Biplane"
+ },
+ "CC11": {
+  "make": "Cub Crafters",
+  "model": "CC-11 Sport Cub"
+ },
+ "CC19": {
+  "make": "Cub Crafters",
+  "model": "CC-19 XCub"
+ },
+ "CD2": {
+  "make": "Claudius Dornier",
+  "model": "CD-2 Seastar"
+ },
+ "CDC6": {
+  "make": "Cessna",
+  "model": "DC-6"
+ },
+ "CDUS": {
+  "make": "Autogyro",
+  "model": "Calidus"
+ },
+ "CDW1": {
+  "make": "Chilton",
+  "model": "DW-1"
+ },
+ "CE15": {
+  "make": "Chernov",
+  "model": "Che-15"
+ },
+ "CE22": {
+  "make": "Hydroplane",
+  "model": "Che-22 Pelican"
+ },
+ "CE23": {
+  "make": "Chernov",
+  "model": "Che-23"
+ },
+ "CE25": {
+  "make": "Chernov",
+  "model": "Che-25"
+ },
+ "CE27": {
+  "make": "Chernov",
+  "model": "Che-27"
+ },
+ "CE43": {
+  "make": "Cerva",
+  "model": "CE-43 Guepard"
+ },
+ "CEL5": {
+  "make": "Otto",
+  "model": "Celera 500L"
+ },
+ "CELR": {
+  "make": "Mirage",
+  "model": "Celerity"
+ },
+ "CENT": {
+  "make": "Found",
+  "model": "100 Centennial"
+ },
+ "CFRE": {
+  "make": "Colyaer",
+  "model": "Freedom"
+ },
+ "CG3": {
+  "make": "Caudron",
+  "model": "G-3"
+ },
+ "CGAN": {
+  "make": "Colyaer",
+  "model": "Gannet"
+ },
+ "CH10": {
+  "make": "Zenair",
+  "model": "CH-100 Mono-Z"
+ },
+ "CH12": {
+  "make": "Cicare",
+  "model": "CH-12"
+ },
+ "CH14": {
+  "make": "Cicare",
+  "model": "CH-14 Aguilucho"
+ },
+ "CH15": {
+  "make": "Zenair",
+  "model": "CH-150 Acro-Z"
+ },
+ "CH18": {
+  "make": "Zenair",
+  "model": "CH-180 Super Acro-Z"
+ },
+ "CH20": {
+  "make": "Heintz",
+  "model": "CH-200 Zénith"
+ },
+ "CH25": {
+  "make": "Zenair",
+  "model": "CH-250 Zénith"
+ },
+ "CH2T": {
+  "make": "Amd",
+  "model": "CH-2000 Alarus"
+ },
+ "CH3": {
+  "make": "Chrislea",
+  "model": "CH-3 Skyjeep"
+ },
+ "CH30": {
+  "make": "Zenair",
+  "model": "CH-300 Tri-Z"
+ },
+ "CH40": {
+  "make": "Champion",
+  "model": "402 Lancer"
+ },
+ "CH50": {
+  "make": "Zenair",
+  "model": "CH-50 Mini-Z"
+ },
+ "CH60": {
+  "make": "Roland",
+  "model": "Z-602"
+ },
+ "CH62": {
+  "make": "Zenair",
+  "model": "CH-620 Gemini"
+ },
+ "CH64": {
+  "make": "Zenair",
+  "model": "CH-640 Zodiac"
+ },
+ "CH65": {
+  "make": "Amd",
+  "model": "CH-650 Zodiac"
+ },
+ "CH7": {
+  "make": "Heli-Sport",
+  "model": "CH-7 Kompress"
+ },
+ "CH70": {
+  "make": "Roland",
+  "model": "S-Stol"
+ },
+ "CH75": {
+  "make": "Amd",
+  "model": "CH-750 Stol"
+ },
+ "CH7A": {
+  "make": "Aeronca",
+  "model": "7BCM"
+ },
+ "CH7B": {
+  "make": "Champion",
+  "model": "7GCAA"
+ },
+ "CH80": {
+  "make": "Jordan Aerospace",
+  "model": "CH-8000 Shark"
+ },
+ "CHAN": {
+  "make": "Cadcor",
+  "model": "Chanute"
+ },
+ "CHCS": {
+  "make": "Alpaero",
+  "model": "Choucas"
+ },
+ "CHIC": {
+  "make": "Podesva",
+  "model": "Chico"
+ },
+ "CHIF": {
+  "make": "Pawnee",
+  "model": "Chief"
+ },
+ "CHIN": {
+  "make": "Asap",
+  "model": "Chinook"
+ },
+ "CHIP": {
+  "make": "Leger",
+  "model": "Super-Chipmunk"
+ },
+ "CHP2": {
+  "make": "Belite",
+  "model": "CH-2A Chipper 2"
+ },
+ "CHR1": {
+  "make": "Elmwood",
+  "model": "CA-05 Christavia Mk1"
+ },
+ "CHR4": {
+  "make": "Elmwood",
+  "model": "CH-8 Christavia Mk4"
+ },
+ "CHSY": {
+  "make": "Chayair",
+  "model": "Sycamore"
+ },
+ "CICA": {
+  "make": "Hydroplane",
+  "model": "Cicada"
+ },
+ "CJ1": {
+  "make": "Corby",
+  "model": "CJ-1 Starlet"
+ },
+ "CJ6": {
+  "make": "Hongdu",
+  "model": "BT-6"
+ },
+ "CKUO": {
+  "make": "Aidc",
+  "model": "F-CK-1 Ching-Kuo"
+ },
+ "CL2P": {
+  "make": "Canadair",
+  "model": "CL-215"
+ },
+ "CL2T": {
+  "make": "Canadair",
+  "model": "UD-13"
+ },
+ "CL30": {
+  "make": "Bombardier",
+  "model": "BD-100 Challenger 300"
+ },
+ "CL35": {
+  "make": "Bombardier",
+  "model": "BD-100 Challenger 350"
+ },
+ "CL41": {
+  "make": "Canadair",
+  "model": "CL-41 Tutor"
+ },
+ "CL4G": {
+  "make": "Canadair",
+  "model": "CL-44-O Guppy"
+ },
+ "CL60": {
+  "make": "Bombardier",
+  "model": "Challenger 604"
+ },
+ "CLA": {
+  "make": "Callair",
+  "model": "A-2"
+ },
+ "CLB1": {
+  "make": "Aero Commander",
+  "model": "B-1 Ag Commander"
+ },
+ "CLBR": {
+  "make": "Fisher Aero",
+  "model": "Celebrity"
+ },
+ "CLD2": {
+  "make": "Rotortec",
+  "model": "Cloud Dancer 2"
+ },
+ "CLDS": {
+  "make": "Rearwin",
+  "model": "8090 Cloudster"
+ },
+ "CLON": {
+  "make": "Autogyro",
+  "model": "Cavalon"
+ },
+ "CMA3": {
+  "make": "Colyaer",
+  "model": "Martin 3"
+ },
+ "CMAS": {
+  "make": "Cessna",
+  "model": "C-34"
+ },
+ "CMD1": {
+  "make": "Air Command",
+  "model": "Commander 147"
+ },
+ "CMDE": {
+  "make": "Air Command",
+  "model": "Commander Elite Side-by-Side"
+ },
+ "CMDT": {
+  "make": "Air Command",
+  "model": "Commander Elite Tandem"
+ },
+ "CN12": {
+  "make": "Circa",
+  "model": "Nieuport 12-7/8"
+ },
+ "CN35": {
+  "make": "CASA",
+  "model": "D-4"
+ },
+ "CNBR": {
+  "make": "Bac",
+  "model": "Canberra"
+ },
+ "CNDR": {
+  "make": "General Avia",
+  "model": "F-20TP Condor"
+ },
+ "CNUK": {
+  "make": "Fleet",
+  "model": "80 Canuck"
+ },
+ "CO50": {
+  "make": "Cobalt",
+  "model": "Co-50 Valkyrie"
+ },
+ "COAR": {
+  "make": "Cobra",
+  "model": "Arrow"
+ },
+ "COBR": {
+  "make": "Deborde-Rolland",
+  "model": "Cobra"
+ },
+ "COL3": {
+  "make": "Cessna",
+  "model": "350"
+ },
+ "COL4": {
+  "make": "Cessna",
+  "model": "400"
+ },
+ "COLT": {
+  "make": "Texas Aircraft",
+  "model": "Colt"
+ },
+ "COMU": {
+  "make": "Helicom",
+  "model": "H-1 Commuter"
+ },
+ "CONI": {
+  "make": "Lockheed",
+  "model": "WV Warning Star"
+ },
+ "COOT": {
+  "make": "Aerocar",
+  "model": "Coot"
+ },
+ "CORO": {
+  "make": "Corvus",
+  "model": "Corone"
+ },
+ "CORR": {
+  "make": "Sivel",
+  "model": "SD-27 Corriedale"
+ },
+ "CORS": {
+  "make": "Chance Vought",
+  "model": "AU Corsair"
+ },
+ "CORV": {
+  "make": "Wolfsberg",
+  "model": "Corvus"
+ },
+ "COUG": {
+  "make": "Acro Sport",
+  "model": "Cougar"
+ },
+ "COUR": {
+  "make": "Helio",
+  "model": "H-391 Courier"
+ },
+ "COY2": {
+  "make": "Rans",
+  "model": "S-6 Coyote 2"
+ },
+ "COZJ": {
+  "make": "Co-Z",
+  "model": "CozyJet"
+ },
+ "COZY": {
+  "make": "Aerocad",
+  "model": "AeroCanard"
+ },
+ "CP10": {
+  "make": "Akrotech Europe",
+  "model": "CAP-10"
+ },
+ "CP13": {
+  "make": "Piel",
+  "model": "CP-1310 Super Emeraude"
+ },
+ "CP20": {
+  "make": "Caarp",
+  "model": "CAP-20"
+ },
+ "CP21": {
+  "make": "Mudry",
+  "model": "CAP-21"
+ },
+ "CP22": {
+  "make": "Akrotech Europe",
+  "model": "CAP-222"
+ },
+ "CP23": {
+  "make": "Mudry",
+  "model": "CAP-230"
+ },
+ "CP30": {
+  "make": "Piel",
+  "model": "CP-30 Emeraude"
+ },
+ "CP32": {
+  "make": "Piel",
+  "model": "CP-320 Super Emeraude"
+ },
+ "CP60": {
+  "make": "Piel",
+  "model": "CP-60 Diamant"
+ },
+ "CP65": {
+  "make": "Porterfield",
+  "model": "CP-65 Collegiate"
+ },
+ "CP75": {
+  "make": "Piel",
+  "model": "CP-70 Béryl"
+ },
+ "CP80": {
+  "make": "Piel",
+  "model": "CP-80 Zéphir"
+ },
+ "CP90": {
+  "make": "Piel",
+  "model": "CP-90 Pinocchio 2"
+ },
+ "CPNA": {
+  "make": "Pena",
+  "model": "Capena"
+ },
+ "CPUP": {
+  "make": "Culp",
+  "model": "Sopwith Pup"
+ },
+ "CR10": {
+  "make": "Dyn'aero",
+  "model": "CR-100"
+ },
+ "CRBN": {
+  "make": "Curtiss-Robertson",
+  "model": "50 Robin"
+ },
+ "CRER": {
+  "make": "Rans",
+  "model": "S-7 Courier"
+ },
+ "CRES": {
+  "make": "New Zealand",
+  "model": "Cresco"
+ },
+ "CRIO": {
+  "make": "Microleve",
+  "model": "Corsario"
+ },
+ "CRJ1": {
+  "make": "Bombardier",
+  "model": "CRJ-100"
+ },
+ "CRJ2": {
+  "make": "Bombardier",
+  "model": "CRJ-200"
+ },
+ "CRJ7": {
+  "make": "Bombardier",
+  "model": "CRJ-700"
+ },
+ "CRJ9": {
+  "make": "Bombardier",
+  "model": "CRJ-900"
+ },
+ "CRJX": {
+  "make": "Bombardier",
+  "model": "CRJ-1000"
+ },
+ "CRUZ": {
+  "make": "Csa",
+  "model": "PiperSport"
+ },
+ "CT4": {
+  "make": "Pacific Aerospace",
+  "model": "CT-4 Akala"
+ },
+ "CTAH": {
+  "make": "Rainbow Skyreach",
+  "model": "Cheetah"
+ },
+ "CTLN": {
+  "make": "Fly Synthesis",
+  "model": "Catalina"
+ },
+ "CUB2": {
+  "make": "Aces High",
+  "model": "Cuby 2"
+ },
+ "CUCA": {
+  "make": "Culver",
+  "model": "LAR Cadet"
+ },
+ "CUDA": {
+  "make": "Lancair",
+  "model": "NLA-275 Barracuda"
+ },
+ "CULP": {
+  "make": "Culp",
+  "model": "Special"
+ },
+ "CULV": {
+  "make": "Culver",
+  "model": "V"
+ },
+ "CULX": {
+  "make": "Fisher Aero",
+  "model": "Culex"
+ },
+ "CVLP": {
+  "make": "Convair",
+  "model": "T-29"
+ },
+ "CVLT": {
+  "make": "Convair",
+  "model": "C-131H"
+ },
+ "CX5": {
+  "make": "Thatcher",
+  "model": "CX-5"
+ },
+ "CYGT": {
+  "make": "Hawker",
+  "model": "Cygnet"
+ },
+ "D1": {
+  "make": "Derringer",
+  "model": "New Derringer"
+ },
+ "D11": {
+  "make": "Jodel",
+  "model": "D-11"
+ },
+ "D139": {
+  "make": "Dorna",
+  "model": "Pica 1"
+ },
+ "D140": {
+  "make": "Jodel",
+  "model": "D-140 Abeille"
+ },
+ "D150": {
+  "make": "Jodel",
+  "model": "D-150 Mascaret"
+ },
+ "D18": {
+  "make": "Jodel",
+  "model": "D-18"
+ },
+ "D201": {
+  "make": "D'apuzzo",
+  "model": "D-201 Sportwing"
+ },
+ "D21": {
+  "make": "Fokker",
+  "model": "D-21 Replica"
+ },
+ "D228": {
+  "make": "Dornier",
+  "model": "228"
+ },
+ "D24": {
+  "make": "Albaviation",
+  "model": "D-24 MagicONE"
+ },
+ "D25": {
+  "make": "New Standard",
+  "model": "D-25"
+ },
+ "D250": {
+  "make": "Centre Est",
+  "model": "DR-200"
+ },
+ "D253": {
+  "make": "Centre Est",
+  "model": "DR-253 Regent"
+ },
+ "D28D": {
+  "make": "Dornier",
+  "model": "128-2 Skyservant"
+ },
+ "D28T": {
+  "make": "Dornier",
+  "model": "128-6 Turbo Skyservant"
+ },
+ "D31": {
+  "make": "Druine",
+  "model": "D-31 Turbulent"
+ },
+ "D328": {
+  "make": "Dornier",
+  "model": "328"
+ },
+ "D39": {
+  "make": "Akaflieg Darmstadt",
+  "model": "D-39"
+ },
+ "D4": {
+  "make": "Auster",
+  "model": "D-4"
+ },
+ "D5": {
+  "make": "Beagle",
+  "model": "D-5"
+ },
+ "D5TU": {
+  "make": "Druine",
+  "model": "D-5 Turbi"
+ },
+ "D6": {
+  "make": "Auster",
+  "model": "D-6"
+ },
+ "D6CR": {
+  "make": "Druine",
+  "model": "D-60 Condor"
+ },
+ "D7": {
+  "make": "Fokker",
+  "model": "D-7 Replica"
+ },
+ "D8": {
+  "make": "Fokker",
+  "model": "D-8 Replica"
+ },
+ "DA2": {
+  "make": "Davis",
+  "model": "DA-2"
+ },
+ "DA36": {
+  "make": "Diamond",
+  "model": "DA-36 E-Star"
+ },
+ "DA40": {
+  "make": "Diamond",
+  "model": "DA-40 Katana"
+ },
+ "DA42": {
+  "make": "Diamond",
+  "model": "DA-42 Guardian"
+ },
+ "DA5": {
+  "make": "Davis",
+  "model": "DA-5"
+ },
+ "DA50": {
+  "make": "Diamond",
+  "model": "DA-50"
+ },
+ "DA62": {
+  "make": "Diamond",
+  "model": "DA-62"
+ },
+ "DAHU": {
+  "make": "Pena",
+  "model": "Dahu"
+ },
+ "DAKH": {
+  "make": "Fisher",
+  "model": "Dakota Hawk"
+ },
+ "DAL1": {
+  "make": "Spezio",
+  "model": "DAL-1 Tuholer"
+ },
+ "DAL4": {
+  "make": "Dallach",
+  "model": "D-4 Fascination"
+ },
+ "DAL5": {
+  "make": "Dallach",
+  "model": "D-5 Evolution"
+ },
+ "DART": {
+  "make": "Parrish",
+  "model": "Dart"
+ },
+ "DC10": {
+  "make": "McDonnell Douglas",
+  "model": "DC-10"
+ },
+ "DC2": {
+  "make": "Douglas",
+  "model": "DC-2"
+ },
+ "DC3": {
+  "make": "Douglas",
+  "model": "DC-3"
+ },
+ "DC3S": {
+  "make": "Douglas",
+  "model": "Super DC-3"
+ },
+ "DC3T": {
+  "make": "Professional Aviation",
+  "model": "Jet Prop DC-3"
+ },
+ "DC4": {
+  "make": "Douglas",
+  "model": "DC-4"
+ },
+ "DC6": {
+  "make": "Douglas",
+  "model": "DC-6"
+ },
+ "DC7": {
+  "make": "Douglas",
+  "model": "DC-7"
+ },
+ "DC86": {
+  "make": "Douglas",
+  "model": "DC-8-60"
+ },
+ "DC87": {
+  "make": "Douglas",
+  "model": "DC-8-70"
+ },
+ "DC91": {
+  "make": "Douglas",
+  "model": "DC-9-10"
+ },
+ "DC92": {
+  "make": "Douglas",
+  "model": "DC-9-20"
+ },
+ "DC93": {
+  "make": "McDonnell Douglas",
+  "model": "VC-9"
+ },
+ "DC94": {
+  "make": "Douglas",
+  "model": "DC-9-40"
+ },
+ "DC95": {
+  "make": "Douglas",
+  "model": "DC-9-50"
+ },
+ "DDUC": {
+  "make": "Bakeng",
+  "model": "Double Duce"
+ },
+ "DEAG": {
+  "make": "Amax",
+  "model": "Double Eagle"
+ },
+ "DEFI": {
+  "make": "Rutan",
+  "model": "40 Defiant"
+ },
+ "DF10": {
+  "make": "Delfin",
+  "model": "Delfin 10 Karas"
+ },
+ "DF1M": {
+  "make": "Delfin",
+  "model": "Delfin 10M R-Line"
+ },
+ "DF2": {
+  "make": "Delfin",
+  "model": "Delfin 2"
+ },
+ "DF3": {
+  "make": "Delfin",
+  "model": "Delfin 3"
+ },
+ "DFL6": {
+  "make": "Damoure-Fabre",
+  "model": "DFL-6 Saphir"
+ },
+ "DFLY": {
+  "make": "Slipstream",
+  "model": "Dragonfly"
+ },
+ "DG15": {
+  "make": "Howard (1)",
+  "model": "NH"
+ },
+ "DH2T": {
+  "make": "De Havilland Canada",
+  "model": "DHC-2 Mk3 Turbo Beaver"
+ },
+ "DH3T": {
+  "make": "De Havilland Canada",
+  "model": "DHC-3 Turbo Otter"
+ },
+ "DH4T": {
+  "make": "De Havilland Canada",
+  "model": "DHC-4 Turbo Caribou"
+ },
+ "DH60": {
+  "make": "De Havilland",
+  "model": "DH-60 Moth"
+ },
+ "DH80": {
+  "make": "De Havilland",
+  "model": "DH-80 Puss Moth"
+ },
+ "DH82": {
+  "make": "De Havilland",
+  "model": "DH-82 Queen Bee"
+ },
+ "DH83": {
+  "make": "De Havilland",
+  "model": "DH-83 Fox Moth"
+ },
+ "DH84": {
+  "make": "De Havilland Australia",
+  "model": "DH-84 Dragon"
+ },
+ "DH85": {
+  "make": "De Havilland",
+  "model": "DH-85 Leopard Moth"
+ },
+ "DH87": {
+  "make": "De Havilland",
+  "model": "DH-87 Hornet Moth"
+ },
+ "DH88": {
+  "make": "De Havilland",
+  "model": "DH-88 Comet Replica"
+ },
+ "DH89": {
+  "make": "De Havilland",
+  "model": "DH-89 Dragon Rapide"
+ },
+ "DH8A": {
+  "make": "De Havilland Canada",
+  "model": "DHC-8-100 Dash 8"
+ },
+ "DH8B": {
+  "make": "De Havilland Canada",
+  "model": "DHC-8-200 Dash 8"
+ },
+ "DH8C": {
+  "make": "De Havilland Canada",
+  "model": "DHC-8-300 Dash 8"
+ },
+ "DH8D": {
+  "make": "Bombardier",
+  "model": "DHC-8-400 Dash 8"
+ },
+ "DH90": {
+  "make": "De Havilland",
+  "model": "DH-90 Dragonfly"
+ },
+ "DH94": {
+  "make": "De Havilland",
+  "model": "DH-94 Moth Minor"
+ },
+ "DHA3": {
+  "make": "De Havilland Australia",
+  "model": "DHA-3 Drover"
+ },
+ "DHC1": {
+  "make": "De Havilland Canada",
+  "model": "DHC-1 Chipmunk"
+ },
+ "DHC2": {
+  "make": "De Havilland Canada",
+  "model": "U-6 Beaver"
+ },
+ "DHC3": {
+  "make": "De Havilland Canada",
+  "model": "DHC-3 Otter"
+ },
+ "DHC4": {
+  "make": "De Havilland Canada",
+  "model": "C-7 Caribou"
+ },
+ "DHC5": {
+  "make": "De Havilland Canada",
+  "model": "C-8 Buffalo"
+ },
+ "DHC6": {
+  "make": "De Havilland Canada",
+  "model": "DHC-6 Twin Otter"
+ },
+ "DHC7": {
+  "make": "De Havilland Canada",
+  "model": "O-5 Dash 7"
+ },
+ "DIES": {
+  "make": "Pennec-Lucas",
+  "model": "Dieselis"
+ },
+ "DIMO": {
+  "make": "Diamond",
+  "model": "HK-36 MPX"
+ },
+ "DJIN": {
+  "make": "Sud-Ouest",
+  "model": "SO-1221 Djinn"
+ },
+ "DNGO": {
+  "make": "Aeroric",
+  "model": "Dingo"
+ },
+ "DO27": {
+  "make": "Dornier",
+  "model": "Do-27"
+ },
+ "DO28": {
+  "make": "Dornier",
+  "model": "Do-28A"
+ },
+ "DOCX": {
+  "make": "Kovach-Elmendorf",
+  "model": "ES-3 Doc's RX"
+ },
+ "DON": {
+  "make": "Unikomtranso",
+  "model": "Don"
+ },
+ "DOVE": {
+  "make": "De Havilland",
+  "model": "DH-104 Dove"
+ },
+ "DR1": {
+  "make": "Fokker",
+  "model": "Dr-1 Replica"
+ },
+ "DR10": {
+  "make": "Centre Est",
+  "model": "DR-1050 Sicile"
+ },
+ "DR22": {
+  "make": "Centre Est",
+  "model": "DR-220 2+2"
+ },
+ "DR30": {
+  "make": "Robin",
+  "model": "DR-300"
+ },
+ "DR40": {
+  "make": "Robin",
+  "model": "DR-400 2+2"
+ },
+ "DRAG": {
+  "make": "Crae",
+  "model": "Dragon Fly"
+ },
+ "DRIF": {
+  "make": "Austflight",
+  "model": "Drifter"
+ },
+ "DRTG": {
+  "make": "Culver",
+  "model": "Dart G"
+ },
+ "DSA1": {
+  "make": "Smith (1)",
+  "model": "DSA-1 Miniplane"
+ },
+ "DSK": {
+  "make": "Killingsworth",
+  "model": "DSK-1 Hawk"
+ },
+ "DSLK": {
+  "make": "Driggs",
+  "model": "Skylark"
+ },
+ "DT45": {
+  "make": "Diamond",
+  "model": "DART-450"
+ },
+ "DTA1": {
+  "make": "Verhees",
+  "model": "D-1 Delta"
+ },
+ "DTA2": {
+  "make": "Verhees",
+  "model": "D-2 Delta"
+ },
+ "DUB2": {
+  "make": "Dubna",
+  "model": "2 Osa"
+ },
+ "DUCE": {
+  "make": "Bakeng",
+  "model": "Duce"
+ },
+ "DUR5": {
+  "make": "Durand",
+  "model": "Mk5"
+ },
+ "DV1": {
+  "make": "Dova",
+  "model": "DV-1 Skylark"
+ },
+ "DV2": {
+  "make": "Dova",
+  "model": "DV-2 Infinity"
+ },
+ "DV20": {
+  "make": "Diamond",
+  "model": "DA-20 Falcon"
+ },
+ "DW1": {
+  "make": "Bellanca",
+  "model": "DW-1 Eagle"
+ },
+ "DWD2": {
+  "make": "Dewoitine",
+  "model": "D-26"
+ },
+ "DYH2": {
+  "make": "Dynali",
+  "model": "H-2"
+ },
+ "DYH3": {
+  "make": "Dynali",
+  "model": "H-3 Sport"
+ },
+ "E110": {
+  "make": "Embraer",
+  "model": "EMB-110 Bandeirante"
+ },
+ "E120": {
+  "make": "Embraer",
+  "model": "EMB-120 Brasilia"
+ },
+ "E121": {
+  "make": "Embraer",
+  "model": "EC-9 Xingu"
+ },
+ "E135": {
+  "make": "Embraer",
+  "model": "VC-99C"
+ },
+ "E145": {
+  "make": "Embraer",
+  "model": "C-99"
+ },
+ "E170": {
+  "make": "Embraer",
+  "model": "170"
+ },
+ "E190": {
+  "make": "Embraer",
+  "model": "190"
+ },
+ "E195": {
+  "make": "Embraer",
+  "model": "195"
+ },
+ "E2": {
+  "make": "Grumman",
+  "model": "E-2 Daya"
+ },
+ "E200": {
+  "make": "Extra",
+  "model": "EA-200"
+ },
+ "E230": {
+  "make": "Extra",
+  "model": "EA-230"
+ },
+ "E275": {
+  "make": "Embraer",
+  "model": "E175-E2"
+ },
+ "E290": {
+  "make": "Embraer",
+  "model": "E190-E2"
+ },
+ "E295": {
+  "make": "Embraer",
+  "model": "E195-E2"
+ },
+ "E2CB": {
+  "make": "Taylor (1)",
+  "model": "E-2 Cub"
+ },
+ "E300": {
+  "make": "Extra",
+  "model": "EA-300"
+ },
+ "E314": {
+  "make": "Embraer",
+  "model": "A-29"
+ },
+ "E350": {
+  "make": "Cessna",
+  "model": "E350"
+ },
+ "E35L": {
+  "make": "Embraer",
+  "model": "VC-99B Legacy"
+ },
+ "E390": {
+  "make": "Embraer",
+  "model": "KC-390"
+ },
+ "E3CF": {
+  "make": "Boeing",
+  "model": "E-3D Sentry"
+ },
+ "E3TF": {
+  "make": "Boeing",
+  "model": "E-3B Sentry"
+ },
+ "E400": {
+  "make": "Extra",
+  "model": "EA-400"
+ },
+ "E45X": {
+  "make": "Embraer",
+  "model": "EMB-145XR"
+ },
+ "E500": {
+  "make": "Extra",
+  "model": "EA-500"
+ },
+ "E50P": {
+  "make": "Embraer",
+  "model": "EMB-500 Phenom 100"
+ },
+ "E530": {
+  "make": "Cessna",
+  "model": "E530 Scorpion"
+ },
+ "E545": {
+  "make": "Embraer",
+  "model": "EMB-545 Legacy 450"
+ },
+ "E550": {
+  "make": "Embraer",
+  "model": "EMB-550 Legacy 500"
+ },
+ "E55P": {
+  "make": "Embraer",
+  "model": "EMB-505 Phenom 300"
+ },
+ "E6": {
+  "make": "Boeing",
+  "model": "E-6 Mercury"
+ },
+ "E737": {
+  "make": "Boeing",
+  "model": "737-700 AEWC"
+ },
+ "E75L": {
+  "make": "Embraer",
+  "model": "175 (long wing)"
+ },
+ "E75S": {
+  "make": "Embraer",
+  "model": "175 (short wing)"
+ },
+ "E767": {
+  "make": "Boeing",
+  "model": "E-767"
+ },
+ "EA40": {
+  "make": "Eclipse",
+  "model": "Eclipse 400"
+ },
+ "EA50": {
+  "make": "Eclipse",
+  "model": "Eclipse 500"
+ },
+ "EAEA": {
+  "make": "Grosso",
+  "model": "Easy Eagle"
+ },
+ "EAGL": {
+  "make": "Aviat",
+  "model": "Eagle"
+ },
+ "EAGX": {
+  "make": "Eagle Aircraft",
+  "model": "Eagle 100"
+ },
+ "EBOY": {
+  "make": "Fma",
+  "model": "20 El Boyero"
+ },
+ "EC20": {
+  "make": "Eurocopter",
+  "model": "HE-25"
+ },
+ "EC25": {
+  "make": "Airbus Helicopters",
+  "model": "H-225 Cougar Mk2+"
+ },
+ "EC30": {
+  "make": "Airbus Helicopters",
+  "model": "H-130"
+ },
+ "EC35": {
+  "make": "Airbus Helicopters",
+  "model": "H-135"
+ },
+ "EC45": {
+  "make": "Airbus Helicopters-Kawasaki",
+  "model": "H-145"
+ },
+ "EC55": {
+  "make": "Airbus Helicopters",
+  "model": "H-155"
+ },
+ "EC6": {
+  "make": "Croses",
+  "model": "EC-6 Criquet"
+ },
+ "EC75": {
+  "make": "Airbus Helicopters-Harbin",
+  "model": "Z-15"
+ },
+ "ECHO": {
+  "make": "Tecnam",
+  "model": "P-92 Echo"
+ },
+ "EDGE": {
+  "make": "Zivko",
+  "model": "Edge 540"
+ },
+ "EDGT": {
+  "make": "Zivko",
+  "model": "Edge 540 T"
+ },
+ "EF2": {
+  "make": "Bye Aerospace",
+  "model": "eFlyer 2"
+ },
+ "EFAN": {
+  "make": "Airbus",
+  "model": "E-Fan"
+ },
+ "EFOX": {
+  "make": "Aerotrek",
+  "model": "A-220"
+ },
+ "EFUS": {
+  "make": "Magnus",
+  "model": "MG-11 eFusion"
+ },
+ "EGL3": {
+  "make": "Rotorway",
+  "model": "Eagle 300T"
+ },
+ "EGRT": {
+  "make": "Grob",
+  "model": "D-500 Egrett 2"
+ },
+ "EH10": {
+  "make": "AgustaWestland",
+  "model": "AW-101"
+ },
+ "EL10": {
+  "make": "Ela Aviacion",
+  "model": "ELA-10 Eclipse"
+ },
+ "EL20": {
+  "make": "Elitar",
+  "model": "IE-202"
+ },
+ "ELA7": {
+  "make": "Ela Aviacion",
+  "model": "ELA-07"
+ },
+ "ELF": {
+  "make": "Parnall",
+  "model": "Elf"
+ },
+ "ELPS": {
+  "make": "Explorer (1)",
+  "model": "Ellipse"
+ },
+ "ELSP": {
+  "make": "A2 Cz",
+  "model": "Ellipse Spirit"
+ },
+ "ELST": {
+  "make": "Putzer",
+  "model": "Elster"
+ },
+ "ELTO": {
+  "make": "Continental Copters",
+  "model": "El Tomcat"
+ },
+ "ELTR": {
+  "make": "Elitar",
+  "model": "IE-101 Elitar"
+ },
+ "EM10": {
+  "make": "Marganski",
+  "model": "EM-10 Bielik"
+ },
+ "EM11": {
+  "make": "Marganski",
+  "model": "EM-11 Orka"
+ },
+ "EN28": {
+  "make": "Enstrom",
+  "model": "F-28"
+ },
+ "EN48": {
+  "make": "Enstrom",
+  "model": "480"
+ },
+ "EP9": {
+  "make": "Edgar Percival",
+  "model": "EP-9"
+ },
+ "EPER": {
+  "make": "Epervier (1)",
+  "model": "Epervier"
+ },
+ "EPIC": {
+  "make": "Air",
+  "model": "Epic LT"
+ },
+ "EPX1": {
+  "make": "Epervier (2)",
+  "model": "X-1"
+ },
+ "ERAC": {
+  "make": "Dickey",
+  "model": "E-Racer"
+ },
+ "ERCO": {
+  "make": "Air Products",
+  "model": "F-1 Aircoupe"
+ },
+ "ES11": {
+  "make": "Aviotecnica",
+  "model": "ES-101 Exec"
+ },
+ "ES13": {
+  "make": "Clifford Aeroworks",
+  "model": "Spad 13 80%"
+ },
+ "ESCA": {
+  "make": "Air",
+  "model": "Epic Escape"
+ },
+ "ESCP": {
+  "make": "Just",
+  "model": "Escapade"
+ },
+ "ETAR": {
+  "make": "Dassault",
+  "model": "Etendard 4"
+ },
+ "EUFI": {
+  "make": "Airbus",
+  "model": "C-16"
+ },
+ "EUPA": {
+  "make": "Europa",
+  "model": "Europa"
+ },
+ "EURT": {
+  "make": "Fft",
+  "model": "Eurotrainer 2000"
+ },
+ "EV55": {
+  "make": "Evektor",
+  "model": "EV-55 Outback"
+ },
+ "EV97": {
+  "make": "Evektor",
+  "model": "EV-97 Harmony"
+ },
+ "EVAN": {
+  "make": "Evangel",
+  "model": "4500 Evangel"
+ },
+ "EVOP": {
+  "make": "Lancair",
+  "model": "Evolution Piston"
+ },
+ "EVOT": {
+  "make": "Evolution",
+  "model": "EVOT-550 Evolution"
+ },
+ "EVSS": {
+  "make": "Evektor",
+  "model": "SportStar"
+ },
+ "EX5T": {
+  "make": "Aea",
+  "model": "Explorer 500T"
+ },
+ "EXEC": {
+  "make": "Huzhou Taixiang",
+  "model": "Exec"
+ },
+ "EXEJ": {
+  "make": "Rotorway",
+  "model": "JetExec"
+ },
+ "EXNG": {
+  "make": "Extra",
+  "model": "NG"
+ },
+ "EXPL": {
+  "make": "McDonnell Douglas",
+  "model": "MH-90 Enforcer"
+ },
+ "EXPR": {
+  "make": "Express",
+  "model": "90"
+ },
+ "EZFL": {
+  "make": "Aerocomp",
+  "model": "E-Z Flyer"
+ },
+ "EZFT": {
+  "make": "Blue Yonder",
+  "model": "Twin E-Z Flyer"
+ },
+ "EZHV": {
+  "make": "Blue Yonder",
+  "model": "E-Z Harvard"
+ },
+ "EZKC": {
+  "make": "Blue Yonder",
+  "model": "E-Z King Cobra"
+ },
+ "F1": {
+  "make": "Mitsubishi",
+  "model": "F-1"
+ },
+ "F100": {
+  "make": "Fokker",
+  "model": "100"
+ },
+ "F104": {
+  "make": "Lockheed",
+  "model": "F-104 Starfighter"
+ },
+ "F117": {
+  "make": "Lockheed",
+  "model": "F-117 Night Hawk"
+ },
+ "F13": {
+  "make": "Junkers",
+  "model": "F-13 Replica"
+ },
+ "F14": {
+  "make": "Grumman",
+  "model": "F-14 Tomcat"
+ },
+ "F15": {
+  "make": "McDonnell Douglas",
+  "model": "F-15 Baz"
+ },
+ "F156": {
+  "make": "Morane-Saulnier",
+  "model": "MS-500 Criquet"
+ },
+ "F16": {
+  "make": "General Dynamics",
+  "model": "F-16 Netz"
+ },
+ "F18H": {
+  "make": "McDonnell Douglas",
+  "model": "C-15"
+ },
+ "F18S": {
+  "make": "Boeing",
+  "model": "EA-18 Growler"
+ },
+ "F1FV": {
+  "make": "Avion",
+  "model": "F-1 Favorit"
+ },
+ "F2": {
+  "make": "Mitsubishi",
+  "model": "F-2"
+ },
+ "F22": {
+  "make": "Lockheed Martin",
+  "model": "F-22 Raptor"
+ },
+ "F260": {
+  "make": "Siai-Marchetti",
+  "model": "SF-260"
+ },
+ "F26T": {
+  "make": "Aermacchi",
+  "model": "SF-260T"
+ },
+ "F27": {
+  "make": "Fokker",
+  "model": "F-27 Maritime"
+ },
+ "F28": {
+  "make": "Fokker",
+  "model": "F-28 Fellowship"
+ },
+ "F2TH": {
+  "make": "Dassault",
+  "model": "Falcon 2000"
+ },
+ "F30": {
+  "make": "Golden Avio",
+  "model": "F-30 Brio"
+ },
+ "F35": {
+  "make": "Lockheed Martin",
+  "model": "F-35A Lightning 2"
+ },
+ "F3F": {
+  "make": "Grumman",
+  "model": "F3F Replica"
+ },
+ "F4": {
+  "make": "Iai",
+  "model": "F-4 Kurnass 2000"
+ },
+ "F402": {
+  "make": "Falcon Air",
+  "model": "Falcon 402"
+ },
+ "F406": {
+  "make": "Cessna",
+  "model": "F406 Vigilant"
+ },
+ "F41E": {
+  "make": "Aerosamara",
+  "model": "F-41 El'brus"
+ },
+ "F421": {
+  "make": "Falcon Air",
+  "model": "Falcon 421"
+ },
+ "F5": {
+  "make": "Northrop",
+  "model": "F-5 Tiger 2"
+ },
+ "F50": {
+  "make": "Fokker",
+  "model": "50"
+ },
+ "F5SA": {
+  "make": "Iriaf",
+  "model": "S-100 Saeghe"
+ },
+ "F60": {
+  "make": "Fokker",
+  "model": "60"
+ },
+ "F600": {
+  "make": "Siai-Marchetti",
+  "model": "SF-600 Canguro"
+ },
+ "F7": {
+  "make": "Fokker",
+  "model": "F-7 Replica"
+ },
+ "F70": {
+  "make": "Fokker",
+  "model": "70"
+ },
+ "F8": {
+  "make": "Chance Vought",
+  "model": "F8 Crusader"
+ },
+ "F86": {
+  "make": "Canadair",
+  "model": "CL-13 Sabre"
+ },
+ "F8L": {
+  "make": "Aeromere",
+  "model": "F-8L Falco"
+ },
+ "F900": {
+  "make": "Dassault",
+  "model": "Falcon 900"
+ },
+ "F9F": {
+  "make": "Grumman",
+  "model": "F9F Panther"
+ },
+ "FA01": {
+  "make": "Fläming Air",
+  "model": "FA-01 Saphir"
+ },
+ "FA02": {
+  "make": "Fläming Air",
+  "model": "FA-02 Smaragd VLA"
+ },
+ "FA03": {
+  "make": "Fläming Air",
+  "model": "FA-03 Smaragd TMG"
+ },
+ "FA04": {
+  "make": "Fläming Air",
+  "model": "FA-04 Peregrine"
+ },
+ "FA10": {
+  "make": "Dassault",
+  "model": "Falcon 10"
+ },
+ "FA11": {
+  "make": "Fairchild (2)",
+  "model": "F-11 Husky"
+ },
+ "FA20": {
+  "make": "Dassault",
+  "model": "Gardian"
+ },
+ "FA24": {
+  "make": "Fairchild (1)",
+  "model": "F-24 Argus"
+ },
+ "FA50": {
+  "make": "Dassault",
+  "model": "Falcon 50"
+ },
+ "FA62": {
+  "make": "Fairchild (1)",
+  "model": "M-62 Cornell"
+ },
+ "FA6X": {
+  "make": "Dassault",
+  "model": "Falcon 6X"
+ },
+ "FA7X": {
+  "make": "Dassault",
+  "model": "Falcon 7X"
+ },
+ "FA8X": {
+  "make": "Dassault",
+  "model": "Falcon 8X"
+ },
+ "FAET": {
+  "make": "Atec",
+  "model": "321 Faeta"
+ },
+ "FALC": {
+  "make": "American Aircraft",
+  "model": "Falcon XP"
+ },
+ "FALM": {
+  "make": "Miles",
+  "model": "M-3 Falcon Major"
+ },
+ "FANL": {
+  "make": "Rhein",
+  "model": "FL-1 Fanliner"
+ },
+ "FANT": {
+  "make": "Rhein",
+  "model": "Fantrainer"
+ },
+ "FB1A": {
+  "make": "Bowers",
+  "model": "Fly Baby 1A"
+ },
+ "FB1B": {
+  "make": "Bowers",
+  "model": "Fly Baby 1B"
+ },
+ "FB5": {
+  "make": "Euro-Fly",
+  "model": "FB-5 Star Light"
+ },
+ "FBA2": {
+  "make": "Found",
+  "model": "FBA-2"
+ },
+ "FC1": {
+  "make": "Chengdu",
+  "model": "FC-1 Xiaolong"
+ },
+ "FD2E": {
+  "make": "Flight Design",
+  "model": "F-2e"
+ },
+ "FDCT": {
+  "make": "Flight Design",
+  "model": "CT"
+ },
+ "FDF2": {
+  "make": "Flight Design",
+  "model": "F-2"
+ },
+ "FDMC": {
+  "make": "Flight Design",
+  "model": "MC"
+ },
+ "FE51": {
+  "make": "Fighter Escort Wings",
+  "model": "P-51"
+ },
+ "FEST": {
+  "make": "Aerostar (2)",
+  "model": "01 Festival"
+ },
+ "FFLY": {
+  "make": "Fairey",
+  "model": "Firefly"
+ },
+ "FG01": {
+  "make": "Farigoux",
+  "model": "FG-01 Origan"
+ },
+ "FGT": {
+  "make": "Midwest Aerosport",
+  "model": "Formula GT"
+ },
+ "FH11": {
+  "make": "Rogerson Hiller",
+  "model": "RH-1100 Hornet"
+ },
+ "FIBO": {
+  "make": "Starfire",
+  "model": "Firebolt Convertible"
+ },
+ "FIKD": {
+  "make": "Fike",
+  "model": "D"
+ },
+ "FIKE": {
+  "make": "Fike",
+  "model": "E"
+ },
+ "FINC": {
+  "make": "Fleet",
+  "model": "10"
+ },
+ "FJ10": {
+  "make": "Aerostar (1)",
+  "model": "FJ-100"
+ },
+ "FJR3": {
+  "make": "Fajr",
+  "model": "F-3"
+ },
+ "FK12": {
+  "make": "B & F Technik",
+  "model": "FK-12 Comet"
+ },
+ "FK14": {
+  "make": "B & F Technik",
+  "model": "FK-14 Polaris"
+ },
+ "FK9": {
+  "make": "B & F Technik",
+  "model": "FK-9"
+ },
+ "FL3": {
+  "make": "Avia (1)",
+  "model": "L-3 Aviastarlet"
+ },
+ "FL53": {
+  "make": "Meteor",
+  "model": "FL-53"
+ },
+ "FL54": {
+  "make": "Meteor",
+  "model": "FL-54"
+ },
+ "FL55": {
+  "make": "Meteor",
+  "model": "FL-55"
+ },
+ "FLAM": {
+  "make": "Dassault",
+  "model": "MD-311 Flamant"
+ },
+ "FLCO": {
+  "make": "Finmeccanica",
+  "model": "Falco"
+ },
+ "FLE2": {
+  "make": "Fleet",
+  "model": "2"
+ },
+ "FLE7": {
+  "make": "Fleet",
+  "model": "7"
+ },
+ "FLIZ": {
+  "make": "Flitzer",
+  "model": "Z-1 Flitzer"
+ },
+ "FLSH": {
+  "make": "Euro-Fly",
+  "model": "Flash"
+ },
+ "FLSS": {
+  "make": "Flyer",
+  "model": "Flyer NG"
+ },
+ "FM25": {
+  "make": "Flying Machines",
+  "model": "FM-250 Vampire"
+ },
+ "FMGO": {
+  "make": "Aak",
+  "model": "Flamingo"
+ },
+ "FN33": {
+  "make": "Nardi",
+  "model": "FN-333 Riviera"
+ },
+ "FNKB": {
+  "make": "Akron",
+  "model": "Funk B"
+ },
+ "FOOF": {
+  "make": "Stewart (2)",
+  "model": "JD-2 Foo Fighter"
+ },
+ "FORT": {
+  "make": "Fleet",
+  "model": "60 Fort"
+ },
+ "FOUG": {
+  "make": "Iai",
+  "model": "CM-170R Tzukit"
+ },
+ "FOX": {
+  "make": "Skyfox",
+  "model": "CA-25 Impala"
+ },
+ "FOXT": {
+  "make": "Team Tango",
+  "model": "Gavilán"
+ },
+ "FRBD": {
+  "make": "Northrop Grumman",
+  "model": "H-03 Firebird"
+ },
+ "FREE": {
+  "make": "Cabrinha",
+  "model": "423 Free Spirit"
+ },
+ "FREL": {
+  "make": "Aerospatiale",
+  "model": "SA-321 Super Frelon"
+ },
+ "FRNT": {
+  "make": "Sky Raider",
+  "model": "Frontier"
+ },
+ "FRON": {
+  "make": "Frontier",
+  "model": "Frontier MD-2"
+ },
+ "FS51": {
+  "make": "Falconar",
+  "model": "SAL P-51D Mustang"
+ },
+ "FT30": {
+  "make": "Nai",
+  "model": "FT-300"
+ },
+ "FU24": {
+  "make": "Air Parts",
+  "model": "Fletcher FU-24"
+ },
+ "FURY": {
+  "make": "Hawker",
+  "model": "Fury"
+ },
+ "FUSI": {
+  "make": "Magnus",
+  "model": "MG-11 Fusion"
+ },
+ "FW02": {
+  "make": "Flywhale",
+  "model": "FW-02 Flywhale"
+ },
+ "FW44": {
+  "make": "Fma",
+  "model": "Fw-44 Stieglitz"
+ },
+ "FW90": {
+  "make": "Flug Werk",
+  "model": "Fw-190 Replica"
+ },
+ "FWSB": {
+  "make": "Fleetwings",
+  "model": "F-4 Sea Bird"
+ },
+ "FX1": {
+  "make": "Innovaviation",
+  "model": "FX-1"
+ },
+ "G1": {
+  "make": "G1 Aviation",
+  "model": "G-1"
+ },
+ "G109": {
+  "make": "Grob",
+  "model": "G-109"
+ },
+ "G115": {
+  "make": "Grob",
+  "model": "G-115"
+ },
+ "G120": {
+  "make": "Grob",
+  "model": "G-120"
+ },
+ "G12T": {
+  "make": "Grob",
+  "model": "G-120TP"
+ },
+ "G140": {
+  "make": "Grob",
+  "model": "G-140TP"
+ },
+ "G150": {
+  "make": "Gulfstream Aerospace",
+  "model": "Gulfstream G150"
+ },
+ "G159": {
+  "make": "Grumman",
+  "model": "TC-4 Academe"
+ },
+ "G15T": {
+  "make": "Grob",
+  "model": "G-115T Acro"
+ },
+ "G160": {
+  "make": "Grob",
+  "model": "G-160 Ranger"
+ },
+ "G164": {
+  "make": "Grumman American",
+  "model": "G-164 Ag-Cat"
+ },
+ "G180": {
+  "make": "General Aircraft",
+  "model": "G1-80 Skyfarer"
+ },
+ "G200": {
+  "make": "Akrotech",
+  "model": "G-200"
+ },
+ "G202": {
+  "make": "Akrotech",
+  "model": "G-202"
+ },
+ "G21": {
+  "make": "Grumman",
+  "model": "JRF Goose"
+ },
+ "G21M": {
+  "make": "Mckinnon",
+  "model": "G-21C Goose"
+ },
+ "G21T": {
+  "make": "Mckinnon",
+  "model": "G-21E Turbo Goose"
+ },
+ "G222": {
+  "make": "Alenia",
+  "model": "G-222"
+ },
+ "G280": {
+  "make": "Gulfstream Aerospace",
+  "model": "Gulfstream G280"
+ },
+ "G2CA": {
+  "make": "Guimbal",
+  "model": "G-2 Cabri"
+ },
+ "G2GL": {
+  "make": "Soko",
+  "model": "G-2 Galeb"
+ },
+ "G2T1": {
+  "make": "Great Lakes",
+  "model": "2T-1 Sport"
+ },
+ "G3": {
+  "make": "Remos",
+  "model": "G-3 Mirage"
+ },
+ "G44": {
+  "make": "Grumman",
+  "model": "J4F Widgeon"
+ },
+ "G46": {
+  "make": "Fiat",
+  "model": "G-46"
+ },
+ "G4SG": {
+  "make": "Soko",
+  "model": "G-4 Super Galeb"
+ },
+ "G59": {
+  "make": "Fiat",
+  "model": "G-59"
+ },
+ "G64T": {
+  "make": "Schweizer",
+  "model": "G-164 Turbo Ag-Cat"
+ },
+ "G70": {
+  "make": "Groppo",
+  "model": "G-70"
+ },
+ "G73": {
+  "make": "Grumman",
+  "model": "G-73 Mallard"
+ },
+ "G73T": {
+  "make": "Frakes",
+  "model": "G-73T Turbo Mallard"
+ },
+ "G800": {
+  "make": "Grinvalds",
+  "model": "G-801 Orion"
+ },
+ "G91": {
+  "make": "Fiat",
+  "model": "G-91R"
+ },
+ "G96": {
+  "make": "Grumman",
+  "model": "TF Trader"
+ },
+ "G97": {
+  "make": "Sai (2)",
+  "model": "G-97 Spotter"
+ },
+ "GA10": {
+  "make": "Gippsaero",
+  "model": "GA-10"
+ },
+ "GA20": {
+  "make": "Gippsland",
+  "model": "GA-200 Fatman"
+ },
+ "GA3C": {
+  "make": "Gulfstream Aerospace",
+  "model": "Gulfstream G300"
+ },
+ "GA4C": {
+  "make": "Gulfstream Aerospace",
+  "model": "G-7 Gulfstream G400"
+ },
+ "GA5C": {
+  "make": "Gulfstream Aerospace",
+  "model": "G-7 Gulfstream G500"
+ },
+ "GA6C": {
+  "make": "Gulfstream Aerospace",
+  "model": "G-7 Gulfstream G600"
+ },
+ "GA7": {
+  "make": "Grumman American",
+  "model": "GA-7 Cougar"
+ },
+ "GA7C": {
+  "make": "Gulfstream Aerospace",
+  "model": "G-8 Gulfstream G700"
+ },
+ "GA8": {
+  "make": "Gippsaero",
+  "model": "GA-8 Airvan"
+ },
+ "GA8C": {
+  "make": "Gulfstream Aerospace",
+  "model": "G-8 Gulfstream G800"
+ },
+ "GABR": {
+  "make": "Blackshape",
+  "model": "BS-115 Gabriel"
+ },
+ "GALX": {
+  "make": "Iai",
+  "model": "1126 Galaxy"
+ },
+ "GANT": {
+  "make": "Fairey",
+  "model": "Gannet"
+ },
+ "GAUN": {
+  "make": "Gloster",
+  "model": "Gauntlet"
+ },
+ "GAVI": {
+  "make": "Aero Mercantil",
+  "model": "358 Gavilan"
+ },
+ "GAZL": {
+  "make": "Soko",
+  "model": "H-45 Partizan"
+ },
+ "GB1": {
+  "make": "Game Composites",
+  "model": "GB-1 GameBird"
+ },
+ "GBSP": {
+  "make": "Beets",
+  "model": "GB Special"
+ },
+ "GC1": {
+  "make": "Globe",
+  "model": "GC-1 Swift"
+ },
+ "GDUK": {
+  "make": "Ellison-Mahon",
+  "model": "Gweduck"
+ },
+ "GEMI": {
+  "make": "Miles",
+  "model": "M-65 Gemini"
+ },
+ "GENI": {
+  "make": "Ifb",
+  "model": "E-Genius"
+ },
+ "GEPE": {
+  "make": "Aero Services",
+  "model": "Guêpe"
+ },
+ "GJ11": {
+  "make": "Hongdu",
+  "model": "GJ-11 Sharp Sword"
+ },
+ "GL5T": {
+  "make": "Bombardier",
+  "model": "BD-700 Global 5000"
+ },
+ "GL7T": {
+  "make": "Bombardier",
+  "model": "BD-700 Global 7000"
+ },
+ "GLAD": {
+  "make": "Gloster",
+  "model": "Gladiator"
+ },
+ "GLAS": {
+  "make": "Glasair",
+  "model": "Glasair"
+ },
+ "GLEX": {
+  "make": "Bombardier",
+  "model": "BD-700 Global Express"
+ },
+ "GLF2": {
+  "make": "Gulfstream Aerospace",
+  "model": "Gulfstream II"
+ },
+ "GLF3": {
+  "make": "Gulfstream Aerospace",
+  "model": "C-20A Gulfstream 3"
+ },
+ "GLF4": {
+  "make": "Gulfstream Aerospace",
+  "model": "G-4 Gulfstream 4"
+ },
+ "GLF5": {
+  "make": "Gulfstream Aerospace",
+  "model": "Gulfstream G550"
+ },
+ "GLF6": {
+  "make": "Gulfstream Aerospace",
+  "model": "G-6 Gulfstream G650"
+ },
+ "GLSP": {
+  "make": "New Glastar",
+  "model": "Sportsman 2+2"
+ },
+ "GLST": {
+  "make": "Glasair",
+  "model": "GlaStar"
+ },
+ "GLTU": {
+  "make": "Stoddard-Hamilton",
+  "model": "Turbine Glasair"
+ },
+ "GM17": {
+  "make": "Intracom",
+  "model": "GM-17 Viper"
+ },
+ "GMGC": {
+  "make": "Ibis (2)",
+  "model": "GS-750 Grand Magic"
+ },
+ "GNAT": {
+  "make": "Folland",
+  "model": "Fo-144 Gnat"
+ },
+ "GOBU": {
+  "make": "Butterfly",
+  "model": "Golden Butterfly"
+ },
+ "GOLF": {
+  "make": "Tecnam",
+  "model": "P-96 Golf"
+ },
+ "GOOS": {
+  "make": "Quikkit",
+  "model": "Glass Goose"
+ },
+ "GP1": {
+  "make": "Jihlavan",
+  "model": "Skyleader GP One"
+ },
+ "GP3": {
+  "make": "Osprey",
+  "model": "GP-3 Osprey 2"
+ },
+ "GP4": {
+  "make": "Osprey",
+  "model": "GP-4"
+ },
+ "GPRO": {
+  "make": "Genevation",
+  "model": "GenPro"
+ },
+ "GR51": {
+  "make": "Cameron",
+  "model": "P-51G Grand 51"
+ },
+ "GRFN": {
+  "make": "Griffon Aero",
+  "model": "Griffon"
+ },
+ "GRIF": {
+  "make": "Canada Air Rv",
+  "model": "Griffin"
+ },
+ "GRIZ": {
+  "make": "Aerotek (2)",
+  "model": "Turbo Grizzly"
+ },
+ "GSIS": {
+  "make": "Slipstream",
+  "model": "Genesis"
+ },
+ "GSPN": {
+  "make": "Grob",
+  "model": "G-180 SPn Utility Jet"
+ },
+ "GUEP": {
+  "make": "Aero Services",
+  "model": "Guepy"
+ },
+ "GURI": {
+  "make": "Aeromot",
+  "model": "AMT-600 Guri"
+ },
+ "GX": {
+  "make": "Remos",
+  "model": "GX"
+ },
+ "GY10": {
+  "make": "Gardan",
+  "model": "GY-100 Bagheera"
+ },
+ "GY20": {
+  "make": "Cab",
+  "model": "GY-20 Minicab"
+ },
+ "GY30": {
+  "make": "Cab",
+  "model": "GY-30 Supercab"
+ },
+ "GY80": {
+  "make": "Gardan",
+  "model": "GY-80 Horizon"
+ },
+ "H111": {
+  "make": "CASA",
+  "model": "2-111"
+ },
+ "H12T": {
+  "make": "Hiller",
+  "model": "UH-12ET"
+ },
+ "H160": {
+  "make": "Airbus Helicopters",
+  "model": "H-160"
+ },
+ "H2": {
+  "make": "Kaman",
+  "model": "K-20 Seasprite"
+ },
+ "H202": {
+  "make": "Hb-Aircraft",
+  "model": "HB-202 Fledger"
+ },
+ "H207": {
+  "make": "Hb-Flugtechnik",
+  "model": "HB-207 Alfa"
+ },
+ "H21": {
+  "make": "Vertol",
+  "model": "42 Work Horse"
+ },
+ "H25A": {
+  "make": "Hawker Siddeley",
+  "model": "HS-125-1"
+ },
+ "H25B": {
+  "make": "British Aerospace",
+  "model": "C-29"
+ },
+ "H25C": {
+  "make": "British Aerospace",
+  "model": "BAe-125-1000"
+ },
+ "H269": {
+  "make": "Schweizer",
+  "model": "269"
+ },
+ "H40": {
+  "make": "Hoffmann",
+  "model": "H-40"
+ },
+ "H43A": {
+  "make": "Kaman",
+  "model": "HOK"
+ },
+ "H43B": {
+  "make": "Kaman",
+  "model": "HH-43B Huskie"
+ },
+ "H46": {
+  "make": "Boeing Vertol",
+  "model": "107"
+ },
+ "H47": {
+  "make": "Boeing Vertol",
+  "model": "114"
+ },
+ "H500": {
+  "make": "Hughes",
+  "model": "369"
+ },
+ "H53": {
+  "make": "Sikorsky",
+  "model": "S-65"
+ },
+ "H53S": {
+  "make": "Sikorsky",
+  "model": "S-80"
+ },
+ "H60": {
+  "make": "Sikorsky",
+  "model": "S-70"
+ },
+ "H64": {
+  "make": "McDonnell Douglas",
+  "model": "AH-64 Apache"
+ },
+ "HA2": {
+  "make": "Hollmann",
+  "model": "HA-2 Sportster"
+ },
+ "HA31": {
+  "make": "Hindustan",
+  "model": "HA-31 Basant"
+ },
+ "HA4T": {
+  "make": "Raytheon",
+  "model": "4000 Hawker 4000"
+ },
+ "HAHU": {
+  "make": "Sindlinger",
+  "model": "HH-1 Hawker Hurricane"
+ },
+ "HANS": {
+  "make": "Nal",
+  "model": "Hansa"
+ },
+ "HAR": {
+  "make": "McDonnell Douglas",
+  "model": "VA-1"
+ },
+ "HAW3": {
+  "make": "Groen",
+  "model": "H2X Hawk 3"
+ },
+ "HAWK": {
+  "make": "BAE Systems",
+  "model": "Hawk"
+ },
+ "HB21": {
+  "make": "Brditschka",
+  "model": "HB-21 Hobbyliner"
+ },
+ "HB23": {
+  "make": "Brditschka",
+  "model": "HB-23 Scanliner"
+ },
+ "HB3": {
+  "make": "Brditschka",
+  "model": "HB-3"
+ },
+ "HCAT": {
+  "make": "Grumman",
+  "model": "F6F Hellcat"
+ },
+ "HD34": {
+  "make": "Hurel-Dubois",
+  "model": "HD-34"
+ },
+ "HDJT": {
+  "make": "Honda",
+  "model": "HA-420 HondaJet"
+ },
+ "HEAD": {
+  "make": "Stewart (2)",
+  "model": "JD-1 Headwind"
+ },
+ "HERN": {
+  "make": "De Havilland",
+  "model": "DH-114 Heron"
+ },
+ "HF20": {
+  "make": "Hfb",
+  "model": "HFB-320 Hansa"
+ },
+ "HI27": {
+  "make": "Hirth",
+  "model": "Hi-27 Acrostar"
+ },
+ "HIGH": {
+  "make": "Just",
+  "model": "JA20 Highlander"
+ },
+ "HIND": {
+  "make": "Hawker",
+  "model": "Hind"
+ },
+ "HL2": {
+  "make": "Lambach",
+  "model": "HL-2 Replica"
+ },
+ "HLC4": {
+  "make": "Halberstadt",
+  "model": "CL-4 Replica"
+ },
+ "HLD4": {
+  "make": "Halberstadt",
+  "model": "D-4 Replica"
+ },
+ "HM38": {
+  "make": "Falconar",
+  "model": "HM-380 Ladybug"
+ },
+ "HN70": {
+  "make": "Nicollier",
+  "model": "HN-700 Menestrel 2"
+ },
+ "HORN": {
+  "make": "Wallerkowski",
+  "model": "Hornisse"
+ },
+ "HORZ": {
+  "make": "Fisher Aero",
+  "model": "Horizon"
+ },
+ "HR10": {
+  "make": "Robin",
+  "model": "HR-100 Royal"
+ },
+ "HR20": {
+  "make": "Robin",
+  "model": "R-200"
+ },
+ "HRM9": {
+  "make": "Elbit",
+  "model": "Kochav"
+ },
+ "HRNT": {
+  "make": "Aak",
+  "model": "Hornet"
+ },
+ "HROC": {
+  "make": "Harmon",
+  "model": "Rocket"
+ },
+ "HRON": {
+  "make": "Iai",
+  "model": "Heron"
+ },
+ "HSMT": {
+  "make": "Rotorsmart",
+  "model": "HeliSmart"
+ },
+ "HT16": {
+  "make": "Hindustan",
+  "model": "HJT-16 Kiran"
+ },
+ "HT2": {
+  "make": "Hindustan",
+  "model": "HT-2"
+ },
+ "HT36": {
+  "make": "Hindustan",
+  "model": "HJT-36 Sitara"
+ },
+ "HT40": {
+  "make": "Hindustan",
+  "model": "HTT-40"
+ },
+ "HU1": {
+  "make": "Shenyang Sailplane",
+  "model": "HU-1 Seagull"
+ },
+ "HU2": {
+  "make": "Shenyang Sailplane",
+  "model": "HU-2 Petrel"
+ },
+ "HUCO": {
+  "make": "Bell",
+  "model": "209 HueyCobra"
+ },
+ "HUML": {
+  "make": "Hummel",
+  "model": "Hummel Bird"
+ },
+ "HUNT": {
+  "make": "Hawker",
+  "model": "Hunter"
+ },
+ "HURI": {
+  "make": "Hawker",
+  "model": "Hurricane"
+ },
+ "HURK": {
+  "make": "Tai",
+  "model": "TT-32 Hürkuş"
+ },
+ "HUSK": {
+  "make": "Aviat",
+  "model": "A-1 Husky"
+ },
+ "HW4P": {
+  "make": "Groen",
+  "model": "Hawk 4"
+ },
+ "HW4T": {
+  "make": "Groen",
+  "model": "Jet Hawk 4T"
+ },
+ "HX2": {
+  "make": "Helowerks",
+  "model": "HX-2 Wasp"
+ },
+ "HYPR": {
+  "make": "P&m Aviation",
+  "model": "HypR"
+ },
+ "I103": {
+  "make": "Ilyushin",
+  "model": "Il-103"
+ },
+ "I112": {
+  "make": "Ilyushin",
+  "model": "Il-112"
+ },
+ "I114": {
+  "make": "Ilyushin",
+  "model": "Il-114"
+ },
+ "I115": {
+  "make": "Aisa",
+  "model": "I-115"
+ },
+ "I11B": {
+  "make": "Aisa",
+  "model": "I-11B Peque"
+ },
+ "I153": {
+  "make": "Polikarpov",
+  "model": "I-153"
+ },
+ "I15B": {
+  "make": "Polikarpov",
+  "model": "I-15bis"
+ },
+ "I16": {
+  "make": "Polikarpov",
+  "model": "I-16"
+ },
+ "I22": {
+  "make": "Pzl-Mielec",
+  "model": "I-22 Iryda"
+ },
+ "I23": {
+  "make": "Instytut Lotnictwa",
+  "model": "I-23 Manager"
+ },
+ "I3": {
+  "make": "Interavia",
+  "model": "I-3"
+ },
+ "I66": {
+  "make": "Iannotta",
+  "model": "I-66 San Francesco"
+ },
+ "IA46": {
+  "make": "Dinfia",
+  "model": "IA-46 Ranquel"
+ },
+ "IA58": {
+  "make": "Fma",
+  "model": "IA-58 Pucará"
+ },
+ "IA63": {
+  "make": "Fma",
+  "model": "AT-63 Pampa"
+ },
+ "IFUR": {
+  "make": "Isaacs",
+  "model": "Fury"
+ },
+ "IL14": {
+  "make": "Avia (2)",
+  "model": "Av-14"
+ },
+ "IL18": {
+  "make": "Ilyushin",
+  "model": "Il-18"
+ },
+ "IL28": {
+  "make": "Harbin",
+  "model": "H-5"
+ },
+ "IL38": {
+  "make": "Ilyushin",
+  "model": "Il-38"
+ },
+ "IL62": {
+  "make": "Ilyushin",
+  "model": "Il-62"
+ },
+ "IL76": {
+  "make": "Ilyushin",
+  "model": "Il-76"
+ },
+ "IL86": {
+  "make": "Ilyushin",
+  "model": "Il-86"
+ },
+ "IL96": {
+  "make": "Ilyushin",
+  "model": "Il-96"
+ },
+ "IMPU": {
+  "make": "Impulse",
+  "model": "Xcite"
+ },
+ "INCQ": {
+  "make": "Inpaer",
+  "model": "Conquest"
+ },
+ "INEC": {
+  "make": "Inpaer",
+  "model": "Excel"
+ },
+ "INEX": {
+  "make": "Inpaer",
+  "model": "Explorer"
+ },
+ "INTG": {
+  "make": "Aura Aero",
+  "model": "Integral R"
+ },
+ "ION": {
+  "make": "Ion",
+  "model": "Ion"
+ },
+ "IP06": {
+  "make": "Ipe",
+  "model": "IPE-06 Curucaca"
+ },
+ "IP10": {
+  "make": "Ipe",
+  "model": "IPE-010"
+ },
+ "IP26": {
+  "make": "Ipai",
+  "model": "IPAI-26 Tuca"
+ },
+ "IP6A": {
+  "make": "Ipe",
+  "model": "IPE-06A"
+ },
+ "IPAN": {
+  "make": "Embraer",
+  "model": "U-19 Ipanema"
+ },
+ "IR22": {
+  "make": "Ica",
+  "model": "IAR-822"
+ },
+ "IR23": {
+  "make": "Ica",
+  "model": "IAR-823"
+ },
+ "IR24": {
+  "make": "Ica",
+  "model": "IAR-824"
+ },
+ "IR25": {
+  "make": "Ica",
+  "model": "IAR-825TP Triumf"
+ },
+ "IR27": {
+  "make": "Bucuresti",
+  "model": "IAR-827 Dacic"
+ },
+ "IR28": {
+  "make": "Ica",
+  "model": "IS-28MA"
+ },
+ "IR46": {
+  "make": "Iar",
+  "model": "IAR-46 Katty"
+ },
+ "IR99": {
+  "make": "Avioane",
+  "model": "IAR-99 Soim"
+ },
+ "IRBS": {
+  "make": "Kubicek",
+  "model": "M-4 Irbis"
+ },
+ "IS2": {
+  "make": "Instytut Lotnictwa",
+  "model": "IS-2"
+ },
+ "IS28": {
+  "make": "Iar",
+  "model": "IS-28M2"
+ },
+ "ISAT": {
+  "make": "Aerojames",
+  "model": "01 Isatis"
+ },
+ "ISPT": {
+  "make": "Isaacs",
+  "model": "Spitfire"
+ },
+ "J1": {
+  "make": "Auster",
+  "model": "J-1 Alpha"
+ },
+ "J10": {
+  "make": "Chengdu",
+  "model": "F-10"
+ },
+ "J177": {
+  "make": "Aerodynos",
+  "model": "JA-177 Pingouin"
+ },
+ "J2": {
+  "make": "Piper",
+  "model": "J-2 Cub"
+ },
+ "J20": {
+  "make": "Chengdu",
+  "model": "J-20"
+ },
+ "J3": {
+  "make": "Piper",
+  "model": "NE Cub"
+ },
+ "J300": {
+  "make": "Alms",
+  "model": "J-300 Joker"
+ },
+ "J328": {
+  "make": "Fairchild Dornier",
+  "model": "328JET"
+ },
+ "J4": {
+  "make": "Piper",
+  "model": "J-4 Cub Coupe"
+ },
+ "J400": {
+  "make": "Jihlavan",
+  "model": "JA-400 Skyleader 400"
+ },
+ "J40E": {
+  "make": "Zall Jihlavan",
+  "model": "JA-400 Skyleader 400 Electric"
+ },
+ "J4B2": {
+  "make": "Barnett",
+  "model": "J4B2"
+ },
+ "J5": {
+  "make": "Piper",
+  "model": "AE Cub Cruiser"
+ },
+ "J600": {
+  "make": "Jihlavan",
+  "model": "JA-600 Rapid 600"
+ },
+ "J8A": {
+  "make": "Shenyang",
+  "model": "J-8A"
+ },
+ "J8B": {
+  "make": "Shenyang",
+  "model": "F-8T"
+ },
+ "JAB2": {
+  "make": "Jabiru",
+  "model": "Jabiru J160"
+ },
+ "JAB4": {
+  "make": "Jabiru",
+  "model": "Jabiru J200"
+ },
+ "JABI": {
+  "make": "Jabiru",
+  "model": "Jabiru SK"
+ },
+ "JACE": {
+  "make": "Ace",
+  "model": "Junior Ace"
+ },
+ "JAG2": {
+  "make": "Jag Helicopter",
+  "model": "JAG"
+ },
+ "JAGR": {
+  "make": "Hindustan",
+  "model": "Jaguar"
+ },
+ "JAJ5": {
+  "make": "Alpha",
+  "model": "J-5 Marco"
+ },
+ "JAJ6": {
+  "make": "J & As",
+  "model": "J-6 Fregata"
+ },
+ "JARO": {
+  "make": "Jackaroo",
+  "model": "Thruxton Jackaroo"
+ },
+ "JAS4": {
+  "make": "Joby",
+  "model": "JAS-4"
+ },
+ "JAST": {
+  "make": "Soko",
+  "model": "J-1 Jastreb"
+ },
+ "JB15": {
+  "make": "Oberlerchner",
+  "model": "JOB-15"
+ },
+ "JC01": {
+  "make": "Coupe",
+  "model": "JC-01"
+ },
+ "JC02": {
+  "make": "Coupe",
+  "model": "JC-02"
+ },
+ "JCOM": {
+  "make": "Aero Commander",
+  "model": "1121 Jet Commander"
+ },
+ "JCRU": {
+  "make": "Aasi",
+  "model": "Jetcruzer"
+ },
+ "JD2": {
+  "make": "Dyke",
+  "model": "JD-2 Delta"
+ },
+ "JDOE": {
+  "make": "American Homebuilts",
+  "model": "John Doe"
+ },
+ "JE2": {
+  "make": "Eich",
+  "model": "JE-2 Gyroplane"
+ },
+ "JFOX": {
+  "make": "Airo",
+  "model": "1"
+ },
+ "JH7": {
+  "make": "Xian",
+  "model": "JH-7"
+ },
+ "JK05": {
+  "make": "Ekolot",
+  "model": "JK-05 Beetle"
+ },
+ "JL9": {
+  "make": "Guizhou",
+  "model": "JL-9 Shanying"
+ },
+ "JN76": {
+  "make": "Caudron",
+  "model": "CR-760 Cyclone Replica"
+ },
+ "JPM1": {
+  "make": "Marie",
+  "model": "JPM-01 Medoc"
+ },
+ "JPRO": {
+  "make": "Bac",
+  "model": "145 Jet Provost"
+ },
+ "JRC1": {
+  "make": "Chalard",
+  "model": "JRC-01 Julcar"
+ },
+ "JRO": {
+  "make": "Dta",
+  "model": "J-RO"
+ },
+ "JS3": {
+  "make": "Century",
+  "model": "Jetstream 3"
+ },
+ "JS31": {
+  "make": "British Aerospace",
+  "model": "BAe-3100 Jetstream 31"
+ },
+ "JS32": {
+  "make": "British Aerospace",
+  "model": "BAe-3200 Jetstream Super 31"
+ },
+ "JS41": {
+  "make": "Ai(r)",
+  "model": "BAe-4100 Jetstream 41"
+ },
+ "JSX": {
+  "make": "Sonex",
+  "model": "JSX SubSonex"
+ },
+ "JT2": {
+  "make": "Taylor (4)",
+  "model": "JT-2 Titch"
+ },
+ "JU52": {
+  "make": "CASA",
+  "model": "352L"
+ },
+ "JUN1": {
+  "make": "Kaminskas",
+  "model": "RK-1 Jungster 1"
+ },
+ "JUN2": {
+  "make": "Kaminskas",
+  "model": "RK-2 Jungster 2"
+ },
+ "JUNR": {
+  "make": "Andreasson",
+  "model": "BA-7"
+ },
+ "JUPI": {
+  "make": "Lammer Geyer",
+  "model": "Jupiter"
+ },
+ "K100": {
+  "make": "Daher",
+  "model": "Kodiak 100"
+ },
+ "K126": {
+  "make": "Ica",
+  "model": "Ka-126"
+ },
+ "K209": {
+  "make": "Fama",
+  "model": "K-209 KISS"
+ },
+ "K226": {
+  "make": "Kamov",
+  "model": "Ka-226 Sergei"
+ },
+ "K35E": {
+  "make": "Boeing",
+  "model": "KC-135E Stratotanker"
+ },
+ "K35R": {
+  "make": "Boeing",
+  "model": "C-135FR Stratotanker"
+ },
+ "K50": {
+  "make": "Korea Aerospace",
+  "model": "A-50 Golden Eagle"
+ },
+ "K51": {
+  "make": "Kovacs",
+  "model": "K-51 Peregrino"
+ },
+ "K8": {
+  "make": "Hongdu",
+  "model": "JL-8"
+ },
+ "K900": {
+  "make": "Daher",
+  "model": "Kodiak 200"
+ },
+ "KA25": {
+  "make": "Kamov",
+  "model": "Ka-25"
+ },
+ "KA26": {
+  "make": "Kamov",
+  "model": "Ka-26"
+ },
+ "KA27": {
+  "make": "Kamov",
+  "model": "Ka-27"
+ },
+ "KA50": {
+  "make": "Kamov",
+  "model": "Ka-50 Werewolf"
+ },
+ "KA52": {
+  "make": "Kamov",
+  "model": "Ka-52 Alligator"
+ },
+ "KA62": {
+  "make": "Kamov",
+  "model": "Ka-62"
+ },
+ "KAAN": {
+  "make": "Tai",
+  "model": "TF Kaan"
+ },
+ "KAK1": {
+  "make": "Kieger",
+  "model": "AK-1"
+ },
+ "KAK2": {
+  "make": "Kieger",
+  "model": "AK-2"
+ },
+ "KAK3": {
+  "make": "Junkers Profly",
+  "model": "Junka"
+ },
+ "KAT3": {
+  "make": "Khrunichev",
+  "model": "AT-3"
+ },
+ "KATB": {
+  "make": "Kari",
+  "model": "Twinbee"
+ },
+ "KATR": {
+  "make": "Aerosamara",
+  "model": "Katran"
+ },
+ "KC2": {
+  "make": "Kawasaki",
+  "model": "C-2"
+ },
+ "KE3": {
+  "make": "Boeing",
+  "model": "KE-3"
+ },
+ "KEHA": {
+  "make": "Kestrel",
+  "model": "Float Hawk"
+ },
+ "KELA": {
+  "make": "Keleher",
+  "model": "Lark"
+ },
+ "KELD": {
+  "make": "Kelly",
+  "model": "D"
+ },
+ "KERO": {
+  "make": "Rearwin",
+  "model": "2000 Ken-Royce"
+ },
+ "KEST": {
+  "make": "Farnborough",
+  "model": "F-1 Kestrel"
+ },
+ "KF21": {
+  "make": "Korea Aerospace",
+  "model": "KF-21 Boramae"
+ },
+ "KFAB": {
+  "make": "Kitplanes For Africa",
+  "model": "Bushbaby"
+ },
+ "KFAS": {
+  "make": "Kitplanes For Africa",
+  "model": "Safari"
+ },
+ "KFIR": {
+  "make": "Iai",
+  "model": "Kfir"
+ },
+ "KFIS": {
+  "make": "Anderson",
+  "model": "EA-1 Kingfisher"
+ },
+ "KH4": {
+  "make": "Kawasaki",
+  "model": "KH-4"
+ },
+ "KIS2": {
+  "make": "Tri-R",
+  "model": "KIS TD"
+ },
+ "KIS4": {
+  "make": "Pulsar",
+  "model": "Super Cruiser"
+ },
+ "KITH": {
+  "make": "Bourdon",
+  "model": "Kitty Hawk"
+ },
+ "KITI": {
+  "make": "Mitchell-Procter",
+  "model": "Kittiwake"
+ },
+ "KK60": {
+  "make": "Kari-Keen",
+  "model": "60 Coupe"
+ },
+ "KL07": {
+  "make": "Bolkow",
+  "model": "F-207"
+ },
+ "KL10": {
+  "make": "Flight Design-Vessel",
+  "model": "KLA-100"
+ },
+ "KL25": {
+  "make": "Klemm",
+  "model": "L-25"
+ },
+ "KL35": {
+  "make": "Klemm",
+  "model": "Kl-35"
+ },
+ "KLBR": {
+  "make": "Kolb",
+  "model": "King Kolbra"
+ },
+ "KM2": {
+  "make": "Fuji",
+  "model": "KM-2"
+ },
+ "KMAX": {
+  "make": "Kaman",
+  "model": "K-1200 K-Max"
+ },
+ "KNTW": {
+  "make": "Payne",
+  "model": "Knight Twister"
+ },
+ "KOLL": {
+  "make": "Kolb",
+  "model": "Laser"
+ },
+ "KP2": {
+  "make": "Jihlavan",
+  "model": "KP-2 Rapid 200"
+ },
+ "KP5": {
+  "make": "Jihlavan",
+  "model": "KP-5 Rapid 500"
+ },
+ "KR1": {
+  "make": "Rand",
+  "model": "KR-1"
+ },
+ "KR2": {
+  "make": "Rand",
+  "model": "KR-2"
+ },
+ "KR21": {
+  "make": "Fairchild (1)",
+  "model": "KR-21"
+ },
+ "KR30": {
+  "make": "Ekolot",
+  "model": "KR-030 Topaz"
+ },
+ "KR31": {
+  "make": "Fairchild (1)",
+  "model": "KR-31"
+ },
+ "KR34": {
+  "make": "Fairchild (1)",
+  "model": "KR-34"
+ },
+ "KRAG": {
+  "make": "Soko",
+  "model": "P-2 Kraguj"
+ },
+ "KRAH": {
+  "make": "Rock",
+  "model": "Krähe"
+ },
+ "KRIC": {
+  "make": "Flsz",
+  "model": "DK-1 Der Kricket"
+ },
+ "KSTK": {
+  "make": "Phoenix-Aviacor",
+  "model": "M-12 Kasatik"
+ },
+ "KT1": {
+  "make": "Korea Aerospace",
+  "model": "KA-1 Woong-Bee"
+ },
+ "KTOO": {
+  "make": "Amax",
+  "model": "J-6 Karatoo"
+ },
+ "KZ2": {
+  "make": "Sai (1)",
+  "model": "KZ-2 Kupe"
+ },
+ "KZ3": {
+  "make": "Sai (1)",
+  "model": "KZ-3"
+ },
+ "KZ4": {
+  "make": "Sai (1)",
+  "model": "KZ-4"
+ },
+ "KZ7": {
+  "make": "Sai (1)",
+  "model": "KZ-7 Laerke"
+ },
+ "KZ8": {
+  "make": "Sai (1)",
+  "model": "KZ-8"
+ },
+ "KZLA": {
+  "make": "Baykar",
+  "model": "Bayraktar Kızılelma"
+ },
+ "L10": {
+  "make": "Lockheed",
+  "model": "L-10 Electra"
+ },
+ "L101": {
+  "make": "Lockheed",
+  "model": "L-1011 TriStar"
+ },
+ "L11": {
+  "make": "Luscombe",
+  "model": "11A Sedan"
+ },
+ "L11E": {
+  "make": "Luscombe",
+  "model": "11E"
+ },
+ "L12": {
+  "make": "Lockheed",
+  "model": "JO Electra Junior"
+ },
+ "L13": {
+  "make": "Convair",
+  "model": "L-13"
+ },
+ "L13M": {
+  "make": "Let",
+  "model": "L-13 Blanik (single-engine conversions)"
+ },
+ "L13S": {
+  "make": "Aerotechnik",
+  "model": "L-13S Vivat"
+ },
+ "L14": {
+  "make": "Lockheed",
+  "model": "L-14 Hudson"
+ },
+ "L15": {
+  "make": "Hongdu",
+  "model": "L-15 Lieying"
+ },
+ "L159": {
+  "make": "Aero (2)",
+  "model": "L-159"
+ },
+ "L18": {
+  "make": "Lockheed",
+  "model": "R5O Lodestar"
+ },
+ "L181": {
+  "make": "Associated Air",
+  "model": "Liberty 181"
+ },
+ "L188": {
+  "make": "Lockheed",
+  "model": "L-188 Electra"
+ },
+ "L200": {
+  "make": "Let",
+  "model": "L-200 Morava"
+ },
+ "L29": {
+  "make": "Aero (2)",
+  "model": "L-29 Delfin"
+ },
+ "L29A": {
+  "make": "Lockheed",
+  "model": "L-1329 Jetstar 6"
+ },
+ "L29B": {
+  "make": "Lockheed",
+  "model": "L-1329 Jetstar 2"
+ },
+ "L37": {
+  "make": "Lockheed",
+  "model": "L-15 Harpoon"
+ },
+ "L380": {
+  "make": "Lederlin",
+  "model": "380 Ladybug"
+ },
+ "L39": {
+  "make": "Aero (2)",
+  "model": "L-39 Albatros"
+ },
+ "L4": {
+  "make": "Chaika",
+  "model": "L-4"
+ },
+ "L40": {
+  "make": "Orličan (1)",
+  "model": "L-40 Meta Sokol"
+ },
+ "L410": {
+  "make": "Let",
+  "model": "L-410 Turbolet"
+ },
+ "L5": {
+  "make": "Stinson",
+  "model": "OY Sentinel"
+ },
+ "L59": {
+  "make": "Aero (2)",
+  "model": "L-59"
+ },
+ "L6": {
+  "make": "Aerovolga",
+  "model": "L-6"
+ },
+ "L60": {
+  "make": "Orličan (1)",
+  "model": "K-60 Brigadyr"
+ },
+ "L610": {
+  "make": "Let",
+  "model": "L-610"
+ },
+ "L70": {
+  "make": "Valmet",
+  "model": "L-70 Vinka"
+ },
+ "L8": {
+  "make": "Luscombe",
+  "model": "8"
+ },
+ "L90": {
+  "make": "Aermacchi",
+  "model": "M-290TP Redigo"
+ },
+ "LA25": {
+  "make": "Lake",
+  "model": "LA-250 Seafury"
+ },
+ "LA4": {
+  "make": "Lake",
+  "model": "LA-4"
+ },
+ "LA60": {
+  "make": "Aermacchi",
+  "model": "AL-60"
+ },
+ "LA6T": {
+  "make": "Aermacchi",
+  "model": "AL-60 Turbine Grizzly"
+ },
+ "LA8": {
+  "make": "Aerovolga",
+  "model": "LA-8 Flagman"
+ },
+ "LACO": {
+  "make": "Laven",
+  "model": "LACO-125"
+ },
+ "LAKR": {
+  "make": "Laser",
+  "model": "Akro Z"
+ },
+ "LAKX": {
+  "make": "Aeroplastika",
+  "model": "LAK-X"
+ },
+ "LAMA": {
+  "make": "Hindustan",
+  "model": "SA-315 Lancer"
+ },
+ "LANC": {
+  "make": "Avro",
+  "model": "683 Lancaster"
+ },
+ "LAR1": {
+  "make": "Flaris",
+  "model": "LAR-1"
+ },
+ "LARK": {
+  "make": "North American Rockwell",
+  "model": "100 Lark Commander"
+ },
+ "LAST": {
+  "make": "Utva",
+  "model": "N-63 Lasta"
+ },
+ "LBUG": {
+  "make": "Lightning Bug",
+  "model": "Lightning Bug"
+ },
+ "LCA": {
+  "make": "Ada",
+  "model": "LCA Tejas"
+ },
+ "LCB": {
+  "make": "Laird",
+  "model": "LC-B Commercial"
+ },
+ "LCH": {
+  "make": "Hindustan",
+  "model": "LCH"
+ },
+ "LCR": {
+  "make": "Laird",
+  "model": "LC-R Speedwing"
+ },
+ "LEG2": {
+  "make": "Lancair",
+  "model": "Legacy"
+ },
+ "LEGD": {
+  "make": "Performance",
+  "model": "Legend"
+ },
+ "LESP": {
+  "make": "Lancair",
+  "model": "Lancair ES-P"
+ },
+ "LEV2": {
+  "make": "Tapanee",
+  "model": "Levitation 2"
+ },
+ "LEV4": {
+  "make": "Tapanee",
+  "model": "Levitation 4"
+ },
+ "LGEZ": {
+  "make": "Rutan",
+  "model": "61 Long-EZ"
+ },
+ "LGND": {
+  "make": "Aeropilot",
+  "model": "L-600"
+ },
+ "LH10": {
+  "make": "Lh Aviation",
+  "model": "LH-10 Ellipse"
+ },
+ "LIBE": {
+  "make": "Liberty (1)",
+  "model": "Bellaire"
+ },
+ "LION": {
+  "make": "Griffon",
+  "model": "Lionheart"
+ },
+ "LJ23": {
+  "make": "Lear Jet",
+  "model": "23"
+ },
+ "LJ24": {
+  "make": "Gates Learjet",
+  "model": "24"
+ },
+ "LJ25": {
+  "make": "Gates Learjet",
+  "model": "25"
+ },
+ "LJ28": {
+  "make": "Gates Learjet",
+  "model": "28"
+ },
+ "LJ31": {
+  "make": "Gates Learjet",
+  "model": "31"
+ },
+ "LJ35": {
+  "make": "Gates Learjet",
+  "model": "35"
+ },
+ "LJ40": {
+  "make": "Learjet",
+  "model": "40"
+ },
+ "LJ45": {
+  "make": "Learjet",
+  "model": "45"
+ },
+ "LJ55": {
+  "make": "Learjet",
+  "model": "55"
+ },
+ "LJ60": {
+  "make": "Learjet",
+  "model": "60"
+ },
+ "LJ70": {
+  "make": "Learjet",
+  "model": "70"
+ },
+ "LJ75": {
+  "make": "Learjet",
+  "model": "75"
+ },
+ "LM5": {
+  "make": "Lombardi",
+  "model": "LM-5 Aviastar"
+ },
+ "LM5X": {
+  "make": "Light Miniature",
+  "model": "LM-5 Super Cub"
+ },
+ "LM7": {
+  "make": "Lombardi",
+  "model": "LM-7"
+ },
+ "LMC1": {
+  "make": "Chasle",
+  "model": "LMC-1 Sprintair"
+ },
+ "LMK1": {
+  "make": "Cata",
+  "model": "LMK-1 Oryx"
+ },
+ "LN27": {
+  "make": "Falcomposite",
+  "model": "LN-27 Furio"
+ },
+ "LN3": {
+  "make": "Flygfabriken",
+  "model": "LN-3 Seagull"
+ },
+ "LNC2": {
+  "make": "Lancair",
+  "model": "Lancair 200"
+ },
+ "LNC4": {
+  "make": "Lancair",
+  "model": "Lancair 4"
+ },
+ "LNCE": {
+  "make": "Lancair",
+  "model": "Lancair ES"
+ },
+ "LNP4": {
+  "make": "Lancair",
+  "model": "Lancair PropJet 4"
+ },
+ "LNT4": {
+  "make": "Lancair",
+  "model": "Sentry 4T"
+ },
+ "LOCA": {
+  "make": "Aerolab",
+  "model": "LoCamp"
+ },
+ "LOVE": {
+  "make": "Loving-Wayne",
+  "model": "WR-1 Love"
+ },
+ "LP1": {
+  "make": "Lopresti",
+  "model": "LP-1 Fury"
+ },
+ "LR2T": {
+  "make": "Load Ranger",
+  "model": "2000"
+ },
+ "LS2": {
+  "make": "Hat",
+  "model": "LS-2"
+ },
+ "LSTR": {
+  "make": "Custom Flight",
+  "model": "Lite Star"
+ },
+ "LTNG": {
+  "make": "Bac",
+  "model": "Lightning"
+ },
+ "LUL5": {
+  "make": "Lucas",
+  "model": "L-5"
+ },
+ "LUL6": {
+  "make": "Lucas",
+  "model": "L-6"
+ },
+ "LUL7": {
+  "make": "Lucas",
+  "model": "L-7"
+ },
+ "LUL8": {
+  "make": "Lucas",
+  "model": "L-8"
+ },
+ "LW20": {
+  "make": "Howard Hughes",
+  "model": "Australian LightWing Speed SP-2000"
+ },
+ "LW40": {
+  "make": "Howard Hughes",
+  "model": "Australian LightWing Speed SP-4000"
+ },
+ "LWIN": {
+  "make": "Howard Hughes",
+  "model": "Australian LightWing GR-582"
+ },
+ "LX32": {
+  "make": "Lilienthal",
+  "model": "100"
+ },
+ "LX34": {
+  "make": "Lilienthal",
+  "model": "X-34 Bekas"
+ },
+ "LXR": {
+  "make": "Elixir",
+  "model": "Elixir"
+ },
+ "LYNX": {
+  "make": "Westland",
+  "model": "WG-13 Lynx"
+ },
+ "LYSA": {
+  "make": "National Steel",
+  "model": "Lysander"
+ },
+ "M10": {
+  "make": "Aerostar (1)",
+  "model": "90"
+ },
+ "M101": {
+  "make": "Myasishchev",
+  "model": "M-101 Gzhel"
+ },
+ "M106": {
+  "make": "Lambert",
+  "model": "M-106 Mission"
+ },
+ "M108": {
+  "make": "Lambert",
+  "model": "M-108 Mission"
+ },
+ "M110": {
+  "make": "Aviat",
+  "model": "110 Special"
+ },
+ "M15": {
+  "make": "Pzl-Mielec",
+  "model": "M-15 Belphegor"
+ },
+ "M17": {
+  "make": "Myasishchev",
+  "model": "M-17 Stratosfera"
+ },
+ "M18": {
+  "make": "Aii",
+  "model": "AVA-303"
+ },
+ "M18T": {
+  "make": "Melex",
+  "model": "T-45 Turbine Dromader"
+ },
+ "M2": {
+  "make": "Kubicek",
+  "model": "M-2 Scout"
+ },
+ "M200": {
+  "make": "Aero Commander",
+  "model": "200 Commander 200"
+ },
+ "M20P": {
+  "make": "Mooney",
+  "model": "M-20"
+ },
+ "M20T": {
+  "make": "Mooney",
+  "model": "M-20K 231"
+ },
+ "M21": {
+  "make": "Pzl-Mielec",
+  "model": "M-21 Dromader Mini"
+ },
+ "M212": {
+  "make": "Lambert",
+  "model": "M-212 Mission"
+ },
+ "M22": {
+  "make": "Mooney",
+  "model": "M-22"
+ },
+ "M24": {
+  "make": "Pzl-Mielec",
+  "model": "M-24 Dromader Super"
+ },
+ "M26": {
+  "make": "Pzl-Mielec",
+  "model": "M-26 Air Wolf"
+ },
+ "M28": {
+  "make": "Pzl-Mielec",
+  "model": "C-145"
+ },
+ "M2HK": {
+  "make": "Miles",
+  "model": "M-2 Hawk Major"
+ },
+ "M308": {
+  "make": "German Bianco",
+  "model": "MB-308"
+ },
+ "M326": {
+  "make": "Embraer",
+  "model": "AT-26 Xavante"
+ },
+ "M339": {
+  "make": "Aermacchi",
+  "model": "MB-339"
+ },
+ "M345": {
+  "make": "Leonardo",
+  "model": "M-345"
+ },
+ "M346": {
+  "make": "Aermacchi",
+  "model": "M-346 Master"
+ },
+ "M36J": {
+  "make": "Matra",
+  "model": "M-360 Jupiter"
+ },
+ "M4": {
+  "make": "Maule",
+  "model": "M-4"
+ },
+ "M404": {
+  "make": "Martin",
+  "model": "404"
+ },
+ "M5": {
+  "make": "Maule",
+  "model": "M-5"
+ },
+ "M55": {
+  "make": "Myasishchev",
+  "model": "M-55 Geophysica"
+ },
+ "M6": {
+  "make": "Maule",
+  "model": "M-6 Super Rocket"
+ },
+ "M600": {
+  "make": "Piper",
+  "model": "PA-46-600TP M600"
+ },
+ "M7": {
+  "make": "Maule",
+  "model": "MX-7-180"
+ },
+ "M700": {
+  "make": "Piper",
+  "model": "PA-46-701TP M700 Fury"
+ },
+ "M74": {
+  "make": "Texas Helicopter",
+  "model": "M-74 Wasp"
+ },
+ "M7T": {
+  "make": "Maule",
+  "model": "M-7-420"
+ },
+ "M8": {
+  "make": "Maule",
+  "model": "M-8"
+ },
+ "M9": {
+  "make": "Maule",
+  "model": "M-9"
+ },
+ "MA1": {
+  "make": "Emair",
+  "model": "MA-1 Diablo"
+ },
+ "MA5": {
+  "make": "Marquart",
+  "model": "MA-5 Charger"
+ },
+ "MA60": {
+  "make": "Xian",
+  "model": "MA-60"
+ },
+ "MA6H": {
+  "make": "Xian",
+  "model": "MA-60H"
+ },
+ "MAGC": {
+  "make": "Eagle Aviation",
+  "model": "EA-100"
+ },
+ "MAGI": {
+  "make": "Miles",
+  "model": "M-14 Magister"
+ },
+ "MAGN": {
+  "make": "Airdale",
+  "model": "Magnum"
+ },
+ "MAJR": {
+  "make": "Falconar",
+  "model": "Cubmajor"
+ },
+ "MAKO": {
+  "make": "Lancair",
+  "model": "NLA-450 Mako"
+ },
+ "MAMB": {
+  "make": "Melbourne",
+  "model": "MA-2 Mamba"
+ },
+ "MAME": {
+  "make": "Aerocomp",
+  "model": "Merlin"
+ },
+ "MAVR": {
+  "make": "Aea",
+  "model": "Maverick"
+ },
+ "MB70": {
+  "make": "Brochet",
+  "model": "MB-72"
+ },
+ "MB80": {
+  "make": "Brochet",
+  "model": "MB-80"
+ },
+ "MC01": {
+  "make": "Montaer",
+  "model": "MC-01"
+ },
+ "MC10": {
+  "make": "Colomban",
+  "model": "MC-10 Cricri"
+ },
+ "MC23": {
+  "make": "Irkut",
+  "model": "MC-21-300"
+ },
+ "MC45": {
+  "make": "Meyers",
+  "model": "MAC-145"
+ },
+ "MC90": {
+  "make": "Monocoupe",
+  "model": "90"
+ },
+ "MCOU": {
+  "make": "Chris Tena",
+  "model": "Mini Coupe"
+ },
+ "MCOY": {
+  "make": "Montana",
+  "model": "Coyote"
+ },
+ "MCR1": {
+  "make": "Dyn'aero",
+  "model": "MCR-01"
+ },
+ "MCR4": {
+  "make": "Dyn'aero",
+  "model": "MCR-2"
+ },
+ "MCRR": {
+  "make": "Dyn'aero",
+  "model": "MCR-R180"
+ },
+ "MCUL": {
+  "make": "Kimball",
+  "model": "McCullocoupe"
+ },
+ "MD11": {
+  "make": "Boeing",
+  "model": "MD-11"
+ },
+ "MD3": {
+  "make": "Sme",
+  "model": "MD-3 Tiga"
+ },
+ "MD3R": {
+  "make": "Gryf",
+  "model": "MD-3 Rider"
+ },
+ "MD52": {
+  "make": "McDonnell Douglas",
+  "model": "AH-6J"
+ },
+ "MD60": {
+  "make": "Boeing",
+  "model": "MD-600N"
+ },
+ "MD81": {
+  "make": "Boeing",
+  "model": "MD-81"
+ },
+ "MD82": {
+  "make": "Boeing",
+  "model": "MD-82"
+ },
+ "MD83": {
+  "make": "Boeing",
+  "model": "MD-83"
+ },
+ "MD87": {
+  "make": "Boeing",
+  "model": "MD-87"
+ },
+ "MD88": {
+  "make": "Boeing",
+  "model": "MD-88"
+ },
+ "MD90": {
+  "make": "Boeing",
+  "model": "MD-90"
+ },
+ "ME08": {
+  "make": "Nord",
+  "model": "1000"
+ },
+ "ME09": {
+  "make": "Hispano",
+  "model": "HA-1112 Buchon"
+ },
+ "ME62": {
+  "make": "Legend Flyers",
+  "model": "Me-262"
+ },
+ "MEAD": {
+  "make": "Mead",
+  "model": "Adventure"
+ },
+ "MEL2": {
+  "make": "Garrison",
+  "model": "Melmoth 2"
+ },
+ "MERK": {
+  "make": "Aviaton",
+  "model": "Merkury"
+ },
+ "MESS": {
+  "make": "Miles",
+  "model": "M-38 Messenger"
+ },
+ "METR": {
+  "make": "Armstrong Whitworth",
+  "model": "Meteor"
+ },
+ "MF17": {
+  "make": "Pakistan",
+  "model": "Shahbaz"
+ },
+ "MG15": {
+  "make": "Pzl-Mielec",
+  "model": "LiM-1"
+ },
+ "MG17": {
+  "make": "Shenyang",
+  "model": "F-5"
+ },
+ "MG19": {
+  "make": "Shenyang",
+  "model": "F-6"
+ },
+ "MG21": {
+  "make": "Chengdu",
+  "model": "F-7"
+ },
+ "MG23": {
+  "make": "Mikoyan",
+  "model": "MiG-23"
+ },
+ "MG25": {
+  "make": "Mikoyan",
+  "model": "MiG-25"
+ },
+ "MG29": {
+  "make": "Mikoyan",
+  "model": "MiG-29"
+ },
+ "MG31": {
+  "make": "Mapo",
+  "model": "MiG-31"
+ },
+ "MG44": {
+  "make": "Mikoyan",
+  "model": "MiG 1-44"
+ },
+ "MGIC": {
+  "make": "Kaiser",
+  "model": "Magic"
+ },
+ "MGNM": {
+  "make": "Aviation Enterprises",
+  "model": "Magnum"
+ },
+ "MGUL": {
+  "make": "Percival",
+  "model": "E Mew Gull"
+ },
+ "MH20": {
+  "make": "Mitsubishi",
+  "model": "MH-2000"
+ },
+ "MH46": {
+  "make": "Aerosette",
+  "model": "MH-46 Eclipse"
+ },
+ "MI10": {
+  "make": "Mil",
+  "model": "Mi-10"
+ },
+ "MI14": {
+  "make": "Mil",
+  "model": "Mi-14"
+ },
+ "MI2": {
+  "make": "Pzl-Swidnik",
+  "model": "Mi-2"
+ },
+ "MI24": {
+  "make": "Mil",
+  "model": "Mi-24"
+ },
+ "MI26": {
+  "make": "Mil",
+  "model": "Mi-26"
+ },
+ "MI28": {
+  "make": "Mil",
+  "model": "Mi-28"
+ },
+ "MI34": {
+  "make": "Mil",
+  "model": "Mi-34"
+ },
+ "MI38": {
+  "make": "Mil",
+  "model": "Mi-38"
+ },
+ "MI4": {
+  "make": "Harbin",
+  "model": "Z-5"
+ },
+ "MI6": {
+  "make": "Mil",
+  "model": "Mi-6"
+ },
+ "MI8": {
+  "make": "Mil",
+  "model": "Mi-8"
+ },
+ "MIDR": {
+  "make": "Acba",
+  "model": "ACBA-7 Midour"
+ },
+ "MIMP": {
+  "make": "Aerocar",
+  "model": "Mini-Imp"
+ },
+ "MIMU": {
+  "make": "Bushby",
+  "model": "MM-1 Midget Mustang"
+ },
+ "MIR2": {
+  "make": "Dassault",
+  "model": "Vajra"
+ },
+ "MIRA": {
+  "make": "Dassault",
+  "model": "Mirage 3"
+ },
+ "MITE": {
+  "make": "Mooney",
+  "model": "M-18 Mite"
+ },
+ "MJ10": {
+  "make": "Jurca",
+  "model": "MJ-10 Spit"
+ },
+ "MJ12": {
+  "make": "Jurca",
+  "model": "MJ-12 P-40"
+ },
+ "MJ1H": {
+  "make": "Jurca",
+  "model": "MJ-100 Spitfire Replica"
+ },
+ "MJ2": {
+  "make": "Jurca",
+  "model": "MJ-2 Tempête"
+ },
+ "MJ4": {
+  "make": "Jurca",
+  "model": "MJ-4 Shadow"
+ },
+ "MJ5": {
+  "make": "Jurca",
+  "model": "MJ-5 Sirocco"
+ },
+ "MJ51": {
+  "make": "Jurca",
+  "model": "MJ-51 Spérocco"
+ },
+ "MJ53": {
+  "make": "Jurca",
+  "model": "MJ-53 Autan"
+ },
+ "MJ7": {
+  "make": "Boeve",
+  "model": "P-51 Mustang"
+ },
+ "MJ77": {
+  "make": "Jurca",
+  "model": "MJ-77 Gnatsum"
+ },
+ "MJ8": {
+  "make": "Jurca",
+  "model": "MJ-8 1-Nine-0"
+ },
+ "MJ80": {
+  "make": "Jurca",
+  "model": "MJ-80 Focke-Wulf Fw-190 Replica"
+ },
+ "MJ9": {
+  "make": "Jurca",
+  "model": "MJ-9"
+ },
+ "MJ90": {
+  "make": "Jurca",
+  "model": "MJ-90 Messerschmitt Bf-109 Replica"
+ },
+ "MLER": {
+  "make": "Alanne",
+  "model": "Moottori-Lerche"
+ },
+ "MM14": {
+  "make": "Magni",
+  "model": "M-14 Scout"
+ },
+ "MM16": {
+  "make": "Magni",
+  "model": "M-16 Tandem Trainer"
+ },
+ "MM19": {
+  "make": "Magni",
+  "model": "M-19 Shark"
+ },
+ "MM21": {
+  "make": "Magni",
+  "model": "M-21"
+ },
+ "MM22": {
+  "make": "Magni",
+  "model": "M-22 Voyager"
+ },
+ "MM24": {
+  "make": "Magni",
+  "model": "M-24 Orion"
+ },
+ "MMAX": {
+  "make": "Mad Max Aero",
+  "model": "Mad Max"
+ },
+ "MMUT": {
+  "make": "Mara Wing",
+  "model": "1-L Malamut"
+ },
+ "MNEX": {
+  "make": "Norman",
+  "model": "Nordic 8 Mini Explorer"
+ },
+ "MOCU": {
+  "make": "Culp",
+  "model": "MonoCulp"
+ },
+ "MOGO": {
+  "make": "Kinetic",
+  "model": "Mountain Goat"
+ },
+ "MOL1": {
+  "make": "Molniya",
+  "model": "1"
+ },
+ "MON2": {
+  "make": "Montanair",
+  "model": "2180 Spirit"
+ },
+ "MONA": {
+  "make": "Miles",
+  "model": "M-17 Monarch"
+ },
+ "MONI": {
+  "make": "Monnett",
+  "model": "Moni"
+ },
+ "MOR2": {
+  "make": "Varga",
+  "model": "2150 Kachina"
+ },
+ "MOSP": {
+  "make": "Mong",
+  "model": "Sport"
+ },
+ "MOSQ": {
+  "make": "De Havilland",
+  "model": "DH-98 Mosquito"
+ },
+ "MOTO": {
+  "make": "Humbert",
+  "model": "Moto Du Ciel"
+ },
+ "MP02": {
+  "make": "Aero-Kros",
+  "model": "MP-02 Czajka"
+ },
+ "MP20": {
+  "make": "Plan",
+  "model": "MP-205 Busard"
+ },
+ "MR25": {
+  "make": "Murphy",
+  "model": "SR-2500 Super Rebel"
+ },
+ "MR35": {
+  "make": "Murphy",
+  "model": "SR-3500 Moose"
+ },
+ "MR3T": {
+  "make": "Murphy",
+  "model": "SR-3500 T-Moose"
+ },
+ "MRAI": {
+  "make": "Monnett",
+  "model": "Monerai P"
+ },
+ "MRF1": {
+  "make": "Dassault",
+  "model": "Mirage F1"
+ },
+ "MRMD": {
+  "make": "Csa",
+  "model": "Mermaid"
+ },
+ "MRTN": {
+  "make": "Mirage",
+  "model": "Marathon"
+ },
+ "MS1": {
+  "make": "Mysky",
+  "model": "MS-1"
+ },
+ "MS23": {
+  "make": "Morane-Saulnier",
+  "model": "MS-230"
+ },
+ "MS31": {
+  "make": "Morane-Saulnier",
+  "model": "MS-315"
+ },
+ "MS73": {
+  "make": "Morane-Saulnier",
+  "model": "MS-733 Alcyon"
+ },
+ "MS76": {
+  "make": "Dinfia",
+  "model": "MS-760 Paris"
+ },
+ "MSAI": {
+  "make": "Morane-Saulnier",
+  "model": "AI"
+ },
+ "MSQ2": {
+  "make": "Backcountry",
+  "model": "Mackey SQ-2"
+ },
+ "MT": {
+  "make": "Autogyro",
+  "model": "MT-03"
+ },
+ "MT2": {
+  "make": "Mitsubishi",
+  "model": "T-2"
+ },
+ "MU2": {
+  "make": "Mitsubishi",
+  "model": "MU-2"
+ },
+ "MU23": {
+  "make": "Akaflieg Munchen",
+  "model": "Mü-23 Saurier"
+ },
+ "MU30": {
+  "make": "Mitsubishi",
+  "model": "MU-300 Diamond"
+ },
+ "MUS2": {
+  "make": "Bushby",
+  "model": "M-2 Mustang 2"
+ },
+ "MVN1": {
+  "make": "Mven",
+  "model": "T-500"
+ },
+ "MVRK": {
+  "make": "Phoenix (2)",
+  "model": "Maverick"
+ },
+ "MX10": {
+  "make": "Aeroandina",
+  "model": "MXP-100 Aventura"
+ },
+ "MX1T": {
+  "make": "World Aircraft",
+  "model": "Sentinel"
+ },
+ "MX2": {
+  "make": "Mx Aircraft",
+  "model": "MX-2"
+ },
+ "MX58": {
+  "make": "Aero-East-Europe",
+  "model": "MXP-158 Embera"
+ },
+ "MX65": {
+  "make": "Aerotec (2)",
+  "model": "MXP-650 Amigo"
+ },
+ "MX80": {
+  "make": "Aeroandina",
+  "model": "MXP-800 Fantasy"
+ },
+ "MXS": {
+  "make": "Mx Aircraft",
+  "model": "MXS"
+ },
+ "MY12": {
+  "make": "Mylius",
+  "model": "MY-102 Tornado"
+ },
+ "MY13": {
+  "make": "Mylius",
+  "model": "MY-103 Mistral"
+ },
+ "MYA4": {
+  "make": "Myasishchev",
+  "model": "3M"
+ },
+ "MYS4": {
+  "make": "Dassault",
+  "model": "MD-454A Mystère 4A"
+ },
+ "N110": {
+  "make": "Nord",
+  "model": "1100 Noralpha"
+ },
+ "N120": {
+  "make": "Nord",
+  "model": "1200 Norecrin"
+ },
+ "N219": {
+  "make": "Dirgantara Indonesia",
+  "model": "N-219 Nurtanio"
+ },
+ "N250": {
+  "make": "Nusantara",
+  "model": "N-250"
+ },
+ "N260": {
+  "make": "Max Holste",
+  "model": "MH-260 Super Broussard"
+ },
+ "N262": {
+  "make": "Aerospatiale",
+  "model": "N-262"
+ },
+ "N3": {
+  "make": "Nostalgair",
+  "model": "N-3 Super Pup"
+ },
+ "N320": {
+  "make": "Nord",
+  "model": "3202"
+ },
+ "N340": {
+  "make": "Nord",
+  "model": "3400"
+ },
+ "N3N": {
+  "make": "Naval Aircraft Factory",
+  "model": "N3N"
+ },
+ "N5A": {
+  "make": "Hongdu",
+  "model": "N-5A"
+ },
+ "N5B": {
+  "make": "Hongdu",
+  "model": "N-5B"
+ },
+ "NA40": {
+  "make": "Unis",
+  "model": "NA-40 Bongo"
+ },
+ "NARN": {
+  "make": "Korea Aerospace",
+  "model": "KC-100 Naraon"
+ },
+ "NAVI": {
+  "make": "North American",
+  "model": "L-17 Navion"
+ },
+ "NC85": {
+  "make": "Nord",
+  "model": "NC-854"
+ },
+ "ND1T": {
+  "make": "Ndn",
+  "model": "NDN-1T Turbo Firecracker"
+ },
+ "NDAC": {
+  "make": "Normand Dube",
+  "model": "Aerocruiser"
+ },
+ "NDAT": {
+  "make": "Normand Dube",
+  "model": "Aerocruiser Turbo 450"
+ },
+ "NDIC": {
+  "make": "Norman",
+  "model": "Nordic 2"
+ },
+ "NFEX": {
+  "make": "Nf-Aircraft",
+  "model": "Explorer"
+ },
+ "NG4": {
+  "make": "Roko Aero",
+  "model": "NG-4"
+ },
+ "NG5": {
+  "make": "Brm Aero",
+  "model": "Bristell HD"
+ },
+ "NH90": {
+  "make": "Nhi",
+  "model": "HT-29"
+ },
+ "NI28": {
+  "make": "Nieuport",
+  "model": "28 Replica"
+ },
+ "NIBB": {
+  "make": "Aviamilano",
+  "model": "F-14 Nibbio"
+ },
+ "NIPR": {
+  "make": "Avions Fairey",
+  "model": "T-66 Nipper"
+ },
+ "NM5": {
+  "make": "Nal",
+  "model": "NM-5"
+ },
+ "NMCU": {
+  "make": "Enaer",
+  "model": "ECH-02 Namcu"
+ },
+ "NNJA": {
+  "make": "Best Off",
+  "model": "Nynja"
+ },
+ "NOMA": {
+  "make": "Gaf",
+  "model": "N-2 Nomad"
+ },
+ "NORA": {
+  "make": "Nordflug",
+  "model": "2501 Noratlas"
+ },
+ "NORS": {
+  "make": "Noorduyn",
+  "model": "Norseman"
+ },
+ "NPOR": {
+  "make": "Redfern",
+  "model": "Nieuport 17"
+ },
+ "NST6": {
+  "make": "Custom Flight",
+  "model": "North Star 6 Galaxie"
+ },
+ "NSTR": {
+  "make": "Custom Flight",
+  "model": "North Star"
+ },
+ "NT10": {
+  "make": "Nuwaco",
+  "model": "T-10"
+ },
+ "NXT": {
+  "make": "Nemesis",
+  "model": "NXT"
+ },
+ "O1": {
+  "make": "Cessna",
+  "model": "OE Bird Dog"
+ },
+ "O3": {
+  "make": "Lockheed",
+  "model": "YO-3"
+ },
+ "OCNR": {
+  "make": "Tissot-Charbonnier",
+  "model": "TC-120 Océanair"
+ },
+ "OH1": {
+  "make": "Kawasaki",
+  "model": "OH-1"
+ },
+ "OKHO": {
+  "make": "Aero-Astra",
+  "model": "Okhotnik"
+ },
+ "OM1": {
+  "make": "Morrisey",
+  "model": "OM-1 Bravo"
+ },
+ "OMGA": {
+  "make": "Isae",
+  "model": "Omega"
+ },
+ "OMLA": {
+  "make": "Omac",
+  "model": "Laser 300"
+ },
+ "OMSD": {
+  "make": "Atec",
+  "model": "Omsider"
+ },
+ "ONE": {
+  "make": "Gogetair",
+  "model": "G-600"
+ },
+ "ONEX": {
+  "make": "Sonex",
+  "model": "Onex"
+ },
+ "OPCA": {
+  "make": "Brooklands",
+  "model": "OA-7 Optica Scout"
+ },
+ "OR10": {
+  "make": "Orion",
+  "model": "10"
+ },
+ "OR12": {
+  "make": "Orion",
+  "model": "SK-12"
+ },
+ "OSCR": {
+  "make": "Partenavia",
+  "model": "P-64 Oscar"
+ },
+ "OVOD": {
+  "make": "Vitek",
+  "model": "Ovod"
+ },
+ "OZZI": {
+  "make": "Buchanan",
+  "model": "BAC-204 Mosquito"
+ },
+ "P06T": {
+  "make": "Tecnam",
+  "model": "P-2006T"
+ },
+ "P1": {
+  "make": "Kawasaki",
+  "model": "P-1"
+ },
+ "P100": {
+  "make": "Pottier",
+  "model": "P-100"
+ },
+ "P130": {
+  "make": "Pottier",
+  "model": "P-130 Bleu Citron"
+ },
+ "P136": {
+  "make": "Piaggio",
+  "model": "P-136"
+ },
+ "P148": {
+  "make": "Piaggio",
+  "model": "P-148"
+ },
+ "P149": {
+  "make": "Focke-Wulf",
+  "model": "FWP-149"
+ },
+ "P180": {
+  "make": "Piaggio",
+  "model": "P-180 Avanti"
+ },
+ "P18T": {
+  "make": "Smith Aviation",
+  "model": "PA-18T Super Cub"
+ },
+ "P19": {
+  "make": "Aviamilano",
+  "model": "P-19 Scricciolo"
+ },
+ "P1HH": {
+  "make": "Piaggio",
+  "model": "P-1HH Hammerhead"
+ },
+ "P2": {
+  "make": "Lockheed",
+  "model": "P-2 Neptune"
+ },
+ "P208": {
+  "make": "Tecnam",
+  "model": "P-2008"
+ },
+ "P210": {
+  "make": "Riley",
+  "model": "Super P210"
+ },
+ "P212": {
+  "make": "Tecnam",
+  "model": "P-2012 Traveller"
+ },
+ "P220": {
+  "make": "Antoniewski",
+  "model": "P-220S-AT2"
+ },
+ "P230": {
+  "make": "Pottier",
+  "model": "P-230 Panda"
+ },
+ "P250": {
+  "make": "Pottier",
+  "model": "P-250 Xerus"
+ },
+ "P25B": {
+  "make": "Laviasa",
+  "model": "PA-25 Biplaza Puelche"
+ },
+ "P27": {
+  "make": "Gryf",
+  "model": "P-27 Skyster"
+ },
+ "P270": {
+  "make": "Pottier",
+  "model": "P-270 Amster"
+ },
+ "P28A": {
+  "make": "Piper",
+  "model": "PA-28-161 Cadet"
+ },
+ "P28B": {
+  "make": "Aicsa",
+  "model": "PA-28-236 Dakota"
+ },
+ "P28R": {
+  "make": "Piper",
+  "model": "PA-28R-201 Arrow"
+ },
+ "P28S": {
+  "make": "Piper",
+  "model": "PA-28R-201T Turbo Arrow"
+ },
+ "P28T": {
+  "make": "Chincul",
+  "model": "PA-A-28RT-201 Arrow 4"
+ },
+ "P28U": {
+  "make": "Aicsa",
+  "model": "PA-28RT-201T Turbo Arrow 4"
+ },
+ "P3": {
+  "make": "Lockheed",
+  "model": "P-3 Orion"
+ },
+ "P32R": {
+  "make": "Piper",
+  "model": "PA-32R-300 Lance"
+ },
+ "P32T": {
+  "make": "Chincul",
+  "model": "PA-A-32RT-300 Lance 2"
+ },
+ "P337": {
+  "make": "Cessna",
+  "model": "P337 Pressurized Skymaster"
+ },
+ "P38": {
+  "make": "Lockheed",
+  "model": "F-5 Lightning"
+ },
+ "P39": {
+  "make": "Bell",
+  "model": "P-39 Airacobra"
+ },
+ "P40": {
+  "make": "Curtiss",
+  "model": "P-40 Warhawk"
+ },
+ "P46T": {
+  "make": "Piper",
+  "model": "PA-46-500TP Meridian M500"
+ },
+ "P47": {
+  "make": "Republic",
+  "model": "F-47 Thunderbolt"
+ },
+ "P4Y": {
+  "make": "Convair",
+  "model": "P4Y Privateer"
+ },
+ "P50": {
+  "make": "Pottier",
+  "model": "P-50 Bouvreuil"
+ },
+ "P51": {
+  "make": "North American",
+  "model": "A-36 Mustang"
+ },
+ "P57": {
+  "make": "Partenavia",
+  "model": "P-57 Fachiro 2"
+ },
+ "P60": {
+  "make": "Pottier",
+  "model": "P-60 Minacro"
+ },
+ "P61": {
+  "make": "Northrop",
+  "model": "P-61 Black Widow"
+ },
+ "P63": {
+  "make": "Bell",
+  "model": "P-63 Kingcobra"
+ },
+ "P66P": {
+  "make": "Piaggio",
+  "model": "P-166"
+ },
+ "P66T": {
+  "make": "Piaggio",
+  "model": "P-166DL3"
+ },
+ "P68": {
+  "make": "Partenavia",
+  "model": "P-68"
+ },
+ "P68T": {
+  "make": "Partenavia",
+  "model": "AP-68TP-300 Spartacus"
+ },
+ "P70": {
+  "make": "Pottier",
+  "model": "P-70"
+ },
+ "P750": {
+  "make": "Pacific Aerospace",
+  "model": "750XL"
+ },
+ "P8": {
+  "make": "Boeing",
+  "model": "P-8 Poseidon"
+ },
+ "P80": {
+  "make": "Pottier",
+  "model": "P-80"
+ },
+ "P82": {
+  "make": "North American",
+  "model": "F-82 Twin Mustang"
+ },
+ "PA11": {
+  "make": "Piper",
+  "model": "L-18B Cub Special"
+ },
+ "PA12": {
+  "make": "Backcountry",
+  "model": "PA-12 Super Cruiser"
+ },
+ "PA14": {
+  "make": "Piper",
+  "model": "PA-14 Family Cruiser"
+ },
+ "PA15": {
+  "make": "Piper",
+  "model": "PA-15 Vagabond"
+ },
+ "PA16": {
+  "make": "Piper",
+  "model": "PA-16 Clipper"
+ },
+ "PA17": {
+  "make": "Piper",
+  "model": "PA-17 Vagabond"
+ },
+ "PA18": {
+  "make": "Piper",
+  "model": "U-7 Super Cub"
+ },
+ "PA20": {
+  "make": "Piper",
+  "model": "PA-20 Pacer"
+ },
+ "PA22": {
+  "make": "Piper",
+  "model": "PA-22 Colt"
+ },
+ "PA23": {
+  "make": "Piper",
+  "model": "PA-23-150 Apache"
+ },
+ "PA24": {
+  "make": "Piper",
+  "model": "PA-24 Comanche"
+ },
+ "PA25": {
+  "make": "Chincul",
+  "model": "PA-A-25 Pawnee"
+ },
+ "PA27": {
+  "make": "Piper",
+  "model": "U-11 Aztec"
+ },
+ "PA30": {
+  "make": "Piper",
+  "model": "PA-30 Twin Comanche"
+ },
+ "PA31": {
+  "make": "Piper",
+  "model": "PA-31-300 Navajo"
+ },
+ "PA32": {
+  "make": "Piper",
+  "model": "PA-32 6X"
+ },
+ "PA34": {
+  "make": "Embraer",
+  "model": "U-7 Seneca"
+ },
+ "PA36": {
+  "make": "Aicsa",
+  "model": "PA-36 Pawnee Brave"
+ },
+ "PA38": {
+  "make": "Aicsa",
+  "model": "PA-38 Tomahawk"
+ },
+ "PA44": {
+  "make": "Piper",
+  "model": "PA-44 Seminole"
+ },
+ "PA46": {
+  "make": "Piper",
+  "model": "PA-46-350P M350"
+ },
+ "PACE": {
+  "make": "Bellanca",
+  "model": "D Skyrocket"
+ },
+ "PAGO": {
+  "make": "Alms",
+  "model": "ADV-01 Papango"
+ },
+ "PANT": {
+  "make": "Rotec",
+  "model": "Panther 2"
+ },
+ "PAR1": {
+  "make": "Paradise",
+  "model": "P-1"
+ },
+ "PAR4": {
+  "make": "Paradise",
+  "model": "P-4"
+ },
+ "PARL": {
+  "make": "Pietenpol",
+  "model": "Aerial"
+ },
+ "PAT4": {
+  "make": "Neiva",
+  "model": "NE-821 Caraja"
+ },
+ "PAUL": {
+  "make": "Neiva",
+  "model": "56 Paulistinha"
+ },
+ "PAV4": {
+  "make": "Carter",
+  "model": "PAV-4"
+ },
+ "PAY1": {
+  "make": "Chincul",
+  "model": "PA-A-31T1-500 Cheyenne 1"
+ },
+ "PAY2": {
+  "make": "Piper",
+  "model": "PA-31T-620 Cheyenne"
+ },
+ "PAY3": {
+  "make": "Aicsa",
+  "model": "PA-42-720 Cheyenne 3"
+ },
+ "PAY4": {
+  "make": "Piper",
+  "model": "PA-42-1000 Cheyenne 400"
+ },
+ "PC12": {
+  "make": "Pilatus",
+  "model": "PC-12"
+ },
+ "PC21": {
+  "make": "Pilatus",
+  "model": "E-27"
+ },
+ "PC24": {
+  "make": "Pilatus",
+  "model": "PC-24"
+ },
+ "PC6P": {
+  "make": "Pilatus",
+  "model": "PC-6 Porter"
+ },
+ "PC6T": {
+  "make": "Pilatus",
+  "model": "UV-20 Chiricahua"
+ },
+ "PC7": {
+  "make": "Pilatus",
+  "model": "PC-7 Astra"
+ },
+ "PC9": {
+  "make": "Pilatus",
+  "model": "PC-9"
+ },
+ "PCA2": {
+  "make": "Pitcairn-Cierva",
+  "model": "PCA-2"
+ },
+ "PDIG": {
+  "make": "Vstol",
+  "model": "SST-2000 Pairadigm"
+ },
+ "PEGA": {
+  "make": "General Avia",
+  "model": "F-20 Pegaso"
+ },
+ "PEGZ": {
+  "make": "Pegase Aero",
+  "model": "Pegazair"
+ },
+ "PELI": {
+  "make": "Flyer",
+  "model": "Pelican"
+ },
+ "PEMB": {
+  "make": "Hunting Percival",
+  "model": "P-66 Pembroke"
+ },
+ "PETL": {
+  "make": "Aero Itba",
+  "model": "Petrel"
+ },
+ "PETR": {
+  "make": "Edra",
+  "model": "Paturi"
+ },
+ "PGEE": {
+  "make": "Holcomb",
+  "model": "Perigee"
+ },
+ "PGK1": {
+  "make": "Western",
+  "model": "PGK-1 Hirondelle"
+ },
+ "PHIL": {
+  "make": "Vtol Aircraft",
+  "model": "Phillicopter"
+ },
+ "PHIX": {
+  "make": "Phenix",
+  "model": "Phenix"
+ },
+ "PIAE": {
+  "make": "Pipistrel",
+  "model": "WattsUp"
+ },
+ "PIAT": {
+  "make": "Pipistrel",
+  "model": "Alpha Trainer"
+ },
+ "PICO": {
+  "make": "General Avia",
+  "model": "F-15 Delfino"
+ },
+ "PILL": {
+  "make": "Enaer",
+  "model": "T-35A Pillán"
+ },
+ "PINO": {
+  "make": "General Avia",
+  "model": "F-22 Pinguino"
+ },
+ "PIPA": {
+  "make": "Pipistrel",
+  "model": "Panthera"
+ },
+ "PISI": {
+  "make": "Pipistrel",
+  "model": "Sinus"
+ },
+ "PIT4": {
+  "make": "Pipistrel",
+  "model": "Taurus Electro G4"
+ },
+ "PIVE": {
+  "make": "Pipistrel",
+  "model": "Velis Electro"
+ },
+ "PIVI": {
+  "make": "Pipistrel",
+  "model": "Explorer"
+ },
+ "PK11": {
+  "make": "Pik",
+  "model": "PIK-11 Tumppu"
+ },
+ "PK15": {
+  "make": "Pik",
+  "model": "PIK-15 Hinu"
+ },
+ "PK18": {
+  "make": "Pik",
+  "model": "PIK-18 Sytky"
+ },
+ "PK21": {
+  "make": "Pik",
+  "model": "PIK-21 Super Sytky"
+ },
+ "PK23": {
+  "make": "Pik",
+  "model": "PIK-23 Suhinu"
+ },
+ "PK25": {
+  "make": "Pik",
+  "model": "PIK-25 Varttimarkka"
+ },
+ "PKAN": {
+  "make": "Uetz",
+  "model": "U-3M Pelikan"
+ },
+ "PL1": {
+  "make": "Pazmany",
+  "model": "PL-1 Laminar"
+ },
+ "PL12": {
+  "make": "Transavia",
+  "model": "PL-12 Airtruk"
+ },
+ "PL2": {
+  "make": "Pazmany",
+  "model": "PL-2"
+ },
+ "PL4": {
+  "make": "Pazmany",
+  "model": "PL-4"
+ },
+ "PL9": {
+  "make": "Pazmany",
+  "model": "PL-9 Stork"
+ },
+ "PLUS": {
+  "make": "Taylorcraft (2)",
+  "model": "Plus C"
+ },
+ "PNR2": {
+  "make": "Alpi",
+  "model": "Pioneer 200"
+ },
+ "PNR3": {
+  "make": "Alpi",
+  "model": "Pioneer 300"
+ },
+ "PNR4": {
+  "make": "Alpi",
+  "model": "Pioneer 400"
+ },
+ "PNTH": {
+  "make": "Sport Performance",
+  "model": "Panther"
+ },
+ "PO2": {
+  "make": "Css",
+  "model": "CSS-13"
+ },
+ "PO60": {
+  "make": "Potez",
+  "model": "60 Sauterelle"
+ },
+ "POLI": {
+  "make": "Alvarez",
+  "model": "Polliwagen"
+ },
+ "PONY": {
+  "make": "Reda",
+  "model": "Pony"
+ },
+ "PP2": {
+  "make": "Pilatus",
+  "model": "P-2"
+ },
+ "PP3": {
+  "make": "Pilatus",
+  "model": "P-3"
+ },
+ "PPRO": {
+  "make": "Hunting Percival",
+  "model": "P-56 Provost"
+ },
+ "PRBP": {
+  "make": "Howard Hughes",
+  "model": "Pocket Rocket PR-Bipe"
+ },
+ "PRBR": {
+  "make": "Howard Hughes",
+  "model": "Pocket Rocket PR-Breeze"
+ },
+ "PRCE": {
+  "make": "Percival",
+  "model": "P-57 Sea Prince"
+ },
+ "PREN": {
+  "make": "Percival",
+  "model": "P-40 Prentice"
+ },
+ "PRET": {
+  "make": "Gm&t",
+  "model": "Pretty Flight"
+ },
+ "PREX": {
+  "make": "Private Explorer",
+  "model": "Private Explorer"
+ },
+ "PRIM": {
+  "make": "Blackshape",
+  "model": "Bk-100 Prime"
+ },
+ "PRM1": {
+  "make": "Hawker Beechcraft",
+  "model": "390 Premier 1"
+ },
+ "PROC": {
+  "make": "Percival",
+  "model": "P-28 Proctor"
+ },
+ "PROT": {
+  "make": "Csa",
+  "model": "Parrot"
+ },
+ "PROW": {
+  "make": "Prowler",
+  "model": "Jaguar"
+ },
+ "PRPR": {
+  "make": "Howard Hughes",
+  "model": "Pocket Rocket PR-XP"
+ },
+ "PRTS": {
+  "make": "Rutan",
+  "model": "281 Proteus"
+ },
+ "PRXT": {
+  "make": "Private Explorer",
+  "model": "T-Explorer"
+ },
+ "PSTM": {
+  "make": "Podesva",
+  "model": "Stearman"
+ },
+ "PSW4": {
+  "make": "Pzl-Swidnik",
+  "model": "SW-4"
+ },
+ "PT22": {
+  "make": "Ryan",
+  "model": "PT-22 Recruit"
+ },
+ "PT70": {
+  "make": "Pottier",
+  "model": "P-170"
+ },
+ "PT80": {
+  "make": "Pottier",
+  "model": "P-180"
+ },
+ "PTMS": {
+  "make": "Kimball",
+  "model": "Ti-12"
+ },
+ "PTS1": {
+  "make": "Aerotek (1)",
+  "model": "Pitts S-1 Special"
+ },
+ "PTS2": {
+  "make": "Aerotek (1)",
+  "model": "Pitts S-2 Special"
+ },
+ "PTSS": {
+  "make": "Aviat",
+  "model": "S-1-11 Super Stinker"
+ },
+ "PULR": {
+  "make": "P&m Aviation",
+  "model": "PulsR"
+ },
+ "PULS": {
+  "make": "Pulsar",
+  "model": "Pulsar"
+ },
+ "PUMA": {
+  "make": "Aerospatiale",
+  "model": "CH-33 Puma"
+ },
+ "PUP": {
+  "make": "Beagle",
+  "model": "B-121 Pup"
+ },
+ "PURS": {
+  "make": "Rans",
+  "model": "S-11 Pursuit"
+ },
+ "PUSH": {
+  "make": "Prescott",
+  "model": "Pusher"
+ },
+ "PVTR": {
+  "make": "Privateer",
+  "model": "Privateer"
+ },
+ "PZ01": {
+  "make": "Lipnur",
+  "model": "PZL-101 Gawron"
+ },
+ "PZ02": {
+  "make": "Pzl-Okecie",
+  "model": "PZL-102 Kos"
+ },
+ "PZ04": {
+  "make": "Pzl-Okecie",
+  "model": "PZL-104 Wilga 35"
+ },
+ "PZ06": {
+  "make": "Pzl-Okecie",
+  "model": "PZL-106A Kruk"
+ },
+ "PZ12": {
+  "make": "Pzl-Okecie",
+  "model": "PZL-112 Junior"
+ },
+ "PZ3T": {
+  "make": "Pzl-Okecie",
+  "model": "PZL-130 Orlik"
+ },
+ "PZ4M": {
+  "make": "Pzl-Okecie",
+  "model": "PZL-104M Wilga 2000"
+ },
+ "PZ6T": {
+  "make": "Pzl-Okecie",
+  "model": "PZL-106AT Turbo Kruk"
+ },
+ "Q01": {
+  "make": "Reiner Stemme",
+  "model": "Q-01"
+ },
+ "Q1": {
+  "make": "General Atomics",
+  "model": "MQ-1 Warrior"
+ },
+ "Q25": {
+  "make": "Boeing",
+  "model": "MQ-25 Stingray"
+ },
+ "Q28": {
+  "make": "Boeing Australia",
+  "model": "MQ-28 Ghost Bat"
+ },
+ "Q4": {
+  "make": "Northrop Grumman",
+  "model": "MQ-4 Triton"
+ },
+ "Q5": {
+  "make": "Hongdu",
+  "model": "A-5"
+ },
+ "Q58": {
+  "make": "Kratos",
+  "model": "XQ-58 Valkyrie"
+ },
+ "Q9": {
+  "make": "General Atomics",
+  "model": "NR-05"
+ },
+ "QAIL": {
+  "make": "Aerosport",
+  "model": "Quail"
+ },
+ "QALT": {
+  "make": "Fmp",
+  "model": "Qualt"
+ },
+ "QIC2": {
+  "make": "Quickie",
+  "model": "Quickie Q2"
+ },
+ "QR01": {
+  "make": "Quercy",
+  "model": "CQR-01"
+ },
+ "QUAS": {
+  "make": "Aeroalcool",
+  "model": "Quasar Lite"
+ },
+ "QUIC": {
+  "make": "Quickie",
+  "model": "Quickie"
+ },
+ "R100": {
+  "make": "Robin",
+  "model": "R-1180 Aiglon"
+ },
+ "R109": {
+  "make": "Aircraft Spruce",
+  "model": "DR-109 Rhino"
+ },
+ "R11": {
+  "make": "Rupert",
+  "model": "R-11"
+ },
+ "R12": {
+  "make": "Rupert",
+  "model": "R-12 Vimana"
+ },
+ "R135": {
+  "make": "Boeing",
+  "model": "RC-135"
+ },
+ "R185": {
+  "make": "Johnson",
+  "model": "Rocket 125"
+ },
+ "R2": {
+  "make": "Sau",
+  "model": "R-02 Robert"
+ },
+ "R200": {
+  "make": "Robin",
+  "model": "R-2112 Alpha"
+ },
+ "R22": {
+  "make": "Robinson",
+  "model": "R-22"
+ },
+ "R300": {
+  "make": "Robin",
+  "model": "R-300"
+ },
+ "R4": {
+  "make": "Sikorsky",
+  "model": "H-4 Hoverfly"
+ },
+ "R44": {
+  "make": "Robinson",
+  "model": "R-44 Astro"
+ },
+ "R66": {
+  "make": "Robinson",
+  "model": "R-66"
+ },
+ "R721": {
+  "make": "Boeing",
+  "model": "727-100RE Super 27"
+ },
+ "R722": {
+  "make": "Boeing",
+  "model": "727-200RE Super 27"
+ },
+ "R90F": {
+  "make": "Ruschmeyer",
+  "model": "R-90-230FG"
+ },
+ "R90R": {
+  "make": "Ruschmeyer",
+  "model": "MF-85"
+ },
+ "R90T": {
+  "make": "Ruschmeyer",
+  "model": "R-90-420AT"
+ },
+ "RA14": {
+  "make": "Maranda",
+  "model": "BM-1 Loisirs"
+ },
+ "RA17": {
+  "make": "Adam (1)",
+  "model": "RA-17"
+ },
+ "RAF2": {
+  "make": "Rotary Air Force",
+  "model": "RAF-2000"
+ },
+ "RAID": {
+  "make": "Sky Raider",
+  "model": "Super Sky Raider"
+ },
+ "RAIL": {
+  "make": "Aerosport",
+  "model": "Rail"
+ },
+ "RALL": {
+  "make": "Socata",
+  "model": "Gabier"
+ },
+ "RANG": {
+  "make": "Navion",
+  "model": "Rangemaster"
+ },
+ "RARO": {
+  "make": "Altitude",
+  "model": "P-85"
+ },
+ "RAV3": {
+  "make": "Ravin",
+  "model": "Ravin 300"
+ },
+ "RAV5": {
+  "make": "Ravin",
+  "model": "Ravin 500"
+ },
+ "RAZM": {
+  "make": "Saint Germain",
+  "model": "Raz-Mut"
+ },
+ "RBEL": {
+  "make": "Murphy",
+  "model": "Elite"
+ },
+ "RC3": {
+  "make": "Republic",
+  "model": "RC-3 Seabee"
+ },
+ "RC70": {
+  "make": "Rockwell",
+  "model": "700 Commander 700"
+ },
+ "RCAL": {
+  "make": "Murphy",
+  "model": "Radical"
+ },
+ "RD03": {
+  "make": "Duruble",
+  "model": "RD-03 Edelweiss"
+ },
+ "RD20": {
+  "make": "Denize",
+  "model": "RD-20 Raid Driver"
+ },
+ "RDH2": {
+  "make": "Redfern",
+  "model": "DH-2"
+ },
+ "RELI": {
+  "make": "Stinson",
+  "model": "SR Reliant"
+ },
+ "RENE": {
+  "make": "Murphy",
+  "model": "Renegade"
+ },
+ "REV6": {
+  "make": "Groen",
+  "model": "Revcon 6G"
+ },
+ "RF10": {
+  "make": "Aeromot",
+  "model": "AMT-100 Ximango"
+ },
+ "RF3": {
+  "make": "Alpavia",
+  "model": "RF-3"
+ },
+ "RF4": {
+  "make": "Alpavia",
+  "model": "RF-4"
+ },
+ "RF47": {
+  "make": "Arc Atlantique",
+  "model": "RF-47"
+ },
+ "RF5": {
+  "make": "Fournier",
+  "model": "RF-5"
+ },
+ "RF6": {
+  "make": "Slingsby",
+  "model": "T-3 Firefly"
+ },
+ "RF9": {
+  "make": "Abs",
+  "model": "RF-9"
+ },
+ "RFAL": {
+  "make": "Dassault",
+  "model": "Rafale"
+ },
+ "RGNT": {
+  "make": "Neiva",
+  "model": "C-42 Regente"
+ },
+ "RISN": {
+  "make": "Porto",
+  "model": "Risen"
+ },
+ "RJ03": {
+  "make": "Junqua",
+  "model": "RJ-03 Ibis"
+ },
+ "RJ1H": {
+  "make": "Ai(r)",
+  "model": "RJ-100 Avroliner"
+ },
+ "RJ70": {
+  "make": "Ai(r)",
+  "model": "RJ-70 Avroliner"
+ },
+ "RJ85": {
+  "make": "Ai(r)",
+  "model": "RJ-85 Avroliner"
+ },
+ "RK5": {
+  "make": "Kalinauskas",
+  "model": "RK-5"
+ },
+ "RLU1": {
+  "make": "Rlu",
+  "model": "RLU-1 Breezy"
+ },
+ "RMOU": {
+  "make": "Hillberg",
+  "model": "EH1-01 Rotormouse"
+ },
+ "RNGR": {
+  "make": "Dac",
+  "model": "RangeR"
+ },
+ "RODS": {
+  "make": "Aircraft Spruce",
+  "model": "DR-107 One Design"
+ },
+ "ROND": {
+  "make": "Ambrosini",
+  "model": "F-4 Rondone"
+ },
+ "ROSE": {
+  "make": "Maupin",
+  "model": "Windrose"
+ },
+ "RP1": {
+  "make": "Mitsubishi",
+  "model": "RP-1"
+ },
+ "RPUP": {
+  "make": "Little Wing",
+  "model": "LW-4 Roto-Pup"
+ },
+ "RS12": {
+  "make": "Rans",
+  "model": "S-12 Airaile"
+ },
+ "RS18": {
+  "make": "Sportavia-Putzer",
+  "model": "RS-180 Sportsman"
+ },
+ "RS20": {
+  "make": "Rans",
+  "model": "S-20 Raven"
+ },
+ "RS21": {
+  "make": "Rans",
+  "model": "S-21 Outbound"
+ },
+ "RTA4": {
+  "make": "Rtaf",
+  "model": "RTAF-4 Chandra"
+ },
+ "RUBI": {
+  "make": "Scintex",
+  "model": "ML-250 Rubis"
+ },
+ "RV10": {
+  "make": "Van's",
+  "model": "RV-10"
+ },
+ "RV12": {
+  "make": "Van's",
+  "model": "RV-12"
+ },
+ "RV14": {
+  "make": "Van's",
+  "model": "RV-14"
+ },
+ "RV15": {
+  "make": "Van's",
+  "model": "RV-15"
+ },
+ "RV3": {
+  "make": "Van's",
+  "model": "RV-3"
+ },
+ "RV4": {
+  "make": "Van's",
+  "model": "RV-4"
+ },
+ "RV4T": {
+  "make": "Van's",
+  "model": "RV-4T"
+ },
+ "RV6": {
+  "make": "Aiep",
+  "model": "Air Beetle"
+ },
+ "RV7": {
+  "make": "Van's",
+  "model": "RV-7"
+ },
+ "RV8": {
+  "make": "Van's",
+  "model": "RV-8"
+ },
+ "RV9": {
+  "make": "Van's",
+  "model": "RV-9"
+ },
+ "RVAL": {
+  "make": "Denel",
+  "model": "AH-2 Rooivalk"
+ },
+ "RVST": {
+  "make": "Rupert",
+  "model": "VimanaSteel"
+ },
+ "RW19": {
+  "make": "Ragwing",
+  "model": "RW-19 Stork"
+ },
+ "RW20": {
+  "make": "Ragwing",
+  "model": "RW-20 Stork"
+ },
+ "RW22": {
+  "make": "Ragwing",
+  "model": "RW-22 Tiger Moth"
+ },
+ "RW26": {
+  "make": "Ragwing",
+  "model": "RW-26 Special 2"
+ },
+ "RW3": {
+  "make": "Rhein",
+  "model": "RW-3 Passat"
+ },
+ "RYSA": {
+  "make": "Progress",
+  "model": "Rysachok"
+ },
+ "RYST": {
+  "make": "Ryan",
+  "model": "ST-A"
+ },
+ "S05F": {
+  "make": "Siai-Marchetti",
+  "model": "S-205-18F"
+ },
+ "S05R": {
+  "make": "Siai-Marchetti",
+  "model": "S-205-18R"
+ },
+ "S1": {
+  "make": "Interstate",
+  "model": "S-1"
+ },
+ "S10": {
+  "make": "Stinson",
+  "model": "105"
+ },
+ "S108": {
+  "make": "Piper",
+  "model": "108 Voyager"
+ },
+ "S11": {
+  "make": "Fokker",
+  "model": "S-11 Instructor"
+ },
+ "S12": {
+  "make": "Spencer",
+  "model": "S-12 Air Car"
+ },
+ "S122": {
+  "make": "Skyline",
+  "model": "SL-122 Pchelka"
+ },
+ "S15S": {
+  "make": "Stemme",
+  "model": "S-15"
+ },
+ "S15U": {
+  "make": "Safran",
+  "model": "S-15 Patroller"
+ },
+ "S160": {
+  "make": "Sunward",
+  "model": "SA160"
+ },
+ "S200": {
+  "make": "Sipa",
+  "model": "S-200 Minijet"
+ },
+ "S202": {
+  "make": "Sgau",
+  "model": "S-202"
+ },
+ "S208": {
+  "make": "Siai-Marchetti",
+  "model": "S-208"
+ },
+ "S21": {
+  "make": "Macdonald",
+  "model": "S-21"
+ },
+ "S211": {
+  "make": "Padc",
+  "model": "S-211"
+ },
+ "S223": {
+  "make": "CASA",
+  "model": "223 Flamingo"
+ },
+ "S22T": {
+  "make": "Cirrus",
+  "model": "SR-22T"
+ },
+ "S274": {
+  "make": "Irgc",
+  "model": "Shahed 274"
+ },
+ "S278": {
+  "make": "Hesa",
+  "model": "Shahed 278"
+ },
+ "S285": {
+  "make": "Hesa",
+  "model": "Shahed 285"
+ },
+ "S2P": {
+  "make": "Grumman",
+  "model": "S-2 Tracker"
+ },
+ "S2T": {
+  "make": "Imp",
+  "model": "S-2 Turbo Tracker"
+ },
+ "S3": {
+  "make": "Lockheed",
+  "model": "S-3 Viking"
+ },
+ "S330": {
+  "make": "Schweizer",
+  "model": "269D 330"
+ },
+ "S355": {
+  "make": "Scaled",
+  "model": "355 Firebird"
+ },
+ "S360": {
+  "make": "Aerospatiale",
+  "model": "SA-360 Dauphin"
+ },
+ "S37": {
+  "make": "Sukhoi",
+  "model": "S-37 Berkut"
+ },
+ "S38": {
+  "make": "Sikorsky",
+  "model": "S-38 Replica"
+ },
+ "S39": {
+  "make": "Sikorsky",
+  "model": "S-39"
+ },
+ "S4": {
+  "make": "Arctic",
+  "model": "S-4 Privateer"
+ },
+ "S400": {
+  "make": "Sgau",
+  "model": "S-400 Kapitan"
+ },
+ "S401": {
+  "make": "Scaled",
+  "model": "401 Sierra"
+ },
+ "S434": {
+  "make": "Sikorsky",
+  "model": "S-434"
+ },
+ "S45": {
+  "make": "Partenair",
+  "model": "S-45 Mystere"
+ },
+ "S450": {
+  "make": "Aero-East-Europe",
+  "model": "SILA-450"
+ },
+ "S51": {
+  "make": "Sikorsky",
+  "model": "H-5"
+ },
+ "S51D": {
+  "make": "Stewart (1)",
+  "model": "S-51D"
+ },
+ "S52": {
+  "make": "Sikorsky",
+  "model": "HO5S"
+ },
+ "S522": {
+  "make": "Soko",
+  "model": "522"
+ },
+ "S55P": {
+  "make": "Sikorsky",
+  "model": "HRS"
+ },
+ "S55T": {
+  "make": "Sikorsky",
+  "model": "S-55T"
+ },
+ "S58P": {
+  "make": "Sikorsky",
+  "model": "S-58"
+ },
+ "S58T": {
+  "make": "Sikorsky",
+  "model": "S-58T"
+ },
+ "S6": {
+  "make": "Stemme",
+  "model": "S-6"
+ },
+ "S601": {
+  "make": "Aerospatiale",
+  "model": "SN-601 Corvette"
+ },
+ "S61": {
+  "make": "Sikorsky",
+  "model": "S-61A"
+ },
+ "S61R": {
+  "make": "Sikorsky",
+  "model": "CH-3"
+ },
+ "S62": {
+  "make": "Sikorsky",
+  "model": "S-62"
+ },
+ "S64": {
+  "make": "Sikorsky",
+  "model": "CH-54 Tarhe"
+ },
+ "S65C": {
+  "make": "Aerospatiale",
+  "model": "SA-365C Dauphin 2"
+ },
+ "S716": {
+  "make": "Stratos",
+  "model": "714"
+ },
+ "S76": {
+  "make": "Sikorsky",
+  "model": "S-76"
+ },
+ "S900": {
+  "make": "Sipa",
+  "model": "S-901"
+ },
+ "S92": {
+  "make": "Sikorsky",
+  "model": "S-92"
+ },
+ "S97": {
+  "make": "Sikorsky",
+  "model": "S-97 Raider"
+ },
+ "SA02": {
+  "make": "K & S",
+  "model": "SA-102.5 Cavalier"
+ },
+ "SA03": {
+  "make": "K & S",
+  "model": "SA-103 Cavalier"
+ },
+ "SA04": {
+  "make": "K & S",
+  "model": "SA-104 Cavalier"
+ },
+ "SA05": {
+  "make": "K & S",
+  "model": "SA-105 Super Cavalier"
+ },
+ "SA10": {
+  "make": "Stolp",
+  "model": "SA-100 Starduster"
+ },
+ "SA11": {
+  "make": "Stits",
+  "model": "SA-11 Playmate"
+ },
+ "SA2": {
+  "make": "Icp",
+  "model": "SA-2 Vimana"
+ },
+ "SA20": {
+  "make": "Beriev",
+  "model": "SA-20"
+ },
+ "SA3": {
+  "make": "Stits",
+  "model": "SA-3 Playboy"
+ },
+ "SA30": {
+  "make": "Stolp",
+  "model": "SA-300 Starduster Too"
+ },
+ "SA37": {
+  "make": "Schweizer",
+  "model": "RG-8 Condor"
+ },
+ "SA38": {
+  "make": "Schweizer",
+  "model": "RU-38A Twin Condor"
+ },
+ "SA50": {
+  "make": "Stolp",
+  "model": "SA-500 Starlet"
+ },
+ "SA6": {
+  "make": "Stits",
+  "model": "SA-6 Flut-R-Bug"
+ },
+ "SA6E": {
+  "make": "Sreya",
+  "model": "SA-6 Envoy"
+ },
+ "SA7": {
+  "make": "Stits",
+  "model": "SA-7 Sky-Coupe"
+ },
+ "SA70": {
+  "make": "Stolp",
+  "model": "SA-700 Acroduster"
+ },
+ "SA75": {
+  "make": "Stolp",
+  "model": "SA-750 Acroduster Too"
+ },
+ "SA8T": {
+  "make": "Schweizer",
+  "model": "RU-38B Twin Condor"
+ },
+ "SAB2": {
+  "make": "Arnet Pereyra",
+  "model": "Sabre 2"
+ },
+ "SABA": {
+  "make": "Paravar Pars",
+  "model": "Saba"
+ },
+ "SABW": {
+  "make": "Azalea",
+  "model": "Saberwing"
+ },
+ "SACE": {
+  "make": "Ace",
+  "model": "Super Ace"
+ },
+ "SACR": {
+  "make": "Smith (3)",
+  "model": "Acro Advanced"
+ },
+ "SAFF": {
+  "make": "Halsted",
+  "model": "Saffire"
+ },
+ "SAH1": {
+  "make": "Fls",
+  "model": "Sprint"
+ },
+ "SAKO": {
+  "make": "Rans",
+  "model": "S-10 Sakota"
+ },
+ "SALB": {
+  "make": "Skygear",
+  "model": "Albatross"
+ },
+ "SAM": {
+  "make": "Sam Aircraft",
+  "model": "Sam"
+ },
+ "SAND": {
+  "make": "Short",
+  "model": "S-25 Sandringham"
+ },
+ "SAPH": {
+  "make": "Piel",
+  "model": "CP-1320 Saphir"
+ },
+ "SASH": {
+  "make": "Shark Aircraft",
+  "model": "Shark"
+ },
+ "SASP": {
+  "make": "Supermarine Aircraft",
+  "model": "Spitfire Mk25"
+ },
+ "SASY": {
+  "make": "Protech",
+  "model": "PT-2 Sassy"
+ },
+ "SATA": {
+  "make": "Hispano",
+  "model": "HA-200 Saeta"
+ },
+ "SAVA": {
+  "make": "Sadler",
+  "model": "Vampire"
+ },
+ "SAVG": {
+  "make": "Alms",
+  "model": "Callao"
+ },
+ "SB05": {
+  "make": "Saab",
+  "model": "105"
+ },
+ "SB1": {
+  "make": "Sikorsky-Boeing",
+  "model": "SB-1 Defiant"
+ },
+ "SB20": {
+  "make": "Saab",
+  "model": "2000"
+ },
+ "SB29": {
+  "make": "Saab",
+  "model": "29"
+ },
+ "SB32": {
+  "make": "Saab",
+  "model": "32 Lansen"
+ },
+ "SB35": {
+  "make": "Saab",
+  "model": "35 Draken"
+ },
+ "SB37": {
+  "make": "Saab",
+  "model": "37 Viggen"
+ },
+ "SB7": {
+  "make": "Seabird",
+  "model": "SB-7 Seeker"
+ },
+ "SB91": {
+  "make": "De Schelde",
+  "model": "91 Safir"
+ },
+ "SBD": {
+  "make": "Douglas",
+  "model": "A-24 Banshee"
+ },
+ "SBLS": {
+  "make": "Slipstream",
+  "model": "SkyBlaster"
+ },
+ "SBOY": {
+  "make": "Interplane",
+  "model": "Skyboy"
+ },
+ "SBR1": {
+  "make": "North American Rockwell",
+  "model": "Sabre 40"
+ },
+ "SBR2": {
+  "make": "Rockwell",
+  "model": "NA-265 Sabre 75"
+ },
+ "SC01": {
+  "make": "Fft",
+  "model": "SC-01 Speed Canard"
+ },
+ "SC7": {
+  "make": "Short",
+  "model": "SC-7 Skyvan"
+ },
+ "SCAM": {
+  "make": "Aerosport",
+  "model": "Scamp"
+ },
+ "SCEP": {
+  "make": "Slipstream",
+  "model": "Scepter"
+ },
+ "SCII": {
+  "make": "Sport Copter",
+  "model": "SportCopter 2"
+ },
+ "SCOM": {
+  "make": "Airdale",
+  "model": "Comet"
+ },
+ "SCOR": {
+  "make": "Rotorway",
+  "model": "Scorpion"
+ },
+ "SCOU": {
+  "make": "Westland",
+  "model": "Scout"
+ },
+ "SCRO": {
+  "make": "Akaflieg Munchen",
+  "model": "Mü-30 Schlacro"
+ },
+ "SCTR": {
+  "make": "Flaglor",
+  "model": "Scooter"
+ },
+ "SCUB": {
+  "make": "Aero Kuhlmann",
+  "model": "Scub"
+ },
+ "SCW1": {
+  "make": "Scwal",
+  "model": "101"
+ },
+ "SD2": {
+  "make": "Spacek",
+  "model": "SD-2 SportMaster"
+ },
+ "SD4": {
+  "make": "Tomark",
+  "model": "SD-4 Viper"
+ },
+ "SDUS": {
+  "make": "Stolp",
+  "model": "Super Starduster"
+ },
+ "SE1": {
+  "make": "Spirit",
+  "model": "SE-1"
+ },
+ "SE5A": {
+  "make": "Raf",
+  "model": "SE-5A"
+ },
+ "SE5R": {
+  "make": "Replica Plans",
+  "model": "SE-5A Replica"
+ },
+ "SEAT": {
+  "make": "Seawind",
+  "model": "Turbine Seawind"
+ },
+ "SEAW": {
+  "make": "Seawind",
+  "model": "Seawind"
+ },
+ "SERA": {
+  "make": "Servoplant",
+  "model": "Aerocraft"
+ },
+ "SF2": {
+  "make": "Hapi",
+  "model": "SF-2 Cygnet"
+ },
+ "SF23": {
+  "make": "Scheibe",
+  "model": "SF-23 Sperling"
+ },
+ "SF24": {
+  "make": "Scheibe",
+  "model": "SF-24 Motorspatz"
+ },
+ "SF25": {
+  "make": "Scheibe",
+  "model": "SF-25 Falke"
+ },
+ "SF28": {
+  "make": "Scheibe",
+  "model": "SF-28 Tandem Falke"
+ },
+ "SF31": {
+  "make": "Sportavia-Putzer",
+  "model": "SFS-31 Milan"
+ },
+ "SF34": {
+  "make": "Saab",
+  "model": "340"
+ },
+ "SF35": {
+  "make": "Scheibe",
+  "model": "SF-35"
+ },
+ "SF36": {
+  "make": "Scheibe",
+  "model": "SF-36"
+ },
+ "SF50": {
+  "make": "Cirrus",
+  "model": "SF50 Vision Jet"
+ },
+ "SG37": {
+  "make": "Schweizer",
+  "model": "TG-7"
+ },
+ "SG70": {
+  "make": "Glass",
+  "model": "SG-70 STOLGlass"
+ },
+ "SG92": {
+  "make": "Technoavia",
+  "model": "SM-92T Turbo Finist"
+ },
+ "SGCD": {
+  "make": "Saab",
+  "model": "39C Gripen C"
+ },
+ "SGEF": {
+  "make": "Saab",
+  "model": "39E Gripen E"
+ },
+ "SGRA": {
+  "make": "Prestige",
+  "model": "Storm Rally"
+ },
+ "SGUP": {
+  "make": "Aero Spacelines",
+  "model": "377SGT Super Guppy"
+ },
+ "SH09": {
+  "make": "Kopter",
+  "model": "SH-09"
+ },
+ "SH33": {
+  "make": "Short",
+  "model": "330"
+ },
+ "SH36": {
+  "make": "Short",
+  "model": "360"
+ },
+ "SH4": {
+  "make": "Silvercraft",
+  "model": "SH-4"
+ },
+ "SH5": {
+  "make": "Harbin",
+  "model": "PS-5"
+ },
+ "SHAC": {
+  "make": "Avro",
+  "model": "696 Shackleton"
+ },
+ "SHAW": {
+  "make": "Armstrong Whitworth",
+  "model": "Sea Hawk"
+ },
+ "SHEA": {
+  "make": "Seaflight",
+  "model": "Shearwater"
+ },
+ "SHEK": {
+  "make": "Rans",
+  "model": "S-16 Shekari"
+ },
+ "SHER": {
+  "make": "Sherpa",
+  "model": "Sherpa"
+ },
+ "SHOE": {
+  "make": "Mercury",
+  "model": "Shoestring"
+ },
+ "SHOP": {
+  "make": "Salvay-Stark",
+  "model": "Skyhopper"
+ },
+ "SHOR": {
+  "make": "Higher Class",
+  "model": "Super Hornet"
+ },
+ "SHRA": {
+  "make": "Lanitz",
+  "model": "Sherwood Ranger"
+ },
+ "SHRK": {
+  "make": "Shark Aero",
+  "model": "Shark"
+ },
+ "SHRT": {
+  "make": "Sherpa",
+  "model": "Sherpa K-650T"
+ },
+ "SIDE": {
+  "make": "Smyth",
+  "model": "S Sidewinder"
+ },
+ "SIGM": {
+  "make": "Elitar",
+  "model": "Sigma"
+ },
+ "SILH": {
+  "make": "Lunds Tekniske",
+  "model": "SA-60 Silhouette"
+ },
+ "SIRA": {
+  "make": "Tecnam",
+  "model": "P-2002"
+ },
+ "SJ30": {
+  "make": "Emivest",
+  "model": "SJ-30"
+ },
+ "SK10": {
+  "make": "Skyeton",
+  "model": "K-10 Swift"
+ },
+ "SK70": {
+  "make": "Starkraft",
+  "model": "SK-700"
+ },
+ "SKAR": {
+  "make": "Iii",
+  "model": "Sky Arrow"
+ },
+ "SKIF": {
+  "make": "Aerolites",
+  "model": "AeroSkiff"
+ },
+ "SKIM": {
+  "make": "Colonial",
+  "model": "C-1 Skimmer"
+ },
+ "SKRA": {
+  "make": "Best Off",
+  "model": "Sky Ranger"
+ },
+ "SKYC": {
+  "make": "Oma Sud",
+  "model": "Skycar"
+ },
+ "SKYO": {
+  "make": "Skyote Aeromarine",
+  "model": "Skyote"
+ },
+ "SKYR": {
+  "make": "Rearwin",
+  "model": "175 Skyranger"
+ },
+ "SL1": {
+  "make": "Star-Lite",
+  "model": "SL-1 Star-Lite"
+ },
+ "SL39": {
+  "make": "Mapo",
+  "model": "SL-39"
+ },
+ "SL90": {
+  "make": "Aviotechnica",
+  "model": "SL-90 Leshii"
+ },
+ "SLCH": {
+  "make": "Scaled",
+  "model": "351 Stratolaunch"
+ },
+ "SLG2": {
+  "make": "Sonaca",
+  "model": "S-2"
+ },
+ "SLG4": {
+  "make": "Airplane Factory",
+  "model": "Sling 4"
+ },
+ "SLH4": {
+  "make": "Sling Aircraft",
+  "model": "Sling 4 High Wing"
+ },
+ "SLK3": {
+  "make": "Slick",
+  "model": "360"
+ },
+ "SLK5": {
+  "make": "Slick",
+  "model": "540"
+ },
+ "SM01": {
+  "make": "Stern-Mallick",
+  "model": "SM-01 Vega"
+ },
+ "SM19": {
+  "make": "Siai-Marchetti",
+  "model": "SM-1019"
+ },
+ "SM20": {
+  "make": "Technoavia",
+  "model": "SM-2000"
+ },
+ "SM60": {
+  "make": "Stinson",
+  "model": "T Tri-Motor"
+ },
+ "SM92": {
+  "make": "Moravan",
+  "model": "Zlin Z-400 Rhino"
+ },
+ "SMAX": {
+  "make": "Airmax",
+  "model": "M-22 SeaMax"
+ },
+ "SMB2": {
+  "make": "Dassault",
+  "model": "Super Mystère B2"
+ },
+ "SNAD": {
+  "make": "Calumet",
+  "model": "636 Snobird Adventurer"
+ },
+ "SNAP": {
+  "make": "Dallair",
+  "model": "FR-01 Snap"
+ },
+ "SNGY": {
+  "make": "Ciac",
+  "model": "Synergy"
+ },
+ "SNOS": {
+  "make": "Vsr",
+  "model": "SR-1 Snoshoo"
+ },
+ "SNS2": {
+  "make": "Sorrell",
+  "model": "SNS-2 Guppy"
+ },
+ "SNS7": {
+  "make": "Sorrell",
+  "model": "SNS-7 Hiperbipe"
+ },
+ "SNS9": {
+  "make": "Sorrell",
+  "model": "SNS-9 EXP-2"
+ },
+ "SOKL": {
+  "make": "Mraz",
+  "model": "M-1 Sokol"
+ },
+ "SOL2": {
+  "make": "Solar Impulse",
+  "model": "2"
+ },
+ "SONX": {
+  "make": "Sonex",
+  "model": "Sonex"
+ },
+ "SORA": {
+  "make": "Acs (1)",
+  "model": "ACS-100 Sora"
+ },
+ "SP20": {
+  "make": "Micco",
+  "model": "SP-20"
+ },
+ "SP33": {
+  "make": "Spectrum",
+  "model": "S-33 Independence"
+ },
+ "SP55": {
+  "make": "Technoavia",
+  "model": "SP-55"
+ },
+ "SP6E": {
+  "make": "Sauser",
+  "model": "P-6E Replica"
+ },
+ "SP7": {
+  "make": "Spartan",
+  "model": "7 Executive"
+ },
+ "SP91": {
+  "make": "Technoavia",
+  "model": "SP-91 Slava"
+ },
+ "SP95": {
+  "make": "Technoavia",
+  "model": "SP-95"
+ },
+ "SPA2": {
+  "make": "Stark-Trefethen",
+  "model": "Sport-Aire 2"
+ },
+ "SPAR": {
+  "make": "Iii",
+  "model": "Speed Arrow"
+ },
+ "SPDR": {
+  "make": "Rearwin",
+  "model": "6000 Speedster"
+ },
+ "SPGY": {
+  "make": "Aircraft Designs",
+  "model": "Sportster Gyro"
+ },
+ "SPHA": {
+  "make": "American Autogyro",
+  "model": "Spinus"
+ },
+ "SPIR": {
+  "make": "Questair",
+  "model": "Spirit"
+ },
+ "SPIT": {
+  "make": "Supermarine",
+  "model": "Seafire"
+ },
+ "SPKR": {
+  "make": "Tl Ultralight",
+  "model": "Sparker"
+ },
+ "SPOR": {
+  "make": "Amax",
+  "model": "Sport 1700"
+ },
+ "SPR2": {
+  "make": "Carlson",
+  "model": "Sparrow 2"
+ },
+ "SPRT": {
+  "make": "Practavia",
+  "model": "Sprite"
+ },
+ "SPST": {
+  "make": "Rearwin",
+  "model": "7000 Sportster"
+ },
+ "SPUP": {
+  "make": "Sopwith",
+  "model": "Pup"
+ },
+ "SQ2T": {
+  "make": "Glassic",
+  "model": "SQ-2000"
+ },
+ "SQES": {
+  "make": "Innovation",
+  "model": "SkyQuest"
+ },
+ "SR01": {
+  "make": "Eurodisplay",
+  "model": "SR-01 Magic"
+ },
+ "SR20": {
+  "make": "Cirrus",
+  "model": "SR20"
+ },
+ "SR22": {
+  "make": "Cirrus",
+  "model": "SR-22"
+ },
+ "SRAC": {
+  "make": "Sport Racer",
+  "model": "Sport Racer"
+ },
+ "SRAI": {
+  "make": "Great Plains",
+  "model": "Sonerai"
+ },
+ "SRAS": {
+  "make": "D'apuzzo",
+  "model": "D-260 Senior Aero Sport"
+ },
+ "SRAY": {
+  "make": "Dornier",
+  "model": "S-Ray 007"
+ },
+ "SREY": {
+  "make": "Progressive Aerodyne",
+  "model": "SeaRey"
+ },
+ "SS2": {
+  "make": "Rutan",
+  "model": "339 Space Ship Two"
+ },
+ "SS2P": {
+  "make": "Ayres",
+  "model": "S-2R-600 Thrush"
+ },
+ "SS2T": {
+  "make": "Ayres",
+  "model": "V-1 Vigilante"
+ },
+ "SSAB": {
+  "make": "North American",
+  "model": "F-100 Super Sabre"
+ },
+ "SSC": {
+  "make": "Butterfly",
+  "model": "Super Sky Cycle"
+ },
+ "SSTL": {
+  "make": "Just",
+  "model": "JA30 SuperSTOL"
+ },
+ "SSTM": {
+  "make": "Sg Aviation",
+  "model": "Sea Storm"
+ },
+ "ST1": {
+  "make": "Phillips",
+  "model": "ST-1 Speedtwin"
+ },
+ "ST10": {
+  "make": "Socata",
+  "model": "ST-10 Provence"
+ },
+ "ST3": {
+  "make": "Stearman",
+  "model": "C-3"
+ },
+ "ST30": {
+  "make": "Panzl",
+  "model": "S-330"
+ },
+ "ST4": {
+  "make": "Stearman",
+  "model": "4 Junior Speedmail"
+ },
+ "ST6": {
+  "make": "Stearman",
+  "model": "YPT-9"
+ },
+ "ST60": {
+  "make": "Staudacher",
+  "model": "S-600"
+ },
+ "ST75": {
+  "make": "Boeing",
+  "model": "75 Kaydet"
+ },
+ "ST87": {
+  "make": "Stern",
+  "model": "ST-87 Europlane"
+ },
+ "STAL": {
+  "make": "Aircraft Designs",
+  "model": "Stallion"
+ },
+ "STAR": {
+  "make": "Beech",
+  "model": "2000 Starship"
+ },
+ "STAT": {
+  "make": "Aircraft Designs",
+  "model": "Turbine Stallion"
+ },
+ "STCH": {
+  "make": "Fly Synthesis",
+  "model": "Storch"
+ },
+ "STFF": {
+  "make": "Statler",
+  "model": "Firefly"
+ },
+ "STG2": {
+  "make": "Rans",
+  "model": "S-18 Stinger 2"
+ },
+ "STIL": {
+  "make": "Terzi",
+  "model": "T-9 Stiletto"
+ },
+ "STLN": {
+  "make": "Helio",
+  "model": "AU-24 Stallion"
+ },
+ "STOR": {
+  "make": "Storch Aviation",
+  "model": "SS-4 Storch"
+ },
+ "STRA": {
+  "make": "Striplin",
+  "model": "Sky Ranger"
+ },
+ "STRE": {
+  "make": "Tl Ultralight",
+  "model": "Stream"
+ },
+ "STRI": {
+  "make": "Sopwith",
+  "model": "Triplane Replica"
+ },
+ "STRK": {
+  "make": "Bac",
+  "model": "167 Strikemaster"
+ },
+ "STRM": {
+  "make": "Sg Aviation",
+  "model": "Storm"
+ },
+ "STST": {
+  "make": "Cfm",
+  "model": "SA-2 Star Streak"
+ },
+ "SU17": {
+  "make": "Sukhoi",
+  "model": "Su-17"
+ },
+ "SU24": {
+  "make": "Sukhoi",
+  "model": "Su-24"
+ },
+ "SU25": {
+  "make": "Sukhoi",
+  "model": "Su-25"
+ },
+ "SU26": {
+  "make": "Sukhoi",
+  "model": "Su-26"
+ },
+ "SU27": {
+  "make": "Sukhoi",
+  "model": "J-11"
+ },
+ "SU29": {
+  "make": "Sukhoi",
+  "model": "Su-29"
+ },
+ "SU31": {
+  "make": "Sukhoi",
+  "model": "Su-31"
+ },
+ "SU38": {
+  "make": "Sukhoi",
+  "model": "Su-38"
+ },
+ "SU57": {
+  "make": "Sukhoi",
+  "model": "T-50"
+ },
+ "SU7": {
+  "make": "Sukhoi",
+  "model": "Su-7"
+ },
+ "SU80": {
+  "make": "Sukhoi",
+  "model": "Su-80"
+ },
+ "SU95": {
+  "make": "Sukhoi",
+  "model": "Superjet 100-95"
+ },
+ "SUBA": {
+  "make": "Fuji",
+  "model": "FA-200 Aero Subaru"
+ },
+ "SUCO": {
+  "make": "Bell",
+  "model": "209 SuperCobra"
+ },
+ "SURN": {
+  "make": "Korea Aerospace",
+  "model": "KUH-1 Surion"
+ },
+ "SUSO": {
+  "make": "Vstol",
+  "model": "SS-2000 Super Solution"
+ },
+ "SV4": {
+  "make": "Aiaa",
+  "model": "SV-4"
+ },
+ "SVNH": {
+  "make": "Aerotec (2)",
+  "model": "MXP-740 Savannah"
+ },
+ "SW18": {
+  "make": "Skywood",
+  "model": "SW-18 Teddy"
+ },
+ "SW2": {
+  "make": "Swearingen",
+  "model": "SA-26 Merlin 2"
+ },
+ "SW3": {
+  "make": "Fairchild Swearingen",
+  "model": "SA-226TB Merlin 3"
+ },
+ "SW4": {
+  "make": "Fairchild",
+  "model": "SA-227 Metro"
+ },
+ "SWAK": {
+  "make": "Warner (2)",
+  "model": "Sportster"
+ },
+ "SWAT": {
+  "make": "Bharat",
+  "model": "LT-1 Swati"
+ },
+ "SWFT": {
+  "make": "Scaled",
+  "model": "400 Swift"
+ },
+ "SWIN": {
+  "make": "S-Wing",
+  "model": "S-Wing"
+ },
+ "SWOR": {
+  "make": "Blackburn",
+  "model": "Swordfish"
+ },
+ "SX30": {
+  "make": "Swearingen",
+  "model": "SX-300"
+ },
+ "SYCA": {
+  "make": "Bristol",
+  "model": "171 Sycamore"
+ },
+ "SYMP": {
+  "make": "Omf",
+  "model": "OMF-100 Symphony"
+ },
+ "SYNC": {
+  "make": "Fly Synthesis",
+  "model": "Syncro"
+ },
+ "SZ45": {
+  "make": "Szd",
+  "model": "SZD-45 Ogar"
+ },
+ "T1": {
+  "make": "Fuji",
+  "model": "T-1"
+ },
+ "T10": {
+  "make": "Tmm-Avia",
+  "model": "T-10 Avia-Tor"
+ },
+ "T101": {
+  "make": "Aeroprogress",
+  "model": "T-101 Grach"
+ },
+ "T134": {
+  "make": "Tupolev",
+  "model": "Tu-134"
+ },
+ "T154": {
+  "make": "Tupolev",
+  "model": "Tu-154"
+ },
+ "T160": {
+  "make": "Tupolev",
+  "model": "Tu-160"
+ },
+ "T18": {
+  "make": "Classic Sport",
+  "model": "S-18"
+ },
+ "T19": {
+  "make": "Thk",
+  "model": "T-19 Türkkuşu"
+ },
+ "T2": {
+  "make": "North American Rockwell",
+  "model": "T-2 Buckeye"
+ },
+ "T204": {
+  "make": "Tupolev",
+  "model": "Tu-204"
+ },
+ "T206": {
+  "make": "Cessna",
+  "model": "T206 Stationair TC"
+ },
+ "T210": {
+  "make": "Cessna",
+  "model": "T210 Turbo Centurion"
+ },
+ "T211": {
+  "make": "Indus",
+  "model": "T-211 Sport E"
+ },
+ "T22M": {
+  "make": "Tupolev",
+  "model": "Tu-22M"
+ },
+ "T250": {
+  "make": "Anderson-Greenwood",
+  "model": "51"
+ },
+ "T28": {
+  "make": "North American",
+  "model": "T-28 Trojan"
+ },
+ "T30": {
+  "make": "Terzi",
+  "model": "T-30 Katana"
+ },
+ "T33": {
+  "make": "Lockheed",
+  "model": "AT-33"
+ },
+ "T334": {
+  "make": "Tupolev",
+  "model": "Tu-334"
+ },
+ "T34P": {
+  "make": "Beech",
+  "model": "45 Mentor"
+ },
+ "T34T": {
+  "make": "Beech",
+  "model": "T-34C Turbo Mentor"
+ },
+ "T35": {
+  "make": "Temco",
+  "model": "T-35 Buckaroo"
+ },
+ "T37": {
+  "make": "Cessna",
+  "model": "318A"
+ },
+ "T38": {
+  "make": "Northrop",
+  "model": "T-38 Talon"
+ },
+ "T4": {
+  "make": "Kawasaki",
+  "model": "T-4"
+ },
+ "T40": {
+  "make": "Turner",
+  "model": "T-40"
+ },
+ "T411": {
+  "make": "Khrunichev",
+  "model": "T-411 Aist"
+ },
+ "T415": {
+  "make": "Khrunichev",
+  "model": "T-415 Snegir"
+ },
+ "T419": {
+  "make": "Khrunichev",
+  "model": "AT-419 Strekoza"
+ },
+ "T5": {
+  "make": "Fuji",
+  "model": "T-5"
+ },
+ "T50": {
+  "make": "Cessna",
+  "model": "Crane"
+ },
+ "T51": {
+  "make": "Titan",
+  "model": "T-51 Mustang"
+ },
+ "T5YY": {
+  "make": "Aidc",
+  "model": "T-5 Yung Yin"
+ },
+ "T6": {
+  "make": "North American",
+  "model": "BC-1"
+ },
+ "T7": {
+  "make": "Fuji",
+  "model": "T-7"
+ },
+ "TA15": {
+  "make": "Taylorcraft (1)",
+  "model": "15 Tourist"
+ },
+ "TA16": {
+  "make": "Thurston",
+  "model": "TA-16 Trojan"
+ },
+ "TA20": {
+  "make": "Taylorcraft (1)",
+  "model": "20 Topper"
+ },
+ "TAGO": {
+  "make": "Team Tango",
+  "model": "Tango-2"
+ },
+ "TAIL": {
+  "make": "Wittman",
+  "model": "W-8 Tailwind"
+ },
+ "TAMP": {
+  "make": "Socata",
+  "model": "TB-9 Tampico"
+ },
+ "TARO": {
+  "make": "Anahuac",
+  "model": "Tauro"
+ },
+ "TARR": {
+  "make": "Pelegrin",
+  "model": "Tarragon"
+ },
+ "TAYA": {
+  "make": "Taylor-Young",
+  "model": "A"
+ },
+ "TAYB": {
+  "make": "Taylorcraft (1)",
+  "model": "BC"
+ },
+ "TAYD": {
+  "make": "Taylorcraft (1)",
+  "model": "DC"
+ },
+ "TB05": {
+  "make": "Amc",
+  "model": "Texas Bullet 205"
+ },
+ "TB20": {
+  "make": "Shijiazhuang",
+  "model": "LE-500 Xiaoying"
+ },
+ "TB21": {
+  "make": "Socata",
+  "model": "TB-21 Trinidad TC"
+ },
+ "TB30": {
+  "make": "Aerospatiale",
+  "model": "TB-30 Epsilon"
+ },
+ "TB31": {
+  "make": "Socata",
+  "model": "TB-31 Omega"
+ },
+ "TBEE": {
+  "make": "United Consultant",
+  "model": "UC-1 Twin Bee"
+ },
+ "TBM": {
+  "make": "Grumman",
+  "model": "TBF Avenger"
+ },
+ "TBM7": {
+  "make": "Socata",
+  "model": "TBM-700A"
+ },
+ "TBM8": {
+  "make": "Socata",
+  "model": "TBM-850"
+ },
+ "TBM9": {
+  "make": "Daher",
+  "model": "TBM-910"
+ },
+ "TBR3": {
+  "make": "Golden Circle",
+  "model": "T-Bird 3"
+ },
+ "TC2": {
+  "make": "Aero Mirage",
+  "model": "TC-2"
+ },
+ "TCAT": {
+  "make": "Grumman",
+  "model": "F7F Tigercat"
+ },
+ "TCOU": {
+  "make": "Helio",
+  "model": "U-5 Twin Courier"
+ },
+ "TD1": {
+  "make": "Taiwan Dancer",
+  "model": "TD-1"
+ },
+ "TD2": {
+  "make": "Turbine Design",
+  "model": "TD-2 Tempest"
+ },
+ "TD3": {
+  "make": "Taiwan Dancer",
+  "model": "TD-3 Alluvion Legend"
+ },
+ "TEAL": {
+  "make": "Schweizer",
+  "model": "TSC-1 Teal"
+ },
+ "TERM": {
+  "make": "Smith (2)",
+  "model": "Termite"
+ },
+ "TERR": {
+  "make": "Foxcon",
+  "model": "Terrier"
+ },
+ "TEX2": {
+  "make": "Hawker Beechcraft",
+  "model": "3000"
+ },
+ "TEXA": {
+  "make": "Fly Synthesis",
+  "model": "Texan"
+ },
+ "TF19": {
+  "make": "Taylorcraft (1)",
+  "model": "19 Sportsman"
+ },
+ "TF21": {
+  "make": "Taylor Kits",
+  "model": "T-Kraft"
+ },
+ "TF22": {
+  "make": "Taylorcraft (1)",
+  "model": "F-22 Ranger"
+ },
+ "TFOC": {
+  "make": "Thunder Wings",
+  "model": "Focke-Wulf Fw-190"
+ },
+ "TFUN": {
+  "make": "Twi",
+  "model": "Taifun"
+ },
+ "TIAD": {
+  "make": "Trike Icaros",
+  "model": "Adventure"
+ },
+ "TIGR": {
+  "make": "Eurocopter",
+  "model": "HA-28"
+ },
+ "TIJU": {
+  "make": "Avions Fairey",
+  "model": "Tipsy Junior"
+ },
+ "TIPB": {
+  "make": "Avions Fairey",
+  "model": "Tipsy B"
+ },
+ "TJET": {
+  "make": "Maverick",
+  "model": "TJ-1500 Leader"
+ },
+ "TL20": {
+  "make": "Tl Ultralight",
+  "model": "TL-96 Star"
+ },
+ "TL30": {
+  "make": "Tl Ultralight",
+  "model": "TL-3000 Sirius"
+ },
+ "TLEG": {
+  "make": "Legend",
+  "model": "Turbine Legend"
+ },
+ "TM5": {
+  "make": "Tm Aircraft",
+  "model": "TM-5"
+ },
+ "TMOT": {
+  "make": "Fisher",
+  "model": "R-80 Tiger Moth"
+ },
+ "TMUS": {
+  "make": "Papa 51",
+  "model": "Thunder Mustang"
+ },
+ "TNAV": {
+  "make": "Camair",
+  "model": "480 Twin Navion"
+ },
+ "TNDR": {
+  "make": "Dream",
+  "model": "Tundra"
+ },
+ "TOBA": {
+  "make": "Socata",
+  "model": "TB-10 Tobago"
+ },
+ "TOOT": {
+  "make": "Meyer",
+  "model": "Little Toot"
+ },
+ "TOR": {
+  "make": "Aeritalia",
+  "model": "Tornado"
+ },
+ "TOUR": {
+  "make": "Aesl",
+  "model": "Airtourer"
+ },
+ "TOXO": {
+  "make": "Cag (1)",
+  "model": "Toxo"
+ },
+ "TP40": {
+  "make": "Thunder Wings",
+  "model": "Curtiss P-40"
+ },
+ "TPIL": {
+  "make": "Enaer",
+  "model": "T-35TX Aucán"
+ },
+ "TPIN": {
+  "make": "Scottish Aviation",
+  "model": "Twin Pioneer"
+ },
+ "TR20": {
+  "make": "Feugray",
+  "model": "TR-200"
+ },
+ "TR55": {
+  "make": "3xtrim",
+  "model": "550 Trener"
+ },
+ "TRAL": {
+  "make": "Groppo",
+  "model": "Trail"
+ },
+ "TRAP": {
+  "make": "Capella",
+  "model": "T-Raptor"
+ },
+ "TRBA": {
+  "make": "Podesva",
+  "model": "Trener Baby"
+ },
+ "TRDO": {
+  "make": "Titan",
+  "model": "Tornado S"
+ },
+ "TRF1": {
+  "make": "Team Rocket",
+  "model": "F-1"
+ },
+ "TRIM": {
+  "make": "Ford",
+  "model": "4-AT Tri-Motor"
+ },
+ "TRIS": {
+  "make": "Anglo Normandy",
+  "model": "BN-2A Mk3 Trislander"
+ },
+ "TRMA": {
+  "make": "Stinson",
+  "model": "A Tri-Motor"
+ },
+ "TRWN": {
+  "make": "Pacific Airmotive",
+  "model": "Tradewind"
+ },
+ "TS11": {
+  "make": "Pzl-Mielec",
+  "model": "TS-11 Iskra"
+ },
+ "TS8": {
+  "make": "Pzl-Mielec",
+  "model": "TS-8 Bies"
+ },
+ "TSPT": {
+  "make": "Thunder Wings",
+  "model": "Supermarine Spitfire"
+ },
+ "TSTN": {
+  "make": "Terrafugia",
+  "model": "Transition"
+ },
+ "TSTR": {
+  "make": "Air & Space",
+  "model": "Twinstar"
+ },
+ "TTRS": {
+  "make": "Humbert",
+  "model": "Tetras"
+ },
+ "TTWO": {
+  "make": "Parker",
+  "model": "Teenie Two"
+ },
+ "TU16": {
+  "make": "Tupolev",
+  "model": "Tu-16"
+ },
+ "TU22": {
+  "make": "Tupolev",
+  "model": "Tu-22"
+ },
+ "TU95": {
+  "make": "Tupolev",
+  "model": "Tu-20"
+ },
+ "TUCA": {
+  "make": "Embraer",
+  "model": "A-27 Tucano"
+ },
+ "TUCR": {
+  "make": "Flying Legend",
+  "model": "Tucano Replica"
+ },
+ "TUCT": {
+  "make": "Flying Legend",
+  "model": "Turbine Tucano Replica"
+ },
+ "TUL3": {
+  "make": "Podesva",
+  "model": "TUL-03 Amigo"
+ },
+ "TUTR": {
+  "make": "Avro",
+  "model": "621 Tutor"
+ },
+ "TVL4": {
+  "make": "Travel Air",
+  "model": "4"
+ },
+ "TVLB": {
+  "make": "Travel Air",
+  "model": "B"
+ },
+ "TWEN": {
+  "make": "Tecnam",
+  "model": "P-2010 Gran Lusso"
+ },
+ "TWIR": {
+  "make": "Dyn'aero",
+  "model": "Twin-R"
+ },
+ "TWST": {
+  "make": "Silence",
+  "model": "Twister"
+ },
+ "TZRV": {
+  "make": "Iriaf",
+  "model": "JT-2-2 Tazarve"
+ },
+ "U15": {
+  "make": "Phoenix Air",
+  "model": "U-15 Phoenix"
+ },
+ "U16": {
+  "make": "Grumman",
+  "model": "UF Albatross"
+ },
+ "U2": {
+  "make": "Lockheed",
+  "model": "U-2"
+ },
+ "U21": {
+  "make": "Beech",
+  "model": "EU-21 Ute"
+ },
+ "U22": {
+  "make": "Beech",
+  "model": "1074"
+ },
+ "UBAT": {
+  "make": "Australite",
+  "model": "Ultrabat"
+ },
+ "UF10": {
+  "make": "Airo",
+  "model": "5"
+ },
+ "UF13": {
+  "make": "Distar",
+  "model": "D-13 SunDancer"
+ },
+ "UFHT": {
+  "make": "Ufo",
+  "model": "HeliThruster"
+ },
+ "UH1": {
+  "make": "Bell",
+  "model": "204"
+ },
+ "UH12": {
+  "make": "Hiller",
+  "model": "UH-12B"
+ },
+ "UH1Y": {
+  "make": "Bell",
+  "model": "UH-1Y"
+ },
+ "UL10": {
+  "make": "Streamline Welding",
+  "model": "10 Ultimate Winner"
+ },
+ "UL20": {
+  "make": "Streamline Welding",
+  "model": "20 Ultimate Companion"
+ },
+ "UL2F": {
+  "make": "Aeros",
+  "model": "UL-2000 Flamingo"
+ },
+ "UL39": {
+  "make": "Cvut",
+  "model": "UL-39 Albi"
+ },
+ "UL45": {
+  "make": "3xtrim",
+  "model": "450 Ultra"
+ },
+ "ULTR": {
+  "make": "Windracers",
+  "model": "Ultra"
+ },
+ "ULTS": {
+  "make": "American Sportscopter",
+  "model": "Ultrasport 496"
+ },
+ "UM18": {
+  "make": "Air & Space",
+  "model": "18"
+ },
+ "UNIV": {
+  "make": "Neiva",
+  "model": "T-25 Universal"
+ },
+ "URRA": {
+  "make": "Ibis (2)",
+  "model": "GS-600 Arrow"
+ },
+ "US2": {
+  "make": "Shinmaywa",
+  "model": "US-2"
+ },
+ "UT60": {
+  "make": "Utva",
+  "model": "60"
+ },
+ "UT65": {
+  "make": "Utva",
+  "model": "65 Privrednik"
+ },
+ "UT66": {
+  "make": "Utva",
+  "model": "66"
+ },
+ "UT75": {
+  "make": "Utva",
+  "model": "75"
+ },
+ "UU12": {
+  "make": "Udet",
+  "model": "U-12 Flamingo Replica"
+ },
+ "V1": {
+  "make": "Grumman",
+  "model": "AO-1 Mohawk"
+ },
+ "V10": {
+  "make": "North American Rockwell",
+  "model": "OV-10 Bronco"
+ },
+ "V22": {
+  "make": "Bell-Boeing",
+  "model": "901 Osprey"
+ },
+ "V221": {
+  "make": "Msw",
+  "model": "Votec 221"
+ },
+ "V252": {
+  "make": "Msw",
+  "model": "Votec 252"
+ },
+ "V280": {
+  "make": "Bell",
+  "model": "V-280 Valor"
+ },
+ "V322": {
+  "make": "Msw",
+  "model": "Votec 322"
+ },
+ "V351": {
+  "make": "Msw",
+  "model": "Votec 351"
+ },
+ "V452": {
+  "make": "Msw",
+  "model": "Votec 452"
+ },
+ "V500": {
+  "make": "Revolution (1)",
+  "model": "Voyager-500"
+ },
+ "VALI": {
+  "make": "Vultee",
+  "model": "SNV Valiant"
+ },
+ "VAMP": {
+  "make": "De Havilland",
+  "model": "DH-100 Vampire"
+ },
+ "VANT": {
+  "make": "Visionaire",
+  "model": "VA-10 Vantage"
+ },
+ "VAUT": {
+  "make": "Sud",
+  "model": "SO-4050 Vautour"
+ },
+ "VELO": {
+  "make": "Velocity",
+  "model": "Velocity LW"
+ },
+ "VELT": {
+  "make": "Velocity",
+  "model": "Velocity V-Twin"
+ },
+ "VEZE": {
+  "make": "Rutan",
+  "model": "33 VariEze"
+ },
+ "VF35": {
+  "make": "Lockheed Martin",
+  "model": "F-35B Lightning 2"
+ },
+ "VF60": {
+  "make": "Vulcanair",
+  "model": "VF-600 Mission"
+ },
+ "VG3T": {
+  "make": "Aviakit",
+  "model": "Vega 3000"
+ },
+ "VGUL": {
+  "make": "Percival",
+  "model": "K-1 Vega Gull"
+ },
+ "VIMA": {
+  "make": "Valtion",
+  "model": "Viima"
+ },
+ "VIPJ": {
+  "make": "Viper",
+  "model": "ViperJet"
+ },
+ "VIPR": {
+  "make": "Paxman's",
+  "model": "Viper"
+ },
+ "VIX": {
+  "make": "Skystar",
+  "model": "Kitfox Vixen"
+ },
+ "VIXN": {
+  "make": "Amax",
+  "model": "Vixen"
+ },
+ "VJ22": {
+  "make": "Volmer",
+  "model": "VJ-22 Sportsman"
+ },
+ "VK3P": {
+  "make": "Cirrus",
+  "model": "VK-30 Cirrus (piston)"
+ },
+ "VK3T": {
+  "make": "Cirrus",
+  "model": "VK-30 Cirrus (turbine)"
+ },
+ "VL3": {
+  "make": "Aveko",
+  "model": "VL-3"
+ },
+ "VL3T": {
+  "make": "Jmb Aircraft",
+  "model": "VL-3 Evolution Turbine"
+ },
+ "VLOT": {
+  "make": "Velocity",
+  "model": "Velocity XL (turbine)"
+ },
+ "VLTT": {
+  "make": "Velocity",
+  "model": "Velocity V-Twin (turbine)"
+ },
+ "VM1": {
+  "make": "Vol Mediterrani",
+  "model": "VM-1 Esqual"
+ },
+ "VNOM": {
+  "make": "De Havilland",
+  "model": "DH-112 Venom"
+ },
+ "VNTR": {
+  "make": "Icp",
+  "model": "Ventura"
+ },
+ "VO10": {
+  "make": "Volaircraft",
+  "model": "Volaire 10"
+ },
+ "VOL2": {
+  "make": "Volante",
+  "model": "Volante Two"
+ },
+ "VP2": {
+  "make": "Evans",
+  "model": "VP-2 Volksplane"
+ },
+ "VR20": {
+  "make": "Egvoyager",
+  "model": "VR-202"
+ },
+ "VR7": {
+  "make": "Vashon",
+  "model": "Ranger R7"
+ },
+ "VSON": {
+  "make": "American Affordable",
+  "model": "Vision"
+ },
+ "VTOR": {
+  "make": "Vulcanair",
+  "model": "AP-68TP-600 Viator"
+ },
+ "VTRA": {
+  "make": "Rans",
+  "model": "S-19 Venterra"
+ },
+ "VTUR": {
+  "make": "Nuventure",
+  "model": "Venture"
+ },
+ "VUT1": {
+  "make": "Evektor",
+  "model": "VUT-100 Cobra"
+ },
+ "VVIG": {
+  "make": "Rutan",
+  "model": "27 VariViggen"
+ },
+ "VW10": {
+  "make": "Airconcept",
+  "model": "VoWi-10 Airbuggy"
+ },
+ "VWIT": {
+  "make": "Aircraft Spruce",
+  "model": "V-Witt"
+ },
+ "W11": {
+  "make": "Wolf",
+  "model": "W-11 Boredom Fighter"
+ },
+ "W135": {
+  "make": "Boeing",
+  "model": "WC-135R"
+ },
+ "W201": {
+  "make": "Weatherly",
+  "model": "201"
+ },
+ "W3": {
+  "make": "Pzl-Swidnik",
+  "model": "W-3 Erka"
+ },
+ "W5BC": {
+  "make": "Wittman",
+  "model": "W-5 Buttercup"
+ },
+ "W62T": {
+  "make": "Weatherly",
+  "model": "620TP"
+ },
+ "WA40": {
+  "make": "Wassmer",
+  "model": "WA-40 Super 4"
+ },
+ "WA41": {
+  "make": "Wassmer",
+  "model": "WA-41 Baladou"
+ },
+ "WA42": {
+  "make": "Wassmer",
+  "model": "WA-421 Prestige"
+ },
+ "WA50": {
+  "make": "Wassmer",
+  "model": "WA-52 Europa"
+ },
+ "WA80": {
+  "make": "Wassmer",
+  "model": "WA-80 Piranha"
+ },
+ "WAC9": {
+  "make": "Waco",
+  "model": "9"
+ },
+ "WACA": {
+  "make": "Waco",
+  "model": "IBA"
+ },
+ "WACC": {
+  "make": "Waco",
+  "model": "C"
+ },
+ "WACD": {
+  "make": "Waco",
+  "model": "D"
+ },
+ "WACE": {
+  "make": "Waco",
+  "model": "ARE Aristocrat"
+ },
+ "WACF": {
+  "make": "Waco",
+  "model": "F"
+ },
+ "WACG": {
+  "make": "Waco",
+  "model": "G"
+ },
+ "WACM": {
+  "make": "Waco",
+  "model": "JWM"
+ },
+ "WACN": {
+  "make": "Waco",
+  "model": "AVN"
+ },
+ "WACO": {
+  "make": "Waco",
+  "model": "O"
+ },
+ "WACT": {
+  "make": "Waco",
+  "model": "RPT"
+ },
+ "WAIX": {
+  "make": "Sonex",
+  "model": "Waiex"
+ },
+ "WASP": {
+  "make": "Westland",
+  "model": "Wasp"
+ },
+ "WB57": {
+  "make": "Martin",
+  "model": "272"
+ },
+ "WBOO": {
+  "make": "Dean-Wilson",
+  "model": "DW-200 Whitney Boomerang"
+ },
+ "WCAT": {
+  "make": "Grumman",
+  "model": "F4F Wildcat"
+ },
+ "WDEX": {
+  "make": "Radab",
+  "model": "Windex"
+ },
+ "WESX": {
+  "make": "Westland",
+  "model": "WS-58 Wessex"
+ },
+ "WF4U": {
+  "make": "War",
+  "model": "Vought F4U Corsair"
+ },
+ "WFOC": {
+  "make": "War",
+  "model": "Focke-Wulf 190"
+ },
+ "WFUR": {
+  "make": "War",
+  "model": "Hawker Sea Fury"
+ },
+ "WH1": {
+  "make": "Wendt",
+  "model": "WH-1 Traveler"
+ },
+ "WH4": {
+  "make": "Hall",
+  "model": "WH-4 Harpoon"
+ },
+ "WHAT": {
+  "make": "Whatley",
+  "model": "Special"
+ },
+ "WHIL": {
+  "make": "Reflex",
+  "model": "WLAC-1 White Lightning"
+ },
+ "WHIT": {
+  "make": "Miles",
+  "model": "M-11 Whitney Straight"
+ },
+ "WHK2": {
+  "make": "Rutan",
+  "model": "348 White Knight Two"
+ },
+ "WICH": {
+  "make": "Javelin",
+  "model": "Wichawk"
+ },
+ "WILT": {
+  "make": "Aerostar (2)",
+  "model": "WT-01 Wild Thing"
+ },
+ "WIND": {
+  "make": "Watson",
+  "model": "GW-1 Windwagon"
+ },
+ "WINE": {
+  "make": "Windecker",
+  "model": "Eagle"
+ },
+ "WIRR": {
+  "make": "Commonwealth (1)",
+  "model": "CA-16 Wirraway"
+ },
+ "WISP": {
+  "make": "Whisper",
+  "model": "Whisper"
+ },
+ "WLBY": {
+  "make": "Fly Synthesis",
+  "model": "Wallaby"
+ },
+ "WM2": {
+  "make": "Miller (2)",
+  "model": "WM-2"
+ },
+ "WOPU": {
+  "make": "Aerosport",
+  "model": "Woody Pusher"
+ },
+ "WP40": {
+  "make": "War",
+  "model": "Curtiss P-40 Kittyhawk"
+ },
+ "WP47": {
+  "make": "War",
+  "model": "Republic P-47 Thunderbolt"
+ },
+ "WS22": {
+  "make": "Spring",
+  "model": "WS-202 Sprint"
+ },
+ "WSP": {
+  "make": "Aak",
+  "model": "Wasp"
+ },
+ "WT10": {
+  "make": "Aerospool",
+  "model": "WT-10 Advantic"
+ },
+ "WT9": {
+  "make": "Aerospool",
+  "model": "WT-9 Dynamic"
+ },
+ "WUSH": {
+  "make": "Wüst",
+  "model": "Shark"
+ },
+ "WW1": {
+  "make": "White",
+  "model": "WW-1 Der Jäger D-9"
+ },
+ "WW23": {
+  "make": "Iai",
+  "model": "1123 Westwind"
+ },
+ "WW24": {
+  "make": "Iai",
+  "model": "1124 Sea Scan"
+ },
+ "WX35": {
+  "make": "Whisper",
+  "model": "X-350"
+ },
+ "WZ10": {
+  "make": "Changhe",
+  "model": "WZ-10"
+ },
+ "WZER": {
+  "make": "War",
+  "model": "Mitsubishi Zero"
+ },
+ "X2": {
+  "make": "Sikorsky",
+  "model": "X-2"
+ },
+ "X3": {
+  "make": "Eurocopter",
+  "model": "X-3"
+ },
+ "X47B": {
+  "make": "Northrop Grumman",
+  "model": "X-47B"
+ },
+ "X49": {
+  "make": "Piasecki",
+  "model": "X-49 SpeedHawk"
+ },
+ "X59": {
+  "make": "Lockheed Martin",
+  "model": "X-59 QueSST"
+ },
+ "XA41": {
+  "make": "Xtremeair",
+  "model": "XA-41"
+ },
+ "XA42": {
+  "make": "Xtremeair",
+  "model": "XA-42"
+ },
+ "XA85": {
+  "make": "Raj Hamsa",
+  "model": "X-AIR Hawk"
+ },
+ "XAIR": {
+  "make": "Raj Hamsa",
+  "model": "X-AIR S"
+ },
+ "XB1": {
+  "make": "Boom",
+  "model": "XB-1"
+ },
+ "XL2": {
+  "make": "Discovery",
+  "model": "XL-2"
+ },
+ "XNON": {
+  "make": "Abs Aerolight",
+  "model": "Xenon"
+ },
+ "XNOS": {
+  "make": "Sonex",
+  "model": "Xenos"
+ },
+ "Y11": {
+  "make": "Harbin",
+  "model": "Y-11"
+ },
+ "Y112": {
+  "make": "Yakovlev",
+  "model": "Yak-112"
+ },
+ "Y12": {
+  "make": "Harbin",
+  "model": "Y-12C"
+ },
+ "Y12F": {
+  "make": "Harbin",
+  "model": "Y-12F Aircar"
+ },
+ "Y130": {
+  "make": "Yakovlev",
+  "model": "Yak-130"
+ },
+ "Y18T": {
+  "make": "Technoavia",
+  "model": "SM-94"
+ },
+ "Y20": {
+  "make": "Xian",
+  "model": "Y-20 Kunpeng"
+ },
+ "YA1": {
+  "make": "Yeoman",
+  "model": "YA-1 Cropmaster"
+ },
+ "YAK3": {
+  "make": "Yakovlev",
+  "model": "Yak-3"
+ },
+ "YAK9": {
+  "make": "Yakovlev",
+  "model": "Yak-9"
+ },
+ "YALE": {
+  "make": "North American",
+  "model": "NJ Yale"
+ },
+ "YARR": {
+  "make": "Arrow (2)",
+  "model": "Yarrow Arrow"
+ },
+ "YAST": {
+  "make": "Sgau",
+  "model": "Yastreb"
+ },
+ "YC12": {
+  "make": "Chasle",
+  "model": "YC-12 Tourbillon"
+ },
+ "YK11": {
+  "make": "Let",
+  "model": "C-11"
+ },
+ "YK12": {
+  "make": "Pzl-Okecie",
+  "model": "Yak-12"
+ },
+ "YK18": {
+  "make": "Yakovlev",
+  "model": "Yak-18"
+ },
+ "YK28": {
+  "make": "Yakovlev",
+  "model": "Yak-28"
+ },
+ "YK30": {
+  "make": "Yakovlev",
+  "model": "Yak-30"
+ },
+ "YK40": {
+  "make": "Yakovlev",
+  "model": "Yak-40"
+ },
+ "YK42": {
+  "make": "Yakovlev",
+  "model": "Yak-42"
+ },
+ "YK50": {
+  "make": "Yakovlev",
+  "model": "Yak-50"
+ },
+ "YK52": {
+  "make": "Aerostar (2)",
+  "model": "Iak-52"
+ },
+ "YK53": {
+  "make": "Yakovlev",
+  "model": "Yak-53"
+ },
+ "YK54": {
+  "make": "Yakovlev",
+  "model": "Yak-54"
+ },
+ "YK55": {
+  "make": "Yakovlev",
+  "model": "Yak-55"
+ },
+ "YK58": {
+  "make": "Yakovlev",
+  "model": "Yak-58"
+ },
+ "YL15": {
+  "make": "Boeing",
+  "model": "451 Scout"
+ },
+ "YNHL": {
+  "make": "Aviaimpex",
+  "model": "KT-112 Yanhol"
+ },
+ "YS11": {
+  "make": "Mitsubishi",
+  "model": "YS-11"
+ },
+ "YUKN": {
+  "make": "Murphy",
+  "model": "Yukon"
+ },
+ "YUNO": {
+  "make": "Shuya",
+  "model": "Yunona"
+ },
+ "YURO": {
+  "make": "Soko-Cniar",
+  "model": "J-22 Orao"
+ },
+ "Z22": {
+  "make": "Moravan",
+  "model": "Zlin Z-22 Junak"
+ },
+ "Z26": {
+  "make": "Moravan",
+  "model": "Zlin Z-626"
+ },
+ "Z37P": {
+  "make": "Let",
+  "model": "Z-37 Cmelák"
+ },
+ "Z37T": {
+  "make": "Moravan",
+  "model": "Z-137 Agro Turbo"
+ },
+ "Z42": {
+  "make": "Moravan",
+  "model": "Zlin Z-42"
+ },
+ "Z43": {
+  "make": "Moravan",
+  "model": "Safir 43"
+ },
+ "Z50": {
+  "make": "Moravan",
+  "model": "Zlin Z-50"
+ },
+ "ZA6": {
+  "make": "Aerokopter",
+  "model": "AK-1"
+ },
+ "ZEFR": {
+  "make": "Curti",
+  "model": "Zefhir"
+ },
+ "ZEP2": {
+  "make": "Arnet Pereyra",
+  "model": "Toucan"
+ },
+ "ZEPH": {
+  "make": "Atec",
+  "model": "122 Zephyr"
+ },
+ "ZERO": {
+  "make": "Mitsubishi",
+  "model": "A6M Zero"
+ },
+ "ZIU": {
+  "make": "Tai",
+  "model": "ZIU"
+ },
+ "ZULU": {
+  "make": "Bul",
+  "model": "Zùlù"
+ }
+}
