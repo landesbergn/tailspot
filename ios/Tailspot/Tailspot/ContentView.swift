@@ -1560,7 +1560,15 @@ struct ContentView: View {
     /// the current zoom factor so the analyzer can reconstruct the
     /// effective FOV when replaying.
     private func recordReplayTick() {
-        let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
+        // Record the FULL annotated set, NOT the visible-filtered subset.
+        // The whole point of the replay → ReplayAnalyzer loop is to re-apply
+        // `isLikelyVisibleToObserver` offline with different cap/elevation
+        // tuning; if we pre-filter here, every plane the live filter rejected
+        // (e.g. a distant contrail) is absent from the file and can never be
+        // studied. `observed` already excludes on-ground/stale (dropped in
+        // annotate); it keeps below-horizon and far planes, which is exactly
+        // what offline filter tuning needs.
+        let annotated = adsb.observed
         let tick = ReplayEvent.Tick(
             timestamp: Date(),
             sensor: .init(
@@ -1576,7 +1584,7 @@ struct ContentView: View {
                 cameraElevationDeg: motion.cameraElevationDeg,
                 zoomFactor: Double(zoom)
             ),
-            aircraft: visible.map { ReplayEvent.AircraftSnapshot($0.aircraft) }
+            aircraft: annotated.map { ReplayEvent.AircraftSnapshot($0.aircraft) }
         )
         recorder.recordTick(tick)
     }
