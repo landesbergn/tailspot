@@ -238,8 +238,14 @@ OVERRIDES = {
     "E135": ("Embraer", "ERJ-135"),
     "E145": ("Embraer", "ERJ-145"),
 
+    # ----- Airbus A310 -----
     # T-22 (military) beat the universally-known commercial name.
     "A310": ("Airbus", "A310"),
+
+    # ----- A400M / HS-748 -----
+    # More military-designation wins over well-known names.
+    "A400": ("Airbus", "A400M Atlas"),
+    "A748": ("Hawker Siddeley", "HS-748"),
 
     # ----- British Aerospace Jetstream 41 -----
     # AI(R)->Avro is right for the RJ Avroliners but not the
