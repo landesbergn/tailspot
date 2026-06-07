@@ -117,6 +117,26 @@ nonisolated enum AircraftNaming {
     private static let customerCode =
         #/^B?(7[0-9]7)-([0-9])([A-Z0-9]{2})\(?([A-Z]{1,3})?\)?$/#
 
+    /// Space-to-dash join, scoped ONLY to Airbus A3xx and Boeing 7x7
+    /// families where the part after the space STARTS with a digit.
+    /// "A380 842" → "A380-842", "777 300ER" → "777-300ER".
+    /// "737 MAX 8" stays unchanged (MAX starts with a letter).
+    /// A220-series (A2xx) is deliberately excluded.
+    private static let spaceDashJoin =
+        #/^(A3[0-9]{2}|7[0-9]7) ([0-9][A-Z0-9]*)$/#
+
+    /// Airbus engine-variant collapse: raw suffix digits encode
+    /// series/engine/version; the marketing name is series-hundred.
+    ///   "A380-842" → variant 8 + engine code 42 → "A380-800"
+    ///   "A321-271NX" → series 2 + neo → "A321neo"
+    ///   "A330-243F"  → series 2 + freighter → "A330-200F"
+    /// Pattern requires EXACTLY 3 variant digits (family-digit + 2)
+    /// so "A350-1000" (4 digits) and "A330-900" (series-hundred already)
+    /// fall through unchanged. Idempotent: "A380-800" → series 8 +
+    /// code "00" + no suffix → "A380-800".
+    private static let airbusVariant =
+        #/^(A3[0-9]{2})-([0-9])([0-9]{2})(NX|N|F)?$/#
+
     static func cleanedModel(_ raw: String?, make: String?) -> String? {
         guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         else { return nil }
@@ -128,9 +148,32 @@ nonisolated enum AircraftNaming {
             // established via lowercased() but sliced on the original.
             model = String(model.dropFirst(make.count + 1))
         }
+        // (a) Space-to-dash join for Airbus A3xx / Boeing 7x7 families
+        // where the token after the space starts with a digit.
+        if let m = model.wholeMatch(of: spaceDashJoin) {
+            model = "\(m.1)-\(m.2)"
+        }
+        // Boeing customer-code collapse.
         if let m = model.uppercased().wholeMatch(of: customerCode) {
             let suffix = m.4.map(String.init) ?? ""
             model = "\(m.1)-\(m.2)00\(suffix)"
+        }
+        // (b) Airbus engine-variant collapse (applied AFTER space-to-dash).
+        if let m = model.wholeMatch(of: airbusVariant) {
+            let family = String(m.1)
+            let series = String(m.2)
+            let suffix = m.4.map(String.init) ?? ""
+            switch suffix {
+            case "N", "NX":
+                // neo variants: A321-271NX → A321neo
+                model = "\(family)neo"
+            case "F":
+                // freighter: A330-243F → A330-200F
+                model = "\(family)-\(series)00F"
+            default:
+                // standard: A380-842 → A380-800
+                model = "\(family)-\(series)00"
+            }
         }
         return model
     }

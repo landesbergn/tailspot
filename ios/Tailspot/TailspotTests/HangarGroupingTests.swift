@@ -311,4 +311,25 @@ struct HangarGroupingTests {
 
         #expect(groups.last?.model == HangarGrouping.unknownTitle)
     }
+
+    // MARK: - Space-variant and engine-code styles collapse into one group
+
+    /// Old catches (no typecode) with space-style ("A380 842") or raw
+    /// engine-code suffix ("A380-861") must collapse into the same
+    /// group as a catch with typecode A388 (which resolves via the
+    /// DOC 8643 table to "Airbus A380-800"). All three → ONE group.
+    @Test func spaceAndVariantStylesCollapseIntoOneGroup() {
+        let groups = HangarGrouping.group([
+            // Old catch — space style, no typecode
+            makeCatch(icao: "a1", manufacturer: "AIRBUS", model: "A380 842"),
+            // Old catch — dash + engine code, no typecode
+            makeCatch(icao: "a2", manufacturer: "AIRBUS", model: "A380-861"),
+            // New catch — typecode present, resolves via table
+            makeCatch(icao: "a3", manufacturer: "AIRBUS", model: "A380-861", typecode: "A388"),
+        ], by: .aircraftType)
+
+        #expect(groups.count == 1, "Expected 1 group, got \(groups.count): \(groups.map(\.title))")
+        #expect(groups[0].title == "Airbus A380-800")
+        #expect(groups[0].rows.count == 3)
+    }
 }

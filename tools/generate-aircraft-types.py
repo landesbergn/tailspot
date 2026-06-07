@@ -102,10 +102,13 @@ OVERRIDES = {
 
     # ----- Airbus: military/VIP variant beats commercial -----
     # "T-24" (4) beats "A-330-200" (9); "ACJ-350-900" (11) beats
-    # "A-350-900 XWB" (13).
+    # "A-350-900 XWB" (13). XWB suffix dropped: the string-cleanup
+    # fallback produces "A350-900"/"A350-1000" and must CONVERGE with
+    # the table value — "XWB" is marketing fluff the fallback can't
+    # reconstruct. Pinned by AircraftNamingTests.fallbackConvergesWithTable.
     "A332": ("Airbus", "A330-200"),
-    "A359": ("Airbus", "A350-900 XWB"),
-    "A35K": ("Airbus", "A350-1000 XWB"),
+    "A359": ("Airbus", "A350-900"),
+    "A35K": ("Airbus", "A350-1000"),
 
     # ----- De Havilland Canada Dash 8 -----
     # DH8A/B/C: US military designations (E-9, P-9, RO-6) win over

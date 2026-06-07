@@ -109,15 +109,9 @@ struct SetDetailView: View {
 
     private func modelRow(_ group: ModelGroup) -> some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(displayModel(group.model))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text(operatorPreview(for: group))
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .lineLimit(1)
-            }
+            Text(displayModel(group.model))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 0) {
                 Text("×\(group.distinctTailCount)")
@@ -143,25 +137,6 @@ struct SetDetailView: View {
     /// Unknown sentinel needs a friendlier label.
     private func displayModel(_ raw: String) -> String {
         raw == HangarGrouping.unknownTitle ? "Unknown model" : raw
-    }
-
-    /// One-line preview of the operators behind a model group — the
-    /// first two distinct `operatorName` values from the tails, comma
-    /// separated. Falls back to "Various operators" when there are
-    /// many. Empty string when no operator data is available.
-    private func operatorPreview(for group: ModelGroup) -> String {
-        let names = group.tails.compactMap {
-            $0.mostRecent.operatorName?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .nilIfEmpty
-        }
-        let distinct = Array(NSOrderedSet(array: names)) as? [String] ?? []
-        switch distinct.count {
-        case 0:  return ""
-        case 1:  return distinct[0]
-        case 2:  return distinct.joined(separator: " · ")
-        default: return "Various operators"
-        }
     }
 
     // MARK: - Empty state
@@ -190,6 +165,3 @@ struct ModelSlotRoute: Hashable {
     let model: String
 }
 
-private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
-}

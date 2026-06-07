@@ -97,11 +97,65 @@ struct AircraftNamingTests {
         ("737 MAX 8", "737 MAX 8"),
         ("747-8", "747-8"),
         ("747-400F", "747-400F"),
+        // space-to-dash join: Boeing family (spaces before digits)
+        ("777 300ER", "777-300ER"),
+        ("747 400", "747-400"),
     ])
     func customerCodeCollapse(input: String, expected: String) {
         let n = AircraftNaming.canonical(typecode: nil, manufacturer: "BOEING", model: input)
         #expect(n.model == expected)
         #expect(n.make == "Boeing")
+    }
+
+    // MARK: - Fallback: Airbus engine-variant collapse
+
+    @Test(arguments: [
+        // variant collapse: engine-code digits → series-hundred
+        ("A380-842", "A380-800"),
+        ("A320-214", "A320-200"),
+        // space-to-dash join then variant collapse
+        ("A380 861", "A380-800"),
+        // neo variants
+        ("A321-271NX", "A321neo"),
+        // freighter
+        ("A330-243F", "A330-200F"),
+        // A350 four-digit variant — must NOT be touched by the 3-digit pattern
+        ("A350-941", "A350-900"),
+        // idempotence: already clean strings pass through unchanged
+        ("A380-800", "A380-800"),
+        ("A320neo", "A320neo"),
+        // A220 is NOT in the A3xx pattern — must not match
+        ("A220-300", "A220-300"),
+        // A350-1000 has FOUR variant digits — pattern requires exactly 3
+        ("A350-1000", "A350-1000"),
+        // A330-900 is already series-hundred style — stays as-is (idempotent)
+        ("A330-900", "A330-900"),
+    ])
+    func airbusVariantCollapse(input: String, expected: String) {
+        let n = AircraftNaming.canonical(typecode: nil, manufacturer: "AIRBUS", model: input)
+        #expect(n.make == "Airbus")
+        #expect(n.model == expected, "Input '\(input)' expected '\(expected)' got '\(n.model ?? "nil")'")
+    }
+
+    // MARK: - Convergence invariant
+
+    /// Pins that the string-cleanup fallback and the DOC 8643 table
+    /// produce identical displayNames for the same airframe. Breaks if
+    /// the Airbus variant-collapse rule drifts or a table value gains
+    /// marketing suffixes (e.g. "XWB").
+    @Test func fallbackConvergesWithTable() {
+        let pairs: [(typecode: String, manufacturer: String, rawModel: String)] = [
+            ("A388", "AIRBUS",  "A380 842"),
+            ("A346", "AIRBUS",  "A340 642"),
+            ("B77W", "BOEING",  "777-3F2ER"),
+            ("A359", "AIRBUS",  "A350-941"),  // requires Fix 2's XWB drop
+        ]
+        for (tc, mfr, raw) in pairs {
+            let fromTable    = AircraftNaming.canonical(typecode: tc,  manufacturer: nil,  model: nil).displayName
+            let fromFallback = AircraftNaming.canonical(typecode: nil, manufacturer: mfr,  model: raw).displayName
+            #expect(fromTable == fromFallback,
+                    "Convergence failure for typecode \(tc): table='\(fromTable ?? "nil")' fallback='\(fromFallback ?? "nil")'")
+        }
     }
 
     // MARK: - Fallback: make casing + dedupe
