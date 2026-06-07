@@ -916,7 +916,11 @@ struct ContentView: View {
                     caughtAt: now,
                     observerLat: observerLat,
                     observerLon: observerLon,
-                    slantDistanceMeters: observed?.slantDistanceMeters ?? 0
+                    slantDistanceMeters: observed?.slantDistanceMeters ?? 0,
+                    registration: metadata?.registration,
+                    typecode: metadata?.typecode,
+                    altitudeMeters: observed?.aircraft.altitudeMeters,
+                    velocityMps: observed?.aircraft.velocityMps
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -932,6 +936,21 @@ struct ContentView: View {
                 // reveal carries the multiplicity message.
                 catchHaptic &+= 1
                 Log.adsb.notice("Caught \(newCatches.count, privacy: .public) plane(s); \(duplicates.count, privacy: .public) duplicate(s)")
+                // Reverse-geocode the observer position ONCE for the
+                // batch (every row shares it) and stamp the new rows.
+                // Post-save and fire-and-forget: a catch never waits
+                // on — or fails because of — the geocoder. Offline →
+                // placeName stays nil; CatchDetailView's backfill
+                // retries on a later open.
+                Task { @MainActor in
+                    guard let place = await ReverseGeocode.placeName(
+                        lat: observerLat, lon: observerLon
+                    ) else { return }
+                    for row in newCatches where row.placeName == nil {
+                        row.placeName = place
+                    }
+                    try? modelContext.save()
+                }
             } else if !duplicates.isEmpty {
                 Log.adsb.notice("Catch: all \(duplicates.count, privacy: .public) target(s) already in Hangar")
             }
