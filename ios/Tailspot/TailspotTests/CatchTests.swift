@@ -282,4 +282,26 @@ struct CatchTests {
         )
         #expect(PokePlane(catchRecord: c).model == "Boeing 777-300ER")
     }
+
+    // MARK: - Set matcher: canonical + raw union
+
+    @Test func setMatcherSeesCanonicalAndRawNames() {
+        // Raw-only: model string carries the token (pre-typecode row).
+        let raw = Catch(
+            icao24: "r1", callsign: nil, model: "737-8H4", manufacturer: "BOEING",
+            caughtAt: Date(), observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        // Canonical-only: nil model, typecode resolves to "Boeing 737 MAX 8".
+        let canon = Catch(
+            icao24: "c1", callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(), observerLat: 0, observerLon: 0, slantDistanceMeters: 0,
+            typecode: "B38M"
+        )
+        let narrow = PokeSets.all.first { $0.id == "narrow" }!
+        let entry737 = narrow.entries.first { $0.id == "n-737-800" }!
+        let entryMax = narrow.entries.first { $0.id == "n-737-max" }!
+
+        #expect(PokeSets.matches(catch: raw, entry: entry737))   // union keeps raw matching
+        #expect(PokeSets.matches(catch: canon, entry: entryMax)) // union adds canonical matching
+    }
 }

@@ -143,14 +143,14 @@ enum HangarGrouping {
     static func key(for c: Catch, mode: HangarGrouping) -> String {
         switch mode {
         case .aircraftType:
-            let mfg = c.manufacturer?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-            let mdl = c.model?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-            switch (mfg, mdl) {
-            case let (m?, d?): return "\(m) \(d)"
-            case let (m?, nil): return m
-            case let (nil, d?): return d
-            default: return unknownTitle
-            }
+            // Canonical official name (DOC 8643 typecode first, string
+            // cleanup fallback) so Boeing customer-code variants of
+            // the same model land in one bucket regardless of airline.
+            return AircraftNaming.canonical(
+                typecode: c.typecode,
+                manufacturer: c.manufacturer,
+                model: c.model
+            ).displayName ?? unknownTitle
         case .airline:
             return c.operatorName?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -217,6 +217,11 @@ enum HangarGrouping {
         return buckets
             .map { ModelGroup(model: $0.key, type: type, tails: $0.value) }
             .sorted { lhs, rhs in
+                // Unknown pins to the END regardless of tail count —
+                // it's a junk drawer, not a headline.
+                let lUnknown = lhs.model == unknownTitle
+                let rUnknown = rhs.model == unknownTitle
+                if lUnknown != rUnknown { return rUnknown }
                 if lhs.tails.count != rhs.tails.count {
                     return lhs.tails.count > rhs.tails.count
                 }

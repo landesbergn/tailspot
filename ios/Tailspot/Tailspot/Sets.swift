@@ -219,17 +219,22 @@ nonisolated enum PokeSets {
         case caught(catchedExample: Catch)
     }
 
-    /// True when the given catch's model matches any of the entry's
-    /// `modelTokens` (case-insensitive substring on `c.model`). The
-    /// single source of truth for Catch → PokeSetEntry membership;
-    /// `status(of:against:)`, `progress(of:against:)`, and
-    /// `HangarGrouping.resolveSlots(for:in:)` all pivot on this so a
-    /// future tweak to the matching rule lands in every caller at
-    /// once.
+    /// True when the catch's model matches any of the entry's
+    /// `modelTokens` — checked against BOTH the raw OpenSky model
+    /// string AND the canonical name (typecode-resolved). Union, not
+    /// replacement: membership can only gain from canonicalization,
+    /// never lose. Single source of truth for Catch → PokeSetEntry.
     nonisolated static func matches(catch c: Catch, entry: PokeSetEntry) -> Bool {
-        guard let model = c.model?.lowercased(), !model.isEmpty else { return false }
+        let raw = c.model?.lowercased() ?? ""
+        let canonical = AircraftNaming.canonical(
+            typecode: c.typecode,
+            manufacturer: c.manufacturer,
+            model: c.model
+        ).displayName?.lowercased() ?? ""
+        guard !raw.isEmpty || !canonical.isEmpty else { return false }
         return entry.modelTokens.contains { token in
-            model.contains(token.lowercased())
+            let t = token.lowercased()
+            return raw.contains(t) || canonical.contains(t)
         }
     }
 

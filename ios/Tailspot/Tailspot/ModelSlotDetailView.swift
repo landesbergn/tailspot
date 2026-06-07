@@ -69,16 +69,10 @@ struct ModelSlotDetailView: View {
         // interactive pop gesture too, which we don't want.
     }
 
-    /// Title-case the manufacturer prefix; leave the model
-    /// alphanumerics intact. Mirrors `SetDetailView.displayModel`.
+    /// The group key is already the canonical display name; only the
+    /// Unknown sentinel needs a friendlier label.
     private var displayModel: String {
-        let raw = group.model
-        if raw == HangarGrouping.unknownTitle { return "Unknown model" }
-        let parts = raw.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-        guard parts.count == 2 else { return raw.capitalized }
-        let mfg = parts[0].lowercased().capitalized
-        let model = String(parts[1])
-        return "\(mfg) \(model)"
+        group.model == HangarGrouping.unknownTitle ? "Unknown model" : group.model
     }
 
     private func tailRow(_ row: HangarRow) -> some View {

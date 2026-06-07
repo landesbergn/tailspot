@@ -139,17 +139,10 @@ struct SetDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    /// Human-friendly model string. The raw key from
-    /// `HangarGrouping.key(for:c:mode:.aircraftType)` is typically all
-    /// caps ("BOEING 737-800") because OpenSky stores them that way.
-    /// Title-case the manufacturer; leave model alphanumerics intact.
+    /// The group key is already the canonical display name; only the
+    /// Unknown sentinel needs a friendlier label.
     private func displayModel(_ raw: String) -> String {
-        if raw == HangarGrouping.unknownTitle { return "Unknown model" }
-        let parts = raw.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-        guard parts.count == 2 else { return raw.capitalized }
-        let mfg = parts[0].lowercased().capitalized
-        let model = String(parts[1])
-        return "\(mfg) \(model)"
+        raw == HangarGrouping.unknownTitle ? "Unknown model" : raw
     }
 
     /// One-line preview of the operators behind a model group — the

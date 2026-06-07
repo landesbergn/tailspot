@@ -26,7 +26,8 @@ struct HangarGroupingTests {
         manufacturer: String? = nil,
         model: String? = nil,
         operatorName: String? = nil,
-        caughtAt: Date = Date()
+        caughtAt: Date = Date(),
+        typecode: String? = nil
     ) -> Catch {
         Catch(
             icao24: icao,
@@ -36,7 +37,8 @@ struct HangarGroupingTests {
             operatorName: operatorName,
             caughtAt: caughtAt,
             observerLat: 0, observerLon: 0,
-            slantDistanceMeters: 0
+            slantDistanceMeters: 0,
+            typecode: typecode
         )
     }
 
@@ -49,10 +51,10 @@ struct HangarGroupingTests {
         ], by: .aircraftType)
 
         #expect(groups.count == 2)
-        // Alphabetical → AIRBUS A320 before BOEING 737-800.
-        #expect(groups[0].title == "AIRBUS A320")
+        // Alphabetical → Airbus A320 before Boeing 737-800.
+        #expect(groups[0].title == "Airbus A320")
         #expect(groups[0].rows.count == 1)
-        #expect(groups[1].title == "BOEING 737-800")
+        #expect(groups[1].title == "Boeing 737-800")
         #expect(groups[1].rows.count == 2)
     }
 
@@ -65,7 +67,7 @@ struct HangarGroupingTests {
         ], by: .aircraftType)
 
         let titles = groups.map(\.title)
-        #expect(titles.contains("BOEING"))
+        #expect(titles.contains("Boeing"))
         #expect(titles.contains("A320"))
         // Two distinct unknown-keyed planes collapse into the Unknown
         // bucket; each remains its own row since icao24 differs.
@@ -272,5 +274,41 @@ struct HangarGroupingTests {
         // narrow-body slot should contain a tail with that icao24.
         let allTailIcaos = slots.flatMap { $0.tails.map(\.icao24) }
         #expect(!allTailIcaos.contains("wide747"))
+    }
+
+    // MARK: - Canonical naming integration
+
+    @Test func customerCodeVariantsCollapseIntoOneGroup() {
+        // Same airframe model, two airlines, two customer codes —
+        // must be ONE group keyed by the canonical name.
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "s1", manufacturer: "BOEING", model: "737-8H4"),
+            makeCatch(icao: "u1", manufacturer: "BOEING", model: "737-824"),
+        ], by: .aircraftType)
+
+        #expect(groups.count == 1)
+        #expect(groups[0].title == "Boeing 737-800")
+        #expect(groups[0].rows.count == 2)
+    }
+
+    @Test func typecodeDrivesGroupTitleWhenPresent() {
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "w1", manufacturer: "BOEING", model: "777-322ER", typecode: "B77W"),
+        ], by: .aircraftType)
+        #expect(groups[0].title == "Boeing 777-300ER")
+    }
+
+    @Test func unknownModelGroupSortsLastInModelGroups() {
+        // Unknown has MORE tails than the named group — under the old
+        // count-desc-first sort it landed on top. It must pin to the end.
+        let catches = [
+            makeCatch(icao: "x1"), makeCatch(icao: "x2"), makeCatch(icao: "x3"),
+            makeCatch(icao: "b1", manufacturer: "BOEING", model: "737-800"),
+        ]
+        let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+        let type = rows.first!.aircraftType
+        let groups = HangarGrouping.modelGroups(in: rows, type: type)
+
+        #expect(groups.last?.model == HangarGrouping.unknownTitle)
     }
 }
