@@ -257,7 +257,9 @@ nonisolated struct AircraftClassifier: Sendable {
 
         // Heuristic fallback when no rule matched. Manufacturer alone
         // doesn't carry enough signal to pick a rarity above common,
-        // but it can hint at type (Embraer → regional, Cessna → GA).
+        // but it can hint at type (Embraer → regional, Cessna/Piper → GA,
+        // rotorcraft brands → GA). Default is GA, not narrow — the long
+        // tail of unknown aircraft is light general aviation, not airliners.
         let fallbackType: AircraftType = {
             if haystack.contains("embraer") || haystack.contains("bombardier") {
                 return .regional
@@ -265,7 +267,18 @@ nonisolated struct AircraftClassifier: Sendable {
             if haystack.contains("cessna") || haystack.contains("piper") {
                 return .ga
             }
-            return .narrow
+            // Rotorcraft brands — when no typecode is available we can
+            // still catch helicopter manufacturers by name.
+            let rotorcraftBrands = [
+                "helicopter", "robinson", "eurocopter", "airbus helicopters",
+                "sikorsky", "bell ", "agusta", "leonardo", "md helicopter",
+                "enstrom",
+            ]
+            if rotorcraftBrands.contains(where: { haystack.contains($0) }) {
+                return .ga
+            }
+            // Default: GA (not narrow). The long tail is light aircraft.
+            return .ga
         }()
         return (.common, fallbackType)
     }

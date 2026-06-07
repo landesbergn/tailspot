@@ -591,14 +591,113 @@ def polish_model(make, model):
     return model
 
 
+# ---------------------------------------------------------------------------
+# Aircraft type classification — driven by DOC 8643 AircraftDescription,
+# EngineType, WTC (wake turbulence category). Priority (highest first):
+#
+#   1. Rotorcraft / tiltrotor → ga  (no separate rotorcraft set in Tailspot)
+#   2. MIL exact-match set → mil   (EXACT match only — C17 ≠ C172)
+#   3. BIZ exact-match set → biz
+#   4. Regional prefix regex → regional
+#   5. Wide prefix regex / WTC H or J → wide
+#   6. Narrow prefix regex / (Jet engine + WTC M) → narrow
+#   7. Piston or Electric engine → ga
+#   8. Turboprop + WTC L or M → ga
+#   9. WTC L → ga
+#  10. Default → ga   (the long tail is light aircraft, NOT narrow)
+#
+# MIL and BIZ are EXACT-MATCH sets — never prefix-match. This is
+# critical: C17 (C-17 Globemaster, military) must not match C172 (Cessna).
+# ---------------------------------------------------------------------------
+BIZ = {
+    'GLF5','GLF4','GLF6','GALX','CL30','CL35','CL60',
+    'C25A','C25B','C25C','C500','C510','C525','C550','C560','C56X','C680','C68A','C700','C750',
+    'E50P','E55P',
+    'LJ35','LJ45','LJ60','LJ75','FA7X','FA8X','F2TH','F900',
+    'BD100','H25B','ASTR','PRM1','MU2','PC24','LJ31','LJ40','LJ55','C25M',
+}
+MIL = {
+    'C130','C30J','C17','C5M','C5','KC135','KC10','KC46','K35R',
+    'B52','C27J','C295','A400','P3','P8','E3CF','E3TF','E6',
+    'C12','C12J','U28','RC12','C160','AN12','IL76','A124','C141',
+    'VC25','E4','C32','C40','B1','B2','C2','E2',
+}
+
+_REGIONAL_RE = re.compile(r'^(CRJ|E17|E19|E75|E70|DH8|AT4|AT7|AT5|SF3|SB20|J41|E45|E13|E14)')
+_WIDE_RE     = re.compile(r'^(B74|B77|B78|B76|A33|A34|A35|A38|MD11|IL9|IL8|A124|AN12|AN22|A30|A310)')
+_NARROW_RE   = re.compile(r'^(B73|B72|B75|A31|A32|BCS|MD8|MD9|DC9|E290|E190|E195|A19N|A20N|A21N)')
+
+
+def aircraft_type(tc, info):
+    """
+    Compute Tailspot AircraftType string for a typecode + DOC 8643 info dict.
+    Returns one of: "narrow", "wide", "regional", "biz", "mil", "ga".
+    `info` must have keys AircraftDescription, EngineType, WTC.
+    """
+    desc = info.get("AircraftDescription", "")
+    eng  = info.get("EngineType", "")
+    wtc  = info.get("WTC", "")
+
+    # 1. Rotorcraft → ga
+    if desc in ("Helicopter", "Gyrocopter", "Tiltrotor"):
+        return "ga"
+
+    # 2. Military exact-match
+    if tc in MIL:
+        return "mil"
+
+    # 3. Bizjet exact-match
+    if tc in BIZ:
+        return "biz"
+
+    # 4. Regional prefix
+    if _REGIONAL_RE.match(tc):
+        return "regional"
+
+    # 5. Wide-body prefix or heavy/super-heavy WTC
+    if _WIDE_RE.match(tc) or wtc in ("H", "J"):
+        return "wide"
+
+    # 6. Narrow prefix or (Jet + medium WTC)
+    if _NARROW_RE.match(tc):
+        return "narrow"
+    if eng == "Jet" and wtc == "M":
+        return "narrow"
+
+    # 7. Piston or Electric → ga
+    if eng in ("Piston", "Electric"):
+        return "ga"
+
+    # 8. Turboprop/Turboshaft + light/medium WTC → ga
+    if eng.startswith("Turbo") and wtc in ("L", "M", "L/M"):
+        return "ga"
+
+    # 9. Light WTC → ga
+    if wtc in ("L", "L/M"):
+        return "ga"
+
+    # 10. Default — the long tail is light aircraft, NOT narrow
+    return "ga"
+
+
 def reduce_rows(rows):
+    # Build per-designator info dict (desc/eng/wtc from the first matching row).
+    # We want the raw DOC 8643 fields for type classification, independent of
+    # the make/model OVERRIDE branch (overrides change the display name only).
     by_designator = collections.defaultdict(list)
+    desig_info = {}  # designator → {"AircraftDescription", "EngineType", "WTC"}
     for r in rows:
         desig = (r.get("Designator") or "").strip().upper()
         make = (r.get("ManufacturerCode") or "").strip()
         model = (r.get("ModelFullName") or "").strip()
         if desig and make and model:
             by_designator[desig].append((make, model))
+            if desig not in desig_info:
+                desig_info[desig] = {
+                    "AircraftDescription": r.get("AircraftDescription", ""),
+                    "EngineType": r.get("EngineType", ""),
+                    "WTC": r.get("WTC", ""),
+                }
 
     out = {}
     for desig, pairs in by_designator.items():
@@ -614,7 +713,10 @@ def reduce_rows(rows):
             model_raw = min(models, key=lambda m: (len(m), m))
             make = polish_make(make_raw)
             model = polish_model(make, model_raw)
-        out[desig] = {"make": make, "model": model}
+        # Type is derived from DOC 8643 classification data (independent of
+        # make/model overrides — overrides change display names only).
+        atype = aircraft_type(desig, desig_info.get(desig, {}))
+        out[desig] = {"make": make, "model": model, "type": atype}
     return out
 
 
@@ -719,7 +821,52 @@ def main():
     if args.sample:
         for desig in random.sample(sorted(out), min(args.sample, len(out))):
             e = out[desig]
-            print(f"  {desig:5s} {e['make']} {e['model']}")
+            print(f"  {desig:5s} {e['make']} {e['model']} [{e.get('type','')}]")
+
+    # ── Acceptance fixture: 38 real typecodes ────────────────────────────────
+    FIXTURE = {
+        # narrow
+        "A21N": "narrow", "B739": "narrow", "B738": "narrow", "B38M": "narrow",
+        "A321": "narrow", "BCS3": "narrow", "B737": "narrow", "A320": "narrow",
+        "B39M": "narrow",
+        # wide
+        "B772": "wide", "B788": "wide", "B77W": "wide", "B77L": "wide",
+        # regional
+        "E75L": "regional", "CRJ7": "regional",
+        # biz
+        "E55P": "biz", "CL30": "biz", "C25B": "biz",
+        "GLF5": "biz", "C510": "biz", "GALX": "biz",
+        # ga
+        "C172": "ga", "P28A": "ga", "C182": "ga", "M20P": "ga", "C310": "ga",
+        "EA50": "ga", "C195": "ga", "P28R": "ga", "PA31": "ga",
+        "EC35": "ga",   # Airbus Helicopters H-135 → rotorcraft → ga
+        "SSTL": "ga",   # Just Aircraft SuperSTOL → light GA
+        "R44": "ga",    # Robinson R44 → rotorcraft → ga
+        "T210": "ga",   # Cessna Turbo Centurion → light turbo
+        "SR20": "ga",   # Cirrus SR20 → light piston
+        "PA24": "ga",   # Piper Comanche → light piston
+        "AR11": "ga",   # Aeronca 11 Chief → heritage piston
+        "BE20": "ga",   # Beechcraft King Air 200 → turboprop
+    }
+    print("\n── Acceptance fixture (38 typecodes) ──")
+    all_pass = True
+    for tc, expected in sorted(FIXTURE.items()):
+        got = out.get(tc, {}).get("type", "MISSING")
+        status = "OK" if got == expected else "FAIL"
+        if status == "FAIL":
+            all_pass = False
+            print(f"  {status} {tc}: expected={expected!r} got={got!r}")
+    if all_pass:
+        print(f"  All {len(FIXTURE)} fixture typecodes classified correctly.")
+    else:
+        print("  SOME FIXTURE CHECKS FAILED — review type rules before committing.")
+
+    # ── Per-type tally ───────────────────────────────────────────────────────
+    tally = collections.Counter(e.get("type", "?") for e in out.values())
+    print("\n── Per-type tally ──")
+    for t in ["ga", "narrow", "wide", "regional", "biz", "mil", "?"]:
+        print(f"  {t:8s} {tally.get(t, 0)}")
+    print(f"  total    {sum(tally.values())}")
 
 
 if __name__ == "__main__":

@@ -24,10 +24,22 @@ import Foundation
 
 nonisolated enum AircraftNaming {
 
-    /// Resolved official (or best-effort cleaned) name.
+    /// Resolved official (or best-effort cleaned) name, plus the
+    /// authoritative aircraft type derived from DOC 8643 classification
+    /// data (description, engine type, wake turbulence category).
     struct CanonicalName: Equatable, Sendable {
         let make: String?
         let model: String?
+        /// DOC 8643-derived aircraft type. nil for entries from older
+        /// JSON without the field (safe: callers fall through to the
+        /// string classifier when nil).
+        let type: AircraftType?
+
+        init(make: String?, model: String?, type: AircraftType? = nil) {
+            self.make = make
+            self.model = model
+            self.type = type
+        }
 
         /// "Boeing 777-300ER" — the string display surfaces show and
         /// the Hangar groups by. nil only when both halves are nil.
@@ -41,7 +53,7 @@ nonisolated enum AircraftNaming {
         }
     }
 
-    // MARK: - Entry point
+    // MARK: - Entry points
 
     static func canonical(
         typecode: String?,
@@ -57,9 +69,18 @@ nonisolated enum AircraftNaming {
         return CanonicalName(make: make, model: cleanedModel(model, make: make))
     }
 
+    /// AircraftType for an ICAO typecode from the bundled table, nil if
+    /// unknown. Authoritative classification source — preferred over the
+    /// string classifier whenever a typecode is known.
+    static func aircraftType(forTypecode typecode: String?) -> AircraftType? {
+        guard let code = typecode?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased().nonEmpty else { return nil }
+        return table[code]?.type
+    }
+
     // MARK: - Bundled DOC 8643 table
 
-    /// designator → canonical name. Decoded once on first touch.
+    /// designator → canonical name + type. Decoded once on first touch.
     /// Missing/corrupt resource degrades to an empty table — every
     /// lookup falls through to the string path; never crashes.
     static let table: [String: CanonicalName] = {
@@ -67,12 +88,21 @@ nonisolated enum AircraftNaming {
               let data = try? Data(contentsOf: url),
               let raw = try? JSONDecoder().decode([String: Entry].self, from: data)
         else { return [:] }
-        return raw.mapValues { CanonicalName(make: $0.make, model: $0.model) }
+        return raw.mapValues {
+            CanonicalName(
+                make: $0.make,
+                model: $0.model,
+                type: $0.type.flatMap { AircraftType(rawValue: $0) }
+            )
+        }
     }()
 
     private struct Entry: Decodable {
         let make: String
         let model: String
+        /// DOC 8643-derived type string. Optional for back-compat with
+        /// JSON entries regenerated before this field was added.
+        let type: String?
     }
 
     // MARK: - Fallback: make

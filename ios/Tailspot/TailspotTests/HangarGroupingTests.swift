@@ -301,15 +301,30 @@ struct HangarGroupingTests {
     @Test func unknownModelGroupSortsLastInModelGroups() {
         // Unknown has MORE tails than the named group — under the old
         // count-desc-first sort it landed on top. It must pin to the end.
+        //
+        // Build entirely within the .ga type (the default for unknown
+        // aircraft) so the type filter works cleanly: three no-name catches
+        // (→ Unknown group, 3 tails) plus one named Cessna 172 (→ named
+        // group, 1 tail). Both are GA so they appear in the same
+        // modelGroups call. Without the pin, Unknown's count of 3 would
+        // sort before the named group's count of 1.
         let catches = [
-            makeCatch(icao: "x1"), makeCatch(icao: "x2"), makeCatch(icao: "x3"),
-            makeCatch(icao: "b1", manufacturer: "BOEING", model: "737-800"),
+            // Three anonymous catches — no make/model → Unknown, type → ga.
+            makeCatch(icao: "x1"),
+            makeCatch(icao: "x2"),
+            makeCatch(icao: "x3"),
+            // One named GA aircraft — Cessna + "172" → .ga via classifier.
+            makeCatch(icao: "c1", manufacturer: "Cessna", model: "172"),
         ]
         let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
-        let type = rows.first!.aircraftType
-        let groups = HangarGrouping.modelGroups(in: rows, type: type)
+        // All four rows should be .ga. Provide .ga explicitly to avoid
+        // relying on rows.first's ordering.
+        let gaRows = rows.filter { $0.aircraftType == .ga }
+        let groups = HangarGrouping.modelGroups(in: gaRows, type: .ga)
 
-        #expect(groups.last?.model == HangarGrouping.unknownTitle)
+        // Unknown group must sort last, not first (even though it has 3 tails).
+        #expect(groups.last?.model == HangarGrouping.unknownTitle,
+                "Unknown group must sort last, got: \(groups.map(\.model))")
     }
 
     // MARK: - Space-variant and engine-code styles collapse into one group

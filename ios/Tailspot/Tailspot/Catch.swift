@@ -138,9 +138,18 @@ final class Catch {
         ).rarity
     }
 
-    /// The aircraft type for this airframe. Same fallback rules as
-    /// `resolvedRarity`.
+    /// The aircraft type for this airframe.
+    ///
+    /// Priority:
+    ///   1. Typecode → DOC 8643/FAA-derived type from the bundled table.
+    ///      Read-time lookup so backfilled catches re-bucket automatically
+    ///      when the table is regenerated, without a schema migration.
+    ///   2. Stored snapshot (`aircraftType` raw string) — a stable frozen
+    ///      value written at catch time from the classifier.
+    ///   3. String classifier fallback for pre-typecode rows.
     var resolvedType: AircraftType {
+        // Authoritative: typecode → DOC 8643/FAA-derived type.
+        if let t = AircraftNaming.aircraftType(forTypecode: typecode) { return t }
         if let raw = aircraftType, let t = AircraftType(rawValue: raw) { return t }
         return AircraftClassifier.classify(
             manufacturer: manufacturer,

@@ -15,6 +15,7 @@
 
 import Testing
 import Foundation
+import SwiftData
 @testable import Tailspot
 
 @Suite("AircraftClassifier")
@@ -211,24 +212,50 @@ struct AircraftClassifierTests {
         #expect(lower == .rare)
     }
 
-    @Test func nilAndEmptyInputs_fallToDefault() {
+    @Test func nilAndEmptyInputs_fallToGADefault() {
+        // Default is GA, not narrow — the long tail of unknown aircraft
+        // is light general aviation. Changed from .narrow in the
+        // typecode-driven classification overhaul (2026-06-07).
         let (rarity, type) = AircraftClassifier.classify(
             manufacturer: nil,
             model: nil,
             operatorName: nil
         )
         #expect(rarity == .common)
-        #expect(type == .narrow)
+        #expect(type == .ga)
     }
 
-    @Test func unknownManufacturer_fallsToNarrowCommon() {
+    @Test func unknownManufacturer_fallsToGACommon() {
+        // Same: unknown → GA, not narrow.
         let (rarity, type) = AircraftClassifier.classify(
             manufacturer: "Acme Aerospace",
             model: "ZZ-9 Plural Z Alpha",
             operatorName: nil
         )
         #expect(rarity == .common)
-        #expect(type == .narrow)
+        #expect(type == .ga)
+    }
+
+    // MARK: - Rotorcraft fallback (no typecode path)
+
+    @Test func robinsonR44_classifierFallback_isGA() {
+        // Robinson by manufacturer name → ga (helicopter brand hint).
+        let (_, type) = AircraftClassifier.classify(
+            manufacturer: "ROBINSON",
+            model: "R44",
+            operatorName: nil
+        )
+        #expect(type == .ga)
+    }
+
+    @Test func eurocopterByName_fallback_isGA() {
+        // Eurocopter by manufacturer name → ga.
+        let (_, type) = AircraftClassifier.classify(
+            manufacturer: "Eurocopter",
+            model: "EC135",
+            operatorName: nil
+        )
+        #expect(type == .ga)
     }
 
     @Test func embraerNoModel_hintsRegional() {
@@ -254,6 +281,88 @@ struct AircraftClassifierTests {
         )
         #expect(a.rarity == b.rarity)
         #expect(a.type == b.type)
+    }
+}
+
+// MARK: - Typecode-driven type resolution
+
+/// Pins the three categories of bug reported by the user: helicopters
+/// (EC35, R44) and light GA (C172) landing in Narrow-body. These tests
+/// exercise the full resolution chain through `AircraftNaming.aircraftType`.
+@Suite("AircraftTypeResolution — typecode path")
+@MainActor
+struct AircraftTypeResolutionTests {
+
+    // MARK: Typecode → table lookups
+
+    @Test func ec35_typecode_isGA() {
+        // Airbus Helicopters H-135 is a helicopter → ga, not narrow.
+        #expect(AircraftNaming.aircraftType(forTypecode: "EC35") == .ga)
+    }
+
+    @Test func r44_typecode_isGA() {
+        // Robinson R44 is a helicopter → ga.
+        #expect(AircraftNaming.aircraftType(forTypecode: "R44") == .ga)
+    }
+
+    @Test func c172_typecode_isGA() {
+        // Cessna 172 is light piston GA → ga, not narrow.
+        #expect(AircraftNaming.aircraftType(forTypecode: "C172") == .ga)
+    }
+
+    @Test func b738_typecode_isNarrow() {
+        // Boeing 737-800 → narrow.
+        #expect(AircraftNaming.aircraftType(forTypecode: "B738") == .narrow)
+    }
+
+    @Test func b77w_typecode_isWide() {
+        // Boeing 777-300ER → wide.
+        #expect(AircraftNaming.aircraftType(forTypecode: "B77W") == .wide)
+    }
+
+    @Test func crj7_typecode_isRegional() {
+        // Bombardier CRJ-700 → regional.
+        #expect(AircraftNaming.aircraftType(forTypecode: "CRJ7") == .regional)
+    }
+
+    @Test func glf5_typecode_isBiz() {
+        // Gulfstream G550 → biz.
+        #expect(AircraftNaming.aircraftType(forTypecode: "GLF5") == .biz)
+    }
+
+    @Test func unknownTypecode_returnsNil() {
+        // Unknown typecode falls through to nil; callers use classifier.
+        #expect(AircraftNaming.aircraftType(forTypecode: "ZZZZ") == nil)
+        #expect(AircraftNaming.aircraftType(forTypecode: nil) == nil)
+    }
+
+    // MARK: Catch.resolvedType — typecode wins over stale snapshot
+
+    @Test func resolvedType_typecodeWinsOverStaleSnapshot() throws {
+        // A Catch with typecode "EC35" but stored aircraftType "narrow"
+        // (stale snapshot from before the fix) must resolve to .ga via
+        // the typecode path, overriding the stale stored value.
+        let modelConfig = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Catch.self, configurations: modelConfig)
+        let context = ModelContext(container)
+
+        // Insert with stale stored type (simulate a pre-fix row)
+        let c = Catch(
+            icao24: "abc123",
+            callsign: "TEST1",
+            model: "H-135",
+            manufacturer: "Airbus Helicopters",
+            caughtAt: Date(),
+            observerLat: 37.8,
+            observerLon: -122.2,
+            slantDistanceMeters: 2000,
+            typecode: "EC35",
+            aircraftType: .narrow   // stale snapshot — should be overridden
+        )
+        context.insert(c)
+        // Typecode path must win.
+        #expect(c.resolvedType == .ga,
+                "EC35 typecode must resolve to .ga, not the stale .narrow snapshot")
     }
 }
 
