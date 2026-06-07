@@ -241,6 +241,12 @@ OVERRIDES = {
     # T-22 (military) beat the universally-known commercial name.
     "A310": ("Airbus", "A310"),
 
+    # ----- British Aerospace Jetstream 41 -----
+    # AI(R)->Avro is right for the RJ Avroliners but not the
+    # Jetstream 41, which is a British Aerospace product like its
+    # JS31/JS32 siblings.
+    "JS41": ("British Aerospace", "Jetstream 41"),
+
     # ----- Deferred review candidates (rare on OpenSky free-tier ADS-B) -----
     # B703 (707-300), PA18 (Piper Super Cub), BE10 (Beech King Air 100),
     # C185 (Cessna 185 Skywagon), DHC2 (DHC-2 Beaver) — flag for review
