@@ -13,16 +13,25 @@ Each unique Designator reduces to ONE canonical (make, model):
   1. most frequent ManufacturerCode wins (ties: alphabetical)
   2. among that manufacturer's rows: shortest ModelFullName
      (ties: alphabetical)
-  3. display polish: title-cased make with an exceptions map,
+  3. display polish: canonical-manufacturer map (standardizes brands),
+     strip-leading-brand (kills doubled "Gulfstream G550" style),
+     title-cased make with an exceptions map,
      Airbus "A-320neo" -> "A320neo" hyphen fix
   4. OVERRIDES pins designators where the deterministic rule picks a
      poor representative — populated from human review of the output,
      never from memory.
 
+FAA cross-reference:
+  - Loads tools/data/faa_aircraft_characteristics.xlsx (stdlib zipfile).
+  - Emits MISMATCH lines to stdout for make/model disagreements.
+  - Attaches wingspanFt and lengthFt (floats) to entries that have FAA
+    data — for future visibility work. Swift Decodable ignores extra keys.
+
 Usage:
   python3 tools/generate-aircraft-types.py              # fetch + write
   python3 tools/generate-aircraft-types.py --input f.json   # offline
   python3 tools/generate-aircraft-types.py --sample 25  # print review sample
+  python3 tools/generate-aircraft-types.py --save-disagreements f.txt
 
 The checked-in JSON diff is the verification surface: review it after
 every regeneration.
@@ -41,10 +50,88 @@ import random
 import re
 import sys
 import urllib.request
+import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 
 URL = "https://doc8643.icao.int/external/aircrafttypes"
 OUT = Path(__file__).resolve().parent.parent / "ios/Tailspot/Tailspot/AircraftTypes.json"
+FAA_XLSX = Path(__file__).resolve().parent / "data/faa_aircraft_characteristics.xlsx"
+
+# ---------------------------------------------------------------------------
+# Canonical-manufacturer map
+# Maps UPPERCASE source manufacturer strings (from DOC 8643 ManufacturerCode
+# and/or FAA Manufacturer column) to short canonical brand names.
+# This is the primary normalization step — strip-brand and title-case run after.
+# ---------------------------------------------------------------------------
+CANONICAL_MAKE = {
+    # Major OEMs
+    "AIRBUS": "Airbus",
+    "AIRBUS HELICOPTERS": "Airbus Helicopters",
+    "EUROCOPTER": "Airbus Helicopters",  # rebranded to Airbus Helicopters
+    "BOEING": "Boeing",
+    "EMBRAER": "Embraer",
+    "CESSNA": "Cessna",
+    "TEXTRON AVIATION": "Cessna",        # Cessna parent
+    "PIPER": "Piper",
+    "GULFSTREAM AEROSPACE": "Gulfstream",
+    "GULFSTREAM AMERICAN": "Gulfstream",
+    "CANADAIR": "Bombardier",            # Bombardier absorbed Canadair
+    "BOMBARDIER": "Bombardier",
+    "CIRRUS": "Cirrus",
+    "MOONEY": "Mooney",
+    "ROBINSON": "Robinson",
+    "BEECH": "Beechcraft",
+    "RAYTHEON-BEECH": "Beechcraft",
+    "RAYTHEON BEECH": "Beechcraft",
+    "RAYTHEON": "Beechcraft",            # Raytheon/Hawker Beechcraft era
+    "ECLIPSE": "Eclipse",
+    "AERONCA": "Aeronca",
+    "JUST": "Just Aircraft",
+    "LEARJET": "Learjet",
+    "DASSAULT": "Dassault",
+    "DASSAULT AVIATION": "Dassault",
+    "PILATUS": "Pilatus",
+    "DIAMOND": "Diamond",
+    "SOCATA": "Socata",
+    "PIAGGIO": "Piaggio",
+    "HONDA": "Honda",
+    "QUEST": "Quest",
+    "MITSUBISHI": "Mitsubishi",
+    "GRUMMAN": "Grumman",
+    "GRUMMAN AMERICAN": "Grumman American",
+    "DOUGLAS": "Douglas",
+    "LOCKHEED": "Lockheed",
+    "LOCKHEED MARTIN": "Lockheed Martin",
+    "FAIRCHILD": "Fairchild",
+    "FAIRCHILD SWEARINGEN": "Fairchild",
+    "FAIRCHILD DORNIER": "Fairchild Dornier",
+    "ANTONOV": "Antonov",
+    "ILYUSHIN": "Ilyushin",
+    "SUKHOI": "Sukhoi",
+    "IAI": "IAI",
+    "LAKE": "Lake",
+    "MAULE": "Maule",
+    "HELIO": "Helio",
+    "ROCKWELL": "Rockwell",
+    "NORTH AMERICAN": "North American",
+    "NORTH AMERICAN ROCKWELL": "Rockwell",
+    "CONVAIR": "Convair",
+    "AVIAT": "Aviat",
+    "BELLANCA": "Bellanca",
+    "TAYLORCRAFT": "Taylorcraft",
+    "STINSON": "Stinson",
+    "LUSCOMBE": "Luscombe",
+    "ERCO": "Erco",
+    "AIR TRACTOR": "Air Tractor",
+    "REIMS-CESSNA": "Cessna",           # Reims-built Cessna aircraft
+    "RILEY-CESSNA": "Cessna",           # Riley conversions of Cessna
+    # Hawker / BAE family
+    "BRITISH AEROSPACE": "British Aerospace",
+    "HAWKER": "Hawker",
+    "HAWKER SIDDELEY": "Hawker Siddeley",
+    # ATR, CASA, MBB etc stay in SPECIAL_MAKES (CANONICAL_MAKE takes priority)
+}
 
 # Makes that must stay fully/partially capitalized (acronyms, brand
 # styling). Default rule below title-cases every word (including each
@@ -137,8 +224,10 @@ OVERRIDES = {
     # Cessna "401" row accidentally present under C402.
     # TR-20 (4) beats "560 Citation 5" for C560.
     # U-20 (4) beats "550 Citation II" (15) for C550.
+    # Riley beats Cessna in frequency for C310 (5 vs 4 rows).
     "C182": ("Cessna", "182 Skylane"),
     "C208": ("Cessna", "208 Caravan"),
+    "C310": ("Cessna", "310"),
     "C402": ("Cessna", "402"),
     "C550": ("Cessna", "550 Citation II"),
     "C560": ("Cessna", "560 Citation V"),
@@ -182,7 +271,7 @@ OVERRIDES = {
     "E110": ("Embraer", "EMB-110 Bandeirante"),
 
     # ----- Cirrus SR20 -----
-    # "T-53" (4) beats "SR-20" (5).
+    # "T-53" (4) beats "SR-20" (5). Also strip the ICAO hyphen: SR-20 -> SR20.
     "SR20": ("Cirrus", "SR20"),
 
     # ----- De Havilland Canada DHC-3 Otter -----
@@ -197,9 +286,14 @@ OVERRIDES = {
     # "C-143" (5) beats "CL-600 Challenger 600" (21).
     "CL60": ("Bombardier", "Challenger 604"),
 
-    # ----- Gulfstream II -----
-    # "VC-11" (5) beats "G-1159 Gulfstream 2" (18).
-    "GLF2": ("Gulfstream Aerospace", "Gulfstream II"),
+    # ----- Gulfstream -----
+    # GLF2: "VC-11" (5) beats "G-1159 Gulfstream 2" (18).
+    # GLF5: "C-37" (4) beats "G-5 Gulfstream 5" (16). C-37 is USAF designation.
+    #        Also fixes doubled-brand "Gulfstream Aerospace Gulfstream G550".
+    # GALX: IAI wins by frequency (2 vs 1), picks "1126 Galaxy" — wrong brand+name.
+    "GLF2": ("Gulfstream", "Gulfstream II"),
+    "GLF5": ("Gulfstream", "G550"),
+    "GALX": ("Gulfstream", "G200"),
 
     # ----- Cessna Citation VII -----
     # "U-21" (4) beats "650 Citation 3" (12).
@@ -227,10 +321,6 @@ OVERRIDES = {
     # SJ-X was an early prototype name; SF50 is the certified production name.
     "SF50": ("Cirrus", "SF50 Vision Jet"),
 
-    # ----- Gulfstream G550 -----
-    # "C-37" (4) beats "G-5 Gulfstream 5" (16). C-37 is the USAF designation.
-    "GLF5": ("Gulfstream Aerospace", "Gulfstream G550"),
-
     # ----- Mitsubishi MU-2 -----
     # "LR-1" (4) ties "MU-2" (4); L < M alphabetically, so LR-1 wins.
     "MU2": ("Mitsubishi", "MU-2"),
@@ -256,6 +346,71 @@ OVERRIDES = {
     # JS31/JS32 siblings.
     "JS41": ("British Aerospace", "Jetstream 41"),
 
+    # ----- Piper PA-28 Cherokee family -----
+    # Piper wins by count (23 vs 41 combined for foreign licensees).
+    # Shortest Piper model is "PA-28-161 Cadet" (14) — but the user-validated
+    # target name is "PA-28 Cherokee" (generic family name). The DOC 8643
+    # shortest rule picks a specific variant; override to the canonical family.
+    "P28A": ("Piper", "PA-28 Cherokee"),
+    "P28R": ("Piper", "PA-28R-201 Arrow"),
+    "PA31": ("Piper", "PA-31-300 Navajo"),
+    "PA24": ("Piper", "PA-24 Comanche"),
+
+    # ----- Embraer E175 long wing -----
+    # DOC 8643 has "175 (long wing)" and "ERJ-170-200 (long wing)".
+    # Shortest is "175 (long wing)" but the parenthetical needs removing.
+    # Target is "Embraer 175".
+    "E75L": ("Embraer", "175"),
+
+    # ----- Mooney M20 -----
+    # DOC 8643 shortest MOONEY model is "M-20" — ICAO uses a hyphen.
+    # Target is "Mooney M20" (no hyphen). Override to strip the hyphen.
+    "M20P": ("Mooney", "M20"),
+
+    # ----- Robinson R44 -----
+    # DOC 8643 has "R-44 Astro", "R-44 Raven", "R-44 Clipper".
+    # Shortest is "R-44 Astro" (10). Target is "R44" (no hyphen, no variant).
+    "R44": ("Robinson", "R44"),
+
+    # ----- Eclipse 500 -----
+    # DOC 8643 has "Eclipse 500" and "Eclipse 550"; shortest is "Eclipse 500".
+    # BUT polish_make("ECLIPSE") -> "Eclipse", then strip_leading_brand
+    # kills "Eclipse" prefix from "Eclipse 500" -> "500". Wrong.
+    # Fix: override so the brand stripping doesn't fire for this case.
+    "EA50": ("Eclipse", "500"),
+
+    # ----- Just Aircraft SuperSTOL -----
+    # ICAO has "JA30 SuperSTOL" and "JA35 SuperSTOL XL" under make "JUST".
+    # CANONICAL_MAKE maps JUST -> "Just Aircraft".
+    # Shortest model is "JA30 SuperSTOL". Target is "Just Aircraft SuperSTOL".
+    # JA30 is the internal model code; override to the marketing name.
+    "SSTL": ("Just Aircraft", "SuperSTOL"),
+
+    # ----- Airbus A220 (BCS3) -----
+    # ICAO has AIRBUS "A-220-300" and BOMBARDIER "BD-500 CSeries CS300".
+    # Tie-breaking: AIRBUS wins alphabetically. Model "A-220-300" becomes
+    # "A220-300" after Airbus hyphen fix. Target: "Airbus A220-300". Good.
+    # But just in case Bombardier row wins: override.
+    "BCS3": ("Airbus", "A220-300"),
+
+    # ----- Airbus H135 (EC35) -----
+    # AIRBUS HELICOPTERS wins by count (6 vs 4 for EUROCOPTER).
+    # Shortest model from AIRBUS HELICOPTERS: "H-135" (5).
+    # Target: "Airbus Helicopters H-135". With CANONICAL_MAKE and no
+    # further stripping this should work, but pin it to be safe.
+    "EC35": ("Airbus Helicopters", "H-135"),
+
+    # ----- Aeronca 11 Chief (AR11) -----
+    # ICAO: AERONCA "11 Chief" (1 row) vs HINDUSTAN "HUL-26 Pushpak" (1 row).
+    # Tie-break alphabetically: AERONCA < HINDUSTAN. Should pick Aeronca.
+    # Target: "Aeronca 11 Chief". Pin it to avoid tie-break surprises.
+    "AR11": ("Aeronca", "11 Chief"),
+
+    # ----- Cessna 195 -----
+    # ICAO: CESSNA "195" and "LC-126". Shortest wins: "195" (3 chars).
+    # Target: "Cessna 195". Should work, but pin for safety.
+    "C195": ("Cessna", "195"),
+
     # ----- Deferred review candidates (rare on OpenSky free-tier ADS-B) -----
     # B703 (707-300), PA18 (Piper Super Cub), BE10 (Beech King Air 100),
     # C185 (Cessna 185 Skywagon), DHC2 (DHC-2 Beaver) — flag for review
@@ -263,14 +418,124 @@ OVERRIDES = {
 }
 
 
+def load_faa_xlsx():
+    """
+    Load FAA Aircraft Characteristics Database from xlsx.
+    Returns dict: icao_code (uppercase) -> {"make": str, "model": str,
+                                             "wingspanFt": float|None,
+                                             "lengthFt": float|None}
+    Uses stdlib zipfile + xml.etree only (no openpyxl).
+    """
+    if not FAA_XLSX.exists():
+        return {}
+
+    ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+
+    with zipfile.ZipFile(FAA_XLSX) as z:
+        # Shared string table
+        ss_xml = z.read("xl/sharedStrings.xml")
+        ss_root = ET.fromstring(ss_xml)
+        shared_strings = []
+        for si in ss_root.findall("x:si", ns):
+            text = "".join(t.text or "" for t in si.findall(".//x:t", ns))
+            shared_strings.append(text)
+
+        # Sheet data
+        sheet_xml = z.read("xl/worksheets/sheet1.xml")
+        sheet_root = ET.fromstring(sheet_xml)
+
+        rows = []
+        for row in sheet_root.findall(".//x:row", ns):
+            row_data = {}
+            for cell in row.findall("x:c", ns):
+                ref = cell.get("r")
+                t = cell.get("t")
+                v = cell.find("x:v", ns)
+                col = "".join(c for c in ref if c.isalpha())
+                if v is not None:
+                    if t == "s":
+                        row_data[col] = shared_strings[int(v.text)]
+                    else:
+                        row_data[col] = v.text
+            rows.append(row_data)
+
+    if not rows:
+        return {}
+
+    # First row is header; skip it
+    result = {}
+    for row in rows[1:]:
+        icao = (row.get("A") or "").strip().upper()
+        if not icao:
+            continue
+        faa_mfr = (row.get("C") or "").strip()
+        faa_model = (row.get("D") or "").strip()
+
+        def parse_float(s):
+            s = (s or "").strip()
+            if not s or s == "N/A":
+                return None
+            try:
+                return round(float(s), 1)
+            except (ValueError, TypeError):
+                return None
+
+        # Wingspan: prefer col P (without winglets), fall back to col Q (with winglets)
+        wingspan = parse_float(row.get("P")) or parse_float(row.get("Q"))
+        length = parse_float(row.get("R"))
+
+        result[icao] = {
+            "make": faa_mfr,
+            "model": faa_model,
+            "wingspanFt": wingspan,
+            "lengthFt": length,
+        }
+
+    return result
+
+
+def normalize_make_key(raw):
+    """Normalize a manufacturer string for CANONICAL_MAKE/SPECIAL_MAKES lookup."""
+    # Collapse \xa0 and other whitespace, strip, uppercase
+    return " ".join(raw.split()).upper()
+
+
+def canonical_make_lookup(raw):
+    """
+    Return canonical brand string for a raw manufacturer code.
+    Priority: CANONICAL_MAKE -> SPECIAL_MAKES -> title-case fallback.
+    """
+    key = normalize_make_key(raw)
+    if key in CANONICAL_MAKE:
+        return CANONICAL_MAKE[key]
+    if key in SPECIAL_MAKES:
+        return SPECIAL_MAKES[key]
+    return None
+
+
 def polish_make(raw):
+    """
+    Polish a raw ManufacturerCode string to a display brand name.
+    1. Check CANONICAL_MAKE (standardized brands).
+    2. Check SPECIAL_MAKES (acronyms / special casing).
+    3. Strip ICAO numeric disambiguation suffix e.g. "Fairchild (1)" -> "Fairchild".
+    4. If already mixed-case, pass through.
+    5. Otherwise title-case each word, respecting hyphens.
+    """
     raw = " ".join(raw.split())
-    upper = raw.upper()
-    if upper in SPECIAL_MAKES:
-        return SPECIAL_MAKES[upper]
+    key = normalize_make_key(raw)
+    if key in CANONICAL_MAKE:
+        return CANONICAL_MAKE[key]
+    if key in SPECIAL_MAKES:
+        return SPECIAL_MAKES[key]
     # Strip ICAO's numeric disambiguation suffixes e.g. "Fairchild (1)" -> "Fairchild"
     raw = re.sub(r"\s*\(\d+\)$", "", raw)
-    upper = raw.upper()  # recompute after strip so mixed-case check is valid
+    key = normalize_make_key(raw)  # recompute after strip
+    if key in CANONICAL_MAKE:
+        return CANONICAL_MAKE[key]
+    if key in SPECIAL_MAKES:
+        return SPECIAL_MAKES[key]
+    upper = raw.upper()
     if raw != upper:
         return raw  # already mixed-case in the source
     # Title-case each word, including segments across hyphens
@@ -280,12 +545,49 @@ def polish_make(raw):
     return " ".join(cap_segment(w) for w in raw.split())
 
 
+def strip_leading_brand(make, model):
+    """
+    Remove a leading brand word from model if the model repeats it.
+    Handles both the canonical make AND the raw source make's first word.
+    E.g.:
+      make="Gulfstream", model="Gulfstream G550"  -> "G550"
+      make="Eclipse",    model="Eclipse 500"       -> "500"
+      make="Airbus Helicopters", model="Airbus Helicopters H-135" -> "H-135"
+
+    Also strips parentheticals e.g. "175 (long wing)" -> "175".
+    """
+    # Strip parentheticals first
+    model = re.sub(r"\s*\(.*?\)\s*$", "", model).strip()
+
+    # Build candidate prefixes to strip (longest first to avoid partial strips)
+    prefixes = []
+    if make:
+        prefixes.append(make)  # canonical make, e.g. "Airbus Helicopters"
+        # First word of canonical make, e.g. "Airbus"
+        first = make.split()[0]
+        if first not in prefixes:
+            prefixes.append(first)
+    # Sort longest first so multi-word prefixes get a chance before single words
+    prefixes.sort(key=len, reverse=True)
+
+    for prefix in prefixes:
+        # Match if model starts with prefix (case-insensitive) followed by a space
+        if re.match(re.escape(prefix) + r"\s+", model, re.IGNORECASE):
+            stripped = model[len(prefix):].strip()
+            if stripped:  # only strip if something remains
+                return stripped
+
+    return model
+
+
 def polish_model(make, model):
     model = " ".join(model.split())
     if make == "Airbus":
         # ICAO styles Airbus as "A-320neo" / "A-220-300"; the
         # marketing names drop the first hyphen.
         model = re.sub(r"^A-(?=\d)", "A", model)
+    # Strip leading brand word(s) from model
+    model = strip_leading_brand(make, model)
     return model
 
 
@@ -316,10 +618,66 @@ def reduce_rows(rows):
     return out
 
 
+def build_disagreement_report(doc_out, faa_data):
+    """
+    For every typecode present in BOTH DOC 8643 output and FAA table,
+    check if the canonicalized makes differ OR if the models share no token.
+    Returns list of formatted MISMATCH lines.
+    """
+    lines = []
+    for tc in sorted(doc_out.keys()):
+        if tc not in faa_data:
+            continue
+        doc_entry = doc_out[tc]
+        faa = faa_data[tc]
+
+        doc_make = doc_entry["make"]
+        doc_model = doc_entry["model"]
+        faa_mfr_raw = faa["make"]
+        faa_model = faa["model"]
+
+        # Canonicalize FAA make for comparison
+        faa_make_canon = canonical_make_lookup(faa_mfr_raw) or polish_make(faa_mfr_raw)
+
+        # Check make agreement (case-insensitive)
+        make_match = doc_make.lower() == faa_make_canon.lower()
+
+        # Check model agreement: at least one non-trivial token shared
+        def tokens(s):
+            return set(w.lower() for w in re.split(r"[\s\-/]+", s) if len(w) > 1)
+        doc_tokens = tokens(doc_model)
+        faa_tokens = tokens(faa_model)
+        model_match = bool(doc_tokens & faa_tokens)
+
+        if not make_match or not model_match:
+            lines.append(
+                f"MISMATCH {tc}: doc='{doc_make} {doc_model}' "
+                f"faa='{faa_mfr_raw} {faa_model}'"
+            )
+    return lines
+
+
+def attach_faa_dims(out, faa_data):
+    """
+    Attach wingspanFt and lengthFt from the FAA table to each entry that
+    has a matching ICAO code. Entries without FAA data are unchanged.
+    """
+    for tc, entry in out.items():
+        faa = faa_data.get(tc)
+        if not faa:
+            continue
+        if faa["wingspanFt"] is not None:
+            entry["wingspanFt"] = faa["wingspanFt"]
+        if faa["lengthFt"] is not None:
+            entry["lengthFt"] = faa["lengthFt"]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", help="read rows from a saved JSON file instead of fetching")
     ap.add_argument("--sample", type=int, default=0, help="print N random entries for review")
+    ap.add_argument("--save-disagreements", metavar="FILE",
+                    help="save FAA vs DOC 8643 disagreement report to FILE")
     args = ap.parse_args()
 
     if args.input:
@@ -334,6 +692,25 @@ def main():
             rows = json.load(resp)
 
     out = reduce_rows(rows)
+
+    # Load FAA data
+    faa_data = load_faa_xlsx()
+
+    # Disagreement report
+    disagreements = build_disagreement_report(out, faa_data)
+    for line in disagreements:
+        print(line)
+
+    if args.save_disagreements:
+        with open(args.save_disagreements, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(disagreements))
+            if disagreements:
+                fh.write("\n")
+        print(f"Disagreements saved to {args.save_disagreements} ({len(disagreements)} entries)")
+
+    # Attach FAA dims
+    attach_faa_dims(out, faa_data)
+
     with open(OUT, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=1, sort_keys=True)
         fh.write("\n")

@@ -8,8 +8,10 @@
   "model": "AD Skyraider"
  },
  "A10": {
+  "lengthFt": 53.3,
   "make": "Fairchild",
-  "model": "A-10 Thunderbolt 2"
+  "model": "A-10 Thunderbolt 2",
+  "wingspanFt": 57.5
  },
  "A109": {
   "make": "Agusta",
@@ -24,8 +26,10 @@
   "model": "T-23 Uirapuru"
  },
  "A124": {
+  "lengthFt": 226.2,
   "make": "Antonov",
-  "model": "An-124 Ruslan"
+  "model": "An-124 Ruslan",
+  "wingspanFt": 240.5
  },
  "A129": {
   "make": "Agusta",
@@ -68,8 +72,10 @@
   "model": "A-19"
  },
  "A19N": {
+  "lengthFt": 111.0,
   "make": "Airbus",
-  "model": "A319neo"
+  "model": "A319neo",
+  "wingspanFt": 117.5
  },
  "A20": {
   "make": "Douglas",
@@ -80,8 +86,10 @@
   "model": "MAI-205"
  },
  "A20N": {
+  "lengthFt": 123.3,
   "make": "Airbus",
-  "model": "A320neo"
+  "model": "A320neo",
+  "wingspanFt": 117.5
  },
  "A21": {
   "make": "Aeropract",
@@ -96,8 +104,10 @@
   "model": "A-211"
  },
  "A21N": {
+  "lengthFt": 146.0,
   "make": "Airbus",
-  "model": "A321neo"
+  "model": "A321neo",
+  "wingspanFt": 117.5
  },
  "A22": {
   "make": "Sadler",
@@ -140,96 +150,134 @@
   "model": "A-3 Skywarrior"
  },
  "A306": {
+  "lengthFt": 177.4,
   "make": "Airbus",
-  "model": "A300B4-600"
+  "model": "A300B4-600",
+  "wingspanFt": 147.1
  },
  "A30B": {
+  "lengthFt": 175.5,
   "make": "Airbus",
-  "model": "A300B4-2"
+  "model": "A300B4-2",
+  "wingspanFt": 147.1
  },
  "A31": {
   "make": "Avantage",
   "model": "A-31 Spectrum"
  },
  "A310": {
+  "lengthFt": 153.2,
   "make": "Airbus",
-  "model": "A310"
+  "model": "A310",
+  "wingspanFt": 144.0
  },
  "A318": {
+  "lengthFt": 103.2,
   "make": "Airbus",
-  "model": "A318"
+  "model": "A318",
+  "wingspanFt": 111.9
  },
  "A319": {
+  "lengthFt": 111.0,
   "make": "Airbus",
-  "model": "A319"
+  "model": "A319",
+  "wingspanFt": 111.9
  },
  "A320": {
+  "lengthFt": 123.3,
   "make": "Airbus",
-  "model": "A320"
+  "model": "A320",
+  "wingspanFt": 111.9
  },
  "A321": {
+  "lengthFt": 146.0,
   "make": "Airbus",
-  "model": "A321"
+  "model": "A321",
+  "wingspanFt": 111.9
  },
  "A33": {
   "make": "Aeropract",
   "model": "A-33"
  },
  "A332": {
+  "lengthFt": 193.6,
   "make": "Airbus",
-  "model": "A330-200"
+  "model": "A330-200",
+  "wingspanFt": 197.8
  },
  "A333": {
+  "lengthFt": 209.0,
   "make": "Airbus",
-  "model": "A330-300"
+  "model": "A330-300",
+  "wingspanFt": 197.8
  },
  "A337": {
+  "lengthFt": 207.0,
   "make": "Airbus",
-  "model": "A330-700 Beluga XL"
+  "model": "A330-700 Beluga XL",
+  "wingspanFt": 197.8
  },
  "A338": {
+  "lengthFt": 193.0,
   "make": "Airbus",
-  "model": "A330-800"
+  "model": "A330-800",
+  "wingspanFt": 210.0
  },
  "A339": {
+  "lengthFt": 208.9,
   "make": "Airbus",
-  "model": "A330-900"
+  "model": "A330-900",
+  "wingspanFt": 210.0
  },
  "A342": {
+  "lengthFt": 195.0,
   "make": "Airbus",
-  "model": "A340-200"
+  "model": "A340-200",
+  "wingspanFt": 197.8
  },
  "A343": {
+  "lengthFt": 209.0,
   "make": "Airbus",
-  "model": "A340-300"
+  "model": "A340-300",
+  "wingspanFt": 197.8
  },
  "A345": {
+  "lengthFt": 222.9,
   "make": "Airbus",
-  "model": "A340-500"
+  "model": "A340-500",
+  "wingspanFt": 208.2
  },
  "A346": {
+  "lengthFt": 247.2,
   "make": "Airbus",
-  "model": "A340-600"
+  "model": "A340-600",
+  "wingspanFt": 208.2
  },
  "A35": {
   "make": "Avantage",
   "model": "A-35 Scanner"
  },
  "A359": {
+  "lengthFt": 218.5,
   "make": "Airbus",
-  "model": "A350-900"
+  "model": "A350-900",
+  "wingspanFt": 212.4
  },
  "A35K": {
+  "lengthFt": 241.4,
   "make": "Airbus",
-  "model": "A350-1000"
+  "model": "A350-1000",
+  "wingspanFt": 212.4
  },
  "A37": {
   "make": "Cessna",
   "model": "318D Dragonfly"
  },
  "A388": {
+  "lengthFt": 238.6,
   "make": "Airbus",
-  "model": "A380-800"
+  "model": "A380-800",
+  "wingspanFt": 261.7
  },
  "A3ST": {
   "make": "Airbus",
@@ -240,16 +288,20 @@
   "model": "A-4 Skyhawk"
  },
  "A400": {
+  "lengthFt": 148.0,
   "make": "Airbus",
-  "model": "A400M Atlas"
+  "model": "A400M Atlas",
+  "wingspanFt": 139.1
  },
  "A411": {
   "make": "Oskbes-Mai",
   "model": "MAI-411"
  },
  "A5": {
+  "lengthFt": 23.0,
   "make": "Icon",
-  "model": "A-5"
+  "model": "A-5",
+  "wingspanFt": 34.8
  },
  "A50": {
   "make": "Beriev",
@@ -292,7 +344,7 @@
   "model": "MAI-890"
  },
  "A9": {
-  "make": "North American Rockwell",
+  "make": "Rockwell",
   "model": "A-9 Quail Commander"
  },
  "A900": {
@@ -304,16 +356,20 @@
   "model": "MAI-910"
  },
  "AA1": {
+  "lengthFt": 19.3,
   "make": "Grumman American",
-  "model": "AA-1 Tr2"
+  "model": "AA-1 Tr2",
+  "wingspanFt": 24.4
  },
  "AA37": {
   "make": "Aeropract",
   "model": "A-37"
  },
  "AA5": {
+  "lengthFt": 22.0,
   "make": "Grumman American",
-  "model": "AA-5 Tiger"
+  "model": "AA-5 Tiger",
+  "wingspanFt": 31.4
  },
  "AAT3": {
   "make": "Aero",
@@ -344,8 +400,10 @@
   "model": "ArrowCopter"
  },
  "AC11": {
+  "lengthFt": 24.9,
   "make": "Rockwell",
-  "model": "112 Commander 112"
+  "model": "112 Commander 112",
+  "wingspanFt": 32.8
  },
  "AC31": {
   "make": "Avicopter",
@@ -360,44 +418,58 @@
   "model": "AC-4"
  },
  "AC50": {
-  "make": "North American Rockwell",
-  "model": "500 Commander 500"
+  "lengthFt": 36.8,
+  "make": "Rockwell",
+  "model": "500 Commander 500",
+  "wingspanFt": 49.0
  },
  "AC52": {
   "make": "Aero",
   "model": "Commander 520"
  },
  "AC56": {
+  "lengthFt": 36.8,
   "make": "Aero",
-  "model": "Commander 560"
+  "model": "Commander 560",
+  "wingspanFt": 49.0
  },
  "AC5A": {
   "make": "Nanjing",
   "model": "AC-500 Aircar"
  },
  "AC68": {
+  "lengthFt": 35.1,
   "make": "Aero",
-  "model": "Commander 680E"
+  "model": "Commander 680E",
+  "wingspanFt": 49.5
  },
  "AC6L": {
-  "make": "North American Rockwell",
-  "model": "685 Commander 685"
+  "lengthFt": 43.0,
+  "make": "Rockwell",
+  "model": "685 Commander 685",
+  "wingspanFt": 44.1
  },
  "AC72": {
   "make": "Aero",
   "model": "Commander 720 Alti Cruiser"
  },
  "AC80": {
-  "make": "North American Rockwell",
-  "model": "681 Hawk Commander"
+  "lengthFt": 41.5,
+  "make": "Rockwell",
+  "model": "681 Hawk Commander",
+  "wingspanFt": 46.7
  },
  "AC90": {
-  "make": "Gulfstream Aerospace",
-  "model": "690 Jetprop Commander 840"
+  "lengthFt": 44.4,
+  "make": "Gulfstream",
+  "model": "690 Jetprop Commander 840",
+  "wingspanFt": 52.1
  },
  "AC95": {
-  "make": "Gulfstream Aerospace",
-  "model": "695 Jetprop Commander 980"
+  "lengthFt": 43.0,
+  "make": "Gulfstream",
+  "model": "695 Jetprop Commander 980",
+  "wingspanFt": 52.1
  },
  "ACAM": {
   "make": "Leza-Lockwood",
@@ -456,8 +528,10 @@
   "model": "K Scout"
  },
  "AEST": {
+  "lengthFt": 34.8,
   "make": "Aerostar",
-  "model": "600"
+  "model": "600",
+  "wingspanFt": 36.7
  },
  "AFOX": {
   "make": "Halley",
@@ -580,8 +654,10 @@
   "model": "A-1"
  },
  "AN12": {
+  "lengthFt": 111.6,
   "make": "Antonov",
-  "model": "An-12"
+  "model": "An-12",
+  "wingspanFt": 124.8
  },
  "AN2": {
   "make": "Aicsa",
@@ -624,8 +700,10 @@
   "model": "An-70"
  },
  "AN72": {
+  "lengthFt": 92.1,
   "make": "Antonov",
-  "model": "An-72"
+  "model": "An-72",
+  "wingspanFt": 104.6
  },
  "AN8": {
   "make": "Antonov",
@@ -700,8 +778,10 @@
   "model": "AR-1 American Ranger 1"
  },
  "AR11": {
+  "lengthFt": 20.8,
   "make": "Aeronca",
-  "model": "11 Chief"
+  "model": "11 Chief",
+  "wingspanFt": 36.0
  },
  "AR15": {
   "make": "Aeronca",
@@ -732,7 +812,7 @@
   "model": "ARV-1 Super 2"
  },
  "ARVA": {
-  "make": "Iai",
+  "make": "IAI",
   "model": "101 Arava"
  },
  "ARWF": {
@@ -768,7 +848,7 @@
   "model": "H-125 Fennec"
  },
  "AS55": {
-  "make": "Eurocopter",
+  "make": "Airbus Helicopters",
   "model": "AS-555 Fennec"
  },
  "AS65": {
@@ -785,23 +865,25 @@
  },
  "ASO4": {
   "make": "Asso Aerei",
-  "model": "Asso 4 Whisky"
+  "model": "4 Whisky"
  },
  "ASO5": {
   "make": "Asso Aerei",
-  "model": "Asso 5 Champion"
+  "model": "5 Champion"
  },
  "ASOX": {
   "make": "Asso Aerei",
-  "model": "Asso 10 Jewel"
+  "model": "10 Jewel"
  },
  "ASTO": {
   "make": "Tecnam",
   "model": "Astore"
  },
  "ASTR": {
-  "make": "Iai",
-  "model": "1125 Astra"
+  "lengthFt": 55.6,
+  "make": "IAI",
+  "model": "1125 Astra",
+  "wingspanFt": 52.7
  },
  "AT1": {
   "make": "Antoniewski",
@@ -820,56 +902,80 @@
   "model": "AT-300"
  },
  "AT3T": {
+  "lengthFt": 30.6,
   "make": "Air Tractor",
-  "model": "AT-302"
+  "model": "AT-302",
+  "wingspanFt": 51.1
  },
  "AT43": {
+  "lengthFt": 74.4,
   "make": "ATR",
-  "model": "ATR-42-300"
+  "model": "ATR-42-300",
+  "wingspanFt": 80.7
  },
  "AT44": {
+  "lengthFt": 74.4,
   "make": "ATR",
-  "model": "ATR-42-400"
+  "model": "ATR-42-400",
+  "wingspanFt": 80.7
  },
  "AT45": {
+  "lengthFt": 74.4,
   "make": "ATR",
-  "model": "ATR-42-500"
+  "model": "ATR-42-500",
+  "wingspanFt": 80.7
  },
  "AT46": {
+  "lengthFt": 74.4,
   "make": "ATR",
-  "model": "ATR-42-600"
+  "model": "ATR-42-600",
+  "wingspanFt": 80.7
  },
  "AT5P": {
   "make": "Air Tractor",
   "model": "AT-501"
  },
  "AT5T": {
+  "lengthFt": 27.0,
   "make": "Air Tractor",
-  "model": "AT-502"
+  "model": "AT-502",
+  "wingspanFt": 52.0
  },
  "AT6T": {
+  "lengthFt": 33.5,
   "make": "Air Tractor",
-  "model": "AT-602"
+  "model": "AT-602",
+  "wingspanFt": 56.0
  },
  "AT72": {
+  "lengthFt": 89.1,
   "make": "ATR",
-  "model": "ATR-72-201"
+  "model": "ATR-72-201",
+  "wingspanFt": 88.8
  },
  "AT73": {
+  "lengthFt": 89.1,
   "make": "ATR",
-  "model": "ATR-72-211"
+  "model": "ATR-72-211",
+  "wingspanFt": 88.7
  },
  "AT75": {
+  "lengthFt": 89.1,
   "make": "ATR",
-  "model": "ATR-72-500"
+  "model": "ATR-72-500",
+  "wingspanFt": 80.6
  },
  "AT76": {
+  "lengthFt": 89.1,
   "make": "ATR",
-  "model": "ATR-72-600"
+  "model": "ATR-72-600",
+  "wingspanFt": 88.7
  },
  "AT8T": {
+  "lengthFt": 37.5,
   "make": "Air Tractor",
-  "model": "AT-802"
+  "model": "AT-802",
+  "wingspanFt": 59.3
  },
  "ATAC": {
   "make": "Aircraft Technologies",
@@ -1000,16 +1106,22 @@
   "model": "B-17 Flying Fortress"
  },
  "B18T": {
+  "lengthFt": 44.3,
   "make": "Hamilton",
-  "model": "Westwind 2"
+  "model": "Westwind 2",
+  "wingspanFt": 46.0
  },
  "B190": {
-  "make": "Beech",
-  "model": "1900"
+  "lengthFt": 57.7,
+  "make": "Beechcraft",
+  "model": "1900",
+  "wingspanFt": 58.0
  },
  "B2": {
+  "lengthFt": 69.0,
   "make": "Northrop Grumman",
-  "model": "B-2 Spirit"
+  "model": "B-2 Spirit",
+  "wingspanFt": 172.0
  },
  "B209": {
   "make": "Bolkow",
@@ -1068,28 +1180,38 @@
   "model": "305"
  },
  "B350": {
+  "lengthFt": 46.7,
   "make": "Hawker Beechcraft",
-  "model": "DT-05"
+  "model": "DT-05",
+  "wingspanFt": 57.9
  },
  "B360": {
   "make": "Yakovlev Aircraft",
   "model": "Bear 360"
  },
  "B36T": {
+  "lengthFt": 29.2,
   "make": "Allison",
-  "model": "36 Turbine Bonanza"
+  "model": "36 Turbine Bonanza",
+  "wingspanFt": 33.5
  },
  "B37M": {
+  "lengthFt": 116.7,
   "make": "Boeing",
-  "model": "737 MAX 7"
+  "model": "737 MAX 7",
+  "wingspanFt": 117.8
  },
  "B38M": {
+  "lengthFt": 129.7,
   "make": "Boeing",
-  "model": "737 MAX 8"
+  "model": "737 MAX 8",
+  "wingspanFt": 117.8
  },
  "B39M": {
+  "lengthFt": 138.3,
   "make": "Boeing",
-  "model": "737 MAX 9"
+  "model": "737 MAX 9",
+  "wingspanFt": 117.8
  },
  "B3XM": {
   "make": "Boeing",
@@ -1116,12 +1238,16 @@
   "model": "430"
  },
  "B461": {
+  "lengthFt": 85.9,
   "make": "British Aerospace",
-  "model": "BAe-146-100"
+  "model": "BAe-146-100",
+  "wingspanFt": 86.4
  },
  "B462": {
+  "lengthFt": 93.7,
   "make": "British Aerospace",
-  "model": "BAe-146-200"
+  "model": "BAe-146-200",
+  "wingspanFt": 86.4
  },
  "B463": {
   "make": "British Aerospace",
@@ -1144,15 +1270,17 @@
   "model": "505 Jet Ranger X"
  },
  "B52": {
+  "lengthFt": 160.9,
   "make": "Boeing",
-  "model": "B-52 Stratofortress"
+  "model": "B-52 Stratofortress",
+  "wingspanFt": 185.0
  },
  "B525": {
   "make": "Bell",
   "model": "525 Relentless"
  },
  "B58T": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "58TC Baron"
  },
  "B60": {
@@ -1164,7 +1292,7 @@
   "model": "AW-609"
  },
  "B60T": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "60 Royal Turbine Duke"
  },
  "B701": {
@@ -1172,76 +1300,110 @@
   "model": "707-100"
  },
  "B703": {
+  "lengthFt": 152.9,
   "make": "Boeing",
-  "model": "C-18"
+  "model": "C-18",
+  "wingspanFt": 145.8
  },
  "B712": {
+  "lengthFt": 124.0,
   "make": "Boeing",
-  "model": "717-200"
+  "model": "717-200",
+  "wingspanFt": 93.3
  },
  "B720": {
   "make": "Boeing",
   "model": "720"
  },
  "B721": {
+  "lengthFt": 133.2,
   "make": "Boeing",
-  "model": "727-100"
+  "model": "727-100",
+  "wingspanFt": 108.0
  },
  "B722": {
+  "lengthFt": 153.2,
   "make": "Boeing",
-  "model": "727-200"
+  "model": "727-200",
+  "wingspanFt": 108.0
  },
  "B732": {
+  "lengthFt": 100.2,
   "make": "Boeing",
-  "model": "737-200"
+  "model": "737-200",
+  "wingspanFt": 93.0
  },
  "B733": {
+  "lengthFt": 109.6,
   "make": "Boeing",
-  "model": "737-300"
+  "model": "737-300",
+  "wingspanFt": 94.8
  },
  "B734": {
+  "lengthFt": 119.6,
   "make": "Boeing",
-  "model": "737-400"
+  "model": "737-400",
+  "wingspanFt": 94.8
  },
  "B735": {
+  "lengthFt": 101.8,
   "make": "Boeing",
-  "model": "737-500"
+  "model": "737-500",
+  "wingspanFt": 94.8
  },
  "B736": {
+  "lengthFt": 102.5,
   "make": "Boeing",
-  "model": "737-600"
+  "model": "737-600",
+  "wingspanFt": 112.6
  },
  "B737": {
+  "lengthFt": 110.3,
   "make": "Boeing",
-  "model": "737-700"
+  "model": "737-700",
+  "wingspanFt": 112.6
  },
  "B738": {
+  "lengthFt": 129.5,
   "make": "Boeing",
-  "model": "737-800"
+  "model": "737-800",
+  "wingspanFt": 112.6
  },
  "B739": {
+  "lengthFt": 138.2,
   "make": "Boeing",
-  "model": "737-900"
+  "model": "737-900",
+  "wingspanFt": 112.6
  },
  "B741": {
+  "lengthFt": 231.8,
   "make": "Boeing",
-  "model": "747-100"
+  "model": "747-100",
+  "wingspanFt": 195.7
  },
  "B742": {
+  "lengthFt": 231.8,
   "make": "Boeing",
-  "model": "747-200"
+  "model": "747-200",
+  "wingspanFt": 195.7
  },
  "B743": {
+  "lengthFt": 231.8,
   "make": "Boeing",
-  "model": "747-300"
+  "model": "747-300",
+  "wingspanFt": 195.7
  },
  "B744": {
+  "lengthFt": 231.9,
   "make": "Boeing",
-  "model": "747-400"
+  "model": "747-400",
+  "wingspanFt": 195.7
  },
  "B748": {
+  "lengthFt": 250.2,
   "make": "Boeing",
-  "model": "747-8"
+  "model": "747-8",
+  "wingspanFt": 224.4
  },
  "B74R": {
   "make": "Boeing",
@@ -1252,64 +1414,94 @@
   "model": "747SP"
  },
  "B752": {
+  "lengthFt": 155.3,
   "make": "Boeing",
-  "model": "757-200"
+  "model": "757-200",
+  "wingspanFt": 124.8
  },
  "B753": {
+  "lengthFt": 178.6,
   "make": "Boeing",
-  "model": "757-300"
+  "model": "757-300",
+  "wingspanFt": 124.8
  },
  "B762": {
+  "lengthFt": 159.2,
   "make": "Boeing",
-  "model": "767-200"
+  "model": "767-200",
+  "wingspanFt": 156.1
  },
  "B763": {
+  "lengthFt": 180.3,
   "make": "Boeing",
-  "model": "767-300"
+  "model": "767-300",
+  "wingspanFt": 156.1
  },
  "B764": {
+  "lengthFt": 201.3,
   "make": "Boeing",
-  "model": "767-400"
+  "model": "767-400",
+  "wingspanFt": 170.3
  },
  "B772": {
+  "lengthFt": 209.1,
   "make": "Boeing",
-  "model": "777-200"
+  "model": "777-200",
+  "wingspanFt": 199.9
  },
  "B773": {
+  "lengthFt": 209.1,
   "make": "Boeing",
-  "model": "777-300"
+  "model": "777-300",
+  "wingspanFt": 199.9
  },
  "B778": {
+  "lengthFt": 229.0,
   "make": "Boeing",
-  "model": "777-8"
+  "model": "777-8",
+  "wingspanFt": 235.4
  },
  "B779": {
+  "lengthFt": 251.8,
   "make": "Boeing",
-  "model": "777-9"
+  "model": "777-9",
+  "wingspanFt": 235.4
  },
  "B77L": {
+  "lengthFt": 209.1,
   "make": "Boeing",
-  "model": "777-200LR"
+  "model": "777-200LR",
+  "wingspanFt": 212.1
  },
  "B77W": {
+  "lengthFt": 242.3,
   "make": "Boeing",
-  "model": "777-300ER"
+  "model": "777-300ER",
+  "wingspanFt": 212.6
  },
  "B788": {
+  "lengthFt": 186.1,
   "make": "Boeing",
-  "model": "787-8 Dreamliner"
+  "model": "787-8 Dreamliner",
+  "wingspanFt": 197.3
  },
  "B789": {
+  "lengthFt": 206.1,
   "make": "Boeing",
-  "model": "787-9 Dreamliner"
+  "model": "787-9 Dreamliner",
+  "wingspanFt": 197.3
  },
  "B78X": {
+  "lengthFt": 224.1,
   "make": "Boeing",
-  "model": "787-10 Dreamliner"
+  "model": "787-10 Dreamliner",
+  "wingspanFt": 197.3
  },
  "BA11": {
+  "lengthFt": 93.5,
   "make": "Bac",
-  "model": "111 One-Eleven"
+  "model": "111 One-Eleven",
+  "wingspanFt": 88.5
  },
  "BABY": {
   "make": "Canadian Home Rotors",
@@ -1344,12 +1536,16 @@
   "model": "Bearhawk Companion"
  },
  "BCS1": {
+  "lengthFt": 114.8,
   "make": "Airbus",
-  "model": "A220-100"
+  "model": "A220-100",
+  "wingspanFt": 115.1
  },
  "BCS3": {
+  "lengthFt": 127.0,
   "make": "Airbus",
-  "model": "A220-300"
+  "model": "A220-300",
+  "wingspanFt": 115.1
  },
  "BD10": {
   "make": "Peregrine",
@@ -1380,128 +1576,176 @@
   "model": "Sk61"
  },
  "BE10": {
-  "make": "Beech",
-  "model": "U-21F Ute"
+  "lengthFt": 39.9,
+  "make": "Beechcraft",
+  "model": "U-21F Ute",
+  "wingspanFt": 45.9
  },
  "BE12": {
   "make": "Beriev",
   "model": "Be-12 Tchaika"
  },
  "BE17": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "17 Staggerwing"
  },
  "BE18": {
-  "make": "Beech",
-  "model": "18 (piston)"
+  "lengthFt": 35.3,
+  "make": "Beechcraft",
+  "model": "18",
+  "wingspanFt": 49.7
  },
  "BE19": {
-  "make": "Beech",
-  "model": "19 Sport"
+  "lengthFt": 25.7,
+  "make": "Beechcraft",
+  "model": "19 Sport",
+  "wingspanFt": 32.8
  },
  "BE20": {
+  "lengthFt": 43.8,
   "make": "Beechcraft",
-  "model": "200 Super King Air"
+  "model": "200 Super King Air",
+  "wingspanFt": 54.5
  },
  "BE22": {
   "make": "Beechcraft",
   "model": "220 Denali"
  },
  "BE23": {
-  "make": "Beech",
-  "model": "23 Musketeer"
+  "lengthFt": 25.7,
+  "make": "Beechcraft",
+  "model": "23 Musketeer",
+  "wingspanFt": 32.8
  },
  "BE24": {
-  "make": "Beech",
-  "model": "24 Sierra"
+  "lengthFt": 25.7,
+  "make": "Beechcraft",
+  "model": "24 Sierra",
+  "wingspanFt": 32.8
  },
  "BE30": {
-  "make": "Beech",
-  "model": "300 Super King Air"
+  "lengthFt": 46.7,
+  "make": "Beechcraft",
+  "model": "300 Super King Air",
+  "wingspanFt": 57.9
  },
  "BE32": {
   "make": "Beriev",
   "model": "Be-30"
  },
  "BE33": {
-  "make": "Beech",
-  "model": "E-24"
+  "lengthFt": 26.7,
+  "make": "Beechcraft",
+  "model": "E-24",
+  "wingspanFt": 33.5
  },
  "BE35": {
-  "make": "Beech",
-  "model": "35 Bonanza"
+  "lengthFt": 25.2,
+  "make": "Beechcraft",
+  "model": "35 Bonanza",
+  "wingspanFt": 35.5
  },
  "BE36": {
-  "make": "Beech",
-  "model": "36 Bonanza 36"
+  "lengthFt": 27.5,
+  "make": "Beechcraft",
+  "model": "36 Bonanza 36",
+  "wingspanFt": 33.5
  },
  "BE40": {
-  "make": "Beech",
-  "model": "T-400"
+  "lengthFt": 48.4,
+  "make": "Beechcraft",
+  "model": "T-400",
+  "wingspanFt": 43.5
  },
  "BE4W": {
-  "make": "Raytheon",
+  "make": "Beechcraft",
   "model": "Hawker 400XT"
  },
  "BE50": {
-  "make": "Beech",
-  "model": "RU-8 Seminole"
+  "lengthFt": 31.5,
+  "make": "Beechcraft",
+  "model": "RU-8 Seminole",
+  "wingspanFt": 45.3
  },
  "BE55": {
-  "make": "Beech",
-  "model": "55 Baron"
+  "lengthFt": 28.0,
+  "make": "Beechcraft",
+  "model": "55 Baron",
+  "wingspanFt": 37.8
  },
  "BE56": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "56 Turbo Baron"
  },
  "BE58": {
+  "lengthFt": 29.8,
   "make": "Beechcraft",
-  "model": "58 Baron"
+  "model": "58 Baron",
+  "wingspanFt": 37.8
  },
  "BE60": {
-  "make": "Beech",
-  "model": "60 Duke"
+  "lengthFt": 33.8,
+  "make": "Beechcraft",
+  "model": "60 Duke",
+  "wingspanFt": 39.3
  },
  "BE65": {
-  "make": "Beech",
-  "model": "65 Queen Air"
+  "lengthFt": 35.5,
+  "make": "Beechcraft",
+  "model": "65 Queen Air",
+  "wingspanFt": 45.9
  },
  "BE70": {
-  "make": "Beech",
-  "model": "70 Queen Air"
+  "lengthFt": 35.5,
+  "make": "Beechcraft",
+  "model": "70 Queen Air",
+  "wingspanFt": 50.3
  },
  "BE76": {
-  "make": "Beech",
-  "model": "76 Duchess"
+  "lengthFt": 29.0,
+  "make": "Beechcraft",
+  "model": "76 Duchess",
+  "wingspanFt": 38.0
  },
  "BE77": {
-  "make": "Beech",
-  "model": "77 Skipper"
+  "lengthFt": 24.0,
+  "make": "Beechcraft",
+  "model": "77 Skipper",
+  "wingspanFt": 30.0
  },
  "BE80": {
-  "make": "Beech",
-  "model": "80 Zamir"
+  "lengthFt": 35.5,
+  "make": "Beechcraft",
+  "model": "80 Zamir",
+  "wingspanFt": 50.3
  },
  "BE88": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "88 Queen Air"
  },
  "BE95": {
-  "make": "Beech",
-  "model": "95 Travel Air"
+  "lengthFt": 25.9,
+  "make": "Beechcraft",
+  "model": "95 Travel Air",
+  "wingspanFt": 37.8
  },
  "BE99": {
-  "make": "Beech",
-  "model": "99 Airliner"
+  "lengthFt": 44.6,
+  "make": "Beechcraft",
+  "model": "99 Airliner",
+  "wingspanFt": 45.9
  },
  "BE9L": {
+  "lengthFt": 35.5,
   "make": "Beechcraft",
-  "model": "90 King Air"
+  "model": "90 King Air",
+  "wingspanFt": 50.3
  },
  "BE9T": {
-  "make": "Beech",
-  "model": "90 (F90) King Air"
+  "lengthFt": 35.5,
+  "make": "Beechcraft",
+  "model": "90 (F90) King Air",
+  "wingspanFt": 54.5
  },
  "BEA5": {
   "make": "Avipro",
@@ -1568,24 +1812,30 @@
   "model": "11"
  },
  "BL17": {
+  "lengthFt": 26.3,
   "make": "Bellanca",
-  "model": "17 Viking"
+  "model": "17 Viking",
+  "wingspanFt": 34.2
  },
  "BL19": {
   "make": "Aviabellanca",
   "model": "19 Skyrocket"
  },
  "BL8": {
+  "lengthFt": 23.0,
   "make": "American Champion",
-  "model": "8 Scout"
+  "model": "8 Scout",
+  "wingspanFt": 36.2
  },
  "BLBU": {
   "make": "Ameur",
   "model": "Altania"
  },
  "BLCF": {
+  "lengthFt": 235.2,
   "make": "Boeing",
-  "model": "747-400LCF Dreamlifter"
+  "model": "747-400LCF Dreamlifter",
+  "wingspanFt": 213.0
  },
  "BLEN": {
   "make": "Bristol",
@@ -1692,8 +1942,10 @@
   "model": "Black Swan"
  },
  "BT36": {
-  "make": "Beech",
-  "model": "A36TC Bonanza"
+  "lengthFt": 27.5,
+  "make": "Beechcraft",
+  "model": "A36TC Bonanza",
+  "wingspanFt": 37.8
  },
  "BT7": {
   "make": "Boeing",
@@ -1757,15 +2009,15 @@
  },
  "C04T": {
   "make": "Cessna",
-  "model": "404 (turbine)"
+  "model": "404"
  },
  "C06T": {
   "make": "Cessna",
-  "model": "206 (turbine)"
+  "model": "206"
  },
  "C07T": {
   "make": "Cessna",
-  "model": "207 (turbine)"
+  "model": "207"
  },
  "C1": {
   "make": "Kawasaki",
@@ -1784,24 +2036,30 @@
   "model": "R4Q Flying Boxcar"
  },
  "C120": {
+  "lengthFt": 21.5,
   "make": "Cessna",
-  "model": "120"
+  "model": "120",
+  "wingspanFt": 33.3
  },
  "C123": {
   "make": "Fairchild",
   "model": "C-123 Provider"
  },
  "C130": {
+  "lengthFt": 97.8,
   "make": "Lockheed",
-  "model": "EC-130 Aya"
+  "model": "EC-130 Aya",
+  "wingspanFt": 132.6
  },
  "C135": {
   "make": "Boeing",
   "model": "NC-135"
  },
  "C140": {
+  "lengthFt": 21.5,
   "make": "Cessna",
-  "model": "140"
+  "model": "140",
+  "wingspanFt": 33.3
  },
  "C14T": {
   "make": "Aji",
@@ -1812,64 +2070,92 @@
   "model": "YC-15"
  },
  "C150": {
+  "lengthFt": 23.9,
   "make": "Cessna",
-  "model": "150"
+  "model": "150",
+  "wingspanFt": 33.2
  },
  "C152": {
+  "lengthFt": 24.1,
   "make": "Cessna",
-  "model": "152"
+  "model": "152",
+  "wingspanFt": 33.2
  },
  "C160": {
+  "lengthFt": 106.3,
   "make": "Transall",
-  "model": "C-160"
+  "model": "C-160",
+  "wingspanFt": 131.2
  },
  "C162": {
+  "lengthFt": 22.8,
   "make": "Cessna",
-  "model": "162 Skycatcher"
+  "model": "162 Skycatcher",
+  "wingspanFt": 30.0
  },
  "C17": {
+  "lengthFt": 174.0,
   "make": "Boeing",
-  "model": "C-17 Globemaster 3"
+  "model": "C-17 Globemaster 3",
+  "wingspanFt": 169.8
  },
  "C170": {
+  "lengthFt": 25.0,
   "make": "Cessna",
-  "model": "170"
+  "model": "170",
+  "wingspanFt": 36.0
  },
  "C172": {
+  "lengthFt": 27.2,
   "make": "Cessna",
-  "model": "172"
+  "model": "172",
+  "wingspanFt": 36.1
  },
  "C175": {
+  "lengthFt": 25.0,
   "make": "Cessna",
-  "model": "175"
+  "model": "175",
+  "wingspanFt": 36.2
  },
  "C177": {
+  "lengthFt": 27.3,
   "make": "Cessna",
-  "model": "177"
+  "model": "177",
+  "wingspanFt": 35.5
  },
  "C180": {
+  "lengthFt": 25.6,
   "make": "Cessna",
-  "model": "180"
+  "model": "180",
+  "wingspanFt": 35.8
  },
  "C182": {
+  "lengthFt": 29.0,
   "make": "Cessna",
-  "model": "182 Skylane"
+  "model": "182 Skylane",
+  "wingspanFt": 36.0
  },
  "C185": {
+  "lengthFt": 25.6,
   "make": "Cessna",
-  "model": "U-17A"
+  "model": "U-17A",
+  "wingspanFt": 35.8
  },
  "C188": {
+  "lengthFt": 26.3,
   "make": "Cessna",
-  "model": "188 AgWagon"
+  "model": "188 AgWagon",
+  "wingspanFt": 41.7
  },
  "C190": {
   "make": "Cessna",
   "model": "190"
  },
  "C195": {
+  "lengthFt": 27.3,
   "make": "Cessna",
-  "model": "195"
+  "model": "195",
+  "wingspanFt": 36.2
  },
  "C2": {
   "make": "Grumman",
@@ -1880,24 +2166,34 @@
   "model": "205"
  },
  "C206": {
+  "lengthFt": 28.3,
   "make": "Cessna",
-  "model": "206 Stationair"
+  "model": "206 Stationair",
+  "wingspanFt": 36.0
  },
  "C207": {
+  "lengthFt": 31.5,
   "make": "Cessna",
-  "model": "207 Skywagon 207"
+  "model": "207 Skywagon 207",
+  "wingspanFt": 36.1
  },
  "C208": {
+  "lengthFt": 37.6,
   "make": "Cessna",
-  "model": "208 Caravan"
+  "model": "208 Caravan",
+  "wingspanFt": 52.1
  },
  "C210": {
+  "lengthFt": 28.2,
   "make": "Cessna",
-  "model": "210"
+  "model": "210",
+  "wingspanFt": 36.8
  },
  "C212": {
+  "lengthFt": 53.0,
   "make": "CASA",
-  "model": "C-212 Aviocar"
+  "model": "C-212 Aviocar",
+  "wingspanFt": 62.3
  },
  "C21T": {
   "make": "Riley",
@@ -1908,24 +2204,34 @@
   "model": "C-22J Ventura"
  },
  "C240": {
+  "lengthFt": 25.2,
   "make": "Cessna",
-  "model": "T240 TTx"
+  "model": "T240 TTx",
+  "wingspanFt": 36.1
  },
  "C25A": {
+  "lengthFt": 47.7,
   "make": "Cessna",
-  "model": "525A Citation CJ2"
+  "model": "525A Citation CJ2",
+  "wingspanFt": 49.8
  },
  "C25B": {
+  "lengthFt": 51.2,
   "make": "Cessna",
-  "model": "525B Citation CJ3"
+  "model": "525B Citation CJ3",
+  "wingspanFt": 53.3
  },
  "C25C": {
+  "lengthFt": 53.3,
   "make": "Cessna",
-  "model": "525C Citation CJ4"
+  "model": "525C Citation CJ4",
+  "wingspanFt": 50.8
  },
  "C25M": {
+  "lengthFt": 42.6,
   "make": "Cessna",
-  "model": "525 Citation M2"
+  "model": "525 Citation M2",
+  "wingspanFt": 47.3
  },
  "C270": {
   "make": "Caudron",
@@ -1940,8 +2246,10 @@
   "model": "T-21"
  },
  "C303": {
+  "lengthFt": 30.4,
   "make": "Aviones Colombia",
-  "model": "T303"
+  "model": "T303",
+  "wingspanFt": 39.0
  },
  "C306": {
   "make": "Cea-Ufmg",
@@ -1952,24 +2260,32 @@
   "model": "CEA-309 Mehari"
  },
  "C30J": {
+  "lengthFt": 112.8,
   "make": "Lockheed Martin",
-  "model": "AC-130J Ghostrider"
+  "model": "AC-130J Ghostrider",
+  "wingspanFt": 132.6
  },
  "C310": {
-  "make": "Riley",
-  "model": "65"
+  "lengthFt": 32.0,
+  "make": "Cessna",
+  "model": "310",
+  "wingspanFt": 36.9
  },
  "C311": {
   "make": "Cea-Ufmg",
   "model": "CEA-311 Anequim"
  },
  "C320": {
+  "lengthFt": 32.0,
   "make": "Cessna",
-  "model": "320 Skyknight"
+  "model": "320 Skyknight",
+  "wingspanFt": 36.9
  },
  "C335": {
+  "lengthFt": 34.3,
   "make": "Cessna",
-  "model": "335"
+  "model": "335",
+  "wingspanFt": 38.1
  },
  "C336": {
   "make": "Cessna",
@@ -1980,20 +2296,26 @@
   "model": "337 Super Skymaster"
  },
  "C340": {
+  "lengthFt": 43.3,
   "make": "Riley",
-  "model": "Super 340"
+  "model": "Super 340",
+  "wingspanFt": 38.1
  },
  "C365": {
   "make": "Ekw",
   "model": "C-3605"
  },
  "C402": {
+  "lengthFt": 36.4,
   "make": "Cessna",
-  "model": "402"
+  "model": "402",
+  "wingspanFt": 44.2
  },
  "C404": {
+  "lengthFt": 39.5,
   "make": "Cessna",
-  "model": "404 Titan"
+  "model": "404 Titan",
+  "wingspanFt": 46.3
  },
  "C408": {
   "make": "Cessna",
@@ -2004,104 +2326,146 @@
   "model": "411"
  },
  "C414": {
+  "lengthFt": 36.4,
   "make": "Cessna",
-  "model": "414"
+  "model": "414",
+  "wingspanFt": 44.2
  },
  "C42": {
   "make": "Ikarus",
   "model": "C-42"
  },
  "C421": {
+  "lengthFt": 36.4,
   "make": "Cessna",
-  "model": "421"
+  "model": "421",
+  "wingspanFt": 44.2
  },
  "C425": {
+  "lengthFt": 35.8,
   "make": "Cessna",
-  "model": "425 Corsair"
+  "model": "425 Corsair",
+  "wingspanFt": 44.2
  },
  "C441": {
+  "lengthFt": 39.0,
   "make": "Cessna",
-  "model": "441 Conquest"
+  "model": "441 Conquest",
+  "wingspanFt": 49.3
  },
  "C46": {
   "make": "Curtiss",
   "model": "C-46 Commando"
  },
  "C500": {
+  "lengthFt": 43.5,
   "make": "Cessna",
-  "model": "500 Citation"
+  "model": "500 Citation",
+  "wingspanFt": 47.1
  },
  "C501": {
+  "lengthFt": 43.5,
   "make": "Cessna",
-  "model": "501 Citation 1SP"
+  "model": "501 Citation 1SP",
+  "wingspanFt": 47.1
  },
  "C510": {
+  "lengthFt": 40.6,
   "make": "Cessna",
-  "model": "510 Citation Mustang"
+  "model": "510 Citation Mustang",
+  "wingspanFt": 43.2
  },
  "C525": {
+  "lengthFt": 42.6,
   "make": "Cessna",
-  "model": "525 CitationJet"
+  "model": "525 CitationJet",
+  "wingspanFt": 46.9
  },
  "C550": {
+  "lengthFt": 47.3,
   "make": "Cessna",
-  "model": "550 Citation II"
+  "model": "550 Citation II",
+  "wingspanFt": 51.7
  },
  "C551": {
+  "lengthFt": 47.7,
   "make": "Cessna",
-  "model": "551 Citation 2SP"
+  "model": "551 Citation 2SP",
+  "wingspanFt": 51.7
  },
  "C55B": {
+  "lengthFt": 47.7,
   "make": "Cessna",
-  "model": "550B Citation Bravo"
+  "model": "550B Citation Bravo",
+  "wingspanFt": 52.2
  },
  "C560": {
+  "lengthFt": 48.9,
   "make": "Cessna",
-  "model": "560 Citation V"
+  "model": "560 Citation V",
+  "wingspanFt": 54.1
  },
  "C56X": {
+  "lengthFt": 51.8,
   "make": "Cessna",
-  "model": "560XL Citation XLS"
+  "model": "560XL Citation XLS",
+  "wingspanFt": 56.3
  },
  "C5M": {
   "make": "Lockheed",
   "model": "C-5 Super Galaxy"
  },
  "C650": {
+  "lengthFt": 55.5,
   "make": "Cessna",
-  "model": "650 Citation VII"
+  "model": "650 Citation VII",
+  "wingspanFt": 53.5
  },
  "C680": {
+  "lengthFt": 63.5,
   "make": "Cessna",
-  "model": "680 Citation Sovereign"
+  "model": "680 Citation Sovereign",
+  "wingspanFt": 63.1
  },
  "C68A": {
+  "lengthFt": 62.3,
   "make": "Cessna",
-  "model": "680A Citation Latitude"
+  "model": "680A Citation Latitude",
+  "wingspanFt": 72.3
  },
  "C700": {
+  "lengthFt": 73.2,
   "make": "Cessna",
-  "model": "700 Citation Longitude"
+  "model": "700 Citation Longitude",
+  "wingspanFt": 68.9
  },
  "C72R": {
+  "lengthFt": 27.2,
   "make": "Aviones Colombia",
-  "model": "172RG"
+  "model": "172RG",
+  "wingspanFt": 36.1
  },
  "C750": {
+  "lengthFt": 72.3,
   "make": "Cessna",
-  "model": "750 Citation 10"
+  "model": "750 Citation 10",
+  "wingspanFt": 63.6
  },
  "C77R": {
+  "lengthFt": 27.3,
   "make": "Aviones Colombia",
-  "model": "177RG"
+  "model": "177RG",
+  "wingspanFt": 35.5
  },
  "C82": {
   "make": "Fairchild",
   "model": "C-82 Packet"
  },
  "C82R": {
+  "lengthFt": 29.0,
   "make": "Aviones Colombia",
-  "model": "R182"
+  "model": "R182",
+  "wingspanFt": 36.0
  },
  "C82S": {
   "make": "Cessna",
@@ -2392,12 +2756,16 @@
   "model": "CH-750 Stol"
  },
  "CH7A": {
+  "lengthFt": 22.1,
   "make": "Aeronca",
-  "model": "7BCM"
+  "model": "7BCM",
+  "wingspanFt": 33.5
  },
  "CH7B": {
+  "lengthFt": 22.1,
   "make": "Champion",
-  "model": "7GCAA"
+  "model": "7GCAA",
+  "wingspanFt": 33.5
  },
  "CH80": {
   "make": "Jordan Aerospace",
@@ -2460,32 +2828,40 @@
   "model": "F-CK-1 Ching-Kuo"
  },
  "CL2P": {
-  "make": "Canadair",
+  "make": "Bombardier",
   "model": "CL-215"
  },
  "CL2T": {
-  "make": "Canadair",
+  "make": "Bombardier",
   "model": "UD-13"
  },
  "CL30": {
+  "lengthFt": 68.8,
   "make": "Bombardier",
-  "model": "BD-100 Challenger 300"
+  "model": "BD-100 Challenger 300",
+  "wingspanFt": 63.8
  },
  "CL35": {
+  "lengthFt": 68.6,
   "make": "Bombardier",
-  "model": "BD-100 Challenger 350"
+  "model": "BD-100 Challenger 350",
+  "wingspanFt": 68.9
  },
  "CL41": {
-  "make": "Canadair",
-  "model": "CL-41 Tutor"
+  "lengthFt": 32.0,
+  "make": "Bombardier",
+  "model": "CL-41 Tutor",
+  "wingspanFt": 36.5
  },
  "CL4G": {
-  "make": "Canadair",
+  "make": "Bombardier",
   "model": "CL-44-O Guppy"
  },
  "CL60": {
+  "lengthFt": 68.4,
   "make": "Bombardier",
-  "model": "Challenger 604"
+  "model": "Challenger 604",
+  "wingspanFt": 64.3
  },
  "CLA": {
   "make": "Callair",
@@ -2536,8 +2912,10 @@
   "model": "Nieuport 12-7/8"
  },
  "CN35": {
+  "lengthFt": 64.5,
   "make": "CASA",
-  "model": "D-4"
+  "model": "D-4",
+  "wingspanFt": 84.7
  },
  "CNBR": {
   "make": "Bac",
@@ -2564,12 +2942,16 @@
   "model": "Cobra"
  },
  "COL3": {
+  "lengthFt": 25.2,
   "make": "Cessna",
-  "model": "350"
+  "model": "350",
+  "wingspanFt": 36.1
  },
  "COL4": {
+  "lengthFt": 25.2,
   "make": "Cessna",
-  "model": "400"
+  "model": "400",
+  "wingspanFt": 36.1
  },
  "COLT": {
   "make": "Texas Aircraft",
@@ -2608,8 +2990,10 @@
   "model": "Cougar"
  },
  "COUR": {
+  "lengthFt": 31.0,
   "make": "Helio",
-  "model": "H-391 Courier"
+  "model": "H-391 Courier",
+  "wingspanFt": 39.0
  },
  "COY2": {
   "make": "Rans",
@@ -2704,28 +3088,38 @@
   "model": "Corsario"
  },
  "CRJ1": {
+  "lengthFt": 87.8,
   "make": "Bombardier",
-  "model": "CRJ-100"
+  "model": "CRJ-100",
+  "wingspanFt": 69.6
  },
  "CRJ2": {
+  "lengthFt": 87.8,
   "make": "Bombardier",
-  "model": "CRJ-200"
+  "model": "CRJ-200",
+  "wingspanFt": 68.7
  },
  "CRJ7": {
+  "lengthFt": 106.6,
   "make": "Bombardier",
-  "model": "CRJ-700"
+  "model": "CRJ-700",
+  "wingspanFt": 76.3
  },
  "CRJ9": {
+  "lengthFt": 118.8,
   "make": "Bombardier",
-  "model": "CRJ-900"
+  "model": "CRJ-900",
+  "wingspanFt": 81.5
  },
  "CRJX": {
   "make": "Bombardier",
   "model": "CRJ-1000"
  },
  "CRUZ": {
+  "lengthFt": 21.3,
   "make": "Csa",
-  "model": "PiperSport"
+  "model": "PiperSport",
+  "wingspanFt": 28.8
  },
  "CT4": {
   "make": "Pacific Aerospace",
@@ -2764,12 +3158,16 @@
   "model": "Culex"
  },
  "CVLP": {
+  "lengthFt": 79.2,
   "make": "Convair",
-  "model": "T-29"
+  "model": "T-29",
+  "wingspanFt": 91.8
  },
  "CVLT": {
+  "lengthFt": 95.8,
   "make": "Convair",
-  "model": "C-131H"
+  "model": "C-131H",
+  "wingspanFt": 105.3
  },
  "CX5": {
   "make": "Thatcher",
@@ -2844,8 +3242,10 @@
   "model": "D-31 Turbulent"
  },
  "D328": {
+  "lengthFt": 69.8,
   "make": "Dornier",
-  "model": "328"
+  "model": "328",
+  "wingspanFt": 68.8
  },
  "D39": {
   "make": "Akaflieg Darmstadt",
@@ -2888,12 +3288,16 @@
   "model": "DA-36 E-Star"
  },
  "DA40": {
+  "lengthFt": 26.3,
   "make": "Diamond",
-  "model": "DA-40 Katana"
+  "model": "DA-40 Katana",
+  "wingspanFt": 39.2
  },
  "DA42": {
+  "lengthFt": 28.1,
   "make": "Diamond",
-  "model": "DA-42 Guardian"
+  "model": "DA-42 Guardian",
+  "wingspanFt": 44.5
  },
  "DA5": {
   "make": "Davis",
@@ -2932,32 +3336,42 @@
   "model": "Dart"
  },
  "DC10": {
+  "lengthFt": 181.6,
   "make": "McDonnell Douglas",
-  "model": "DC-10"
+  "model": "DC-10",
+  "wingspanFt": 165.3
  },
  "DC2": {
   "make": "Douglas",
   "model": "DC-2"
  },
  "DC3": {
+  "lengthFt": 64.7,
   "make": "Douglas",
-  "model": "DC-3"
+  "model": "DC-3",
+  "wingspanFt": 95.2
  },
  "DC3S": {
+  "lengthFt": 67.8,
   "make": "Douglas",
-  "model": "Super DC-3"
+  "model": "Super DC-3",
+  "wingspanFt": 90.0
  },
  "DC3T": {
+  "lengthFt": 67.8,
   "make": "Professional Aviation",
-  "model": "Jet Prop DC-3"
+  "model": "Jet Prop DC-3",
+  "wingspanFt": 95.0
  },
  "DC4": {
   "make": "Douglas",
   "model": "DC-4"
  },
  "DC6": {
+  "lengthFt": 100.6,
   "make": "Douglas",
-  "model": "DC-6"
+  "model": "DC-6",
+  "wingspanFt": 117.5
  },
  "DC7": {
   "make": "Douglas",
@@ -2968,28 +3382,36 @@
   "model": "DC-8-60"
  },
  "DC87": {
+  "lengthFt": 187.7,
   "make": "Douglas",
-  "model": "DC-8-70"
+  "model": "DC-8-70",
+  "wingspanFt": 148.4
  },
  "DC91": {
+  "lengthFt": 104.4,
   "make": "Douglas",
-  "model": "DC-9-10"
+  "model": "DC-9-10",
+  "wingspanFt": 89.4
  },
  "DC92": {
   "make": "Douglas",
   "model": "DC-9-20"
  },
  "DC93": {
+  "lengthFt": 119.3,
   "make": "McDonnell Douglas",
-  "model": "VC-9"
+  "model": "VC-9",
+  "wingspanFt": 93.3
  },
  "DC94": {
   "make": "Douglas",
   "model": "DC-9-40"
  },
  "DC95": {
+  "lengthFt": 133.6,
   "make": "Douglas",
-  "model": "DC-9-50"
+  "model": "DC-9-50",
+  "wingspanFt": 93.4
  },
  "DDUC": {
   "make": "Bakeng",
@@ -3005,19 +3427,19 @@
  },
  "DF10": {
   "make": "Delfin",
-  "model": "Delfin 10 Karas"
+  "model": "10 Karas"
  },
  "DF1M": {
   "make": "Delfin",
-  "model": "Delfin 10M R-Line"
+  "model": "10M R-Line"
  },
  "DF2": {
   "make": "Delfin",
-  "model": "Delfin 2"
+  "model": "2"
  },
  "DF3": {
   "make": "Delfin",
-  "model": "Delfin 3"
+  "model": "3"
  },
  "DFL6": {
   "make": "Damoure-Fabre",
@@ -3080,20 +3502,28 @@
   "model": "DH-89 Dragon Rapide"
  },
  "DH8A": {
+  "lengthFt": 73.0,
   "make": "De Havilland Canada",
-  "model": "DHC-8-100 Dash 8"
+  "model": "DHC-8-100 Dash 8",
+  "wingspanFt": 85.0
  },
  "DH8B": {
+  "lengthFt": 73.0,
   "make": "De Havilland Canada",
-  "model": "DHC-8-200 Dash 8"
+  "model": "DHC-8-200 Dash 8",
+  "wingspanFt": 85.0
  },
  "DH8C": {
+  "lengthFt": 84.3,
   "make": "De Havilland Canada",
-  "model": "DHC-8-300 Dash 8"
+  "model": "DHC-8-300 Dash 8",
+  "wingspanFt": 90.0
  },
  "DH8D": {
+  "lengthFt": 107.8,
   "make": "Bombardier",
-  "model": "DHC-8-400 Dash 8"
+  "model": "DHC-8-400 Dash 8",
+  "wingspanFt": 93.3
  },
  "DH90": {
   "make": "De Havilland",
@@ -3112,8 +3542,10 @@
   "model": "DHC-1 Chipmunk"
  },
  "DHC2": {
+  "lengthFt": 30.3,
   "make": "De Havilland Canada",
-  "model": "U-6 Beaver"
+  "model": "U-6 Beaver",
+  "wingspanFt": 48.0
  },
  "DHC3": {
   "make": "De Havilland Canada",
@@ -3128,12 +3560,16 @@
   "model": "C-8 Buffalo"
  },
  "DHC6": {
+  "lengthFt": 51.8,
   "make": "De Havilland Canada",
-  "model": "DHC-6 Twin Otter"
+  "model": "DHC-6 Twin Otter",
+  "wingspanFt": 65.0
  },
  "DHC7": {
+  "lengthFt": 80.5,
   "make": "De Havilland Canada",
-  "model": "O-5 Dash 7"
+  "model": "O-5 Dash 7",
+  "wingspanFt": 93.0
  },
  "DIES": {
   "make": "Pennec-Lucas",
@@ -3248,8 +3684,10 @@
   "model": "DV-2 Infinity"
  },
  "DV20": {
+  "lengthFt": 23.5,
   "make": "Diamond",
-  "model": "DA-20 Falcon"
+  "model": "DA-20 Falcon",
+  "wingspanFt": 35.7
  },
  "DW1": {
   "make": "Bellanca",
@@ -3268,36 +3706,50 @@
   "model": "H-3 Sport"
  },
  "E110": {
+  "lengthFt": 50.3,
   "make": "Embraer",
-  "model": "EMB-110 Bandeirante"
+  "model": "EMB-110 Bandeirante",
+  "wingspanFt": 50.3
  },
  "E120": {
+  "lengthFt": 65.7,
   "make": "Embraer",
-  "model": "EMB-120 Brasilia"
+  "model": "EMB-120 Brasilia",
+  "wingspanFt": 64.9
  },
  "E121": {
   "make": "Embraer",
   "model": "EC-9 Xingu"
  },
  "E135": {
+  "lengthFt": 93.4,
   "make": "Embraer",
-  "model": "ERJ-135"
+  "model": "ERJ-135",
+  "wingspanFt": 65.8
  },
  "E145": {
+  "lengthFt": 98.0,
   "make": "Embraer",
-  "model": "ERJ-145"
+  "model": "ERJ-145",
+  "wingspanFt": 65.8
  },
  "E170": {
+  "lengthFt": 98.1,
   "make": "Embraer",
-  "model": "170"
+  "model": "170",
+  "wingspanFt": 85.3
  },
  "E190": {
+  "lengthFt": 118.9,
   "make": "Embraer",
-  "model": "190"
+  "model": "190",
+  "wingspanFt": 94.2
  },
  "E195": {
+  "lengthFt": 126.8,
   "make": "Embraer",
-  "model": "195"
+  "model": "195",
+  "wingspanFt": 94.2
  },
  "E2": {
   "make": "Grumman",
@@ -3316,12 +3768,16 @@
   "model": "E175-E2"
  },
  "E290": {
+  "lengthFt": 118.8,
   "make": "Embraer",
-  "model": "E190-E2"
+  "model": "E190-E2",
+  "wingspanFt": 110.6
  },
  "E295": {
+  "lengthFt": 136.2,
   "make": "Embraer",
-  "model": "E195-E2"
+  "model": "E195-E2",
+  "wingspanFt": 115.2
  },
  "E2CB": {
   "make": "Taylor",
@@ -3340,8 +3796,10 @@
   "model": "E350"
  },
  "E35L": {
+  "lengthFt": 86.4,
   "make": "Embraer",
-  "model": "VC-99B Legacy"
+  "model": "VC-99B Legacy",
+  "wingspanFt": 69.2
  },
  "E390": {
   "make": "Embraer",
@@ -3360,32 +3818,42 @@
   "model": "EA-400"
  },
  "E45X": {
+  "lengthFt": 98.0,
   "make": "Embraer",
-  "model": "EMB-145XR"
+  "model": "EMB-145XR",
+  "wingspanFt": 65.6
  },
  "E500": {
   "make": "Extra",
   "model": "EA-500"
  },
  "E50P": {
+  "lengthFt": 42.1,
   "make": "Embraer",
-  "model": "EMB-500 Phenom 100"
+  "model": "EMB-500 Phenom 100",
+  "wingspanFt": 40.3
  },
  "E530": {
   "make": "Cessna",
   "model": "E530 Scorpion"
  },
  "E545": {
+  "lengthFt": 64.6,
   "make": "Embraer",
-  "model": "EMB-545 Legacy 450"
+  "model": "EMB-545 Legacy 450",
+  "wingspanFt": 66.4
  },
  "E550": {
+  "lengthFt": 68.0,
   "make": "Embraer",
-  "model": "EMB-550 Legacy 500"
+  "model": "EMB-550 Legacy 500",
+  "wingspanFt": 66.5
  },
  "E55P": {
+  "lengthFt": 51.3,
   "make": "Embraer",
-  "model": "EMB-505 Phenom 300"
+  "model": "EMB-505 Phenom 300",
+  "wingspanFt": 52.2
  },
  "E6": {
   "make": "Boeing",
@@ -3396,12 +3864,16 @@
   "model": "737-700 AEWC"
  },
  "E75L": {
+  "lengthFt": 106.0,
   "make": "Embraer",
-  "model": "175 (long wing)"
+  "model": "175",
+  "wingspanFt": 101.7
  },
  "E75S": {
+  "lengthFt": 103.9,
   "make": "Embraer",
-  "model": "175 (short wing)"
+  "model": "175",
+  "wingspanFt": 94.2
  },
  "E767": {
   "make": "Boeing",
@@ -3409,11 +3881,13 @@
  },
  "EA40": {
   "make": "Eclipse",
-  "model": "Eclipse 400"
+  "model": "400"
  },
  "EA50": {
+  "lengthFt": 33.1,
   "make": "Eclipse",
-  "model": "Eclipse 500"
+  "model": "500",
+  "wingspanFt": 37.3
  },
  "EAEA": {
   "make": "Grosso",
@@ -3425,14 +3899,14 @@
  },
  "EAGX": {
   "make": "Eagle Aircraft",
-  "model": "Eagle 100"
+  "model": "100"
  },
  "EBOY": {
   "make": "Fma",
   "model": "20 El Boyero"
  },
  "EC20": {
-  "make": "Eurocopter",
+  "make": "Airbus Helicopters",
   "model": "HE-25"
  },
  "EC25": {
@@ -3576,8 +4050,10 @@
   "model": "E-Racer"
  },
  "ERCO": {
+  "lengthFt": 20.8,
   "make": "Air Products",
-  "model": "F-1 Aircoupe"
+  "model": "F-1 Aircoupe",
+  "wingspanFt": 30.0
  },
  "ES11": {
   "make": "Aviotecnica",
@@ -3592,7 +4068,7 @@
   "model": "Epic Escape"
  },
  "ESCP": {
-  "make": "Just",
+  "make": "Just Aircraft",
   "model": "Escapade"
  },
  "ETAR": {
@@ -3628,8 +4104,10 @@
   "model": "Evolution Piston"
  },
  "EVOT": {
+  "lengthFt": 30.0,
   "make": "Evolution",
-  "model": "EVOT-550 Evolution"
+  "model": "EVOT-550 Evolution",
+  "wingspanFt": 37.0
  },
  "EVSS": {
   "make": "Evektor",
@@ -3700,24 +4178,32 @@
   "model": "F-14 Tomcat"
  },
  "F15": {
+  "lengthFt": 63.8,
   "make": "McDonnell Douglas",
-  "model": "F-15 Baz"
+  "model": "F-15 Baz",
+  "wingspanFt": 42.8
  },
  "F156": {
   "make": "Morane-Saulnier",
   "model": "MS-500 Criquet"
  },
  "F16": {
+  "lengthFt": 49.4,
   "make": "General Dynamics",
-  "model": "F-16 Netz"
+  "model": "F-16 Netz",
+  "wingspanFt": 32.7
  },
  "F18H": {
+  "lengthFt": 56.0,
   "make": "McDonnell Douglas",
-  "model": "C-15"
+  "model": "C-15",
+  "wingspanFt": 40.4
  },
  "F18S": {
+  "lengthFt": 60.1,
   "make": "Boeing",
-  "model": "EA-18 Growler"
+  "model": "EA-18 Growler",
+  "wingspanFt": 44.7
  },
  "F1FV": {
   "make": "Avion",
@@ -3728,8 +4214,10 @@
   "model": "F-2"
  },
  "F22": {
+  "lengthFt": 62.1,
   "make": "Lockheed Martin",
-  "model": "F-22 Raptor"
+  "model": "F-22 Raptor",
+  "wingspanFt": 44.5
  },
  "F260": {
   "make": "Siai-Marchetti",
@@ -3748,8 +4236,10 @@
   "model": "F-28 Fellowship"
  },
  "F2TH": {
+  "lengthFt": 66.3,
   "make": "Dassault",
-  "model": "Falcon 2000"
+  "model": "Falcon 2000",
+  "wingspanFt": 63.4
  },
  "F30": {
   "make": "Golden Avio",
@@ -3764,16 +4254,18 @@
   "model": "F3F Replica"
  },
  "F4": {
-  "make": "Iai",
+  "make": "IAI",
   "model": "F-4 Kurnass 2000"
  },
  "F402": {
   "make": "Falcon Air",
-  "model": "Falcon 402"
+  "model": "402"
  },
  "F406": {
+  "lengthFt": 39.0,
   "make": "Cessna",
-  "model": "F406 Vigilant"
+  "model": "F406 Vigilant",
+  "wingspanFt": 49.5
  },
  "F41E": {
   "make": "Aerosamara",
@@ -3781,7 +4273,7 @@
  },
  "F421": {
   "make": "Falcon Air",
-  "model": "Falcon 421"
+  "model": "421"
  },
  "F5": {
   "make": "Northrop",
@@ -3816,7 +4308,7 @@
   "model": "F8 Crusader"
  },
  "F86": {
-  "make": "Canadair",
+  "make": "Bombardier",
   "model": "CL-13 Sabre"
  },
  "F8L": {
@@ -3824,8 +4316,10 @@
   "model": "F-8L Falco"
  },
  "F900": {
+  "lengthFt": 66.3,
   "make": "Dassault",
-  "model": "Falcon 900"
+  "model": "Falcon 900",
+  "wingspanFt": 63.4
  },
  "F9F": {
   "make": "Grumman",
@@ -3848,24 +4342,30 @@
   "model": "FA-04 Peregrine"
  },
  "FA10": {
+  "lengthFt": 45.5,
   "make": "Dassault",
-  "model": "Falcon 10"
+  "model": "Falcon 10",
+  "wingspanFt": 42.9
  },
  "FA11": {
   "make": "Fairchild",
   "model": "F-11 Husky"
  },
  "FA20": {
+  "lengthFt": 56.3,
   "make": "Dassault",
-  "model": "Gardian"
+  "model": "Gardian",
+  "wingspanFt": 53.5
  },
  "FA24": {
   "make": "Fairchild",
   "model": "F-24 Argus"
  },
  "FA50": {
+  "lengthFt": 60.8,
   "make": "Dassault",
-  "model": "Falcon 50"
+  "model": "Falcon 50",
+  "wingspanFt": 61.9
  },
  "FA62": {
   "make": "Fairchild",
@@ -3876,12 +4376,16 @@
   "model": "Falcon 6X"
  },
  "FA7X": {
+  "lengthFt": 76.1,
   "make": "Dassault",
-  "model": "Falcon 7X"
+  "model": "Falcon 7X",
+  "wingspanFt": 86.0
  },
  "FA8X": {
+  "lengthFt": 80.2,
   "make": "Dassault",
-  "model": "Falcon 8X"
+  "model": "Falcon 8X",
+  "wingspanFt": 86.3
  },
  "FAET": {
   "make": "Atec",
@@ -3928,8 +4432,10 @@
   "model": "F-2e"
  },
  "FDCT": {
+  "lengthFt": 21.7,
   "make": "Flight Design",
-  "model": "CT"
+  "model": "CT",
+  "wingspanFt": 28.1
  },
  "FDF2": {
   "make": "Flight Design",
@@ -4041,7 +4547,7 @@
  },
  "FLSS": {
   "make": "Flyer",
-  "model": "Flyer NG"
+  "model": "NG"
  },
  "FM25": {
   "make": "Flying Machines",
@@ -4068,7 +4574,7 @@
   "model": "60 Fort"
  },
  "FOUG": {
-  "make": "Iai",
+  "make": "IAI",
   "model": "CM-170R Tzukit"
  },
  "FOX": {
@@ -4097,7 +4603,7 @@
  },
  "FRON": {
   "make": "Frontier",
-  "model": "Frontier MD-2"
+  "model": "MD-2"
  },
  "FS51": {
   "make": "Falconar",
@@ -4164,8 +4670,10 @@
   "model": "G-140TP"
  },
  "G150": {
-  "make": "Gulfstream Aerospace",
-  "model": "Gulfstream G150"
+  "lengthFt": 56.8,
+  "make": "Gulfstream",
+  "model": "G150",
+  "wingspanFt": 55.6
  },
  "G159": {
   "make": "Grumman",
@@ -4180,8 +4688,10 @@
   "model": "G-160 Ranger"
  },
  "G164": {
+  "lengthFt": 25.9,
   "make": "Grumman American",
-  "model": "G-164 Ag-Cat"
+  "model": "G-164 Ag-Cat",
+  "wingspanFt": 42.3
  },
  "G180": {
   "make": "General Aircraft",
@@ -4212,8 +4722,10 @@
   "model": "G-222"
  },
  "G280": {
-  "make": "Gulfstream Aerospace",
-  "model": "Gulfstream G280"
+  "lengthFt": 66.8,
+  "make": "Gulfstream",
+  "model": "G280",
+  "wingspanFt": 63.0
  },
  "G2CA": {
   "make": "Guimbal",
@@ -4288,27 +4800,33 @@
   "model": "GA-200 Fatman"
  },
  "GA3C": {
-  "make": "Gulfstream Aerospace",
-  "model": "Gulfstream G300"
+  "make": "Gulfstream",
+  "model": "G300"
  },
  "GA4C": {
-  "make": "Gulfstream Aerospace",
+  "make": "Gulfstream",
   "model": "G-7 Gulfstream G400"
  },
  "GA5C": {
-  "make": "Gulfstream Aerospace",
-  "model": "G-7 Gulfstream G500"
+  "lengthFt": 91.2,
+  "make": "Gulfstream",
+  "model": "G-7 Gulfstream G500",
+  "wingspanFt": 86.3
  },
  "GA6C": {
-  "make": "Gulfstream Aerospace",
-  "model": "G-7 Gulfstream G600"
+  "lengthFt": 96.1,
+  "make": "Gulfstream",
+  "model": "G-7 Gulfstream G600",
+  "wingspanFt": 94.2
  },
  "GA7": {
+  "lengthFt": 28.7,
   "make": "Grumman American",
-  "model": "GA-7 Cougar"
+  "model": "GA-7 Cougar",
+  "wingspanFt": 36.8
  },
  "GA7C": {
-  "make": "Gulfstream Aerospace",
+  "make": "Gulfstream",
   "model": "G-8 Gulfstream G700"
  },
  "GA8": {
@@ -4316,7 +4834,7 @@
   "model": "GA-8 Airvan"
  },
  "GA8C": {
-  "make": "Gulfstream Aerospace",
+  "make": "Gulfstream",
   "model": "G-8 Gulfstream G800"
  },
  "GABR": {
@@ -4324,8 +4842,10 @@
   "model": "BS-115 Gabriel"
  },
  "GALX": {
-  "make": "Iai",
-  "model": "1126 Galaxy"
+  "lengthFt": 62.3,
+  "make": "Gulfstream",
+  "model": "G200",
+  "wingspanFt": 58.1
  },
  "GANT": {
   "make": "Fairey",
@@ -4352,8 +4872,10 @@
   "model": "GB Special"
  },
  "GC1": {
+  "lengthFt": 20.8,
   "make": "Globe",
-  "model": "GC-1 Swift"
+  "model": "GC-1 Swift",
+  "wingspanFt": 29.3
  },
  "GDUK": {
   "make": "Ellison-Mahon",
@@ -4376,12 +4898,16 @@
   "model": "GJ-11 Sharp Sword"
  },
  "GL5T": {
+  "lengthFt": 96.8,
   "make": "Bombardier",
-  "model": "BD-700 Global 5000"
+  "model": "BD-700 Global 5000",
+  "wingspanFt": 94.0
  },
  "GL7T": {
+  "lengthFt": 110.6,
   "make": "Bombardier",
-  "model": "BD-700 Global 7000"
+  "model": "BD-700 Global 7000",
+  "wingspanFt": 104.3
  },
  "GLAD": {
   "make": "Gloster",
@@ -4392,28 +4918,40 @@
   "model": "Glasair"
  },
  "GLEX": {
+  "lengthFt": 99.4,
   "make": "Bombardier",
-  "model": "BD-700 Global Express"
+  "model": "BD-700 Global Express",
+  "wingspanFt": 94.0
  },
  "GLF2": {
-  "make": "Gulfstream Aerospace",
-  "model": "Gulfstream II"
+  "lengthFt": 79.9,
+  "make": "Gulfstream",
+  "model": "Gulfstream II",
+  "wingspanFt": 68.8
  },
  "GLF3": {
-  "make": "Gulfstream Aerospace",
-  "model": "C-20A Gulfstream 3"
+  "lengthFt": 83.1,
+  "make": "Gulfstream",
+  "model": "C-20A Gulfstream 3",
+  "wingspanFt": 77.8
  },
  "GLF4": {
-  "make": "Gulfstream Aerospace",
-  "model": "G-4 Gulfstream 4"
+  "lengthFt": 88.3,
+  "make": "Gulfstream",
+  "model": "G-4 Gulfstream 4",
+  "wingspanFt": 77.8
  },
  "GLF5": {
-  "make": "Gulfstream Aerospace",
-  "model": "Gulfstream G550"
+  "lengthFt": 96.4,
+  "make": "Gulfstream",
+  "model": "G550",
+  "wingspanFt": 93.5
  },
  "GLF6": {
-  "make": "Gulfstream Aerospace",
-  "model": "G-6 Gulfstream G650"
+  "lengthFt": 99.8,
+  "make": "Gulfstream",
+  "model": "G-6 Gulfstream G650",
+  "wingspanFt": 99.7
  },
  "GLSP": {
   "make": "New Glastar",
@@ -4548,16 +5086,22 @@
   "model": "42 Work Horse"
  },
  "H25A": {
+  "lengthFt": 50.5,
   "make": "Hawker Siddeley",
-  "model": "HS-125-1"
+  "model": "HS-125-1",
+  "wingspanFt": 47.0
  },
  "H25B": {
+  "lengthFt": 51.2,
   "make": "British Aerospace",
-  "model": "C-29"
+  "model": "C-29",
+  "wingspanFt": 51.4
  },
  "H25C": {
+  "lengthFt": 53.9,
   "make": "British Aerospace",
-  "model": "BAe-125-1000"
+  "model": "BAe-125-1000",
+  "wingspanFt": 51.4
  },
  "H269": {
   "make": "Schweizer",
@@ -4612,8 +5156,10 @@
   "model": "HA-31 Basant"
  },
  "HA4T": {
-  "make": "Raytheon",
-  "model": "4000 Hawker 4000"
+  "lengthFt": 69.2,
+  "make": "Beechcraft",
+  "model": "4000 Hawker 4000",
+  "wingspanFt": 61.8
  },
  "HAHU": {
   "make": "Sindlinger",
@@ -4632,8 +5178,10 @@
   "model": "H2X Hawk 3"
  },
  "HAWK": {
+  "lengthFt": 37.4,
   "make": "BAE Systems",
-  "model": "Hawk"
+  "model": "Hawk",
+  "wingspanFt": 32.6
  },
  "HB21": {
   "make": "Brditschka",
@@ -4656,8 +5204,10 @@
   "model": "HD-34"
  },
  "HDJT": {
+  "lengthFt": 41.1,
   "make": "Honda",
-  "model": "HA-420 HondaJet"
+  "model": "HA-420 HondaJet",
+  "wingspanFt": 39.9
  },
  "HEAD": {
   "make": "Stewart",
@@ -4676,7 +5226,7 @@
   "model": "Hi-27 Acrostar"
  },
  "HIGH": {
-  "make": "Just",
+  "make": "Just Aircraft",
   "model": "JA20 Highlander"
  },
  "HIND": {
@@ -4732,7 +5282,7 @@
   "model": "Rocket"
  },
  "HRON": {
-  "make": "Iai",
+  "make": "IAI",
   "model": "Heron"
  },
  "HSMT": {
@@ -4769,7 +5319,7 @@
  },
  "HUML": {
   "make": "Hummel",
-  "model": "Hummel Bird"
+  "model": "Bird"
  },
  "HUNT": {
   "make": "Hawker",
@@ -4784,8 +5334,10 @@
   "model": "TT-32 Hürkuş"
  },
  "HUSK": {
+  "lengthFt": 22.6,
   "make": "Aviat",
-  "model": "A-1 Husky"
+  "model": "A-1 Husky",
+  "wingspanFt": 35.5
  },
  "HW4P": {
   "make": "Groen",
@@ -4888,8 +5440,10 @@
   "model": "Il-62"
  },
  "IL76": {
+  "lengthFt": 152.9,
   "make": "Ilyushin",
-  "model": "Il-76"
+  "model": "Il-76",
+  "wingspanFt": 165.7
  },
  "IL86": {
   "make": "Ilyushin",
@@ -5024,8 +5578,10 @@
   "model": "J-300 Joker"
  },
  "J328": {
+  "lengthFt": 69.7,
   "make": "Fairchild Dornier",
-  "model": "328JET"
+  "model": "328JET",
+  "wingspanFt": 68.8
  },
  "J4": {
   "make": "Piper",
@@ -5061,15 +5617,15 @@
  },
  "JAB2": {
   "make": "Jabiru",
-  "model": "Jabiru J160"
+  "model": "J160"
  },
  "JAB4": {
   "make": "Jabiru",
-  "model": "Jabiru J200"
+  "model": "J200"
  },
  "JABI": {
   "make": "Jabiru",
-  "model": "Jabiru SK"
+  "model": "SK"
  },
  "JACE": {
   "make": "Ace",
@@ -5176,16 +5732,22 @@
   "model": "Jetstream 3"
  },
  "JS31": {
+  "lengthFt": 47.1,
   "make": "British Aerospace",
-  "model": "BAe-3100 Jetstream 31"
+  "model": "BAe-3100 Jetstream 31",
+  "wingspanFt": 52.0
  },
  "JS32": {
+  "lengthFt": 47.1,
   "make": "British Aerospace",
-  "model": "BAe-3200 Jetstream Super 31"
+  "model": "BAe-3200 Jetstream Super 31",
+  "wingspanFt": 52.0
  },
  "JS41": {
+  "lengthFt": 63.2,
   "make": "British Aerospace",
-  "model": "Jetstream 41"
+  "model": "Jetstream 41",
+  "wingspanFt": 60.4
  },
  "JSX": {
   "make": "Sonex",
@@ -5236,8 +5798,10 @@
   "model": "KC-135E Stratotanker"
  },
  "K35R": {
+  "lengthFt": 136.3,
   "make": "Boeing",
-  "model": "C-135FR Stratotanker"
+  "model": "C-135FR Stratotanker",
+  "wingspanFt": 130.8
  },
  "K50": {
   "make": "Korea Aerospace",
@@ -5348,7 +5912,7 @@
   "model": "Safari"
  },
  "KFIR": {
-  "make": "Iai",
+  "make": "IAI",
   "model": "Kfir"
  },
  "KFIS": {
@@ -5521,7 +6085,7 @@
  },
  "L13M": {
   "make": "Let",
-  "model": "L-13 Blanik (single-engine conversions)"
+  "model": "L-13 Blanik"
  },
  "L13S": {
   "make": "Aerotechnik",
@@ -5564,8 +6128,10 @@
   "model": "L-1329 Jetstar 6"
  },
  "L29B": {
+  "lengthFt": 60.3,
   "make": "Lockheed",
-  "model": "L-1329 Jetstar 2"
+  "model": "L-1329 Jetstar 2",
+  "wingspanFt": 54.3
  },
  "L37": {
   "make": "Lockheed",
@@ -5592,8 +6158,10 @@
   "model": "L-410 Turbolet"
  },
  "L5": {
+  "lengthFt": 24.1,
   "make": "Stinson",
-  "model": "OY Sentinel"
+  "model": "OY Sentinel",
+  "wingspanFt": 34.0
  },
  "L59": {
   "make": "Aero",
@@ -5616,8 +6184,10 @@
   "model": "L-70 Vinka"
  },
  "L8": {
+  "lengthFt": 20.0,
   "make": "Luscombe",
-  "model": "8"
+  "model": "8",
+  "wingspanFt": 35.0
  },
  "L90": {
   "make": "Aermacchi",
@@ -5628,8 +6198,10 @@
   "model": "LA-250 Seafury"
  },
  "LA4": {
+  "lengthFt": 24.9,
   "make": "Lake",
-  "model": "LA-4"
+  "model": "LA-4",
+  "wingspanFt": 38.0
  },
  "LA60": {
   "make": "Aermacchi",
@@ -5668,7 +6240,7 @@
   "model": "LAR-1"
  },
  "LARK": {
-  "make": "North American Rockwell",
+  "make": "Rockwell",
   "model": "100 Lark Commander"
  },
  "LAST": {
@@ -5677,7 +6249,7 @@
  },
  "LBUG": {
   "make": "Lightning Bug",
-  "model": "Lightning Bug"
+  "model": "Bug"
  },
  "LCA": {
   "make": "Ada",
@@ -5705,7 +6277,7 @@
  },
  "LESP": {
   "make": "Lancair",
-  "model": "Lancair ES-P"
+  "model": "ES-P"
  },
  "LEV2": {
   "make": "Tapanee",
@@ -5736,52 +6308,74 @@
   "model": "Lionheart"
  },
  "LJ23": {
+  "lengthFt": 43.3,
   "make": "Lear Jet",
-  "model": "23"
+  "model": "23",
+  "wingspanFt": 35.6
  },
  "LJ24": {
+  "lengthFt": 43.3,
   "make": "Gates Learjet",
-  "model": "24"
+  "model": "24",
+  "wingspanFt": 35.6
  },
  "LJ25": {
+  "lengthFt": 47.6,
   "make": "Gates Learjet",
-  "model": "25"
+  "model": "25",
+  "wingspanFt": 35.6
  },
  "LJ28": {
   "make": "Gates Learjet",
   "model": "28"
  },
  "LJ31": {
+  "lengthFt": 48.7,
   "make": "Gates Learjet",
-  "model": "31"
+  "model": "31",
+  "wingspanFt": 43.8
  },
  "LJ35": {
+  "lengthFt": 48.7,
   "make": "Gates Learjet",
-  "model": "35"
+  "model": "35",
+  "wingspanFt": 39.5
  },
  "LJ40": {
+  "lengthFt": 55.6,
   "make": "Learjet",
-  "model": "40"
+  "model": "40",
+  "wingspanFt": 47.8
  },
  "LJ45": {
+  "lengthFt": 58.0,
   "make": "Learjet",
-  "model": "45"
+  "model": "45",
+  "wingspanFt": 47.8
  },
  "LJ55": {
+  "lengthFt": 55.1,
   "make": "Learjet",
-  "model": "55"
+  "model": "55",
+  "wingspanFt": 43.8
  },
  "LJ60": {
+  "lengthFt": 58.7,
   "make": "Learjet",
-  "model": "60"
+  "model": "60",
+  "wingspanFt": 43.8
  },
  "LJ70": {
+  "lengthFt": 56.0,
   "make": "Learjet",
-  "model": "70"
+  "model": "70",
+  "wingspanFt": 50.9
  },
  "LJ75": {
+  "lengthFt": 58.0,
   "make": "Learjet",
-  "model": "75"
+  "model": "75",
+  "wingspanFt": 50.9
  },
  "LM5": {
   "make": "Lombardi",
@@ -5813,19 +6407,23 @@
  },
  "LNC2": {
   "make": "Lancair",
-  "model": "Lancair 200"
+  "model": "200"
  },
  "LNC4": {
+  "lengthFt": 25.0,
   "make": "Lancair",
-  "model": "Lancair 4"
+  "model": "4",
+  "wingspanFt": 32.6
  },
  "LNCE": {
   "make": "Lancair",
-  "model": "Lancair ES"
+  "model": "ES"
  },
  "LNP4": {
+  "lengthFt": 25.0,
   "make": "Lancair",
-  "model": "Lancair PropJet 4"
+  "model": "PropJet 4",
+  "wingspanFt": 32.6
  },
  "LNT4": {
   "make": "Lancair",
@@ -5952,12 +6550,16 @@
   "model": "200 Commander 200"
  },
  "M20P": {
+  "lengthFt": 26.8,
   "make": "Mooney",
-  "model": "M-20"
+  "model": "M20",
+  "wingspanFt": 36.1
  },
  "M20T": {
+  "lengthFt": 26.8,
   "make": "Mooney",
-  "model": "M-20K 231"
+  "model": "M-20K 231",
+  "wingspanFt": 36.1
  },
  "M21": {
   "make": "Pzl-Mielec",
@@ -6020,8 +6622,10 @@
   "model": "404"
  },
  "M5": {
+  "lengthFt": 23.5,
   "make": "Maule",
-  "model": "M-5"
+  "model": "M-5",
+  "wingspanFt": 30.8
  },
  "M55": {
   "make": "Myasishchev",
@@ -6160,8 +6764,10 @@
   "model": "McCullocoupe"
  },
  "MD11": {
+  "lengthFt": 202.2,
   "make": "Boeing",
-  "model": "MD-11"
+  "model": "MD-11",
+  "wingspanFt": 170.5
  },
  "MD3": {
   "make": "Sme",
@@ -6180,28 +6786,40 @@
   "model": "MD-600N"
  },
  "MD81": {
+  "lengthFt": 147.8,
   "make": "Boeing",
-  "model": "MD-81"
+  "model": "MD-81",
+  "wingspanFt": 107.9
  },
  "MD82": {
+  "lengthFt": 147.8,
   "make": "Boeing",
-  "model": "MD-82"
+  "model": "MD-82",
+  "wingspanFt": 107.9
  },
  "MD83": {
+  "lengthFt": 147.8,
   "make": "Boeing",
-  "model": "MD-83"
+  "model": "MD-83",
+  "wingspanFt": 107.9
  },
  "MD87": {
+  "lengthFt": 130.4,
   "make": "Boeing",
-  "model": "MD-87"
+  "model": "MD-87",
+  "wingspanFt": 107.9
  },
  "MD88": {
+  "lengthFt": 147.8,
   "make": "Boeing",
-  "model": "MD-88"
+  "model": "MD-88",
+  "wingspanFt": 107.9
  },
  "MD90": {
+  "lengthFt": 152.6,
   "make": "Boeing",
-  "model": "MD-90"
+  "model": "MD-90",
+  "wingspanFt": 107.9
  },
  "ME08": {
   "make": "Nord",
@@ -6449,7 +7067,7 @@
  },
  "MMAX": {
   "make": "Mad Max Aero",
-  "model": "Mad Max"
+  "model": "Max"
  },
  "MMUT": {
   "make": "Mara Wing",
@@ -6572,16 +7190,20 @@
   "model": "T-2"
  },
  "MU2": {
+  "lengthFt": 39.4,
   "make": "Mitsubishi",
-  "model": "MU-2"
+  "model": "MU-2",
+  "wingspanFt": 39.2
  },
  "MU23": {
   "make": "Akaflieg Munchen",
   "model": "Mü-23 Saurier"
  },
  "MU30": {
+  "lengthFt": 48.4,
   "make": "Mitsubishi",
-  "model": "MU-300 Diamond"
+  "model": "MU-300 Diamond",
+  "wingspanFt": 43.5
  },
  "MUS2": {
   "make": "Bushby",
@@ -6696,8 +7318,10 @@
   "model": "KC-100 Naraon"
  },
  "NAVI": {
+  "lengthFt": 27.5,
   "make": "North American",
-  "model": "L-17 Navion"
+  "model": "L-17 Navion",
+  "wingspanFt": 33.4
  },
  "NC85": {
   "make": "Nord",
@@ -6888,8 +7512,10 @@
   "model": "FWP-149"
  },
  "P180": {
+  "lengthFt": 47.3,
   "make": "Piaggio",
-  "model": "P-180 Avanti"
+  "model": "P-180 Avanti",
+  "wingspanFt": 46.0
  },
  "P18T": {
   "make": "Smith Aviation",
@@ -6912,8 +7538,10 @@
   "model": "P-2008"
  },
  "P210": {
+  "lengthFt": 28.2,
   "make": "Riley",
-  "model": "Super P210"
+  "model": "Super P210",
+  "wingspanFt": 38.8
  },
  "P212": {
   "make": "Tecnam",
@@ -6944,40 +7572,54 @@
   "model": "P-270 Amster"
  },
  "P28A": {
+  "lengthFt": 23.8,
   "make": "Piper",
-  "model": "PA-28-161 Cadet"
+  "model": "PA-28 Cherokee",
+  "wingspanFt": 35.0
  },
  "P28B": {
+  "lengthFt": 24.7,
   "make": "Aicsa",
-  "model": "PA-28-236 Dakota"
+  "model": "PA-28-236 Dakota",
+  "wingspanFt": 35.0
  },
  "P28R": {
+  "lengthFt": 24.7,
   "make": "Piper",
-  "model": "PA-28R-201 Arrow"
+  "model": "PA-28R-201 Arrow",
+  "wingspanFt": 35.4
  },
  "P28S": {
   "make": "Piper",
   "model": "PA-28R-201T Turbo Arrow"
  },
  "P28T": {
+  "lengthFt": 24.7,
   "make": "Chincul",
-  "model": "PA-A-28RT-201 Arrow 4"
+  "model": "PA-A-28RT-201 Arrow 4",
+  "wingspanFt": 35.4
  },
  "P28U": {
   "make": "Aicsa",
   "model": "PA-28RT-201T Turbo Arrow 4"
  },
  "P3": {
+  "lengthFt": 116.0,
   "make": "Lockheed",
-  "model": "P-3 Orion"
+  "model": "P-3 Orion",
+  "wingspanFt": 99.7
  },
  "P32R": {
+  "lengthFt": 27.7,
   "make": "Piper",
-  "model": "PA-32R-300 Lance"
+  "model": "PA-32R-300 Lance",
+  "wingspanFt": 36.2
  },
  "P32T": {
+  "lengthFt": 27.7,
   "make": "Chincul",
-  "model": "PA-A-32RT-300 Lance 2"
+  "model": "PA-A-32RT-300 Lance 2",
+  "wingspanFt": 36.2
  },
  "P337": {
   "make": "Cessna",
@@ -6996,8 +7638,10 @@
   "model": "P-40 Warhawk"
  },
  "P46T": {
+  "lengthFt": 29.6,
   "make": "Piper",
-  "model": "PA-46-500TP Meridian M500"
+  "model": "PA-46-500TP Meridian M500",
+  "wingspanFt": 43.0
  },
  "P47": {
   "make": "Republic",
@@ -7012,8 +7656,10 @@
   "model": "P-50 Bouvreuil"
  },
  "P51": {
+  "lengthFt": 32.3,
   "make": "North American",
-  "model": "A-36 Mustang"
+  "model": "A-36 Mustang",
+  "wingspanFt": 37.0
  },
  "P57": {
   "make": "Partenavia",
@@ -7040,8 +7686,10 @@
   "model": "P-166DL3"
  },
  "P68": {
+  "lengthFt": 31.3,
   "make": "Partenavia",
-  "model": "P-68"
+  "model": "P-68",
+  "wingspanFt": 39.4
  },
  "P68T": {
   "make": "Partenavia",
@@ -7052,12 +7700,16 @@
   "model": "P-70"
  },
  "P750": {
+  "lengthFt": 38.8,
   "make": "Pacific Aerospace",
-  "model": "750XL"
+  "model": "750XL",
+  "wingspanFt": 42.0
  },
  "P8": {
+  "lengthFt": 129.5,
   "make": "Boeing",
-  "model": "P-8 Poseidon"
+  "model": "P-8 Poseidon",
+  "wingspanFt": 123.6
  },
  "P80": {
   "make": "Pottier",
@@ -7068,12 +7720,16 @@
   "model": "F-82 Twin Mustang"
  },
  "PA11": {
+  "lengthFt": 23.9,
   "make": "Piper",
-  "model": "L-18B Cub Special"
+  "model": "L-18B Cub Special",
+  "wingspanFt": 35.5
  },
  "PA12": {
+  "lengthFt": 22.8,
   "make": "Backcountry",
-  "model": "PA-12 Super Cruiser"
+  "model": "PA-12 Super Cruiser",
+  "wingspanFt": 35.5
  },
  "PA14": {
   "make": "Piper",
@@ -7084,72 +7740,104 @@
   "model": "PA-15 Vagabond"
  },
  "PA16": {
+  "lengthFt": 20.1,
   "make": "Piper",
-  "model": "PA-16 Clipper"
+  "model": "PA-16 Clipper",
+  "wingspanFt": 29.3
  },
  "PA17": {
   "make": "Piper",
   "model": "PA-17 Vagabond"
  },
  "PA18": {
+  "lengthFt": 22.5,
   "make": "Piper",
-  "model": "U-7 Super Cub"
+  "model": "U-7 Super Cub",
+  "wingspanFt": 35.3
  },
  "PA20": {
+  "lengthFt": 20.5,
   "make": "Piper",
-  "model": "PA-20 Pacer"
+  "model": "PA-20 Pacer",
+  "wingspanFt": 29.3
  },
  "PA22": {
+  "lengthFt": 20.5,
   "make": "Piper",
-  "model": "PA-22 Colt"
+  "model": "PA-22 Colt",
+  "wingspanFt": 29.3
  },
  "PA23": {
+  "lengthFt": 27.6,
   "make": "Piper",
-  "model": "PA-23-150 Apache"
+  "model": "PA-23-150 Apache",
+  "wingspanFt": 37.2
  },
  "PA24": {
+  "lengthFt": 24.8,
   "make": "Piper",
-  "model": "PA-24 Comanche"
+  "model": "PA-24 Comanche",
+  "wingspanFt": 36.0
  },
  "PA25": {
+  "lengthFt": 24.8,
   "make": "Chincul",
-  "model": "PA-A-25 Pawnee"
+  "model": "PA-A-25 Pawnee",
+  "wingspanFt": 36.2
  },
  "PA27": {
+  "lengthFt": 31.2,
   "make": "Piper",
-  "model": "U-11 Aztec"
+  "model": "U-11 Aztec",
+  "wingspanFt": 37.2
  },
  "PA30": {
+  "lengthFt": 25.2,
   "make": "Piper",
-  "model": "PA-30 Twin Comanche"
+  "model": "PA-30 Twin Comanche",
+  "wingspanFt": 36.8
  },
  "PA31": {
+  "lengthFt": 32.6,
   "make": "Piper",
-  "model": "PA-31-300 Navajo"
+  "model": "PA-31-300 Navajo",
+  "wingspanFt": 40.7
  },
  "PA32": {
+  "lengthFt": 27.6,
   "make": "Piper",
-  "model": "PA-32 6X"
+  "model": "PA-32 6X",
+  "wingspanFt": 36.2
  },
  "PA34": {
+  "lengthFt": 28.6,
   "make": "Embraer",
-  "model": "U-7 Seneca"
+  "model": "U-7 Seneca",
+  "wingspanFt": 38.9
  },
  "PA36": {
+  "lengthFt": 27.5,
   "make": "Aicsa",
-  "model": "PA-36 Pawnee Brave"
+  "model": "PA-36 Pawnee Brave",
+  "wingspanFt": 38.8
  },
  "PA38": {
+  "lengthFt": 23.1,
   "make": "Aicsa",
-  "model": "PA-38 Tomahawk"
+  "model": "PA-38 Tomahawk",
+  "wingspanFt": 34.0
  },
  "PA44": {
+  "lengthFt": 27.6,
   "make": "Piper",
-  "model": "PA-44 Seminole"
+  "model": "PA-44 Seminole",
+  "wingspanFt": 38.6
  },
  "PA46": {
+  "lengthFt": 28.9,
   "make": "Piper",
-  "model": "PA-46-350P M350"
+  "model": "PA-46-350P M350",
+  "wingspanFt": 43.0
  },
  "PACE": {
   "make": "Bellanca",
@@ -7176,8 +7864,10 @@
   "model": "Aerial"
  },
  "PAT4": {
+  "lengthFt": 34.7,
   "make": "Neiva",
-  "model": "NE-821 Caraja"
+  "model": "NE-821 Caraja",
+  "wingspanFt": 42.7
  },
  "PAUL": {
   "make": "Neiva",
@@ -7188,32 +7878,44 @@
   "model": "PAV-4"
  },
  "PAY1": {
+  "lengthFt": 34.7,
   "make": "Chincul",
-  "model": "PA-A-31T1-500 Cheyenne 1"
+  "model": "PA-A-31T1-500 Cheyenne 1",
+  "wingspanFt": 42.7
  },
  "PAY2": {
+  "lengthFt": 34.7,
   "make": "Piper",
-  "model": "PA-31T-620 Cheyenne"
+  "model": "PA-31T-620 Cheyenne",
+  "wingspanFt": 42.7
  },
  "PAY3": {
+  "lengthFt": 43.4,
   "make": "Aicsa",
-  "model": "PA-42-720 Cheyenne 3"
+  "model": "PA-42-720 Cheyenne 3",
+  "wingspanFt": 47.7
  },
  "PAY4": {
+  "lengthFt": 43.4,
   "make": "Piper",
-  "model": "PA-42-1000 Cheyenne 400"
+  "model": "PA-42-1000 Cheyenne 400",
+  "wingspanFt": 47.7
  },
  "PC12": {
+  "lengthFt": 47.3,
   "make": "Pilatus",
-  "model": "PC-12"
+  "model": "PC-12",
+  "wingspanFt": 53.3
  },
  "PC21": {
   "make": "Pilatus",
   "model": "E-27"
  },
  "PC24": {
+  "lengthFt": 55.3,
   "make": "Pilatus",
-  "model": "PC-24"
+  "model": "PC-24",
+  "wingspanFt": 55.8
  },
  "PC6P": {
   "make": "Pilatus",
@@ -7437,15 +8139,17 @@
  },
  "PREX": {
   "make": "Private Explorer",
-  "model": "Private Explorer"
+  "model": "Explorer"
  },
  "PRIM": {
   "make": "Blackshape",
   "model": "Bk-100 Prime"
  },
  "PRM1": {
+  "lengthFt": 46.0,
   "make": "Hawker Beechcraft",
-  "model": "390 Premier 1"
+  "model": "390 Premier 1",
+  "wingspanFt": 44.5
  },
  "PROC": {
   "make": "Percival",
@@ -7609,7 +8313,7 @@
  },
  "QIC2": {
   "make": "Quickie",
-  "model": "Quickie Q2"
+  "model": "Q2"
  },
  "QR01": {
   "make": "Quercy",
@@ -7669,19 +8373,23 @@
  },
  "R44": {
   "make": "Robinson",
-  "model": "R-44 Astro"
+  "model": "R44"
  },
  "R66": {
   "make": "Robinson",
   "model": "R-66"
  },
  "R721": {
+  "lengthFt": 133.2,
   "make": "Boeing",
-  "model": "727-100RE Super 27"
+  "model": "727-100RE Super 27",
+  "wingspanFt": 108.0
  },
  "R722": {
+  "lengthFt": 153.2,
   "make": "Boeing",
-  "model": "727-200RE Super 27"
+  "model": "727-200RE Super 27",
+  "wingspanFt": 108.0
  },
  "R90F": {
   "make": "Ruschmeyer",
@@ -7729,11 +8437,11 @@
  },
  "RAV3": {
   "make": "Ravin",
-  "model": "Ravin 300"
+  "model": "300"
  },
  "RAV5": {
   "make": "Ravin",
-  "model": "Ravin 500"
+  "model": "500"
  },
  "RAZM": {
   "make": "Saint Germain",
@@ -7824,16 +8532,20 @@
   "model": "RJ-03 Ibis"
  },
  "RJ1H": {
+  "lengthFt": 101.7,
   "make": "Avro",
-  "model": "RJ-100 Avroliner"
+  "model": "RJ-100 Avroliner",
+  "wingspanFt": 86.4
  },
  "RJ70": {
   "make": "Avro",
   "model": "RJ-70 Avroliner"
  },
  "RJ85": {
+  "lengthFt": 93.7,
   "make": "Avro",
-  "model": "RJ-85 Avroliner"
+  "model": "RJ-85 Avroliner",
+  "wingspanFt": 86.4
  },
  "RK5": {
   "make": "Kalinauskas",
@@ -7900,8 +8612,10 @@
   "model": "RV-10"
  },
  "RV12": {
+  "lengthFt": 19.9,
   "make": "Van's",
-  "model": "RV-12"
+  "model": "RV-12",
+  "wingspanFt": 26.8
  },
  "RV14": {
   "make": "Van's",
@@ -7992,8 +8706,10 @@
   "model": "105"
  },
  "S108": {
+  "lengthFt": 24.5,
   "make": "Piper",
-  "model": "108 Voyager"
+  "model": "108 Voyager",
+  "wingspanFt": 33.9
  },
  "S11": {
   "make": "Fokker",
@@ -8044,8 +8760,10 @@
   "model": "223 Flamingo"
  },
  "S22T": {
+  "lengthFt": 26.0,
   "make": "Cirrus",
-  "model": "SR-22T"
+  "model": "SR-22T",
+  "wingspanFt": 38.3
  },
  "S274": {
   "make": "Irgc",
@@ -8356,8 +9074,10 @@
   "model": "SB-1 Defiant"
  },
  "SB20": {
+  "lengthFt": 89.5,
   "make": "Saab",
-  "model": "2000"
+  "model": "2000",
+  "wingspanFt": 81.3
  },
  "SB29": {
   "make": "Saab",
@@ -8396,20 +9116,26 @@
   "model": "Skyboy"
  },
  "SBR1": {
-  "make": "North American Rockwell",
-  "model": "Sabre 40"
+  "lengthFt": 46.9,
+  "make": "Rockwell",
+  "model": "Sabre 40",
+  "wingspanFt": 44.7
  },
  "SBR2": {
+  "lengthFt": 46.9,
   "make": "Rockwell",
-  "model": "NA-265 Sabre 75"
+  "model": "NA-265 Sabre 75",
+  "wingspanFt": 44.7
  },
  "SC01": {
   "make": "Fft",
   "model": "SC-01 Speed Canard"
  },
  "SC7": {
+  "lengthFt": 41.3,
   "make": "Short",
-  "model": "SC-7 Skyvan"
+  "model": "SC-7 Skyvan",
+  "wingspanFt": 64.9
  },
  "SCAM": {
   "make": "Aerosport",
@@ -8512,8 +9238,10 @@
   "model": "SFS-31 Milan"
  },
  "SF34": {
+  "lengthFt": 64.7,
   "make": "Saab",
-  "model": "340"
+  "model": "340",
+  "wingspanFt": 74.6
  },
  "SF35": {
   "make": "Scheibe",
@@ -8524,8 +9252,10 @@
   "model": "SF-36"
  },
  "SF50": {
+  "lengthFt": 30.7,
   "make": "Cirrus",
-  "model": "SF50 Vision Jet"
+  "model": "SF50 Vision Jet",
+  "wingspanFt": 38.7
  },
  "SG37": {
   "make": "Schweizer",
@@ -8560,12 +9290,16 @@
   "model": "SH-09"
  },
  "SH33": {
+  "lengthFt": 58.0,
   "make": "Short",
-  "model": "330"
+  "model": "330",
+  "wingspanFt": 74.7
  },
  "SH36": {
+  "lengthFt": 70.8,
   "make": "Short",
-  "model": "360"
+  "model": "360",
+  "wingspanFt": 74.8
  },
  "SH4": {
   "make": "Silvercraft",
@@ -8617,7 +9351,7 @@
  },
  "SHRT": {
   "make": "Sherpa",
-  "model": "Sherpa K-650T"
+  "model": "K-650T"
  },
  "SIDE": {
   "make": "Smyth",
@@ -8701,7 +9435,7 @@
  },
  "SLH4": {
   "make": "Sling Aircraft",
-  "model": "Sling 4 High Wing"
+  "model": "4 High Wing"
  },
  "SLK3": {
   "make": "Slick",
@@ -8876,16 +9610,20 @@
   "model": "SR-01 Magic"
  },
  "SR20": {
+  "lengthFt": 26.0,
   "make": "Cirrus",
-  "model": "SR20"
+  "model": "SR20",
+  "wingspanFt": 38.3
  },
  "SR22": {
+  "lengthFt": 26.0,
   "make": "Cirrus",
-  "model": "SR-22"
+  "model": "SR-22",
+  "wingspanFt": 38.3
  },
  "SRAC": {
   "make": "Sport Racer",
-  "model": "Sport Racer"
+  "model": "Racer"
  },
  "SRAI": {
   "make": "Great Plains",
@@ -8924,8 +9662,8 @@
   "model": "Super Sky Cycle"
  },
  "SSTL": {
-  "make": "Just",
-  "model": "JA30 SuperSTOL"
+  "make": "Just Aircraft",
+  "model": "SuperSTOL"
  },
  "SSTM": {
   "make": "Sg Aviation",
@@ -8972,7 +9710,7 @@
   "model": "Stallion"
  },
  "STAR": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "2000 Starship"
  },
  "STAT": {
@@ -9072,8 +9810,10 @@
   "model": "Su-80"
  },
  "SU95": {
+  "lengthFt": 98.2,
   "make": "Sukhoi",
-  "model": "Superjet 100-95"
+  "model": "Superjet 100-95",
+  "wingspanFt": 91.2
  },
  "SUBA": {
   "make": "Fuji",
@@ -9108,12 +9848,16 @@
   "model": "SA-26 Merlin 2"
  },
  "SW3": {
-  "make": "Fairchild Swearingen",
-  "model": "SA-226TB Merlin 3"
+  "lengthFt": 42.2,
+  "make": "Fairchild",
+  "model": "SA-226TB Merlin 3",
+  "wingspanFt": 46.3
  },
  "SW4": {
+  "lengthFt": 59.4,
   "make": "Fairchild",
-  "model": "SA-227 Metro"
+  "model": "SA-227 Metro",
+  "wingspanFt": 57.0
  },
  "SWAK": {
   "make": "Warner",
@@ -9188,7 +9932,7 @@
   "model": "T-19 Türkkuşu"
  },
  "T2": {
-  "make": "North American Rockwell",
+  "make": "Rockwell",
   "model": "T-2 Buckeye"
  },
  "T204": {
@@ -9200,8 +9944,10 @@
   "model": "T206 Stationair TC"
  },
  "T210": {
+  "lengthFt": 28.2,
   "make": "Cessna",
-  "model": "T210 Turbo Centurion"
+  "model": "T210 Turbo Centurion",
+  "wingspanFt": 38.8
  },
  "T211": {
   "make": "Indus",
@@ -9216,8 +9962,10 @@
   "model": "51"
  },
  "T28": {
+  "lengthFt": 33.0,
   "make": "North American",
-  "model": "T-28 Trojan"
+  "model": "T-28 Trojan",
+  "wingspanFt": 40.1
  },
  "T30": {
   "make": "Terzi",
@@ -9232,11 +9980,13 @@
   "model": "Tu-334"
  },
  "T34P": {
-  "make": "Beech",
-  "model": "45 Mentor"
+  "lengthFt": 28.7,
+  "make": "Beechcraft",
+  "model": "45 Mentor",
+  "wingspanFt": 33.3
  },
  "T34T": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "T-34C Turbo Mentor"
  },
  "T35": {
@@ -9248,8 +9998,10 @@
   "model": "318A"
  },
  "T38": {
+  "lengthFt": 46.3,
   "make": "Northrop",
-  "model": "T-38 Talon"
+  "model": "T-38 Talon",
+  "wingspanFt": 25.3
  },
  "T4": {
   "make": "Kawasaki",
@@ -9288,8 +10040,10 @@
   "model": "T-5 Yung Yin"
  },
  "T6": {
+  "lengthFt": 29.0,
   "make": "North American",
-  "model": "BC-1"
+  "model": "BC-1",
+  "wingspanFt": 42.0
  },
  "T7": {
   "make": "Fuji",
@@ -9332,8 +10086,10 @@
   "model": "A"
  },
  "TAYB": {
+  "lengthFt": 22.0,
   "make": "Taylorcraft",
-  "model": "BC"
+  "model": "BC",
+  "wingspanFt": 36.0
  },
  "TAYD": {
   "make": "Taylorcraft",
@@ -9344,8 +10100,10 @@
   "model": "Texas Bullet 205"
  },
  "TB20": {
+  "lengthFt": 25.4,
   "make": "Shijiazhuang",
-  "model": "LE-500 Xiaoying"
+  "model": "LE-500 Xiaoying",
+  "wingspanFt": 32.7
  },
  "TB21": {
   "make": "Socata",
@@ -9368,16 +10126,22 @@
   "model": "TBF Avenger"
  },
  "TBM7": {
+  "lengthFt": 34.9,
   "make": "Socata",
-  "model": "TBM-700A"
+  "model": "TBM-700A",
+  "wingspanFt": 41.6
  },
  "TBM8": {
+  "lengthFt": 34.9,
   "make": "Socata",
-  "model": "TBM-850"
+  "model": "TBM-850",
+  "wingspanFt": 41.6
  },
  "TBM9": {
+  "lengthFt": 35.2,
   "make": "Daher",
-  "model": "TBM-910"
+  "model": "TBM-910",
+  "wingspanFt": 42.1
  },
  "TBR3": {
   "make": "Golden Circle",
@@ -9420,8 +10184,10 @@
   "model": "Terrier"
  },
  "TEX2": {
+  "lengthFt": 33.2,
   "make": "Hawker Beechcraft",
-  "model": "3000"
+  "model": "3000",
+  "wingspanFt": 33.4
  },
  "TEXA": {
   "make": "Fly Synthesis",
@@ -9452,7 +10218,7 @@
   "model": "Adventure"
  },
  "TIGR": {
-  "make": "Eurocopter",
+  "make": "Airbus Helicopters",
   "model": "HA-28"
  },
  "TIJU": {
@@ -9500,8 +10266,10 @@
   "model": "Tundra"
  },
  "TOBA": {
+  "lengthFt": 25.4,
   "make": "Socata",
-  "model": "TB-10 Tobago"
+  "model": "TB-10 Tobago",
+  "wingspanFt": 32.8
  },
  "TOOT": {
   "make": "Meyer",
@@ -9672,11 +10440,11 @@
   "model": "U-2"
  },
  "U21": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "EU-21 Ute"
  },
  "U22": {
-  "make": "Beech",
+  "make": "Beechcraft",
   "model": "1074"
  },
  "UBAT": {
@@ -9776,12 +10544,14 @@
   "model": "AO-1 Mohawk"
  },
  "V10": {
-  "make": "North American Rockwell",
+  "make": "Rockwell",
   "model": "OV-10 Bronco"
  },
  "V22": {
+  "lengthFt": 63.0,
   "make": "Bell-Boeing",
-  "model": "901 Osprey"
+  "model": "901 Osprey",
+  "wingspanFt": 45.8
  },
  "V221": {
   "make": "Msw",
@@ -9829,11 +10599,11 @@
  },
  "VELO": {
   "make": "Velocity",
-  "model": "Velocity LW"
+  "model": "LW"
  },
  "VELT": {
   "make": "Velocity",
-  "model": "Velocity V-Twin"
+  "model": "V-Twin"
  },
  "VEZE": {
   "make": "Rutan",
@@ -9881,11 +10651,11 @@
  },
  "VK3P": {
   "make": "Cirrus",
-  "model": "VK-30 Cirrus (piston)"
+  "model": "VK-30 Cirrus"
  },
  "VK3T": {
   "make": "Cirrus",
-  "model": "VK-30 Cirrus (turbine)"
+  "model": "VK-30 Cirrus"
  },
  "VL3": {
   "make": "Aveko",
@@ -9897,11 +10667,11 @@
  },
  "VLOT": {
   "make": "Velocity",
-  "model": "Velocity XL (turbine)"
+  "model": "XL"
  },
  "VLTT": {
   "make": "Velocity",
-  "model": "Velocity V-Twin (turbine)"
+  "model": "V-Twin"
  },
  "VM1": {
   "make": "Vol Mediterrani",
@@ -9921,7 +10691,7 @@
  },
  "VOL2": {
   "make": "Volante",
-  "model": "Volante Two"
+  "model": "Two"
  },
  "VP2": {
   "make": "Evans",
@@ -10188,12 +10958,14 @@
   "model": "WW-1 Der Jäger D-9"
  },
  "WW23": {
-  "make": "Iai",
+  "make": "IAI",
   "model": "1123 Westwind"
  },
  "WW24": {
-  "make": "Iai",
-  "model": "1124 Sea Scan"
+  "lengthFt": 52.3,
+  "make": "IAI",
+  "model": "1124 Sea Scan",
+  "wingspanFt": 44.8
  },
  "WX35": {
   "make": "Whisper",
@@ -10212,7 +10984,7 @@
   "model": "X-2"
  },
  "X3": {
-  "make": "Eurocopter",
+  "make": "Airbus Helicopters",
   "model": "X-3"
  },
  "X47B": {
