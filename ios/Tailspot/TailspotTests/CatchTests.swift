@@ -190,4 +190,58 @@ struct CatchTests {
         #expect(c.resolvedRarity == .legendary)
         #expect(c.resolvedType == .heritage)
     }
+
+    @Test func newSnapshotFieldsRoundTrip() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a1b2c3",
+            callsign: "UAL248",
+            model: "777-322ER",
+            manufacturer: "BOEING",
+            operatorName: "United Airlines",
+            caughtAt: Date(timeIntervalSince1970: 1_750_000_000),
+            observerLat: 37.87,
+            observerLon: -122.27,
+            slantDistanceMeters: 8_300,
+            registration: "N779UA",
+            typecode: "B77W",
+            altitudeMeters: 11_277.6,
+            velocityMps: 245.0,
+            placeName: "Berkeley, CA"
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>()).first
+        #expect(fetched?.registration == "N779UA")
+        #expect(fetched?.typecode == "B77W")
+        #expect(fetched?.altitudeMeters == 11_277.6)
+        #expect(fetched?.velocityMps == 245.0)
+        #expect(fetched?.placeName == "Berkeley, CA")
+    }
+
+    @Test func newSnapshotFieldsDefaultToNil() throws {
+        // Pre-existing call sites omit the new params; lightweight
+        // migration gives old rows nil. Pin the defaults.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a1b2c3",
+            callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>()).first
+        #expect(fetched?.registration == nil)
+        #expect(fetched?.typecode == nil)
+        #expect(fetched?.altitudeMeters == nil)
+        #expect(fetched?.velocityMps == nil)
+        #expect(fetched?.placeName == nil)
+    }
 }

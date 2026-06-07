@@ -60,6 +60,24 @@ final class Catch {
     /// storage strategy as `rarity` — raw string, optional, backfilled
     /// by the classifier when nil.
     var aircraftType: String?
+    /// Tail number (registration) from OpenSky metadata at catch time —
+    /// or recovered later by the detail view's backfill (registration
+    /// is a property of the airframe, not the moment). Added 2026-06,
+    /// optional + nil-default for lightweight migration.
+    var registration: String?
+    /// ICAO type designator ("B77W") — the key into AircraftNaming's
+    /// DOC 8643 table. Same migration strategy as `registration`.
+    var typecode: String?
+    /// Aircraft altitude (m MSL) at the catch moment. NEVER backfilled
+    /// — the moment is unrecoverable; old rows render "—".
+    var altitudeMeters: Double?
+    /// Aircraft ground speed (m/s) at the catch moment. Same rules as
+    /// `altitudeMeters`.
+    var velocityMps: Double?
+    /// Reverse-geocoded observer place, e.g. "Berkeley, CA". Filled
+    /// post-save at catch time (never blocks the catch) or by the
+    /// detail-view backfill.
+    var placeName: String?
 
     init(
         icao24: String,
@@ -72,6 +90,11 @@ final class Catch {
         observerLat: Double,
         observerLon: Double,
         slantDistanceMeters: Double,
+        registration: String? = nil,
+        typecode: String? = nil,
+        altitudeMeters: Double? = nil,
+        velocityMps: Double? = nil,
+        placeName: String? = nil,
         rarity: Rarity? = nil,
         aircraftType: AircraftType? = nil
     ) {
@@ -85,6 +108,11 @@ final class Catch {
         self.observerLat = observerLat
         self.observerLon = observerLon
         self.slantDistanceMeters = slantDistanceMeters
+        self.registration = registration
+        self.typecode = typecode
+        self.altitudeMeters = altitudeMeters
+        self.velocityMps = velocityMps
+        self.placeName = placeName
         // If the caller didn't explicitly classify, run the classifier
         // at insert time so the row is born with a stable (rarity, type)
         // pair. Rows written before this field existed end up with nil
