@@ -6,6 +6,107 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, design-canvas port ✅, TestFlight v0 shipping to internal testers ✅, backend next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-06-06 [naming standardization + catch detail upgrades])
+
+**Shipping as TestFlight v0.1.4.** Four user-reported problems drove
+this round: (1) aircraft names were inconsistent — OpenSky raw strings
+like "THE BOEING COMPANY" and customer-code variants like "737-8H4"
+made sets look wrong and section headers untrustworthy; (2) Hangar sets
+grouped by airline ended up with duplicates because the same type
+appeared under multiple raw name variants; (3) the Unknown bucket sorted
+to the **top** of the grouped list rather than the bottom; (4) the
+Catch detail was missing useful information — ALT/SPD always blank, no
+location name, no registration or ICAO typecode, and no way to delete a
+row. Full spec: `docs/superpowers/specs/2026-06-06-plane-naming-catch-detail-design.md`.
+
+1. **ICAO DOC 8643 table + generator.** `tools/generate-aircraft-types.py`
+   fetches the official ICAO designator endpoint
+   (`https://doc8643.icao.int/external/aircrafttypes`, 7,260 rows),
+   reduces to one canonical (make, model) per designator (2,612 entries),
+   and writes `ios/Tailspot/Tailspot/AircraftTypes.json` as a bundled
+   resource. Reduction rules: most-frequent manufacturer per designator,
+   shortest model string, title-case polish + Airbus hyphen fix. ~50
+   human-reviewed `OVERRIDES` correct the handful of cases where
+   "shortest name" picks a military designation (e.g., E145 → "C-99"
+   without an override). **Full table, no corridor subset** — Noah
+   explicitly chose full ICAO coverage over a US/EU cut-down. Licensing:
+   factual aeronautical data; ICAO's pre-release terms pass; FAA JO
+   7360.1 is the noted public-domain fallback if ICAO terms ever become
+   an issue. Regeneration workflow documented in the script docstring;
+   `--input` flag allows clean diffs against a saved source file.
+
+2. **`AircraftNaming` — read-time canonical resolution.**
+   `AircraftNaming.canonical(typecode:manufacturer:model:) -> CanonicalName`
+   is the single entry point: typecode lookup in the bundled table wins
+   outright; fallback applies string-cleanup rules (Boeing customer-code
+   collapse `737-8H4` → `737-800`, idempotent on already-clean strings;
+   make title-casing with aviation-specific exceptions; make-in-model
+   dedupe). Architecture: raw OpenSky strings remain stored in SwiftData
+   — canonicalization is read-time and pure, so classifier rule
+   improvements apply retroactively to every existing catch without a
+   migration. `AircraftNamingTests` sweeps the entire 2,612-entry bundled
+   table for structural integrity plus the Boeing customer-code fallback
+   suite (13 parameterized argument sets → 13 case executions).
+
+3. **Sets + grouping fixes.** `HangarGrouping.key(.aircraftType)` now
+   keys on the canonical `displayName` rather than the raw OpenSky model
+   string — customer-code variants collapse across airlines, so UA and
+   AA 737-800s share a section. `modelGroups` uses a sort key that pins
+   the Unknown bucket to last position (was first). `PokeSets.matches`
+   changed from intersection to UNION (raw OR canonical) — set membership
+   only gains from canonicalization. `SetDetailView` and
+   `ModelSlotDetailView` dropped their inline re-casing hacks (now
+   redundant).
+
+4. **`Catch` schema +5 optional fields** (lightweight migration):
+   `registration`, `typecode`, `altitudeMeters`, `velocityMps`,
+   `placeName`. All optional with nil defaults so existing rows migrate
+   without disruption. `performCatch` populates them at save time
+   (metadata.registration + metadata.typecodeIcao from `AircraftMetadata`;
+   altitude + velocity from `ObservedAircraft`; placeName via a
+   post-save fire-and-forget reverse-geocode).
+
+5. **`ReverseGeocode` (new file).** `MKReverseGeocodingRequest` is the
+   implementation — `CLGeocoder` is `API_DEPRECATED` at iOS 26 in the
+   SDK headers, forcing the switch. **Gotcha:** `MKAddressRepresentations`
+   (the MapKit successor's address model) has NO `administrativeArea`
+   field, unlike `CLPlacemark`. The has-city path uses Apple's
+   `cityWithContext` property (locale-aware, e.g., "Berkeley, CA" or
+   "Toulouse, Occitanie") rather than assembling city + state manually.
+   `ReverseGeocodeTests` verifies every placemark shape (city-only,
+   country-only, city + country, nil result).
+
+6. **`CatchDetailView` upgrades.** New place line (geocoded name if
+   present, fallback to lat/lon coords). New AIRFRAME panel (REG / ICAO /
+   TYPE). Red trash delete pill → confirmation alert → deletes the
+   SwiftData row AND its photo file. **Backfill on open:** `CatchDetailView`
+   may fill nil-only airframe fields (registration, typecode, manufacturer,
+   model, placeName, operatorName) by re-fetching metadata — never
+   overwrites a stored value, never touches moment-data. See "Hangar
+   collection" section for the amended read-only-snapshot invariant.
+   `ModelSlotDetailView` tail rows now prefer registration over hex ICAO
+   when available. `HangarRecentView.performDelete` gained an
+   orphaned-JPEG cleanup that the row-delete path was previously missing.
+
+7. **`PokePlane` fixes.** Shared `altText(fromMeters:)` / `speedText(fromMps:)`
+   helpers centralize unit formatting. `PokePlane.init(catchRecord:)`
+   reads persisted `altitudeMeters` / `velocityMps` from the Catch row
+   (previously always nil because the fields didn't exist yet — this was
+   the "ALT/SPD always blank" bug). Canonical model names feed the PokeCard
+   hero so cards now show "Boeing 737-800" instead of "737-8H4 (CFMI)".
+
+**Tests: 213 → 243** (255 case executions). 30 net-new named tests:
+`AircraftNamingTests` + `ReverseGeocodeTests` (new suites) + extensions
+to `CatchTests`, `HangarGroupingTests`, `ADSBManagerTests`.
+
+**`MARKETING_VERSION` 0.1.3 → 0.1.4.**
+
+**Pending at session end:** device deploy + Noah's field-verification
+checklist (canonical names on-screen, place names in catch detail, delete
+flow) + merge to main. Device was unavailable for re-pair during this
+session; the feature branch `feature/naming-catch-detail` is fully
+tested (243/243 pass) and ready to merge when Noah re-pairs.
+
 ## Current state (as of session ending 2026-06-06 [AR tracking overhaul — recall, elevation, ground-truth visibility])
 
 **Shipping as TestFlight v0.1.3.** The arc of this multi-day round: Noah
@@ -390,7 +491,7 @@ xcodebuild test \
 ```
 First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, OpenSky client, or anything they depend on).
 
-The current suite is **193 tests** across `TailspotTests/`, broadly:
+The current suite is **243 tests** (255 case executions — one parameterized suite runs 13 argument sets) across `TailspotTests/`, broadly:
 
 - **Geometry / projection** — `GeoTests`, `ClosestTargetTests` (FOV/zoom-aware lock zone).
 - **OpenSky wire format** — `AircraftDecodingTests`, `AircraftMetadataDecodingTests`.
@@ -403,6 +504,8 @@ The current suite is **193 tests** across `TailspotTests/`, broadly:
 - **Multi-catch** — `MultiCatchComboTests` (combo-multiplier ladder).
 - **Catch photo** — `CatchPhotoComposerTests` (aspect-fill transform + bracket compose).
 - **Trophies** — `TrophiesTests`.
+- **Naming** — `AircraftNamingTests` (bundled DOC 8643 table structural sweeps + Boeing customer-code fallback).
+- **Geocoding** — `ReverseGeocodeTests` (pure place-name formatting for every placemark shape).
 
 Look in `TailspotTests/` directly for the per-`@Test` enumeration — keeping it inline here drifted out of date and is no longer worth maintaining.
 
@@ -515,7 +618,14 @@ Per-icao24 metadata (manufacturer / model / registration / operator) is fetched 
 
 Two grouping modes today: `.aircraftType` (manufacturer + model) and `.airline` (operatorName). Each mode has its own fallback chain ending in a single "Unknown" bucket that always sorts to the end. Row subtitles deliberately show whichever of (operator, type) ISN'T already in the section header so rows add information instead of restating it.
 
-`CatchDetailView` is a **read-only snapshot** — no live re-fetch of metadata or position. A catch is a frozen moment; tomorrow's metadata/distance must not retroactively rewrite it. v0 has **no dedupe** (each tap = each row in its section) and **no delete UI**; both are deferred. If catches grow to hundreds, the per-body re-grouping in `HangarView.groupedList` will want memoization.
+`CatchDetailView` is a **frozen-moment view with a narrow backfill
+exception** (spec 2026-06-06): on open it may fill **nil-only** fields
+that are properties of the airframe, not the moment — registration,
+typecode, manufacturer, model, placeName, and operatorName (the last
+is best-effort *current* operator, not as-flown; documented in code).
+Recorded values are never overwritten, and moment-data (altitude,
+speed, distance, date) is never backfilled. A catch's recorded facts
+still must not be retroactively rewritten. v0 has **no dedupe** (each tap = each row in its section). **Delete** exists in two places — the red trash pill in `CatchDetailView` and a Hangar swipe-delete context menu — both require confirmation and both delete photo files alongside the SwiftData row. If catches grow to hundreds, the per-body re-grouping in `HangarView.groupedList` will want memoization.
 
 ### Replay recorder
 
