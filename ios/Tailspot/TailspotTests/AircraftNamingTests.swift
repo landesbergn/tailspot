@@ -85,6 +85,7 @@ struct AircraftNamingTests {
 
     @Test(arguments: [
         ("737-8H4", "737-800"),        // letter+digit code (Southwest)
+        ("737-8h4", "737-800"),        // lowercase input
         ("777-322", "777-300"),        // all-digit code (United)
         ("777-3F2ER", "777-300ER"),    // suffix survives
         ("767-332(ER)", "767-300ER"),  // parenthesised suffix
@@ -142,5 +143,10 @@ struct AircraftNamingTests {
     @Test func modelOnlyStillCleans() {
         let n = AircraftNaming.canonical(typecode: nil, manufacturer: nil, model: "737-8H4")
         #expect(n.displayName == "737-800")
+        #expect(n.make == nil)
+    }
+
+    @Test func multiWordSpecialMakeResolves() {
+        #expect(AircraftNaming.canonical(typecode: nil, manufacturer: "BAE SYSTEMS", model: "Jetstream 41").make == "BAE Systems")
     }
 }

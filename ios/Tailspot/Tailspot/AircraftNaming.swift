@@ -79,12 +79,13 @@ nonisolated enum AircraftNaming {
 
     /// Deliberately-capitalized makes (acronyms). Mirrors the
     /// generator's SPECIAL_MAKES; only matters for the string path.
-    private static let makeExceptions: Set<String> = ["ATR", "PZL", "CASA", "MBB", "NAMC", "BAE"]
+    private static let makeExceptions: Set<String> = ["ATR", "PZL", "CASA", "MBB", "NAMC"]
     private static let makeSpecials: [String: String] = [
         "MCDONNELL DOUGLAS": "McDonnell Douglas",
         "DE HAVILLAND": "De Havilland",
         "DE HAVILLAND CANADA": "De Havilland Canada",
         "SAAB": "Saab",
+        "BAE SYSTEMS": "BAE Systems",
     ]
 
     static func cleanedMake(_ raw: String?) -> String? {
@@ -123,6 +124,8 @@ nonisolated enum AircraftNaming {
         // Manufacturer repeated inside the model ("BOEING 737-800"
         // with make Boeing) reads twice once joined — drop it.
         if let make, model.lowercased().hasPrefix(make.lowercased() + " ") {
+            // make.count is case-invariant for ASCII names; the prefix is
+            // established via lowercased() but sliced on the original.
             model = String(model.dropFirst(make.count + 1))
         }
         if let m = model.uppercased().wholeMatch(of: customerCode) {
