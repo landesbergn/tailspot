@@ -75,6 +75,14 @@ struct ModelSlotDetailView: View {
         group.model == HangarGrouping.unknownTitle ? "Unknown model" : group.model
     }
 
+    /// Tail number when we have it ("N779UA"), raw hex as fallback —
+    /// the registration is what a spotter actually reads off the plane.
+    private func tailIdentifier(_ row: HangarRow) -> String {
+        row.mostRecent.registration?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty ?? row.icao24
+    }
+
     private func tailRow(_ row: HangarRow) -> some View {
         let cs = row.mostRecent.callsign?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -87,7 +95,7 @@ struct ModelSlotDetailView: View {
                 Text(cs)
                     .font(Brand.Font.mono(size: 12, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
-                Text("\(row.icao24) · \(row.mostRecent.operatorName ?? "—")")
+                Text("\(tailIdentifier(row)) · \(row.mostRecent.operatorName ?? "—")")
                     .font(Brand.Font.mono(size: 10, weight: .regular))
                     .foregroundStyle(Brand.Color.textTertiary)
             }

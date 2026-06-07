@@ -86,6 +86,9 @@ struct HangarRecentView: View {
 
     private func performDelete(row: HangarRow) {
         for c in row.allCatches {
+            // Drop the photo file with the row — deleting only the
+            // model row orphaned JPEGs in Documents/catches forever.
+            CatchPhotoStore.delete(filename: c.photoFilename)
             modelContext.delete(c)
         }
         do { try modelContext.save() } catch {

@@ -946,7 +946,7 @@ struct ContentView: View {
                     guard let place = await ReverseGeocode.placeName(
                         lat: observerLat, lon: observerLon
                     ) else { return }
-                    for row in newCatches where row.placeName == nil {
+                    for row in newCatches where row.placeName == nil && !row.isDeleted {
                         row.placeName = place
                     }
                     try? modelContext.save()

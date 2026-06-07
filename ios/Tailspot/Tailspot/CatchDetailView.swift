@@ -21,12 +21,24 @@
 //
 
 import SwiftUI
+import SwiftData
+import os
 
 struct CatchDetailView: View {
     let row: HangarRow
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var modelContext
+
+    /// One shared client for the airframe-fact backfill. Deliberately
+    /// NOT ADSBManager's MetadataCache — the manager isn't reachable
+    /// from the Hangar sheet without threading it through every layer,
+    /// and this is a one-shot recovery path. The metadata endpoint
+    /// works anonymously; creds come from the bundle when present.
+    private static let backfillClient = OpenSkyClient()
+
+    @State private var showDeleteConfirm = false
 
     /// Planespotters lookup, only consulted when the catch has no
     /// user-captured photo of its own. nil = not loaded yet OR none
@@ -51,6 +63,7 @@ struct CatchDetailView: View {
                         .padding(.top, 8)
                     earnedPanel
                     firstCaughtPanel
+                    airframePanel
                     if let photo = planespottersPhoto, !hasCatchPhoto {
                         attribution(photo)
                     }
@@ -64,12 +77,19 @@ struct CatchDetailView: View {
                 .padding(.top, 8)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .alert(deleteTitle, isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) { performDelete() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
+        }
         // Preserves swipe-from-left-edge to pop. The floating chevron
         // pill is the explicit back affordance; the swipe is the
         // implicit one. `.navigationBarBackButtonHidden(true)` would
         // disable the interactive pop gesture in addition to hiding
         // the (already hidden) back button.
         .task {
+            await backfillIfNeeded()
             // Skip the net call when the user has a catch photo —
             // the card already paints that JPEG and attribution is
             // suppressed.
@@ -169,7 +189,7 @@ struct CatchDetailView: View {
             Text(first.caughtAt.formatted(date: .abbreviated, time: .shortened))
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text(observerCoordText)
+            Text(first.placeName ?? observerCoordText)
                 .font(Brand.Font.mono(size: 12, weight: .regular))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
@@ -177,6 +197,42 @@ struct CatchDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+    }
+
+    // MARK: - Airframe panel
+
+    /// Registration (tail number) + ICAO hex + type designator. These
+    /// are airframe facts, not moment facts — recoverable by the
+    /// backfill for rows that predate the fields. "—" when OpenSky
+    /// simply doesn't know.
+    private var airframePanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("AIRFRAME")
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+            HStack(spacing: 0) {
+                airframeField("REG", first.registration?.trimmedNonEmpty ?? "—")
+                airframeField("ICAO", first.icao24.uppercased())
+                airframeField("TYPE", first.typecode?.trimmedNonEmpty ?? "—")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+    }
+
+    private func airframeField(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(Brand.Font.mono(size: 8, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Brand.Color.textTertiary)
+            Text(value)
+                .font(Brand.Font.mono(size: 13, weight: .bold))
+                .foregroundStyle(Brand.Color.textPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var observerCoordText: String {
@@ -189,13 +245,20 @@ struct CatchDetailView: View {
 
     // MARK: - Floating chrome pills
 
-    /// Back chevron (left) + share (right) — `.ultraThinMaterial` discs
-    /// with a white 10% hairline. System nav bar is hidden so they own
-    /// the top of the view.
+    /// Back chevron (left) + trash + share (right) — `.ultraThinMaterial`
+    /// discs with a white 10% hairline. System nav bar is hidden so they
+    /// own the top of the view.
     private var chromeBar: some View {
         HStack {
             chromePill(icon: "chevron.left") { dismiss() }
             Spacer()
+            Button {
+                showDeleteConfirm = true
+            } label: {
+                chromePillBody(icon: "trash", tint: Brand.Color.alertWarning)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 8)
             ShareLink(item: shareText) {
                 chromePillBody(icon: "square.and.arrow.up")
             }
@@ -211,10 +274,10 @@ struct CatchDetailView: View {
         .buttonStyle(.plain)
     }
 
-    private func chromePillBody(icon: String) -> some View {
+    private func chromePillBody(icon: String, tint: Color = Brand.Color.textPrimary) -> some View {
         Image(systemName: icon)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Brand.Color.textPrimary)
+            .foregroundStyle(tint)
             .frame(width: 36, height: 36)
             .background(.ultraThinMaterial, in: .circle)
             .overlay(Circle().strokeBorder(.white.opacity(0.10), lineWidth: 1))
@@ -246,6 +309,67 @@ struct CatchDetailView: View {
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.top, 4)
+    }
+
+    // MARK: - Delete
+
+    private var deleteTitle: String {
+        let cs = first.callsign?.trimmedNonEmpty ?? first.icao24.uppercased()
+        if row.count == 1 { return "Delete catch of \(cs)?" }
+        return "Delete all \(row.count) catches of \(cs)?"
+    }
+
+    /// Drops every catch in the row AND each catch's photo file —
+    /// rows referencing dead files would render placeholder stripes
+    /// and the orphaned JPEGs would pile up in Documents/catches.
+    private func performDelete() {
+        for c in row.allCatches {
+            CatchPhotoStore.delete(filename: c.photoFilename)
+            modelContext.delete(c)
+        }
+        do { try modelContext.save() } catch {
+            Log.adsb.error("Detail delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        dismiss()
+    }
+
+    // MARK: - Backfill
+
+    /// One-time recovery of airframe-static facts for rows written
+    /// before these fields existed. AMENDS the "read-only snapshot"
+    /// rule deliberately (spec 2026-06-06 § E): fill-only-if-nil, so
+    /// recorded values are never overwritten, and moment-data
+    /// (alt/speed) is never touched. operatorName is the documented
+    /// exception — what we recover is the CURRENT operator, not
+    /// as-flown; better than a permanent blank for pre-field rows.
+    /// Persisted on success, so each row backfills at most once;
+    /// offline/failed fetches leave nil and retry on the next open.
+    private func backfillIfNeeded() async {
+        var dirty = false
+
+        if first.registration == nil || first.typecode == nil {
+            if let meta = (try? await Self.backfillClient.aircraftMetadata(icao24: first.icao24)) ?? nil {
+                for c in row.allCatches {
+                    if c.registration == nil { c.registration = meta.registration?.trimmedNonEmpty }
+                    if c.typecode == nil { c.typecode = meta.typecode?.trimmedNonEmpty }
+                    if c.manufacturer == nil { c.manufacturer = meta.manufacturerName?.trimmedNonEmpty }
+                    if c.model == nil { c.model = meta.model?.trimmedNonEmpty }
+                    if c.operatorName == nil { c.operatorName = meta.operatorName?.trimmedNonEmpty }
+                }
+                dirty = true
+            }
+        }
+
+        if first.placeName == nil, first.observerLat != 0 || first.observerLon != 0 {
+            if let place = await ReverseGeocode.placeName(
+                lat: first.observerLat, lon: first.observerLon
+            ) {
+                first.placeName = place
+                dirty = true
+            }
+        }
+
+        if dirty { try? modelContext.save() }
     }
 }
 
