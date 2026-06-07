@@ -22,7 +22,9 @@
 //      for the device locale). This single Apple-formatted string is
 //      used directly for the common has-city case so we don't need
 //      to reassemble adminArea from a raw string that the new API
-//      no longer exposes structurally.
+//      no longer exposes structurally. cityWithContext uses the
+//      automatic context style — a US-locale device shows "Berkeley,
+//      CA"; other locales may append the country.
 //    • cityName        — locality only, for the no-context fallback.
 //    • regionName      — country name, for the tail cases.
 //  The `format` function still handles every degradation path (no
@@ -49,6 +51,9 @@ nonisolated enum ReverseGeocode {
         // "Toulouse, Occitanie" (FR) without re-assembling adminArea.
         if let cityContext = rep?.cityWithContext { return cityContext }
         // Tail: no city — degrade through region/country/nil via format.
+        // adminArea is always nil here — MKAddressRepresentations has
+        // no state/province field; "Region, Country" output needs a
+        // direct format() caller.
         return format(locality: rep?.cityName, adminArea: nil, country: rep?.regionName)
     }
 

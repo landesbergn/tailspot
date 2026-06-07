@@ -14,7 +14,7 @@ import Testing
 struct ReverseGeocodeTests {
 
     @Test func usStyleCityState() {
-        // CLPlacemark gives "CA" as administrativeArea in the US.
+        // US admin areas arrive abbreviated ("CA") from Apple geocoding.
         #expect(ReverseGeocode.format(locality: "Berkeley", adminArea: "CA", country: "United States") == "Berkeley, CA")
     }
 
