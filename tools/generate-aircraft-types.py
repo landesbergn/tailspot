@@ -26,6 +26,12 @@ Usage:
 
 The checked-in JSON diff is the verification surface: review it after
 every regeneration.
+
+Regeneration note: the script fetches LIVE ICAO data, so a re-run may
+mix unrelated upstream ICAO edits into the diff alongside your
+override change. To isolate an override change, save the source once
+(curl -s -X POST <URL> -d "" > /tmp/8643.json) and re-run both
+before/after with --input /tmp/8643.json.
 """
 
 import argparse
@@ -55,6 +61,9 @@ SPECIAL_MAKES = {
     "BAE SYSTEMS": "BAE Systems",
     "DE HAVILLAND": "De Havilland",
     "DE HAVILLAND CANADA": "De Havilland Canada",
+    # ICAO encodes "Aero International (Regional)" as "AI(R)"; title-case
+    # produces broken "Ai(r)". Map to the recognizable brand name.
+    "AI(R)": "Avro",
 }
 
 # designator: (make, model) — pins designators where the deterministic
@@ -222,6 +231,20 @@ OVERRIDES = {
     # ----- Mitsubishi MU-2 -----
     # "LR-1" (4) ties "MU-2" (4); L < M alphabetically, so LR-1 wins.
     "MU2": ("Mitsubishi", "MU-2"),
+
+    # ----- Embraer ERJ-135/145 -----
+    # C-99 (4 chars) beats ERJ-145; VC-99C beats ERJ-135 — Brazilian
+    # Air Force designations on the highest-frequency US regional jets.
+    "E135": ("Embraer", "ERJ-135"),
+    "E145": ("Embraer", "ERJ-145"),
+
+    # T-22 (military) beat the universally-known commercial name.
+    "A310": ("Airbus", "A310"),
+
+    # ----- Deferred review candidates (rare on OpenSky free-tier ADS-B) -----
+    # B703 (707-300), PA18 (Piper Super Cub), BE10 (Beech King Air 100),
+    # C185 (Cessna 185 Skywagon), DHC2 (DHC-2 Beaver) — flag for review
+    # if these start appearing in field sessions.
 }
 
 
@@ -230,6 +253,9 @@ def polish_make(raw):
     upper = raw.upper()
     if upper in SPECIAL_MAKES:
         return SPECIAL_MAKES[upper]
+    # Strip ICAO's numeric disambiguation suffixes e.g. "Fairchild (1)" -> "Fairchild"
+    raw = re.sub(r"\s*\(\d+\)$", "", raw)
+    upper = raw.upper()  # recompute after strip so mixed-case check is valid
     if raw != upper:
         return raw  # already mixed-case in the source
     # Title-case each word, including segments across hyphens
@@ -282,7 +308,8 @@ def main():
     args = ap.parse_args()
 
     if args.input:
-        rows = json.load(open(args.input))
+        with open(args.input) as fh:
+            rows = json.load(fh)
     else:
         req = urllib.request.Request(
             URL, data=b"", method="POST",

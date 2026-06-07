@@ -8,7 +8,7 @@
   "model": "AD Skyraider"
  },
  "A10": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "A-10 Thunderbolt 2"
  },
  "A109": {
@@ -20,7 +20,7 @@
   "model": "A-119 Koala"
  },
  "A122": {
-  "make": "Aerotec (1)",
+  "make": "Aerotec",
   "model": "T-23 Uirapuru"
  },
  "A124": {
@@ -124,7 +124,7 @@
   "model": "A-27"
  },
  "A270": {
-  "make": "Aero (2)",
+  "make": "Aero",
   "model": "Ae-270 Propjet"
  },
  "A29": {
@@ -153,7 +153,7 @@
  },
  "A310": {
   "make": "Airbus",
-  "model": "T-22"
+  "model": "A310"
  },
  "A318": {
   "make": "Airbus",
@@ -256,7 +256,7 @@
   "model": "A-50"
  },
  "A500": {
-  "make": "Adam (2)",
+  "make": "Adam",
   "model": "A-500"
  },
  "A504": {
@@ -276,7 +276,7 @@
   "model": "S-2R-T660 Turbo Thrush"
  },
  "A700": {
-  "make": "Adam (2)",
+  "make": "Adam",
   "model": "A-700 AdamJet"
  },
  "A743": {
@@ -316,11 +316,11 @@
   "model": "AA-5 Tiger"
  },
  "AAT3": {
-  "make": "Aero (3)",
+  "make": "Aero",
   "model": "AT-3"
  },
  "AAT4": {
-  "make": "Aero (3)",
+  "make": "Aero",
   "model": "AT-4"
  },
  "AB11": {
@@ -364,11 +364,11 @@
   "model": "500 Commander 500"
  },
  "AC52": {
-  "make": "Aero (1)",
+  "make": "Aero",
   "model": "Commander 520"
  },
  "AC56": {
-  "make": "Aero (1)",
+  "make": "Aero",
   "model": "Commander 560"
  },
  "AC5A": {
@@ -376,7 +376,7 @@
   "model": "AC-500 Aircar"
  },
  "AC68": {
-  "make": "Aero (1)",
+  "make": "Aero",
   "model": "Commander 680E"
  },
  "AC6L": {
@@ -384,7 +384,7 @@
   "model": "685 Commander 685"
  },
  "AC72": {
-  "make": "Aero (1)",
+  "make": "Aero",
   "model": "Commander 720 Alti Cruiser"
  },
  "AC80": {
@@ -416,7 +416,7 @@
   "model": "Acro-Sport 2"
  },
  "ACRD": {
-  "make": "Avia (3)",
+  "make": "Avia",
   "model": "Accord"
  },
  "ACRO": {
@@ -456,7 +456,7 @@
   "model": "K Scout"
  },
  "AEST": {
-  "make": "Aerostar (1)",
+  "make": "Aerostar",
   "model": "600"
  },
  "AFOX": {
@@ -736,7 +736,7 @@
   "model": "101 Arava"
  },
  "ARWF": {
-  "make": "Arrow (1)",
+  "make": "Arrow",
   "model": "F Sport"
  },
  "AS02": {
@@ -912,11 +912,11 @@
   "model": "SA60 Aurora"
  },
  "AUS3": {
-  "make": "Taylorcraft (2)",
+  "make": "Taylorcraft",
   "model": "E"
  },
  "AUS4": {
-  "make": "Taylorcraft (2)",
+  "make": "Taylorcraft",
   "model": "G"
  },
  "AUS5": {
@@ -1548,7 +1548,7 @@
   "model": "Biplane"
  },
  "BIRD": {
-  "make": "Taylor (3)",
+  "make": "Taylor",
   "model": "TA-2 Bird"
  },
  "BISC": {
@@ -1780,7 +1780,7 @@
   "model": "Spirit 750"
  },
  "C119": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "R4Q Flying Boxcar"
  },
  "C120": {
@@ -1788,7 +1788,7 @@
   "model": "120"
  },
  "C123": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "C-123 Provider"
  },
  "C130": {
@@ -2096,7 +2096,7 @@
   "model": "177RG"
  },
  "C82": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "C-82 Packet"
  },
  "C82R": {
@@ -2124,7 +2124,7 @@
   "model": "CA-12 Comp Air 12"
  },
  "CA19": {
-  "make": "Commonwealth (1)",
+  "make": "Commonwealth",
   "model": "CA-13 Boomerang"
  },
  "CA1P": {
@@ -2136,7 +2136,7 @@
   "model": "CA-10T Comp Air 10T"
  },
  "CA25": {
-  "make": "Commonwealth (1)",
+  "make": "Commonwealth",
   "model": "CA-25 Winjeel"
  },
  "CA3": {
@@ -3028,7 +3028,7 @@
   "model": "Dragonfly"
  },
  "DG15": {
-  "make": "Howard (1)",
+  "make": "Howard",
   "model": "NH"
  },
  "DH2T": {
@@ -3204,7 +3204,7 @@
   "model": "Dart G"
  },
  "DSA1": {
-  "make": "Smith (1)",
+  "make": "Smith",
   "model": "DSA-1 Miniplane"
  },
  "DSK": {
@@ -3281,11 +3281,11 @@
  },
  "E135": {
   "make": "Embraer",
-  "model": "VC-99C"
+  "model": "ERJ-135"
  },
  "E145": {
   "make": "Embraer",
-  "model": "C-99"
+  "model": "ERJ-145"
  },
  "E170": {
   "make": "Embraer",
@@ -3324,7 +3324,7 @@
   "model": "E195-E2"
  },
  "E2CB": {
-  "make": "Taylor (1)",
+  "make": "Taylor",
   "model": "E-2 Cub"
  },
  "E300": {
@@ -3520,7 +3520,7 @@
   "model": "Elf"
  },
  "ELPS": {
-  "make": "Explorer (1)",
+  "make": "Explorer",
   "model": "Ellipse"
  },
  "ELSP": {
@@ -3560,7 +3560,7 @@
   "model": "EP-9"
  },
  "EPER": {
-  "make": "Epervier (1)",
+  "make": "Epervier",
   "model": "Epervier"
  },
  "EPIC": {
@@ -3568,7 +3568,7 @@
   "model": "Epic LT"
  },
  "EPX1": {
-  "make": "Epervier (2)",
+  "make": "Epervier",
   "model": "X-1"
  },
  "ERAC": {
@@ -3852,7 +3852,7 @@
   "model": "Falcon 10"
  },
  "FA11": {
-  "make": "Fairchild (2)",
+  "make": "Fairchild",
   "model": "F-11 Husky"
  },
  "FA20": {
@@ -3860,7 +3860,7 @@
   "model": "Gardian"
  },
  "FA24": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "F-24 Argus"
  },
  "FA50": {
@@ -3868,7 +3868,7 @@
   "model": "Falcon 50"
  },
  "FA62": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "M-62 Cornell"
  },
  "FA6X": {
@@ -3944,7 +3944,7 @@
   "model": "P-51"
  },
  "FEST": {
-  "make": "Aerostar (2)",
+  "make": "Aerostar",
   "model": "01 Festival"
  },
  "FFLY": {
@@ -3980,7 +3980,7 @@
   "model": "10"
  },
  "FJ10": {
-  "make": "Aerostar (1)",
+  "make": "Aerostar",
   "model": "FJ-100"
  },
  "FJR3": {
@@ -4000,7 +4000,7 @@
   "model": "FK-9"
  },
  "FL3": {
-  "make": "Avia (1)",
+  "make": "Avia",
   "model": "L-3 Aviastarlet"
  },
  "FL53": {
@@ -4060,7 +4060,7 @@
   "model": "Funk B"
  },
  "FOOF": {
-  "make": "Stewart (2)",
+  "make": "Stewart",
   "model": "JD-2 Foo Fighter"
  },
  "FORT": {
@@ -4276,7 +4276,7 @@
   "model": "TF Trader"
  },
  "G97": {
-  "make": "Sai (2)",
+  "make": "Sai",
   "model": "G-97 Spotter"
  },
  "GA10": {
@@ -4432,7 +4432,7 @@
   "model": "GM-17 Viper"
  },
  "GMGC": {
-  "make": "Ibis (2)",
+  "make": "Ibis",
   "model": "GS-750 Grand Magic"
  },
  "GNAT": {
@@ -4480,7 +4480,7 @@
   "model": "Griffin"
  },
  "GRIZ": {
-  "make": "Aerotek (2)",
+  "make": "Aerotek",
   "model": "Turbo Grizzly"
  },
  "GSIS": {
@@ -4660,7 +4660,7 @@
   "model": "HA-420 HondaJet"
  },
  "HEAD": {
-  "make": "Stewart (2)",
+  "make": "Stewart",
   "model": "JD-1 Headwind"
  },
  "HERN": {
@@ -4868,7 +4868,7 @@
   "model": "Fury"
  },
  "IL14": {
-  "make": "Avia (2)",
+  "make": "Avia",
   "model": "Av-14"
  },
  "IL18": {
@@ -5184,7 +5184,7 @@
   "model": "BAe-3200 Jetstream Super 31"
  },
  "JS41": {
-  "make": "Ai(r)",
+  "make": "Avro",
   "model": "BAe-4100 Jetstream 41"
  },
  "JSX": {
@@ -5192,7 +5192,7 @@
   "model": "JSX SubSonex"
  },
  "JT2": {
-  "make": "Taylor (4)",
+  "make": "Taylor",
   "model": "JT-2 Titch"
  },
  "JU52": {
@@ -5432,7 +5432,7 @@
   "model": "KR-2"
  },
  "KR21": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "KR-21"
  },
  "KR30": {
@@ -5440,11 +5440,11 @@
   "model": "KR-030 Topaz"
  },
  "KR31": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "KR-31"
  },
  "KR34": {
-  "make": "Fairchild (1)",
+  "make": "Fairchild",
   "model": "KR-34"
  },
  "KRAG": {
@@ -5472,23 +5472,23 @@
   "model": "J-6 Karatoo"
  },
  "KZ2": {
-  "make": "Sai (1)",
+  "make": "Sai",
   "model": "KZ-2 Kupe"
  },
  "KZ3": {
-  "make": "Sai (1)",
+  "make": "Sai",
   "model": "KZ-3"
  },
  "KZ4": {
-  "make": "Sai (1)",
+  "make": "Sai",
   "model": "KZ-4"
  },
  "KZ7": {
-  "make": "Sai (1)",
+  "make": "Sai",
   "model": "KZ-7 Laerke"
  },
  "KZ8": {
-  "make": "Sai (1)",
+  "make": "Sai",
   "model": "KZ-8"
  },
  "KZLA": {
@@ -5536,7 +5536,7 @@
   "model": "L-15 Lieying"
  },
  "L159": {
-  "make": "Aero (2)",
+  "make": "Aero",
   "model": "L-159"
  },
  "L18": {
@@ -5556,7 +5556,7 @@
   "model": "L-200 Morava"
  },
  "L29": {
-  "make": "Aero (2)",
+  "make": "Aero",
   "model": "L-29 Delfin"
  },
  "L29A": {
@@ -5576,7 +5576,7 @@
   "model": "380 Ladybug"
  },
  "L39": {
-  "make": "Aero (2)",
+  "make": "Aero",
   "model": "L-39 Albatros"
  },
  "L4": {
@@ -5584,7 +5584,7 @@
   "model": "L-4"
  },
  "L40": {
-  "make": "Orličan (1)",
+  "make": "Orličan",
   "model": "L-40 Meta Sokol"
  },
  "L410": {
@@ -5596,7 +5596,7 @@
   "model": "OY Sentinel"
  },
  "L59": {
-  "make": "Aero (2)",
+  "make": "Aero",
   "model": "L-59"
  },
  "L6": {
@@ -5604,7 +5604,7 @@
   "model": "L-6"
  },
  "L60": {
-  "make": "Orličan (1)",
+  "make": "Orličan",
   "model": "K-60 Brigadyr"
  },
  "L610": {
@@ -5728,7 +5728,7 @@
   "model": "LH-10 Ellipse"
  },
  "LIBE": {
-  "make": "Liberty (1)",
+  "make": "Liberty",
   "model": "Bellaire"
  },
  "LION": {
@@ -5908,7 +5908,7 @@
   "model": "Lysander"
  },
  "M10": {
-  "make": "Aerostar (1)",
+  "make": "Aerostar",
   "model": "90"
  },
  "M101": {
@@ -6592,7 +6592,7 @@
   "model": "T-500"
  },
  "MVRK": {
-  "make": "Phoenix (2)",
+  "make": "Phoenix",
   "model": "Maverick"
  },
  "MX10": {
@@ -6612,7 +6612,7 @@
   "model": "MXP-158 Embera"
  },
  "MX65": {
-  "make": "Aerotec (2)",
+  "make": "Aerotec",
   "model": "MXP-650 Amigo"
  },
  "MX80": {
@@ -7368,7 +7368,7 @@
   "model": "PL-9 Stork"
  },
  "PLUS": {
-  "make": "Taylorcraft (2)",
+  "make": "Taylorcraft",
   "model": "Plus C"
  },
  "PNR2": {
@@ -7496,11 +7496,11 @@
   "model": "Ti-12"
  },
  "PTS1": {
-  "make": "Aerotek (1)",
+  "make": "Aerotek",
   "model": "Pitts S-1 Special"
  },
  "PTS2": {
-  "make": "Aerotek (1)",
+  "make": "Aerotek",
   "model": "Pitts S-2 Special"
  },
  "PTSS": {
@@ -7700,7 +7700,7 @@
   "model": "BM-1 Loisirs"
  },
  "RA17": {
-  "make": "Adam (1)",
+  "make": "Adam",
   "model": "RA-17"
  },
  "RAF2": {
@@ -7824,15 +7824,15 @@
   "model": "RJ-03 Ibis"
  },
  "RJ1H": {
-  "make": "Ai(r)",
+  "make": "Avro",
   "model": "RJ-100 Avroliner"
  },
  "RJ70": {
-  "make": "Ai(r)",
+  "make": "Avro",
   "model": "RJ-70 Avroliner"
  },
  "RJ85": {
-  "make": "Ai(r)",
+  "make": "Avro",
   "model": "RJ-85 Avroliner"
  },
  "RK5": {
@@ -8124,7 +8124,7 @@
   "model": "H-5"
  },
  "S51D": {
-  "make": "Stewart (1)",
+  "make": "Stewart",
   "model": "S-51D"
  },
  "S52": {
@@ -8292,7 +8292,7 @@
   "model": "Super Ace"
  },
  "SACR": {
-  "make": "Smith (3)",
+  "make": "Smith",
   "model": "Acro Advanced"
  },
  "SAFF": {
@@ -8780,7 +8780,7 @@
   "model": "Sonex"
  },
  "SORA": {
-  "make": "Acs (1)",
+  "make": "Acs",
   "model": "ACS-100 Sora"
  },
  "SP20": {
@@ -9096,7 +9096,7 @@
   "model": "SV-4"
  },
  "SVNH": {
-  "make": "Aerotec (2)",
+  "make": "Aerotec",
   "model": "MXP-740 Savannah"
  },
  "SW18": {
@@ -9116,7 +9116,7 @@
   "model": "SA-227 Metro"
  },
  "SWAK": {
-  "make": "Warner (2)",
+  "make": "Warner",
   "model": "Sportster"
  },
  "SWAT": {
@@ -9296,7 +9296,7 @@
   "model": "T-7"
  },
  "TA15": {
-  "make": "Taylorcraft (1)",
+  "make": "Taylorcraft",
   "model": "15 Tourist"
  },
  "TA16": {
@@ -9304,7 +9304,7 @@
   "model": "TA-16 Trojan"
  },
  "TA20": {
-  "make": "Taylorcraft (1)",
+  "make": "Taylorcraft",
   "model": "20 Topper"
  },
  "TAGO": {
@@ -9332,11 +9332,11 @@
   "model": "A"
  },
  "TAYB": {
-  "make": "Taylorcraft (1)",
+  "make": "Taylorcraft",
   "model": "BC"
  },
  "TAYD": {
-  "make": "Taylorcraft (1)",
+  "make": "Taylorcraft",
   "model": "DC"
  },
  "TB05": {
@@ -9412,7 +9412,7 @@
   "model": "TSC-1 Teal"
  },
  "TERM": {
-  "make": "Smith (2)",
+  "make": "Smith",
   "model": "Termite"
  },
  "TERR": {
@@ -9428,7 +9428,7 @@
   "model": "Texan"
  },
  "TF19": {
-  "make": "Taylorcraft (1)",
+  "make": "Taylorcraft",
   "model": "19 Sportsman"
  },
  "TF21": {
@@ -9436,7 +9436,7 @@
   "model": "T-Kraft"
  },
  "TF22": {
-  "make": "Taylorcraft (1)",
+  "make": "Taylorcraft",
   "model": "F-22 Ranger"
  },
  "TFOC": {
@@ -9516,7 +9516,7 @@
   "model": "Airtourer"
  },
  "TOXO": {
-  "make": "Cag (1)",
+  "make": "Cag",
   "model": "Toxo"
  },
  "TP40": {
@@ -9744,7 +9744,7 @@
   "model": "T-25 Universal"
  },
  "URRA": {
-  "make": "Ibis (2)",
+  "make": "Ibis",
   "model": "GS-600 Arrow"
  },
  "US2": {
@@ -9808,7 +9808,7 @@
   "model": "Votec 452"
  },
  "V500": {
-  "make": "Revolution (1)",
+  "make": "Revolution",
   "model": "Voyager-500"
  },
  "VALI": {
@@ -10124,7 +10124,7 @@
   "model": "Wichawk"
  },
  "WILT": {
-  "make": "Aerostar (2)",
+  "make": "Aerostar",
   "model": "WT-01 Wild Thing"
  },
  "WIND": {
@@ -10136,7 +10136,7 @@
   "model": "Eagle"
  },
  "WIRR": {
-  "make": "Commonwealth (1)",
+  "make": "Commonwealth",
   "model": "CA-16 Wirraway"
  },
  "WISP": {
@@ -10148,7 +10148,7 @@
   "model": "Wallaby"
  },
  "WM2": {
-  "make": "Miller (2)",
+  "make": "Miller",
   "model": "WM-2"
  },
  "WOPU": {
@@ -10304,7 +10304,7 @@
   "model": "NJ Yale"
  },
  "YARR": {
-  "make": "Arrow (2)",
+  "make": "Arrow",
   "model": "Yarrow Arrow"
  },
  "YAST": {
@@ -10348,7 +10348,7 @@
   "model": "Yak-50"
  },
  "YK52": {
-  "make": "Aerostar (2)",
+  "make": "Aerostar",
   "model": "Iak-52"
  },
  "YK53": {
