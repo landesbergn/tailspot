@@ -223,4 +223,58 @@ struct CatchBackfillTests {
         // Nothing was actually set, so changed must be false
         #expect(changed == false)
     }
+
+    // MARK: - applyFAAFallback
+
+    @Test func applyFAAFallbackFillsNilIdentity() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        // Catch with all identity nil. Catch.init classifies even with nil
+        // inputs, so aircraftType is populated by the classifier on init.
+        // Explicitly nil it to simulate a legacy row that migrated without
+        // a value — the real target of FAA fallback for aircraftType.
+        let c = makeCatch(icao24: "a9eefa", in: context)
+        c.aircraftType = nil   // simulate pre-field legacy row
+
+        let changed = CatchBackfill.applyFAAFallback(to: [c], icao24: "a9eefa")
+
+        #expect(changed == true)
+        #expect(c.manufacturer == "Cirrus")
+        #expect(c.model == "SR20")
+        #expect(c.aircraftType == "ga")
+        #expect(c.registration == "N7391E")
+    }
+
+    @Test func applyFAAFallbackRespectsExistingValues() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        // Catch with model already set — FAA fallback must not overwrite it.
+        let c = makeCatch(icao24: "a9eefa", model: "SR22T", in: context)
+
+        let changed = CatchBackfill.applyFAAFallback(to: [c], icao24: "a9eefa")
+
+        // model was already set, so FAA SR20 must not overwrite it.
+        // manufacturer, registration, (possibly aircraftType) may still fill.
+        #expect(c.model == "SR22T")
+        // changed may be true (manufacturer/registration filled) or false
+        // depending on what the classifier set at init — just verify model.
+        _ = changed
+    }
+
+    @Test func applyFAAFallbackForeignReturnsFalse() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = makeCatch(icao24: "71c575", in: context)
+        let manufacturerBefore = c.manufacturer
+        let modelBefore = c.model
+
+        let changed = CatchBackfill.applyFAAFallback(to: [c], icao24: "71c575")
+
+        #expect(changed == false)
+        #expect(c.manufacturer == manufacturerBefore)
+        #expect(c.model == modelBefore)
+    }
 }

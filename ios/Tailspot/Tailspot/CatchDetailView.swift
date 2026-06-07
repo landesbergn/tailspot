@@ -344,6 +344,11 @@ struct CatchDetailView: View {
             if let meta = (try? await CatchBackfill.client.aircraftMetadata(icao24: first.icao24)) ?? nil {
                 if CatchBackfill.applyMetadata(meta, to: row.allCatches) { dirty = true }
             }
+            // FAA fallback: if OpenSky gave nothing (typecode + model still
+            // nil), try the bundled FAA snapshot for US-registered aircraft.
+            if first.typecode == nil && first.model == nil {
+                if CatchBackfill.applyFAAFallback(to: row.allCatches, icao24: first.icao24) { dirty = true }
+            }
         }
 
         if first.placeName == nil, first.observerLat != 0 || first.observerLon != 0 {

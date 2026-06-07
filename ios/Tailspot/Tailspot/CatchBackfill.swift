@@ -45,6 +45,22 @@ enum CatchBackfill {
         c.typecode == nil || c.registration == nil
     }
 
+    /// FAA-registry fallback for US aircraft OpenSky has no record of.
+    /// Fills make/model/aircraftType/registration (fill-only-if-nil) from
+    /// the bundled snapshot. Returns true if it changed anything.
+    static func applyFAAFallback(to catches: [Catch], icao24: String) -> Bool {
+        guard let rec = FAARegistry.record(forIcao24: icao24) else { return false }
+        let nNumber = IcaoRegistry.nNumber(forIcao24: icao24)
+        var changed = false
+        for c in catches {
+            if c.manufacturer == nil { c.manufacturer = rec.make; changed = true }
+            if c.model == nil { c.model = rec.model; changed = true }
+            if c.aircraftType == nil, let t = rec.type { c.aircraftType = t.rawValue; changed = true }
+            if c.registration == nil, let n = nNumber { c.registration = n; changed = true }
+        }
+        return changed
+    }
+
     /// Collection-wide pass: for every catch missing airframe facts,
     /// fetch metadata ONCE per distinct icao24 and fill. Bounded,
     /// idempotent, swallows errors. Saves once at the end. Runs in the
@@ -60,6 +76,12 @@ enum CatchBackfill {
             guard !trimmed.isEmpty else { continue }
             if let meta = (try? await client.aircraftMetadata(icao24: trimmed)) ?? nil {
                 if applyMetadata(meta, to: rows) { changedAny = true }
+            }
+            // FAA fallback: if OpenSky gave nothing (typecode + model still
+            // nil after the metadata attempt), try the bundled FAA snapshot.
+            let needsFAA = rows.contains { $0.typecode == nil && $0.model == nil }
+            if needsFAA {
+                if applyFAAFallback(to: rows, icao24: trimmed) { changedAny = true }
             }
             if Task.isCancelled { break }
         }
