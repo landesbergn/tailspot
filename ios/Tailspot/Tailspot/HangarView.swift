@@ -14,6 +14,7 @@ import SwiftData
 
 struct HangarView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     /// Pulled from the model container injected by TailspotApp. The
     /// @Query auto-updates when new Catches are inserted — so if you
     /// catch a plane, dismiss to the AR view, catch another, then
@@ -42,6 +43,14 @@ struct HangarView: View {
             }
                 .toolbar(.hidden, for: .navigationBar)
                 .background(Brand.Color.bgPrimary)
+                .task {
+                    // Collection-wide airframe-fact backfill: resolves
+                    // typecode (and other static fields) for catches
+                    // written before these fields existed. One metadata
+                    // fetch per distinct icao24; idempotent. The @Query
+                    // auto-refreshes the UI as fields fill and save().
+                    await CatchBackfill.backfillAll(catches, in: modelContext)
+                }
                 .navigationDestination(for: HangarRow.self) { row in
                     CatchDetailView(row: row)
                 }

@@ -31,13 +31,6 @@ struct CatchDetailView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var modelContext
 
-    /// One shared client for the airframe-fact backfill. Deliberately
-    /// NOT ADSBManager's MetadataCache — the manager isn't reachable
-    /// from the Hangar sheet without threading it through every layer,
-    /// and this is a one-shot recovery path. The metadata endpoint
-    /// works anonymously; creds come from the bundle when present.
-    private static let backfillClient = OpenSkyClient()
-
     @State private var showDeleteConfirm = false
 
     /// Planespotters lookup, only consulted when the catch has no
@@ -347,16 +340,9 @@ struct CatchDetailView: View {
     private func backfillIfNeeded() async {
         var dirty = false
 
-        if first.registration == nil || first.typecode == nil {
-            if let meta = (try? await Self.backfillClient.aircraftMetadata(icao24: first.icao24)) ?? nil {
-                for c in row.allCatches {
-                    if c.registration == nil { c.registration = meta.registration?.trimmedNonEmpty }
-                    if c.typecode == nil { c.typecode = meta.typecode?.trimmedNonEmpty }
-                    if c.manufacturer == nil { c.manufacturer = meta.manufacturerName?.trimmedNonEmpty }
-                    if c.model == nil { c.model = meta.model?.trimmedNonEmpty }
-                    if c.operatorName == nil { c.operatorName = meta.operatorName?.trimmedNonEmpty }
-                }
-                dirty = true
+        if CatchBackfill.needsMetadata(first) {
+            if let meta = (try? await CatchBackfill.client.aircraftMetadata(icao24: first.icao24)) ?? nil {
+                if CatchBackfill.applyMetadata(meta, to: row.allCatches) { dirty = true }
             }
         }
 
