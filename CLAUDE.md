@@ -95,7 +95,7 @@ row. Full spec: `docs/superpowers/specs/2026-06-06-plane-naming-catch-detail-des
    the "ALT/SPD always blank" bug). Canonical model names feed the PokeCard
    hero so cards now show "Boeing 737-800" instead of "737-8H4 (CFMI)".
 
-**Tests: 213 → 243** (255 case executions). 30 net-new named tests:
+**Tests: 213 → 244** (256 case executions). 30 net-new named tests:
 `AircraftNamingTests` + `ReverseGeocodeTests` (new suites) + extensions
 to `CatchTests`, `HangarGroupingTests`, `ADSBManagerTests`.
 
@@ -105,7 +105,7 @@ to `CatchTests`, `HangarGroupingTests`, `ADSBManagerTests`.
 checklist (canonical names on-screen, place names in catch detail, delete
 flow) + merge to main. Device was unavailable for re-pair during this
 session; the feature branch `feature/naming-catch-detail` is fully
-tested (243/243 pass) and ready to merge when Noah re-pairs.
+tested (244/244 pass) and ready to merge when Noah re-pairs.
 
 ## Current state (as of session ending 2026-06-06 [AR tracking overhaul — recall, elevation, ground-truth visibility])
 
@@ -491,7 +491,7 @@ xcodebuild test \
 ```
 First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, OpenSky client, or anything they depend on).
 
-The current suite is **243 tests** (255 case executions — one parameterized suite runs 13 argument sets) across `TailspotTests/`, broadly:
+The current suite is **244 tests** (256 case executions — one parameterized suite runs 13 argument sets) across `TailspotTests/`, broadly:
 
 - **Geometry / projection** — `GeoTests`, `ClosestTargetTests` (FOV/zoom-aware lock zone).
 - **OpenSky wire format** — `AircraftDecodingTests`, `AircraftMetadataDecodingTests`.

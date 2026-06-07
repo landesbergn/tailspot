@@ -917,8 +917,11 @@ struct ContentView: View {
                     observerLat: observerLat,
                     observerLon: observerLon,
                     slantDistanceMeters: observed?.slantDistanceMeters ?? 0,
-                    registration: metadata?.registration,
-                    typecode: metadata?.typecode,
+                    // trimmedNonEmpty-equivalent: an OpenSky "" must store
+                    // as nil or the fill-only-if-nil backfill can never
+                    // self-heal the field later.
+                    registration: metadata?.registration?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
+                    typecode: metadata?.typecode?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
                     altitudeMeters: observed?.aircraft.altitudeMeters,
                     velocityMps: observed?.aircraft.velocityMps
                 )
