@@ -183,7 +183,7 @@ struct SetDetailView: View {
 
 /// Stable navigation target for `ModelSlotDetailView` — the model-group
 /// tail list. Carries the set id + a derived model string (e.g.,
-/// "BOEING 737-800") rather than a curated PokeSetEntry id, so the
+/// "Boeing 737-800") rather than a curated PokeSetEntry id, so the
 /// list can grow as the user catches new models.
 struct ModelSlotRoute: Hashable {
     let setId: String

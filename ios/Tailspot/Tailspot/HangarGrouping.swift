@@ -6,7 +6,7 @@
 //  HangarView so the logic is unit-testable without spinning up SwiftUI.
 //
 //  v0 supports two grouping modes:
-//   - .aircraftType — by manufacturer + model (e.g., "BOEING 737-800")
+//   - .aircraftType — by canonical model name (e.g., "Boeing 737-800")
 //   - .airline      — by operatorName (e.g., "United Airlines")
 //
 //  v1 (this file) adds dedupe: within a group, catches sharing an

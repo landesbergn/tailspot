@@ -44,6 +44,9 @@ nonisolated enum PokeSets {
                 .init(id: "n-737-800",  canonicalName: "Boeing 737-800",    rarity: .common,
                       modelTokens: ["737-8", "737-800"],
                       summary: "Most-built airliner variant. Workhorse of every major US carrier."),
+                // "max" token: union matching also scans canonical names —
+                // K-Max/SeaMax could theoretically match, but need a typecode'd
+                // catch of those airframes; acceptable.
                 .init(id: "n-737-max",  canonicalName: "Boeing 737 MAX",    rarity: .uncommon,
                       modelTokens: ["max"],
                       summary: "Re-engined 737 family. MAX 8/9 are the common spots."),
