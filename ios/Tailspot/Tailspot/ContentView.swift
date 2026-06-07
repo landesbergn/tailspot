@@ -1037,17 +1037,20 @@ struct ContentView: View {
     /// catch is still in view. Used by both the new-catch and
     /// duplicate paths so the reveal renders consistently.
     private func pokePlane(from row: Catch, observed: ObservedAircraft?) -> PokePlane {
-        let altFt = (observed?.aircraft.altitudeMeters).map { Int(($0 * 3.28084).rounded()) }
-        let speedKt: Int? = observed?.aircraft.velocityMps.map { Int(($0 * 1.94384).rounded()) }
+        let canonical = AircraftNaming.canonical(
+            typecode: row.typecode,
+            manufacturer: row.manufacturer,
+            model: row.model
+        )
         let distMeters = observed?.slantDistanceMeters ?? row.slantDistanceMeters
         return PokePlane(
             callsign: row.callsign,
-            model: row.model,
+            model: canonical.displayName ?? row.model,
             carrier: row.operatorName,
             rarity: row.resolvedRarity,
             type: row.resolvedType,
-            altText: altFt.map { "\($0.formatted(.number)) ft" },
-            speedText: speedKt.map { "\($0) kt" },
+            altText: PokePlane.altText(fromMeters: observed?.aircraft.altitudeMeters ?? row.altitudeMeters),
+            speedText: PokePlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
             distText: String(format: "%.1f km", distMeters / 1000),
             photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
         )

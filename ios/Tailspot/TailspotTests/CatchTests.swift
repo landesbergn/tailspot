@@ -244,4 +244,42 @@ struct CatchTests {
         #expect(fetched?.velocityMps == nil)
         #expect(fetched?.placeName == nil)
     }
+
+    // MARK: - PokePlane from a stored Catch
+
+    @Test func pokePlaneFormatsStoredAltAndSpeed() {
+        let c = Catch(
+            icao24: "a1b2c3", callsign: "UAL248",
+            model: "777-322ER", manufacturer: "BOEING",
+            caughtAt: Date(), observerLat: 0, observerLon: 0,
+            slantDistanceMeters: 8_300,
+            altitudeMeters: 152.4,   // exactly 500 ft
+            velocityMps: 102.889     // exactly 200 kt
+        )
+        let plane = PokePlane(catchRecord: c)
+        #expect(plane.altText == "500 ft")
+        #expect(plane.speedText == "200 kt")
+    }
+
+    @Test func pokePlaneShowsNilStatsForLegacyRows() {
+        let c = Catch(
+            icao24: "a1b2c3", callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(), observerLat: 0, observerLon: 0,
+            slantDistanceMeters: 0
+        )
+        let plane = PokePlane(catchRecord: c)
+        #expect(plane.altText == nil)   // card renders "—"
+        #expect(plane.speedText == nil)
+    }
+
+    @Test func pokePlaneUsesCanonicalModelName() {
+        let c = Catch(
+            icao24: "a1b2c3", callsign: "UAL248",
+            model: "777-322ER", manufacturer: "BOEING",
+            caughtAt: Date(), observerLat: 0, observerLon: 0,
+            slantDistanceMeters: 0,
+            typecode: "B77W"
+        )
+        #expect(PokePlane(catchRecord: c).model == "Boeing 777-300ER")
+    }
 }

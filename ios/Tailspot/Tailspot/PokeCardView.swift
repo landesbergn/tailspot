@@ -373,18 +373,36 @@ struct PokeCardView: View {
 // MARK: - PokePlane builders
 
 extension PokePlane {
+    /// "500 ft" from meters MSL. Shared by the live catch reveal and
+    /// the stored-catch builder so the two can't drift apart.
+    static func altText(fromMeters m: Double?) -> String? {
+        m.map { "\(Int(($0 * 3.28084).rounded()).formatted(.number)) ft" }
+    }
+
+    /// "200 kt" from m/s ground speed.
+    static func speedText(fromMps v: Double?) -> String? {
+        v.map { "\(Int(($0 * 1.94384).rounded())) kt" }
+    }
+
     /// Build a card from a persisted Catch. Reads the snapshotted
-    /// rarity/type (or backfills via classifier when nil). Photo URL
-    /// is the user's catch photo file if present.
+    /// rarity/type (or backfills via classifier when nil), resolves
+    /// the model line to its canonical official name, and formats the
+    /// alt/speed snapshotted at the catch moment (nil for rows from
+    /// before those fields shipped → the card renders "—").
     init(catchRecord c: Catch) {
+        let canonical = AircraftNaming.canonical(
+            typecode: c.typecode,
+            manufacturer: c.manufacturer,
+            model: c.model
+        )
         self.init(
             callsign: c.callsign,
-            model: c.model,
+            model: canonical.displayName ?? c.model,
             carrier: c.operatorName,
             rarity: c.resolvedRarity,
             type: c.resolvedType,
-            altText: nil,                  // not stored on Catch — Detail can pass it in
-            speedText: nil,
+            altText: Self.altText(fromMeters: c.altitudeMeters),
+            speedText: Self.speedText(fromMps: c.velocityMps),
             distText: String(format: "%.1f km", c.slantDistanceMeters / 1000),
             photoURL: c.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
         )
