@@ -167,6 +167,16 @@ nonisolated enum AircraftNaming {
     private static let airbusVariant =
         #/^(A3[0-9]{2})-([0-9])([0-9]{2})(NX|N|F)?$/#
 
+    /// Boeing 737 MAX short designation. Boeing names the MAX family
+    /// "737-7/-8/-9/-10" (single digit), distinct from the previous-gen
+    /// 737 NG which is always 3-digit ("737-700/-800/-900"). A bare
+    /// "737-8" IS the MAX 8 (typecode B38M → "737 MAX 8"); without this
+    /// rule a no-typecode MAX 8 fell out as "737-8" and fragmented into
+    /// its own Set away from the typecode-resolved "737 MAX 8". "737-800"
+    /// has three digits and is NOT matched — the NG stays its own type.
+    private static let boeing737Max =
+        #/^B?737-(7|8|9|10)$/#
+
     static func cleanedModel(_ raw: String?, make: String?) -> String? {
         guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         else { return nil }
@@ -178,9 +188,17 @@ nonisolated enum AircraftNaming {
             // established via lowercased() but sliced on the original.
             model = String(model.dropFirst(make.count + 1))
         }
+        // Boeing 737 MAX short code ("737-8" → "737 MAX 8"), so a
+        // no-typecode MAX converges with the typecode table's name.
+        // Must run BEFORE customer-code collapse (which would otherwise
+        // leave the bare short code untouched). "737-800" is 3-digit
+        // and falls through to NG handling below.
+        if let m = model.uppercased().wholeMatch(of: boeing737Max) {
+            model = "737 MAX \(m.1)"
+        }
         // (a) Space-to-dash join for Airbus A3xx / Boeing 7x7 families
         // where the token after the space starts with a digit.
-        if let m = model.wholeMatch(of: spaceDashJoin) {
+        else if let m = model.wholeMatch(of: spaceDashJoin) {
             model = "\(m.1)-\(m.2)"
         }
         // Boeing customer-code collapse.

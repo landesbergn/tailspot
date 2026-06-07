@@ -137,6 +137,46 @@ struct AircraftNamingTests {
         #expect(n.model == expected, "Input '\(input)' expected '\(expected)' got '\(n.model ?? "nil")'")
     }
 
+    // MARK: - Fallback: Boeing 737 MAX short codes
+    // A bare "737-N" (single digit) is the MAX; the previous-gen NG is
+    // always 3-digit "737-N00". The MAX short code must converge with
+    // the typecode table ("737 MAX N"); the NG must NOT become a MAX.
+
+    @Test(arguments: [
+        ("737-8", "737 MAX 8"),    // MAX 8 short code
+        ("737-9", "737 MAX 9"),    // MAX 9
+        ("737-7", "737 MAX 7"),    // MAX 7
+        ("737-10", "737 MAX 10"),  // MAX 10
+        ("B737-8", "737 MAX 8"),   // leading-B variant
+        ("737-800", "737-800"),    // NG — three digits, NOT a MAX
+        ("737-900", "737-900"),    // NG
+        ("737-8H4", "737-800"),    // NG customer code, not MAX
+        ("737 MAX 8", "737 MAX 8"),// already clean, idempotent
+    ])
+    func boeing737MaxShortCode(input: String, expected: String) {
+        let n = AircraftNaming.canonical(typecode: nil, manufacturer: "BOEING", model: input)
+        #expect(n.model == expected, "Input '\(input)' expected '\(expected)' got '\(n.model ?? "nil")'")
+    }
+
+    /// The user's report: a MAX 8 caught WITH a typecode (B38M) and one
+    /// caught WITHOUT (raw "737-8") must land in the SAME group. Same
+    /// for the MAX 9. And the NG -800/-900 must NOT collapse into the MAX.
+    @Test func boeing737MaxConvergesWithTypecode() {
+        let max8Table    = AircraftNaming.canonical(typecode: "B38M", manufacturer: nil, model: nil).displayName
+        let max8Fallback = AircraftNaming.canonical(typecode: nil, manufacturer: "Boeing", model: "737-8").displayName
+        #expect(max8Table == max8Fallback)
+        #expect(max8Table == "Boeing 737 MAX 8")
+
+        let max9Table    = AircraftNaming.canonical(typecode: "B39M", manufacturer: nil, model: nil).displayName
+        let max9Fallback = AircraftNaming.canonical(typecode: nil, manufacturer: "Boeing", model: "737-9").displayName
+        #expect(max9Table == max9Fallback)
+
+        // NG stays distinct from the MAX.
+        let ng800 = AircraftNaming.canonical(typecode: nil, manufacturer: "Boeing", model: "737-800").displayName
+        #expect(ng800 == "Boeing 737-800")
+        #expect(ng800 != max8Table)
+    }
+
     // MARK: - Convergence invariant
 
     /// Pins that the string-cleanup fallback and the DOC 8643 table
