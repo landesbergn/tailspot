@@ -8,99 +8,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-07 [aircraft-identity overhaul: classification, FAA fallback])
+## Current state (as of session ending 2026-06-08 [3D pinhole projection for AR label placement])
 
-**Shipping as TestFlight v0.2.0.** Built on the 2026-06-06 naming/catch-detail
-work (ICAO DOC 8643 table, `AircraftNaming`, Catch schema +5 fields, `CatchDetailView`
-AIRFRAME panel + delete). Field testing and a full data audit exposed a second
-layer of problems: the DOC 8643 table had messy manufacturer strings, `AircraftType`
-classification was broken for rotorcraft and GA, OpenSky 404s for US aircraft
-left entire class of airframes unresolved, and the replay recorder was silently
-recording only the filtered-visible subset (defeating the ReplayAnalyzer when
-visibility filtered everything out). All fixed. Architecture principle established:
-**every derived property (canonical name + aircraft type) resolves from the ICAO
-typecode through authoritative reference data — DOC 8643 for names, DOC 8643
-description/engine/wake for type — never from OpenSky's free-text fields; a
-collection-wide background backfill (`CatchBackfill`) ensures old catches carry
-a typecode.** Key files: `AircraftNaming.swift`, `CatchBackfill.swift`,
-`IcaoRegistry.swift`, `FAARegistry.swift`, `ReverseGeocode.swift`; bundled
-resources `AircraftTypes.json`, `faa-aircraft.bin`, `faa-models.json`; generators
-`tools/generate-aircraft-types.py`, `tools/generate-faa-registry.py`; reference
-data `tools/data/faa_aircraft_characteristics.xlsx`.
+**3D pinhole projection landed; device-verified by Noah; on `main` as
+`MARKETING_VERSION` 0.2.1.** Replaces the separable tan projection in
+`Geo.screenPosition` — which treated screen-x (from bearing delta) and screen-y
+(from elevation delta) as independent — with a proper pinhole camera that couples
+azimuth and elevation and honors device **roll**. This fixes the documented
+systematic label offset (the "~1/cos(camElev) horizontal exaggeration", ~25% at
+40° camera elevation) that was PLAN §9 #3's "cheaper partial step". The random
+component (compass wobble) is untouched — that's the later Vision/ML half of #3.
+Spec: `docs/superpowers/specs/2026-06-08-3d-pinhole-projection-design.md`.
 
-1. **Canonical-manufacturer normalization + FAA cross-check in the generator.**
-   `tools/generate-aircraft-types.py` now normalizes messy OpenSky/DOC 8643 make
-   strings to clean brand names ("Gulfstream Aerospace"→"Gulfstream",
-   "Canadair"→"Bombardier"), strips doubled-brand model prefixes, and cross-checks
-   ~5 military/conversion mis-picks against the committed FAA Aircraft
-   Characteristics Database (`tools/data/faa_aircraft_characteristics.xlsx`). FAA
-   wingspan/length data carried into ~92 entries as bonus metadata. `OVERRIDES`
-   table extended accordingly; regeneration is idempotent.
+Architecture principle: **all AR placement funnels through one chokepoint
+(`Geo.screenPosition`), so the fix reaches the live overlay, lock-on, tap-to-ID,
+multi-catch capture detection, and offline `ReplayAnalyzer` at once.** The camera
+orientation is derived from the **gravity vector + heading** (consistent with the
+gravity-based `cameraElevationDeg`; never the gimbal-flaky Euler roll).
 
-2. **Airbus engine-variant collapse + Boeing 737 MAX short-codes in
-   `AircraftNaming.cleanedModel`.** Engine-suffix variants collapse to family
-   names ("A380-842"→"A380-800", "A321-271NX"→"A321neo"). Bare OpenSky model
-   strings "737-8" / "737-9" (no typecode, no suffix) collapse to "737 MAX 8" /
-   "737 MAX 9" — converging the no-typecode catch path with the typecode path.
-   "737-800" NG stays distinct. Convergence pinned by parameterized tests in
-   `AircraftNamingTests`.
+1. **Pinhole core (`Geo.swift`).** New `Geo.CameraBasis` (forward/right/up world
+   ENU unit vectors via `SIMD3<Double>`), two builders — `cameraBasis(headingDeg:
+   cameraElevationDeg:rollDeg:)` and `cameraBasis(gravityX:Y:Z:headingDeg:)` (derives
+   camEl + roll from gravity, delegates) — plus `rollDeg(gravity:)` and the pinhole
+   `screenPosition(...basis...)`. The old scalar `screenPosition(...phoneHeadingDeg:
+   cameraElevationDeg:rollDeg:...)` now builds a basis and delegates, so it gains the
+   coupling fix + a `rollDeg` param while the existing `GeoTests`/`ClosestTargetTests`
+   invariant net stays green unchanged (the regression proof that the common case
+   didn't move). Builds for arm64 device.
 
-3. **`AircraftType` classified from the typecode via DOC 8643 authoritative data.**
-   `AircraftTypes.json` now carries a `type` field per entry (derived from
-   DOC 8643 description + engine + wake categories). `Catch.resolvedType` reads it
-   via `IcaoRegistry`. This fixes the core misclassification: helicopters (R44,
-   EC35) and light GA (Cessna 172) were landing in `narrow` because the string
-   classifier had no rotorcraft awareness and defaulted unknowns to `narrow`. New
-   default is `.ga`; the string classifier (no-typecode fallback only) gained
-   helicopter awareness. Type distribution across 2,612 entries: ga 2227,
-   narrow 223, wide 61, regional 40, biz 39, mil 22. `AircraftTypeResolutionTests`
-   pins every type bucket with representative icao24s.
+2. **Roll threaded through every consumer.** `ObservedAircraft.screenPosition`
+   gains a `CameraBasis` overload (built once per frame, then 3 dot products per
+   plane); `closestTargetIcao24`/`icaosInZone` take `rollDeg` and build the basis
+   once so lock-zone geometry matches label placement; `ContentView` builds the
+   basis from the live gravity vector each frame and forwards roll to `handleTap`;
+   `ReplayAnalyzer` derives roll from the recorded gravity vector when present, else
+   falls back to roll = 0.
 
-4. **Collection-wide typecode backfill (`CatchBackfill.swift`).** On Hangar open,
-   `CatchBackfill.backfillIfNeeded(in:)` fetches a typecode for every catch
-   missing one (one OpenSky call per icao24, cached, fill-only-if-nil, runs in a
-   background Task). Ensures the entire collection resolves through the clean table,
-   not just newly caught planes. `CatchBackfillTests` covers the fill/skip
-   semantics and the 404-fallback path.
+3. **Replay format additions (additive/optional, the `zoomFactor` pattern).**
+   `SensorSnapshot` gains `gravityX/Y/Z: Double?` (lets future recordings
+   reconstruct the exact live basis); `TapPin` gains `x/y: Double?` (pixel-exact
+   tap ground truth for projection + the future visual-confirmation work).
+   Synthesized `Codable` omits nil, so pre-existing recordings decode unchanged.
+   `recordReplayTick` records gravity; `recordTapPin(tapPoint:)` records the tap.
 
-5. **Sets model list sorts alphabetically** (was tail-count descending). Unknown
-   bucket still forced to last. Fixes the jarring reorder on each catch.
+4. **Verification.** Correctness is proved by analytic unit tests (basis-builder
+   absolute correctness vs known poses; self-checking coupling identities —
+   level-x == old separable x, level-y == old-y/cos(dB); the 302.16px
+   horizontal-compression anchor; gravity-roll sign). No strong *offline* ground
+   truth exists (committed `replays/*.jsonl` have no tap-pins), so the on-device
+   eyeball was the acceptance gate — **passed** (roll glues correctly, overhead +
+   corner planes sane). Future pin-protocol recordings now carry gravity + tap-xy
+   for pixel-exact replay validation.
 
-6. **Replay recorder fix.** `ReplayRecorder.recordReplayTick` was silently recording
-   only the visibility-filtered subset (`adsb.observed` post-filter), so when the
-   filter rejected everything (a contrail cruising past the distance cap) the JSONL
-   tick carried zero aircraft — defeating the ReplayAnalyzer's purpose. Now records
-   the full annotated set before filtering. Found while diagnosing a contrail that
-   was filtered as "no aircraft in range" and produced an empty replay.
+**Tests: 287 → 307, 0 failures.** New `CameraBasisTests` (16) + integration tests
+in `ReplayAnalyzerTests` (roll plumbing) and `ReplayRecorderTests` (gravity +
+tap-location round-trip, nil back-compat).
 
-7. **FAA-registry fallback for US aircraft OpenSky 404s (`IcaoRegistry.swift`,
-   `FAARegistry.swift`).** US icao24↔N-number is a deterministic bit-level
-   encoding; a bundled FAA snapshot (313,376 US aircraft, ~3.5 MB, binary-searched
-   via `faa-aircraft.bin` + model table `faa-models.json`, generated by
-   `tools/generate-faa-registry.py` from the public FAA Civil Aircraft Registry)
-   supplies make/model/type when OpenSky has no record. Verified: Cirrus SR20
-   (a9eefa), Embraer E175 (a8d71c), Pilatus PC-12 (a00965) recover; foreign tails
-   (Korean 71c575) correctly stay unknown. Community aggregators (hexdb.io, adsbdb)
-   404 the same airframes — shared OpenSky lineage, so they don't help. FAA fallback
-   is wired into `CatchBackfill` as the OpenSky-404 path. `FAARegistryTests` and
-   `IcaoRegistryTests` pin the round-trip encoding + lookup.
+**`MARKETING_VERSION` 0.2.0 → 0.2.1** (user-visible AR accuracy: labels track the
+real plane far better at elevation and under roll).
 
-8. **ADS-B metadata sources research doc.** `docs/superpowers/research/2026-06-07-adsb-metadata-sources.md`
-   documents when/how to move off OpenSky for metadata. Key findings: the baked
-   single credential makes the 4,000/day quota a global bucket (exhausts at ~4
-   simultaneous spotters); OpenSky terms are research-only (commercial use
-   prohibited); adsb.lol (ODbL) is the one MLAT source whose license permits a
-   distributed app; the planned backend is the keystone next step (fixes credential
-   exhaustion + MLAT licensing + stale bundle at once). **NOT being built now —
-   deferred to the backend round.** See the research doc for provider comparison
-   table and decision matrix.
-
-**Tests: 244 → 287, 0 failures.** New suites: `AircraftNamingTests` (extended),
-`AircraftTypeResolutionTests`, `CatchBackfillTests`, `IcaoRegistryTests`,
-`FAARegistryTests`, `ReverseGeocodeTests` (extended).
-
-**`MARKETING_VERSION` 0.1.4 → 0.2.0** (major user-visible surface: standardized
-aircraft identity + authoritative classification + catch-detail overhaul).
+**In flight on `main`, not by this round (heads-up for the next session):** two
+docs-only commits add an *activity-based rarity* design spec + implementation plan
+(`docs/superpowers/specs/2026-06-08-activity-rarity-design.md`,
+`docs/superpowers/plans/2026-06-08-activity-rarity.md`) — no code yet. Separately,
+the aircraft-naming generator (`tools/generate-aircraft-types.py`,
+`AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`) had **uncommitted**
+WIP in the working tree during this round — confirm its state before building on
+those files.
 
 ## Working model
 
