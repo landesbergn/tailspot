@@ -45,8 +45,10 @@ struct ObservedAircraft: Identifiable, Sendable {
 /// new shown set (the icao24s now passing the hysteretic visibility gate).
 /// Shared by the live path (`ADSBManager.reAnnotate`) and the offline
 /// `ReplayAnalyzer` so the two can't drift. Pure aside from stamping flags
-/// on the passed-in array.
-nonisolated func applyVisibilityHysteresis(
+/// on the passed-in array. MainActor-isolated (the repo default) because it
+/// consults `isLikelyVisibleToObserver`, the MainActor-isolated visibility
+/// gate; both callers already run on the MainActor, so this costs nothing.
+func applyVisibilityHysteresis(
     _ observed: inout [ObservedAircraft],
     previouslyShown: Set<String>
 ) -> Set<String> {
