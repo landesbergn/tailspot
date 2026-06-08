@@ -82,7 +82,10 @@ nonisolated enum ReverseGeocode {
     }
 }
 
-private extension String {
+// `nonisolated` so the helper is usable from `format` (which is
+// nonisolated) under Xcode 26 MainActor-default isolation — an
+// unmarked extension would inherit MainActor and warn.
+private nonisolated extension String {
     var trimmedNonEmpty: String? {
         let t = trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
