@@ -407,6 +407,46 @@ struct ReplayAnalyzerTests {
         }
     }
 
+    // MARK: - 3D pinhole: gravity-derived roll plumbing
+
+    /// End-to-end plumbing check (spec §6.3): the sensor row → basis-builder
+    /// selection → projection path inside the analyzer. A plane due west and
+    /// slightly above the horizon projects straight above screen center with
+    /// no roll; feeding a gravity vector that encodes a 45° roll must rotate
+    /// it sideways. Also exercises the gravity-absent fallback (roll = 0).
+    @Test func gravityRollRotatesProjectionAndAbsentGravityIsZeroRoll() {
+        var analyzer = ReplayAnalyzer()
+        analyzer.screenSize = CGSize(width: 400, height: 800)   // center = (200, 400)
+        let plane = westAircraft(icao: "abc123", altMeters: 300) // ~5° above, due west
+
+        // No gravity fields → analyzer uses roll = 0. Plane sits horizontally
+        // centered, above center.
+        let noGravity = analyzer.analyze([
+            .tick(tick(at: 0, from: t0,
+                       sensor: berkeleySensor(headingDeg: 270, cameraEl: 0),
+                       aircraft: [plane]))
+        ])
+        let pNoRoll = try! #require(noGravity.ticks[0].aircraft[0].screenPosition)
+        #expect(abs(pNoRoll.x - 200) < 1)   // horizontally centered
+        #expect(pNoRoll.y < 400)            // above center
+
+        // Gravity encoding a 45° roll (gz = 0 → camEl stays 0; in-plane
+        // gravity tilted 45°). Same geometry must now shift off-center
+        // horizontally.
+        let rolledSensor = ReplayEvent.SensorSnapshot(
+            latitude: 37.87, longitude: -122.27, altitudeMeters: 40,
+            horizontalAccuracyMeters: 5, headingDeg: 270, headingAccuracyDeg: 3,
+            pitchRad: .pi / 2, rollRad: 0, yawRad: 0, cameraElevationDeg: 0,
+            zoomFactor: nil,
+            gravityX: sin(.pi / 4), gravityY: -cos(.pi / 4), gravityZ: 0
+        )
+        let withRoll = analyzer.analyze([
+            .tick(tick(at: 0, from: t0, sensor: rolledSensor, aircraft: [plane]))
+        ])
+        let pRoll = try! #require(withRoll.ticks[0].aircraft[0].screenPosition)
+        #expect(pRoll.x > 210)              // rotated off-center by the roll
+    }
+
     @Test func describeNoGpsTickShowsObsNoFix() {
         let sensorNoFix = ReplayEvent.SensorSnapshot(
             latitude: nil, longitude: nil, altitudeMeters: nil,

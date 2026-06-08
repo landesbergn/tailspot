@@ -270,6 +270,19 @@ struct ReplayAnalyzer {
         let effectiveHfov = hfovDeg / zoom
         let effectiveVfov = vfovDeg / zoom
 
+        // Camera roll for the pinhole projection. Prefer the gravity vector
+        // (exact, robust at the portrait hold); recordings made before the
+        // 3D-pinhole work have no gravity, so fall back to roll = 0 rather
+        // than the unreliable Euler `rollRad`.
+        let rollDeg: Double = {
+            if let gx = tick.sensor.gravityX,
+               let gy = tick.sensor.gravityY,
+               let gz = tick.sensor.gravityZ {
+                return Geo.rollDeg(gravityX: gx, gravityY: gy, gravityZ: gz)
+            }
+            return 0
+        }()
+
         // Compute per-aircraft annotation. Ticks without a GPS fix
         // skip annotation entirely — we can't compute bearings without
         // an observer.
@@ -293,6 +306,7 @@ struct ReplayAnalyzer {
                 let screenPos = obs.screenPosition(
                     phoneHeadingDeg: tick.sensor.headingDeg ?? 0,
                     cameraElevationDeg: tick.sensor.cameraElevationDeg,
+                    rollDeg: rollDeg,
                     in: screenSize,
                     hfovDeg: effectiveHfov,
                     vfovDeg: effectiveVfov
@@ -313,6 +327,7 @@ struct ReplayAnalyzer {
             in: visibleObs,
             phoneHeadingDeg: tick.sensor.headingDeg ?? 0,
             cameraElevationDeg: tick.sensor.cameraElevationDeg,
+            rollDeg: rollDeg,
             screenSize: screenSize,
             hfovDeg: effectiveHfov,
             vfovDeg: effectiveVfov,

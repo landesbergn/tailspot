@@ -182,6 +182,17 @@ struct ContentView: View {
                         let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
+                        // Camera roll from the gravity vector (robust at the
+                        // portrait hold where Euler roll is unreliable). The
+                        // basis is built once per frame and reused for every
+                        // label projection below; lock/zone/tap take `roll`
+                        // and rebuild the identical basis internally.
+                        let roll = Geo.rollDeg(
+                            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+                        )
+                        let basis = Geo.cameraBasis(
+                            headingDeg: heading, cameraElevationDeg: camEl, rollDeg: roll
+                        )
 
                         // Target choice: the explicit tap-pinned plane (if
                         // still visible) wins; otherwise fall back to
@@ -193,6 +204,7 @@ struct ContentView: View {
                             in: visible,
                             phoneHeadingDeg: heading,
                             cameraElevationDeg: camEl,
+                            rollDeg: roll,
                             screenSize: geo.size,
                             hfovDeg: effectiveHfov,
                             vfovDeg: effectiveVfov
@@ -231,6 +243,7 @@ struct ContentView: View {
                                                 visible: visible,
                                                 phoneHeadingDeg: heading,
                                                 cameraElevationDeg: camEl,
+                                                rollDeg: roll,
                                                 hfovDeg: effectiveHfov,
                                                 vfovDeg: effectiveVfov,
                                                 now: now
@@ -256,8 +269,7 @@ struct ContentView: View {
                             let pinnedIcaoForLabels = lockOn.state.targetIcao24
                             ForEach(visible, id: \.aircraft.icao24) { obs in
                                 if let pos = obs.screenPosition(
-                                    phoneHeadingDeg: heading,
-                                    cameraElevationDeg: camEl,
+                                    basis: basis,
                                     in: geo.size,
                                     hfovDeg: effectiveHfov,
                                     vfovDeg: effectiveVfov
@@ -337,8 +349,7 @@ struct ContentView: View {
                             // path draws onto the saved photo.
                             let onScreenProjected: [(icao: String, position: CGPoint)] = visible.compactMap { obs in
                                 guard let pos = obs.screenPosition(
-                                    phoneHeadingDeg: heading,
-                                    cameraElevationDeg: camEl,
+                                    basis: basis,
                                     in: geo.size,
                                     hfovDeg: effectiveHfov,
                                     vfovDeg: effectiveVfov
@@ -1582,7 +1593,10 @@ struct ContentView: View {
                 rollRad: motion.roll,
                 yawRad: motion.yaw,
                 cameraElevationDeg: motion.cameraElevationDeg,
-                zoomFactor: Double(zoom)
+                zoomFactor: Double(zoom),
+                gravityX: motion.gravityX,
+                gravityY: motion.gravityY,
+                gravityZ: motion.gravityZ
             ),
             aircraft: annotated.map { ReplayEvent.AircraftSnapshot($0.aircraft) }
         )
@@ -1617,6 +1631,7 @@ struct ContentView: View {
         visible: [ObservedAircraft],
         phoneHeadingDeg: Double,
         cameraElevationDeg: Double,
+        rollDeg: Double,
         hfovDeg: Double,
         vfovDeg: Double,
         now: Date
@@ -1639,6 +1654,7 @@ struct ContentView: View {
             at: point,
             phoneHeadingDeg: phoneHeadingDeg,
             cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
             screenSize: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg,
@@ -1654,7 +1670,7 @@ struct ContentView: View {
                 lockOn.unpin()
             } else {
                 pinnedIcao = icao
-                recorder.recordTapPin(icao24: icao, at: now)
+                recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
                 // forceLock is the only way into .locked — the user
                 // just pointed at this plane, so the engine jumps
                 // straight to a locked state.
@@ -1679,6 +1695,7 @@ struct ContentView: View {
             at: point,
             phoneHeadingDeg: phoneHeadingDeg,
             cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
             screenSize: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg,

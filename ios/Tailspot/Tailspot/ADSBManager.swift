@@ -214,9 +214,12 @@ extension ObservedAircraft {
     ///
     /// `cameraElevationDeg` is the angle above the horizon the camera
     /// is pointing (use MotionManager.cameraElevationDeg, NOT raw pitch).
+    /// `rollDeg` is camera roll about the bore-sight (0 = upright; see
+    /// `Geo.rollDeg(gravityX:gravityY:gravityZ:)`).
     func screenPosition(
         phoneHeadingDeg: Double,
         cameraElevationDeg: Double,
+        rollDeg: Double = 0,
         in screenSize: CGSize,
         hfovDeg: Double = 56,
         vfovDeg: Double = 72
@@ -226,6 +229,26 @@ extension ObservedAircraft {
             targetElevationDeg: elevationDeg,
             phoneHeadingDeg: phoneHeadingDeg,
             cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
+            screenSize: screenSize,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
+        )
+    }
+
+    /// Project through a precomputed `CameraBasis`. Preferred in per-frame
+    /// loops (label placement, lock-on, zone scans): build the basis once
+    /// from the current pose, then each aircraft is three dot products.
+    func screenPosition(
+        basis: Geo.CameraBasis,
+        in screenSize: CGSize,
+        hfovDeg: Double = 56,
+        vfovDeg: Double = 72
+    ) -> CGPoint? {
+        Geo.screenPosition(
+            targetBearingDeg: bearingDeg,
+            targetElevationDeg: elevationDeg,
+            basis: basis,
             screenSize: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg

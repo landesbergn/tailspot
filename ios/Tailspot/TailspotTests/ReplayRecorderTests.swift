@@ -7,6 +7,7 @@
 
 import Testing
 import Foundation
+import CoreGraphics
 @testable import Tailspot
 
 @Suite("Replay format")
@@ -84,6 +85,64 @@ struct ReplayJSONLTests {
         for e in events { data.append(try ReplayJSONL.line(for: e)) }
         let decoded = try ReplayJSONL.decode(data)
         #expect(decoded == events)
+    }
+
+    @Test func roundTripsGravityAndTapLocation() throws {
+        let sensor = ReplayEvent.SensorSnapshot(
+            latitude: 37.87, longitude: -122.27, altitudeMeters: 40,
+            horizontalAccuracyMeters: 5, headingDeg: 270, headingAccuracyDeg: 3,
+            pitchRad: 1.1, rollRad: 0.1, yawRad: 0.05, cameraElevationDeg: 27,
+            zoomFactor: 2.0,
+            gravityX: 0.12, gravityY: -0.93, gravityZ: 0.34
+        )
+        let events: [ReplayEvent] = [
+            .tick(.init(timestamp: Date(timeIntervalSince1970: 1_715_000_000),
+                        sensor: sensor, aircraft: [])),
+            .tapPin(.init(timestamp: Date(timeIntervalSince1970: 1_715_000_005),
+                          icao24: "abc", x: 123.5, y: 456.25)),
+        ]
+        var data = Data()
+        for e in events { data.append(try ReplayJSONL.line(for: e)) }
+        let decoded = try ReplayJSONL.decode(data)
+
+        #expect(decoded == events)   // Equatable round-trip incl. new fields
+        guard case .tick(let t) = decoded[0] else { Issue.record("expected tick"); return }
+        #expect(t.sensor.gravityX == 0.12)
+        #expect(t.sensor.gravityY == -0.93)
+        #expect(t.sensor.gravityZ == 0.34)
+        guard case .tapPin(let p) = decoded[1] else { Issue.record("expected tapPin"); return }
+        #expect(p.x == 123.5)
+        #expect(p.y == 456.25)
+    }
+
+    @Test func legacyRecordsWithoutGravityOrTapLocationDecodeToNil() throws {
+        // The synthesized Codable omits nil optionals on encode, so a record
+        // built without gravity / tap location is byte-identical to a file
+        // recorded before those fields shipped. Decoding must yield nil
+        // (not a failure) — the back-compat contract.
+        let sensor = ReplayEvent.SensorSnapshot(
+            latitude: 37.87, longitude: -122.27, altitudeMeters: 40,
+            horizontalAccuracyMeters: 5, headingDeg: 270, headingAccuracyDeg: 3,
+            pitchRad: 1.1, rollRad: 0.1, yawRad: 0.05, cameraElevationDeg: 27,
+            zoomFactor: nil
+        )
+        let events: [ReplayEvent] = [
+            .tick(.init(timestamp: Date(timeIntervalSince1970: 1_715_000_000),
+                        sensor: sensor, aircraft: [])),
+            .tapPin(.init(timestamp: Date(timeIntervalSince1970: 1_715_000_005), icao24: "abc")),
+        ]
+        var data = Data()
+        for e in events { data.append(try ReplayJSONL.line(for: e)) }
+        let decoded = try ReplayJSONL.decode(data)
+
+        guard case .tick(let t) = decoded[0] else { Issue.record("expected tick"); return }
+        #expect(t.sensor.gravityX == nil)
+        #expect(t.sensor.gravityY == nil)
+        #expect(t.sensor.gravityZ == nil)
+        #expect(t.sensor.cameraElevationDeg == 27)   // the rest still decodes
+        guard case .tapPin(let p) = decoded[1] else { Issue.record("expected tapPin"); return }
+        #expect(p.x == nil)
+        #expect(p.y == nil)
     }
 
     @Test func dropsTrailingPartialLine() throws {
@@ -199,6 +258,24 @@ struct ReplayRecorderTests {
             #expect(p.icao24 == "abc")
         } else { Issue.record("Expected tapPin second; got \(events[1])") }
         if case .unpin = events[2] {} else { Issue.record("Expected unpin third") }
+    }
+
+    @Test func recordTapPinWritesTapLocation() throws {
+        let url = tempFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let r = ReplayRecorder()
+        _ = try r.start(at: url)
+        r.recordTapPin(icao24: "abc",
+                       at: Date(timeIntervalSince1970: 1_715_000_010),
+                       tapPoint: CGPoint(x: 42, y: 99))
+        r.stop()
+
+        let events = try ReplayJSONL.decode(Data(contentsOf: url))
+        guard case .tapPin(let p) = events[1] else { Issue.record("expected tapPin second"); return }
+        #expect(p.icao24 == "abc")
+        #expect(p.x == 42)
+        #expect(p.y == 99)
     }
 
     @Test func recordTapPinWhenNotRecordingIsANoop() {

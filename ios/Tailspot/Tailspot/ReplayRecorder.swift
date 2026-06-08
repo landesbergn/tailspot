@@ -36,6 +36,7 @@
 
 import Foundation
 import Combine
+import CoreGraphics
 import os
 
 // MARK: - Event model
@@ -79,6 +80,21 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
     struct TapPin: Codable, Equatable, Sendable {
         let timestamp: Date
         let icao24: String
+        /// Screen location of the tap, in points, at the moment of the pin.
+        /// Optional for back-compat — files recorded before the 3D-pinhole
+        /// work carry icao only; the analyzer treats a tap-pin without a
+        /// location as "this icao was confirmed visible" (today's behavior).
+        /// When present it is pixel-exact ground truth for the projection
+        /// and the eventual visual-confirmation work.
+        let x: Double?
+        let y: Double?
+
+        init(timestamp: Date, icao24: String, x: Double? = nil, y: Double? = nil) {
+            self.timestamp = timestamp
+            self.icao24 = icao24
+            self.x = x
+            self.y = y
+        }
     }
 
     struct Unpin: Codable, Equatable, Sendable {
@@ -102,6 +118,38 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
         /// `Codable` tolerates the missing key because the property is
         /// `Optional`.
         let zoomFactor: Double?
+        /// Device gravity vector (CMDeviceMotion.gravity) at capture, in the
+        /// device frame. Optional for back-compat — files recorded before the
+        /// 3D-pinhole work don't have it, and the analyzer falls back to
+        /// roll = 0. When present it lets a recording reconstruct the exact
+        /// live camera basis (heading + gravity → elevation + roll), which
+        /// the flaky Euler `rollRad` can't provide near the portrait hold.
+        let gravityX: Double?
+        let gravityY: Double?
+        let gravityZ: Double?
+
+        init(
+            latitude: Double?, longitude: Double?, altitudeMeters: Double?,
+            horizontalAccuracyMeters: Double?, headingDeg: Double?,
+            headingAccuracyDeg: Double?, pitchRad: Double, rollRad: Double,
+            yawRad: Double, cameraElevationDeg: Double, zoomFactor: Double?,
+            gravityX: Double? = nil, gravityY: Double? = nil, gravityZ: Double? = nil
+        ) {
+            self.latitude = latitude
+            self.longitude = longitude
+            self.altitudeMeters = altitudeMeters
+            self.horizontalAccuracyMeters = horizontalAccuracyMeters
+            self.headingDeg = headingDeg
+            self.headingAccuracyDeg = headingAccuracyDeg
+            self.pitchRad = pitchRad
+            self.rollRad = rollRad
+            self.yawRad = yawRad
+            self.cameraElevationDeg = cameraElevationDeg
+            self.zoomFactor = zoomFactor
+            self.gravityX = gravityX
+            self.gravityY = gravityY
+            self.gravityZ = gravityZ
+        }
     }
 
     /// A flat snapshot of the fields we want to replay through the
@@ -299,9 +347,13 @@ final class ReplayRecorder: ObservableObject {
 
     /// Append a tap-pin event. Called from `ContentView.handleTap` when
     /// the user explicitly pins onto a plane.
-    func recordTapPin(icao24: String, at now: Date = Date()) {
+    func recordTapPin(icao24: String, at now: Date = Date(), tapPoint: CGPoint? = nil) {
         guard isRecording else { return }
-        writeOrStop(.tapPin(.init(timestamp: now, icao24: icao24)))
+        writeOrStop(.tapPin(.init(
+            timestamp: now, icao24: icao24,
+            x: tapPoint.map { Double($0.x) },
+            y: tapPoint.map { Double($0.y) }
+        )))
     }
 
     /// Append an unpin event. Called when the user clears the pin

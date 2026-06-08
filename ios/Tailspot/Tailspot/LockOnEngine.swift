@@ -152,20 +152,25 @@ func closestTargetIcao24(
     at point: CGPoint? = nil,
     phoneHeadingDeg: Double,
     cameraElevationDeg: Double,
+    rollDeg: Double = 0,
     screenSize: CGSize,
     hfovDeg: Double = 56,
     vfovDeg: Double = 72,
     lockZoneRadius: CGFloat = 80
 ) -> String? {
     let anchor = point ?? CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
+    // Build the camera basis once and reuse — keeps lock-zone geometry
+    // identical to the label projection (same pose, same basis).
+    let basis = Geo.cameraBasis(
+        headingDeg: phoneHeadingDeg, cameraElevationDeg: cameraElevationDeg, rollDeg: rollDeg
+    )
 
     var bestIcao: String? = nil
     var bestDist: CGFloat = .infinity
 
     for obs in observed where obs.isLikelyVisibleToObserver {
         guard let pos = obs.screenPosition(
-            phoneHeadingDeg: phoneHeadingDeg,
-            cameraElevationDeg: cameraElevationDeg,
+            basis: basis,
             in: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg
@@ -199,18 +204,21 @@ func icaosInZone(
     at point: CGPoint? = nil,
     phoneHeadingDeg: Double,
     cameraElevationDeg: Double,
+    rollDeg: Double = 0,
     screenSize: CGSize,
     hfovDeg: Double = 56,
     vfovDeg: Double = 72,
     zoneRadius: CGFloat = 180
 ) -> [String] {
     let anchor = point ?? CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
+    let basis = Geo.cameraBasis(
+        headingDeg: phoneHeadingDeg, cameraElevationDeg: cameraElevationDeg, rollDeg: rollDeg
+    )
 
     var hits: [(String, CGFloat)] = []
     for obs in observed where obs.isLikelyVisibleToObserver {
         guard let pos = obs.screenPosition(
-            phoneHeadingDeg: phoneHeadingDeg,
-            cameraElevationDeg: cameraElevationDeg,
+            basis: basis,
             in: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg
