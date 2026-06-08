@@ -6,6 +6,100 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `PLAN.md` is the single source of truth for product scope, architectural decisions, the phased roadmap (Friday POC ✅, design-canvas port ✅, TestFlight v0 shipping to internal testers ✅, backend next), risks (including the credential-leak incident), and what's still on the table. Read it before proposing structural changes.
 
+## Current state (as of session ending 2026-06-07 [aircraft-identity overhaul: classification, FAA fallback])
+
+**Shipping as TestFlight v0.2.0.** Built on the 2026-06-06 naming/catch-detail
+work (ICAO DOC 8643 table, `AircraftNaming`, Catch schema +5 fields, `CatchDetailView`
+AIRFRAME panel + delete). Field testing and a full data audit exposed a second
+layer of problems: the DOC 8643 table had messy manufacturer strings, `AircraftType`
+classification was broken for rotorcraft and GA, OpenSky 404s for US aircraft
+left entire class of airframes unresolved, and the replay recorder was silently
+recording only the filtered-visible subset (defeating the ReplayAnalyzer when
+visibility filtered everything out). All fixed. Architecture principle established:
+**every derived property (canonical name + aircraft type) resolves from the ICAO
+typecode through authoritative reference data — DOC 8643 for names, DOC 8643
+description/engine/wake for type — never from OpenSky's free-text fields; a
+collection-wide background backfill (`CatchBackfill`) ensures old catches carry
+a typecode.** Key files: `AircraftNaming.swift`, `CatchBackfill.swift`,
+`IcaoRegistry.swift`, `FAARegistry.swift`, `ReverseGeocode.swift`; bundled
+resources `AircraftTypes.json`, `faa-aircraft.bin`, `faa-models.json`; generators
+`tools/generate-aircraft-types.py`, `tools/generate-faa-registry.py`; reference
+data `tools/data/faa_aircraft_characteristics.xlsx`.
+
+1. **Canonical-manufacturer normalization + FAA cross-check in the generator.**
+   `tools/generate-aircraft-types.py` now normalizes messy OpenSky/DOC 8643 make
+   strings to clean brand names ("Gulfstream Aerospace"→"Gulfstream",
+   "Canadair"→"Bombardier"), strips doubled-brand model prefixes, and cross-checks
+   ~5 military/conversion mis-picks against the committed FAA Aircraft
+   Characteristics Database (`tools/data/faa_aircraft_characteristics.xlsx`). FAA
+   wingspan/length data carried into ~92 entries as bonus metadata. `OVERRIDES`
+   table extended accordingly; regeneration is idempotent.
+
+2. **Airbus engine-variant collapse + Boeing 737 MAX short-codes in
+   `AircraftNaming.cleanedModel`.** Engine-suffix variants collapse to family
+   names ("A380-842"→"A380-800", "A321-271NX"→"A321neo"). Bare OpenSky model
+   strings "737-8" / "737-9" (no typecode, no suffix) collapse to "737 MAX 8" /
+   "737 MAX 9" — converging the no-typecode catch path with the typecode path.
+   "737-800" NG stays distinct. Convergence pinned by parameterized tests in
+   `AircraftNamingTests`.
+
+3. **`AircraftType` classified from the typecode via DOC 8643 authoritative data.**
+   `AircraftTypes.json` now carries a `type` field per entry (derived from
+   DOC 8643 description + engine + wake categories). `Catch.resolvedType` reads it
+   via `IcaoRegistry`. This fixes the core misclassification: helicopters (R44,
+   EC35) and light GA (Cessna 172) were landing in `narrow` because the string
+   classifier had no rotorcraft awareness and defaulted unknowns to `narrow`. New
+   default is `.ga`; the string classifier (no-typecode fallback only) gained
+   helicopter awareness. Type distribution across 2,612 entries: ga 2227,
+   narrow 223, wide 61, regional 40, biz 39, mil 22. `AircraftTypeResolutionTests`
+   pins every type bucket with representative icao24s.
+
+4. **Collection-wide typecode backfill (`CatchBackfill.swift`).** On Hangar open,
+   `CatchBackfill.backfillIfNeeded(in:)` fetches a typecode for every catch
+   missing one (one OpenSky call per icao24, cached, fill-only-if-nil, runs in a
+   background Task). Ensures the entire collection resolves through the clean table,
+   not just newly caught planes. `CatchBackfillTests` covers the fill/skip
+   semantics and the 404-fallback path.
+
+5. **Sets model list sorts alphabetically** (was tail-count descending). Unknown
+   bucket still forced to last. Fixes the jarring reorder on each catch.
+
+6. **Replay recorder fix.** `ReplayRecorder.recordReplayTick` was silently recording
+   only the visibility-filtered subset (`adsb.observed` post-filter), so when the
+   filter rejected everything (a contrail cruising past the distance cap) the JSONL
+   tick carried zero aircraft — defeating the ReplayAnalyzer's purpose. Now records
+   the full annotated set before filtering. Found while diagnosing a contrail that
+   was filtered as "no aircraft in range" and produced an empty replay.
+
+7. **FAA-registry fallback for US aircraft OpenSky 404s (`IcaoRegistry.swift`,
+   `FAARegistry.swift`).** US icao24↔N-number is a deterministic bit-level
+   encoding; a bundled FAA snapshot (313,376 US aircraft, ~3.5 MB, binary-searched
+   via `faa-aircraft.bin` + model table `faa-models.json`, generated by
+   `tools/generate-faa-registry.py` from the public FAA Civil Aircraft Registry)
+   supplies make/model/type when OpenSky has no record. Verified: Cirrus SR20
+   (a9eefa), Embraer E175 (a8d71c), Pilatus PC-12 (a00965) recover; foreign tails
+   (Korean 71c575) correctly stay unknown. Community aggregators (hexdb.io, adsbdb)
+   404 the same airframes — shared OpenSky lineage, so they don't help. FAA fallback
+   is wired into `CatchBackfill` as the OpenSky-404 path. `FAARegistryTests` and
+   `IcaoRegistryTests` pin the round-trip encoding + lookup.
+
+8. **ADS-B metadata sources research doc.** `docs/superpowers/research/2026-06-07-adsb-metadata-sources.md`
+   documents when/how to move off OpenSky for metadata. Key findings: the baked
+   single credential makes the 4,000/day quota a global bucket (exhausts at ~4
+   simultaneous spotters); OpenSky terms are research-only (commercial use
+   prohibited); adsb.lol (ODbL) is the one MLAT source whose license permits a
+   distributed app; the planned backend is the keystone next step (fixes credential
+   exhaustion + MLAT licensing + stale bundle at once). **NOT being built now —
+   deferred to the backend round.** See the research doc for provider comparison
+   table and decision matrix.
+
+**Tests: 244 → 287, 0 failures.** New suites: `AircraftNamingTests` (extended),
+`AircraftTypeResolutionTests`, `CatchBackfillTests`, `IcaoRegistryTests`,
+`FAARegistryTests`, `ReverseGeocodeTests` (extended).
+
+**`MARKETING_VERSION` 0.1.4 → 0.2.0** (major user-visible surface: standardized
+aircraft identity + authoritative classification + catch-detail overhaul).
+
 ## Current state (as of session ending 2026-06-06 [naming standardization + catch detail upgrades])
 
 **Shipping as TestFlight v0.1.4.** Four user-reported problems drove
@@ -491,7 +585,7 @@ xcodebuild test \
 ```
 First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, OpenSky client, or anything they depend on).
 
-The current suite is **244 tests** (256 case executions — one parameterized suite runs 13 argument sets) across `TailspotTests/`, broadly:
+The current suite is **287 tests, 0 failures** across `TailspotTests/`, broadly:
 
 - **Geometry / projection** — `GeoTests`, `ClosestTargetTests` (FOV/zoom-aware lock zone).
 - **OpenSky wire format** — `AircraftDecodingTests`, `AircraftMetadataDecodingTests`.
@@ -504,8 +598,10 @@ The current suite is **244 tests** (256 case executions — one parameterized su
 - **Multi-catch** — `MultiCatchComboTests` (combo-multiplier ladder).
 - **Catch photo** — `CatchPhotoComposerTests` (aspect-fill transform + bracket compose).
 - **Trophies** — `TrophiesTests`.
-- **Naming** — `AircraftNamingTests` (bundled DOC 8643 table structural sweeps + Boeing customer-code fallback).
+- **Naming + classification** — `AircraftNamingTests` (DOC 8643 table sweeps, Boeing customer-code fallback, engine-variant collapse, 737 MAX short-codes), `AircraftTypeResolutionTests` (typecode→type for every DOC 8643 bucket including rotorcraft + GA).
 - **Geocoding** — `ReverseGeocodeTests` (pure place-name formatting for every placemark shape).
+- **Registry + FAA fallback** — `IcaoRegistryTests` (icao24 encoding round-trip, lookup correctness), `FAARegistryTests` (US registry binary-search, foreign-tail non-match, fallback-to-nil for unknown).
+- **Backfill** — `CatchBackfillTests` (fill-only-if-nil semantics, OpenSky-404 FAA fallback path, caching).
 
 Look in `TailspotTests/` directly for the per-`@Test` enumeration — keeping it inline here drifted out of date and is no longer worth maintaining.
 
