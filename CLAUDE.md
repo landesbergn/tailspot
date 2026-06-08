@@ -8,78 +8,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-08 [3D pinhole projection for AR label placement])
+## Current state (as of session ending 2026-06-08 [field-fix ship: naming audit + visibility hysteresis → v0.2.2])
 
-**3D pinhole projection landed; device-verified by Noah; on `main` as
-`MARKETING_VERSION` 0.2.1.** Replaces the separable tan projection in
-`Geo.screenPosition` — which treated screen-x (from bearing delta) and screen-y
-(from elevation delta) as independent — with a proper pinhole camera that couples
-azimuth and elevation and honors device **roll**. This fixes the documented
-systematic label offset (the "~1/cos(camElev) horizontal exaggeration", ~25% at
-40° camera elevation) that was PLAN §9 #3's "cheaper partial step". The random
-component (compass wobble) is untouched — that's the later Vision/ML half of #3.
-Spec: `docs/superpowers/specs/2026-06-08-3d-pinhole-projection-design.md`.
+**Release-coordination round: bundled two field-driven fix streams that had been
+sitting unshipped onto `main`, bumped to `MARKETING_VERSION` 0.2.2, and pushed for
+TestFlight + `bin/deploy` to Noah's iPhone.** Both are tunings of existing
+chokepoints — no new architecture. This session ran as the integrator across
+several parallel work sessions: each session committed its own work (the
+hysteresis stream landed on `fix/visibility-hysteresis-roll-readout`, the naming
+audit was already on `main` from a prior commit), and this round merged, version-
+bumped, doc-updated, and shipped once the working tree was clean.
 
-Architecture principle: **all AR placement funnels through one chokepoint
-(`Geo.screenPosition`), so the fix reaches the live overlay, lock-on, tap-to-ID,
-multi-catch capture detection, and offline `ReplayAnalyzer` at once.** The camera
-orientation is derived from the **gravity vector + heading** (consistent with the
-gravity-based `cameraElevationDeg`; never the gimbal-flaky Euler roll).
+1. **Aircraft-naming audit (was "in flight" last round, now shipped).** Commit
+   `4430c39` fixes 57 DOC 8643 name mis-picks — military / foreign-licensee /
+   converter / doubled strings → the recognizable civil name (e.g. H25B → Hawker
+   800XP, GA6C → Gulfstream G600), each grounded in a real DOC 8643 / FAA row via
+   the generator's `OVERRIDES` table. Files: `tools/generate-aircraft-types.py`,
+   `AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`. Known
+   type-classification follow-up — several bizjets still typed `narrow`/`ga` — stays
+   parked in PLAN.md §9 (couple it to the activity-rarity work; it changes rarity).
 
-1. **Pinhole core (`Geo.swift`).** New `Geo.CameraBasis` (forward/right/up world
-   ENU unit vectors via `SIMD3<Double>`), two builders — `cameraBasis(headingDeg:
-   cameraElevationDeg:rollDeg:)` and `cameraBasis(gravityX:Y:Z:headingDeg:)` (derives
-   camEl + roll from gravity, delegates) — plus `rollDeg(gravity:)` and the pinhole
-   `screenPosition(...basis...)`. The old scalar `screenPosition(...phoneHeadingDeg:
-   cameraElevationDeg:rollDeg:...)` now builds a basis and delegates, so it gains the
-   coupling fix + a `rollDeg` param while the existing `GeoTests`/`ClosestTargetTests`
-   invariant net stays green unchanged (the regression proof that the common case
-   didn't move). Builds for arm64 device.
+2. **Visibility hysteresis (AR bracket de-flicker).** A Schmitt trigger on the
+   visibility distance cap: a plane already shown last frame keeps a wider cap so it
+   doesn't blink off when it hovers right at the boundary (and drop the lock). New
+   `ObservedAircraft.visibilityHysteresisFactor = 1.2` (~20% outer band) +
+   `wasShownLastFrame` flag, applied via the shared `nonisolated
+   applyVisibilityHysteresis(_:previouslyShown:)` helper. Threaded through BOTH the
+   live path (`ADSBManager.reAnnotate`, carried in private `shownIcaos`) and the
+   offline `ReplayAnalyzer` (carried across ticks) so the two can't drift — same
+   "one chokepoint, both paths" discipline as the pinhole round. Field report
+   2026-06-08: ASA733 oscillated False→True→False across consecutive ticks at the
+   ~9 km cap (±0.1–1.1 km swing); the 1.2 band absorbs it while still dropping
+   planes that genuinely recede. New plane must clear the *inner* cap to appear.
 
-2. **Roll threaded through every consumer.** `ObservedAircraft.screenPosition`
-   gains a `CameraBasis` overload (built once per frame, then 3 dot products per
-   plane); `closestTargetIcao24`/`icaosInZone` take `rollDeg` and build the basis
-   once so lock-zone geometry matches label placement; `ContentView` builds the
-   basis from the live gravity vector each frame and forwards roll to `handleTap`;
-   `ReplayAnalyzer` derives roll from the recorded gravity vector when present, else
-   falls back to roll = 0.
+3. **Gravity-roll debug readout (`ContentView`).** A debug-overlay readout of the
+   gravity-derived roll (behind the debug wrench), to eyeball the pinhole camera
+   basis in the field. Debug-only; no production-surface change.
 
-3. **Replay format additions (additive/optional, the `zoomFactor` pattern).**
-   `SensorSnapshot` gains `gravityX/Y/Z: Double?` (lets future recordings
-   reconstruct the exact live basis); `TapPin` gains `x/y: Double?` (pixel-exact
-   tap ground truth for projection + the future visual-confirmation work).
-   Synthesized `Codable` omits nil, so pre-existing recordings decode unchanged.
-   `recordReplayTick` records gravity; `recordTapPin(tapPoint:)` records the tap.
+**Tests: 307 → 314, 0 failures** (verified green on iPhone 17 sim before push). New
+`VisibilityHysteresisTests` (5: appear/stay/drop state machine end-to-end + helper
+stamps `wasShownLastFrame` from the prior shown set).
 
-4. **Verification.** Correctness is proved by analytic unit tests (basis-builder
-   absolute correctness vs known poses; self-checking coupling identities —
-   level-x == old separable x, level-y == old-y/cos(dB); the 302.16px
-   horizontal-compression anchor; gravity-roll sign). No strong *offline* ground
-   truth exists (committed `replays/*.jsonl` have no tap-pins), so the on-device
-   eyeball was the acceptance gate — **passed** (roll glues correctly, overhead +
-   corner planes sane). Future pin-protocol recordings now carry gravity + tap-xy
-   for pixel-exact replay validation.
+**`MARKETING_VERSION` 0.2.1 → 0.2.2** (user-visible: recognizable aircraft names +
+AR labels stop blinking at the distance edge).
 
-**Tests: 287 → 307, 0 failures.** New `CameraBasisTests` (16) + integration tests
-in `ReplayAnalyzerTests` (roll plumbing) and `ReplayRecorderTests` (gravity +
-tap-location round-trip, nil back-compat).
-
-**`MARKETING_VERSION` 0.2.0 → 0.2.1** (user-visible AR accuracy: labels track the
-real plane far better at elevation and under roll).
-
-**In flight on `main`, not by this round (heads-up for the next session):** two
-docs-only commits add an *activity-based rarity* design spec + implementation plan
+**In flight on `main`, not by this round (heads-up for the next session):** the
+*activity-based rarity* design spec + implementation plan
 (`docs/superpowers/specs/2026-06-08-activity-rarity-design.md`,
-`docs/superpowers/plans/2026-06-08-activity-rarity.md`) — no code yet. Separately,
-an **aircraft-naming audit committed to `main` 2026-06-08** (`tools/generate-aircraft-types.py`,
-`AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`) fixes 57 DOC 8643
-name mis-picks — military / foreign-licensee / converter / doubled strings → the
-recognizable civil name (e.g. H25B → Hawker 800XP, GA6C → Gulfstream G600), each
-grounded in a real DOC 8643 / FAA row via the generator's `OVERRIDES` table. **Not
-yet TestFlight-deployed and `MARKETING_VERSION` not yet bumped** (round still
-settling from live field reports). Known type-classification follow-up — several
-bizjets still typed `narrow`/`ga` — is parked in PLAN.md §9 (couple it to the
-activity-rarity work, as it changes catch rarity).
+`docs/superpowers/plans/2026-06-08-activity-rarity.md`) are docs-only — no code yet.
 
 ## Working model
 

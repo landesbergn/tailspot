@@ -5,6 +5,65 @@ that file focused on the live state plus durable guidance. The live "Current
 state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
 Git history and PLAN.md §9 remain the authoritative record.
 
+## 2026-06-08 — 3D pinhole projection for AR label placement (v0.2.1)
+
+**3D pinhole projection landed; device-verified by Noah; on `main` as
+`MARKETING_VERSION` 0.2.1.** Replaces the separable tan projection in
+`Geo.screenPosition` — which treated screen-x (from bearing delta) and screen-y
+(from elevation delta) as independent — with a proper pinhole camera that couples
+azimuth and elevation and honors device **roll**. This fixes the documented
+systematic label offset (the "~1/cos(camElev) horizontal exaggeration", ~25% at
+40° camera elevation) that was PLAN §9 #3's "cheaper partial step". The random
+component (compass wobble) is untouched — that's the later Vision/ML half of #3.
+Spec: `docs/superpowers/specs/2026-06-08-3d-pinhole-projection-design.md`.
+
+Architecture principle: **all AR placement funnels through one chokepoint
+(`Geo.screenPosition`), so the fix reaches the live overlay, lock-on, tap-to-ID,
+multi-catch capture detection, and offline `ReplayAnalyzer` at once.** The camera
+orientation is derived from the **gravity vector + heading** (consistent with the
+gravity-based `cameraElevationDeg`; never the gimbal-flaky Euler roll).
+
+1. **Pinhole core (`Geo.swift`).** New `Geo.CameraBasis` (forward/right/up world
+   ENU unit vectors via `SIMD3<Double>`), two builders — `cameraBasis(headingDeg:
+   cameraElevationDeg:rollDeg:)` and `cameraBasis(gravityX:Y:Z:headingDeg:)` (derives
+   camEl + roll from gravity, delegates) — plus `rollDeg(gravity:)` and the pinhole
+   `screenPosition(...basis...)`. The old scalar `screenPosition(...phoneHeadingDeg:
+   cameraElevationDeg:rollDeg:...)` now builds a basis and delegates, so it gains the
+   coupling fix + a `rollDeg` param while the existing `GeoTests`/`ClosestTargetTests`
+   invariant net stays green unchanged (the regression proof that the common case
+   didn't move). Builds for arm64 device.
+
+2. **Roll threaded through every consumer.** `ObservedAircraft.screenPosition`
+   gains a `CameraBasis` overload (built once per frame, then 3 dot products per
+   plane); `closestTargetIcao24`/`icaosInZone` take `rollDeg` and build the basis
+   once so lock-zone geometry matches label placement; `ContentView` builds the
+   basis from the live gravity vector each frame and forwards roll to `handleTap`;
+   `ReplayAnalyzer` derives roll from the recorded gravity vector when present, else
+   falls back to roll = 0.
+
+3. **Replay format additions (additive/optional, the `zoomFactor` pattern).**
+   `SensorSnapshot` gains `gravityX/Y/Z: Double?` (lets future recordings
+   reconstruct the exact live basis); `TapPin` gains `x/y: Double?` (pixel-exact
+   tap ground truth for projection + the future visual-confirmation work).
+   Synthesized `Codable` omits nil, so pre-existing recordings decode unchanged.
+   `recordReplayTick` records gravity; `recordTapPin(tapPoint:)` records the tap.
+
+4. **Verification.** Correctness is proved by analytic unit tests (basis-builder
+   absolute correctness vs known poses; self-checking coupling identities —
+   level-x == old separable x, level-y == old-y/cos(dB); the 302.16px
+   horizontal-compression anchor; gravity-roll sign). No strong *offline* ground
+   truth exists (committed `replays/*.jsonl` have no tap-pins), so the on-device
+   eyeball was the acceptance gate — **passed** (roll glues correctly, overhead +
+   corner planes sane). Future pin-protocol recordings now carry gravity + tap-xy
+   for pixel-exact replay validation.
+
+**Tests: 287 → 307, 0 failures.** New `CameraBasisTests` (16) + integration tests
+in `ReplayAnalyzerTests` (roll plumbing) and `ReplayRecorderTests` (gravity +
+tap-location round-trip, nil back-compat).
+
+**`MARKETING_VERSION` 0.2.0 → 0.2.1** (user-visible AR accuracy: labels track the
+real plane far better at elevation and under roll).
+
 ## 2026-06-07 — Aircraft-identity overhaul: classification, FAA fallback (v0.2.0)
 
 **Shipping as TestFlight v0.2.0.** Built on the 2026-06-06 naming/catch-detail

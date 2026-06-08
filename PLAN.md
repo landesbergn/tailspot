@@ -355,6 +355,8 @@ Planned but not yet created:
 
 ## 9. Immediate next steps (post-POC)
 
+**Field-fix ship SHIPPED 2026-06-08 as TestFlight v0.2.2.** A release-coordination round that bundled two field-driven fix streams onto `main` once the working tree was clean (each parallel session committed its own work; this round merged + version-bumped + doc-updated + pushed). (1) **Aircraft-naming audit** (commit `4430c39`, was "in flight" the prior round) — 57 DOC 8643 name mis-picks corrected via the generator's `OVERRIDES` table (H25B → Hawker 800XP, GA6C → Gulfstream G600, etc.); files `tools/generate-aircraft-types.py`, `AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`. (2) **Visibility hysteresis** — a Schmitt trigger on the visibility distance cap so a plane hovering at the ~9 km boundary doesn't flicker the AR bracket / drop the lock (field report: ASA733 oscillated across the cap ±0.1–1.1 km across ticks); new `ObservedAircraft.visibilityHysteresisFactor = 1.2` + `wasShownLastFrame` flag, applied via shared `applyVisibilityHysteresis` helper threaded through both `ADSBManager.reAnnotate` (live) and `ReplayAnalyzer` (offline). (3) **Gravity-roll debug readout** in `ContentView` (debug-overlay only) to eyeball the pinhole basis in the field. 307 → 314 tests, 0 failures (new `VisibilityHysteresisTests`). `MARKETING_VERSION` 0.2.1 → 0.2.2. Known type-classification follow-up (several bizjets still typed `narrow`/`ga`) stays parked below, coupled to the activity-rarity work.
+
 **3D pinhole projection SHIPPED 2026-06-08 (v0.2.1), device-verified.** Replaced
 the separable tan projection in `Geo.screenPosition` (independent screen-x from
 bearing-delta, screen-y from elevation-delta) with a gravity-derived pinhole
