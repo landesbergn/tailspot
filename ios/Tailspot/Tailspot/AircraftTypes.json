@@ -509,8 +509,8 @@
  },
  "AC50": {
   "lengthFt": 36.8,
-  "make": "Rockwell",
-  "model": "500 Commander 500",
+  "make": "Aero Commander",
+  "model": "500",
   "type": "ga",
   "wingspanFt": 49.0
  },
@@ -540,8 +540,8 @@
  },
  "AC6L": {
   "lengthFt": 43.0,
-  "make": "Rockwell",
-  "model": "685 Commander 685",
+  "make": "Aero Commander",
+  "model": "685",
   "type": "ga",
   "wingspanFt": 44.1
  },
@@ -1357,8 +1357,8 @@
  },
  "B18T": {
   "lengthFt": 44.3,
-  "make": "Hamilton",
-  "model": "Westwind 2",
+  "make": "Beechcraft",
+  "model": "18 Turbo",
   "type": "ga",
   "wingspanFt": 46.0
  },
@@ -1448,8 +1448,8 @@
  },
  "B350": {
   "lengthFt": 46.7,
-  "make": "Hawker Beechcraft",
-  "model": "DT-05",
+  "make": "Beechcraft",
+  "model": "350 Super King Air",
   "type": "ga",
   "wingspanFt": 57.9
  },
@@ -1460,7 +1460,7 @@
  },
  "B36T": {
   "lengthFt": 29.2,
-  "make": "Allison",
+  "make": "Beechcraft",
   "model": "36 Turbine Bonanza",
   "type": "ga",
   "wingspanFt": 33.5
@@ -1595,7 +1595,7 @@
  "B703": {
   "lengthFt": 152.9,
   "make": "Boeing",
-  "model": "C-18",
+  "model": "707-300",
   "type": "wide",
   "wingspanFt": 145.8
  },
@@ -1923,7 +1923,7 @@
  "BE10": {
   "lengthFt": 39.9,
   "make": "Beechcraft",
-  "model": "U-21F Ute",
+  "model": "100 King Air",
   "type": "ga",
   "wingspanFt": 45.9
  },
@@ -1992,7 +1992,7 @@
  "BE33": {
   "lengthFt": 26.7,
   "make": "Beechcraft",
-  "model": "E-24",
+  "model": "33 Bonanza",
   "type": "ga",
   "wingspanFt": 33.5
  },
@@ -2013,7 +2013,7 @@
  "BE40": {
   "lengthFt": 48.4,
   "make": "Beechcraft",
-  "model": "T-400",
+  "model": "400A Beechjet",
   "type": "narrow",
   "wingspanFt": 43.5
  },
@@ -2025,7 +2025,7 @@
  "BE50": {
   "lengthFt": 31.5,
   "make": "Beechcraft",
-  "model": "RU-8 Seminole",
+  "model": "50 Twin Bonanza",
   "type": "ga",
   "wingspanFt": 45.3
  },
@@ -2602,7 +2602,7 @@
  "C185": {
   "lengthFt": 25.6,
   "make": "Cessna",
-  "model": "U-17A",
+  "model": "185 Skywagon",
   "type": "ga",
   "wingspanFt": 35.8
  },
@@ -2732,8 +2732,8 @@
  },
  "C303": {
   "lengthFt": 30.4,
-  "make": "Aviones Colombia",
-  "model": "T303",
+  "make": "Cessna",
+  "model": "T303 Crusader",
   "type": "ga",
   "wingspanFt": 39.0
  },
@@ -2792,8 +2792,8 @@
  },
  "C340": {
   "lengthFt": 43.3,
-  "make": "Riley",
-  "model": "Super 340",
+  "make": "Cessna",
+  "model": "340",
   "type": "ga",
   "wingspanFt": 38.1
  },
@@ -2962,8 +2962,8 @@
  },
  "C72R": {
   "lengthFt": 27.2,
-  "make": "Aviones Colombia",
-  "model": "172RG",
+  "make": "Cessna",
+  "model": "172RG Cutlass",
   "type": "ga",
   "wingspanFt": 36.1
  },
@@ -2976,8 +2976,8 @@
  },
  "C77R": {
   "lengthFt": 27.3,
-  "make": "Aviones Colombia",
-  "model": "177RG",
+  "make": "Cessna",
+  "model": "177RG Cardinal",
   "type": "ga",
   "wingspanFt": 35.5
  },
@@ -2988,8 +2988,8 @@
  },
  "C82R": {
   "lengthFt": 29.0,
-  "make": "Aviones Colombia",
-  "model": "R182",
+  "make": "Cessna",
+  "model": "R182 Skylane RG",
   "type": "ga",
   "wingspanFt": 36.0
  },
@@ -3548,7 +3548,7 @@
  "CN35": {
   "lengthFt": 64.5,
   "make": "CASA",
-  "model": "D-4",
+  "model": "CN-235",
   "type": "ga",
   "wingspanFt": 84.7
  },
@@ -4145,7 +4145,7 @@
  "DC93": {
   "lengthFt": 119.3,
   "make": "McDonnell Douglas",
-  "model": "VC-9",
+  "model": "DC-9-30",
   "type": "narrow",
   "wingspanFt": 93.3
  },
@@ -4322,7 +4322,7 @@
  "DHC2": {
   "lengthFt": 30.3,
   "make": "De Havilland Canada",
-  "model": "U-6 Beaver",
+  "model": "DHC-2 Beaver",
   "type": "ga",
   "wingspanFt": 48.0
  },
@@ -4333,12 +4333,12 @@
  },
  "DHC4": {
   "make": "De Havilland Canada",
-  "model": "C-7 Caribou",
+  "model": "DHC-4 Caribou",
   "type": "ga"
  },
  "DHC5": {
   "make": "De Havilland Canada",
-  "model": "C-8 Buffalo",
+  "model": "DHC-5 Buffalo",
   "type": "ga"
  },
  "DHC6": {
@@ -4351,7 +4351,7 @@
  "DHC7": {
   "lengthFt": 80.5,
   "make": "De Havilland Canada",
-  "model": "O-5 Dash 7",
+  "model": "DHC-7 Dash 7",
   "type": "ga",
   "wingspanFt": 93.0
  },
@@ -4538,7 +4538,7 @@
  },
  "E121": {
   "make": "Embraer",
-  "model": "EC-9 Xingu",
+  "model": "EMB-121 Xingu",
   "type": "ga"
  },
  "E135": {
@@ -4633,7 +4633,7 @@
  "E35L": {
   "lengthFt": 86.4,
   "make": "Embraer",
-  "model": "VC-99B Legacy",
+  "model": "Legacy 600",
   "type": "narrow",
   "wingspanFt": 69.2
  },
@@ -4660,7 +4660,7 @@
  "E45X": {
   "lengthFt": 98.0,
   "make": "Embraer",
-  "model": "EMB-145XR",
+  "model": "ERJ-145XR",
   "type": "regional",
   "wingspanFt": 65.6
  },
@@ -4945,8 +4945,8 @@
  },
  "ERCO": {
   "lengthFt": 20.8,
-  "make": "Air Products",
-  "model": "F-1 Aircoupe",
+  "make": "Erco",
+  "model": "415 Ercoupe",
   "type": "ga",
   "wingspanFt": 30.0
  },
@@ -5318,7 +5318,7 @@
  "FA20": {
   "lengthFt": 56.3,
   "make": "Dassault",
-  "model": "Gardian",
+  "model": "Falcon 20",
   "type": "narrow",
   "wingspanFt": 53.5
  },
@@ -5878,20 +5878,20 @@
  },
  "GA4C": {
   "make": "Gulfstream",
-  "model": "G-7 Gulfstream G400",
+  "model": "G400",
   "type": "narrow"
  },
  "GA5C": {
   "lengthFt": 91.2,
   "make": "Gulfstream",
-  "model": "G-7 Gulfstream G500",
+  "model": "G500",
   "type": "narrow",
   "wingspanFt": 86.3
  },
  "GA6C": {
   "lengthFt": 96.1,
   "make": "Gulfstream",
-  "model": "G-7 Gulfstream G600",
+  "model": "G600",
   "type": "narrow",
   "wingspanFt": 94.2
  },
@@ -5904,7 +5904,7 @@
  },
  "GA7C": {
   "make": "Gulfstream",
-  "model": "G-8 Gulfstream G700",
+  "model": "G700",
   "type": "narrow"
  },
  "GA8": {
@@ -5914,7 +5914,7 @@
  },
  "GA8C": {
   "make": "Gulfstream",
-  "model": "G-8 Gulfstream G800",
+  "model": "G800",
   "type": "narrow"
  },
  "GABR": {
@@ -6025,21 +6025,21 @@
  "GLF2": {
   "lengthFt": 79.9,
   "make": "Gulfstream",
-  "model": "Gulfstream II",
+  "model": "II",
   "type": "narrow",
   "wingspanFt": 68.8
  },
  "GLF3": {
   "lengthFt": 83.1,
   "make": "Gulfstream",
-  "model": "C-20A Gulfstream 3",
+  "model": "III",
   "type": "narrow",
   "wingspanFt": 77.8
  },
  "GLF4": {
   "lengthFt": 88.3,
   "make": "Gulfstream",
-  "model": "G-4 Gulfstream 4",
+  "model": "IV",
   "type": "biz",
   "wingspanFt": 77.8
  },
@@ -6053,7 +6053,7 @@
  "GLF6": {
   "lengthFt": 99.8,
   "make": "Gulfstream",
-  "model": "G-6 Gulfstream G650",
+  "model": "G650",
   "type": "biz",
   "wingspanFt": 99.7
  },
@@ -6231,8 +6231,8 @@
  },
  "H25B": {
   "lengthFt": 51.2,
-  "make": "British Aerospace",
-  "model": "C-29",
+  "make": "Hawker",
+  "model": "800XP",
   "type": "biz",
   "wingspanFt": 51.4
  },
@@ -6310,8 +6310,8 @@
  },
  "HA4T": {
   "lengthFt": 69.2,
-  "make": "Beechcraft",
-  "model": "4000 Hawker 4000",
+  "make": "Hawker",
+  "model": "4000",
   "type": "narrow",
   "wingspanFt": 61.8
  },
@@ -7743,21 +7743,21 @@
  },
  "LJ23": {
   "lengthFt": 43.3,
-  "make": "Lear Jet",
+  "make": "Learjet",
   "model": "23",
   "type": "ga",
   "wingspanFt": 35.6
  },
  "LJ24": {
   "lengthFt": 43.3,
-  "make": "Gates Learjet",
+  "make": "Learjet",
   "model": "24",
   "type": "ga",
   "wingspanFt": 35.6
  },
  "LJ25": {
   "lengthFt": 47.6,
-  "make": "Gates Learjet",
+  "make": "Learjet",
   "model": "25",
   "type": "ga",
   "wingspanFt": 35.6
@@ -7769,14 +7769,14 @@
  },
  "LJ31": {
   "lengthFt": 48.7,
-  "make": "Gates Learjet",
+  "make": "Learjet",
   "model": "31",
   "type": "biz",
   "wingspanFt": 43.8
  },
  "LJ35": {
   "lengthFt": 48.7,
-  "make": "Gates Learjet",
+  "make": "Learjet",
   "model": "35",
   "type": "biz",
   "wingspanFt": 39.5
@@ -9267,8 +9267,8 @@
  },
  "P210": {
   "lengthFt": 28.2,
-  "make": "Riley",
-  "model": "Super P210",
+  "make": "Cessna",
+  "model": "P210 Centurion",
   "type": "ga",
   "wingspanFt": 38.8
  },
@@ -9316,7 +9316,7 @@
  },
  "P28B": {
   "lengthFt": 24.7,
-  "make": "Aicsa",
+  "make": "Piper",
   "model": "PA-28-236 Dakota",
   "type": "ga",
   "wingspanFt": 35.0
@@ -9335,8 +9335,8 @@
  },
  "P28T": {
   "lengthFt": 24.7,
-  "make": "Chincul",
-  "model": "PA-A-28RT-201 Arrow 4",
+  "make": "Piper",
+  "model": "PA-28RT-201 Arrow 4",
   "type": "ga",
   "wingspanFt": 35.4
  },
@@ -9361,8 +9361,8 @@
  },
  "P32T": {
   "lengthFt": 27.7,
-  "make": "Chincul",
-  "model": "PA-A-32RT-300 Lance 2",
+  "make": "Piper",
+  "model": "PA-32RT-300T Turbo Lance 2",
   "type": "ga",
   "wingspanFt": 36.2
  },
@@ -9489,13 +9489,13 @@
  "PA11": {
   "lengthFt": 23.9,
   "make": "Piper",
-  "model": "L-18B Cub Special",
+  "model": "PA-11 Cub Special",
   "type": "ga",
   "wingspanFt": 35.5
  },
  "PA12": {
   "lengthFt": 22.8,
-  "make": "Backcountry",
+  "make": "Piper",
   "model": "PA-12 Super Cruiser",
   "type": "ga",
   "wingspanFt": 35.5
@@ -9525,7 +9525,7 @@
  "PA18": {
   "lengthFt": 22.5,
   "make": "Piper",
-  "model": "U-7 Super Cub",
+  "model": "PA-18 Super Cub",
   "type": "ga",
   "wingspanFt": 35.3
  },
@@ -9559,15 +9559,15 @@
  },
  "PA25": {
   "lengthFt": 24.8,
-  "make": "Chincul",
-  "model": "PA-A-25 Pawnee",
+  "make": "Piper",
+  "model": "PA-25 Pawnee",
   "type": "ga",
   "wingspanFt": 36.2
  },
  "PA27": {
   "lengthFt": 31.2,
   "make": "Piper",
-  "model": "U-11 Aztec",
+  "model": "PA-23-250 Aztec",
   "type": "ga",
   "wingspanFt": 37.2
  },
@@ -9594,14 +9594,14 @@
  },
  "PA34": {
   "lengthFt": 28.6,
-  "make": "Embraer",
-  "model": "U-7 Seneca",
+  "make": "Piper",
+  "model": "PA-34 Seneca",
   "type": "ga",
   "wingspanFt": 38.9
  },
  "PA36": {
   "lengthFt": 27.5,
-  "make": "Aicsa",
+  "make": "Piper",
   "model": "PA-36 Pawnee Brave",
   "type": "ga",
   "wingspanFt": 38.8
@@ -9676,8 +9676,8 @@
  },
  "PAY1": {
   "lengthFt": 34.7,
-  "make": "Chincul",
-  "model": "PA-A-31T1-500 Cheyenne 1",
+  "make": "Piper",
+  "model": "PA-31T1-500 Cheyenne 1",
   "type": "ga",
   "wingspanFt": 42.7
  },
@@ -9690,7 +9690,7 @@
  },
  "PAY3": {
   "lengthFt": 43.4,
-  "make": "Aicsa",
+  "make": "Piper",
   "model": "PA-42-720 Cheyenne 3",
   "type": "ga",
   "wingspanFt": 47.7
@@ -10705,7 +10705,7 @@
  },
  "S108": {
   "lengthFt": 24.5,
-  "make": "Piper",
+  "make": "Stinson",
   "model": "108 Voyager",
   "type": "ga",
   "wingspanFt": 33.9

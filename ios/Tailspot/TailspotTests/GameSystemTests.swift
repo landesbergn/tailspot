@@ -330,6 +330,11 @@ struct AircraftTypeResolutionTests {
         #expect(AircraftNaming.aircraftType(forTypecode: "GLF5") == .biz)
     }
 
+    @Test func h25b_typecode_isBiz() {
+        // Hawker 800XP → biz (H25B is in the BIZ exact-match set).
+        #expect(AircraftNaming.aircraftType(forTypecode: "H25B") == .biz)
+    }
+
     @Test func unknownTypecode_returnsNil() {
         // Unknown typecode falls through to nil; callers use classifier.
         #expect(AircraftNaming.aircraftType(forTypecode: "ZZZZ") == nil)

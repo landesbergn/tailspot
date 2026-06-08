@@ -78,6 +78,85 @@ struct AircraftNamingTests {
         #expect(n.displayName == "Boeing 777-300ER")
     }
 
+    /// H25B is the ICAO designator for the civil Hawker 800 family
+    /// (800/800XP/850XP/900XP) AND its US military C-29A variant. The
+    /// generator's shortest-model-wins heuristic picked the short
+    /// military "C-29" name; OVERRIDES pins it to the plane-spotter-
+    /// familiar "Hawker 800XP". Reported in the field: a civil N-reg
+    /// airframe (N667WJ) surfaced as "British Aerospace C-29".
+    @Test func hawker800xpResolvesFromTypecode() {
+        #expect(AircraftNaming.canonical(typecode: "H25B", manufacturer: nil, model: nil).displayName == "Hawker 800XP")
+    }
+
+    /// 2026-06-08 audit batch: typecodes whose DOC 8643 reduction picked
+    /// a poor representative (military designation / foreign-licensee make /
+    /// converter or doubled string) instead of the recognizable civil name.
+    /// Pinned via the generator's OVERRIDES; values are grounded in actual
+    /// DOC 8643 / FAA rows. Regression-locks the fix — if a regeneration
+    /// ever drops an override, the displayName reverts and this fails.
+    @Test(arguments: [
+        ("H25B", "Hawker 800XP"),
+        ("BE40", "Beechcraft 400A Beechjet"),
+        ("FA20", "Dassault Falcon 20"),
+        ("LJ23", "Learjet 23"),
+        ("LJ24", "Learjet 24"),
+        ("LJ25", "Learjet 25"),
+        ("LJ31", "Learjet 31"),
+        ("LJ35", "Learjet 35"),
+        ("HA4T", "Hawker 4000"),
+        ("B350", "Beechcraft 350 Super King Air"),
+        ("BE10", "Beechcraft 100 King Air"),
+        ("PAY1", "Piper PA-31T1-500 Cheyenne 1"),
+        ("PAY3", "Piper PA-42-720 Cheyenne 3"),
+        ("BE33", "Beechcraft 33 Bonanza"),
+        ("BE50", "Beechcraft 50 Twin Bonanza"),
+        ("B36T", "Beechcraft 36 Turbine Bonanza"),
+        ("B18T", "Beechcraft 18 Turbo"),
+        ("C340", "Cessna 340"),
+        ("P210", "Cessna P210 Centurion"),
+        ("C185", "Cessna 185 Skywagon"),
+        ("C303", "Cessna T303 Crusader"),
+        ("C72R", "Cessna 172RG Cutlass"),
+        ("C77R", "Cessna 177RG Cardinal"),
+        ("C82R", "Cessna R182 Skylane RG"),
+        ("P28B", "Piper PA-28-236 Dakota"),
+        ("P28T", "Piper PA-28RT-201 Arrow 4"),
+        ("P32T", "Piper PA-32RT-300T Turbo Lance 2"),
+        ("PA25", "Piper PA-25 Pawnee"),
+        ("PA36", "Piper PA-36 Pawnee Brave"),
+        ("PA12", "Piper PA-12 Super Cruiser"),
+        ("S108", "Stinson 108 Voyager"),
+        ("ERCO", "Erco 415 Ercoupe"),
+        ("AC50", "Aero Commander 500"),
+        ("AC6L", "Aero Commander 685"),
+        ("B703", "Boeing 707-300"),
+        ("DC93", "McDonnell Douglas DC-9-30"),
+        ("CN35", "CASA CN-235"),
+        ("E45X", "Embraer ERJ-145XR"),
+        ("DHC2", "De Havilland Canada DHC-2 Beaver"),
+        ("DHC7", "De Havilland Canada DHC-7 Dash 7"),
+        ("DHC4", "De Havilland Canada DHC-4 Caribou"),
+        ("DHC5", "De Havilland Canada DHC-5 Buffalo"),
+        ("GLF2", "Gulfstream II"),
+        ("GLF3", "Gulfstream III"),
+        ("GLF4", "Gulfstream IV"),
+        ("GLF6", "Gulfstream G650"),
+        ("E35L", "Embraer Legacy 600"),
+        ("E121", "Embraer EMB-121 Xingu"),
+        ("PA34", "Piper PA-34 Seneca"),
+        ("PA27", "Piper PA-23-250 Aztec"),
+        ("PA18", "Piper PA-18 Super Cub"),
+        ("PA11", "Piper PA-11 Cub Special"),
+        ("GA4C", "Gulfstream G400"),
+        ("GA5C", "Gulfstream G500"),
+        ("GA6C", "Gulfstream G600"),
+        ("GA7C", "Gulfstream G700"),
+        ("GA8C", "Gulfstream G800"),
+    ])
+    func auditBatchNamesResolveFromTypecode(typecode: String, expected: String) {
+        #expect(AircraftNaming.canonical(typecode: typecode, manufacturer: nil, model: nil).displayName == expected)
+    }
+
     // MARK: - Fallback: Boeing customer-code collapse
     // Dirty inputs collapse; clean inputs MUST pass through unchanged
     // (idempotence) — OpenSky has both since Boeing dropped customer

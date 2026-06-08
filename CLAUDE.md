@@ -71,10 +71,15 @@ real plane far better at elevation and under roll).
 docs-only commits add an *activity-based rarity* design spec + implementation plan
 (`docs/superpowers/specs/2026-06-08-activity-rarity-design.md`,
 `docs/superpowers/plans/2026-06-08-activity-rarity.md`) — no code yet. Separately,
-the aircraft-naming generator (`tools/generate-aircraft-types.py`,
-`AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`) had **uncommitted**
-WIP in the working tree during this round — confirm its state before building on
-those files.
+an **aircraft-naming audit committed to `main` 2026-06-08** (`tools/generate-aircraft-types.py`,
+`AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`) fixes 57 DOC 8643
+name mis-picks — military / foreign-licensee / converter / doubled strings → the
+recognizable civil name (e.g. H25B → Hawker 800XP, GA6C → Gulfstream G600), each
+grounded in a real DOC 8643 / FAA row via the generator's `OVERRIDES` table. **Not
+yet TestFlight-deployed and `MARKETING_VERSION` not yet bumped** (round still
+settling from live field reports). Known type-classification follow-up — several
+bizjets still typed `narrow`/`ga` — is parked in PLAN.md §9 (couple it to the
+activity-rarity work, as it changes catch rarity).
 
 ## Working model
 

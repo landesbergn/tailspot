@@ -291,7 +291,9 @@ OVERRIDES = {
     # GLF5: "C-37" (4) beats "G-5 Gulfstream 5" (16). C-37 is USAF designation.
     #        Also fixes doubled-brand "Gulfstream Aerospace Gulfstream G550".
     # GALX: IAI wins by frequency (2 vs 1), picks "1126 Galaxy" — wrong brand+name.
-    "GLF2": ("Gulfstream", "Gulfstream II"),
+    # Model omits the "Gulfstream" brand (the make supplies it) so the
+    # displayName isn't doubled ("Gulfstream II", not "Gulfstream Gulfstream II").
+    "GLF2": ("Gulfstream", "II"),
     "GLF5": ("Gulfstream", "G550"),
     "GALX": ("Gulfstream", "G200"),
 
@@ -345,6 +347,16 @@ OVERRIDES = {
     # Jetstream 41, which is a British Aerospace product like its
     # JS31/JS32 siblings.
     "JS41": ("British Aerospace", "Jetstream 41"),
+
+    # ----- Hawker 800 family -----
+    # H25B is the designator for the civil Hawker 800/800XP/850XP/900XP
+    # bizjet family AND its US military C-29A variant. Shortest-model-
+    # wins picked "C-29" (military) over the commercial name — so a
+    # civil N-reg (e.g. N667WJ, field-reported) surfaced as "British
+    # Aerospace C-29". Pin to the plane-spotter-familiar name. Note:
+    # the typecode can't distinguish 850XP/900XP, so they also surface
+    # as "800XP" — inherent to typecode-level naming.
+    "H25B": ("Hawker", "800XP"),
 
     # ----- Piper PA-28 Cherokee family -----
     # Piper wins by count (23 vs 41 combined for foreign licensees).
@@ -411,10 +423,94 @@ OVERRIDES = {
     # Target: "Cessna 195". Should work, but pin for safety.
     "C195": ("Cessna", "195"),
 
-    # ----- Deferred review candidates (rare on OpenSky free-tier ADS-B) -----
-    # B703 (707-300), PA18 (Piper Super Cub), BE10 (Beech King Air 100),
-    # C185 (Cessna 185 Skywagon), DHC2 (DHC-2 Beaver) — flag for review
-    # if these start appearing in field sessions.
+    # ===== 2026-06-08 audit batch =====================================
+    # Triaged from the FAA-vs-DOC8643 disagreement report (the same
+    # shortest-model-wins / wrong-make failure mode as H25B above). Each
+    # (make, model) below is taken from an actual DOC 8643 ModelFullName
+    # row for that designator (or the FAA characteristics string) — never
+    # from memory. Three sub-patterns:
+    #   (a) a short MILITARY designation beat the civil name
+    #       ("Boeing C-18" for the 707-300; "Beechcraft U-21F Ute" for
+    #       the King Air 100);
+    #   (b) a FOREIGN-LICENSEE make outranked the original by row count
+    #       ("Aviones Colombia" for Cessnas; "Aicsa"/"Chincul" for Pipers);
+    #   (c) a CONVERSION shop or a DOUBLED string ("Hamilton Westwind 2"
+    #       for the turbine Beech 18; "Beechcraft 4000 Hawker 4000").
+
+    # Business jets
+    "BE40": ("Beechcraft", "400A Beechjet"),   # was "Beechcraft T-400"
+    "FA20": ("Dassault", "Falcon 20"),         # was "Dassault Gardian"
+    "LJ23": ("Learjet", "23"),                 # source make "Lear Jet"
+    "LJ24": ("Learjet", "24"),                 # source make "Gates Learjet"
+    "LJ25": ("Learjet", "25"),
+    "LJ31": ("Learjet", "31"),
+    "LJ35": ("Learjet", "35"),                 # LJ35 also covers the 36
+    "HA4T": ("Hawker", "4000"),                # was doubled "4000 Hawker 4000"
+
+    # King Air / turboprop twins
+    "B350": ("Beechcraft", "350 Super King Air"),  # was "DT-05"; cf BE20
+    "BE10": ("Beechcraft", "100 King Air"),        # was "U-21F Ute"; cf BE9L
+    "PAY1": ("Piper", "PA-31T1-500 Cheyenne 1"),   # was make "Chincul"
+    "PAY3": ("Piper", "PA-42-720 Cheyenne 3"),     # was make "Aicsa"
+
+    # Beech / Cessna / Piper / Stinson singles & light twins
+    "BE33": ("Beechcraft", "33 Bonanza"),       # was "E-24"
+    "BE50": ("Beechcraft", "50 Twin Bonanza"),  # was "RU-8 Seminole"
+    "B36T": ("Beechcraft", "36 Turbine Bonanza"),  # was make "Allison"
+    "B18T": ("Beechcraft", "18 Turbo"),         # was "Hamilton Westwind 2"
+    "C340": ("Cessna", "340"),                  # was "Riley Super 340"
+    "P210": ("Cessna", "P210 Centurion"),       # was "Riley Super P210"
+    "C185": ("Cessna", "185 Skywagon"),         # was "U-17A"
+    "C303": ("Cessna", "T303 Crusader"),        # was make "Aviones Colombia"
+    "C72R": ("Cessna", "172RG Cutlass"),
+    "C77R": ("Cessna", "177RG Cardinal"),
+    "C82R": ("Cessna", "R182 Skylane RG"),
+    "P28B": ("Piper", "PA-28-236 Dakota"),      # was make "Aicsa"
+    "P28T": ("Piper", "PA-28RT-201 Arrow 4"),   # was make "Chincul"
+    "P32T": ("Piper", "PA-32RT-300T Turbo Lance 2"),
+    "PA25": ("Piper", "PA-25 Pawnee"),
+    "PA36": ("Piper", "PA-36 Pawnee Brave"),
+    "PA12": ("Piper", "PA-12 Super Cruiser"),   # was make "Backcountry"
+    "S108": ("Stinson", "108 Voyager"),         # was make "Piper"
+    "ERCO": ("Erco", "415 Ercoupe"),            # was "Air Products F-1 Aircoupe"
+    "AC50": ("Aero Commander", "500"),          # was doubled "500 Commander 500"
+    "AC6L": ("Aero Commander", "685"),          # was doubled "685 Commander 685"
+
+    # Airliner / regional
+    "B703": ("Boeing", "707-300"),              # was "C-18"
+    "DC93": ("McDonnell Douglas", "DC-9-30"),   # was "VC-9"
+    "CN35": ("CASA", "CN-235"),                 # was "CASA D-4"
+    "E45X": ("Embraer", "ERJ-145XR"),           # was "EMB-145XR" (cf E145/E135)
+
+    # De Havilland Canada
+    "DHC2": ("De Havilland Canada", "DHC-2 Beaver"),  # was "U-6 Beaver"
+    "DHC4": ("De Havilland Canada", "DHC-4 Caribou"), # was "C-7 Caribou"
+    "DHC5": ("De Havilland Canada", "DHC-5 Buffalo"), # was "C-8 Buffalo"
+    "DHC7": ("De Havilland Canada", "DHC-7 Dash 7"),  # was "O-5 Dash 7"
+
+    # ----- Second pass (military-shape model scan, not just FAA cross-ref) -----
+    # The FAA disagreement report only flags designators present in BOTH
+    # tables; these slipped through (foreign types, or FAA used the same
+    # military name). Found by scanning for a military-MDS model where a
+    # civil-named DOC 8643 row also exists. All civil-common / catchable.
+    "GLF3": ("Gulfstream", "III"),              # was military "C-20A Gulfstream 3"; cf GLF2
+    "GLF4": ("Gulfstream", "IV"),               # was internal "G-4 Gulfstream 4"
+    "GLF6": ("Gulfstream", "G650"),             # was doubled "G-6 Gulfstream G650"; cf GLF5
+    # Modern Gulfstream GVII/GVIII family: DOC model is "G-7/G-8 Gulfstream
+    # GNNN" — the brand sits mid-string so strip_leading_brand can't remove
+    # it, doubling the displayName ("Gulfstream G-7 Gulfstream G600"). Pin
+    # to the marketing designation. (Field-reported: N415P / GA6C.)
+    "GA4C": ("Gulfstream", "G400"),
+    "GA5C": ("Gulfstream", "G500"),
+    "GA6C": ("Gulfstream", "G600"),
+    "GA7C": ("Gulfstream", "G700"),
+    "GA8C": ("Gulfstream", "G800"),
+    "E35L": ("Embraer", "Legacy 600"),          # was Brazilian-mil "VC-99B Legacy"
+    "E121": ("Embraer", "EMB-121 Xingu"),       # was "EC-9 Xingu"
+    "PA34": ("Piper", "PA-34 Seneca"),          # was "Embraer U-7 Seneca"
+    "PA27": ("Piper", "PA-23-250 Aztec"),       # was "U-11 Aztec"
+    "PA18": ("Piper", "PA-18 Super Cub"),       # was "U-7 Super Cub"
+    "PA11": ("Piper", "PA-11 Cub Special"),     # was "L-18B Cub Special"
 }
 
 
@@ -616,6 +712,13 @@ BIZ = {
     'LJ35','LJ45','LJ60','LJ75','FA7X','FA8X','F2TH','F900',
     'BD100','H25B','ASTR','PRM1','MU2','PC24','LJ31','LJ40','LJ55','C25M',
 }
+# KNOWN TYPE GAPS (flagged by the 2026-06-08 naming audit; fix WITH the
+# activity-rarity work — it changes catch rarity, see PLAN.md §9). These are
+# confirmed business jets that fall through to narrow/ga because they're
+# absent from BIZ:
+#   ga     -> LJ23, LJ24, LJ25  (Learjet 23/24/25)
+#   narrow -> H25C, BE40, HA4T, FA20, GLF2, GLF3, G150, G280,
+#             GA3C, GA4C, GA5C, GA6C, GA7C, GA8C
 MIL = {
     'C130','C30J','C17','C5M','C5','KC135','KC10','KC46','K35R',
     'B52','C27J','C295','A400','P3','P8','E3CF','E3TF','E6',
