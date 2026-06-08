@@ -1456,9 +1456,15 @@ struct ContentView: View {
 
     private func formatAttitude() -> String {
         let pitchDeg = motion.pitch * 180 / .pi
-        let rollDeg = motion.roll * 180 / .pi
+        // Show the GRAVITY-derived roll — the value the pinhole projection
+        // actually uses. The Euler `motion.roll` flips to ±180° at the
+        // portrait hold (gimbal branch) and reads ~178° even when the phone
+        // is upright, which misled a debug session on 2026-06-08.
+        let rollDeg = Geo.rollDeg(gravityX: motion.gravityX,
+                                  gravityY: motion.gravityY,
+                                  gravityZ: motion.gravityZ)
         let camElDeg = motion.cameraElevationDeg
-        return String(format: "Tilt:    pitch %5.1f°  cam-el %+5.1f°  roll %5.1f°",
+        return String(format: "Tilt:    pitch %5.1f°  cam-el %+5.1f°  g-roll %5.1f°",
                       pitchDeg, camElDeg, rollDeg)
     }
 

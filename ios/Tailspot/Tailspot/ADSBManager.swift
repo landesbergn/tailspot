@@ -29,7 +29,31 @@ struct ObservedAircraft: Identifiable, Sendable {
     let groundDistanceMeters: Double
     let slantDistanceMeters: Double // line-of-sight (3D) distance
 
+    /// Set true when this aircraft was in the visible set on the PREVIOUS
+    /// frame. Drives visibility hysteresis (see `isLikelyVisibleToObserver`):
+    /// an already-shown plane gets a wider distance cap so it doesn't flicker
+    /// in/out when it hovers right at the boundary. Stamped each frame by
+    /// `applyVisibilityHysteresis`; defaults false so any path that doesn't
+    /// track it (tests, one-off checks) gets the plain non-hysteretic gate.
+    var wasShownLastFrame: Bool = false
+
     var id: String { aircraft.icao24 }
+}
+
+/// Apply visibility hysteresis to a freshly-annotated frame: stamp each
+/// aircraft's `wasShownLastFrame` from the prior shown set, then return the
+/// new shown set (the icao24s now passing the hysteretic visibility gate).
+/// Shared by the live path (`ADSBManager.reAnnotate`) and the offline
+/// `ReplayAnalyzer` so the two can't drift. Pure aside from stamping flags
+/// on the passed-in array.
+nonisolated func applyVisibilityHysteresis(
+    _ observed: inout [ObservedAircraft],
+    previouslyShown: Set<String>
+) -> Set<String> {
+    for i in observed.indices {
+        observed[i].wasShownLastFrame = previouslyShown.contains(observed[i].aircraft.icao24)
+    }
+    return Set(observed.filter { $0.isLikelyVisibleToObserver }.map { $0.aircraft.icao24 })
 }
 
 extension ObservedAircraft {
@@ -117,8 +141,14 @@ extension ObservedAircraft {
     /// day) or atmospheric scattering. The curve encodes a typical Bay
     /// Area day; per-condition adjustment is out of scope for v0.
     var isLikelyVisibleToObserver: Bool {
-        elevationDeg > Self.minVisibleElevationDeg
-            && slantDistanceMeters < visibilityCapMeters
+        // Hysteresis: a plane already shown last frame keeps a wider cap so
+        // it doesn't blink off when it hovers at the boundary. New planes
+        // must clear the inner cap to appear.
+        let cap = wasShownLastFrame
+            ? visibilityCapMeters * Self.visibilityHysteresisFactor
+            : visibilityCapMeters
+        return elevationDeg > Self.minVisibleElevationDeg
+            && slantDistanceMeters < cap
     }
 
     /// The effective distance cap for THIS aircraft: the elevation curve,
@@ -140,6 +170,15 @@ extension ObservedAircraft {
     /// N3001B ghost (4.8 km @ 8° → cap ~3.3 km) while leaving a real
     /// pattern-traffic window inside ~2-3 km. Tunable.
     static let smallAirframeVisibilityFactor: Double = 0.5
+
+    /// Hysteresis band for the visibility distance cap. An already-shown
+    /// plane stays shown until it exceeds `visibilityCapMeters * factor`,
+    /// so a plane hovering right at the cap doesn't flicker the AR bracket
+    /// (and drop the lock) frame-to-frame. Field report 2026-06-08: ASA733
+    /// oscillated across the ~9 km cap by ±0.1-1.1 km across consecutive
+    /// ticks; 1.2 (a ~20% band) absorbs that swing while still dropping
+    /// planes that genuinely recede past the cap. Tunable.
+    static let visibilityHysteresisFactor: Double = 1.2
 
     /// Elevation-dependent distance cap. A flat cap can't separate real
     /// sightings from ghosts: near the horizon (1-4°) you look through
@@ -278,6 +317,10 @@ struct VisibilityDiagnostic: Equatable, Sendable {
 final class ADSBManager: ObservableObject {
 
     @Published var observed: [ObservedAircraft] = []
+    /// icao24s that were in the visible set on the previous `reAnnotate`
+    /// frame — the state behind visibility hysteresis. Not published; it's
+    /// internal bookkeeping consumed only by the next `reAnnotate`.
+    private var shownIcaos: Set<String> = []
     /// Latest visibility-funnel counts (see `VisibilityDiagnostic`). Updated
     /// every `reAnnotate` tick; drives the temporary on-screen tracked/shown
     /// readout while we validate the 2026-06-01 visibility re-tune.
@@ -505,12 +548,15 @@ final class ADSBManager: ObservableObject {
         let effectiveMaxAge = ObservedAircraft.maxPositionAge
             + max(0, currentInterval - pollInterval)
 
-        let annotated = rawAircraft
+        var annotated = rawAircraft
             .compactMap {
                 ObservedAircraft.annotate($0, observer: observer, now: now,
                                           maxPositionAge: effectiveMaxAge)
             }
             .sorted { $0.slantDistanceMeters < $1.slantDistanceMeters }
+        // Stamp visibility hysteresis from the prior frame's shown set so a
+        // plane hovering at the distance cap doesn't flicker the AR bracket.
+        shownIcaos = applyVisibilityHysteresis(&annotated, previouslyShown: shownIcaos)
         self.observed = annotated
 
         updateDiagnostic(now: now, effectiveMaxAge: effectiveMaxAge,

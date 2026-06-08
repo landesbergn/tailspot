@@ -217,6 +217,10 @@ struct ReplayAnalyzer {
         let engine = LockOnEngine()
         var pinnedIcao: String?
         var tickReports: [ReplayTickReport] = []
+        // Visibility-hysteresis state, carried across ticks so a plane at
+        // the distance cap stays shown rather than flickering (mirrors the
+        // live `ADSBManager.shownIcaos`).
+        var shownIcaos: Set<String> = []
 
         for event in ordered {
             switch event {
@@ -231,7 +235,7 @@ struct ReplayAnalyzer {
                 // drive it via update() with the center-driven target,
                 // mirroring ContentView's behavior.
             case .tick(let t):
-                tickReports.append(report(for: t, engine: engine, pinnedIcao: pinnedIcao))
+                tickReports.append(report(for: t, engine: engine, pinnedIcao: pinnedIcao, shownIcaos: &shownIcaos))
             }
         }
 
@@ -259,7 +263,7 @@ struct ReplayAnalyzer {
 
     // MARK: - Internals
 
-    private func report(for tick: ReplayEvent.Tick, engine: LockOnEngine, pinnedIcao: String? = nil) -> ReplayTickReport {
+    private func report(for tick: ReplayEvent.Tick, engine: LockOnEngine, pinnedIcao: String? = nil, shownIcaos: inout Set<String>) -> ReplayTickReport {
         let observer = reconstructObserver(from: tick)
 
         // Camera zoom changes the effective FOV: at 2× the same screen
@@ -293,12 +297,18 @@ struct ReplayAnalyzer {
             // Match ADSBManager's sort: nearest-first. Build a parallel
             // (snapshot, observed) list so summaries carry the same
             // ordering.
-            let pairs: [(ReplayEvent.AircraftSnapshot, ObservedAircraft)] = tick.aircraft.compactMap { snap in
+            let rawPairs: [(ReplayEvent.AircraftSnapshot, ObservedAircraft)] = tick.aircraft.compactMap { snap in
                 guard let obs = ObservedAircraft.annotate(
                     Aircraft(snap), observer: observer, now: tick.timestamp
                 ) else { return nil }
                 return (snap, obs)
             }.sorted { $0.1.slantDistanceMeters < $1.1.slantDistanceMeters }
+
+            // Apply visibility hysteresis (same helper as the live path) so a
+            // plane hovering at the distance cap doesn't flicker across ticks.
+            var obsList = rawPairs.map { $0.1 }
+            shownIcaos = applyVisibilityHysteresis(&obsList, previouslyShown: shownIcaos)
+            let pairs = Array(zip(rawPairs.map { $0.0 }, obsList))
 
             for (snap, obs) in pairs {
                 let isVisible = obs.isLikelyVisibleToObserver
