@@ -43,6 +43,21 @@ struct RarityResolutionTests {
         #expect(AircraftNaming.rarity(forTypecode: code) == expected)
     }
 
+    // Bizjets newly exposed to the activity model by the 2026-06-09 type
+    // fix: biz default → uncommon (they were wrongly common as narrow/ga);
+    // flagship ULR Gulfstreams overridden → rare (consistent with G650).
+    @Test(arguments: [
+        ("FA50", Rarity.uncommon),   // Dassault Falcon 50
+        ("C650", .uncommon),         // Cessna Citation VII
+        ("LJ25", .uncommon),         // Learjet 25
+        ("GA6C", .rare),             // Gulfstream G600
+        ("GA7C", .rare),             // Gulfstream G700
+        ("GA8C", .rare),             // Gulfstream G800
+    ])
+    func bizjetRarityAfterTypeFix(_ code: String, _ expected: Rarity) {
+        #expect(AircraftNaming.rarity(forTypecode: code) == expected)
+    }
+
     @Test func unknownTypecode_returnsNil() {
         // Unknown / nil typecode falls through to nil; callers then use
         // the string classifier fallback.

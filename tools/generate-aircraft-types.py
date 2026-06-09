@@ -694,7 +694,7 @@ def polish_model(make, model):
 #   1. Rotorcraft / tiltrotor → ga  (no separate rotorcraft set in Tailspot)
 #   2. MIL exact-match set → mil   (EXACT match only — C17 ≠ C172)
 #   3. BIZ exact-match set → biz
-#   4. Regional prefix regex → regional
+#   4. REGIONAL exact-match set / regional prefix regex → regional
 #   5. Wide prefix regex / WTC H or J → wide
 #   6. Narrow prefix regex / (Jet engine + WTC M) → narrow
 #   7. Piston or Electric engine → ga
@@ -711,19 +711,33 @@ BIZ = {
     'E50P','E55P',
     'LJ35','LJ45','LJ60','LJ75','FA7X','FA8X','F2TH','F900',
     'BD100','H25B','ASTR','PRM1','MU2','PC24','LJ31','LJ40','LJ55','C25M',
+    # 2026-06-09: closed the bizjet type gaps found by the full classifier
+    # audit — these are confirmed business jets that fell through to narrow
+    # (Jet+WTC M) or ga (Jet+WTC L) because they were absent here. Each
+    # verified against its DOC 8643 ModelFullName. (Supersedes the partial
+    # gap list the 2026-06-08 naming audit left as a TODO.)
+    'G150','G280','GA3C','GA4C','GA5C','GA6C','GA7C','GA8C','GLF2','GLF3',  # Gulfstream
+    'GL5T','GL7T','GLEX',                                                   # Bombardier Global
+    'LJ23','LJ24','LJ25','LJ28','LJ70',                                     # Learjet
+    'C501','C551','C55B','C650',                                           # Cessna Citation
+    'FA10','FA20','FA50','FA6X',                                           # Dassault Falcon
+    'E35L','E545','E550',                                                  # Embraer Legacy / Praetor
+    'H25A','H25C','HA4T','BE40','BE4W',                                    # Hawker 125/4000, Beechjet 400
+    'HDJT','SF50','EA50',                                                  # VLJ / single-engine jets
+    'MU30','SJ30','HF20','S601','JCOM','SBR1','SBR2','L29A','L29B','WW23',  # other production / classic
 }
-# KNOWN TYPE GAPS (flagged by the 2026-06-08 naming audit; fix WITH the
-# activity-rarity work — it changes catch rarity, see PLAN.md §9). These are
-# confirmed business jets that fall through to narrow/ga because they're
-# absent from BIZ:
-#   ga     -> LJ23, LJ24, LJ25  (Learjet 23/24/25)
-#   narrow -> H25C, BE40, HA4T, FA20, GLF2, GLF3, G150, G280,
-#             GA3C, GA4C, GA5C, GA6C, GA7C, GA8C
 MIL = {
     'C130','C30J','C17','C5M','C5','KC135','KC10','KC46','K35R',
     'B52','C27J','C295','A400','P3','P8','E3CF','E3TF','E6',
     'C12','C12J','U28','RC12','C160','AN12','IL76','A124','C141',
     'VC25','E4','C32','C40','B1','B2','C2','E2',
+}
+# Regional jets absent from the prefix regex below — BAe 146, Avro RJ,
+# Fokker 70/100/F28, Dornier 328JET, Antonov An-148/158. Exact-match like
+# BIZ/MIL (added 2026-06-09 with the bizjet gaps). These are ADS-B-equipped
+# commercial regionals that do appear in-app, so the glyph matters.
+REGIONAL = {
+    'B461','B462','B463','RJ1H','RJ70','RJ85','F28','F70','F100','J328','A148','A158',
 }
 
 _REGIONAL_RE = re.compile(r'^(CRJ|E17|E19|E75|E70|DH8|AT4|AT7|AT5|SF3|SB20|J41|E45|E13|E14)')
@@ -753,8 +767,8 @@ def aircraft_type(tc, info):
     if tc in BIZ:
         return "biz"
 
-    # 4. Regional prefix
-    if _REGIONAL_RE.match(tc):
+    # 4. Regional exact-match set or prefix
+    if tc in REGIONAL or _REGIONAL_RE.match(tc):
         return "regional"
 
     # 5. Wide-body prefix or heavy/super-heavy WTC
@@ -811,6 +825,9 @@ RARITY_OVERRIDES = {
     "MD11": "rare",
     # ── rare — heavy / ULR business jets ──
     "GLF6": "rare",       # Gulfstream G650
+    "GA6C": "rare",       # Gulfstream G600 (ULR flagship — added 2026-06-09)
+    "GA7C": "rare",       # Gulfstream G700
+    "GA8C": "rare",       # Gulfstream G800
     "GL7T": "rare",       # Bombardier Global 7500
     "GL5T": "rare",       # Bombardier Global 5000
     "GLEX": "rare",       # Bombardier Global Express / 6000
@@ -1023,9 +1040,11 @@ def main():
         # biz
         "E55P": "biz", "CL30": "biz", "C25B": "biz",
         "GLF5": "biz", "C510": "biz", "GALX": "biz",
+        "EA50": "biz",  # Eclipse 500 VLJ — reclassified ga→biz 2026-06-09
+                        # (it's a twin jet; "biz" reads truer than "ga")
         # ga
         "C172": "ga", "P28A": "ga", "C182": "ga", "M20P": "ga", "C310": "ga",
-        "EA50": "ga", "C195": "ga", "P28R": "ga", "PA31": "ga",
+        "C195": "ga", "P28R": "ga", "PA31": "ga",
         "EC35": "ga",   # Airbus Helicopters H-135 → rotorcraft → ga
         "SSTL": "ga",   # Just Aircraft SuperSTOL → light GA
         "R44": "ga",    # Robinson R44 → rotorcraft → ga

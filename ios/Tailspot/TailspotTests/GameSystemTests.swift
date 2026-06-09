@@ -341,6 +341,39 @@ struct AircraftTypeResolutionTests {
         #expect(AircraftNaming.aircraftType(forTypecode: "H25B") == .biz)
     }
 
+    // Bizjets that used to fall through to narrow (Jet+WTC M) or ga
+    // (Jet+WTC L) before the 2026-06-09 BIZ-set expansion. Each is a
+    // confirmed business jet — see tools/generate-aircraft-types.py.
+    @Test(arguments: [
+        "GL7T",  // Bombardier Global 7500 (was narrow)
+        "GA6C",  // Gulfstream G600 (was narrow)
+        "GLF2",  // Gulfstream II (was narrow)
+        "FA50",  // Dassault Falcon 50 (was narrow)
+        "C650",  // Cessna Citation VII (was narrow)
+        "E35L",  // Embraer Legacy 600 (was narrow)
+        "BE40",  // Beechjet 400A (was narrow)
+        "LJ25",  // Learjet 25 (was ga)
+        "HDJT",  // HondaJet (was ga)
+        "SF50",  // Cirrus Vision Jet (was ga)
+    ])
+    func mistypedBizjets_nowBiz(code: String) {
+        #expect(AircraftNaming.aircraftType(forTypecode: code) == .biz)
+    }
+
+    // Regional jets that used to fall through to narrow before the
+    // 2026-06-09 REGIONAL exact-match set.
+    @Test(arguments: [
+        "B462",  // BAe 146-200
+        "RJ85",  // Avro RJ85
+        "F100",  // Fokker 100
+        "F28",   // Fokker F28 Fellowship
+        "J328",  // Dornier 328JET
+        "A148",  // Antonov An-148
+    ])
+    func mistypedRegionals_nowRegional(code: String) {
+        #expect(AircraftNaming.aircraftType(forTypecode: code) == .regional)
+    }
+
     @Test func unknownTypecode_returnsNil() {
         // Unknown typecode falls through to nil; callers use classifier.
         #expect(AircraftNaming.aircraftType(forTypecode: "ZZZZ") == nil)

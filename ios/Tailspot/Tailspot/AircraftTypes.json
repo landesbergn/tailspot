@@ -67,7 +67,7 @@
   "make": "Antonov",
   "model": "An-148",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "A149": {
   "make": "AgustaWestland",
@@ -79,7 +79,7 @@
   "make": "Antonov",
   "model": "An-158",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "A169": {
   "make": "AgustaWestland",
@@ -1800,7 +1800,7 @@
   "make": "British Aerospace",
   "model": "BAe-146-100",
   "rarity": "common",
-  "type": "narrow",
+  "type": "regional",
   "wingspanFt": 86.4
  },
  "B462": {
@@ -1808,14 +1808,14 @@
   "make": "British Aerospace",
   "model": "BAe-146-200",
   "rarity": "common",
-  "type": "narrow",
+  "type": "regional",
   "wingspanFt": 86.4
  },
  "B463": {
   "make": "British Aerospace",
   "model": "BAe-146-300",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "B47G": {
   "make": "Bell",
@@ -2373,15 +2373,15 @@
   "lengthFt": 48.4,
   "make": "Beechcraft",
   "model": "400A Beechjet",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 43.5
  },
  "BE4W": {
   "make": "Beechcraft",
   "model": "Hawker 400XT",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "BE50": {
   "lengthFt": 31.5,
@@ -3383,8 +3383,8 @@
   "lengthFt": 43.5,
   "make": "Cessna",
   "model": "501 Citation 1SP",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 47.1
  },
  "C510": {
@@ -3415,16 +3415,16 @@
   "lengthFt": 47.7,
   "make": "Cessna",
   "model": "551 Citation 2SP",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 51.7
  },
  "C55B": {
   "lengthFt": 47.7,
   "make": "Cessna",
   "model": "550B Citation Bravo",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 52.2
  },
  "C560": {
@@ -3453,8 +3453,8 @@
   "lengthFt": 55.5,
   "make": "Cessna",
   "model": "650 Citation VII",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 53.5
  },
  "C680": {
@@ -5469,8 +5469,8 @@
   "lengthFt": 86.4,
   "make": "Embraer",
   "model": "Legacy 600",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 69.2
  },
  "E390": {
@@ -5529,16 +5529,16 @@
   "lengthFt": 64.6,
   "make": "Embraer",
   "model": "EMB-545 Legacy 450",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 66.4
  },
  "E550": {
   "lengthFt": 68.0,
   "make": "Embraer",
   "model": "EMB-550 Legacy 500",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 66.5
  },
  "E55P": {
@@ -5593,8 +5593,8 @@
   "lengthFt": 33.1,
   "make": "Eclipse",
   "model": "500",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 37.3
  },
  "EAEA": {
@@ -6001,7 +6001,7 @@
   "make": "Fokker",
   "model": "100",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "F104": {
   "make": "Lockheed",
@@ -6107,7 +6107,7 @@
   "make": "Fokker",
   "model": "F-28 Fellowship",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "F2TH": {
   "lengthFt": 66.3,
@@ -6207,7 +6207,7 @@
   "make": "Fokker",
   "model": "70",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "F8": {
   "make": "Chance Vought",
@@ -6269,8 +6269,8 @@
   "lengthFt": 45.5,
   "make": "Dassault",
   "model": "Falcon 10",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 42.9
  },
  "FA11": {
@@ -6283,8 +6283,8 @@
   "lengthFt": 56.3,
   "make": "Dassault",
   "model": "Falcon 20",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 53.5
  },
  "FA24": {
@@ -6297,8 +6297,8 @@
   "lengthFt": 60.8,
   "make": "Dassault",
   "model": "Falcon 50",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 61.9
  },
  "FA62": {
@@ -6310,8 +6310,8 @@
  "FA6X": {
   "make": "Dassault",
   "model": "Falcon 6X",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "FA7X": {
   "lengthFt": 76.1,
@@ -6755,8 +6755,8 @@
   "lengthFt": 56.8,
   "make": "Gulfstream",
   "model": "G150",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 55.6
  },
  "G159": {
@@ -6831,8 +6831,8 @@
   "lengthFt": 66.8,
   "make": "Gulfstream",
   "model": "G280",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 63.0
  },
  "G2CA": {
@@ -6946,29 +6946,29 @@
  "GA3C": {
   "make": "Gulfstream",
   "model": "G300",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "GA4C": {
   "make": "Gulfstream",
   "model": "G400",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "GA5C": {
   "lengthFt": 91.2,
   "make": "Gulfstream",
   "model": "G500",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 86.3
  },
  "GA6C": {
   "lengthFt": 96.1,
   "make": "Gulfstream",
   "model": "G600",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "rare",
+  "type": "biz",
   "wingspanFt": 94.2
  },
  "GA7": {
@@ -6982,8 +6982,8 @@
  "GA7C": {
   "make": "Gulfstream",
   "model": "G700",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "rare",
+  "type": "biz"
  },
  "GA8": {
   "make": "Gippsaero",
@@ -6994,8 +6994,8 @@
  "GA8C": {
   "make": "Gulfstream",
   "model": "G800",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "rare",
+  "type": "biz"
  },
  "GABR": {
   "make": "Blackshape",
@@ -7090,7 +7090,7 @@
   "make": "Bombardier",
   "model": "BD-700 Global 5000",
   "rarity": "rare",
-  "type": "narrow",
+  "type": "biz",
   "wingspanFt": 94.0
  },
  "GL7T": {
@@ -7098,7 +7098,7 @@
   "make": "Bombardier",
   "model": "BD-700 Global 7000",
   "rarity": "rare",
-  "type": "narrow",
+  "type": "biz",
   "wingspanFt": 104.3
  },
  "GLAD": {
@@ -7118,23 +7118,23 @@
   "make": "Bombardier",
   "model": "BD-700 Global Express",
   "rarity": "rare",
-  "type": "narrow",
+  "type": "biz",
   "wingspanFt": 94.0
  },
  "GLF2": {
   "lengthFt": 79.9,
   "make": "Gulfstream",
   "model": "II",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 68.8
  },
  "GLF3": {
   "lengthFt": 83.1,
   "make": "Gulfstream",
   "model": "III",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 77.8
  },
  "GLF4": {
@@ -7363,8 +7363,8 @@
   "lengthFt": 50.5,
   "make": "Hawker Siddeley",
   "model": "HS-125-1",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 47.0
  },
  "H25B": {
@@ -7379,8 +7379,8 @@
   "lengthFt": 53.9,
   "make": "British Aerospace",
   "model": "BAe-125-1000",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 51.4
  },
  "H269": {
@@ -7465,8 +7465,8 @@
   "lengthFt": 69.2,
   "make": "Hawker",
   "model": "4000",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 61.8
  },
  "HAHU": {
@@ -7535,8 +7535,8 @@
   "lengthFt": 41.1,
   "make": "Honda",
   "model": "HA-420 HondaJet",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 39.9
  },
  "HEAD": {
@@ -7554,8 +7554,8 @@
  "HF20": {
   "make": "Hfb",
   "model": "HFB-320 Hansa",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "HI27": {
   "make": "Hirth",
@@ -8094,7 +8094,7 @@
   "make": "Fairchild Dornier",
   "model": "328JET",
   "rarity": "common",
-  "type": "narrow",
+  "type": "regional",
   "wingspanFt": 68.8
  },
  "J4": {
@@ -8232,8 +8232,8 @@
  "JCOM": {
   "make": "Aero Commander",
   "model": "1121 Jet Commander",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "JCRU": {
   "make": "Aasi",
@@ -8906,15 +8906,15 @@
  "L29A": {
   "make": "Lockheed",
   "model": "L-1329 Jetstar 6",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "L29B": {
   "lengthFt": 60.3,
   "make": "Lockheed",
   "model": "L-1329 Jetstar 2",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 54.3
  },
  "L37": {
@@ -9179,31 +9179,31 @@
   "lengthFt": 43.3,
   "make": "Learjet",
   "model": "23",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 35.6
  },
  "LJ24": {
   "lengthFt": 43.3,
   "make": "Learjet",
   "model": "24",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 35.6
  },
  "LJ25": {
   "lengthFt": 47.6,
   "make": "Learjet",
   "model": "25",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 35.6
  },
  "LJ28": {
   "make": "Gates Learjet",
   "model": "28",
-  "rarity": "common",
-  "type": "ga"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "LJ31": {
   "lengthFt": 48.7,
@@ -9257,8 +9257,8 @@
   "lengthFt": 56.0,
   "make": "Learjet",
   "model": "70",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 50.9
  },
  "LJ75": {
@@ -10493,8 +10493,8 @@
   "lengthFt": 48.4,
   "make": "Mitsubishi",
   "model": "MU-300 Diamond",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 43.5
  },
  "MUS2": {
@@ -12448,21 +12448,21 @@
   "make": "Avro",
   "model": "RJ-100 Avroliner",
   "rarity": "common",
-  "type": "narrow",
+  "type": "regional",
   "wingspanFt": 86.4
  },
  "RJ70": {
   "make": "Avro",
   "model": "RJ-70 Avroliner",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "RJ85": {
   "lengthFt": 93.7,
   "make": "Avro",
   "model": "RJ-85 Avroliner",
   "rarity": "common",
-  "type": "narrow",
+  "type": "regional",
   "wingspanFt": 86.4
  },
  "RK5": {
@@ -12954,8 +12954,8 @@
  "S601": {
   "make": "Aerospatiale",
   "model": "SN-601 Corvette",
-  "rarity": "common",
-  "type": "ga"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "S61": {
   "make": "Sikorsky",
@@ -13317,16 +13317,16 @@
   "lengthFt": 46.9,
   "make": "Rockwell",
   "model": "Sabre 40",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 44.7
  },
  "SBR2": {
   "lengthFt": 46.9,
   "make": "Rockwell",
   "model": "NA-265 Sabre 75",
-  "rarity": "common",
-  "type": "narrow",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 44.7
  },
  "SC01": {
@@ -13517,8 +13517,8 @@
   "lengthFt": 30.7,
   "make": "Cirrus",
   "model": "SF50 Vision Jet",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "biz",
   "wingspanFt": 38.7
  },
  "SG37": {
@@ -13690,8 +13690,8 @@
  "SJ30": {
   "make": "Emivest",
   "model": "SJ-30",
-  "rarity": "common",
-  "type": "ga"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "SK10": {
   "make": "Skyeton",
@@ -16054,8 +16054,8 @@
  "WW23": {
   "make": "IAI",
   "model": "1123 Westwind",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "uncommon",
+  "type": "biz"
  },
  "WW24": {
   "lengthFt": 52.3,
