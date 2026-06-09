@@ -12,17 +12,17 @@
 //  caught, the tier and type are immutable even if we later refine
 //  the classifier.
 //
-//  Curation philosophy: we don't compute rarity from raw global
-//  fleet frequency. Frequency-driven rarity gets weird around hubs
-//  (a 787 isn't rare at SFO but is rare in Tulsa). The curated
-//  table reflects "how interesting is this airframe to a spotter,"
-//  not "how often does it fly overhead."
+//  Rarity philosophy: tiers reflect SKY PRESENCE — roughly how many of a
+//  type are airborne at any given moment, i.e. how likely you are to see
+//  one overhead. Newness is NOT rarity (a 737 MAX is common); low-activity
+//  airframes rank up (a parked-most-of-the-time bizjet is uncommon). We use
+//  global presence, not local hub frequency, so a 747 stays special even at
+//  a hub. See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
 //
-//  TODO: replace the rule-of-thumb model-substring table with a
-//  curated (type × livery × tier) table once the backend exists
-//  (PLAN §1.2). Until then the heuristic is conservative — most
-//  airframes resolve to (common, narrow), which keeps the rare
-//  signal meaningful.
+//  AUTHORITATIVE PATH: rarity resolves from the ICAO typecode via
+//  `AircraftNaming.rarity(forTypecode:)` (the generated AircraftTypes.json
+//  carries a per-typecode `rarity`). The string table below is now only the
+//  NO-TYPECODE FALLBACK — kept re-tiered to match the activity model.
 //
 
 import Foundation
@@ -179,47 +179,41 @@ nonisolated struct AircraftClassifier: Sendable {
     /// Rules evaluated top-to-bottom; first match wins. Order rules
     /// from most specific (operator-gated) to least specific.
     static let rules: [Rule] = [
-        // ── Legendary — specific airframes, VIP / one-off / icons ──
+        // ── Legendary — operator-gated icons / one-offs ──
         Rule(["vc-25", "747-2"], operatorTokens: ["usaf", "air force"], rarity: .legendary, type: .mil),
         Rule(["concorde"], rarity: .legendary, type: .heritage),
         Rule(["sr-71", "u-2"], rarity: .legendary, type: .mil),
         Rule(["b-2"], rarity: .legendary, type: .mil),
-        Rule(["747sp"], rarity: .legendary, type: .heritage),
 
-        // ── Epic — rare commercial heavies + retired-fleet types ──
+        // ── Epic — super-heavy / strategic (few airborne at any moment) ──
         Rule(["a380"], rarity: .epic, type: .wide),
-        Rule(["747-8"], rarity: .epic, type: .wide),
-        Rule(["a340"], rarity: .epic, type: .wide),
+        Rule(["747-8"], rarity: .epic, type: .wide),     // before bare "747"
+        Rule(["b-52", "b-1"], rarity: .epic, type: .mil),
         Rule(["c-5"], rarity: .epic, type: .mil),
 
-        // ── Rare — interesting commercial + workhorse military ──
-        Rule(["787"], rarity: .rare, type: .wide),
-        Rule(["a350"], rarity: .rare, type: .wide),
-        Rule(["777"], rarity: .rare, type: .wide),
-        Rule(["747"], rarity: .rare, type: .wide),
-        Rule(["c-130"], rarity: .rare, type: .mil),
-        Rule(["c-17"], rarity: .rare, type: .mil),
-        Rule(["kc-", "b-52", "b-1", "ah-", "uh-", "ch-"], rarity: .rare, type: .mil),
+        // ── Rare — scarce-in-the-air widebodies, heavy bizjets, workhorse mil ──
+        Rule(["a340"], rarity: .rare, type: .wide),
+        Rule(["md-11", "md11"], rarity: .rare, type: .wide),
+        Rule(["747"], rarity: .rare, type: .wide),       // 747 classic / -400 / freighter
+        Rule(["global 7500", "global 6500", "global 5000", "global express",
+              "g600", "g650", "g700"], rarity: .rare, type: .biz),   // before light bizjets
+        Rule(["c-130", "c-17", "kc-", "p-8", "ah-", "uh-", "ch-"], rarity: .rare, type: .mil),
 
-        // ── Uncommon — newer airliner variants ──
-        Rule(["max"], rarity: .uncommon, type: .narrow),         // 737 MAX
-        Rule(["a220"], rarity: .uncommon, type: .narrow),
-        Rule(["e190", "e195"], rarity: .uncommon, type: .narrow),
-        Rule(["a330"], rarity: .uncommon, type: .wide),
-        Rule(["767"], rarity: .uncommon, type: .wide),
+        // ── Uncommon — workhorse widebodies (lots fly, but below the narrowbody wall) ──
+        Rule(["787", "a350", "777", "767", "a330"], rarity: .uncommon, type: .wide),
+        // ── Uncommon — newer / smaller narrowbody ──
+        Rule(["a220", "e190", "e195", "717", "md-8", "md8", "727"], rarity: .uncommon, type: .narrow),
+        // ── Uncommon — business jets (low utilization, parked most days) ──
+        Rule(["g500", "g550", "citation", "phenom", "learjet", "challenger", "falcon", "hawker"],
+             rarity: .uncommon, type: .biz),
+        // ── Uncommon — GA turboprops (before the "beechcraft"-bearing piston rule below) ──
+        Rule(["pc-12", "pc12", "tbm", "king air", "super king"], rarity: .uncommon, type: .ga),
 
-        // ── Common — everyday narrow-bodies & regional jets ──
-        Rule(["737"], rarity: .common, type: .narrow),
+        // ── Common — everyday narrowbodies, regionals, GA piston (the sky's bulk) ──
+        Rule(["737", "max", "757"], rarity: .common, type: .narrow),   // NG + MAX both common
         Rule(["a320", "a319", "a321"], rarity: .common, type: .narrow),
         Rule(["e175", "e170", "crj"], rarity: .common, type: .regional),
         Rule(["dash 8", "atr"], rarity: .common, type: .regional),
-
-        // ── Business jets ──
-        Rule(["global 7500", "global 6500", "global 5000"], rarity: .uncommon, type: .biz),
-        Rule(["g650", "g700", "g500"], rarity: .uncommon, type: .biz),
-        Rule(["citation", "phenom", "learjet", "challenger", "falcon"], rarity: .common, type: .biz),
-
-        // ── General aviation ──
         Rule(["cessna", "piper", "cirrus", "beechcraft", "diamond"], rarity: .common, type: .ga),
     ]
 

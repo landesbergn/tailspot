@@ -126,11 +126,17 @@ final class Catch {
         self.aircraftType = (aircraftType ?? autoType).rawValue
     }
 
-    /// The rarity tier for this airframe. Prefers the snapshotted
-    /// value if present (a catch is a frozen moment), and falls back
-    /// to the classifier for older rows where the field is nil.
+    /// The rarity tier for this airframe. Resolved live from the
+    /// typecode (authoritative, like `resolvedType`); falls back to the
+    /// string classifier for pre-typecode rows.
+    ///
+    /// NOTE: unlike `resolvedType`, this does NOT read the stored
+    /// `rarity` snapshot. Rarity now floats with the activity table so
+    /// re-tiering corrects prior catches on read (spec 2026-06-08) —
+    /// the deliberate exception to the frozen-moment rule. The stored
+    /// `rarity` string is kept only as an as-caught audit value.
     var resolvedRarity: Rarity {
-        if let raw = rarity, let r = Rarity(rawValue: raw) { return r }
+        if let r = AircraftNaming.rarity(forTypecode: typecode) { return r }
         return AircraftClassifier.classify(
             manufacturer: manufacturer,
             model: model,

@@ -34,11 +34,16 @@ nonisolated enum AircraftNaming {
         /// JSON without the field (safe: callers fall through to the
         /// string classifier when nil).
         let type: AircraftType?
+        /// Activity-based rarity tier (sky presence) for this typecode.
+        /// nil for entries from older JSON without the field (safe:
+        /// callers fall through to the string classifier when nil).
+        let rarity: Rarity?
 
-        init(make: String?, model: String?, type: AircraftType? = nil) {
+        init(make: String?, model: String?, type: AircraftType? = nil, rarity: Rarity? = nil) {
             self.make = make
             self.model = model
             self.type = type
+            self.rarity = rarity
         }
 
         /// "Boeing 777-300ER" — the string display surfaces show and
@@ -78,6 +83,15 @@ nonisolated enum AircraftNaming {
         return table[code]?.type
     }
 
+    /// Activity-based rarity tier for an ICAO typecode from the bundled
+    /// table, nil if unknown. Authoritative source — preferred over the
+    /// string classifier whenever a typecode is known.
+    static func rarity(forTypecode typecode: String?) -> Rarity? {
+        guard let code = typecode?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased().nonEmpty else { return nil }
+        return table[code]?.rarity
+    }
+
     // MARK: - Bundled DOC 8643 table
 
     /// designator → canonical name + type. Decoded once on first touch.
@@ -92,7 +106,8 @@ nonisolated enum AircraftNaming {
             CanonicalName(
                 make: $0.make,
                 model: $0.model,
-                type: $0.type.flatMap { AircraftType(rawValue: $0) }
+                type: $0.type.flatMap { AircraftType(rawValue: $0) },
+                rarity: $0.rarity.flatMap { Rarity(rawValue: $0) }
             )
         }
     }()
@@ -103,6 +118,9 @@ nonisolated enum AircraftNaming {
         /// DOC 8643-derived type string. Optional for back-compat with
         /// JSON entries regenerated before this field was added.
         let type: String?
+        /// Activity-rarity tier string. Optional for back-compat with
+        /// JSON entries regenerated before this field was added.
+        let rarity: String?
     }
 
     // MARK: - Fallback: make

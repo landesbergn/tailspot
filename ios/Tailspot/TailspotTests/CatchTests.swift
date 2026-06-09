@@ -124,9 +124,12 @@ struct CatchTests {
     // MARK: - Rarity / Type snapshotting
 
     @Test func insertRunsClassifierAndSnapshotsRarityAndType() throws {
-        // New rows pick up rarity + type from the classifier at insert
-        // time so the catch is a frozen moment — re-classifying later
-        // can't retroactively change what tier the user "earned."
+        // New rows still snapshot rarity + type from the classifier at
+        // insert time (stored as audit values). Note: post-2026-06-08
+        // resolvedRarity DERIVES live from the typecode/classifier rather
+        // than reading the stored rarity — with no typecode here both
+        // equal the classifier verdict (787 is a workhorse widebody →
+        // uncommon under the activity model).
         let container = try makeContainer()
         let context = ModelContext(container)
 
@@ -143,9 +146,9 @@ struct CatchTests {
         try context.save()
 
         let fetched = try #require(try context.fetch(FetchDescriptor<Catch>()).first)
-        #expect(fetched.rarity == Rarity.rare.rawValue)
+        #expect(fetched.rarity == Rarity.uncommon.rawValue)
         #expect(fetched.aircraftType == AircraftType.wide.rawValue)
-        #expect(fetched.resolvedRarity == .rare)
+        #expect(fetched.resolvedRarity == .uncommon)
         #expect(fetched.resolvedType == .wide)
     }
 
@@ -171,11 +174,13 @@ struct CatchTests {
         #expect(c.resolvedType == .wide)
     }
 
-    @Test func explicitRarityOverridesClassifier() {
-        // The init takes optional rarity / aircraftType params so a
-        // caller can lock in a specific tier (e.g., the multi-catch
-        // mechanic or a future curated override). Verify the explicit
-        // value beats the classifier.
+    @Test func explicitRarityStoredButResolvedRarityDerives() {
+        // The init still accepts explicit rarity / aircraftType params,
+        // stored as as-caught audit values. aircraftType still flows
+        // through resolvedType (typecode → stored → classifier), but
+        // post-2026-06-08 resolvedRarity DERIVES from the typecode/
+        // classifier and ignores the stored rarity snapshot — the
+        // deliberate exception that lets re-tiering correct prior catches.
         let c = Catch(
             icao24: "x",
             callsign: nil,
@@ -187,7 +192,11 @@ struct CatchTests {
             rarity: .legendary,
             aircraftType: .heritage
         )
-        #expect(c.resolvedRarity == .legendary)
+        // Explicit rarity is still stored (audit), but no longer drives
+        // resolution — a 737-800 with no typecode resolves to .common.
+        #expect(c.rarity == Rarity.legendary.rawValue)
+        #expect(c.resolvedRarity == .common)
+        // aircraftType explicit value still wins via resolvedType.
         #expect(c.resolvedType == .heritage)
     }
 

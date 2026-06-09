@@ -89,23 +89,26 @@ struct AircraftClassifierTests {
 
     // MARK: - Rare tier
 
-    @Test func boeing787IsRareWide() {
+    // Workhorse widebodies: lots airborne at any moment, but a clear step
+    // below the narrowbody wall → uncommon (were .rare under the old
+    // interest-based table). 2026-06-08 activity model.
+    @Test func boeing787IsUncommonWide() {
         let (rarity, type) = AircraftClassifier.classify(
             manufacturer: "BOEING",
             model: "787-9",
             operatorName: "United Airlines"
         )
-        #expect(rarity == .rare)
+        #expect(rarity == .uncommon)
         #expect(type == .wide)
     }
 
-    @Test func a350IsRareWide() {
+    @Test func a350IsUncommonWide() {
         let (rarity, type) = AircraftClassifier.classify(
             manufacturer: "AIRBUS",
             model: "A350-941",
             operatorName: "Delta"
         )
-        #expect(rarity == .rare)
+        #expect(rarity == .uncommon)
         #expect(type == .wide)
     }
 
@@ -144,13 +147,16 @@ struct AircraftClassifierTests {
         #expect(type == .narrow)
     }
 
-    @Test func b737MaxIsUncommon() {
+    // The MAX is the newest 737, but ~1,500+ fly daily — one of the
+    // most-seen jets in the sky → common (was .uncommon). The "max" token
+    // now lives in the common 737 rule. 2026-06-08 activity model.
+    @Test func b737MaxIsCommon() {
         let (rarity, _) = AircraftClassifier.classify(
             manufacturer: "BOEING",
             model: "737 MAX 9",
             operatorName: "Alaska"
         )
-        #expect(rarity == .uncommon)
+        #expect(rarity == .common)
     }
 
     // MARK: - Common tier
@@ -209,7 +215,7 @@ struct AircraftClassifierTests {
             operatorName: nil
         )
         #expect(lower == upper)
-        #expect(lower == .rare)
+        #expect(lower == .uncommon)   // 787 is a workhorse widebody → uncommon
     }
 
     @Test func nilAndEmptyInputs_fallToGADefault() {

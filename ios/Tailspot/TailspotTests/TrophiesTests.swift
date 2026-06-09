@@ -82,7 +82,7 @@ struct TrophiesTests {
     @Test func inputsCountTierCatchesSeparately() {
         let catches: [Catch] = [
             mk(model: "A380-800",  manufacturer: "AIRBUS"),   // epic
-            mk(model: "787-9",     manufacturer: "BOEING"),   // rare
+            mk(model: "747-400",   manufacturer: "BOEING"),   // rare (scarce widebody)
             mk(model: "VC-25",     manufacturer: "BOEING", operatorName: "USAF"), // legendary
             mk(model: "737-800",   manufacturer: "BOEING"),   // common
         ]

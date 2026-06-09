@@ -41,7 +41,7 @@ struct RarityReferenceScreen: View {
             Text("Every plane has a tier.")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text("Curated by airframe — not measured by frequency.")
+            Text("Ranked by how much each type actually flies — how likely you are to see one overhead.")
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
         }
@@ -80,11 +80,11 @@ struct RarityReferenceScreen: View {
 
     private func examples(for r: Rarity) -> String {
         switch r {
-        case .common:    return "737 NG · A320 · CRJ · Cessna 172"
-        case .uncommon:  return "737 MAX · A220 · A330 · E190 · G650"
-        case .rare:      return "787 · A350 · 777 · 747 · C-130 · KC-135"
-        case .epic:      return "A380 · 747-8 · A340 · C-5"
-        case .legendary: return "Air Force One · SR-71 · B-2 · Concorde · NASA SOFIA"
+        case .common:    return "737 · A320 · E175 · ATR · Cessna 172"
+        case .uncommon:  return "A330 · 787 · 777 · Phenom 300 · King Air"
+        case .rare:      return "747 · A340 · G650 · C-130 · C-17"
+        case .epic:      return "A380 · 747-8 · B-52 · C-5"
+        case .legendary: return "Air Force One · SR-71 · B-2 · Concorde"
         }
     }
 }
