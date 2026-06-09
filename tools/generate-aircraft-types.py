@@ -783,6 +783,89 @@ def aircraft_type(tc, info):
     return "ga"
 
 
+# Activity-rarity overrides: typecode → tier. Pins designators where the
+# category default (see aircraft_rarity) mis-tiers sky presence. Only
+# EXCEPTIONS belong here — things the default already gets right (e.g.
+# military workhorses → mil → rare) are omitted. Keyed on the ICAO
+# designator; absent designators simply never match (harmless).
+# See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
+RARITY_OVERRIDES = {
+    # ── legendary — icons / one-offs / barely-flying ──
+    "VC25": "legendary",  # Air Force One (VC-25A)
+    "B2":   "legendary",  # B-2 Spirit
+    "U2":   "legendary",  # U-2 Dragon Lady
+    "SR71": "legendary",  # SR-71 (absent from active DOC 8643; future-proof)
+    "CONC": "legendary",  # Concorde (absent; future-proof)
+    # ── epic — super-heavy / strategic ──
+    "A388": "epic",       # A380-800
+    "B748": "epic",       # 747-8
+    "C5M":  "epic",       # C-5M Super Galaxy
+    "A124": "epic",       # An-124
+    "B52":  "epic",       # B-52
+    "B1":   "epic",       # B-1 Lancer
+    "E3TF": "epic", "E3CF": "epic",   # E-3 Sentry (AWACS)
+    "E4":   "epic",       # E-4B Nightwatch
+    # ── rare — scarce-in-the-air widebodies ──
+    "B742": "rare", "B744": "rare", "B74S": "rare",   # 747 classic / -400 / SP
+    "A342": "rare", "A343": "rare", "A345": "rare", "A346": "rare",  # A340
+    "MD11": "rare",
+    # ── rare — heavy / ULR business jets ──
+    "GLF6": "rare",       # Gulfstream G650
+    "GL7T": "rare",       # Bombardier Global 7500
+    "GL5T": "rare",       # Bombardier Global 5000
+    "GLEX": "rare",       # Bombardier Global Express / 6000
+    # ── uncommon — newer / smaller narrowbody ──
+    "BCS1": "uncommon", "BCS3": "uncommon",           # A220
+    "E190": "uncommon", "E195": "uncommon",           # E190 / E195
+    "E290": "uncommon", "E295": "uncommon",           # E190-E2 / E195-E2
+    "B712": "uncommon",                               # 717
+    "MD82": "uncommon", "MD83": "uncommon",
+    "MD88": "uncommon", "MD90": "uncommon",
+    "B721": "uncommon", "B722": "uncommon",           # 727
+    # ── uncommon — GA turboprops (single / twin utility) ──
+    "PC12": "uncommon",
+    "TBM7": "uncommon", "TBM8": "uncommon", "TBM9": "uncommon",
+    "BE20": "uncommon", "BE30": "uncommon", "B350": "uncommon",   # King Air
+}
+
+
+def aircraft_rarity(tc, info, type_str):
+    """
+    Activity-tier ("sky presence") for a typecode — roughly how likely you
+    are to see one overhead. No real movements feed exists offline, so this
+    is a curated approximation: a category default from the DOC 8643 fields
+    plus the RARITY_OVERRIDES table for named exceptions. Returns one of
+    common/uncommon/rare/epic/legendary.
+    See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
+    """
+    if tc in RARITY_OVERRIDES:
+        return RARITY_OVERRIDES[tc]
+    desc = info.get("AircraftDescription", "")
+    wtc  = info.get("WTC", "")
+    # Rotorcraft / tilt-rotor: localized, lower numbers than the airliner and
+    # GA-piston long tail → uncommon.
+    if desc in ("Helicopter", "Gyrocopter", "Tiltrotor"):
+        return "uncommon"
+    # Super-heavy (A380-class) → epic (named ones are overridden anyway).
+    if wtc == "J":
+        return "epic"
+    # Workhorse widebodies: lots airborne, but a clear step below the
+    # narrowbody wall → uncommon. Scarce widebodies overridden to rare/epic.
+    if type_str == "wide":
+        return "uncommon"
+    # Business jets: low utilization, parked most days → uncommon. Heavy/ULR
+    # jets overridden to rare.
+    if type_str == "biz":
+        return "uncommon"
+    # Military: occasional → rare. Bombers/AWACS/outsized overridden to epic;
+    # icons (B-2, VC-25) to legendary.
+    if type_str == "mil":
+        return "rare"
+    # narrow / regional / ga — the high-movement long tail. Newer/smaller
+    # narrowbodies and scarce GA turboprops are overridden to uncommon.
+    return "common"
+
+
 def reduce_rows(rows):
     # Build per-designator info dict (desc/eng/wtc from the first matching row).
     # We want the raw DOC 8643 fields for type classification, independent of
@@ -819,7 +902,8 @@ def reduce_rows(rows):
         # Type is derived from DOC 8643 classification data (independent of
         # make/model overrides — overrides change display names only).
         atype = aircraft_type(desig, desig_info.get(desig, {}))
-        out[desig] = {"make": make, "model": model, "type": atype}
+        arity = aircraft_rarity(desig, desig_info.get(desig, {}), atype)
+        out[desig] = {"make": make, "model": model, "type": atype, "rarity": arity}
     return out
 
 
