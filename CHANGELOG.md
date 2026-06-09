@@ -5,6 +5,50 @@ that file focused on the live state plus durable guidance. The live "Current
 state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
 Git history and PLAN.md §9 remain the authoritative record.
 
+## 2026-06-08 — field-fix ship: naming audit + visibility hysteresis (v0.2.2)
+
+**Release-coordination round: bundled two field-driven fix streams that had been
+sitting unshipped onto `main`, bumped to `MARKETING_VERSION` 0.2.2, and pushed for
+TestFlight + `bin/deploy` to Noah's iPhone.** Both are tunings of existing
+chokepoints — no new architecture. This session ran as the integrator across
+several parallel work sessions: each session committed its own work (the
+hysteresis stream landed on `fix/visibility-hysteresis-roll-readout`, the naming
+audit was already on `main` from a prior commit), and this round merged, version-
+bumped, doc-updated, and shipped once the working tree was clean.
+
+1. **Aircraft-naming audit (was "in flight" last round, now shipped).** Commit
+   `4430c39` fixes 57 DOC 8643 name mis-picks — military / foreign-licensee /
+   converter / doubled strings → the recognizable civil name (e.g. H25B → Hawker
+   800XP, GA6C → Gulfstream G600), each grounded in a real DOC 8643 / FAA row via
+   the generator's `OVERRIDES` table. Files: `tools/generate-aircraft-types.py`,
+   `AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`. Known
+   type-classification follow-up — several bizjets still typed `narrow`/`ga` — stays
+   parked in PLAN.md §9 (couple it to the activity-rarity work; it changes rarity).
+
+2. **Visibility hysteresis (AR bracket de-flicker).** A Schmitt trigger on the
+   visibility distance cap: a plane already shown last frame keeps a wider cap so it
+   doesn't blink off when it hovers right at the boundary (and drop the lock). New
+   `ObservedAircraft.visibilityHysteresisFactor = 1.2` (~20% outer band) +
+   `wasShownLastFrame` flag, applied via the shared `nonisolated
+   applyVisibilityHysteresis(_:previouslyShown:)` helper. Threaded through BOTH the
+   live path (`ADSBManager.reAnnotate`, carried in private `shownIcaos`) and the
+   offline `ReplayAnalyzer` (carried across ticks) so the two can't drift — same
+   "one chokepoint, both paths" discipline as the pinhole round. Field report
+   2026-06-08: ASA733 oscillated False→True→False across consecutive ticks at the
+   ~9 km cap (±0.1–1.1 km swing); the 1.2 band absorbs it while still dropping
+   planes that genuinely recede. New plane must clear the *inner* cap to appear.
+
+3. **Gravity-roll debug readout (`ContentView`).** A debug-overlay readout of the
+   gravity-derived roll (behind the debug wrench), to eyeball the pinhole camera
+   basis in the field. Debug-only; no production-surface change.
+
+**Tests: 307 → 314, 0 failures** (verified green on iPhone 17 sim before push). New
+`VisibilityHysteresisTests` (5: appear/stay/drop state machine end-to-end + helper
+stamps `wasShownLastFrame` from the prior shown set).
+
+**`MARKETING_VERSION` 0.2.1 → 0.2.2** (user-visible: recognizable aircraft names +
+AR labels stop blinking at the distance edge).
+
 ## 2026-06-08 — 3D pinhole projection for AR label placement (v0.2.1)
 
 **3D pinhole projection landed; device-verified by Noah; on `main` as

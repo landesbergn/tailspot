@@ -8,54 +8,70 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-08 [field-fix ship: naming audit + visibility hysteresis → v0.2.2])
+## Current state (as of session ending 2026-06-08 [activity-based rarity tiering])
 
-**Release-coordination round: bundled two field-driven fix streams that had been
-sitting unshipped onto `main`, bumped to `MARKETING_VERSION` 0.2.2, and pushed for
-TestFlight + `bin/deploy` to Noah's iPhone.** Both are tunings of existing
-chokepoints — no new architecture. This session ran as the integrator across
-several parallel work sessions: each session committed its own work (the
-hysteresis stream landed on `fix/visibility-hysteresis-roll-readout`, the naming
-audit was already on `main` from a prior commit), and this round merged, version-
-bumped, doc-updated, and shipped once the working tree was clean.
+**Re-tiered rarity by sky presence instead of curated spotter-interest, and
+finished moving rarity onto the typecode-driven path (the last derived property
+still using OpenSky free-text).** Driven by a user observation: a 737 MAX was
+`uncommon` purely for being new (it's one of the most-seen jets), while a Phenom
+300 was `common` despite being a rarely-airborne bizjet. The fix tiers by "how
+many of a type are airborne at any given moment" — using global presence, not
+local hub frequency, so a 747 stays special even under SFO/OAK. Spec +
+implementation plan: `docs/superpowers/specs/2026-06-08-activity-rarity-design.md`,
+`docs/superpowers/plans/2026-06-08-activity-rarity.md`.
 
-1. **Aircraft-naming audit (was "in flight" last round, now shipped).** Commit
-   `4430c39` fixes 57 DOC 8643 name mis-picks — military / foreign-licensee /
-   converter / doubled strings → the recognizable civil name (e.g. H25B → Hawker
-   800XP, GA6C → Gulfstream G600), each grounded in a real DOC 8643 / FAA row via
-   the generator's `OVERRIDES` table. Files: `tools/generate-aircraft-types.py`,
-   `AircraftTypes.json`, `AircraftNamingTests`, `GameSystemTests`. Known
-   type-classification follow-up — several bizjets still typed `narrow`/`ga` — stays
-   parked in PLAN.md §9 (couple it to the activity-rarity work; it changes rarity).
+1. **Typecode-driven rarity (Approach B).** `tools/generate-aircraft-types.py`
+   gained `RARITY_OVERRIDES` + `aircraft_rarity()` and emits a per-typecode
+   `rarity` in `AircraftTypes.json` (category default keyed on DOC 8643
+   description/engine/WTC, plus a curated override table). `AircraftNaming.rarity(
+   forTypecode:)` reads it, mirroring `aircraftType(forTypecode:)`. The regen diff
+   is rarity-only (2612 insertions, 0 deletions — the naming audit's make/model are
+   untouched). Distribution: common 2235, uncommon 340, rare 27, epic 8,
+   legendary 2.
 
-2. **Visibility hysteresis (AR bracket de-flicker).** A Schmitt trigger on the
-   visibility distance cap: a plane already shown last frame keeps a wider cap so it
-   doesn't blink off when it hovers right at the boundary (and drop the lock). New
-   `ObservedAircraft.visibilityHysteresisFactor = 1.2` (~20% outer band) +
-   `wasShownLastFrame` flag, applied via the shared `nonisolated
-   applyVisibilityHysteresis(_:previouslyShown:)` helper. Threaded through BOTH the
-   live path (`ADSBManager.reAnnotate`, carried in private `shownIcaos`) and the
-   offline `ReplayAnalyzer` (carried across ticks) so the two can't drift — same
-   "one chokepoint, both paths" discipline as the pinhole round. Field report
-   2026-06-08: ASA733 oscillated False→True→False across consecutive ticks at the
-   ~9 km cap (±0.1–1.1 km swing); the 1.2 band absorbs it while still dropping
-   planes that genuinely recede. New plane must clear the *inner* cap to appear.
+2. **`Catch.resolvedRarity` now derives live and DROPS the stored snapshot** —
+   typecode → re-tiered string classifier, ignoring the stored `rarity` string.
+   This is the **deliberate exception to the frozen-moment rule** (`resolvedType`
+   still keeps its stored middle step): rarity floats with the table so re-tiering
+   **corrects prior catches on read**, no migration. The stored `rarity` is kept
+   only as an as-caught audit value. Verified every caught-data display site reads
+   `resolvedRarity` (via `HangarRow.rarity` → `mostRecent.resolvedRarity` and
+   `PokePlane(catchRecord:)` → `c.resolvedRarity`), so the Hangar/detail/card/
+   reveal/points surfaces all show the new tier — not the stale stored one.
 
-3. **Gravity-roll debug readout (`ContentView`).** A debug-overlay readout of the
-   gravity-derived roll (behind the debug wrench), to eyeball the pinhole camera
-   basis in the field. Debug-only; no production-surface change.
+3. **Tier moves (user-visible):** 737 MAX `uncommon→common`; light/mid bizjets
+   (Phenom, Citation, Learjet, Challenger, Falcon) `common→uncommon`; workhorse
+   widebodies (A330, 767, 787, 777, A350) → `uncommon` (a step below the
+   narrowbody wall, but far from rare); scarce widebodies (747, A340, MD-11) +
+   heavy bizjets (G650, Global) → `rare`; super-heavy/strategic (A380, 747-8,
+   B-52, C-5) → `epic`; icons (Air Force One, SR-71, B-2, U-2) → `legendary`.
+   Rotorcraft → `uncommon`. The string `AircraftClassifier` was re-tiered to match
+   and is now only the no-typecode fallback. Explainer (`RarityReferenceScreen`)
+   reworded: "Ranked by how much each type actually flies."
 
-**Tests: 307 → 314, 0 failures** (verified green on iPhone 17 sim before push). New
-`VisibilityHysteresisTests` (5: appear/stay/drop state machine end-to-end + helper
-stamps `wasShownLastFrame` from the prior shown set).
+4. **Two known divergences (parked, not bugs):** (a) `ContentView` line ~1735's
+   live AR-overlay tier uses `AircraftClassifier.classify(...)` directly (string
+   path), bypassing the typecode even when known — small divergence now that the
+   string rules match the table, but the pre-catch HUD tier can differ from the
+   post-catch tier for an airframe where string≠typecode. (b) `SetsScreen`'s
+   `entry.rarity` is static set-catalog metadata (`Sets.swift`), NOT re-tiered to
+   the activity model — the Sets browser may show a slot's old curated tier.
+   Both are PLAN.md §9 follow-ups.
 
-**`MARKETING_VERSION` 0.2.1 → 0.2.2** (user-visible: recognizable aircraft names +
-AR labels stop blinking at the distance edge).
+**Tests: 314 → 318, 0 failures** (verified green on iPhone 17 sim). New
+`RarityResolutionTests` (typecode→tier for every bucket + a re-rank-on-read proof:
+a Catch with a stale `.uncommon` snapshot but typecode `B38M` resolves to
+`.common`). `GameSystemTests` / `CatchTests` / `TrophiesTests` assertions updated
+for the new tiers (787/A350 rare→uncommon, MAX uncommon→common; an
+`explicitRarity*` test rewritten to document that explicit rarity is now stored-
+but-not-resolved).
 
-**In flight on `main`, not by this round (heads-up for the next session):** the
-*activity-based rarity* design spec + implementation plan
-(`docs/superpowers/specs/2026-06-08-activity-rarity-design.md`,
-`docs/superpowers/plans/2026-06-08-activity-rarity.md`) are docs-only — no code yet.
+**`MARKETING_VERSION` stays 0.2.2** (build-only bump). Per the version-bump
+preference, this re-tier is a tuning of an existing system, not a new surface, so
+it ships as a routine build for faster TestFlight approval. **Release note for
+testers: point totals will shift** (a MAX catch drops 25→10; a Phenom rises
+10→25; a `rare` widebody like a 787 drops 100→25) — expected, not a bug. Bump to
+0.3.0 instead if you want testers to notice it in the version string.
 
 ## Working model
 

@@ -41,9 +41,10 @@ struct HangarRow: Identifiable, Hashable {
     /// panel.
     var firstCatch: Catch { allCatches.last ?? mostRecent }
 
-    /// Snapshotted rarity tier from the most-recent catch. Reads the
-    /// stored value (a catch is a frozen moment) and falls back to
-    /// the classifier for pre-rarity-field rows.
+    /// Rarity tier from the most-recent catch. Derived live via
+    /// `resolvedRarity` (typecode → activity table → classifier), so the
+    /// Hangar re-tiers prior catches on read rather than showing a stored
+    /// snapshot (spec 2026-06-08).
     var rarity: Rarity { mostRecent.resolvedRarity }
 
     /// Snapshotted aircraft type from the most-recent catch.
