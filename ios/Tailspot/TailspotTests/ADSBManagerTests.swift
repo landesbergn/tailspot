@@ -508,3 +508,60 @@ struct ADSBManagerTests {
         }
     }
 }
+
+// MARK: - Backend source toggle (WP 1.6/1.8 pre-cutover)
+
+@Suite("ADSBManager backend toggle")
+@MainActor
+struct ADSBManagerBackendToggleTests {
+
+    private final class NamedSource: ADSBSource, Sendable {
+        let icao: String
+        init(icao: String) { self.icao = icao }
+
+        func aircraftInBbox(
+            lamin: Double, lomin: Double, lamax: Double, lomax: Double
+        ) async throws -> [Aircraft] {
+            [Aircraft(
+                icao24: icao, callsign: nil, originCountry: "Test",
+                longitude: -122.27, latitude: 37.96,    // ~10 km north of observer
+                altitudeMeters: 3000, velocityMps: nil, trackDeg: nil,
+                onGround: false, positionTimestamp: nil
+            )]
+        }
+
+        func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? { nil }
+    }
+
+    @Test func useBackendRoutesPollAndMetadataThroughBackendSource() async {
+        // Clear any persisted toggle state so this test is hermetic, and
+        // restore afterwards (useBackend persists via UserDefaults so a
+        // field session survives app restarts).
+        let key = ADSBManager.useBackendDefaultsKey
+        let saved = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+
+        let manager = ADSBManager(
+            liveSource: NamedSource(icao: "0live0"),
+            mockSource: NamedSource(icao: "0mock0"),
+            backendSource: NamedSource(icao: "0back0")
+        )
+        let observer = CLLocation(latitude: 37.87, longitude: -122.27)
+
+        await manager.refresh(around: observer)
+        #expect(manager.observed.map(\.aircraft.icao24) == ["0live0"])
+
+        manager.useBackend = true
+        await manager.refresh(around: observer)
+        #expect(manager.observed.map(\.aircraft.icao24) == ["0back0"])
+
+        // Mock still wins over everything (couch-testing trumps the toggle).
+        manager.useMock = true
+        await manager.refresh(around: observer)
+        #expect(manager.observed.map(\.aircraft.icao24) == ["0mock0"])
+    }
+}

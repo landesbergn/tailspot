@@ -343,6 +343,23 @@ final class ADSBManager: ObservableObject {
         didSet { Task { await refreshNow() } }
     }
 
+    /// Field-validation toggle for the backend cutover (WP 1.8): swaps the
+    /// live source between OpenSky (device-direct, still the default) and
+    /// the Tailspot backend proxy (api.tailspot.app — adsb.lol data with
+    /// MLAT, so GA aircraft and helicopters appear that OpenSky's free tier
+    /// never shows). Persisted so a field session survives app restarts;
+    /// ignored while `useMock` is on. Once the backend is validated in the
+    /// field, the cutover makes it the only source and this toggle goes away.
+    @Published var useBackend: Bool = UserDefaults.standard.bool(
+        forKey: ADSBManager.useBackendDefaultsKey
+    ) {
+        didSet {
+            UserDefaults.standard.set(useBackend, forKey: ADSBManager.useBackendDefaultsKey)
+            Task { await refreshNow() }
+        }
+    }
+    static let useBackendDefaultsKey = "tailspot.debug.useBackend"
+
     /// Search radius around the user, in km. OpenSky's anonymous tier
     /// caps bbox area; 50 km here is conservatively inside that limit
     /// at any latitude we care about.
@@ -370,7 +387,15 @@ final class ADSBManager: ObservableObject {
 
     private let liveSource: ADSBSource
     private let mockSource: ADSBSource
-    private var source: ADSBSource { useMock ? mockSource : liveSource }
+    private let backendSource: ADSBSource
+    /// Effective source. Mock wins (couch-testing trumps everything),
+    /// then the backend toggle, then the OpenSky default. Both the bbox
+    /// poll AND `metadata(for:)` route through this, so flipping the
+    /// toggle exercises the full backend path.
+    private var source: ADSBSource {
+        if useMock { return mockSource }
+        return useBackend ? backendSource : liveSource
+    }
 
     /// Whether the live source has OAuth credentials. Surfaced for
     /// the debug overlay so we can see at a glance whether the app
@@ -399,10 +424,12 @@ final class ADSBManager: ObservableObject {
     /// the real OpenSky network, which is slow and flaky.
     init(
         liveSource: ADSBSource = OpenSkyClient(),
-        mockSource: ADSBSource = MockADSBSource()
+        mockSource: ADSBSource = MockADSBSource(),
+        backendSource: ADSBSource = TailspotBackendClient()
     ) {
         self.liveSource = liveSource
         self.mockSource = mockSource
+        self.backendSource = backendSource
     }
 
     /// Start polling. The provider closure is called on each tick to
