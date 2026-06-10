@@ -24,7 +24,17 @@
  */
 
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 /**
  * Per-airframe registry rows (FAA Releasable Aircraft DB → one row per US tail).
@@ -69,3 +79,105 @@ export type RegistryRow = typeof registry.$inferSelect;
 export type RegistryInsert = typeof registry.$inferInsert;
 export type TypecodeRow = typeof typecodes.$inferSelect;
 export type TypecodeInsert = typeof typecodes.$inferInsert;
+
+/**
+ * Identity + catches (WP 1.5).
+ *
+ * `devices` — one row per anonymous install. There is NO username/password and
+ *   no PII: a device registers, gets a random 256-bit token shown ONCE, and we
+ *   store only the token's SHA-256 hash. A device can optionally claim a public
+ *   `handle` (the only thing that ever appears on the leaderboard). The
+ *   case-insensitive uniqueness of handles is enforced by a unique index on
+ *   `lower(handle)`, NOT on the raw column, so "Maverick" and "maverick" collide
+ *   while we still preserve the user's preferred casing for display.
+ *
+ * `catches` — one row per ingested catch. `catchUuid` is a CLIENT-generated
+ *   idempotency key (unique): a retried upload with the same uuid returns the
+ *   original result instead of creating a duplicate. Server-resolved facts
+ *   (typecode, rarity, points) are stored — never the client's claims (the wire
+ *   contract carries none). The anti-cheat `validation` verdict + reasons are
+ *   stored as jsonb for later analysis but NEVER gate the response.
+ */
+
+/** Anonymous device identities. The token is never stored — only its SHA-256 hash. */
+export const devices = pgTable(
+  "devices",
+  {
+    /** Server-generated surrogate id (the public deviceId in the wire contract). */
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * SHA-256 (hex) of the bearer token. The token itself is shown once at
+     * registration and never persisted: a leaked DB row can't be replayed as a
+     * credential. Unique so the auth lookup is a single point-read.
+     */
+    tokenHash: text("token_hash").notNull().unique(),
+    /**
+     * Optional public handle. Stored with the user's chosen casing; uniqueness
+     * is case-insensitive via the `lower(handle)` index below.
+     */
+    handle: text("handle"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => ({
+    /**
+     * Case-insensitive handle uniqueness. A partial index (WHERE handle IS NOT
+     * NULL) so the many handle-less devices don't all collide on NULL — and
+     * Postgres treats NULLs as distinct anyway, but the predicate documents
+     * intent and keeps the index small.
+     */
+    handleLowerUnique: uniqueIndex("devices_handle_lower_unique")
+      .on(sql`lower(${t.handle})`)
+      .where(sql`${t.handle} is not null`),
+  }),
+);
+
+/** Ingested catches. One row per (server-accepted) catch; idempotent on catchUuid. */
+export const catches = pgTable(
+  "catches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Client idempotency key — a retried upload with this uuid is a no-op replay. */
+    catchUuid: uuid("catch_uuid").notNull().unique(),
+    /** Owning device. */
+    deviceId: uuid("device_id")
+      .notNull()
+      .references(() => devices.id),
+    /** Lowercase hex Mode-S 24-bit address of the caught aircraft. */
+    icao24: text("icao24").notNull(),
+    /** Callsign as the client observed it (trimmed); null if none. */
+    callsign: text("callsign"),
+    /** Server-resolved ICAO type designator (from metadata); null if unresolved. */
+    typecode: text("typecode"),
+    /** Server-resolved rarity tier; null when the airframe/type is unknown. */
+    rarity: text("rarity"),
+    /** Server-computed points (rarity→points; default 10 for unknown). NEVER client-supplied. */
+    points: integer("points").notNull(),
+    /** When the client says it was caught. */
+    caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
+    observerLat: doublePrecision("observer_lat").notNull(),
+    observerLon: doublePrecision("observer_lon").notNull(),
+    /** Compass heading the user was facing (deg true), null if unknown. */
+    headingDeg: doublePrecision("heading_deg"),
+    /** Camera elevation above horizon (deg), null if unknown. */
+    elevationDeg: doublePrecision("elevation_deg"),
+    /** Reported heading accuracy (deg), widens the anti-cheat tolerance; null if unknown. */
+    headingAccuracyDeg: doublePrecision("heading_accuracy_deg"),
+    aircraftLat: doublePrecision("aircraft_lat").notNull(),
+    aircraftLon: doublePrecision("aircraft_lon").notNull(),
+    aircraftAltitudeMeters: doublePrecision("aircraft_altitude_meters").notNull(),
+    /** Upstream position timestamp of the aircraft fix; null if unknown. */
+    aircraftPositionTimestamp: timestamp("aircraft_position_timestamp", { withTimezone: true }),
+    /** Instrumented anti-cheat verdict + reasons. Stored, never enforced. */
+    validation: jsonb("validation"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => ({
+    byDevice: index("catches_device_idx").on(t.deviceId),
+    byIcao: index("catches_icao_idx").on(t.icao24),
+  }),
+);
+
+export type DeviceRow = typeof devices.$inferSelect;
+export type DeviceInsert = typeof devices.$inferInsert;
+export type CatchRow = typeof catches.$inferSelect;
+export type CatchInsert = typeof catches.$inferInsert;

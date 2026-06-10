@@ -8,6 +8,13 @@
       "when": 1781117987089,
       "tag": "0000_secret_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781119016172,
+      "tag": "0001_gigantic_pet_avengers",
+      "breakpoints": true
     }
   ]
 }
