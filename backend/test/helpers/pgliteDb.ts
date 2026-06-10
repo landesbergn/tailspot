@@ -14,7 +14,7 @@
  * SQL, so the test DB and a freshly-migrated production DB are byte-identical.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
@@ -27,13 +27,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Build a fresh PGlite-backed Drizzle handle with the schema applied. */
 export async function makeTestDb(): Promise<Database> {
   const client = new PGlite();
-  // Replay the committed migration so the test schema == the migrated prod
-  // schema. drizzle splits statements on `--> statement-breakpoint`.
-  const migrationPath = join(__dirname, "../../drizzle/0000_secret_pride.sql");
-  const sqlText = readFileSync(migrationPath, "utf8");
-  for (const stmt of sqlText.split("--> statement-breakpoint")) {
-    const trimmed = stmt.trim();
-    if (trimmed !== "") await client.exec(trimmed);
+  // Replay EVERY committed migration in filename order so the test schema ==
+  // the migrated prod schema. (We replay the raw SQL rather than running
+  // drizzle-kit's migrator so the test stays offline and deterministic.)
+  // drizzle splits statements on `--> statement-breakpoint`.
+  const migrationsDir = join(__dirname, "../../drizzle");
+  const migrationFiles = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort(); // 0000_, 0001_, … apply in lexical order, which is chronological.
+  for (const file of migrationFiles) {
+    const sqlText = readFileSync(join(migrationsDir, file), "utf8");
+    for (const stmt of sqlText.split("--> statement-breakpoint")) {
+      const trimmed = stmt.trim();
+      if (trimmed !== "") await client.exec(trimmed);
+    }
   }
   // The Drizzle PGlite driver's type doesn't structurally match the postgres-js
   // `Database` type, but both satisfy the query surface the store/ingest use.
