@@ -1,0 +1,13 @@
+{
+  "B738": {
+    "make": "Boeing",
+    "model": "737-800",
+    "rarity": "common",
+    "type": "narrow",
+    "lengthFt": 129.5
+  },
+  "SR22": { "make": "Cirrus", "model": "SR-22", "rarity": "common", "type": "ga" },
+  "C172": { "make": "Cessna", "model": "172", "rarity": "common", "type": "ga" },
+  "GLF6": { "make": "Gulfstream", "model": "G650", "rarity": "rare", "type": "biz" },
+  "a380": { "make": "Airbus", "model": "A-380", "rarity": "epic", "type": "wide" }
+}

@@ -9,14 +9,22 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "biome check src test"
+    "lint": "biome check src test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "ingest:doc8643": "node --experimental-strip-types src/ingest/doc8643.ts",
+    "ingest:faa": "node --experimental-strip-types src/ingest/faa.ts"
   },
   "dependencies": {
-    "fastify": "^5.2.1"
+    "@electric-sql/pglite": "^0.5.1",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.2.1",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.10.0",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.7.2",
     "vitest": "^3.2.4"
   },
