@@ -90,20 +90,38 @@ export class TileCache {
   }
 
   /**
-   * Quantize a bbox to a stable tile key by flooring each bound to the grid.
-   * Two bboxes within the same grid cell collapse to the same key. Uses
-   * floor on the mins and ceil on the maxes so the key's implied region always
-   * contains the requested bbox (defensive; the key is identity-only anyway).
+   * Expand a bbox to its enclosing grid tile: floor the mins and ceil the
+   * maxes to the grid. Every bbox inside the same grid cell expands to the
+   * SAME tile bounds — and the tile bounds always contain the requested bbox.
+   *
+   * The expanded tile is BOTH the cache identity and the fetched region.
+   * They must match: if we cached under the tile key but fetched only the
+   * requested bbox, the first caller's bbox would define the data every
+   * later caller on that tile receives — silently missing aircraft near the
+   * edges of *their* (different) bbox. Fetching the full tile makes the
+   * cached snapshot valid for every request that maps to it; clients receive
+   * a superset of their bbox, which they already tolerate (the bbox is a
+   * coarse pre-filter — the app computes per-aircraft distance itself).
    */
-  tileKey(bbox: Bbox): string {
+  tileBbox(bbox: Bbox): Bbox {
     const g = this.config.tileSizeDeg;
-    const q = (v: number, fn: (n: number) => number) => (fn(v / g) * g).toFixed(4);
-    return [
-      q(bbox.lamin, Math.floor),
-      q(bbox.lomin, Math.floor),
-      q(bbox.lamax, Math.ceil),
-      q(bbox.lomax, Math.ceil),
-    ].join(",");
+    const snap = (v: number, fn: (n: number) => number) => {
+      // Round to 4 decimals to kill float noise (0.25 * 3 → 0.7500000000000001).
+      const snapped = fn(v / g) * g;
+      return Math.round(snapped * 10_000) / 10_000;
+    };
+    return {
+      lamin: Math.max(-90, snap(bbox.lamin, Math.floor)),
+      lomin: Math.max(-180, snap(bbox.lomin, Math.floor)),
+      lamax: Math.min(90, snap(bbox.lamax, Math.ceil)),
+      lomax: Math.min(180, snap(bbox.lomax, Math.ceil)),
+    };
+  }
+
+  /** Stable cache key: the tile bounds themselves. */
+  tileKey(bbox: Bbox): string {
+    const t = this.tileBbox(bbox);
+    return [t.lamin, t.lomin, t.lamax, t.lomax].map((v) => v.toFixed(4)).join(",");
   }
 
   /**
@@ -133,8 +151,10 @@ export class TileCache {
     }
 
     // 3. Start a new upstream fetch; stash it so concurrent callers share it.
+    // Fetch the EXPANDED tile (not the raw request) so the cached snapshot is
+    // valid for every bbox that maps to this key — see tileBbox() doc.
     const fetchPromise = this.provider
-      .aircraftInBbox(bbox)
+      .aircraftInBbox(this.tileBbox(bbox))
       .then((snapshot) => {
         this.entries.set(key, { snapshot, storedAt: Math.floor(this.now() / 1000) });
         return snapshot;
