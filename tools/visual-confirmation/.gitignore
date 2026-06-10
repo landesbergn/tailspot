@@ -1,0 +1,20 @@
+# Local Python virtualenv — never commit (multi-hundred-MB torch wheels live here)
+.venv/
+
+# Downloaded model weights (.pth from pixeltable-yolox from_pretrained cache).
+# Anchored to repo-root-relative so this does NOT match the .mlpackage's own
+# internal Data/.../weights/weight.bin (which IS part of the committed model).
+/weights/
+*.pth
+*.pt
+
+# ONNX intermediate — deleted after .mlpackage is produced; never committed
+*.onnx
+
+# Conversion / validation outputs (annotated images, FP16 intermediate package).
+# The committed INT8 .mlpackage is force-added explicitly in the commit step.
+out/
+
+# Python bytecode
+__pycache__/
+*.pyc
