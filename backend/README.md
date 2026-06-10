@@ -61,6 +61,42 @@ Behind the route:
   client sees the staleness; otherwise the request 503s. Upstream errors never
   surface as a 500.
 
+### `GET /v1/metadata/{icao24}` (WP 1.4)
+
+Per-airframe metadata, merging the **FAA Releasable Aircraft DB** (authoritative
+for US tails: registration + manufacturer/model + typecode) with **ICAO DOC 8643**
+(authoritative for clean type naming). `{icao24}` is lowercase hex, validated as
+`[0-9a-f]{6}` (uppercase is accepted and normalized).
+
+```jsonc
+{
+  "icao24": "a12345",           // echoed, lowercased
+  "registration": "N12345",     // FAA tail number; null if unknown
+  "manufacturer": "Boeing",     // DOC 8643 clean name when the typecode is known there, else raw FAA
+  "model": "737-800",
+  "typecode": "B738",           // ICAO type designator; null if the FAA row carries none
+  "operatorName": null,         // always null for now — community lookup is a later seam
+  "source": "merged"            // "merged" | "faa" | "doc8643"
+}
+```
+
+Errors: `400 { "error": "malformed icao24" }`; `404 { "error": "unknown aircraft" }`
+when no source knows the airframe.
+
+**Merge semantics.** The FAA registry says *which airframe* a US tail is and
+supplies registration + typecode. When the FAA row's typecode is also in the DOC
+8643 table, we prefer DOC 8643's **clean** manufacturer/model (`Boeing` /
+`737-800`) over the FAA's messy ALL-CAPS strings (`BOEING` / `737-800` — the FAA
+casing/formatting is inconsistent across rows). `source` records provenance:
+`merged` (both contributed), `faa` (registry only — typecode absent or unknown
+to DOC 8643), `doc8643` (type table only). The merge is a pure function
+(`src/metadata/merge.ts`), unit-tested without a database.
+
+**Storage.** Postgres via Drizzle ORM — `registry` (icao24 PK) + `typecodes`
+(typecode PK). The route depends on an injected `MetadataStore` (mirrors the
+aircraft route's injected `PositionProvider`), so the storage backend is swappable
+and tests inject a PGlite-backed store. See **Database & ingestion** below.
+
 ### Configuration (env)
 
 | Var | Default | Meaning |
@@ -70,6 +106,7 @@ Behind the route:
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
 | `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | — | Required only when `POSITION_PROVIDER=opensky`. |
+| `DATABASE_URL` | — | Postgres connection string. Required for `/v1/metadata` and the ingest jobs; read lazily (the position-only endpoints don't need it). |
 
 **Providers.** The primary is **adsb.lol** (`https://api.adsb.lol`), whose only
 geographic query is point+radius (`GET /v2/point/{lat}/{lon}/{radius}`, radius
@@ -90,6 +127,62 @@ npm run dev        # starts with --watch; restarts on file changes
 
 The server binds to `0.0.0.0:8080` by default. Override with `PORT=<n>`.
 
+## Database & ingestion (WP 1.4)
+
+Postgres via **Drizzle ORM**; schema in `src/db/schema.ts` (two tables:
+`registry`, `typecodes`). Migrations are **generated and committed** — no
+raw-SQL drift.
+
+```sh
+npm run db:generate   # drizzle-kit generate → drizzle/*.sql (run after schema edits)
+DATABASE_URL=… npm run db:migrate   # apply committed migrations to the target DB
+```
+
+Two ingest jobs populate the tables. Both are **runnable scripts, not cron** —
+Fly.io machines (or a GitHub Action) schedule the refresh later (see the plan).
+Both upsert idempotently, so re-runs are clean.
+
+### DOC 8643 typecodes
+
+```sh
+DATABASE_URL=… npm run ingest:doc8643 -- ../ios/Tailspot/Tailspot/AircraftTypes.json
+```
+
+The **single source of truth** is the repo's `ios/Tailspot/Tailspot/AircraftTypes.json`
+(2,612 entries: typecode → `{ make, model, type, rarity }`), the same table the
+iOS client bundles. We deliberately do **not** copy it into `backend/`; the path
+is an argument so a deploy can mount it.
+
+> **Build-time copy note (for the Docker/Fly image):** the JSON lives outside
+> `backend/`, so it isn't in the Docker build context by default. Either (a) build
+> the image from the repo root with a context that includes `ios/.../AircraftTypes.json`
+> and `COPY` it in, or (b) run `ingest:doc8643` from a machine/job that has the
+> repo checked out and can reach `DATABASE_URL`. Until the deploy wires this, run
+> the ingest manually from a checkout. The file is ~120 KB — cheap to mount.
+
+### FAA Releasable Aircraft Database
+
+```sh
+# 1. Download + unzip (manual / cron — NOT done by the test suite):
+curl -L -A "tailspot-faa-registry/1.0" -o ReleasableAircraft.zip \
+  https://registry.faa.gov/database/ReleasableAircraft.zip
+unzip ReleasableAircraft.zip -d faa/           # → faa/MASTER.txt, faa/ACFTREF.txt (~250 MB unzipped)
+# 2. Stream-parse + upsert:
+DATABASE_URL=… npm run ingest:faa -- ./faa            # full registry
+DATABASE_URL=… npm run ingest:faa -- ./faa --limit 1000   # smoke test
+```
+
+The importer **streams** `MASTER.txt` line-by-line (the files are large) joined
+against `ACFTREF.txt` (manufacturer/model), keyed by `MODE S CODE HEX` → lowercase
+`icao24`. US tails only, by construction.
+
+> **Download URL status (verified 2026-06-10):** `GET` works (HTTP 206 on a ranged
+> request; body is a valid ZIP). A bare `HEAD` returns 503 from Akamai — that's a
+> HEAD-method quirk, not an outage; use `GET` (curl downloads fine). If a future
+> scripted `GET` 403s, download the zip manually from the FAA registry site and
+> point `ingest:faa` at the extracted directory — the parser doesn't care how the
+> files arrived.
+
 ## Tests
 
 ```sh
@@ -98,6 +191,15 @@ npm test           # vitest run (in-process, no network)
 
 Tests use Fastify's `app.inject()` transport — the server never opens a real TCP
 socket, so tests are fast and cannot conflict with a running dev server.
+
+Database-backed tests (metadata merge/route, the two ingest pipelines) run
+against **PGlite** — an in-process WASM Postgres officially supported by Drizzle
+(`drizzle-orm/pglite`) — so they exercise the real merge query, ON CONFLICT
+upserts, and the registry→typecode join with **no Docker and no external DB**.
+Each test builds a fresh PGlite instance and replays the committed migration SQL,
+so the test schema is identical to a freshly-migrated production database. (The
+combo was verified working in vitest before the service was built on it; the
+in-memory `Map` fallback the plan allowed for wasn't needed.)
 
 ## Typecheck
 
@@ -136,4 +238,14 @@ fly deploy   # from this directory; uses fly.toml + Dockerfile
 
 Primary region: `sjc` (San Jose, CA). See `fly.toml` for machine/VM config and
 health-check settings. Secrets (Postgres URL, adsb.lol key, etc.) are set via
-`fly secrets set KEY=value` — never committed to the repo.
+`fly secrets set KEY=value` — never committed to the repo. `DATABASE_URL` is the
+Fly managed-Postgres connection string.
+
+After provisioning Postgres and setting `DATABASE_URL`, apply migrations and seed
+the metadata tables once (then on each refresh):
+
+```sh
+DATABASE_URL=… npm run db:migrate
+DATABASE_URL=… npm run ingest:doc8643 -- <path-to-AircraftTypes.json>
+DATABASE_URL=… npm run ingest:faa -- <extracted-FAA-dir>
+```

@@ -2,8 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
+import { getDb } from "./db/client.js";
+import { DrizzleMetadataStore, type MetadataStore } from "./metadata/store.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
+import { registerMetadataRoute } from "./routes/metadata.js";
 
 // Resolve the package.json version at startup so /healthz can report it.
 // __dirname equivalent in ESM:
@@ -32,6 +35,12 @@ export interface BuildAppOptions {
   cacheConfig?: Parameters<typeof registerAircraftRoute>[1]["cacheConfig"];
   /** Injectable clock (unix ms) for deterministic cache tests. */
   now?: () => number;
+  /**
+   * Metadata store override (tests inject a PGlite-backed or in-memory store
+   * here). Production passes nothing and we lazily build a Drizzle store over
+   * the `DATABASE_URL` Postgres connection.
+   */
+  metadataStore?: MetadataStore;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -67,6 +76,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     provider,
     cacheConfig,
     now: options.now,
+  });
+
+  // GET /v1/metadata/{icao24} — FAA + DOC 8643 merged lookup (WP 1.4).
+  //
+  // The store is resolved lazily: when an override is injected (tests) we use
+  // it; otherwise we build a Drizzle store over the production Postgres
+  // connection. We only call `getDb()` (which requires DATABASE_URL) when the
+  // route actually handles a request, NOT at build time — so a test that builds
+  // the app without a metadata store (e.g. the aircraft-route suite, which has
+  // no database) never touches DATABASE_URL.
+  let metadataStore = options.metadataStore;
+  registerMetadataRoute(app, {
+    store: {
+      lookup: (icao24) => {
+        metadataStore ??= new DrizzleMetadataStore(getDb());
+        return metadataStore.lookup(icao24);
+      },
+    },
   });
 
   return app;
