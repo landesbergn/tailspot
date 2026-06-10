@@ -8,51 +8,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-10 [production v1 program planned])
+## Current state (as of session ending 2026-06-10 [production v1 program: backend complete, IP scrub shipped, visual-confirmation spike])
 
-**Planning round, no code: the production v1 program is specced and approved.**
-Noah's directive: take the app from hacky TestFlight v0 to a public beta → App
-Store launch → growth push, craft-first, descope rather than compromise. The
-umbrella design is `docs/superpowers/specs/2026-06-10-production-v1-program-design.md`
-— read it before starting any v1-program work. Headlines:
+**The production v1 program (spec: `docs/superpowers/specs/2026-06-10-production-v1-program-design.md`)
+went from approved to substantially executed in one day. Six PRs merged to
+`main`; orchestration ran as Fable 5 designing/reviewing with Opus/Sonnet/Haiku
+agents executing work packages in parallel worktrees.**
 
-1. **Three parallel tracks.** Track 1: backend data backbone (adsb.lol primary
-   behind a provider-adapter ladder, merged FAA/DOC-8643 metadata, anonymous
-   device-token leaderboard, anti-cheat instrumented-not-enforced) — plan at
-   `docs/superpowers/plans/2026-06-10-track1-data-backbone.md`. Track 2:
-   on-device craft, **gated stages** — visual confirmation first (go/no-go vs
-   pin-protocol replay ground truth), then a 4–5 card silhouette style spike for
-   Noah's sign-off, only then bulk generation. Track 3: hardening — Pokédex IP
-   scrub (required pre-beta), mock-surface cleanup, observability
-   (MetricKit + PostHog), legal/attribution (ODbL, FAA, ICAO re-check, OFL).
+1. **Backend (Track 1) — server side COMPLETE, WP 1.1–1.5 merged.** `backend/`
+   is Node 22 + TypeScript + Fastify + Drizzle, 152 hermetic tests (PGlite —
+   in-process WASM Postgres, no Docker), own CI job (`backend-tests.yml`,
+   path-filtered). Serves: `GET /v1/aircraft` (adsb.lol primary / OpenSky
+   fallback behind a `PositionProvider` seam; 0.25° tile cache w/ single-flight
+   + last-good fallback — note the review fix: the FETCH uses the expanded tile
+   bounds, never the raw bbox); `GET /v1/metadata/{icao24}` (FAA registry +
+   DOC 8643 merge, store-injection pattern); `POST /v1/devices` + handle claim
+   + `POST /v1/catches` (server-resolved points, per-device idempotency,
+   instrumented-never-enforced `validateCatch`) + `GET /v1/leaderboard`.
+   Security review (Fable) fixed two real findings pre-merge: catchUuid
+   idempotency was globally scoped (now composite `(device_id, catch_uuid)`,
+   migration 0002) and `trustProxy` was unset (per-IP rate limit would have
+   429'd globally behind Fly's proxy). NOT deployed yet — needs Noah's Fly.io
+   account + hostname; WP 1.9 runbook still to write.
 
-2. **Scope decisions (Noah, explicit):** anonymous leaderboard with NO accounts
-   (no Sign in with Apple, no cross-device sync, no public hangars at launch);
-   designed silhouette cards (no commissions/photos/AI art); visual confirmation
-   pre-beta; enterprise ADS-B feeds (Spire/Firehose) noted as a reasonable
-   future rung on the provider ladder, not now.
+2. **IP scrub (Track 3) SHIPPED.** All Pokémon trademark references removed
+   pre-beta: "POKÉDEX ENTRY"→"LOGBOOK ENTRY", "POKÉDEX-STYLE"→"SPOTTER SETS",
+   `PokeCardView`→`CatchCardView` (file renamed), `PokePlane`→`CardPlane`,
+   `PokeSet*`→`CardSet*`. 321 tests stayed green; zero `poke` grep hits.
 
-3. **Execution model:** Fable 5 orchestrates, architects, and reviews every PR;
-   Opus 4.8 / Sonnet 4.6 / Haiku 4.5 execute work packages by task shape (table
-   in spec §2); failed review escalates a tier. All work flows through the
-   enforced branch → PR → CI gate.
+3. **Visual confirmation (Track 2 Stage 2a) — pre-camera stack done on branch
+   `feat/visual-confirmation-spike`** (NOT merged): YOLOX-Small COCO → CoreML
+   INT8 (9.2 MB, Apache-2.0-clean via the Pixeltable fork; conversion pipeline
+   + REPORT.md under `tools/visual-confirmation/`), Swift decode+NMS port
+   (`AirplaneDetectionDecoder`, 18 tests), and `VisualFixTracker` (gated
+   association + EMA-smoothed offset, 11 tests; branch suite = 350). KEY
+   FINDING: COCO-pretrained detection dies under ~15–20 px, so the design
+   (SWIFT-DESIGN.md) detects in a **640 px native-resolution crop centered on
+   the ADS-B-predicted position** — recovering the ~6× apparent size lost to
+   full-frame downscale. Remaining: camera frame tap, MLModel crop pipeline,
+   bracket wiring, replay fields + 1 Hz crop JPEGs, then Noah's field session
+   for the go/no-go. Precedent worth knowing: SkySpottr (App Store) ships the
+   same YOLOX-Small approach — also a competitor to watch.
 
-4. **Beta gate:** backend cutover complete (OpenSky creds out of the binary +
-   secret rotated), IP scrub done, surface cleanup done, visual confirmation
-   landed-or-flagged-off, crash/telemetry wired, privacy policy hosted.
-   `MARKETING_VERSION` → 0.5.0 at beta, 1.0.0 at launch.
+4. **Process findings (need Noah):** (a) **`main` has NO branch protection** —
+   no classic protection, no rulesets — despite CONTRIBUTING.md documenting an
+   enforced Unit-tests gate from 2026-06-09. Restoring it is a repo-settings
+   change the permission classifier blocks Claude from making; same for
+   enabling repo auto-merge. (b) One merge (PR #7) went in while its
+   final-commit checks were still registering (local verify was green; post-
+   merge CI confirmed green). (c) A disk-full incident killed two agents
+   mid-task (recovered, no loss); macOS later reclaimed purgeable space —
+   118 GB free now. Heavy disk jobs (xcodebuild + model downloads) should not
+   run concurrently.
 
-5. **Superpowers plugin is now disabled** (Noah, this session) — the spec/plan
-   docs keep living under `docs/superpowers/` for continuity, but no skill
-   ceremony governs the workflow anymore; CONTRIBUTING.md's PR gate is the
-   process.
+5. **Pre-cutover requirement discovered in review (WP 1.4b, tracked):** the
+   FAA ingest yields NO ICAO typecode (MASTER.txt doesn't carry it), so
+   production metadata would serve raw ALL-CAPS names — a regression vs the
+   bundled-FAA path (iOS naming keys on typecode). An MFR-MDL-code → ICAO
+   designator enrichment must land before the WP 1.8 cutover; check
+   `tools/generate-faa-registry.py` first, it may already have the mapping.
 
-**Next action:** dispatch Track 1 WP 1.1 (backend scaffold) + Track 3 IP scrub,
-and Track 2 Stage 2a (visual confirmation spike). Noah-facing prerequisites:
-Fly.io account, API hostname/domain choice, OpenSky console access for the
-eventual rotation.
+**Next up:** WP 1.6 `TailspotBackendClient` (Fable — contracts are frozen in
+the WP prompts + backend code), WP 1.7 leaderboard UI, WP 1.4b enrichment,
+camera half of the spike, then WP 1.8 cutover (+ OpenSky secret rotation,
+tester warning first) and WP 1.9 deploy runbook. Noah-facing: Fly.io account,
+API hostname, branch-protection restore.
 
-**Tests: 321, 0 failures** (unchanged — docs-only round).
+**Tests: iOS 321 on `main` (350 on the spike branch); backend 152.**
 
 ## Working model
 
