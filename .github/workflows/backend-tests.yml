@@ -1,0 +1,45 @@
+name: Backend tests
+
+# Only runs when backend code changes — iOS/tools changes skip this job,
+# keeping CI focused and fast.  The existing tests.yml handles iOS unit tests
+# on every PR; the two jobs are intentionally independent.
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+
+# Cancel older runs for the same PR when a new push arrives.
+concurrency:
+  group: backend-tests-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: backend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+
+      - name: Test
+        working-directory: backend
+        run: npm test
