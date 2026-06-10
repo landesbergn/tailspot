@@ -1,0 +1,87 @@
+/**
+ * The frozen wire contract for position data.
+ *
+ * This is the *normalized* shape every PositionProvider must emit, regardless
+ * of which upstream it talks to. The iOS client is built against exactly this
+ * — see the GET /v1/aircraft route. SI units throughout: meters, m/s, degrees
+ * true, unix *seconds* (not milliseconds).
+ *
+ * Philosophy mirrors the iOS `FailableDecodable`: an upstream row that can't be
+ * normalized (e.g. no lat/lon) is dropped per-element, never failing the whole
+ * batch. Lossy-but-resilient beats all-or-nothing for live air traffic.
+ */
+
+/** A geographic bounding box in decimal degrees. */
+export interface Bbox {
+  /** Minimum latitude (south edge). */
+  lamin: number;
+  /** Minimum longitude (west edge). */
+  lomin: number;
+  /** Maximum latitude (north edge). */
+  lamax: number;
+  /** Maximum longitude (east edge). */
+  lomax: number;
+}
+
+/**
+ * One aircraft, normalized to SI units. Field names mirror the iOS `Aircraft`
+ * model where sensible.
+ */
+export interface NormalizedAircraft {
+  /** Lowercase hex ICAO 24-bit address. */
+  icao24: string;
+  /** Whitespace-trimmed callsign; null if the upstream had none/empty. */
+  callsign: string | null;
+  /** ISO country name derived from icao24 (or supplied by upstream); null if unknown. */
+  originCountry: string | null;
+  longitude: number;
+  latitude: number;
+  /**
+   * Geometric altitude preferred, barometric fallback, 0 if unknown or on
+   * ground. Meters.
+   */
+  altitudeMeters: number;
+  /** Ground speed in m/s, or null if unknown. */
+  velocityMps: number | null;
+  /** True track over ground in degrees, or null if unknown. */
+  trackDeg: number | null;
+  onGround: boolean;
+  /** Unix seconds of the last position update, or null if unknown. */
+  positionTimestamp: number | null;
+}
+
+/**
+ * A point-in-time snapshot from an upstream provider.
+ *
+ * `fetchedAt` is the unix-seconds timestamp the *upstream* reported the
+ * snapshot was generated — NOT when our server served the response. Clients
+ * use it to reason about staleness, so it must travel through caching
+ * unchanged.
+ */
+export interface ProviderSnapshot {
+  fetchedAt: number;
+  aircraft: NormalizedAircraft[];
+}
+
+/**
+ * The seam every upstream adapter implements. One method: given a bbox, return
+ * a normalized snapshot. Network errors throw (the route layer decides whether
+ * to serve last-good cache or 503); a successful fetch that simply has no
+ * aircraft returns an empty array, not an error.
+ */
+export interface PositionProvider {
+  /** Human-readable name for logs ("adsblol", "opensky"). */
+  readonly name: string;
+  aircraftInBbox(bbox: Bbox): Promise<ProviderSnapshot>;
+}
+
+/** Thrown by adapters when the upstream is unreachable or returns a non-OK status. */
+export class UpstreamError extends Error {
+  constructor(
+    message: string,
+    readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "UpstreamError";
+  }
+}
