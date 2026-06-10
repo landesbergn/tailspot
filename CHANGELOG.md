@@ -5,6 +5,95 @@ that file focused on the live state plus durable guidance. The live "Current
 state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
 Git history and PLAN.md §9 remain the authoritative record.
 
+## 2026-06-09 — activity-based rarity tiering + bizjet/regional type fix
+
+**Re-tiered rarity by sky presence instead of curated spotter-interest, and
+finished moving rarity onto the typecode-driven path (the last derived property
+still using OpenSky free-text).** Driven by a user observation: a 737 MAX was
+`uncommon` purely for being new (it's one of the most-seen jets), while a Phenom
+300 was `common` despite being a rarely-airborne bizjet. The fix tiers by "how
+many of a type are airborne at any given moment" — using global presence, not
+local hub frequency, so a 747 stays special even under SFO/OAK. Spec +
+implementation plan: `docs/superpowers/specs/2026-06-08-activity-rarity-design.md`,
+`docs/superpowers/plans/2026-06-08-activity-rarity.md`.
+
+1. **Typecode-driven rarity (Approach B).** `tools/generate-aircraft-types.py`
+   gained `RARITY_OVERRIDES` + `aircraft_rarity()` and emits a per-typecode
+   `rarity` in `AircraftTypes.json` (category default keyed on DOC 8643
+   description/engine/WTC, plus a curated override table). `AircraftNaming.rarity(
+   forTypecode:)` reads it, mirroring `aircraftType(forTypecode:)`. The regen diff
+   is rarity-only (2612 insertions, 0 deletions — the naming audit's make/model are
+   untouched). Distribution: common 2235, uncommon 340, rare 27, epic 8,
+   legendary 2.
+
+2. **`Catch.resolvedRarity` now derives live and DROPS the stored snapshot** —
+   typecode → re-tiered string classifier, ignoring the stored `rarity` string.
+   This is the **deliberate exception to the frozen-moment rule** (`resolvedType`
+   still keeps its stored middle step): rarity floats with the table so re-tiering
+   **corrects prior catches on read**, no migration. The stored `rarity` is kept
+   only as an as-caught audit value. Verified every caught-data display site reads
+   `resolvedRarity` (via `HangarRow.rarity` → `mostRecent.resolvedRarity` and
+   `PokePlane(catchRecord:)` → `c.resolvedRarity`), so the Hangar/detail/card/
+   reveal/points surfaces all show the new tier — not the stale stored one.
+
+3. **Tier moves (user-visible):** 737 MAX `uncommon→common`; light/mid bizjets
+   (Phenom, Citation, Learjet, Challenger, Falcon) `common→uncommon`; workhorse
+   widebodies (A330, 767, 787, 777, A350) → `uncommon` (a step below the
+   narrowbody wall, but far from rare); scarce widebodies (747, A340, MD-11) +
+   heavy bizjets (G650, Global) → `rare`; super-heavy/strategic (A380, 747-8,
+   B-52, C-5) → `epic`; icons (Air Force One, SR-71, B-2, U-2) → `legendary`.
+   Rotorcraft → `uncommon`. The string `AircraftClassifier` was re-tiered to match
+   and is now only the no-typecode fallback. Explainer (`RarityReferenceScreen`)
+   reworded: "Ranked by how much each type actually flies."
+
+4. **Bizjet + regional type-classification fix (2026-06-09 follow-on).** Root
+   cause found via systematic debugging: `aircraft_type()`'s jet-fallback
+   (`Jet+WTC M → narrow`, `Jet+WTC L → ga`) has no signal for non-airliner jets,
+   so the whole tail relied on the hand-maintained `BIZ`/`MIL` exact-match sets —
+   and ~50 bizjets + ~12 regional jets were missing, landing in narrow/ga at
+   `common`. Expanded `BIZ` (Gulfstream G300–G800, Global 5000/7500/Express,
+   Citation VII/Bravo/1SP/2SP, Falcon 10/20/50/6X, Learjet 23–28/70, Embraer
+   Legacy/Praetor, Hawker 125/4000, Beechjet 400, HondaJet, Cirrus Vision,
+   Eclipse 500, + classic JetStar/Sabreliner/Westwind/Corvette/Hansa/Jet
+   Commander) and added a `REGIONAL` exact-match set (BAe 146, Avro RJ, Fokker
+   70/100/F28, Dornier 328JET, An-148/158). Each verified against its DOC 8643
+   `ModelFullName`. **Correct side effect:** the newly-`biz` airframes pick up the
+   biz default rarity → `uncommon` (were wrongly `common`); flagship ULR
+   Gulfstreams G600/G700/G800 overridden → `rare`. Eclipse 500 VLJ reclassified
+   `ga→biz`. Distribution: narrow 223→176, biz 39→86, regional 40→52. Display
+   path already correct (`HangarRow.aircraftType` → `resolvedType` → typecode).
+   **The ~110 military jets (F-16/F-35/MiG/Su/etc.) were deliberately left
+   mislabeled** — MLAT-excluded on OpenSky free tier so they almost never surface
+   in-app; fixing them is low-ROI and would need a make/model heuristic (PLAN §9).
+
+5. **Two known rarity divergences (parked, not bugs):** (a) `ContentView` line
+   ~1735's live AR-overlay tier uses `AircraftClassifier.classify(...)` directly
+   (string path), bypassing the typecode even when known — small divergence now
+   that the string rules match the table, but the pre-catch HUD tier can differ
+   from the post-catch tier for an airframe where string≠typecode. (b)
+   `SetsScreen`'s `entry.rarity` is static set-catalog metadata (`Sets.swift`),
+   NOT re-tiered to the activity model — the Sets browser may show a slot's old
+   curated tier. Both are PLAN.md §9 follow-ups.
+
+**Tests: 314 → 321, 0 failures** (verified green on iPhone 17 sim). New
+`RarityResolutionTests` (typecode→tier for every bucket + a re-rank-on-read proof:
+a Catch with a stale `.uncommon` snapshot but typecode `B38M` resolves to
+`.common`) and `bizjetRarityAfterTypeFix`; new `mistypedBizjets_nowBiz` /
+`mistypedRegionals_nowRegional` type suites. `GameSystemTests` / `CatchTests` /
+`TrophiesTests` assertions updated for the new tiers (787/A350 rare→uncommon, MAX
+uncommon→common; an `explicitRarity*` test rewritten to document that explicit
+rarity is now stored-but-not-resolved).
+
+**`MARKETING_VERSION` stays 0.2.2** (build-only bump). Per the version-bump
+preference, this re-tier is a tuning of an existing system, not a new surface, so
+it ships as a routine build for faster TestFlight approval. **Release note for
+testers: existing catches get re-categorized — both point totals AND type
+grouping.** Tiers shift (a MAX drops 25→10; a Phenom rises 10→25; a 787 drops
+100→25), and the bizjet/regional type fix moves aircraft between Hangar sections
+(a Citation jumps NARROW→BIZ; a BAe 146 → REGIONAL) and shifts type-keyed counts.
+All expected, not a bug. Bump to 0.3.0 instead if you want testers to notice in
+the version string.
+
 ## 2026-06-08 — field-fix ship: naming audit + visibility hysteresis (v0.2.2)
 
 **Release-coordination round: bundled two field-driven fix streams that had been

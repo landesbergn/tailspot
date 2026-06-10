@@ -8,94 +8,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-09 [activity-based rarity tiering + bizjet/regional type fix])
+## Current state (as of session ending 2026-06-10 [production v1 program planned])
 
-**Re-tiered rarity by sky presence instead of curated spotter-interest, and
-finished moving rarity onto the typecode-driven path (the last derived property
-still using OpenSky free-text).** Driven by a user observation: a 737 MAX was
-`uncommon` purely for being new (it's one of the most-seen jets), while a Phenom
-300 was `common` despite being a rarely-airborne bizjet. The fix tiers by "how
-many of a type are airborne at any given moment" — using global presence, not
-local hub frequency, so a 747 stays special even under SFO/OAK. Spec +
-implementation plan: `docs/superpowers/specs/2026-06-08-activity-rarity-design.md`,
-`docs/superpowers/plans/2026-06-08-activity-rarity.md`.
+**Planning round, no code: the production v1 program is specced and approved.**
+Noah's directive: take the app from hacky TestFlight v0 to a public beta → App
+Store launch → growth push, craft-first, descope rather than compromise. The
+umbrella design is `docs/superpowers/specs/2026-06-10-production-v1-program-design.md`
+— read it before starting any v1-program work. Headlines:
 
-1. **Typecode-driven rarity (Approach B).** `tools/generate-aircraft-types.py`
-   gained `RARITY_OVERRIDES` + `aircraft_rarity()` and emits a per-typecode
-   `rarity` in `AircraftTypes.json` (category default keyed on DOC 8643
-   description/engine/WTC, plus a curated override table). `AircraftNaming.rarity(
-   forTypecode:)` reads it, mirroring `aircraftType(forTypecode:)`. The regen diff
-   is rarity-only (2612 insertions, 0 deletions — the naming audit's make/model are
-   untouched). Distribution: common 2235, uncommon 340, rare 27, epic 8,
-   legendary 2.
+1. **Three parallel tracks.** Track 1: backend data backbone (adsb.lol primary
+   behind a provider-adapter ladder, merged FAA/DOC-8643 metadata, anonymous
+   device-token leaderboard, anti-cheat instrumented-not-enforced) — plan at
+   `docs/superpowers/plans/2026-06-10-track1-data-backbone.md`. Track 2:
+   on-device craft, **gated stages** — visual confirmation first (go/no-go vs
+   pin-protocol replay ground truth), then a 4–5 card silhouette style spike for
+   Noah's sign-off, only then bulk generation. Track 3: hardening — Pokédex IP
+   scrub (required pre-beta), mock-surface cleanup, observability
+   (MetricKit + PostHog), legal/attribution (ODbL, FAA, ICAO re-check, OFL).
 
-2. **`Catch.resolvedRarity` now derives live and DROPS the stored snapshot** —
-   typecode → re-tiered string classifier, ignoring the stored `rarity` string.
-   This is the **deliberate exception to the frozen-moment rule** (`resolvedType`
-   still keeps its stored middle step): rarity floats with the table so re-tiering
-   **corrects prior catches on read**, no migration. The stored `rarity` is kept
-   only as an as-caught audit value. Verified every caught-data display site reads
-   `resolvedRarity` (via `HangarRow.rarity` → `mostRecent.resolvedRarity` and
-   `PokePlane(catchRecord:)` → `c.resolvedRarity`), so the Hangar/detail/card/
-   reveal/points surfaces all show the new tier — not the stale stored one.
+2. **Scope decisions (Noah, explicit):** anonymous leaderboard with NO accounts
+   (no Sign in with Apple, no cross-device sync, no public hangars at launch);
+   designed silhouette cards (no commissions/photos/AI art); visual confirmation
+   pre-beta; enterprise ADS-B feeds (Spire/Firehose) noted as a reasonable
+   future rung on the provider ladder, not now.
 
-3. **Tier moves (user-visible):** 737 MAX `uncommon→common`; light/mid bizjets
-   (Phenom, Citation, Learjet, Challenger, Falcon) `common→uncommon`; workhorse
-   widebodies (A330, 767, 787, 777, A350) → `uncommon` (a step below the
-   narrowbody wall, but far from rare); scarce widebodies (747, A340, MD-11) +
-   heavy bizjets (G650, Global) → `rare`; super-heavy/strategic (A380, 747-8,
-   B-52, C-5) → `epic`; icons (Air Force One, SR-71, B-2, U-2) → `legendary`.
-   Rotorcraft → `uncommon`. The string `AircraftClassifier` was re-tiered to match
-   and is now only the no-typecode fallback. Explainer (`RarityReferenceScreen`)
-   reworded: "Ranked by how much each type actually flies."
+3. **Execution model:** Fable 5 orchestrates, architects, and reviews every PR;
+   Opus 4.8 / Sonnet 4.6 / Haiku 4.5 execute work packages by task shape (table
+   in spec §2); failed review escalates a tier. All work flows through the
+   enforced branch → PR → CI gate.
 
-4. **Bizjet + regional type-classification fix (2026-06-09 follow-on).** Root
-   cause found via systematic debugging: `aircraft_type()`'s jet-fallback
-   (`Jet+WTC M → narrow`, `Jet+WTC L → ga`) has no signal for non-airliner jets,
-   so the whole tail relied on the hand-maintained `BIZ`/`MIL` exact-match sets —
-   and ~50 bizjets + ~12 regional jets were missing, landing in narrow/ga at
-   `common`. Expanded `BIZ` (Gulfstream G300–G800, Global 5000/7500/Express,
-   Citation VII/Bravo/1SP/2SP, Falcon 10/20/50/6X, Learjet 23–28/70, Embraer
-   Legacy/Praetor, Hawker 125/4000, Beechjet 400, HondaJet, Cirrus Vision,
-   Eclipse 500, + classic JetStar/Sabreliner/Westwind/Corvette/Hansa/Jet
-   Commander) and added a `REGIONAL` exact-match set (BAe 146, Avro RJ, Fokker
-   70/100/F28, Dornier 328JET, An-148/158). Each verified against its DOC 8643
-   `ModelFullName`. **Correct side effect:** the newly-`biz` airframes pick up the
-   biz default rarity → `uncommon` (were wrongly `common`); flagship ULR
-   Gulfstreams G600/G700/G800 overridden → `rare`. Eclipse 500 VLJ reclassified
-   `ga→biz`. Distribution: narrow 223→176, biz 39→86, regional 40→52. Display
-   path already correct (`HangarRow.aircraftType` → `resolvedType` → typecode).
-   **The ~110 military jets (F-16/F-35/MiG/Su/etc.) were deliberately left
-   mislabeled** — MLAT-excluded on OpenSky free tier so they almost never surface
-   in-app; fixing them is low-ROI and would need a make/model heuristic (PLAN §9).
+4. **Beta gate:** backend cutover complete (OpenSky creds out of the binary +
+   secret rotated), IP scrub done, surface cleanup done, visual confirmation
+   landed-or-flagged-off, crash/telemetry wired, privacy policy hosted.
+   `MARKETING_VERSION` → 0.5.0 at beta, 1.0.0 at launch.
 
-5. **Two known rarity divergences (parked, not bugs):** (a) `ContentView` line
-   ~1735's live AR-overlay tier uses `AircraftClassifier.classify(...)` directly
-   (string path), bypassing the typecode even when known — small divergence now
-   that the string rules match the table, but the pre-catch HUD tier can differ
-   from the post-catch tier for an airframe where string≠typecode. (b)
-   `SetsScreen`'s `entry.rarity` is static set-catalog metadata (`Sets.swift`),
-   NOT re-tiered to the activity model — the Sets browser may show a slot's old
-   curated tier. Both are PLAN.md §9 follow-ups.
+5. **Superpowers plugin is now disabled** (Noah, this session) — the spec/plan
+   docs keep living under `docs/superpowers/` for continuity, but no skill
+   ceremony governs the workflow anymore; CONTRIBUTING.md's PR gate is the
+   process.
 
-**Tests: 314 → 321, 0 failures** (verified green on iPhone 17 sim). New
-`RarityResolutionTests` (typecode→tier for every bucket + a re-rank-on-read proof:
-a Catch with a stale `.uncommon` snapshot but typecode `B38M` resolves to
-`.common`) and `bizjetRarityAfterTypeFix`; new `mistypedBizjets_nowBiz` /
-`mistypedRegionals_nowRegional` type suites. `GameSystemTests` / `CatchTests` /
-`TrophiesTests` assertions updated for the new tiers (787/A350 rare→uncommon, MAX
-uncommon→common; an `explicitRarity*` test rewritten to document that explicit
-rarity is now stored-but-not-resolved).
+**Next action:** dispatch Track 1 WP 1.1 (backend scaffold) + Track 3 IP scrub,
+and Track 2 Stage 2a (visual confirmation spike). Noah-facing prerequisites:
+Fly.io account, API hostname/domain choice, OpenSky console access for the
+eventual rotation.
 
-**`MARKETING_VERSION` stays 0.2.2** (build-only bump). Per the version-bump
-preference, this re-tier is a tuning of an existing system, not a new surface, so
-it ships as a routine build for faster TestFlight approval. **Release note for
-testers: existing catches get re-categorized — both point totals AND type
-grouping.** Tiers shift (a MAX drops 25→10; a Phenom rises 10→25; a 787 drops
-100→25), and the bizjet/regional type fix moves aircraft between Hangar sections
-(a Citation jumps NARROW→BIZ; a BAe 146 → REGIONAL) and shifts type-keyed counts.
-All expected, not a bug. Bump to 0.3.0 instead if you want testers to notice in
-the version string.
+**Tests: 321, 0 failures** (unchanged — docs-only round).
 
 ## Working model
 
@@ -108,49 +65,48 @@ the version string.
 
 Two paths:
 
-- **Claude-driven (default this session and after):** `bin/deploy` — builds via `xcodebuild`, installs via `xcrun devicectl`, launches on Noah's paired iPhone wirelessly. See "Remote-deploy loop" below for details and rules. There is no CI; Claude runs the unit-test suite before deploys.
+- **Claude-driven (default):** `bin/deploy` — builds via `xcodebuild`, installs via `xcrun devicectl`, launches on Noah's paired iPhone wirelessly. There is no CI on deploys; run the unit-test suite first when touching testable code (see Tests).
 - **Manual (Noah's IDE workflow):** Xcode `⌘R` against the connected iPhone. Useful when you want Xcode's debugger / live `os_log` console.
 
 The iOS Simulator cannot provide real GPS, compass, or camera, so the iPhone is required for any runtime / field testing.
 
 ### Remote-deploy loop
 
-For tighter iteration than ⌘R-in-Xcode, the repo ships a Bash-driven loop:
+- `bin/deploy [--no-build] [--no-launch] [--dry-run]` — device UDID, scheme, and paths come from `tools/deploy/config.sh`; override locally via `tools/deploy/config.local.sh` (gitignored — the committed UDID is Noah's). Wireless dev pairing must already be active (confirm with `xcrun devicectl list devices`). `--launch` is implicit.
+- `bin/log-tail [-n N] [-f]` — reads `~/Library/Logs/tailspot/device.log`. **Currently a no-op stub:** the host macOS `log` binary doesn't accept `--device <UDID>`, so `bin/log-start` exits 0 with a notice. Fix planned (PLAN.md §9 #3); until then, inspect runtime behavior via Xcode's Console or `os_log` viewer.
 
-- `bin/deploy [--no-build] [--no-launch] [--dry-run]` — builds via `xcodebuild`, installs via `xcrun devicectl`, launches the app on Noah's paired iPhone. The device UDID, scheme, and paths come from `tools/deploy/config.sh`; override locally via `tools/deploy/config.local.sh` (gitignored). Wireless dev pairing must already be active (confirm with `xcrun devicectl list devices`). `--launch` is implicit; use `--no-launch` to install without auto-starting.
-- `bin/log-tail [-n N] [-f]` — reads `~/Library/Logs/tailspot/device.log`. **Currently a no-op stub:** the host macOS `log` binary on this machine does not accept `--device <UDID>`, so `bin/log-start` exits 0 with a notice and no streaming runs. Fix planned (PLAN.md §9 #3); until then, inspect runtime behavior via Xcode's Console or `os_log` viewer.
-- All app-side logging flows through `Log.swift` (subsystem `com.landesberg.tailspot`).
+Failure modes that need Noah, not a retry:
 
-Rules:
-- **Run unit tests before `bin/deploy`** when touching testable code. The loop will happily deploy a broken build.
-- If `xcrun devicectl install` fails (e.g., "developer disk image could not be mounted"), surface the message and stop — don't silently retry. Most such failures need Noah's action: unlock the phone, re-pair via USB, or open Xcode once to mount the DDI.
-- The device UDID in `tools/deploy/config.sh` is Noah's. A different developer overrides via `tools/deploy/config.local.sh`.
+- `xcrun devicectl install` fails (e.g. "developer disk image could not be mounted") → surface the message and stop. Usually: unlock the phone, re-pair via USB, or open Xcode once to mount the DDI.
+- `devicectl process launch` returns a Locked error → the phone must be unlocked; ask Noah and retry the launch step.
+- `xcodebuild` can't find the destination ("Unable to find a destination") → check `xcrun devicectl list devices`; state `unavailable` means USB re-pair or opening Xcode once to re-establish the handshake.
 
 ### Doc-staleness Stop hook
 
-`.claude/settings.json` registers a `Stop` hook that runs `bin/doc-staleness-check` at the end of each Claude turn. The check:
+`.claude/settings.json` registers a `Stop` hook running `bin/doc-staleness-check` at the end of each turn: if unpushed commits exist on `main` and none touched `CLAUDE.md` or `PLAN.md`, it blocks the turn and asks for a doc refresh (`Current state` here, §9 in PLAN.md) before stopping — replace the live `Current state` block and move the old one to `CHANGELOG.md`. The point: a session can be cleared at any time and the next agent reads docs that match what's on disk. The script self-locates via `git rev-parse --show-toplevel`. `.claude/settings.json` is gitignored; to make the hook follow the repo to other machines, add `!.claude/settings.json` to `.gitignore` and commit.
 
-1. Looks for unpushed commits on `main` (`git log origin/main..HEAD`).
-2. If any exist and **none** of them touched `CLAUDE.md` or `PLAN.md`, emits `{"decision":"block","reason":"..."}` so the turn doesn't end — Claude is asked to refresh the docs (`Current state` in CLAUDE.md and §9 in PLAN.md) and push before stopping. When refreshing, replace the live `Current state` block and move the old one to `CHANGELOG.md` (see "Read PLAN.md first") rather than appending a new block.
-3. Otherwise silent.
+## Credentials (OpenSky): xcconfig is canonical
 
-The point: a session can be cleared at any time and the next agent reads docs that match what's on disk. The script self-locates via `git rev-parse --show-toplevel`, so it works regardless of the cwd the hook fires from. `.claude/settings.json` itself is gitignored (everything under `.claude/` is) — to make this hook follow the repo to other machines, add `!.claude/settings.json` to `.gitignore` and commit.
+For LIVE mode the app authenticates to OpenSky via OAuth2 client-credentials. Anonymous tier (400 credits/day) exhausts in ~1.3 hr at the 20 s default poll rate; the registered tier (4000/day) is comfortable for testing.
 
-### OpenSky credentials
+**Canonical path:** `ios/Tailspot/Tailspot.secrets.xcconfig` (gitignored) holds the real `client_id` + `client_secret`; the committed `Tailspot.xcconfig` `#include?`s it; Info.plist substitutes `$(OPENSKY_CLIENT_ID)` / `$(OPENSKY_CLIENT_SECRET)`; `OpenSkyClient.init` reads them from `Bundle.main.infoDictionary`. Xcode Cloud writes the same file via `ci_post_clone.sh` from workflow env vars. **One source of truth.**
 
-For LIVE mode the app authenticates via OAuth2 client-credentials. OpenSky's anonymous tier (400 credits/day) is exhausted in ~1.3 hr at the 20 s default poll rate; the registered tier (4000 credits/day) is comfortable for testing.
+**The xcscheme path is deprecated.** `OpenSkyClient.init` resolves explicit → env vars → Bundle, so a stale env var in a user-only xcscheme silently wins over a fresh secrets file (this cost a debugging hour once). Don't add env vars to schemes; if you must for dev, keep exactly one source populated.
 
-**Canonical path (post-TestFlight):** edit `ios/Tailspot/Tailspot.secrets.xcconfig` (gitignored) with your OpenSky `client_id` + `client_secret`. The committed `Tailspot.xcconfig` `#include?`s it, which feeds Info.plist via `$(OPENSKY_CLIENT_ID)` substitution; `OpenSkyClient.init` reads them from `Bundle.main.infoDictionary` at runtime. Same file Xcode Cloud reads (via `ci_post_clone.sh` writing it from workflow env vars).
+**OAuth endpoint quirk:** OpenSky's token URL is on the **older Keycloak path with the `/auth/` prefix** — `https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token`. The modern path without `/auth/` 404s. Empirically verified; documented in a comment in `OpenSkyClient.swift`. API docs: https://openskynetwork.github.io/opensky-api/rest.html.
 
-`OpenSkyClient.init`'s resolution order is **explicit → env vars → Bundle**. Env vars from the user-only xcscheme still work, but **prefer the xcconfig path**: a stale xcscheme value will silently win over a fresh secrets file and waste a debugging hour (this happened once already this session). Single source of truth = the xcconfig.
+**Leak prevention and response** (two leaks in this repo's history already):
 
-OpenSky's OAuth endpoint is on the **older Keycloak path with the `/auth/` prefix** — `https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token`. The modern path without `/auth/` returns 404. This is empirically verified and documented in a comment in `OpenSkyClient.swift`. The API docs are at https://openskynetwork.github.io/opensky-api/rest.html.
+1. **The committed shared scheme is bare** — no env vars. `.gitignore` allows exactly one shared scheme file (`Tailspot.xcscheme`) via a `!` exception so `xcodebuild` works on fresh clones; gitignore does NOT protect already-tracked files. Inspect `git diff --cached` before every commit for `OPENSKY`, `client_secret`, or `EnvironmentVariable` — finding `paste-your-` means you staged the example template (fine); a real secret means abort. Credentials don't belong in `.swift` files, plists, commit messages, or a staged `Tailspot.secrets.xcconfig`.
+2. **If a secret leaks:** tell Noah immediately, rotate on OpenSky's API console (don't wait), update `Tailspot.secrets.xcconfig` locally, push a new Xcode Cloud build. Rotation is the mitigation, not history rewriting (prior leaks remain recoverable from GitHub's dangling-objects cache anyway).
+3. **Rotation breaks testers.** The secret is baked into shipped binaries; rotating OAuth-fails every old TestFlight build ("API limit" forever) until testers update. Warn testers before any rotation. The real fix is the backend proxy (PLAN.md §1).
 
 ## Tests
 
-Unit tests live in `ios/Tailspot/TailspotTests/` and use Swift Testing (`@Test`, `#expect`, `@Suite`) — not XCTest. UI tests in `TailspotUITests/` exist as Xcode template scaffolding but are slow (~3 min on cold sim) and not part of the regular workflow.
+Unit tests live in `ios/Tailspot/TailspotTests/` and use Swift Testing (`@Test`, `#expect`, `@Suite`) — not XCTest. UI tests in `TailspotUITests/` are Xcode template scaffolding, slow (~3 min cold sim), and not part of the regular workflow.
 
-**Claude runs the unit tests after substantive code changes** with:
+Run after substantive code changes, and always before committing/deploying when touching Geo, Aircraft decoding, ADSBManager, the OpenSky client, or anything they depend on:
+
 ```
 xcodebuild test \
   -project ios/Tailspot/Tailspot.xcodeproj \
@@ -158,41 +114,10 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
   -only-testing:TailspotTests
 ```
-First run is slow (~3 min, sim cold-boot). Cached subsequent runs are ~30–60 s. Run before committing whenever you touch testable code (Geo, Aircraft decoding, ADSBManager, OpenSky client, or anything they depend on).
 
-The current suite is **287 tests, 0 failures** across `TailspotTests/`, broadly:
+First run is slow (~3 min, sim cold-boot); cached runs ~30–60 s. Last verified green: 321 tests, 0 failures (2026-06-09). Browse `TailspotTests/` directly for what's covered — inline inventories here drifted and aren't worth maintaining.
 
-- **Geometry / projection** — `GeoTests`, `ClosestTargetTests` (FOV/zoom-aware lock zone).
-- **OpenSky wire format** — `AircraftDecodingTests`, `AircraftMetadataDecodingTests`.
-- **Manager + cache** — `ADSBManagerTests` (annotation, sort, errors, extrapolation, visibility predicate, rate-limit backoff), `ADSBManagerMetadataTests`, `MetadataCacheTests`.
-- **Catch + Hangar** — `CatchTests` (SwiftData insert/fetch, classifier-driven rarity/type snapshot, duplicate-rejection via `Catch.exists`), `HangarGroupingTests`, `ModelSlot` resolution.
-- **Lock-on** — `LockOnEngineTests` covers the post-T4 3-state machine (idle / locked / sticky), `forceLock`, `unpin`.
-- **Replay** — `ReplayRecorderTests`, `ReplayJSONLTests` (tapPin/unpin events), `ReplayAnalyzerTests`.
-- **Game system** — `GameSystemEnumTests`, `AircraftClassifierTests` (curated rule table, operator any-of gate, legacy-token regression).
-- **Photos + brand** — `PlanespottersClientTests`, `BrandTests`.
-- **Multi-catch** — `MultiCatchComboTests` (combo-multiplier ladder).
-- **Catch photo** — `CatchPhotoComposerTests` (aspect-fill transform + bracket compose).
-- **Trophies** — `TrophiesTests`.
-- **Naming + classification** — `AircraftNamingTests` (DOC 8643 table sweeps, Boeing customer-code fallback, engine-variant collapse, 737 MAX short-codes), `AircraftTypeResolutionTests` (typecode→type for every DOC 8643 bucket including rotorcraft + GA).
-- **Geocoding** — `ReverseGeocodeTests` (pure place-name formatting for every placemark shape).
-- **Registry + FAA fallback** — `IcaoRegistryTests` (icao24 encoding round-trip, lookup correctness), `FAARegistryTests` (US registry binary-search, foreign-tail non-match, fallback-to-nil for unknown).
-- **Backfill** — `CatchBackfillTests` (fill-only-if-nil semantics, OpenSky-404 FAA fallback path, caching).
-
-Look in `TailspotTests/` directly for the per-`@Test` enumeration — keeping it inline here drifted out of date and is no longer worth maintaining.
-
-`ADSBManager.init(liveSource:mockSource:)` has defaulted params so production uses real sources and tests substitute a `FixedSource` fixture. **Do not break this default-init shape** — `ContentView`'s `@StateObject private var adsb = ADSBManager()` depends on it.
-
-## Credentials: xcconfig is canonical, scheme env vars are a footgun
-
-**Canonical path (post-TestFlight):** `ios/Tailspot/Tailspot.secrets.xcconfig` (gitignored) holds the real OpenSky values; the committed `Tailspot.xcconfig` `#include?`s it; Info.plist substitutes `$(OPENSKY_CLIENT_ID)` / `$(OPENSKY_CLIENT_SECRET)`; `OpenSkyClient.init` reads them from `Bundle.main.infoDictionary` at runtime. Same file Xcode Cloud writes via `ci_post_clone.sh` from workflow env vars. **One source of truth.**
-
-**The xcscheme path still works but is deprecated** — `OpenSkyClient.init` checks `ProcessInfo.environment` after explicit creds but before the bundle. The historical pattern was to add env vars to a user-only xcscheme. **Don't.** A stale xcscheme value silently wins over a fresh secrets file (this bit us once already this session — fresh xcconfig creds didn't work because the user had an old xcscheme value still set from earlier). If you must use the scheme path for dev, keep one source populated, not both.
-
-Rules that still apply:
-
-1. **The committed shared scheme is bare** — no env vars. `.gitignore` allows exactly one shared scheme file (`Tailspot.xcscheme`) via a `!` exception so `xcodebuild` works on fresh clones; every other `*.xcscheme` is ignored, but **gitignore does NOT protect already-tracked files**. If you ever do touch the shared scheme, **always `git diff` the staged set before committing**. Look for `OPENSKY_CLIENT_SECRET`, `EnvironmentVariable`, or `paste-your-` (the placeholder text in `Tailspot.secrets.example.xcconfig` — finding this in a diff means you staged the example template, not the real secrets file, which is fine; finding the real secret means abort).
-2. **If a secret leaks**: tell Noah immediately, rotate on OpenSky's API console (don't wait), update `Tailspot.secrets.xcconfig` locally, push a new build to Xcode Cloud (which picks up the new env vars). Both prior leaks in this repo's history are still recoverable from GitHub's dangling-objects cache; rotation is the actual mitigation, not history rewriting.
-3. **Rotation warns testers.** The secret is baked into shipped binaries; rotating it OAuth-fails every old TestFlight build until the tester updates. Communicate ahead of any rotation (see Workflow notes).
+`ADSBManager.init(liveSource:mockSource:)` has defaulted params so production uses real sources and tests substitute a `FixedSource` fixture. Don't break this default-init shape — `ContentView`'s `@StateObject private var adsb = ADSBManager()` depends on it.
 
 ## MainActor default isolation (Xcode 26)
 
@@ -289,14 +214,7 @@ Per-icao24 metadata (manufacturer / model / registration / operator) is fetched 
 
 Two grouping modes today: `.aircraftType` (manufacturer + model) and `.airline` (operatorName). Each mode has its own fallback chain ending in a single "Unknown" bucket that always sorts to the end. Row subtitles deliberately show whichever of (operator, type) ISN'T already in the section header so rows add information instead of restating it.
 
-`CatchDetailView` is a **frozen-moment view with a narrow backfill
-exception** (spec 2026-06-06): on open it may fill **nil-only** fields
-that are properties of the airframe, not the moment — registration,
-typecode, manufacturer, model, placeName, and operatorName (the last
-is best-effort *current* operator, not as-flown; documented in code).
-Recorded values are never overwritten, and moment-data (altitude,
-speed, distance, date) is never backfilled. A catch's recorded facts
-still must not be retroactively rewritten. v0 has **no dedupe** (each tap = each row in its section). **Delete** exists in two places — the red trash pill in `CatchDetailView` and a Hangar swipe-delete context menu — both require confirmation and both delete photo files alongside the SwiftData row. If catches grow to hundreds, the per-body re-grouping in `HangarView.groupedList` will want memoization.
+`CatchDetailView` is a **frozen-moment view with a narrow backfill exception** (spec 2026-06-06): on open it may fill **nil-only** fields that are properties of the airframe, not the moment — registration, typecode, manufacturer, model, placeName, and operatorName (the last is best-effort *current* operator, not as-flown; documented in code). Recorded values are never overwritten, and moment-data (altitude, speed, distance, date) is never backfilled. v0 has **no dedupe** (each tap = each row in its section). **Delete** exists in two places — the red trash pill in `CatchDetailView` and a Hangar swipe-delete context menu — both require confirmation and both delete photo files alongside the SwiftData row. If catches grow to hundreds, the per-body re-grouping in `HangarView.groupedList` will want memoization.
 
 ### Replay recorder
 
@@ -351,7 +269,7 @@ See PLAN.md §8 for the file-by-file layout. Quick highlights:
 
 - `PLAN.md` — product + technical plan
 - `CLAUDE.md` — this file
-- `ios/Tailspot/Tailspot.xcodeproj/xcshareddata/xcschemes/Tailspot.xcscheme` — the **only** shared scheme; gitignored from accidental modification. Read "Credentials and the shared-scheme trap" before editing this file or running `git add ios/`.
+- `ios/Tailspot/Tailspot.xcodeproj/xcshareddata/xcschemes/Tailspot.xcscheme` — the **only** shared scheme. See "Credentials (OpenSky)" before editing it or running `git add ios/`.
 - `ios/Tailspot/Tailspot/` — Xcode project source. Uses **Xcode 16 synchronized folders**: any `*.swift` dropped into this directory is automatically added to the Xcode project. No manual "Add Files to Project" step.
 - `backend/`, `shared/`, `tools/replay-harness/` — planned (PLAN.md §8); not created yet.
 
@@ -361,19 +279,16 @@ See PLAN.md §8 for the file-by-file layout. Quick highlights:
 
 ## Workflow notes
 
-**Now that TestFlight is shipping to real testers** (since 2026-05-26), `main` is a tester-facing branch: any push there can be picked up by the next Xcode Cloud build and installed on a tester's phone. The rules below changed accordingly.
+**TestFlight is live (since 2026-05-26), so `main` is a tester-facing branch:** any push there can be picked up by the next Xcode Cloud build and installed on a tester's phone.
 
-- **`main` is shippable, and now enforced.** All changes reach `main` via a PR with a green **Unit tests** check (GitHub Actions); branch protection blocks direct pushes, admins included. Branch → field-test with `bin/deploy` → PR → squash-merge → ships. Autonomous commit + `bin/deploy` still happen freely *on feature branches*; the PR merge is the one deliberate checkpoint. **Canonical process: `CONTRIBUTING.md`** — read it before changing the release flow.
-- **Build numbers auto-bump in CI.** `ios/Tailspot/ci_scripts/ci_pre_xcodebuild.sh` rewrites `CURRENT_PROJECT_VERSION` to match `CI_BUILD_NUMBER` for every Xcode Cloud archive. **Don't touch `CURRENT_PROJECT_VERSION` in `project.pbxproj` manually** — the committed value stays at `1`; CI changes it per-build.
-- **Default to keeping the SAME `MARKETING_VERSION`; let the build number increment.** Per Noah (2026-06-08): TestFlight/App Review clears subsequent builds under an **already-approved version string** faster than a fresh version. So for routine bugfix / iteration / field-fix builds, **do NOT bump `MARKETING_VERSION`** — ship them under the current version and rely on the auto-incrementing build number (`CURRENT_PROJECT_VERSION`, set by CI). **Only bump `MARKETING_VERSION`** (edit `project.pbxproj`, e.g. `0.2.x → 0.3.0`) for **major / significant** changes worth flagging to testers as a new version. Build number stays auto-incrementing either way. (Earlier rounds bumped per user-visible change; that's now superseded by this faster-approval preference.)
-- **Run tests before pushing.** `xcodebuild test ...` (see Tests section). When touching Geo / Aircraft / ADSBManager / OpenSky / Mock / their tests, a green local run is non-negotiable. The PR's GitHub Actions **Unit tests** check is the backstop — but catch failures locally first; a red PR check just slows the merge.
-- **Inspect `git diff --cached` before every commit** for `OPENSKY`, `client_secret`, or `EnvironmentVariable` strings. If you see them, abort and fix the scheme before committing. Two leaks in this repo's history already.
-- **SwiftData migrations stay lightweight.** Once testers have catches, every model change must be additive (new optional fields with defaults). Breaking schema changes lose tester data. If you ever need a breaking change, bump model version explicitly with a custom migration.
-- **Don't rotate OpenSky creds without warning testers.** The secret is in the shipped binary; rotating it OAuth-fails every old TestFlight build until the tester updates. They'll see "API limit" forever. Communicate ahead of rotations. The real fix is the backend proxy (PLAN.md §1).
-- **Watch crash logs.** App Store Connect → Tailspot → TestFlight → Crashes aggregates them from real testers — free diagnostic surface, check after every TestFlight build.
-- **Settings → bottom of page shows the version + build, tap to copy.** When a tester reports a bug, ask them to tap the footer in Settings; they paste `Tailspot 0.1.1 (build N)` directly into the report.
-- **Don't force-push to `main` without explicit user authorization.** The auto-mode classifier will deny it. If a leak requires history rewriting, surface the request to Noah with the trade-offs spelled out and let him decide.
-- **Don't commit credentials in any form** — not in `.swift` files, not in `.xcscheme` files, not in plist values, not in commit messages, not in `Tailspot.secrets.xcconfig` (gitignored, but verify it's not staged before committing).
+- **`main` is shippable, and enforced.** All changes reach `main` via a PR with a green **Unit tests** check (GitHub Actions); branch protection blocks direct pushes, admins included. Branch → field-test with `bin/deploy` → PR → squash-merge → ships. Autonomous commit + `bin/deploy` happen freely *on feature branches*; the PR merge is the one deliberate checkpoint. Canonical process: `CONTRIBUTING.md`.
+- **Build numbers auto-bump in CI.** `ios/Tailspot/ci_scripts/ci_pre_xcodebuild.sh` rewrites `CURRENT_PROJECT_VERSION` to match `CI_BUILD_NUMBER` per Xcode Cloud archive. Don't touch `CURRENT_PROJECT_VERSION` in `project.pbxproj` manually — the committed value stays at `1`.
+- **Keep the SAME `MARKETING_VERSION` by default; let the build number increment.** Per Noah (2026-06-08): TestFlight/App Review clears builds under an already-approved version string faster than a fresh version. Bump `MARKETING_VERSION` (edit `project.pbxproj`, e.g. `0.2.x → 0.3.0`) only for major changes worth flagging to testers. (Supersedes the earlier bump-per-user-visible-change habit.)
+- **SwiftData migrations stay lightweight.** Once testers have catches, every model change must be additive (new optional fields with defaults). Breaking schema changes lose tester data; if ever needed, bump the model version explicitly with a custom migration.
+- **Watch crash logs.** App Store Connect → Tailspot → TestFlight → Crashes aggregates real-tester crashes — free diagnostic surface, check after every TestFlight build.
+- **Tester bug reports:** Settings → bottom of page shows version + build, tap to copy — ask testers to paste `Tailspot 0.1.1 (build N)` into reports.
+- **Don't force-push to `main` without explicit user authorization.** If a leak requires history rewriting, surface the trade-offs to Noah and let him decide.
+- Tests before pushing/deploying and credential hygiene: see the Tests and Credentials sections — those rules apply to every commit.
 
 ## Open questions still on the table
 
@@ -397,5 +312,3 @@ Lower priority: OpenSky secret rotation (#6, demoted per Noah).
 **Phase B and Phase C** of the original visual identity (HUD label redesign, Hangar polish, app icon, onboarding) are largely superseded by the design-canvas direction now landing in PLAN §9 #2-#6. Don't relitigate Phase B/C — port the canvas surfaces directly.
 
 **Design source.** The canvas handoff lives in `design/` (HTML/JSX prototype, ~340K). Open with `python3 -m http.server 4173 --directory design && open http://127.0.0.1:4173/`. 33 artboards across 10 sections — splash/brand, onboarding, AR home, AR states, catch flow, detail, hangar, sets, gamification (rarity / types / trophies / trophy-unlock), public surfaces (leaderboard, map, share, public-hangar), profile/settings/notifs. **The prototype is for reference, not for direct porting** — recreate visuals in SwiftUI; don't port the JSX structure.
-
-**Using the deploy loop:** `bin/deploy` builds, installs, and launches on Noah's paired iPhone. Always `xcodebuild test ...` before deploying when product code changes. The phone has to be unlocked for `devicectl process launch` to succeed; on a Locked error, ask Noah to unlock and retry the launch step. If `xcodebuild` itself can't find the destination (UDID returns "Unable to find a destination"), check `xcrun devicectl list devices` — state `unavailable` means the phone needs USB re-pair or Xcode opened once to re-establish the handshake.
