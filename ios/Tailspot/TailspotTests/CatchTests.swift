@@ -254,9 +254,9 @@ struct CatchTests {
         #expect(fetched?.placeName == nil)
     }
 
-    // MARK: - PokePlane from a stored Catch
+    // MARK: - CardPlane from a stored Catch
 
-    @Test func pokePlaneFormatsStoredAltAndSpeed() {
+    @Test func cardPlaneFormatsStoredAltAndSpeed() {
         let c = Catch(
             icao24: "a1b2c3", callsign: "UAL248",
             model: "777-322ER", manufacturer: "BOEING",
@@ -265,23 +265,23 @@ struct CatchTests {
             altitudeMeters: 152.4,   // exactly 500 ft
             velocityMps: 102.889     // exactly 200 kt
         )
-        let plane = PokePlane(catchRecord: c)
+        let plane = CardPlane(catchRecord: c)
         #expect(plane.altText == "500 ft")
         #expect(plane.speedText == "200 kt")
     }
 
-    @Test func pokePlaneShowsNilStatsForLegacyRows() {
+    @Test func cardPlaneShowsNilStatsForLegacyRows() {
         let c = Catch(
             icao24: "a1b2c3", callsign: nil, model: nil, manufacturer: nil,
             caughtAt: Date(), observerLat: 0, observerLon: 0,
             slantDistanceMeters: 0
         )
-        let plane = PokePlane(catchRecord: c)
+        let plane = CardPlane(catchRecord: c)
         #expect(plane.altText == nil)   // card renders "—"
         #expect(plane.speedText == nil)
     }
 
-    @Test func pokePlaneUsesCanonicalModelName() {
+    @Test func cardPlaneUsesCanonicalModelName() {
         let c = Catch(
             icao24: "a1b2c3", callsign: "UAL248",
             model: "777-322ER", manufacturer: "BOEING",
@@ -289,7 +289,7 @@ struct CatchTests {
             slantDistanceMeters: 0,
             typecode: "B77W"
         )
-        #expect(PokePlane(catchRecord: c).model == "Boeing 777-300ER")
+        #expect(CardPlane(catchRecord: c).model == "Boeing 777-300ER")
     }
 
     // MARK: - Set matcher: canonical + raw union
@@ -306,11 +306,11 @@ struct CatchTests {
             caughtAt: Date(), observerLat: 0, observerLon: 0, slantDistanceMeters: 0,
             typecode: "B38M"
         )
-        let narrow = PokeSets.all.first { $0.id == "narrow" }!
+        let narrow = CardSets.all.first { $0.id == "narrow" }!
         let entry737 = narrow.entries.first { $0.id == "n-737-800" }!
         let entryMax = narrow.entries.first { $0.id == "n-737-max" }!
 
-        #expect(PokeSets.matches(catch: raw, entry: entry737))   // union keeps raw matching
-        #expect(PokeSets.matches(catch: canon, entry: entryMax)) // union adds canonical matching
+        #expect(CardSets.matches(catch: raw, entry: entry737))   // union keeps raw matching
+        #expect(CardSets.matches(catch: canon, entry: entryMax)) // union adds canonical matching
     }
 }

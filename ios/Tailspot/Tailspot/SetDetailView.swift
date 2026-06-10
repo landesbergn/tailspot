@@ -8,7 +8,7 @@
 //  tap pushes `ModelSlotDetailView` for that model.
 //
 //  Revamped 2026-05-26 per Noah's field-test feedback: drop the
-//  pre-enumerated PokeSetEntry slot grid in favor of a count-driven
+//  pre-enumerated CardSetEntry slot grid in favor of a count-driven
 //  view that grows organically as the user catches new models.
 //
 
@@ -16,7 +16,7 @@ import SwiftUI
 import SwiftData
 
 struct SetDetailView: View {
-    let set: PokeSet
+    let set: CardSet
 
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
@@ -158,7 +158,7 @@ struct SetDetailView: View {
 
 /// Stable navigation target for `ModelSlotDetailView` — the model-group
 /// tail list. Carries the set id + a derived model string (e.g.,
-/// "Boeing 737-800") rather than a curated PokeSetEntry id, so the
+/// "Boeing 737-800") rather than a curated CardSetEntry id, so the
 /// list can grow as the user catches new models.
 struct ModelSlotRoute: Hashable {
     let setId: String

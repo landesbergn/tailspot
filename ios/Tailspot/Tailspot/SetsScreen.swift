@@ -2,7 +2,7 @@
 //  SetsScreen.swift
 //  Tailspot
 //
-//  Browser of all PokeSets with per-set progress, plus a detail
+//  Browser of all CardSets with per-set progress, plus a detail
 //  drill-down for an individual set showing every slot — caught
 //  ones full-color, uncaught ones as rarity-tinted silhouettes.
 //
@@ -21,7 +21,7 @@ struct SetsScreen: View {
                     .listRowBackground(Color.clear)
             }
             Section("Sets") {
-                ForEach(PokeSets.all) { set in
+                ForEach(CardSets.all) { set in
                     NavigationLink(value: set) {
                         setRow(set)
                     }
@@ -31,17 +31,17 @@ struct SetsScreen: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Sets")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: PokeSet.self) { set in
+        .navigationDestination(for: CardSet.self) { set in
             SetDetailScreen(set: set)
         }
     }
 
     private var summaryHero: some View {
-        let totals = PokeSets.all.map { PokeSets.progress(of: $0, against: catches) }
+        let totals = CardSets.all.map { CardSets.progress(of: $0, against: catches) }
         let caught = totals.reduce(0) { $0 + $1.caught }
         let total = totals.reduce(0) { $0 + $1.total }
         return VStack(alignment: .leading, spacing: 6) {
-            Text("POKÉDEX-STYLE")
+            Text("SPOTTER SETS")
                 .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Brand.Color.cyan)
@@ -57,7 +57,7 @@ struct SetsScreen: View {
                     Text("of \(total) slots")
                         .font(Brand.Font.cardSubtitle)
                         .foregroundStyle(Brand.Color.textSecondary)
-                    Text("ACROSS \(PokeSets.all.count) SETS")
+                    Text("ACROSS \(CardSets.all.count) SETS")
                         .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .tracking(1)
                         .foregroundStyle(Brand.Color.textTertiary)
@@ -71,8 +71,8 @@ struct SetsScreen: View {
         .background(Brand.Color.bgElevated)
     }
 
-    private func setRow(_ set: PokeSet) -> some View {
-        let progress = PokeSets.progress(of: set, against: catches)
+    private func setRow(_ set: CardSet) -> some View {
+        let progress = CardSets.progress(of: set, against: catches)
         let fill = progress.total == 0 ? 0 : Double(progress.caught) / Double(progress.total)
         let complete = progress.caught == progress.total
         return HStack(spacing: 12) {
@@ -121,18 +121,18 @@ struct SetsScreen: View {
 // MARK: - Detail
 
 struct SetDetailScreen: View {
-    let set: PokeSet
+    let set: CardSet
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
-    private var slotStatus: [(PokeSetEntry, PokeSets.SlotStatus)] {
-        PokeSets.status(of: set, against: catches)
+    private var slotStatus: [(CardSetEntry, CardSets.SlotStatus)] {
+        CardSets.status(of: set, against: catches)
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
                 heroHeader
-                pokedexLabel
+                logbookLabel
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 12),
                     GridItem(.flexible(), spacing: 12),
@@ -150,9 +150,9 @@ struct SetDetailScreen: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var pokedexLabel: some View {
+    private var logbookLabel: some View {
         HStack {
-            Text("POKÉDEX · \(set.entries.count) ENTRIES")
+            Text("LOGBOOK · \(set.entries.count) ENTRIES")
                 .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Brand.Color.textTertiary)
@@ -162,7 +162,7 @@ struct SetDetailScreen: View {
     }
 
     private var heroHeader: some View {
-        let progress = PokeSets.progress(of: set, against: catches)
+        let progress = CardSets.progress(of: set, against: catches)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 TypeBadge(type: set.type, size: .lg)
@@ -184,7 +184,7 @@ struct SetDetailScreen: View {
     }
 
     @ViewBuilder
-    private func slotTile(index: Int, entry: PokeSetEntry, status: PokeSets.SlotStatus) -> some View {
+    private func slotTile(index: Int, entry: CardSetEntry, status: CardSets.SlotStatus) -> some View {
         let isCaught: Bool = {
             if case .caught = status { return true }
             return false

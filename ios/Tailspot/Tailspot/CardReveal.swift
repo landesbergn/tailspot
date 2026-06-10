@@ -5,11 +5,11 @@
 //  The "Card reveal" catch moment — replaces the v0 green flash
 //  overlay. Full-screen takeover with a rarity-tinted backdrop
 //  (radial bloom + light rays), a "● NEW CARD · ENTRY #N" pill at
-//  the top, the PokeCard center-stage at size .lg with full holo
+//  the top, the catch card center-stage at size .lg with full holo
 //  treatment, and two minimal buttons: "View in Hangar" and a
 //  primary "Keep spotting" button that dismisses.
 //
-//  Tapping the card flips it to the Pokédex-style back. Tap the back
+//  Tapping the card flips it to the logbook-style back. Tap the back
 //  to flip forward. Modeled as a single state machine inside the
 //  reveal so the call site (ContentView) only needs to present /
 //  dismiss the whole sheet.
@@ -18,7 +18,7 @@
 import SwiftUI
 
 struct CardReveal: View {
-    let plane: PokePlane
+    let plane: CardPlane
     /// Entry number to render in the "● NEW CARD · ENTRY #N" pill.
     /// Caller computes this (typically the count of unique icao24
     /// in the Hangar after the catch lands).
@@ -189,11 +189,11 @@ struct CardReveal: View {
                         removal:   .scale(scale: 1.08).combined(with: .opacity)
                     ))
             } else {
-                PokeCardView(plane: plane, size: .lg)
+                CatchCardView(plane: plane, size: .lg)
                     .overlay {
                         // Diagonal red-bordered "ALREADY CAUGHT" stamp,
                         // shown only on the card front for duplicates.
-                        // Hidden on the Pokédex back so the spec sheet
+                        // Hidden on the logbook back so the spec sheet
                         // stays legible. Spec § 3.4.
                         if isDuplicate {
                             alreadyCaughtStamp
@@ -215,7 +215,7 @@ struct CardReveal: View {
         .accessibilityLabel(showingBack ? "Show card front" : "Show card details on back")
     }
 
-    /// Trading-card "stamp" overlay laid diagonally across the PokeCard
+    /// Trading-card "stamp" overlay laid diagonally across the catch card
     /// front when the catch is a re-catch. Modeled after physical
     /// stamps — monospaced bold all-caps with a hard rectangular
     /// border in `Brand.Color.alertWarning`.
@@ -271,13 +271,13 @@ struct CardReveal: View {
 
 // MARK: - Card back
 
-/// The Pokédex-style entry on the back of the card. Reads as a
+/// The logbook entry on the back of the card. Reads as a
 /// structured spec sheet: identity row + watermark + caught footer.
 struct CardBackView: View {
-    let plane: PokePlane
+    let plane: CardPlane
 
     var body: some View {
-        let dims = PokeCardView.CardSize.lg.dims
+        let dims = CatchCardView.CardSize.lg.dims
         ZStack {
             LinearGradient(
                 colors: [Brand.Color.bgElevated, Brand.Color.bgSurface],
@@ -287,7 +287,7 @@ struct CardBackView: View {
                 Rectangle().fill(plane.rarity.tint).frame(height: 5)
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
-                        Text("POKÉDEX ENTRY")
+                        Text("LOGBOOK ENTRY")
                             .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(1.6)
                             .foregroundStyle(Brand.Color.textTertiary)
@@ -362,7 +362,7 @@ private extension String {
 
 #Preview("New catch") {
     CardReveal(
-        plane: .init(
+        plane: CardPlane(
             callsign: "BAW286",
             model: "Airbus A380",
             carrier: "British Airways",
@@ -380,7 +380,7 @@ private extension String {
 
 #Preview("Re-catch (duplicate)") {
     CardReveal(
-        plane: .init(
+        plane: CardPlane(
             callsign: "BAW286",
             model: "Airbus A380",
             carrier: "British Airways",

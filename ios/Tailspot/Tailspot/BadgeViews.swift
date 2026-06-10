@@ -12,7 +12,7 @@
 //     followed by the type label, on a type-tinted background.
 //
 //  Both have sm/md/lg variants so they scale gracefully when used
-//  inside a tight PokeCard footer (md) or as section labels (lg).
+//  inside a tight catch card footer (md) or as section labels (lg).
 //
 
 import SwiftUI

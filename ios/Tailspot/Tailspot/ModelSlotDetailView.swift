@@ -5,7 +5,7 @@
 //  The screen between Set detail and Tail detail — lists every
 //  distinct tail (icao24) the user has caught of one model. The model
 //  is now derived from caught planes (no curated entry list), so the
-//  view takes a `ModelGroup` rather than a `PokeSetEntry`.
+//  view takes a `ModelGroup` rather than a `CardSetEntry`.
 //
 //  Reached by tapping a model row in `SetDetailView`. Each row is one
 //  `HangarRow` (collapsed by icao24) and pushes the existing
@@ -17,7 +17,7 @@ import SwiftUI
 import SwiftData
 
 struct ModelSlotDetailView: View {
-    let set: PokeSet
+    let set: CardSet
     let group: ModelGroup
 
     var body: some View {
@@ -121,7 +121,7 @@ struct ModelSlotDetailView: View {
 /// group on every render so model-name renaming or new catches
 /// surface immediately.
 struct ModelGroupBridge: View {
-    let set: PokeSet
+    let set: CardSet
     let modelName: String
 
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]

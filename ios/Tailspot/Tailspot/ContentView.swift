@@ -561,7 +561,7 @@ struct ContentView: View {
             )
             .presentationBackground(.clear)
         }
-        // Multi-catch reveal — N≥2 PokeCards staggered in with a
+        // Multi-catch reveal — N≥2 catch cards staggered in with a
         // chime+haptic per fresh card, combo banner climbing across
         // the reveal, ALREADY CAUGHT stamps inline on duplicates.
         // T11 routes every (fresh+dup) total ≥ 2 through here from
@@ -629,7 +629,7 @@ struct ContentView: View {
     /// T8 just threads it through.
     struct PendingReveal: Identifiable, Equatable {
         let id = UUID()
-        let plane: PokePlane
+        let plane: CardPlane
         let entryNumber: Int
         var isDuplicate: Bool = false
     }
@@ -983,7 +983,7 @@ struct ContentView: View {
     ///   ALREADY CAUGHT stamps inline on dups and only credits fresh
     ///   tails toward the combo + points (T11).
     ///
-    /// Duplicate-only case (single dup): synthesizes a `PokePlane`
+    /// Duplicate-only case (single dup): synthesizes a `CardPlane`
     /// from the already-stored row + (when available) the current
     /// live observation for fresh alt/speed/distance.
     private func presentReveal(
@@ -1002,13 +1002,13 @@ struct ContentView: View {
             var entries: [MultiCatchReveal.Entry] = []
             for c in newCatches {
                 let observed = visibleByIcao[c.icao24]
-                let plane = pokePlane(from: c, observed: observed)
+                let plane = cardPlane(from: c, observed: observed)
                 entries.append(.init(plane: plane, isDuplicate: false))
             }
             for dupIcao in duplicates {
                 if let existing = fetchExistingCatch(icao: dupIcao) {
                     let observed = visibleByIcao[dupIcao]
-                    let plane = pokePlane(from: existing, observed: observed)
+                    let plane = cardPlane(from: existing, observed: observed)
                     entries.append(.init(plane: plane, isDuplicate: true))
                 }
             }
@@ -1025,7 +1025,7 @@ struct ContentView: View {
 
         if let first = newCatches.first {
             let observed = visibleByIcao[first.icao24]
-            let plane = pokePlane(from: first, observed: observed)
+            let plane = cardPlane(from: first, observed: observed)
             pendingReveal = PendingReveal(
                 plane: plane,
                 entryNumber: uniqueIcaoCount,
@@ -1037,7 +1037,7 @@ struct ContentView: View {
         if let dupIcao = duplicates.first,
            let existing = fetchExistingCatch(icao: dupIcao) {
             let observed = visibleByIcao[dupIcao]
-            let plane = pokePlane(from: existing, observed: observed)
+            let plane = cardPlane(from: existing, observed: observed)
             pendingReveal = PendingReveal(
                 plane: plane,
                 entryNumber: uniqueIcaoCount,
@@ -1054,7 +1054,7 @@ struct ContentView: View {
 
     /// Fetches the most-recent stored `Catch` for the given icao24,
     /// or nil if none. Used by `presentReveal` to synthesize a
-    /// `PokePlane` for duplicate entries (both single + multi paths).
+    /// `CardPlane` for duplicate entries (both single + multi paths).
     private func fetchExistingCatch(icao: String) -> Catch? {
         let key = icao.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         var descriptor = FetchDescriptor<Catch>(
@@ -1065,25 +1065,25 @@ struct ContentView: View {
         return try? modelContext.fetch(descriptor).first
     }
 
-    /// Build a presentational `PokePlane` from a stored `Catch`,
+    /// Build a presentational `CardPlane` from a stored `Catch`,
     /// borrowing live alt/speed values from `observed` when the
     /// catch is still in view. Used by both the new-catch and
     /// duplicate paths so the reveal renders consistently.
-    private func pokePlane(from row: Catch, observed: ObservedAircraft?) -> PokePlane {
+    private func cardPlane(from row: Catch, observed: ObservedAircraft?) -> CardPlane {
         let canonical = AircraftNaming.canonical(
             typecode: row.typecode,
             manufacturer: row.manufacturer,
             model: row.model
         )
         let distMeters = observed?.slantDistanceMeters ?? row.slantDistanceMeters
-        return PokePlane(
+        return CardPlane(
             callsign: row.callsign,
             model: canonical.displayName ?? row.model,
             carrier: row.operatorName,
             rarity: row.resolvedRarity,
             type: row.resolvedType,
-            altText: PokePlane.altText(fromMeters: observed?.aircraft.altitudeMeters ?? row.altitudeMeters),
-            speedText: PokePlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
+            altText: CardPlane.altText(fromMeters: observed?.aircraft.altitudeMeters ?? row.altitudeMeters),
+            speedText: CardPlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
             distText: String(format: "%.1f km", distMeters / 1000),
             photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
         )

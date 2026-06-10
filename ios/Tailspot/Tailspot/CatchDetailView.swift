@@ -2,17 +2,17 @@
 //  CatchDetailView.swift
 //  Tailspot
 //
-//  Tail detail — PokeCard hero front-and-center. Rewritten per spec
+//  Tail detail — catch card hero front-and-center. Rewritten per spec
 //  § 8 (T18): the card carries identity (callsign + model + carrier)
 //  and the photo slot, so the page drops the prior 320pt photo hero,
 //  the 6-cell stats grid, and the catch-log timeline. What remains is
 //  the card + EARNED panel + first-caught panel + (optional)
 //  Planespotters attribution.
 //
-//  Photo-slot priority is owned by `PokeCardView` via `PokePlane.photoURL`:
+//  Photo-slot priority is owned by `CatchCardView` via `CardPlane.photoURL`:
 //  the default builder threads the user's catch JPEG when present. We
 //  fall through to Planespotters here: on appear, if there's no catch
-//  photo we fetch by icao24, then rebuild the PokePlane with that URL.
+//  photo we fetch by icao24, then rebuild the CardPlane with that URL.
 //  If Planespotters also has nothing, the card paints its own
 //  rarity-tinted striped placeholder.
 //
@@ -52,7 +52,7 @@ struct CatchDetailView: View {
 
             ScrollView {
                 VStack(spacing: 14) {
-                    pokeCardHero
+                    catchCardHero
                         .padding(.top, 8)
                     earnedPanel
                     firstCaughtPanel
@@ -100,25 +100,25 @@ struct CatchDetailView: View {
 
     // MARK: - Hero
 
-    /// PokeCard at `.lg`, centered. Photo slot is resolved here: catch
-    /// JPEG (handled by `PokePlane.init(catchRecord:)`) → Planespotters
+    /// Catch card at `.lg`, centered. Photo slot is resolved here: catch
+    /// JPEG (handled by `CardPlane.init(catchRecord:)`) → Planespotters
     /// thumbnail (rebuilt below once `planespottersPhoto` lands) →
     /// striped rarity placeholder (handled by the card itself).
-    private var pokeCardHero: some View {
-        PokeCardView(plane: pokePlane, size: .lg)
+    private var catchCardHero: some View {
+        CatchCardView(plane: catchCardPlane, size: .lg)
             .frame(maxWidth: .infinity)
     }
 
-    /// `PokePlane` for the card. When the catch carries its own photo
+    /// `CardPlane` for the card. When the catch carries its own photo
     /// we use the default builder (which threads `photoFilename` into
     /// `photoURL`). Otherwise we layer a Planespotters URL on top once
     /// the network call returns; until it returns, `photoURL` is nil
     /// and the card falls through to its striped placeholder.
-    private var pokePlane: PokePlane {
-        let base = PokePlane(catchRecord: first)
+    private var catchCardPlane: CardPlane {
+        let base = CardPlane(catchRecord: first)
         if hasCatchPhoto { return base }
         guard let photo = planespottersPhoto else { return base }
-        return PokePlane(
+        return CardPlane(
             callsign: base.callsign,
             model: base.model,
             carrier: base.carrier,

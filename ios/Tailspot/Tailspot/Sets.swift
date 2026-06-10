@@ -2,7 +2,7 @@
 //  Sets.swift
 //  Tailspot
 //
-//  Pokédex-style sets. Each set is a curated list of airframes
+//  Collectible card sets. Each set is a curated list of airframes
 //  identified by a model substring + a "canonical model name" the
 //  set page displays. Sets are organized by `AircraftType` so the
 //  Hangar can show "Wide-body 4 / 14", "Narrow-body 2 / 12", etc.
@@ -17,7 +17,7 @@ import Foundation
 
 /// One slot in a set — a specific airframe the user can fill by
 /// catching anything whose model matches `modelTokens`.
-nonisolated struct PokeSetEntry: Identifiable, Hashable, Sendable {
+nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
     let id: String                  // dedupe key
     let canonicalName: String       // how the slot reads in the grid
     let rarity: Rarity              // colors the locked silhouette
@@ -25,19 +25,19 @@ nonisolated struct PokeSetEntry: Identifiable, Hashable, Sendable {
     let summary: String             // tap-to-reveal blurb
 }
 
-nonisolated struct PokeSet: Identifiable, Hashable, Sendable {
+nonisolated struct CardSet: Identifiable, Hashable, Sendable {
     let id: String
     let type: AircraftType
     let title: String
-    let entries: [PokeSetEntry]
+    let entries: [CardSetEntry]
 }
 
-nonisolated enum PokeSets {
+nonisolated enum CardSets {
 
     /// Concrete sets per type. Hand-curated, not exhaustive — the
     /// goal is "ladder of recognizable airframes" not "every model
     /// ever produced." Add to this over time.
-    static let all: [PokeSet] = [
+    static let all: [CardSet] = [
         .init(
             id: "narrow", type: .narrow, title: "Narrow-body",
             entries: [
@@ -226,8 +226,8 @@ nonisolated enum PokeSets {
     /// `modelTokens` — checked against BOTH the raw OpenSky model
     /// string AND the canonical name (typecode-resolved). Union, not
     /// replacement: membership can only gain from canonicalization,
-    /// never lose. Single source of truth for Catch → PokeSetEntry.
-    nonisolated static func matches(catch c: Catch, entry: PokeSetEntry) -> Bool {
+    /// never lose. Single source of truth for Catch → CardSetEntry.
+    nonisolated static func matches(catch c: Catch, entry: CardSetEntry) -> Bool {
         let raw = c.model?.lowercased() ?? ""
         let canonical = AircraftNaming.canonical(
             typecode: c.typecode,
@@ -244,7 +244,7 @@ nonisolated enum PokeSets {
     /// Walk a single set's entries and resolve each against the
     /// caught planes. First matching catch (by `modelTokens`
     /// substring on `c.model`) fills the slot.
-    static func status(of set: PokeSet, against catches: [Catch]) -> [(PokeSetEntry, SlotStatus)] {
+    static func status(of set: CardSet, against catches: [Catch]) -> [(CardSetEntry, SlotStatus)] {
         set.entries.map { entry in
             let hit = catches.first { matches(catch: $0, entry: entry) }
             return (entry, hit.map(SlotStatus.caught) ?? .locked)
@@ -252,7 +252,7 @@ nonisolated enum PokeSets {
     }
 
     /// "N caught out of M" for the set browser tile.
-    static func progress(of set: PokeSet, against catches: [Catch]) -> (caught: Int, total: Int) {
+    static func progress(of set: CardSet, against catches: [Catch]) -> (caught: Int, total: Int) {
         let s = status(of: set, against: catches)
         return (s.filter { if case .caught = $0.1 { return true } else { return false } }.count, s.count)
     }
