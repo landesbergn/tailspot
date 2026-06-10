@@ -170,25 +170,25 @@ enum HangarGrouping {
     /// sets are a curated lens, not a universal bucket; those rows
     /// still surface in Recent. Empty `tails` means the slot is locked.
     ///
-    /// The Catch → PokeSetEntry pairing reuses the existing matcher
-    /// in `Sets.swift` (`PokeSets.matches(catch:entry:)`) so this
-    /// resolver and `PokeSets.status` / `PokeSets.progress` stay in
+    /// The Catch → CardSetEntry pairing reuses the existing matcher
+    /// in `Sets.swift` (`CardSets.matches(catch:entry:)`) so this
+    /// resolver and `CardSets.status` / `CardSets.progress` stay in
     /// lockstep. Spec § 9.2 — no new matcher introduced here.
     ///
     /// **Deprecated for the Hangar Sets surface (2026-05-26).** The
     /// revamped Hangar Sets tab now uses `modelGroups(in:type:)` to
     /// derive the model layer dynamically. `resolveSlots` is kept for
-    /// any future surface that wants the locked-slot Pokédex treatment.
+    /// any future surface that wants the locked-slot card set treatment.
     ///
     /// Implicitly MainActor (Xcode 26 default): `HangarRow.mostRecent`
     /// is a `Catch` which is @MainActor via SwiftData's `@Model`. The
     /// earlier `nonisolated` annotation triggered Swift 6 warnings;
     /// callers (UI + tests) are already on MainActor, so the constraint
     /// is free.
-    static func resolveSlots(for set: PokeSet, in rows: [HangarRow]) -> [ModelSlot] {
+    static func resolveSlots(for set: CardSet, in rows: [HangarRow]) -> [ModelSlot] {
         set.entries.map { entry in
             let matchingTails = rows.filter { row in
-                PokeSets.matches(catch: row.mostRecent, entry: entry)
+                CardSets.matches(catch: row.mostRecent, entry: entry)
             }
             return ModelSlot(entry: entry, tails: matchingTails)
         }

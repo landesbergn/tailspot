@@ -4,7 +4,7 @@
 //
 //  Sets-view body for the Hangar sheet. Vertical list of 7 set tiles
 //  (one per AircraftType, in the curated order baked into
-//  `PokeSets.all`: Narrow / Wide / Regional / Biz / Mil / GA /
+//  `CardSets.all`: Narrow / Wide / Regional / Biz / Mil / GA /
 //  Heritage). Each tile shows the number of distinct tails the user
 //  has caught in that type — no curated enumeration, no locked
 //  silhouettes. Tap → SetDetailView, which lists the model groups the
@@ -31,7 +31,7 @@ struct HangarSetsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
-                ForEach(PokeSets.all) { set in
+                ForEach(CardSets.all) { set in
                     let tailCount = rows.filter { $0.aircraftType == set.type }.count
                     NavigationLink(value: SetDetailRoute(setId: set.id)) {
                         SetTile(set: set, tailCount: tailCount)
@@ -46,9 +46,9 @@ struct HangarSetsView: View {
     }
 }
 
-/// Stable navigation target — set identified by its `PokeSet.id`
+/// Stable navigation target — set identified by its `CardSet.id`
 /// ("narrow", "wide", "regional"...). HangarView's NavigationStack
-/// resolves this into a `SetDetailView` by looking up `PokeSets.all`.
+/// resolves this into a `SetDetailView` by looking up `CardSets.all`.
 struct SetDetailRoute: Hashable {
     let setId: String
 }
@@ -56,7 +56,7 @@ struct SetDetailRoute: Hashable {
 // MARK: - Tile
 
 private struct SetTile: View {
-    let set: PokeSet
+    let set: CardSet
     let tailCount: Int
 
     private var isLocked: Bool { tailCount == 0 }

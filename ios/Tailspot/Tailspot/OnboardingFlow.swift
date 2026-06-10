@@ -156,7 +156,7 @@ struct OnboardingFlow: View {
     private var sampleCardHint: some View {
         HStack {
             Spacer()
-            PokeCardView(
+            CatchCardView(
                 plane: .init(
                     callsign: "UAL248",
                     model: "Boeing 787-9",

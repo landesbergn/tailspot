@@ -1,5 +1,5 @@
 //
-//  PokeCardView.swift
+//  CatchCardView.swift
 //  Tailspot
 //
 //  The visual artifact for a caught plane — a collectible card with
@@ -23,7 +23,7 @@
 //
 //  All three sizes (sm/md/lg) share the same layout; they only
 //  differ in absolute dimensions and font sizes. The card is purely
-//  presentational — it takes a `PokePlane` value object built by
+//  presentational — it takes a `CardPlane` value object built by
 //  the caller from a Catch + metadata + observed-aircraft state.
 //
 
@@ -31,12 +31,12 @@ import SwiftUI
 
 // MARK: - Value object
 
-/// Pure presentational input for the PokeCard. Built from a Catch
+/// Pure presentational input for the catch card. Built from a Catch
 /// (most reliable, since it's a frozen snapshot) or from a live
 /// ObservedAircraft + AircraftMetadata pair (for the AR catch
 /// moment, before persistence). All optionality lives here; the
 /// view falls back to em-dashes / hidden lines when fields are nil.
-struct PokePlane: Equatable {
+struct CardPlane: Equatable {
     let callsign: String?
     let model: String?
     let carrier: String?
@@ -75,10 +75,10 @@ struct PokePlane: Equatable {
     }
 }
 
-// MARK: - PokeCardView
+// MARK: - CatchCardView
 
-struct PokeCardView: View {
-    let plane: PokePlane
+struct CatchCardView: View {
+    let plane: CardPlane
     var size: CardSize = .md
     /// 0.0 → no holo overlay; 0.45 → subtle; 0.85 → vivid. Has no
     /// effect on common/uncommon cards (which never carry holo).
@@ -370,9 +370,9 @@ struct PokeCardView: View {
     }
 }
 
-// MARK: - PokePlane builders
+// MARK: - CardPlane builders
 
-extension PokePlane {
+extension CardPlane {
     /// "500 ft" from meters MSL. Shared by the live catch reveal and
     /// the stored-catch builder so the two can't drift apart.
     static func altText(fromMeters m: Double?) -> String? {
@@ -421,7 +421,7 @@ private extension String {
 #Preview {
     ScrollView {
         VStack(spacing: 24) {
-            PokeCardView(
+            CatchCardView(
                 plane: .init(
                     callsign: "UAL248",
                     model: "Boeing 787-9",
@@ -434,7 +434,7 @@ private extension String {
                 ),
                 size: .lg
             )
-            PokeCardView(
+            CatchCardView(
                 plane: .init(
                     callsign: "BAW286",
                     model: "Airbus A380",
@@ -447,7 +447,7 @@ private extension String {
                 ),
                 size: .md
             )
-            PokeCardView(
+            CatchCardView(
                 plane: .init(
                     callsign: "AF1",
                     model: "Boeing VC-25",

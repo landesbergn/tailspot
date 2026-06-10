@@ -107,7 +107,7 @@ struct MiniCardView: View {
 
     /// Photo slot. Loads the local catch JPEG if `photoFilename`
     /// exists; otherwise renders a 45° striped placeholder in the
-    /// rarity tint (same treatment as the PokeCard placeholder).
+    /// rarity tint (same treatment as the CatchCard placeholder).
     @ViewBuilder
     private var photoSlot: some View {
         if let filename = c.photoFilename,

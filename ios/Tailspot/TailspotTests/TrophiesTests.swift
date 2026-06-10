@@ -219,9 +219,9 @@ struct TrophiesTests {
     }
 }
 
-@Suite("PokeSets")
+@Suite("CardSets")
 @MainActor
-struct PokeSetsTests {
+struct CardSetsTests {
 
     private func mk(model: String, manufacturer: String? = nil) -> Catch {
         Catch(
@@ -237,15 +237,15 @@ struct PokeSetsTests {
     }
 
     @Test func emptyCatchesAllSlotsLocked() {
-        for set in PokeSets.all {
-            let result = PokeSets.status(of: set, against: [])
+        for set in CardSets.all {
+            let result = CardSets.status(of: set, against: [])
             #expect(result.allSatisfy { if case .locked = $0.1 { return true } else { return false } })
         }
     }
 
     @Test func boeing787CatchFillsWideBodySlot() {
-        let wide = PokeSets.all.first { $0.id == "wide" }!
-        let result = PokeSets.status(of: wide, against: [mk(model: "787-9", manufacturer: "BOEING")])
+        let wide = CardSets.all.first { $0.id == "wide" }!
+        let result = CardSets.status(of: wide, against: [mk(model: "787-9", manufacturer: "BOEING")])
         let entry = result.first { $0.0.id == "w-787" }
         #expect(entry != nil)
         if case .caught = entry!.1 { /* good */ } else {
@@ -259,8 +259,8 @@ struct PokeSetsTests {
     }
 
     @Test func a380FillsWideBodyA380Slot() {
-        let wide = PokeSets.all.first { $0.id == "wide" }!
-        let result = PokeSets.status(of: wide, against: [mk(model: "A380-800", manufacturer: "AIRBUS")])
+        let wide = CardSets.all.first { $0.id == "wide" }!
+        let result = CardSets.status(of: wide, against: [mk(model: "A380-800", manufacturer: "AIRBUS")])
         let entry = result.first { $0.0.id == "w-a380" }!
         if case .caught = entry.1 { /* good */ } else {
             Issue.record("A380 slot didn't fill")
@@ -268,25 +268,25 @@ struct PokeSetsTests {
     }
 
     @Test func progressCountsCaughtSlots() {
-        let wide = PokeSets.all.first { $0.id == "wide" }!
+        let wide = CardSets.all.first { $0.id == "wide" }!
         let catches: [Catch] = [
             mk(model: "787-9"),
             mk(model: "A350-941"),
             mk(model: "777-300ER"),
         ]
-        let progress = PokeSets.progress(of: wide, against: catches)
+        let progress = CardSets.progress(of: wide, against: catches)
         #expect(progress.caught == 3)
         #expect(progress.total == wide.entries.count)
     }
 
     @Test func wrongSetWontFill() {
         // A 737 should fill a narrow slot, not a wide slot.
-        let wide = PokeSets.all.first { $0.id == "wide" }!
-        let result = PokeSets.status(of: wide, against: [mk(model: "737-800", manufacturer: "BOEING")])
+        let wide = CardSets.all.first { $0.id == "wide" }!
+        let result = CardSets.status(of: wide, against: [mk(model: "737-800", manufacturer: "BOEING")])
         #expect(result.allSatisfy { if case .locked = $0.1 { return true } else { return false } })
 
-        let narrow = PokeSets.all.first { $0.id == "narrow" }!
-        let narrowResult = PokeSets.status(of: narrow, against: [mk(model: "737-800")])
+        let narrow = CardSets.all.first { $0.id == "narrow" }!
+        let narrowResult = CardSets.status(of: narrow, against: [mk(model: "737-800")])
         let entry737 = narrowResult.first { $0.0.id == "n-737-800" }!
         if case .caught = entry737.1 { /* good */ } else {
             Issue.record("737 didn't fill narrow 737-800 slot")
@@ -295,9 +295,9 @@ struct PokeSetsTests {
 
     @Test func caseInsensitiveModelMatching() {
         // Substring match folds case.
-        let narrow = PokeSets.all.first { $0.id == "narrow" }!
-        let lower = PokeSets.status(of: narrow, against: [mk(model: "737-800")])
-        let upper = PokeSets.status(of: narrow, against: [mk(model: "BOEING 737-800")])
+        let narrow = CardSets.all.first { $0.id == "narrow" }!
+        let lower = CardSets.status(of: narrow, against: [mk(model: "737-800")])
+        let upper = CardSets.status(of: narrow, against: [mk(model: "BOEING 737-800")])
         let lowerCaught = lower.first { $0.0.id == "n-737-800" }!
         let upperCaught = upper.first { $0.0.id == "n-737-800" }!
         if case .caught = lowerCaught.1, case .caught = upperCaught.1 {
@@ -308,9 +308,9 @@ struct PokeSetsTests {
     }
 
     @Test func setIDsAreUnique() {
-        let setIDs = PokeSets.all.map(\.id)
-        #expect(Set(setIDs).count == setIDs.count, "Duplicate PokeSet id(s)")
-        for set in PokeSets.all {
+        let setIDs = CardSets.all.map(\.id)
+        #expect(Set(setIDs).count == setIDs.count, "Duplicate CardSet id(s)")
+        for set in CardSets.all {
             let entryIDs = set.entries.map(\.id)
             #expect(Set(entryIDs).count == entryIDs.count,
                     "Duplicate entry id(s) in set \(set.id)")

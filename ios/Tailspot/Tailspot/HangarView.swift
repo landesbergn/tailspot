@@ -58,9 +58,9 @@ struct HangarView: View {
                     // Task 16 — real `SetDetailView` (model-slot grid)
                     // lives in `SetDetailView.swift`. If a set id ever
                     // fails to resolve (e.g., we deleted an entry from
-                    // PokeSets.all but a stale nav value lingered),
+                    // CardSets.all but a stale nav value lingered),
                     // fall through to an empty view rather than crash.
-                    if let set = PokeSets.all.first(where: { $0.id == route.setId }) {
+                    if let set = CardSets.all.first(where: { $0.id == route.setId }) {
                         SetDetailView(set: set)
                     }
                 }
@@ -72,7 +72,7 @@ struct HangarView: View {
                     // 2026-05-26 Sets revamp, so a model that has been
                     // un-caught since the navigation pushed degrades
                     // to "no tails" gracefully rather than crashing.
-                    if let set = PokeSets.all.first(where: { $0.id == route.setId }) {
+                    if let set = CardSets.all.first(where: { $0.id == route.setId }) {
                         ModelGroupBridge(set: set, modelName: route.model)
                     }
                 }
@@ -189,7 +189,7 @@ struct HangarView: View {
     }
 
     private var setsPreview: some View {
-        let previewSets: [PokeSet] = PokeSets.all.filter {
+        let previewSets: [CardSet] = CardSets.all.filter {
             [.narrow, .wide, .regional, .heritage].contains($0.type)
         }
         return VStack(alignment: .leading, spacing: 10) {
@@ -205,7 +205,7 @@ struct HangarView: View {
         }
     }
 
-    private func setPreviewRow(_ set: PokeSet) -> some View {
+    private func setPreviewRow(_ set: CardSet) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 6).fill(set.type.tint.opacity(0.20))

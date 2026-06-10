@@ -2,14 +2,14 @@
 //  ModelSlot.swift
 //  Tailspot
 //
-//  View-model wrapping a (PokeSetEntry, [HangarRow]) pair. Used by
+//  View-model wrapping a (CardSetEntry, [HangarRow]) pair. Used by
 //  SetDetailView's slot grid and ModelSlotDetailView's tail list to
 //  answer "for this entry in the set, how many distinct tails of this
 //  model have I caught and what are they?"
 //
 //  Spec § 9.2 — no new matcher is introduced here. The Catch →
-//  PokeSetEntry pairing reuses the existing matcher in `Sets.swift`
-//  (`PokeSets.matches(catch:entry:)`) so the resolver and the
+//  CardSetEntry pairing reuses the existing matcher in `Sets.swift`
+//  (`CardSets.matches(catch:entry:)`) so the resolver and the
 //  set-status / set-progress helpers stay in lockstep.
 //
 
@@ -22,12 +22,12 @@ import Foundation
 /// Hangar's revamped Sets tab no longer enumerates curated entries;
 /// it shows counts per category and derives the model layer
 /// dynamically via `ModelGroup` instead. `ModelSlot` is kept for any
-/// future surface that still wants the locked-slot Pokédex treatment.
+/// future surface that still wants the locked-slot card set treatment.
 struct ModelSlot: Identifiable, Hashable {
-    let entry: PokeSetEntry
+    let entry: CardSetEntry
     let tails: [HangarRow]
 
-    /// Stable identity comes from the underlying entry — `PokeSetEntry`
+    /// Stable identity comes from the underlying entry — `CardSetEntry`
     /// already carries a unique `id` string per slot.
     var id: String { entry.id }
 

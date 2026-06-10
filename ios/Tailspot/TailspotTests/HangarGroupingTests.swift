@@ -253,9 +253,9 @@ struct HangarGroupingTests {
         let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
         #expect(rows.count == 4)
 
-        // Find the narrow-body set in PokeSets.all.
-        guard let narrow = PokeSets.all.first(where: { $0.type == .narrow }) else {
-            Issue.record("No narrow-body set declared in PokeSets.all")
+        // Find the narrow-body set in CardSets.all.
+        guard let narrow = CardSets.all.first(where: { $0.type == .narrow }) else {
+            Issue.record("No narrow-body set declared in CardSets.all")
             return
         }
 

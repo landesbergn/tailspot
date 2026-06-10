@@ -34,7 +34,7 @@ struct MultiCatchReveal: View {
     /// to the combo math (no points, no chime).
     struct Entry: Identifiable, Equatable {
         let id = UUID()
-        let plane: PokePlane
+        let plane: CardPlane
         let isDuplicate: Bool
     }
 
@@ -275,7 +275,7 @@ struct MultiCatchReveal: View {
                 // Offset cards horizontally from center; symmetric.
                 let xOffset = (Double(i) - halfCount + 0.5) * 28
                 ZStack {
-                    PokeCardView(
+                    CatchCardView(
                         plane: entry.plane,
                         size: .md,
                         holoIntensity: entry.isDuplicate ? 0.25 : 0.65,
