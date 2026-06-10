@@ -64,6 +64,12 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test",
+    // Behind Fly.io's edge proxy the TCP peer is the proxy, not the client.
+    // trustProxy makes request.ip read X-Forwarded-For — without it the
+    // per-IP rate limit on POST /v1/devices would put EVERY client in one
+    // bucket (a global 429 the moment two users register in the same minute).
+    // Security-review fix, 2026-06-10.
+    trustProxy: true,
   });
 
   // Provider is selected ONCE at build time (env read here, not per-request).

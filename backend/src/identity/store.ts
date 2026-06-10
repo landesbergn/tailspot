@@ -134,8 +134,10 @@ export interface CatchStore {
    */
   resolveRarity(icao24: string): Promise<RarityResolution>;
   /**
-   * Insert a catch, or — if `catchUuid` was already ingested — return the
-   * ORIGINAL stored result (idempotent replay). The boolean says which happened.
+   * Insert a catch, or — if THIS DEVICE already ingested `catchUuid` — return
+   * the ORIGINAL stored result (idempotent replay). The boolean says which
+   * happened. Idempotency is scoped per device: another device submitting the
+   * same uuid is a normal, independent insert (security-review fix).
    */
   insertOrGet(c: NewCatch): Promise<{ result: StoredCatchResult; duplicate: boolean }>;
   /** Top-N devices WITH a handle, by total points. */
@@ -196,7 +198,7 @@ export class DrizzleCatchStore implements CatchStore {
         aircraftPositionTimestamp: c.aircraftPositionTimestamp,
         validation: c.validation,
       })
-      .onConflictDoNothing({ target: catches.catchUuid })
+      .onConflictDoNothing({ target: [catches.deviceId, catches.catchUuid] })
       .returning({
         id: catches.id,
         points: catches.points,
@@ -222,7 +224,7 @@ export class DrizzleCatchStore implements CatchStore {
         typecode: catches.typecode,
       })
       .from(catches)
-      .where(eq(catches.catchUuid, c.catchUuid))
+      .where(and(eq(catches.deviceId, c.deviceId), eq(catches.catchUuid, c.catchUuid)))
       .limit(1);
     const row = existing[0];
     return {

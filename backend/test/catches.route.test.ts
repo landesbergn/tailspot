@@ -195,3 +195,45 @@ describe("POST /v1/catches", () => {
     expect(validation?.reasons.some((r) => r.includes("bearing off"))).toBe(true);
   });
 });
+
+// ── Security-review regression (2026-06-10): idempotency is per-device ──────
+// A second device submitting the SAME catchUuid must get its OWN fresh catch,
+// not a replay of (or interaction with) the first device's row.
+describe("catchUuid idempotency scope", () => {
+  it("the same catchUuid from a different device is an independent insert", async () => {
+    const db = await makeTestDb();
+    const app = await buildApp({
+      identityStore: new DrizzleIdentityStore(db),
+      catchStore: new DrizzleCatchStore(db),
+      nowSeconds: () => NOW,
+      rateLimitNow: () => 0,
+    });
+
+    const regA = await app.inject({ method: "POST", url: "/v1/devices" });
+    const regB = await app.inject({ method: "POST", url: "/v1/devices" });
+    const uuid = "11111111-2222-4333-8444-555555555555";
+    const post = (token: string) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/catches",
+        headers: { authorization: `Bearer ${token}` },
+        payload: catchBody("bbbbbb", uuid),
+      });
+
+    const first = await post(regA.json().deviceToken);
+    expect(first.statusCode).toBe(201);
+    expect(first.json().duplicate).toBe(false);
+
+    const second = await post(regB.json().deviceToken);
+    expect(second.statusCode).toBe(201);
+    expect(second.json().duplicate).toBe(false);
+    expect(second.json().catchId).not.toBe(first.json().catchId);
+
+    // And the same device replaying it is still a duplicate.
+    const replay = await post(regB.json().deviceToken);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().duplicate).toBe(true);
+    expect(replay.json().catchId).toBe(second.json().catchId);
+    await app.close();
+  });
+});

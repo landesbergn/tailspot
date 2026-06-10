@@ -136,8 +136,13 @@ export const catches = pgTable(
   "catches",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Client idempotency key — a retried upload with this uuid is a no-op replay. */
-    catchUuid: uuid("catch_uuid").notNull().unique(),
+    /** Client idempotency key — a retried upload with this uuid is a no-op
+     *  replay. Uniqueness is PER DEVICE (composite index below), not global:
+     *  idempotency is a contract between one client and the server, and a
+     *  global key would let one device's submission interact with another's
+     *  (replay-leaking the original row, or squatting a uuid another device
+     *  legitimately generated). Security-review fix, 2026-06-10. */
+    catchUuid: uuid("catch_uuid").notNull(),
     /** Owning device. */
     deviceId: uuid("device_id")
       .notNull()
@@ -174,6 +179,11 @@ export const catches = pgTable(
   (t) => ({
     byDevice: index("catches_device_idx").on(t.deviceId),
     byIcao: index("catches_icao_idx").on(t.icao24),
+    /** Idempotency scope: one catchUuid per device (see column comment). */
+    deviceCatchUuidUnique: uniqueIndex("catches_device_catch_uuid_unique").on(
+      t.deviceId,
+      t.catchUuid,
+    ),
   }),
 );
 
