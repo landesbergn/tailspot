@@ -1,0 +1,35 @@
+# fly.toml — tailspot-www (static site + legal pages)
+app = "tailspot-www"
+primary_region = "sjc"
+
+[build]
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  force_https = true
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
