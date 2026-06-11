@@ -97,9 +97,10 @@ export interface NewCatch {
   headingDeg: number | null;
   elevationDeg: number | null;
   headingAccuracyDeg: number | null;
-  aircraftLat: number;
-  aircraftLon: number;
-  aircraftAltitudeMeters: number;
+  /** Aircraft position is nullable — a backfilled pre-WP-1.7 catch sends none. */
+  aircraftLat: number | null;
+  aircraftLon: number | null;
+  aircraftAltitudeMeters: number | null;
   aircraftPositionTimestamp: Date | null;
   validation: unknown;
 }

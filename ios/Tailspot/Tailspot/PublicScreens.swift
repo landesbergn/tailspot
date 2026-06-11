@@ -2,157 +2,146 @@
 //  PublicScreens.swift
 //  Tailspot
 //
-//  The "public surfaces" set from the design canvas:
+//  Public surfaces:
 //
-//   - LeaderboardScreen — anonymous global. No backend yet, so this
-//     ships with mocked rows and the user's row injected based on
-//     their on-device totals. The mock row text says "preview" so
-//     it's clear this isn't live data.
+//   - LeaderboardScreen — live global leaderboard from the backend.
+//     Shows rank/handle/points/catches, highlights "me" row (works
+//     even handle-less, with a "claim a handle to appear" hint).
+//     Loading / error / empty states follow Brand patterns.
+//     Pull-to-refresh supported.
 //
-//   - ShareCardSheet — a shareable card composed in SwiftUI, handed
-//     to `ShareLink` as an `Image`-renderable view.
+//   - ShareCardSheet — shareable card composed in SwiftUI, handed
+//     to ShareLink as an Image-renderable view.
 //
-//   - PublicHangarScreen — visit another spotter's profile (also
-//     placeholder; routed via @AppStorage handle for now).
+//  PublicHangarScreen was removed (backend not ready; the NavigationLink
+//  it was reachable via has also been removed).
 //
 
 import SwiftUI
 import SwiftData
 
-// MARK: - Leaderboard (mocked)
+// MARK: - Leaderboard (live)
 
 struct LeaderboardScreen: View {
-    enum Window: String, CaseIterable, Identifiable {
-        case weekly = "Weekly"
-        case monthly = "Monthly"
-        case allTime = "All-time"
-        var id: String { rawValue }
-    }
+    @AppStorage(SpotterHandle.storageKey) private var localHandle: String = SpotterHandle.defaultPlaceholder
 
+    // Fetch total local points so we can show them in the "me" row
+    // when the backend hasn't replied yet, or when not registered.
     @Query private var catches: [Catch]
-    @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
-    @State private var window: Window = .weekly
 
-    private var rows: [LeaderRow] {
-        // Mock data — the canvas spec is anonymous-global-only.
-        // We seed the table and inject the user's row at the
-        // position implied by their total points.
-        let me = LeaderRow(
-            rank: nil,
-            handle: handle,
-            points: ProfileStats(catches: catches).totalPoints,
-            countries: Set(catches.map(\.icao24)).count,
-            isMe: true
-        )
-        var seed: [LeaderRow] = [
-            .init(rank: 1, handle: "vapor_trail",    points: 38_420, countries: 287),
-            .init(rank: 2, handle: "approach_287",   points: 31_605, countries: 244),
-            .init(rank: 3, handle: "cabin_pressure", points: 28_910, countries: 219),
-            .init(rank: 4, handle: "feet_dry",       points: 22_104, countries: 178),
-            .init(rank: 5, handle: "heavy_metal",    points: 19_350, countries: 162),
-            .init(rank: 6, handle: "contrail_cam",   points: 14_220, countries: 143),
-            .init(rank: 7, handle: "tower_clearance",points: 11_840, countries: 121),
-            .init(rank: 8, handle: "max_alt",        points:  9_640, countries: 110),
-            .init(rank: 9, handle: "rwy_28r",        points:  7_315, countries:  98),
-            .init(rank:10, handle: "blue_hour",      points:  5_902, countries:  84),
-        ]
-        // Slot the user in by points.
-        seed.append(me)
-        seed.sort { $0.points > $1.points }
-        // Renumber ranks.
-        for i in seed.indices { seed[i].rank = i + 1 }
-        return seed
+    // MARK: State
+    @State private var entries: [LeaderboardEntry] = []
+    @State private var me: MyStanding? = nil
+    @State private var loadState: LoadState = .idle
+    @State private var isRefreshing = false
+
+    private let client = TailspotAccountClient()
+
+    enum LoadState {
+        case idle, loading, loaded, error(String)
     }
 
     var body: some View {
         List {
-            // Mock-surface banner so testers know the rows aren't
-            // real — backend ships in a later phase (PLAN §9).
-            Section {
-                ComingSoonBanner(message: "Mock leaderboard. Live data ships with the backend.")
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-            Section {
-                podium
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-            Section {
-                Picker("Window", selection: $window) {
-                    ForEach(Window.allCases) { w in
-                        Text(w.rawValue).tag(w)
+            switch loadState {
+            case .idle, .loading:
+                loadingSection
+            case .error(let msg):
+                errorSection(msg)
+            case .loaded:
+                if entries.isEmpty {
+                    emptySection
+                } else {
+                    if entries.count >= 3 {
+                        Section {
+                            podium
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-            }
-            Section {
-                ForEach(rows) { row in
-                    NavigationLink(value: row.handle) {
-                        leaderRow(row)
-                    }
-                    .listRowBackground(row.isMe
-                                       ? Brand.Color.cyan.opacity(0.12)
-                                       : Color.clear)
-                }
-            } footer: {
-                Text("Anonymous global. Handles are visible; identities aren't tied to Apple ID. Preview data — live leaderboard ships with the backend.")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-            }
-
-            // Coaching banner shown only when the user is below
-            // top 10 — pulls them toward a concrete next milestone.
-            if let climb = climbCTA {
-                Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CLIMB")
-                            .font(Brand.Font.mono(size: 9, weight: .bold))
-                            .tracking(1)
-                            .foregroundStyle(Brand.Color.cyan)
-                        Text(climb.headline)
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                        Text(climb.detail)
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.textSecondary)
-                    }
-                    .padding(.vertical, 6)
+                    rankSection
+                    meHintSection
                 }
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: String.self) { handle in
-            PublicHangarScreen(handle: handle)
+        .refreshable { await load() }
+        .task { if case .idle = loadState { await load() } }
+    }
+
+    // MARK: - Load
+
+    private func load() async {
+        isRefreshing = true
+        if case .idle = loadState { loadState = .loading }
+        do {
+            let response = try await client.leaderboard()
+            entries = response.entries
+            me = response.me
+            loadState = .loaded
+        } catch {
+            loadState = .error(error.localizedDescription)
+        }
+        isRefreshing = false
+    }
+
+    // MARK: - Sections
+
+    private var loadingSection: some View {
+        Section {
+            HStack {
+                Spacer()
+                ProgressView()
+                    .tint(Brand.Color.cyan)
+                    .padding(.vertical, 32)
+                Spacer()
+            }
+            .listRowBackground(Color.clear)
         }
     }
 
-    /// "Climb 4 places to break top 10" — only renders when the
-    /// user is currently outside the top 10. Computes how many
-    /// points they need to overtake the row at rank 10.
-    private var climbCTA: (headline: String, detail: String)? {
-        let me = rows.first { $0.isMe }
-        guard let me, let myRank = me.rank, myRank > 10 else { return nil }
-        guard let target = rows.first(where: { $0.rank == 10 }) else { return nil }
-        let placesToClimb = myRank - 10
-        let pointsNeeded = max(0, target.points - me.points + 1)
-        return (
-            headline: "Climb \(placesToClimb) place\(placesToClimb == 1 ? "" : "s") to break top 10",
-            detail: "Need ~\(pointsNeeded.formatted(.number)) more points this \(window.rawValue.lowercased()) period."
-        )
+    private func errorSection(_ msg: String) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Couldn't load leaderboard", systemImage: "wifi.slash")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Brand.Color.alertCaution)
+                Text(msg)
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textSecondary)
+                Button("Try again") {
+                    loadState = .idle
+                    Task { await load() }
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Brand.Color.cyan)
+            }
+            .padding(.vertical, 6)
+        }
     }
 
-    // MARK: - Podium
+    private var emptySection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("No handles yet")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                Text("Be the first to claim a handle in Settings → Identity to appear here.")
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textSecondary)
+            }
+            .padding(.vertical, 6)
+        }
+    }
 
+    /// Top-3 podium block.
     private var podium: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            podiumColumn(row: rows.first(where: { $0.rank == 2 }), height: 90, rank: 2)
-            podiumColumn(row: rows.first(where: { $0.rank == 1 }), height: 130, rank: 1)
-            podiumColumn(row: rows.first(where: { $0.rank == 3 }), height: 70, rank: 3)
+            podiumColumn(entry: entries.first(where: { $0.rank == 2 }), height: 90,  rank: 2)
+            podiumColumn(entry: entries.first(where: { $0.rank == 1 }), height: 130, rank: 1)
+            podiumColumn(entry: entries.first(where: { $0.rank == 3 }), height: 70,  rank: 3)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 18)
@@ -160,7 +149,7 @@ struct LeaderboardScreen: View {
         .background(Brand.Color.bgElevated)
     }
 
-    private func podiumColumn(row: LeaderRow?, height: CGFloat, rank: Int) -> some View {
+    private func podiumColumn(entry: LeaderboardEntry?, height: CGFloat, rank: Int) -> some View {
         let tint: Color = {
             switch rank {
             case 1: return Color(hex: 0xFFC74A)
@@ -170,12 +159,12 @@ struct LeaderboardScreen: View {
             }
         }()
         return VStack(spacing: 6) {
-            if let row {
-                Text("@\(row.handle)")
+            if let entry {
+                Text("@\(entry.handle)")
                     .font(Brand.Font.mono(size: 10, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .lineLimit(1)
-                Text("\(row.points.formatted(.number))")
+                Text("\(entry.points.formatted(.number))")
                     .font(Brand.Font.mono(size: 13, weight: .heavy))
                     .foregroundStyle(tint)
                     .monospacedDigit()
@@ -193,22 +182,42 @@ struct LeaderboardScreen: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func leaderRow(_ row: LeaderRow) -> some View {
-        HStack(spacing: 12) {
-            Text("\(row.rank ?? 0)")
+    /// Full ranked list.
+    @ViewBuilder
+    private var rankSection: some View {
+        Section {
+            ForEach(entries) { entry in
+                leaderRow(entry)
+            }
+        } footer: {
+            Text("Anonymous global. Handles are public; identities aren't tied to Apple ID.")
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textTertiary)
+        }
+    }
+
+    private func leaderRow(_ entry: LeaderboardEntry) -> some View {
+        let isMe = isMeEntry(entry)
+        return HStack(spacing: 12) {
+            Text("\(entry.rank)")
                 .font(Brand.Font.mono(size: 14, weight: .bold))
-                .foregroundStyle(row.isMe ? Brand.Color.cyan : Brand.Color.textTertiary)
+                .foregroundStyle(isMe ? Brand.Color.cyan : Brand.Color.textTertiary)
                 .monospacedDigit()
                 .frame(width: 30, alignment: .leading)
-            Text("@\(row.handle)")
-                .font(Brand.Font.mono(size: 14, weight: row.isMe ? .bold : .regular))
+            Text("@\(entry.handle)")
+                .font(Brand.Font.mono(size: 14, weight: isMe ? .bold : .regular))
                 .foregroundStyle(Brand.Color.textPrimary)
             Spacer()
-            Text("\(row.points.formatted(.number))")
-                .font(Brand.Font.mono(size: 13, weight: .bold))
-                .foregroundStyle(row.isMe ? Brand.Color.cyan : Brand.Color.textPrimary)
-                .monospacedDigit()
-            if row.isMe {
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(entry.points.formatted(.number))")
+                    .font(Brand.Font.mono(size: 13, weight: .bold))
+                    .foregroundStyle(isMe ? Brand.Color.cyan : Brand.Color.textPrimary)
+                    .monospacedDigit()
+                Text("\(entry.catches) catch\(entry.catches == 1 ? "" : "es")")
+                    .font(Brand.Font.mono(size: 10))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+            if isMe {
                 Text("YOU")
                     .font(Brand.Font.mono(size: 9, weight: .bold))
                     .foregroundStyle(.black.opacity(0.85))
@@ -217,16 +226,73 @@ struct LeaderboardScreen: View {
             }
         }
         .padding(.vertical, 2)
+        .listRowBackground(isMe
+            ? Brand.Color.cyan.opacity(0.12)
+            : Color.clear)
     }
-}
 
-private struct LeaderRow: Identifiable, Equatable {
-    var rank: Int?
-    let handle: String
-    let points: Int
-    let countries: Int
-    var isMe: Bool = false
-    var id: String { handle }
+    /// True when this entry is for the current user's handle.
+    private func isMeEntry(_ entry: LeaderboardEntry) -> Bool {
+        entry.handle.lowercased() == localHandle.lowercased()
+    }
+
+    /// "Me" section shown below the ranked list: either the me row from the
+    /// API (when the device has a handle), or a prompt to claim one.
+    @ViewBuilder
+    private var meHintSection: some View {
+        let myLocalPoints = ProfileStats(catches: catches).totalPoints
+        let hasHandle = !localHandle.isEmpty && localHandle != SpotterHandle.defaultPlaceholder
+
+        if let meStanding = me {
+            // Server confirmed our standing — show it.
+            Section {
+                HStack(spacing: 12) {
+                    Text("\(meStanding.rank)")
+                        .font(Brand.Font.mono(size: 14, weight: .bold))
+                        .foregroundStyle(Brand.Color.cyan)
+                        .monospacedDigit()
+                        .frame(width: 30, alignment: .leading)
+                    Text(hasHandle ? "@\(localHandle)" : "(you)")
+                        .font(Brand.Font.mono(size: 14, weight: .bold))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                    Spacer()
+                    Text("\(meStanding.points.formatted(.number))")
+                        .font(Brand.Font.mono(size: 13, weight: .bold))
+                        .foregroundStyle(Brand.Color.cyan)
+                        .monospacedDigit()
+                    Text("YOU")
+                        .font(Brand.Font.mono(size: 9, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.85))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Brand.Color.cyan, in: .capsule)
+                }
+                .padding(.vertical, 2)
+                .listRowBackground(Brand.Color.cyan.opacity(0.12))
+                if !hasHandle {
+                    Text("Claim a handle in Settings → Identity to appear in the list above.")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                }
+            } header: {
+                Text("Your standing")
+            }
+        } else if !hasHandle {
+            // Not registered yet or no handle — hint.
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("You have \(myLocalPoints.formatted(.number)) points locally")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                    Text("Claim a handle in Settings → Identity to appear on the leaderboard.")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Your standing")
+            }
+        }
+    }
 }
 
 // MARK: - Share card
@@ -358,78 +424,6 @@ struct ShareCardSheet: View {
     }
 }
 
-// MARK: - Public Hangar
-
-struct PublicHangarScreen: View {
-    let handle: String
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                ComingSoonBanner(message: "Public hangars ship with the backend. Previewing layout only.")
-                Text("RECENT CATCHES")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(0..<6, id: \.self) { _ in
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Brand.Color.bgElevated)
-                            VStack {
-                                Image(systemName: "airplane")
-                                    .font(.system(size: 28, weight: .light))
-                                    .foregroundStyle(Brand.Color.textTertiary)
-                                Text("Mock entry")
-                                    .font(Brand.Font.caption)
-                                    .foregroundStyle(Brand.Color.textTertiary)
-                            }
-                        }
-                        .aspectRatio(3.0 / 4.0, contentMode: .fit)
-                    }
-                }
-            }
-            .padding(16)
-        }
-        .background(Brand.Color.bgPrimary.ignoresSafeArea())
-        .navigationTitle("@\(handle)")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(Brand.Color.bgElevated)
-                    .frame(width: 56, height: 56)
-                    .overlay(
-                        Text(String(handle.prefix(2)).uppercased())
-                            .font(Brand.Font.mono(size: 18, weight: .bold))
-                            .foregroundStyle(Brand.Color.cyan)
-                    )
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("@\(handle)")
-                        .font(Brand.Font.mono(size: 20, weight: .bold))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                    Text("128 catches · 88 unique · 14 rare+")
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                }
-                Spacer()
-            }
-            HStack(spacing: 10) {
-                Button("Follow") {}
-                    .buttonStyle(.borderedProminent)
-                    .tint(Brand.Color.cyan)
-                Button("Visit hangar") {}
-                    .buttonStyle(.bordered)
-                    .tint(Brand.Color.textPrimary)
-            }
-        }
-    }
-}
-
 #Preview("Leaderboard") {
     NavigationStack { LeaderboardScreen() }
         .modelContainer(for: Catch.self, inMemory: true)
@@ -440,10 +434,4 @@ struct PublicHangarScreen: View {
         stats: ProfileStats(catches: []),
         handle: "preview"
     )
-}
-
-#Preview("Public Hangar") {
-    NavigationStack {
-        PublicHangarScreen(handle: "vapor_trail")
-    }
 }

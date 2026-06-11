@@ -20,6 +20,12 @@ struct TailspotApp: App {
     /// field would surface a UI message; for v1 a fatalError suffices.
     let container: ModelContainer
 
+    /// Upload queue — fires once per foreground transition (scenePhase →
+    /// .active). Per-catch immediate upload is a follow-up (PLAN §9).
+    private let uploader = CatchUploader()
+
+    @Environment(\.scenePhase) private var scenePhase
+
     init() {
         Log.ui.notice("Tailspot launched")
         do {
@@ -37,6 +43,16 @@ struct TailspotApp: App {
             // directly on every subsequent launch.
             RootView()
                 .modelContainer(container)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                // Upload any pending catches when the app comes to the
+                // foreground. `uploadPending` is idempotent and non-throwing
+                // at the top level; failures per-row are logged and retried
+                // on the next foreground transition.
+                let ctx = container.mainContext
+                Task { await uploader.uploadPending(context: ctx) }
+            }
         }
     }
 }

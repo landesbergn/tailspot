@@ -5,6 +5,65 @@ that file focused on the live state plus durable guidance. The live "Current
 state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
 Git history and PLAN.md §9 remain the authoritative record.
 
+## 2026-06-10 — production v1 program: backend complete, IP scrub shipped, visual-confirmation spike
+
+**The production v1 program (spec: `docs/superpowers/specs/2026-06-10-production-v1-program-design.md`)
+went from approved to substantially executed in one day. Six PRs merged to
+`main`; orchestration ran as Fable 5 designing/reviewing with Opus/Sonnet/Haiku
+agents executing work packages in parallel worktrees.**
+
+1. **Backend (Track 1) — server side COMPLETE, WP 1.1–1.5 merged.** `backend/`
+   is Node 22 + TypeScript + Fastify + Drizzle, 152 hermetic tests (PGlite —
+   in-process WASM Postgres, no Docker), own CI job (`backend-tests.yml`,
+   path-filtered). Serves: `GET /v1/aircraft` (adsb.lol primary / OpenSky
+   fallback behind a `PositionProvider` seam; 0.25° tile cache w/ single-flight
+   + last-good fallback — note the review fix: the FETCH uses the expanded tile
+   bounds, never the raw bbox); `GET /v1/metadata/{icao24}` (FAA registry +
+   DOC 8643 merge, store-injection pattern); `POST /v1/devices` + handle claim
+   + `POST /v1/catches` (server-resolved points, per-device idempotency,
+   instrumented-never-enforced `validateCatch`) + `GET /v1/leaderboard`.
+   Security review (Fable) fixed two real findings pre-merge: catchUuid
+   idempotency was globally scoped (now composite `(device_id, catch_uuid)`,
+   migration 0002) and `trustProxy` was unset (per-IP rate limit would have
+   429'd globally behind Fly's proxy). NOT deployed yet — needs Noah's Fly.io
+   account + hostname; WP 1.9 runbook still to write.
+
+2. **IP scrub (Track 3) SHIPPED.** All Pokémon trademark references removed
+   pre-beta: "POKÉDEX ENTRY"→"LOGBOOK ENTRY", "POKÉDEX-STYLE"→"SPOTTER SETS",
+   `PokeCardView`→`CatchCardView` (file renamed), `PokePlane`→`CardPlane`,
+   `PokeSet*`→`CardSet*`. 321 tests stayed green; zero `poke` grep hits.
+
+3. **Visual confirmation (Track 2 Stage 2a) — pre-camera stack done on branch
+   `feat/visual-confirmation-spike`** (NOT merged): YOLOX-Small COCO → CoreML
+   INT8 (9.2 MB, Apache-2.0-clean via the Pixeltable fork; conversion pipeline
+   + REPORT.md under `tools/visual-confirmation/`), Swift decode+NMS port
+   (`AirplaneDetectionDecoder`, 18 tests), and `VisualFixTracker` (gated
+   association + EMA-smoothed offset, 11 tests; branch suite = 350). KEY
+   FINDING: COCO-pretrained detection dies under ~15–20 px, so the design
+   (SWIFT-DESIGN.md) detects in a **640 px native-resolution crop centered on
+   the ADS-B-predicted position** — recovering the ~6× apparent size lost to
+   full-frame downscale. Remaining: camera frame tap, MLModel crop pipeline,
+   bracket wiring, replay fields + 1 Hz crop JPEGs, then Noah's field session
+   for the go/no-go.
+
+4. **Process findings (need Noah):** (a) **`main` has NO branch protection** —
+   no classic protection, no rulesets — despite CONTRIBUTING.md documenting an
+   enforced Unit-tests gate from 2026-06-09. Restoring it is a repo-settings
+   change the permission classifier blocks Claude from making; same for
+   enabling repo auto-merge. (b) One merge (PR #7) went in while its
+   final-commit checks were still registering (local verify was green; post-
+   merge CI confirmed green). (c) A disk-full incident killed two agents
+   mid-task (recovered, no loss); macOS later reclaimed purgeable space —
+   118 GB free now.
+
+5. **Pre-cutover requirement discovered in review (WP 1.4b, tracked):** the
+   FAA ingest yields NO ICAO typecode (MASTER.txt doesn't carry it), so
+   production metadata would serve raw ALL-CAPS names — a regression vs the
+   bundled-FAA path (iOS naming keys on typecode). An MFR-MDL-code → ICAO
+   designator enrichment must land before the WP 1.8 cutover.
+
+**Tests: iOS 321 on `main` (350 on the spike branch); backend 152.**
+
 ## 2026-06-09 — activity-based rarity tiering + bizjet/regional type fix
 
 **Re-tiered rarity by sky presence instead of curated spotter-interest, and
