@@ -143,6 +143,9 @@ struct ContentView: View {
     /// interactive. The splash absorbs taps for the first half of the
     /// fade so no gestures fire while it's mostly visible.
     @State private var splashOpacity: Double = 1.0
+    /// Collapsed by default. Tap the NEARBY AIRCRAFT header in the
+    /// debug panel to expand the per-plane list.
+    @State private var showAircraftList = false
     /// Active empty-tap ripple, if any: (tap point, timestamp). Set by
     /// `showEmptyTapRipple` when a tap lands in truly empty sky (no
     /// plane within the widened 250 px search). Auto-clears after 1.0 s
@@ -405,29 +408,12 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.2), value: isHeadingAccuracyBad)
                 .animation(.easeInOut(duration: 0.2), value: zoom > 1.01)
 
-                // TEMP diagnostic (2026-06-01): on-screen visibility funnel.
-                // The field build has no debug wrench on Release, so surface
-                // the tracked/shown counts here to confirm the visibility
-                // re-tune (distance 35 km / elev 1° / freshness 150 s) is
-                // letting genuinely-visible planes through. Remove once the
-                // field test confirms the new thresholds.
-                VStack {
-                    HStack {
-                        visibilityDiagnosticReadout
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .padding(.top, 12)
-                .padding(.leading, 12)
-                .allowsHitTesting(false)
-
                 // Debug overlays — hidden by default; revealed by the
                 // wrench toggle below.
                 if showDebug {
                     VStack(spacing: 0) {
                         sensorReadout
-                            .padding()
+                            .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         Spacer(minLength: 0)
@@ -646,37 +632,6 @@ struct ContentView: View {
 
     // MARK: - Top-center overlays
 
-    /// TEMP (2026-06-01) on-screen visibility funnel. Lets Noah confirm the
-    /// re-tuned thresholds (35 km / 1° / 150 s) in the field without the
-    /// debug wrench (which `#if DEBUG` strips from Release/TestFlight). Tints
-    /// amber when planes are tracked but none are shown — the exact "no
-    /// planes" failure we're chasing. Remove after the field test confirms.
-    private var visibilityDiagnosticReadout: some View {
-        let d = adsb.diagnostic
-        let air = max(0, d.fetched - d.onGround)
-        // One glance disambiguates all three "no planes" causes:
-        //   air>0, shown=0      → the visibility filter is eating planes
-        //   air=0 + "ANON"      → anonymous OpenSky tier (creds didn't bake) → daily quota
-        //   air=0 + "API limit" → 429 rate-limit backoff
-        //   air=0, no flag      → genuinely no ADS-B coverage here right now
-        let anon = !adsb.useMock && !adsb.liveSourceIsAuthed
-        // `el` lets you confirm the gravity-based elevation fix live: tilt
-        // the phone down and it should go NEGATIVE (camera below horizon),
-        // not stay positive like the old gimbal-locked pitch formula.
-        let el = Int(motion.cameraElevationDeg.rounded())
-        var line = "air \(air) · shown \(d.shown) · el \(el)°  ·  lowElev \(d.belowElevation) far \(d.tooFar) stale \(d.stale)"
-        if anon { line += "  · ANON" }
-        if let err = adsb.lastError { line += "  · \(err)" }
-        let alert = (d.shown == 0 && air > 0) || anon || adsb.lastError != nil
-        return Text(line)
-            .font(Brand.Font.mono(size: 10, weight: .semibold))
-            .foregroundStyle(alert ? Brand.Color.alertCaution : Brand.Color.textSecondary)
-            .lineLimit(2)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Brand.Color.bgPrimary.opacity(0.5), in: .capsule)
-    }
 
     /// Compass-bad caution badge. Slim capsule with an amber dot +
     /// "COMPASS ±N°" — quieter than the prior amber-bordered card so
@@ -1287,27 +1242,46 @@ struct ContentView: View {
     // MARK: - Top: sensor readout
 
     private var sensorReadout: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Tailspot — POC Day 2")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
 
+            // SOURCE section
+            Text("SOURCE")
+                .font(Brand.Font.mono(size: 10))
+                .foregroundStyle(Brand.Color.textTertiary)
+            sourceRow
+            Text(formatADSBStatus())
+                .font(Brand.Font.mono(size: 12))
+                .foregroundStyle(Brand.Color.textPrimary)
+
+            // SENSORS section
+            Text("SENSORS")
+                .font(Brand.Font.mono(size: 10))
+                .foregroundStyle(Brand.Color.textTertiary)
+                .padding(.top, 8)
             Group {
                 Text(formatLocation())
                 Text(formatHeading())
                     .foregroundStyle(isHeadingAccuracyBad ? Brand.Color.alertCaution : Brand.Color.textPrimary)
-                Text(formatAttitude())
-                adsbStatusRow
-                backendSourceRow
-                recordingRow
-                analyzeRow
+                Text(formatCameraElevation())
                 if !cameraAuthorized {
                     Text("camera: not authorized")
                 }
             }
             .font(Brand.Font.mono(size: 12))
+            .foregroundStyle(Brand.Color.textPrimary)
+
+            // TOOLS section
+            Text("TOOLS")
+                .font(Brand.Font.mono(size: 10))
+                .foregroundStyle(Brand.Color.textTertiary)
+                .padding(.top, 8)
+            Group {
+                recordingRow
+                analyzeRow
+            }
+            .font(Brand.Font.mono(size: 12))
+            .foregroundStyle(Brand.Color.textPrimary)
         }
-        .foregroundStyle(Brand.Color.textPrimary)
-        .padding(12)
         .background(Brand.Color.bgPrimary.opacity(0.55), in: .rect(cornerRadius: 12))
     }
 
@@ -1319,34 +1293,45 @@ struct ContentView: View {
         // what's on-screen instead of dumping the full 50 km bbox.
         let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
         return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Nearby aircraft (\(visible.count))")
-                    .font(.caption.bold())
-                Spacer()
-                if let err = adsb.lastError {
-                    Text(err).font(.caption2)
+            // Tappable header — always visible, shows live count
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    showAircraftList.toggle()
                 }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("NEARBY AIRCRAFT (\(visible.count))")
+                        .font(Brand.Font.mono(size: 10))
+                        .foregroundStyle(Brand.Color.textTertiary)
+                    Spacer()
+                    Image(systemName: showAircraftList ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Brand.Color.textTertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(.rect)
             }
-            .foregroundStyle(Brand.Color.textPrimary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .buttonStyle(.plain)
 
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(visible) { obs in
-                        aircraftRow(obs)
+            if showAircraftList {
+                ScrollView(.vertical) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(visible) { obs in
+                            aircraftRow(obs)
+                        }
+                        if visible.isEmpty {
+                            Text(emptyListMessage)
+                                .font(Brand.Font.mono(size: 12))
+                                .foregroundStyle(Brand.Color.textPrimary.opacity(0.7))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                        }
                     }
-                    if visible.isEmpty {
-                        Text(emptyListMessage)
-                            .font(Brand.Font.mono(size: 12))
-                            .foregroundStyle(Brand.Color.textPrimary.opacity(0.7))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                    }
+                    .padding(.bottom, 12)
                 }
-                .padding(.bottom, 12)
+                .frame(maxHeight: 320)
             }
-            .frame(maxHeight: 320)
         }
         .background(Brand.Color.bgPrimary.opacity(0.7))
     }
@@ -1455,18 +1440,11 @@ struct ContentView: View {
         }
     }
 
-    private func formatAttitude() -> String {
-        let pitchDeg = motion.pitch * 180 / .pi
-        // Show the GRAVITY-derived roll — the value the pinhole projection
-        // actually uses. The Euler `motion.roll` flips to ±180° at the
-        // portrait hold (gimbal branch) and reads ~178° even when the phone
-        // is upright, which misled a debug session on 2026-06-08.
-        let rollDeg = Geo.rollDeg(gravityX: motion.gravityX,
-                                  gravityY: motion.gravityY,
-                                  gravityZ: motion.gravityZ)
+    /// Camera elevation above the horizon — the gravity-derived angle
+    /// fed into projection math. Negative = camera below horizon.
+    private func formatCameraElevation() -> String {
         let camElDeg = motion.cameraElevationDeg
-        return String(format: "Tilt:    pitch %5.1f°  cam-el %+5.1f°  g-roll %5.1f°",
-                      pitchDeg, camElDeg, rollDeg)
+        return String(format: "Cam-el:  %+.1f°", camElDeg)
     }
 
     /// Empty-state message for the bottom list. Surfaces the actual
@@ -1487,48 +1465,57 @@ struct ContentView: View {
         return "ADSB:    fetching…"
     }
 
-    /// Tap-to-toggle row: shows the ADS-B status text plus a [LIVE] /
-    /// [MOCK] tag and the auth state ([AUTH] / [ANON]). Tapping
-    /// anywhere on the row flips the source. The auth tag is
-    /// purely diagnostic — it surfaces whether OpenSky credentials
-    /// reached the app process at launch.
-    private var adsbStatusRow: some View {
+    /// 3-way source cycle: OPENSKY → TAILSPOT API → MOCK → (back to OPENSKY).
+    ///
+    /// Mapping:
+    ///   OPENSKY      = useMock=false, useBackend=false
+    ///   TAILSPOT API = useMock=false, useBackend=true
+    ///   MOCK         = useMock=true  (useBackend left as-is so it's
+    ///                  remembered when cycling back to a live source)
+    ///
+    /// The [AUTH]/[ANON] tag is shown only in OPENSKY mode — it indicates
+    /// whether OAuth credentials reached the app process at launch.
+    private var sourceRow: some View {
         HStack(spacing: 8) {
-            Text(formatADSBStatus())
-            Text(adsb.useMock ? "[MOCK]" : (adsb.useBackend ? "[TSPOT]" : "[LIVE]"))
-                .foregroundStyle(adsb.useMock ? Brand.Color.alertCaution : Brand.Color.alertNormal)
-                .bold()
+            // Source badge — color signals which tier is active
+            Group {
+                if adsb.useMock {
+                    Text("[MOCK]")
+                        .foregroundStyle(Brand.Color.alertCaution)
+                } else if adsb.useBackend {
+                    Text("[TAILSPOT API]")
+                        .foregroundStyle(Brand.Color.cyan)
+                } else {
+                    Text("[OPENSKY]")
+                        .foregroundStyle(Brand.Color.alertNormal)
+                }
+            }
+            .font(Brand.Font.mono(size: 12, weight: .bold))
+
+            // Auth tag — OPENSKY mode only
             if !adsb.useMock && !adsb.useBackend {
                 Text(adsb.liveSourceIsAuthed ? "[AUTH]" : "[ANON]")
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
                     .foregroundStyle(adsb.liveSourceIsAuthed
                                      ? Brand.Color.alertNormal
                                      : Brand.Color.alertCaution)
-                    .bold()
             }
-            Spacer()
-        }
-        .contentShape(.rect)        // make the whole row hit-testable
-        .onTapGesture {
-            adsb.useMock.toggle()
-        }
-    }
 
-    /// Tap-to-toggle row for the backend-proxy field validation (WP 1.8
-    /// pre-cutover): OPENSKY = device-direct (today's default), TAILSPOT =
-    /// api.tailspot.app (adsb.lol data — MLAT included, so expect MORE
-    /// aircraft: GA props and helicopters that OpenSky free tier never
-    /// shows). Persisted across launches; ignored while MOCK is on.
-    private var backendSourceRow: some View {
-        HStack(spacing: 8) {
-            Text("Source:")
-            Text(adsb.useBackend ? "[TAILSPOT API]" : "[OPENSKY]")
-                .foregroundStyle(adsb.useBackend ? Brand.Color.cyan : Brand.Color.alertNormal)
-                .bold()
             Spacer()
         }
         .contentShape(.rect)
         .onTapGesture {
-            adsb.useBackend.toggle()
+            if adsb.useMock {
+                // MOCK → OPENSKY
+                adsb.useMock = false
+                adsb.useBackend = false
+            } else if adsb.useBackend {
+                // TAILSPOT API → MOCK
+                adsb.useMock = true
+            } else {
+                // OPENSKY → TAILSPOT API
+                adsb.useBackend = true
+            }
         }
     }
 
