@@ -1,8 +1,8 @@
 # Privacy Policy
 
 **Operator:** Noah Landesberg (sole developer)
-**Contact:** [CONTACT_EMAIL]
-**Effective date:** [EFFECTIVE_DATE]
+**Contact:** privacy@tailspot.app
+**Effective date:** June 11, 2026
 
 ---
 
@@ -43,11 +43,9 @@ Tailspot is a free plane-spotting app. This policy explains what information the
 
 The app uses **Apple's opt-in crash reporting** (part of iOS, governed by Apple's own privacy policy). If you have opted in to share app diagnostics with developers on your device, anonymized crash data may reach us via App Store Connect. This is standard iOS behavior; we do not add any crash-reporting SDK on top of it.
 
-### Future analytics (PostHog)
+### Product analytics (PostHog)
 
-We plan to add anonymous product analytics using PostHog. When this launches, it will use the same anonymous device ID described above — no new personal data will be collected. This section will be updated when analytics are enabled, but the data practices described here already cover that future addition: anonymous device ID, no linked identity, no third-party advertising use.
-
-> REVIEW: Confirm with a lawyer whether the "pre-disclosure" of a planned but not-yet-live analytics tool satisfies GDPR's transparency requirement in your target jurisdictions, or whether a policy update at the time of launch is sufficient.
+The app sends anonymous product-usage events (for example, "app opened" or "catch uploaded") to PostHog, our analytics processor, using the same anonymous device ID described above. These events contain no name, no email, no precise location, and no advertising identifiers, and are used solely to understand how the app is used and to fix problems. PostHog is listed as a processor in §4.
 
 ---
 
@@ -59,6 +57,7 @@ Data is shared with the following processors, solely to operate the app:
 
 - **Fly.io** (fly.io) — backend hosting. Our server runs on Fly.io infrastructure in the United States. Fly.io's data-processing terms apply.
 - **Apple** — crash/diagnostic data if you have opted into sharing with developers (see §3 above).
+- **PostHog** (posthog.com) — anonymous product analytics (see §3 above). Events are keyed to the anonymous device ID only.
 
 We do not share data with advertisers, data brokers, or analytics companies beyond the anonymous crash reporting noted above.
 
@@ -68,7 +67,7 @@ We do not share data with advertisers, data brokers, or analytics companies beyo
 
 **On-device data:** Your personal catch collection is stored in the app's local database (SwiftData). It lives entirely on your device. Deleting the app deletes this data permanently; we cannot recover it.
 
-**Backend data:** Your device ID, optional handle, and catch records are retained on our server for as long as your device is active on the leaderboard. If you would like your backend data deleted, email us at **[CONTACT_EMAIL]** with the subject line "Data deletion request." We will delete your device ID, handle, and all associated catch records within 30 days and confirm by reply.
+**Backend data:** Your device ID, optional handle, and catch records are retained on our server for as long as your device is active on the leaderboard. If you would like your backend data deleted, email us at **privacy@tailspot.app** with the subject line "Data deletion request." We will delete your device ID, handle, and all associated catch records within 30 days and confirm by reply.
 
 There is currently no in-app deletion flow for backend data. We plan to add one.
 
@@ -85,7 +84,7 @@ If you are in the European Economic Area, you have rights under the General Data
 - **Portability:** request your catch records in a machine-readable format.
 - **Objection:** object to processing for the leaderboard (your catches will then only be stored locally on-device, not submitted to the backend).
 
-To exercise any of these rights, email **[CONTACT_EMAIL]**. We will respond within 30 days.
+To exercise any of these rights, email **privacy@tailspot.app**. We will respond within 30 days.
 
 Our legal basis for processing is **legitimate interest** (operating a game whose core mechanic requires recording catches) and, where you have provided a handle, **contract performance** (displaying your score under your chosen name).
 
@@ -95,13 +94,13 @@ Our legal basis for processing is **legitimate interest** (operating a game whos
 
 ## 7. CCPA (California residents)
 
-We do not sell personal information as defined by the California Consumer Privacy Act. California residents have the right to know what personal information we collect and to request deletion. Contact **[CONTACT_EMAIL]** to exercise these rights.
+We do not sell personal information as defined by the California Consumer Privacy Act. California residents have the right to know what personal information we collect and to request deletion. Contact **privacy@tailspot.app** to exercise these rights.
 
 ---
 
 ## 8. Children
 
-Tailspot is rated 4+ on the App Store and is suitable for all ages. We do not knowingly collect personal information from children under 13. Because the app does not require an account or email address, no age verification is performed. If you believe a child under 13 has submitted data through the app (for example, a chosen handle), contact us at **[CONTACT_EMAIL]** and we will delete it promptly.
+Tailspot is rated 4+ on the App Store and is suitable for all ages. We do not knowingly collect personal information from children under 13. Because the app does not require an account or email address, no age verification is performed. If you believe a child under 13 has submitted data through the app (for example, a chosen handle), contact us at **privacy@tailspot.app** and we will delete it promptly.
 
 > REVIEW: COPPA (US) applies if the app is "directed to children." A 4+ rating alone is not a COPPA safe harbor if the app's theme or marketing attracts a primarily under-13 audience. Plane-spotting is generally adult-leaning, but confirm this framing with a lawyer before the App Store submission.
 
@@ -124,4 +123,4 @@ If we make a material change — for example, adding a new data type or a new th
 Questions, deletion requests, or data-access requests:
 
 **Noah Landesberg**
-[CONTACT_EMAIL]
+privacy@tailspot.app

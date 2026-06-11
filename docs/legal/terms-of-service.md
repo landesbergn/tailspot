@@ -1,8 +1,8 @@
 # Terms of Service
 
 **Operator:** Noah Landesberg (sole developer)
-**Contact:** [CONTACT_EMAIL]
-**Effective date:** [EFFECTIVE_DATE]
+**Contact:** privacy@tailspot.app
+**Effective date:** June 11, 2026
 **Governing law:** California, USA
 
 ---
@@ -98,4 +98,4 @@ We may update these terms. Material changes will be noted with an updated effect
 
 ## 10. Contact
 
-Questions about these terms: **[CONTACT_EMAIL]**
+Questions about these terms: **privacy@tailspot.app**
