@@ -8,72 +8,82 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-11 [WP 1.7: leaderboard live, account client, catch upload pipeline — PR #16 open])
+## Current state (as of session ending 2026-06-11 [backend deployed + leaderboard live + field-driven visibility fix])
 
-**WP 1.7 is complete on branch `feat/leaderboard-live` (PR #16, awaiting
-security review + merge). Prior agent crashes left uncommitted work in the
-worktree; this session verified, committed, and extended it.**
+**The backend is DEPLOYED and the social layer is live.** Two days of program
+execution: `https://api.tailspot.app` (Fly.io `tailspot-api`, sjc; Postgres
+`tailspot-db`; runbook `docs/backend-handoff.md` — every command verified on
+the real deploy) serves positions (adsb.lol, MLAT incl.), merged metadata
+(313,523 FAA tails + DOC 8643 + the WP 1.4b typecode map: 71% of US tails
+resolve `source:"merged"` with clean names + rarity), anonymous identity,
+catch ingestion, and the leaderboard. PRs #12–#19 landed; highlights:
 
-1. **Backend Part 1 (verified + committed):** `POST /v1/catches` now accepts
-   `aircraft: null` for pre-WP-1.7 iOS catches that never recorded the
-   aircraft position. Migration `0003_sticky_spyke.sql` drops `NOT NULL` from
-   `aircraft_lat/lon/altitude_meters`. Verdict is `"unverifiable"` but catch
-   is scored normally from icao24. `Catch.swift` gains optional `serverUuid` +
-   `uploadedAt` (additive, lightweight migration). **164 backend tests green.**
+1. **WP 1.7 leaderboard live (PR #16).** `TailspotAccountClient` (device
+   token in Keychain — `AfterFirstUnlockThisDeviceOnly`, security-reviewed),
+   handle claim wired to onboarding + Settings (409 → inline "taken"),
+   `CatchUploader` backfills existing catches (`aircraft: null` → server
+   verdict "unverifiable" — contract relaxed for this), real
+   `LeaderboardScreen`. PublicHangarScreen REMOVED; NotificationsScreen
+   reduced to one honest line (fake toggles deleted).
 
-2. **iOS Part 2 — `TailspotAccountClient.swift`:** `nonisolated struct`
-   mirroring `TailspotBackendClient` conventions. `ensureRegistered()` →
-   `POST /v1/devices`, token to **Keychain** via `KeychainStore`
-   (`kSecClassGenericPassword`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`),
-   deviceId to UserDefaults. `claimHandle()` → `PUT /v1/devices/me/handle`,
-   409 → typed `AccountError.handleTaken`. `uploadCatch()` → `POST /v1/catches`
-   with `aircraft: null`. `leaderboard()` → `GET /v1/leaderboard`, bearer when
-   available. Base URL injectable for tests.
+2. **Field-driven visibility fix (PR #17), the day's best story:** Noah
+   photographed a contrail plane at Sea Ranch that never got a label.
+   Replay analysis identified it as ANA179 (12.1 km cruise, slant 19.2 km,
+   elevation 39.1°, bearing matching his camera within ~5°) — delivered by
+   the backend, hidden by the 13 km visibility plateau. The curve gained a
+   contrail segment (13 km @ 30° → 25 km @ 45°+, low-elevation half
+   untouched); the photo+replay is the documented field datum in
+   `ObservedAircraft.maxVisibleDistance` and `VisibilityContrailTests`.
 
-3. **iOS Part 3 — `CatchUploader.swift`:** `@MainActor` class,
-   `uploadPending(context:)` fetches `uploadedAt == nil` rows, assigns
-   `serverUuid` lazily (once set, never regenerated — same UUID retries
-   for server-side dedup), uploads sequentially; failure leaves row pending.
-   `TailspotApp` hooks `scenePhase → .active` to fire it on every foreground
-   transition. Per-catch immediate upload is a PLAN §9 follow-up.
+3. **Visual confirmation camera half BUILT (PR #13, OPEN — held for Noah's
+   device eyeball):** frame tap in CameraPreview (8 fps, portrait-rotated),
+   `AirplaneDetector` (direct MLModel on a 640 px native-res crop around
+   the predicted position), `VisualFixTracker` association, bracket
+   snapping for the locked plane, 1 Hz ground-truth crop JPEGs to
+   `Documents/replays/frames/` while recording. Feature-flagged: Debug ON,
+   Release OFF until the field go/no-go. The combined build (this + all of
+   main) is installed on Noah's phone.
 
-4. **iOS Part 4 — UI:** `LeaderboardScreen` → live data (loading / error /
-   empty states, pull-to-refresh, podium for top 3, highlighted "me" row
-   works handle-less with a "claim a handle" hint), `ComingSoonBanner` removed.
-   `PublicHangarScreen` + its `NavigationLink` removed (backend not ready).
-   `NotificationsScreen` → one honest "coming after launch" info section; 9
-   fake `@AppStorage` toggles removed. Onboarding step 3 and Settings handle
-   field both call `claimHandle` on the backend; 409 → inline "taken" error;
-   non-fatal network failures persist locally and continue.
+4. **Observability (PR #19):** `Analytics.swift` — PostHog via plain REST
+   `/batch/` (NO SDK per the no-deps rule), distinct_id = the account
+   deviceId, no-op without `POSTHOG_API_KEY` (xcconfig→Info.plist, same
+   flow as OpenSky creds). MetricKit subscriber logs + captures crash/hang
+   headlines. AR-session events deferred until PR #13 merges (ContentView
+   ownership). **Noah activation step:** create PostHog project "Tailspot",
+   put `POSTHOG_API_KEY = phc_…` in `Tailspot.secrets.xcconfig`.
 
-5. **iOS Part 5 — tests:** 28 new Swift Testing tests. `KeychainStoreTests`
-   (save/load/overwrite/delete/multi-account isolation). DTO decode fixtures
-   for `UploadCatchResponse` (fresh + duplicate), `LeaderboardEntry`,
-   `LeaderboardResponse` (with/without me, empty), `UploadCatchRequest`
-   encoding (aircraft key present as JSON null). `CatchUploaderTests` via
-   injected `FakeUploadClient` (success/failure/duplicate/partial/registration-
-   abort/uuid-stability). `CatchMigrationAdditivityTests` (new fields nil by
-   default, round-trip persists). **349 iOS tests, 0 failures** (was 321).
-   **164 backend tests, 0 failures** (unchanged).
+5. **Rarity divergences fixed (PR #18):** HUD tier now typecode-first via
+   `resolveAROverlayRarity` (mirrors `Catch.resolvedRarity`); 24 of 47
+   Sets-catalog entries were stale and got re-tiered, with an exhaustive
+   consistency test pinning every entry to `AircraftTypes.json`.
 
-**Security review required before merge (noted in PR #16):** verify
-`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` is correct for an
-anonymous per-device credential (it is: survives restarts, doesn't migrate
-to new devices via iCloud Keychain backup), and that bearer tokens only
-travel over HTTPS (the default base URL is `https://api.tailspot.app`).
+6. **Also:** debug panel redesigned (PR #12: one OPENSKY→TAILSPOT→MOCK
+   cycling source row, sections, artifacts deleted, collapsible aircraft
+   list); ops runbook (PR #14); legal drafts (PR #15, OPEN — Noah must
+   read; flags an OpenSky-as-fallback compliance loose end: recommendation
+   is dropping OpenSky from the prod ladder after adsb.lol is field-proven).
 
-**Known gap carried from prior agent work:** `SettingsScreen.saveHandle()`
-is called on `onSubmit` (Return key). A "Save" button or debounce would be
-friendlier UX — this is a PLAN §9 polish item.
+**Process learnings (now conventions):** (a) NEVER rebase an already-pushed
+branch — force-push is permission-blocked; merge main into the branch
+instead (squash-merge makes branch history cosmetic). (b) Tests must not
+touch process-global state (standard UserDefaults, statics) outside a
+single `.serialized` owner suite — Swift Testing runs suites in parallel
+and CI clones race where local runs pass (three CI flakes on 2026-06-11:
+keychain entitlements, defaults key, `Analytics._testQueue`). (c) Keychain
+APIs don't work in CI simulator clones — probe availability and skip.
+(d) Don't run two disk-heavy jobs (xcodebuild + model downloads)
+concurrently — a disk-full killed two agents on 2026-06-10.
 
-**`MARKETING_VERSION` stays 0.2.2** (no new user-visible surface shipped to
-TestFlight yet — this PR targets review + merge, then a TestFlight build).
+**Waiting on Noah:** PR #13 device eyeball; PR #15 legal read + privacy-
+policy hosting (tailspot.app owned, on Namecheap); PostHog key; a field
+session (covers three gates: backend A/B for WP 1.8 cutover, visual-confirm
+verdict, detection go/no-go recording). **Then:** WP 1.8 cutover (delete
+baked OpenSky creds + rotate + warn testers + `MARKETING_VERSION` 0.5.0).
+**Next engineering:** UX polish pass (Settings flagged by Noah — handle
+field needs a real Save affordance), card style spike (Stage 2b, needs
+Noah's sign-off by design), AR analytics events after #13.
 
-**Next up:** WP 1.4b FAA typecode enrichment (pre-cutover requirement —
-see PLAN §9), then WP 1.8 cutover + OpenSky secret rotation (warn testers
-first), WP 1.9 Fly.io deploy runbook (needs Noah's account/hostname).
-Camera half of the visual-confirmation spike (`feat/visual-confirmation-spike`)
-is parked until the cutover sequence completes.
+**Tests: iOS 379+ on `main`, backend 164+, all green.**
 
 ## Working model
 
