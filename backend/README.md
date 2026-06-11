@@ -163,11 +163,14 @@ is an argument so a deploy can mount it.
 ### FAA Releasable Aircraft Database
 
 ```sh
-# 1. Download + unzip (manual / cron — NOT done by the test suite):
-curl -L -A "tailspot-faa-registry/1.0" -o ReleasableAircraft.zip \
+# 1. Download + unzip (manual / cron — NOT done by the test suite).
+#    IMPORTANT: the FAA's Akamai front 403s curl's DEFAULT User-Agent. Pass a
+#    browser UA so the GET returns HTTP 200 with a valid ZIP body:
+curl -L -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" \
+  -o ReleasableAircraft.zip \
   https://registry.faa.gov/database/ReleasableAircraft.zip
 unzip ReleasableAircraft.zip -d faa/           # → faa/MASTER.txt, faa/ACFTREF.txt (~250 MB unzipped)
-# 2. Stream-parse + upsert:
+# 2. Stream-parse + enrich + upsert:
 DATABASE_URL=… npm run ingest:faa -- ./faa            # full registry
 DATABASE_URL=… npm run ingest:faa -- ./faa --limit 1000   # smoke test
 ```
@@ -176,12 +179,52 @@ The importer **streams** `MASTER.txt` line-by-line (the files are large) joined
 against `ACFTREF.txt` (manufacturer/model), keyed by `MODE S CODE HEX` → lowercase
 `icao24`. US tails only, by construction.
 
-> **Download URL status (verified 2026-06-10):** `GET` works (HTTP 206 on a ranged
-> request; body is a valid ZIP). A bare `HEAD` returns 503 from Akamai — that's a
-> HEAD-method quirk, not an outage; use `GET` (curl downloads fine). If a future
-> scripted `GET` 403s, download the zip manually from the FAA registry site and
-> point `ingest:faa` at the extracted directory — the parser doesn't care how the
-> files arrived.
+**Typecode enrichment (WP 1.4b).** Each row's `MFR MDL CODE` is looked up in the
+committed `data/faa-typecode-map.json` to attach an ICAO type designator
+(`registry.typecode`), so `/v1/metadata/{icao24}` can merge in DOC 8643's clean
+names + rarity (`source: "merged"`). A code with no mapping leaves `typecode` null
+(`source: "faa"`, raw FAA names). The lookup is a flat Map read at runtime — no
+fuzzy matching on the hot path. See **Rebuilding the typecode map** below.
+
+> **Download UA requirement (verified 2026-06-10):** a `GET` with curl's default
+> User-Agent **403s** at the Akamai edge; a browser UA (`Mozilla/5.0 …`) returns
+> HTTP 200 with a valid ZIP. A bare `HEAD` returns 503 (a HEAD-method quirk, not
+> an outage). If a scripted `GET` still 403s, download the zip manually from the
+> FAA registry site and point `ingest:faa` at the extracted directory — the parser
+> doesn't care how the files arrived.
+
+### Rebuilding the typecode map (`data/faa-typecode-map.json`)
+
+The committed map (`MFR MDL CODE` → ICAO designator) is built **offline** by a
+reproducible Python script; the ingest reads it at runtime. Regenerate it when
+the FAA registry or `AircraftTypes.json` changes:
+
+```sh
+# Download the FAA data with a browser UA (same Akamai requirement as above):
+curl -L -A "Mozilla/5.0 ... Chrome/120.0 Safari/537.36" \
+  -o /tmp/ReleasableAircraft.zip https://registry.faa.gov/database/ReleasableAircraft.zip
+unzip /tmp/ReleasableAircraft.zip -d /tmp/faa/
+python3 tools/build-typecode-map.py \
+  --acftref /tmp/faa/ACFTREF.txt \
+  --master  /tmp/faa/MASTER.txt \
+  --out     data/faa-typecode-map.json
+```
+
+**Three-pass mapping strategy** (documented precedence; first hit wins):
+1. **Family rules** — a curated `(canonical-make, model-prefix) → designator`
+   table where the tail mass lives (Cessna 172\*, Piper PA-28\*, Beech 36\* …,
+   each grounded in a DOC 8643 ModelFullName).
+2. **Aircraft-characteristics xlsx join** — normalized FAA-naming join against
+   `tools/data/faa_aircraft_characteristics.xlsx` (carries the ICAO designator).
+3. **DOC 8643 normalized join** — `(make, model)` against `AircraftTypes.json`.
+4. **Overrides** — a small per-code hand table for high-tail misses.
+
+The script **validates** every emitted designator is a key in
+`AircraftTypes.json` and runs ≥20 known-pair spot-checks (fails the build on a
+mismatch), then reports **code-weighted and tail-weighted coverage** (the
+MASTER.txt download is only needed for the tail-weighted number — omit `--master`
+to skip it). `MASTER.txt`/`ACFTREF.txt` are **never committed**; only the
+generated map is.
 
 ## Tests
 

@@ -12,8 +12,8 @@
     "lint": "biome check src test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "ingest:doc8643": "node --experimental-strip-types src/ingest/doc8643.ts",
-    "ingest:faa": "node --experimental-strip-types src/ingest/faa.ts"
+    "ingest:doc8643": "npm run build && node dist/ingest/doc8643.js",
+    "ingest:faa": "npm run build && node dist/ingest/faa.js"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
