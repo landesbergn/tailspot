@@ -116,8 +116,11 @@ struct AnalyticsValueTests {
 
 // MARK: - No-op when keyless
 
-@Suite("Analytics no-op when keyless")
-struct AnalyticsKeylessTests {
+/// The ONLY suite allowed to touch Analytics._testQueue. It is process-
+/// global, so every writer must live here, and the suite is .serialized —
+/// two CI flakes (2026-06-11) came from parallel suites racing this global.
+@Suite("Analytics global queue path", .serialized)
+struct AnalyticsGlobalQueuePathTests {
     // When no _testQueue is installed and the bundle has no PostHogAPIKey,
     // capture() should be completely silent. We verify indirectly: a fresh
     // FakeTransport receives zero calls.
@@ -138,6 +141,26 @@ struct AnalyticsKeylessTests {
         // flush also returns immediately with no error when both queues are nil.
         await Analytics.flush()
         // No assertion needed — absence of crash + hang IS the test.
+    }
+
+    /// Verify that Analytics.capture() + Analytics.flush() also work end-to-end
+    /// (the real public API path, used sparingly to avoid global-state races).
+    @Test func endToEndCaptureAndFlush() async throws {
+        let transport = FakeTransport()
+        let q = Analytics.makeTestQueue(transport: transport)
+        // Install then immediately remove the test queue after we're done.
+        Analytics._testQueue = q
+        // Capture fires a Task that enqueues. We flush() which serialises with
+        // that task via the actor (both are actor-isolated to q).
+        Analytics.capture("e2e_event", ["val": .int(42)])
+        await Analytics.flush() // drains the queue and any pending tasks
+        Analytics._testQueue = nil
+
+        let events = await transport.allEvents()
+        // The event may or may not have arrived depending on Task scheduling;
+        // all we can reliably assert is zero crashes and the transport is ready.
+        // For a stronger assertion, use the direct-enqueue pattern above.
+        #expect(events.count >= 0) // always true — confirms no crash/throw
     }
 }
 
@@ -273,25 +296,6 @@ struct AnalyticsBatchingTests {
         #expect(decoded?["api_key"] as? String == "test-key")
     }
 
-    /// Verify that Analytics.capture() + Analytics.flush() also work end-to-end
-    /// (the real public API path, used sparingly to avoid global-state races).
-    @Test func endToEndCaptureAndFlush() async throws {
-        let transport = FakeTransport()
-        let q = Analytics.makeTestQueue(transport: transport)
-        // Install then immediately remove the test queue after we're done.
-        Analytics._testQueue = q
-        // Capture fires a Task that enqueues. We flush() which serialises with
-        // that task via the actor (both are actor-isolated to q).
-        Analytics.capture("e2e_event", ["val": .int(42)])
-        await Analytics.flush() // drains the queue and any pending tasks
-        Analytics._testQueue = nil
-
-        let events = await transport.allEvents()
-        // The event may or may not have arrived depending on Task scheduling;
-        // all we can reliably assert is zero crashes and the transport is ready.
-        // For a stronger assertion, use the direct-enqueue pattern above.
-        #expect(events.count >= 0) // always true — confirms no crash/throw
-    }
 }
 
 // MARK: - Queue cap semantics
@@ -344,15 +348,13 @@ struct AnalyticsRetryTests {
         let transport = FakeTransport()
         await transport.setFailing(true)
 
+        // Flush the queue DIRECTLY — Analytics._testQueue is process-global
+        // and races under Swift Testing's parallel suites (CI 2026-06-11).
         let q = Analytics.makeTestQueue(transport: transport)
-        Analytics._testQueue = q
-        defer { Analytics._testQueue = nil }
-
-        // Enqueue directly via the queue actor to avoid the async Task race.
         await q.enqueue(event: "retry_test", distinctId: "d1", properties: [:])
 
         // shouldFail is true for both attempts — original + 1 retry.
-        await Analytics.flush()
+        await q.flush()
 
         let count = await transport.callCount
         // Should have tried exactly twice (original + 1 retry), then dropped.
@@ -363,17 +365,14 @@ struct AnalyticsRetryTests {
         let transport = FakeTransport()
         await transport.setFailing(true)
 
+        // Direct queue use — no process-global injection (see above).
         let q = Analytics.makeTestQueue(transport: transport)
-        Analytics._testQueue = q
-        defer { Analytics._testQueue = nil }
-
-        // Enqueue directly to avoid the async Task race.
         await q.enqueue(event: "drop_test", distinctId: "d1", properties: [:])
-        await Analytics.flush()
+        await q.flush()
 
         // Verify nothing is re-queued — a second flush sends nothing.
         await transport.setFailing(false)
-        await Analytics.flush()
+        await q.flush()
 
         // Total call count: 2 (original + 1 retry on first flush), 0 on second.
         let count = await transport.callCount
