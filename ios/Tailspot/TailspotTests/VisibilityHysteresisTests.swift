@@ -16,8 +16,12 @@ import Foundation
 @Suite("Visibility hysteresis")
 struct VisibilityHysteresisTests {
 
-    /// An ObservedAircraft at a given slant. Elevation 35° (≥ the 30° full-
-    /// visibility plateau) so the cap is exactly `maxVisibleDistanceMeters`.
+    /// An ObservedAircraft at a given slant. Elevation EXACTLY 30° — the
+    /// joint of the haze ramp and the 2026-06-11 contrail segment — where
+    /// the cap is exactly `maxVisibleDistanceMeters` under both curve
+    /// halves. (35° used to sit on a flat plateau; the contrail segment
+    /// made the cap grow past 30°, so these hysteresis fixtures anchor to
+    /// the one elevation whose cap is pinned.)
     /// Non-N callsign so the small-airframe half-cap doesn't apply.
     private func obs(slant: Double, callsign: String = "UAL123", icao: String = "abc123") -> ObservedAircraft {
         let a = Aircraft(
@@ -26,7 +30,7 @@ struct VisibilityHysteresisTests {
             velocityMps: 200, trackDeg: 90, onGround: false, positionTimestamp: nil
         )
         return ObservedAircraft(
-            aircraft: a, bearingDeg: 0, elevationDeg: 35,
+            aircraft: a, bearingDeg: 0, elevationDeg: 30,
             groundDistanceMeters: slant, slantDistanceMeters: slant
         )
     }

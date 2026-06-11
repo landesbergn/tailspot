@@ -197,17 +197,40 @@ extension ObservedAircraft {
     /// elevation tested (6.3 km @ 4°, 8.1 km @ 12°, 11 km @ 17.4°,
     /// 33 km @ 10.8°). The current constants separate that data 19/19.
     /// Naked-eye spotting is a single-digit-km activity; the 13 km
-    /// plateau above 30° exists only for near-overhead cruise traffic
-    /// (contrails), which no ghost observation contradicts. If a
-    /// contrail day shows real pruning, raise the plateau — distant-
-    /// airframe visibility has so far been intuition, never observation.
+    /// band above 30° exists for near-overhead cruise traffic
+    /// (contrails), which no ghost observation contradicts.
+    ///
+    /// CONTRAIL SEGMENT added 2026-06-11: the predicted contrail pruning
+    /// happened. Field datum (replay-2026-06-11T161754Z + photo, clear
+    /// coastal sky at Sea Ranch): ANA179 at 12.1 km altitude, slant
+    /// 19.2 km, elevation 39.1° — clearly visible by contrail, bearing/
+    /// elevation matching the camera within a few degrees, pruned by the
+    /// old 13 km plateau. A contrail against clear sky reads far beyond
+    /// the airframe itself. The curve now keeps the haze-bounded ramp
+    /// unchanged below 30° (all Berkeley ghost observations live there)
+    /// and adds a second ramp 13 km @ 30° → 25 km @ 45°, flat beyond.
+    /// ANA179 (39.1°) passes at 20.3 km allowed vs 19.2 km actual.
     static func maxVisibleDistance(forElevationDeg elevationDeg: Double) -> Double {
-        if elevationDeg >= fullVisibilityElevationDeg { return maxVisibleDistanceMeters }
+        if elevationDeg >= contrailVisibilityElevationDeg { return contrailVisibleDistanceMeters }
+        if elevationDeg >= fullVisibilityElevationDeg {
+            let f = (elevationDeg - fullVisibilityElevationDeg)
+                / (contrailVisibilityElevationDeg - fullVisibilityElevationDeg)
+            return maxVisibleDistanceMeters
+                + f * (contrailVisibleDistanceMeters - maxVisibleDistanceMeters)
+        }
         let f = (elevationDeg - minVisibleElevationDeg)
             / (fullVisibilityElevationDeg - minVisibleElevationDeg)
         return nearVisibleDistanceMeters
             + max(0, f) * (maxVisibleDistanceMeters - nearVisibleDistanceMeters)
     }
+
+    /// Elevation at which the contrail ceiling fully applies, and that
+    /// ceiling. High-elevation cruise traffic dragging a contrail reads
+    /// far beyond airframe visibility; 25 km covers transpacific cruise
+    /// passing well off-track. Tunable — grounded in the 2026-06-11
+    /// ANA179 observation above.
+    static let contrailVisibilityElevationDeg: Double = 45
+    static let contrailVisibleDistanceMeters: Double = 25_000
 
     /// Distance allowed right at the elevation floor (1°). Lowered
     /// 12 → 4.5 km on 2026-06-06: a 381 m-altitude medevac helicopter at
