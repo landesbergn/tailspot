@@ -47,6 +47,18 @@ final class CameraCaptureBridge {
     }
 }
 
+/// Mailbox for the visual-confirmation frame tap (same one-function-class
+/// pattern as CameraCaptureBridge). The handler is invoked on the camera's
+/// VIDEO queue at the tap's throttled rate — never on main. `nonisolated(unsafe)`
+/// because the property is written once during view wiring (main) before
+/// frames flow and only read afterwards (camera queue); the temporal
+/// ordering makes the unguarded access safe, documented here rather than
+/// paying for a lock on the per-frame hot path.
+@MainActor
+final class CameraFrameBridge {
+    nonisolated(unsafe) var frameHandler: (@Sendable (CVPixelBuffer) -> Void)?
+}
+
 struct CameraPreview: UIViewRepresentable {
     /// Current zoom factor. ContentView owns the state; PreviewView
     /// no-ops if the value hasn't changed since the last apply (see
@@ -59,6 +71,10 @@ struct CameraPreview: UIViewRepresentable {
     /// a still photo. nil = ContentView doesn't need captures.
     var captureBridge: CameraCaptureBridge?
 
+    /// Optional bridge for the visual-confirmation frame tap. nil = no
+    /// video-frame delivery (the output isn't even added to the session).
+    var frameBridge: CameraFrameBridge?
+
     /// Supported zoom range. Wide-camera digital zoom past ~5× shows
     /// mostly compression noise for the distances we care about.
     static let zoomRange: ClosedRange<CGFloat> = 1.0...5.0
@@ -66,6 +82,10 @@ struct CameraPreview: UIViewRepresentable {
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.backgroundColor = .black
+        if let bridge = frameBridge {
+            view.bridgeFrames(to: bridge)   // before startSession so the
+                                            // output joins the one config pass
+        }
         view.startSession()
         if let bridge = captureBridge {
             view.bridgeCapture(to: bridge)
@@ -95,6 +115,12 @@ final class PreviewView: UIView {
     /// Hold capture delegates alive until each AVCapture invocation
     /// finishes. AVCapturePhotoOutput uses a weak delegate reference.
     private var pendingCaptureDelegates: [PhotoCaptureDelegate] = []
+    /// Visual-confirmation frame tap. Created in bridgeFrames(to:) BEFORE
+    /// startSession so the video output is added during the single
+    /// beginConfiguration pass; nil when no frameBridge was supplied.
+    private var frameTap: FrameTapDelegate?
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let videoQueue = DispatchQueue(label: "tailspot.camera.video")
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     private var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
@@ -104,7 +130,7 @@ final class PreviewView: UIView {
         previewLayer.videoGravity = .resizeAspectFill
 
         // Configuration + start are slow; do them off the main thread.
-        sessionQueue.async { [session, photoOutput] in
+        sessionQueue.async { [session, photoOutput, frameTap, videoOutput, videoQueue] in
             session.beginConfiguration()
             session.sessionPreset = .high
 
@@ -123,6 +149,22 @@ final class PreviewView: UIView {
                 session.addOutput(photoOutput)
             }
 
+            // Visual-confirmation frame tap: only when a bridge was wired.
+            if let frameTap, session.canAddOutput(videoOutput) {
+                videoOutput.videoSettings =
+                    [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+                videoOutput.alwaysDiscardsLateVideoFrames = true
+                videoOutput.setSampleBufferDelegate(frameTap, queue: videoQueue)
+                session.addOutput(videoOutput)
+                // Buffers arrive sensor-landscape by default; rotate to
+                // portrait so frame pixels line up with the aspect-fill
+                // preview (and therefore with AspectFillTransform's math).
+                if let conn = videoOutput.connection(with: .video),
+                   conn.isVideoRotationAngleSupported(90) {
+                    conn.videoRotationAngle = 90
+                }
+            }
+
             session.commitConfiguration()
 
             // Capture the device for later zoom updates. Read once on
@@ -138,6 +180,44 @@ final class PreviewView: UIView {
     func bridgeCapture(to bridge: CameraCaptureBridge) {
         bridge.captureFunction = { [weak self] completion in
             self?.capturePhoto(completion: completion)
+        }
+    }
+
+    /// Wire the visual-confirmation frame tap. MUST be called before
+    /// `startSession()` (CameraPreview.makeUIView does) so the video
+    /// output is added during the single configuration pass.
+    func bridgeFrames(to bridge: CameraFrameBridge) {
+        frameTap = FrameTapDelegate(bridge: bridge)
+    }
+
+    /// Forwards throttled video frames to the CameraFrameBridge handler.
+    /// `nonisolated` for the same Xcode-26 default-isolation reason as
+    /// PhotoCaptureDelegate — AVFoundation calls this on `videoQueue`.
+    private final nonisolated class FrameTapDelegate: NSObject,
+        AVCaptureVideoDataOutputSampleBufferDelegate {
+
+        /// Minimum spacing between delivered frames. The detector budget
+        /// is ~8 fps (SWIFT-DESIGN.md); the camera produces 30–60.
+        private static let minInterval: CFTimeInterval = 1.0 / 8.0
+
+        private let bridge: CameraFrameBridge
+        // Only ever touched on videoQueue (serial), so plain var is safe.
+        nonisolated(unsafe) private var lastDelivery: CFTimeInterval = 0
+
+        init(bridge: CameraFrameBridge) {
+            self.bridge = bridge
+        }
+
+        func captureOutput(_ output: AVCaptureOutput,
+                           didOutput sampleBuffer: CMSampleBuffer,
+                           from connection: AVCaptureConnection) {
+            let now = CACurrentMediaTime()
+            guard now - lastDelivery >= Self.minInterval,
+                  let handler = bridge.frameHandler,
+                  let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+            else { return }
+            lastDelivery = now
+            handler(pixelBuffer)
         }
     }
 
