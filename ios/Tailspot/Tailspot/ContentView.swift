@@ -1738,6 +1738,33 @@ struct ContentView: View {
     }
 }
 
+// MARK: - AR-overlay rarity resolution
+
+/// Resolves the rarity tier for a live AR-overlay label using the same
+/// typecode-first precedence as `Catch.resolvedRarity`:
+///
+///   1. Typecode → `AircraftNaming.rarity(forTypecode:)` from the
+///      activity-based AircraftTypes.json table.  This matches the
+///      post-catch tier so the HUD and the Hangar agree.
+///   2. String classifier fallback when no typecode is available yet
+///      (metadata not loaded, or OpenSky returned no `typecode` field).
+///
+/// Extracted as a free function so it can be unit-tested without
+/// instantiating a SwiftUI view (divergence-a fix, 2026-06-11).
+nonisolated func resolveAROverlayRarity(
+    typecode: String?,
+    manufacturer: String?,
+    model: String?,
+    operatorName: String?
+) -> Rarity {
+    if let r = AircraftNaming.rarity(forTypecode: typecode) { return r }
+    return AircraftClassifier.classify(
+        manufacturer: manufacturer,
+        model: model,
+        operatorName: operatorName
+    ).rarity
+}
+
 // MARK: - Per-plane ambient label
 
 /// Per-plane label rendered above the aircraft's projected screen
@@ -1762,7 +1789,8 @@ private struct PlaneLabel: View {
     let metadata: AircraftMetadata?
 
     var body: some View {
-        let (rarity, _) = AircraftClassifier.classify(
+        let rarity = resolveAROverlayRarity(
+            typecode: metadata?.typecode,
             manufacturer: metadata?.manufacturerName,
             model: metadata?.model,
             operatorName: metadata?.operatorName
