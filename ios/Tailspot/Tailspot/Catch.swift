@@ -78,6 +78,20 @@ final class Catch {
     /// post-save at catch time (never blocks the catch) or by the
     /// detail-view backfill.
     var placeName: String?
+    /// Stable per-device UUID for this catch, used as the server-side
+    /// idempotency key when uploading to `POST /v1/catches`. Assigned
+    /// lazily by `CatchUploader` (not at insert time) so existing rows
+    /// stay valid; once set it is never regenerated, so a retry after a
+    /// network failure replays the SAME uuid and the server dedupes.
+    /// Added WP 1.7 — optional + nil-default for lightweight migration.
+    var serverUuid: String?
+    /// When this catch was successfully accepted by the backend (fresh
+    /// insert OR server-confirmed duplicate). `nil` → still pending
+    /// upload; `CatchUploader.uploadPending` fetches exactly the nil
+    /// rows. Added WP 1.7 — optional + nil-default for lightweight
+    /// migration (every pre-WP-1.7 row is "pending" and uploads on the
+    /// next launch, which is the intended backfill behavior).
+    var uploadedAt: Date?
 
     init(
         icao24: String,

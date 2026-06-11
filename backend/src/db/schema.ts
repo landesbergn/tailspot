@@ -167,9 +167,16 @@ export const catches = pgTable(
     elevationDeg: doublePrecision("elevation_deg"),
     /** Reported heading accuracy (deg), widens the anti-cheat tolerance; null if unknown. */
     headingAccuracyDeg: doublePrecision("heading_accuracy_deg"),
-    aircraftLat: doublePrecision("aircraft_lat").notNull(),
-    aircraftLon: doublePrecision("aircraft_lon").notNull(),
-    aircraftAltitudeMeters: doublePrecision("aircraft_altitude_meters").notNull(),
+    /**
+     * Aircraft position is NULLABLE (made so in migration 0003): iOS `Catch`
+     * rows recorded before WP 1.7 never stored the aircraft's position, and they
+     * must still be backfillable to the leaderboard. A catch with a null aircraft
+     * position skips angular validation → verdict "unverifiable" but is accepted
+     * and scored normally (rarity comes from the icao24, not the position).
+     */
+    aircraftLat: doublePrecision("aircraft_lat"),
+    aircraftLon: doublePrecision("aircraft_lon"),
+    aircraftAltitudeMeters: doublePrecision("aircraft_altitude_meters"),
     /** Upstream position timestamp of the aircraft fix; null if unknown. */
     aircraftPositionTimestamp: timestamp("aircraft_position_timestamp", { withTimezone: true }),
     /** Instrumented anti-cheat verdict + reasons. Stored, never enforced. */
