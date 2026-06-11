@@ -453,9 +453,11 @@ struct OnboardingFlow: View {
             // Success — persist locally and continue.
             handle = trimmed
             handleTakenError = nil
+            Analytics.capture("handle_claimed", ["result": .string("success")])
             onFinish()
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken. Try a different handle."
+            Analytics.capture("handle_claimed", ["result": .string("taken")])
         } catch {
             // Network/auth failure — persist locally anyway and move on.
             // The handle claim can be retried from Settings later.

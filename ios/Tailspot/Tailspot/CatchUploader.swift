@@ -92,6 +92,16 @@ class CatchUploader {
                 Log.ui.info(
                     "CatchUploader: uploaded \(catchRow.icao24, privacy: .public) pts=\(response.points, privacy: .public) dup=\(response.duplicate, privacy: .public)"
                 )
+                // Analytics: record the successful upload. Rarity comes from
+                // the server response when present (authoritative); falls back
+                // to the local resolved value. No location — only aggregate
+                // gameplay data.
+                let rarityString = response.rarity ?? catchRow.resolvedRarity.rawValue
+                Analytics.capture("catch_uploaded", [
+                    "rarity":    .string(rarityString),
+                    "points":    .int(response.points),
+                    "duplicate": .bool(response.duplicate),
+                ])
             } catch {
                 // Non-fatal: leave pending for the next foreground transition.
                 Log.ui.error(

@@ -69,6 +69,17 @@ struct LeaderboardScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { if case .idle = loadState { await load() } }
+        .onAppear {
+            // leaderboard_viewed fires each time the screen becomes visible.
+            // entry_count is 0 until load() completes — this is intentional:
+            // we want to know how many times the user opens the screen, not just
+            // after data arrives. has_handle distinguishes identified vs. anonymous.
+            let hasHandle = localHandle != SpotterHandle.defaultPlaceholder && !localHandle.isEmpty
+            Analytics.capture("leaderboard_viewed", [
+                "entry_count": .int(entries.count),
+                "has_handle":  .bool(hasHandle),
+            ])
+        }
     }
 
     // MARK: - Load
