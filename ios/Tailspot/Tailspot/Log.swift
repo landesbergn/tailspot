@@ -25,9 +25,13 @@ import os
 /// outside MainActor. `Logger` itself is `Sendable`, so exposing the
 /// statics across actors is safe.
 nonisolated enum Log {
-    static let openSky  = Logger(subsystem: "com.landesberg.tailspot", category: "openSky")
-    static let adsb     = Logger(subsystem: "com.landesberg.tailspot", category: "adsb")
-    static let location = Logger(subsystem: "com.landesberg.tailspot", category: "location")
-    static let motion   = Logger(subsystem: "com.landesberg.tailspot", category: "motion")
-    static let ui       = Logger(subsystem: "com.landesberg.tailspot", category: "ui")
+    static let openSky    = Logger(subsystem: "com.landesberg.tailspot", category: "openSky")
+    static let adsb       = Logger(subsystem: "com.landesberg.tailspot", category: "adsb")
+    static let location   = Logger(subsystem: "com.landesberg.tailspot", category: "location")
+    static let motion     = Logger(subsystem: "com.landesberg.tailspot", category: "motion")
+    static let ui         = Logger(subsystem: "com.landesberg.tailspot", category: "ui")
+    /// Analytics client lifecycle, flush summaries, and drop warnings.
+    static let analytics  = Logger(subsystem: "com.landesberg.tailspot", category: "analytics")
+    /// MetricKit payload receipt: crash counts, hang rate, peak memory.
+    static let metrics    = Logger(subsystem: "com.landesberg.tailspot", category: "metrics")
 }

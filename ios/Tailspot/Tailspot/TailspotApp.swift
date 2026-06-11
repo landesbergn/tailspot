@@ -33,6 +33,9 @@ struct TailspotApp: App {
         } catch {
             fatalError("Failed to create ModelContainer for Catch: \(error)")
         }
+        // Register MetricKit subscriber once at launch. The subscriber
+        // lives as a singleton so MetricKit retains the weak reference correctly.
+        MetricsSubscriber.shared.register()
     }
 
     var body: some Scene {
@@ -52,6 +55,16 @@ struct TailspotApp: App {
                 // on the next foreground transition.
                 let ctx = container.mainContext
                 Task { await uploader.uploadPending(context: ctx) }
+
+                // app_opened fires on every foreground activation (cold launch
+                // and background→foreground). Version + build let us correlate
+                // events to the exact binary.
+                let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+                let build   = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+                Analytics.capture("app_opened", [
+                    "app_version": .string(version),
+                    "app_build":   .string(build),
+                ])
             }
         }
     }

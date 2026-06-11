@@ -116,8 +116,10 @@ struct SettingsScreen: View {
             try await accountClient.claimHandle(trimmed)
             handle = trimmed
             handleTakenError = nil
+            Analytics.capture("handle_claimed", ["result": .string("success")])
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken"
+            Analytics.capture("handle_claimed", ["result": .string("taken")])
         } catch {
             Log.ui.error("Settings: handle claim failed (non-fatal): \(error, privacy: .public)")
             handle = trimmed
