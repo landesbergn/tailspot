@@ -1297,6 +1297,7 @@ struct ContentView: View {
                     .foregroundStyle(isHeadingAccuracyBad ? Brand.Color.alertCaution : Brand.Color.textPrimary)
                 Text(formatAttitude())
                 adsbStatusRow
+                backendSourceRow
                 recordingRow
                 analyzeRow
                 if !cameraAuthorized {
@@ -1494,10 +1495,10 @@ struct ContentView: View {
     private var adsbStatusRow: some View {
         HStack(spacing: 8) {
             Text(formatADSBStatus())
-            Text(adsb.useMock ? "[MOCK]" : "[LIVE]")
+            Text(adsb.useMock ? "[MOCK]" : (adsb.useBackend ? "[TSPOT]" : "[LIVE]"))
                 .foregroundStyle(adsb.useMock ? Brand.Color.alertCaution : Brand.Color.alertNormal)
                 .bold()
-            if !adsb.useMock {
+            if !adsb.useMock && !adsb.useBackend {
                 Text(adsb.liveSourceIsAuthed ? "[AUTH]" : "[ANON]")
                     .foregroundStyle(adsb.liveSourceIsAuthed
                                      ? Brand.Color.alertNormal
@@ -1509,6 +1510,25 @@ struct ContentView: View {
         .contentShape(.rect)        // make the whole row hit-testable
         .onTapGesture {
             adsb.useMock.toggle()
+        }
+    }
+
+    /// Tap-to-toggle row for the backend-proxy field validation (WP 1.8
+    /// pre-cutover): OPENSKY = device-direct (today's default), TAILSPOT =
+    /// api.tailspot.app (adsb.lol data — MLAT included, so expect MORE
+    /// aircraft: GA props and helicopters that OpenSky free tier never
+    /// shows). Persisted across launches; ignored while MOCK is on.
+    private var backendSourceRow: some View {
+        HStack(spacing: 8) {
+            Text("Source:")
+            Text(adsb.useBackend ? "[TAILSPOT API]" : "[OPENSKY]")
+                .foregroundStyle(adsb.useBackend ? Brand.Color.cyan : Brand.Color.alertNormal)
+                .bold()
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture {
+            adsb.useBackend.toggle()
         }
     }
 
