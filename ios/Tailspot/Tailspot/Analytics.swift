@@ -302,13 +302,16 @@ nonisolated enum Analytics {
     /// stores under "tailspot.account.deviceId". If absent (first-ever launch
     /// before any registration), we generate-and-store under that exact key
     /// so all callers share the same UUID.
-    static func distinctId() -> String {
-        if let existing = UserDefaults.standard.string(forKey: deviceIdKey),
+    /// `defaults` is injectable so tests can use an isolated suite —
+    /// Swift Testing runs suites in PARALLEL, and several suites touching
+    /// the one real standard-defaults key raced on CI (2026-06-11).
+    static func distinctId(defaults: UserDefaults = .standard) -> String {
+        if let existing = defaults.string(forKey: deviceIdKey),
            !existing.isEmpty {
             return existing
         }
         let generated = UUID().uuidString
-        UserDefaults.standard.set(generated, forKey: deviceIdKey)
+        defaults.set(generated, forKey: deviceIdKey)
         return generated
     }
 

@@ -389,52 +389,34 @@ struct AnalyticsRetryTests {
 
 @Suite("Analytics distinct_id reuse")
 struct AnalyticsDistinctIdTests {
+    /// Each test gets its OWN UserDefaults suite: Swift Testing runs
+    /// suites in parallel and the standard defaults are process-global —
+    /// planting values there raced with other suites on CI (2026-06-11).
+    private func isolatedDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "analytics-test-\(UUID().uuidString)")!
+    }
+
     private let testKey = "tailspot.account.deviceId"
-    private let savedValue: String?
-
-    init() {
-        // Save existing value so tearDown can restore it.
-        savedValue = UserDefaults.standard.string(forKey: "tailspot.account.deviceId")
-    }
-
-    private func restoreDefaults() {
-        if let saved = savedValue {
-            UserDefaults.standard.set(saved, forKey: testKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: testKey)
-        }
-    }
 
     @Test func reusesExistingDeviceId() {
-        defer { restoreDefaults() }
+        let defaults = isolatedDefaults()
         let knownId = "test-device-uuid-\(UUID().uuidString)"
-        UserDefaults.standard.set(knownId, forKey: testKey)
+        defaults.set(knownId, forKey: testKey)
 
-        let id = Analytics.distinctId()
+        let id = Analytics.distinctId(defaults: defaults)
         #expect(id == knownId)
     }
 
     @Test func generatesAndStoresIdWhenAbsent() {
-        defer { restoreDefaults() }
-        UserDefaults.standard.removeObject(forKey: testKey)
+        let defaults = isolatedDefaults()
+        defaults.removeObject(forKey: testKey)
 
-        let id = Analytics.distinctId()
+        let id = Analytics.distinctId(defaults: defaults)
         // Should be a non-empty UUID string.
         #expect(!id.isEmpty)
         // Should have been stored.
-        let stored = UserDefaults.standard.string(forKey: testKey)
+        let stored = defaults.string(forKey: testKey)
         #expect(stored == id)
-    }
-
-    @Test func stableAcrossMultipleCalls() {
-        defer { restoreDefaults() }
-        UserDefaults.standard.removeObject(forKey: testKey)
-
-        let first  = Analytics.distinctId()
-        let second = Analytics.distinctId()
-        let third  = Analytics.distinctId()
-        #expect(first == second)
-        #expect(second == third)
     }
 
     @Test func matchesTailspotAccountClientKey() {
@@ -444,13 +426,12 @@ struct AnalyticsDistinctIdTests {
         //
         // TailspotAccountClient uses the private constant "tailspot.account.deviceId".
         // We hardcode the expected string here as a cross-layer contract test.
-        defer { restoreDefaults() }
-        let expectedKey = "tailspot.account.deviceId"
+        let defaults = isolatedDefaults()
         let knownId = "contract-test-\(UUID().uuidString)"
-        UserDefaults.standard.set(knownId, forKey: expectedKey)
+        defaults.set(knownId, forKey: "tailspot.account.deviceId")
 
         // Analytics reads from the same key.
-        let analyticsId = Analytics.distinctId()
+        let analyticsId = Analytics.distinctId(defaults: defaults)
         #expect(analyticsId == knownId)
     }
 }
