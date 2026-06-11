@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Tailspot</title>
+  <meta name="description" content="Tailspot privacy policy — what we collect, why, and what happens to it.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="site-nav">
+  <a class="wordmark" href="/">Tailspot</a>
+</nav>
+
+<main class="page content">
+
+  <h1>Privacy Policy</h1>
+  <div class="meta">
+    <p><strong>Operator:</strong> Noah Landesberg (sole developer)</p>
+    <p><strong>Contact:</strong> <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a></p>
+    <p><strong>Effective date:</strong> June 11, 2026</p>
+  </div>
+
+  <p>Tailspot is a free plane-spotting app. This policy explains what information the app collects, why, and what happens to it. It is written to be read, not lawyered around.</p>
+
+  <hr class="rule">
+
+  <h2>1. What Tailspot collects — and what it does not</h2>
+
+  <h3>What the app collects</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>What</th>
+        <th>Why</th>
+        <th>Where it goes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Anonymous device ID</strong></td>
+        <td>Ties your catches and leaderboard score to your device without requiring an account or email address. Generated on first launch; never tied to your name or any personally-identifying information.</td>
+        <td>Sent to our backend (api.tailspot.app, hosted on Fly.io in the US).</td>
+      </tr>
+      <tr>
+        <td><strong>Public handle</strong> (optional)</td>
+        <td>If you choose one, your handle appears next to your score on the leaderboard. Choosing a handle is entirely optional.</td>
+        <td>Sent to and stored on our backend.</td>
+      </tr>
+      <tr>
+        <td><strong>Catch records</strong></td>
+        <td>Each "catch" stores: the aircraft's ICAO 24-bit address (a public radio identifier), callsign, timestamp, and your GPS coordinates and compass orientation at the moment of the catch.</td>
+        <td>Sent to and stored on our backend for catch validation and your personal collection.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>What the app does NOT collect</h3>
+  <ul>
+    <li>No account, email address, or real name — ever.</li>
+    <li>Camera frames never leave your device. AR identification is done on-device against public flight data; no images are uploaded.</li>
+    <li>Location is used only at the moment you make a catch. The app does not run in the background, does not track your movement over time, and does not build a location history.</li>
+    <li>No advertising identifiers (IDFA). No third-party tracking or analytics SDKs are embedded in the app.</li>
+  </ul>
+
+  <hr class="rule">
+
+  <h2>2. How we use your data</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>How it is used</th>
+        <th>What it is NOT used for</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Device ID + catches</td>
+        <td>Powering your personal collection, validating that catches are genuine (not fabricated coordinates), and computing your leaderboard score.</td>
+        <td>Advertising, profiling, sale to third parties.</td>
+      </tr>
+      <tr>
+        <td>GPS catch coordinates</td>
+        <td>Catch-validation instrumentation only. Coordinates are compared against public flight-track data to verify the plane was actually overhead.</td>
+        <td>Displayed publicly, shared with third parties, or used to build a location history.</td>
+      </tr>
+      <tr>
+        <td>Public handle</td>
+        <td>Showing your chosen display name on the leaderboard.</td>
+        <td>Anything else.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="rule">
+
+  <h2>3. Crash reports and diagnostics</h2>
+
+  <p>The app uses <strong>Apple's opt-in crash reporting</strong> (part of iOS, governed by Apple's own privacy policy). If you have opted in to share app diagnostics with developers on your device, anonymized crash data may reach us via App Store Connect. This is standard iOS behavior; we do not add any crash-reporting SDK on top of it.</p>
+
+  <h3>Product analytics (PostHog)</h3>
+
+  <p>The app sends anonymous product-usage events (for example, "app opened" or "catch uploaded") to PostHog, our analytics processor, using the same anonymous device ID described above. These events contain no name, no email, no precise location, and no advertising identifiers, and are used solely to understand how the app is used and to fix problems. PostHog is listed as a processor in §4.</p>
+
+  <hr class="rule">
+
+  <h2>4. Data sharing</h2>
+
+  <p>We do not sell your data. Full stop.</p>
+
+  <p>Data is shared with the following processors, solely to operate the app:</p>
+  <ul>
+    <li><strong>Fly.io</strong> (fly.io) — backend hosting. Our server runs on Fly.io infrastructure in the United States. Fly.io's data-processing terms apply.</li>
+    <li><strong>Apple</strong> — crash/diagnostic data if you have opted into sharing with developers (see §3 above).</li>
+    <li><strong>PostHog</strong> (posthog.com) — anonymous product analytics (see §3 above). Events are keyed to the anonymous device ID only.</li>
+  </ul>
+
+  <p>We do not share data with advertisers, data brokers, or analytics companies beyond the anonymous crash reporting noted above.</p>
+
+  <hr class="rule">
+
+  <h2>5. Data retention and deletion</h2>
+
+  <p><strong>On-device data:</strong> Your personal catch collection is stored in the app's local database (SwiftData). It lives entirely on your device. Deleting the app deletes this data permanently; we cannot recover it.</p>
+
+  <p><strong>Backend data:</strong> Your device ID, optional handle, and catch records are retained on our server for as long as your device is active on the leaderboard. If you would like your backend data deleted, email us at <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a> with the subject line "Data deletion request." We will delete your device ID, handle, and all associated catch records within 30 days and confirm by reply.</p>
+
+  <p>There is currently no in-app deletion flow for backend data. We plan to add one.</p>
+
+  <hr class="rule">
+
+  <h2>6. GDPR / EEA residents</h2>
+
+  <p>If you are in the European Economic Area, you have rights under the General Data Protection Regulation (GDPR):</p>
+  <ul>
+    <li><strong>Access:</strong> request a copy of the data we hold about your device ID.</li>
+    <li><strong>Erasure:</strong> request deletion (see §5).</li>
+    <li><strong>Portability:</strong> request your catch records in a machine-readable format.</li>
+    <li><strong>Objection:</strong> object to processing for the leaderboard (your catches will then only be stored locally on-device, not submitted to the backend).</li>
+  </ul>
+
+  <p>To exercise any of these rights, email <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a>. We will respond within 30 days.</p>
+
+  <p>Our legal basis for processing is <strong>legitimate interest</strong> (operating a game whose core mechanic requires recording catches) and, where you have provided a handle, <strong>contract performance</strong> (displaying your score under your chosen name).</p>
+
+  <hr class="rule">
+
+  <h2>7. CCPA (California residents)</h2>
+
+  <p>We do not sell personal information as defined by the California Consumer Privacy Act. California residents have the right to know what personal information we collect and to request deletion. Contact <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a> to exercise these rights.</p>
+
+  <hr class="rule">
+
+  <h2>8. Children</h2>
+
+  <p>Tailspot is rated 4+ on the App Store and is suitable for all ages. We do not knowingly collect personal information from children under 13. Because the app does not require an account or email address, no age verification is performed. If you believe a child under 13 has submitted data through the app (for example, a chosen handle), contact us at <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a> and we will delete it promptly.</p>
+
+  <hr class="rule">
+
+  <h2>9. Security</h2>
+
+  <p>Your catch data is transmitted over HTTPS. The backend stores anonymous device IDs and catch records; it does not store passwords, payment information, or government identifiers, because we never collect any of those. No system is perfectly secure; we take reasonable precautions.</p>
+
+  <hr class="rule">
+
+  <h2>10. Changes to this policy</h2>
+
+  <p>If we make a material change — for example, adding a new data type or a new third-party processor — we will update the effective date and note what changed at the top of this document. For significant changes, we will post a notice in the app or on the App Store listing.</p>
+
+  <hr class="rule">
+
+  <h2>11. Contact</h2>
+
+  <p>Questions, deletion requests, or data-access requests:</p>
+  <p><strong>Noah Landesberg</strong><br>
+  <a href="mailto:privacy@tailspot.app">privacy@tailspot.app</a></p>
+
+</main>
+
+<footer class="site-footer">
+  <span class="footer-brand">Tailspot</span>
+  <ul class="footer-links">
+    <li><a href="privacy.html">Privacy Policy</a></li>
+    <li><a href="terms.html">Terms of Service</a></li>
+    <li><a href="attributions.html">Attributions</a></li>
+  </ul>
+</footer>
+
+</body>
+</html>

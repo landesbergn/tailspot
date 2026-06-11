@@ -64,6 +64,73 @@ agents executing work packages in parallel worktrees.**
 
 **Tests: iOS 321 on `main` (350 on the spike branch); backend 152.**
 
+## Current state (as of session ending 2026-06-11 [WP 1.7: leaderboard live, account client, catch upload pipeline — PR #16 open])
+
+**WP 1.7 is complete on branch `feat/leaderboard-live` (PR #16, awaiting
+security review + merge). Prior agent crashes left uncommitted work in the
+worktree; this session verified, committed, and extended it.**
+
+1. **Backend Part 1 (verified + committed):** `POST /v1/catches` now accepts
+   `aircraft: null` for pre-WP-1.7 iOS catches that never recorded the
+   aircraft position. Migration `0003_sticky_spyke.sql` drops `NOT NULL` from
+   `aircraft_lat/lon/altitude_meters`. Verdict is `"unverifiable"` but catch
+   is scored normally from icao24. `Catch.swift` gains optional `serverUuid` +
+   `uploadedAt` (additive, lightweight migration). **164 backend tests green.**
+
+2. **iOS Part 2 — `TailspotAccountClient.swift`:** `nonisolated struct`
+   mirroring `TailspotBackendClient` conventions. `ensureRegistered()` →
+   `POST /v1/devices`, token to **Keychain** via `KeychainStore`
+   (`kSecClassGenericPassword`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`),
+   deviceId to UserDefaults. `claimHandle()` → `PUT /v1/devices/me/handle`,
+   409 → typed `AccountError.handleTaken`. `uploadCatch()` → `POST /v1/catches`
+   with `aircraft: null`. `leaderboard()` → `GET /v1/leaderboard`, bearer when
+   available. Base URL injectable for tests.
+
+3. **iOS Part 3 — `CatchUploader.swift`:** `@MainActor` class,
+   `uploadPending(context:)` fetches `uploadedAt == nil` rows, assigns
+   `serverUuid` lazily (once set, never regenerated — same UUID retries
+   for server-side dedup), uploads sequentially; failure leaves row pending.
+   `TailspotApp` hooks `scenePhase → .active` to fire it on every foreground
+   transition. Per-catch immediate upload is a PLAN §9 follow-up.
+
+4. **iOS Part 4 — UI:** `LeaderboardScreen` → live data (loading / error /
+   empty states, pull-to-refresh, podium for top 3, highlighted "me" row
+   works handle-less with a "claim a handle" hint), `ComingSoonBanner` removed.
+   `PublicHangarScreen` + its `NavigationLink` removed (backend not ready).
+   `NotificationsScreen` → one honest "coming after launch" info section; 9
+   fake `@AppStorage` toggles removed. Onboarding step 3 and Settings handle
+   field both call `claimHandle` on the backend; 409 → inline "taken" error;
+   non-fatal network failures persist locally and continue.
+
+5. **iOS Part 5 — tests:** 28 new Swift Testing tests. `KeychainStoreTests`
+   (save/load/overwrite/delete/multi-account isolation). DTO decode fixtures
+   for `UploadCatchResponse` (fresh + duplicate), `LeaderboardEntry`,
+   `LeaderboardResponse` (with/without me, empty), `UploadCatchRequest`
+   encoding (aircraft key present as JSON null). `CatchUploaderTests` via
+   injected `FakeUploadClient` (success/failure/duplicate/partial/registration-
+   abort/uuid-stability). `CatchMigrationAdditivityTests` (new fields nil by
+   default, round-trip persists). **349 iOS tests, 0 failures** (was 321).
+   **164 backend tests, 0 failures** (unchanged).
+
+**Security review required before merge (noted in PR #16):** verify
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` is correct for an
+anonymous per-device credential (it is: survives restarts, doesn't migrate
+to new devices via iCloud Keychain backup), and that bearer tokens only
+travel over HTTPS (the default base URL is `https://api.tailspot.app`).
+
+**Known gap carried from prior agent work:** `SettingsScreen.saveHandle()`
+is called on `onSubmit` (Return key). A "Save" button or debounce would be
+friendlier UX — this is a PLAN §9 polish item.
+
+**`MARKETING_VERSION` stays 0.2.2** (no new user-visible surface shipped to
+TestFlight yet — this PR targets review + merge, then a TestFlight build).
+
+**Next up:** WP 1.4b FAA typecode enrichment (pre-cutover requirement —
+see PLAN §9), then WP 1.8 cutover + OpenSky secret rotation (warn testers
+first), WP 1.9 Fly.io deploy runbook (needs Noah's account/hostname).
+Camera half of the visual-confirmation spike (`feat/visual-confirmation-spike`)
+is parked until the cutover sequence completes.
+
 ## 2026-06-09 — activity-based rarity tiering + bizjet/regional type fix
 
 **Re-tiered rarity by sky presence instead of curated spotter-interest, and
