@@ -9,30 +9,49 @@
 //
 
 import SwiftUI
+import os
 
 struct SettingsScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
     @AppStorage("tailspot.profile.public") private var publicProfile: Bool = true
     @AppStorage("tailspot.notif.rare") private var notifyRare: Bool = false
 
+    @State private var handleDraft: String = ""
+    @State private var handleTakenError: String? = nil
+    @State private var isSavingHandle = false
+    private let accountClient = TailspotAccountClient()
+
     var body: some View {
         List {
             Section {
-                HStack {
-                    Text("Handle")
-                    Spacer()
-                    Text("@")
-                        .foregroundStyle(Brand.Color.textTertiary)
-                    TextField("handle", text: $handle)
-                        .multilineTextAlignment(.trailing)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(Brand.Font.mono(size: 17))
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Handle")
+                        Spacer()
+                        Text("@")
+                            .foregroundStyle(Brand.Color.textTertiary)
+                        TextField("handle", text: $handleDraft)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .font(Brand.Font.mono(size: 17))
+                            .onChange(of: handleDraft) { _, _ in handleTakenError = nil }
+                            .onSubmit { Task { await saveHandle() } }
+                        if isSavingHandle {
+                            ProgressView().scaleEffect(0.75).tint(Brand.Color.cyan)
+                        }
+                    }
+                    if let takenMsg = handleTakenError {
+                        Label(takenMsg, systemImage: "exclamationmark.circle.fill")
+                            .font(Brand.Font.caption)
+                            .foregroundStyle(Brand.Color.alertCaution)
+                            .padding(.top, 4)
+                    }
                 }
             } header: {
                 Text("Identity")
             } footer: {
-                Text("Your handle is the only thing visible on the leaderboard and public hangar.")
+                Text("Your handle is the only thing visible on the leaderboard. Submit to claim it on the server.")
             }
 
             Section {
@@ -79,6 +98,31 @@ struct SettingsScreen: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { handleDraft = handle }
+    }
+
+    /// Send the current `handleDraft` to the backend. On success persists
+    /// locally. On 409 shows an inline "taken" error. Non-handle-taken
+    /// errors are logged and persisted locally anyway (backend claim can
+    /// be retried on next launch).
+    private func saveHandle() async {
+        let trimmed = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed == handleDraft, // already trimmed — don't re-trim mid-type
+              !trimmed.isEmpty else { return }
+        isSavingHandle = true
+        defer { isSavingHandle = false }
+        do {
+            try await accountClient.ensureRegistered()
+            try await accountClient.claimHandle(trimmed)
+            handle = trimmed
+            handleTakenError = nil
+        } catch AccountError.handleTaken {
+            handleTakenError = "@\(trimmed) is already taken"
+        } catch {
+            Log.ui.error("Settings: handle claim failed (non-fatal): \(error, privacy: .public)")
+            handle = trimmed
+            handleTakenError = nil
+        }
     }
 
     /// "Tailspot 0.1.0 (build N) · tap to copy". Tap copies the same
