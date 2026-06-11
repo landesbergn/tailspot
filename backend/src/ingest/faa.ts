@@ -23,10 +23,18 @@
  * over a fresh download cleanly overwrite. A `--limit N` flag caps the number
  * of MASTER rows processed (fast smoke tests against the real file).
  *
+ * TYPECODE ENRICHMENT (WP 1.4b): each MASTER row's "MFR MDL CODE" is looked up
+ * in the committed `backend/data/faa-typecode-map.json` (built offline by
+ * `tools/build-typecode-map.py`) to attach an ICAO type designator. A code with
+ * no mapping leaves `typecode` null (registration-only, source="faa"). The
+ * lookup is a flat Map read — deterministic, no fuzzy matching on the hot path.
+ *
  * Run as a script:  npm run ingest:faa -- <path-to-extracted-dir> [--limit N]
- * where the dir contains MASTER.txt and ACFTREF.txt. (Download + unzip is a
- * manual / cron step — see the README; this task ships only the parser + a
- * fixture-backed test, never the real download.)
+ * where the dir contains MASTER.txt and ACFTREF.txt. Download + unzip is a
+ * manual / cron step — see the README. NOTE: the FAA's Akamai front 403s curl's
+ * default User-Agent; pass a browser UA ("Mozilla/5.0 ...") for the GET to
+ * succeed. This task ships only the parser + a fixture-backed test, never the
+ * real download.
  */
 
 import { createReadStream } from "node:fs";
@@ -36,6 +44,7 @@ import type { Database } from "../db/client.js";
 import { getDb } from "../db/client.js";
 import type { RegistryInsert } from "../db/schema.js";
 import { upsertRegistry } from "./registryUpsert.js";
+import { type TypecodeMap, loadTypecodeMap } from "./typecodeMap.js";
 
 /** One ACFTREF row's contribution: manufacturer + model + FAA type codes. */
 export interface AcftRef {
@@ -99,16 +108,18 @@ export function parseAcftRef(text: string): Map<string, AcftRef> {
  * hex; rows with no hex code, or whose MFR-MDL code isn't in ACFTREF, are
  * dropped (no manufacturer/model to attach).
  *
- * `typecode` from the FAA registry is left null here: MASTER doesn't carry the
- * ICAO type designator, so the merge layer can't reach DOC 8643 from a pure FAA
- * row. (A typecode-enrichment pass — mapping MFR-MDL code → designator — is a
- * later refinement; until then these rows resolve as source="faa" with the raw
- * FAA names, which is the documented behaviour for a US tail of unknown type.)
+ * `typecode` (WP 1.4b): the MFR-MDL code is looked up in the optional
+ * `typecodeMap` (committed `faa-typecode-map.json`). A hit attaches the ICAO
+ * designator so the merge layer can reach DOC 8643's clean names + rarity; a
+ * miss leaves `typecode` null (source="faa", raw FAA names — the documented
+ * behaviour for a US tail of unknown type). Pass an empty map (or omit) to
+ * reproduce the pre-enrichment behaviour.
  */
 export function parseMaster(
   text: string,
   acftRef: Map<string, AcftRef>,
   limit?: number,
+  typecodeMap?: TypecodeMap,
 ): RegistryInsert[] {
   const lines = text.split(/\r?\n/);
   const rows: RegistryInsert[] = [];
@@ -122,7 +133,7 @@ export function parseMaster(
     const line = lines[i];
     if (line.trim() === "") continue;
     const f = splitFaaLine(line);
-    const row = masterRowToRegistry(f, hexCol, mdlCol, nCol, acftRef);
+    const row = masterRowToRegistry(f, hexCol, mdlCol, nCol, acftRef, typecodeMap);
     if (row) rows.push(row);
   }
   return rows;
@@ -135,6 +146,7 @@ function masterRowToRegistry(
   mdlCol: number,
   nCol: number,
   acftRef: Map<string, AcftRef>,
+  typecodeMap?: TypecodeMap,
 ): RegistryInsert | null {
   const hex = (f[hexCol] ?? "").trim().toLowerCase();
   if (!/^[0-9a-f]{6}$/.test(hex)) return null; // no/invalid Mode-S → drop
@@ -145,12 +157,14 @@ function masterRowToRegistry(
   // registration-only). That's more useful than dropping a known US tail.
   const nNumber = nCol !== undefined ? (f[nCol] ?? "").trim() : "";
   const registration = nNumber ? `N${nNumber}` : null;
+  // WP 1.4b: attach the ICAO designator if the model code is in the map.
+  const typecode = (code && typecodeMap?.get(code)) || null;
   return {
     icao24: hex,
     registration,
     manufacturerRaw: ref?.manufacturer || null,
     modelRaw: ref?.model || null,
-    typecode: null, // MASTER carries no ICAO designator (see parseMaster doc)
+    typecode,
     source: "faa",
   };
 }
@@ -163,10 +177,13 @@ function masterRowToRegistry(
 export async function importFaa(
   db: Database,
   dir: string,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; typecodeMap?: TypecodeMap } = {},
 ): Promise<number> {
   // ACFTREF is small enough to hold; read it whole, then stream MASTER.
   const acftRef = await streamAcftRef(join(dir, "ACFTREF.txt"));
+  // WP 1.4b: load the committed code -> designator map once (default path), or
+  // accept an injected one for tests. Misses leave typecode null.
+  const typecodeMap = opts.typecodeMap ?? loadTypecodeMap();
 
   const rl = createInterface({
     input: createReadStream(join(dir, "MASTER.txt"), { encoding: "latin1" }),
@@ -191,7 +208,7 @@ export async function importFaa(
     }
     if (line.trim() === "") continue;
     if (opts.limit !== undefined && total + batch.length >= opts.limit) break;
-    const row = masterRowToRegistry(splitFaaLine(line), hexCol, mdlCol, nCol, acftRef);
+    const row = masterRowToRegistry(splitFaaLine(line), hexCol, mdlCol, nCol, acftRef, typecodeMap);
     if (!row) continue;
     batch.push(row);
     if (batch.length >= BATCH) {

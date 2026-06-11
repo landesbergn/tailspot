@@ -125,3 +125,7 @@ tools/icon-options/
 # Same deal — the script regenerates them, the picked glyph is wired
 # into HangarGlyph.swift directly.
 tools/hangar-options/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
