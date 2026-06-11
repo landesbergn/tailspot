@@ -339,8 +339,8 @@ struct ADSBManagerTests {
     }
 
     @Test func notVisibleWhenTooFar() {
-        // Past the 13 km plateau even at high elevation.
-        let obs = Self.observed(elevationDeg: 45, slantDistanceMeters: 15_000)
+        // Past even the 25 km contrail ceiling at high elevation.
+        let obs = Self.observed(elevationDeg: 45, slantDistanceMeters: 30_000)
         #expect(!obs.isLikelyVisibleToObserver)
     }
 
@@ -445,12 +445,14 @@ struct ADSBManagerTests {
     @Test func distanceCapCurveShape() {
         // Floor: ~4.5 km right at the 1° elevation floor.
         #expect(abs(ObservedAircraft.maxVisibleDistance(forElevationDeg: 1) - 4_500) < 1)
-        // Plateau: full 13 km at and above 30°.
+        // Joint: 13 km at exactly 30° (end of the haze ramp).
         #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 30) == 13_000)
-        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 60) == 13_000)
-        // Monotonic between floor and plateau.
+        // Contrail segment (2026-06-11): grows past 30°, capped 25 km ≥ 45°.
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 45) == 25_000)
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 60) == 25_000)
+        // Monotonic across the whole curve, both segments and the joint.
         var last = 0.0
-        for e in stride(from: 1.0, through: 30.0, by: 0.5) {
+        for e in stride(from: 1.0, through: 60.0, by: 0.5) {
             let d = ObservedAircraft.maxVisibleDistance(forElevationDeg: e)
             #expect(d >= last)
             last = d
@@ -563,5 +565,44 @@ struct ADSBManagerBackendToggleTests {
         manager.useMock = true
         await manager.refresh(around: observer)
         #expect(manager.observed.map(\.aircraft.icao24) == ["0mock0"])
+    }
+}
+
+// MARK: - Contrail visibility ceiling (field datum 2026-06-11)
+
+@Suite("Visibility contrail segment")
+struct VisibilityContrailTests {
+
+    /// The Sea Ranch observation that created the segment: ANA179 at
+    /// 12.1 km altitude, slant 19.2 km, elevation 39.1°, clearly visible
+    /// by contrail (photo + replay-2026-06-11T161754Z), pruned by the old
+    /// 13 km plateau. The curve must now pass it.
+    @Test func ana179FieldDatumPasses() {
+        let allowed = ObservedAircraft.maxVisibleDistance(forElevationDeg: 39.1)
+        #expect(allowed > 19_200)
+    }
+
+    @Test func contrailPlateauCapsAt25km() {
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 45) == 25_000)
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 80) == 25_000)
+        // Even straight up, 30 km stays out — beyond any contrail datum.
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 80) < 30_000)
+    }
+
+    @Test func lowElevationCurveUnchangedByContrailSegment() {
+        // The Berkeley ghost observations all live below 30° — that part
+        // of the curve must be bit-identical to the pre-segment fit.
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 1) == 4_500)
+        #expect(ObservedAircraft.maxVisibleDistance(forElevationDeg: 30) == 13_000)
+        let at16 = ObservedAircraft.maxVisibleDistance(forElevationDeg: 16)
+        #expect(at16 > 5_800 && at16 < 13_000)   // 5.8 km @ 16° confirmed sighting fits
+        let at17 = ObservedAircraft.maxVisibleDistance(forElevationDeg: 17.4)
+        #expect(at17 < 11_000)                    // 11 km @ 17.4° confirmed ghost stays out
+    }
+
+    @Test func segmentIsContinuousAtThirtyDegrees() {
+        let below = ObservedAircraft.maxVisibleDistance(forElevationDeg: 29.999)
+        let above = ObservedAircraft.maxVisibleDistance(forElevationDeg: 30.001)
+        #expect(abs(below - above) < 50)   // no cliff at the joint
     }
 }
