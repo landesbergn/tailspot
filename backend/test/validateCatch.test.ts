@@ -93,6 +93,12 @@ describe("validateCatch", () => {
     expect(r.reasons[0]).toContain("unverifiable");
   });
 
+  it("unverifiable: null aircraft (no position recorded — backfill path)", () => {
+    const r = validateCatch(truthful, null, NOW, NOW);
+    expect(r.verdict).toBe("unverifiable");
+    expect(r.reasons).toEqual(["no aircraft position recorded"]);
+  });
+
   it("implausible: caughtAt far outside the ±10 min skew window", () => {
     const r = validateCatch(truthful, aircraft, NOW + 3600, NOW); // 1 hr off
     expect(r.verdict).toBe("implausible");

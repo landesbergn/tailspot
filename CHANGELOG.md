@@ -5,6 +5,132 @@ that file focused on the live state plus durable guidance. The live "Current
 state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
 Git history and PLAN.md §9 remain the authoritative record.
 
+## 2026-06-10 — production v1 program: backend complete, IP scrub shipped, visual-confirmation spike
+
+**The production v1 program (spec: `docs/superpowers/specs/2026-06-10-production-v1-program-design.md`)
+went from approved to substantially executed in one day. Six PRs merged to
+`main`; orchestration ran as Fable 5 designing/reviewing with Opus/Sonnet/Haiku
+agents executing work packages in parallel worktrees.**
+
+1. **Backend (Track 1) — server side COMPLETE, WP 1.1–1.5 merged.** `backend/`
+   is Node 22 + TypeScript + Fastify + Drizzle, 152 hermetic tests (PGlite —
+   in-process WASM Postgres, no Docker), own CI job (`backend-tests.yml`,
+   path-filtered). Serves: `GET /v1/aircraft` (adsb.lol primary / OpenSky
+   fallback behind a `PositionProvider` seam; 0.25° tile cache w/ single-flight
+   + last-good fallback — note the review fix: the FETCH uses the expanded tile
+   bounds, never the raw bbox); `GET /v1/metadata/{icao24}` (FAA registry +
+   DOC 8643 merge, store-injection pattern); `POST /v1/devices` + handle claim
+   + `POST /v1/catches` (server-resolved points, per-device idempotency,
+   instrumented-never-enforced `validateCatch`) + `GET /v1/leaderboard`.
+   Security review (Fable) fixed two real findings pre-merge: catchUuid
+   idempotency was globally scoped (now composite `(device_id, catch_uuid)`,
+   migration 0002) and `trustProxy` was unset (per-IP rate limit would have
+   429'd globally behind Fly's proxy). NOT deployed yet — needs Noah's Fly.io
+   account + hostname; WP 1.9 runbook still to write.
+
+2. **IP scrub (Track 3) SHIPPED.** All Pokémon trademark references removed
+   pre-beta: "POKÉDEX ENTRY"→"LOGBOOK ENTRY", "POKÉDEX-STYLE"→"SPOTTER SETS",
+   `PokeCardView`→`CatchCardView` (file renamed), `PokePlane`→`CardPlane`,
+   `PokeSet*`→`CardSet*`. 321 tests stayed green; zero `poke` grep hits.
+
+3. **Visual confirmation (Track 2 Stage 2a) — pre-camera stack done on branch
+   `feat/visual-confirmation-spike`** (NOT merged): YOLOX-Small COCO → CoreML
+   INT8 (9.2 MB, Apache-2.0-clean via the Pixeltable fork; conversion pipeline
+   + REPORT.md under `tools/visual-confirmation/`), Swift decode+NMS port
+   (`AirplaneDetectionDecoder`, 18 tests), and `VisualFixTracker` (gated
+   association + EMA-smoothed offset, 11 tests; branch suite = 350). KEY
+   FINDING: COCO-pretrained detection dies under ~15–20 px, so the design
+   (SWIFT-DESIGN.md) detects in a **640 px native-resolution crop centered on
+   the ADS-B-predicted position** — recovering the ~6× apparent size lost to
+   full-frame downscale. Remaining: camera frame tap, MLModel crop pipeline,
+   bracket wiring, replay fields + 1 Hz crop JPEGs, then Noah's field session
+   for the go/no-go.
+
+4. **Process findings (need Noah):** (a) **`main` has NO branch protection** —
+   no classic protection, no rulesets — despite CONTRIBUTING.md documenting an
+   enforced Unit-tests gate from 2026-06-09. Restoring it is a repo-settings
+   change the permission classifier blocks Claude from making; same for
+   enabling repo auto-merge. (b) One merge (PR #7) went in while its
+   final-commit checks were still registering (local verify was green; post-
+   merge CI confirmed green). (c) A disk-full incident killed two agents
+   mid-task (recovered, no loss); macOS later reclaimed purgeable space —
+   118 GB free now.
+
+5. **Pre-cutover requirement discovered in review (WP 1.4b, tracked):** the
+   FAA ingest yields NO ICAO typecode (MASTER.txt doesn't carry it), so
+   production metadata would serve raw ALL-CAPS names — a regression vs the
+   bundled-FAA path (iOS naming keys on typecode). An MFR-MDL-code → ICAO
+   designator enrichment must land before the WP 1.8 cutover.
+
+**Tests: iOS 321 on `main` (350 on the spike branch); backend 152.**
+
+## Current state (as of session ending 2026-06-11 [WP 1.7: leaderboard live, account client, catch upload pipeline — PR #16 open])
+
+**WP 1.7 is complete on branch `feat/leaderboard-live` (PR #16, awaiting
+security review + merge). Prior agent crashes left uncommitted work in the
+worktree; this session verified, committed, and extended it.**
+
+1. **Backend Part 1 (verified + committed):** `POST /v1/catches` now accepts
+   `aircraft: null` for pre-WP-1.7 iOS catches that never recorded the
+   aircraft position. Migration `0003_sticky_spyke.sql` drops `NOT NULL` from
+   `aircraft_lat/lon/altitude_meters`. Verdict is `"unverifiable"` but catch
+   is scored normally from icao24. `Catch.swift` gains optional `serverUuid` +
+   `uploadedAt` (additive, lightweight migration). **164 backend tests green.**
+
+2. **iOS Part 2 — `TailspotAccountClient.swift`:** `nonisolated struct`
+   mirroring `TailspotBackendClient` conventions. `ensureRegistered()` →
+   `POST /v1/devices`, token to **Keychain** via `KeychainStore`
+   (`kSecClassGenericPassword`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`),
+   deviceId to UserDefaults. `claimHandle()` → `PUT /v1/devices/me/handle`,
+   409 → typed `AccountError.handleTaken`. `uploadCatch()` → `POST /v1/catches`
+   with `aircraft: null`. `leaderboard()` → `GET /v1/leaderboard`, bearer when
+   available. Base URL injectable for tests.
+
+3. **iOS Part 3 — `CatchUploader.swift`:** `@MainActor` class,
+   `uploadPending(context:)` fetches `uploadedAt == nil` rows, assigns
+   `serverUuid` lazily (once set, never regenerated — same UUID retries
+   for server-side dedup), uploads sequentially; failure leaves row pending.
+   `TailspotApp` hooks `scenePhase → .active` to fire it on every foreground
+   transition. Per-catch immediate upload is a PLAN §9 follow-up.
+
+4. **iOS Part 4 — UI:** `LeaderboardScreen` → live data (loading / error /
+   empty states, pull-to-refresh, podium for top 3, highlighted "me" row
+   works handle-less with a "claim a handle" hint), `ComingSoonBanner` removed.
+   `PublicHangarScreen` + its `NavigationLink` removed (backend not ready).
+   `NotificationsScreen` → one honest "coming after launch" info section; 9
+   fake `@AppStorage` toggles removed. Onboarding step 3 and Settings handle
+   field both call `claimHandle` on the backend; 409 → inline "taken" error;
+   non-fatal network failures persist locally and continue.
+
+5. **iOS Part 5 — tests:** 28 new Swift Testing tests. `KeychainStoreTests`
+   (save/load/overwrite/delete/multi-account isolation). DTO decode fixtures
+   for `UploadCatchResponse` (fresh + duplicate), `LeaderboardEntry`,
+   `LeaderboardResponse` (with/without me, empty), `UploadCatchRequest`
+   encoding (aircraft key present as JSON null). `CatchUploaderTests` via
+   injected `FakeUploadClient` (success/failure/duplicate/partial/registration-
+   abort/uuid-stability). `CatchMigrationAdditivityTests` (new fields nil by
+   default, round-trip persists). **349 iOS tests, 0 failures** (was 321).
+   **164 backend tests, 0 failures** (unchanged).
+
+**Security review required before merge (noted in PR #16):** verify
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` is correct for an
+anonymous per-device credential (it is: survives restarts, doesn't migrate
+to new devices via iCloud Keychain backup), and that bearer tokens only
+travel over HTTPS (the default base URL is `https://api.tailspot.app`).
+
+**Known gap carried from prior agent work:** `SettingsScreen.saveHandle()`
+is called on `onSubmit` (Return key). A "Save" button or debounce would be
+friendlier UX — this is a PLAN §9 polish item.
+
+**`MARKETING_VERSION` stays 0.2.2** (no new user-visible surface shipped to
+TestFlight yet — this PR targets review + merge, then a TestFlight build).
+
+**Next up:** WP 1.4b FAA typecode enrichment (pre-cutover requirement —
+see PLAN §9), then WP 1.8 cutover + OpenSky secret rotation (warn testers
+first), WP 1.9 Fly.io deploy runbook (needs Noah's account/hostname).
+Camera half of the visual-confirmation spike (`feat/visual-confirmation-spike`)
+is parked until the cutover sequence completes.
+
 ## 2026-06-09 — activity-based rarity tiering + bizjet/regional type fix
 
 **Re-tiered rarity by sky presence instead of curated spotter-interest, and

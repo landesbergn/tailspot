@@ -28,11 +28,16 @@
 // there; OpenSkyClient treats empty Info.plist values as "no creds"
 // and falls back to anonymous mode.
 //
+// POSTHOG_API_KEY: PostHog project API key for anonymous product analytics.
+// When absent or empty, Analytics is a silent no-op (zero network).
+// See ios/Tailspot/Tailspot/Analytics.swift for the full privacy posture.
+//
 // `#include?` (with the question mark) is the optional-include
 // directive — if the file is missing, no error. The secrets file,
 // when present, gets included AFTER these defaults, so its
 // assignments override (last-wins is xcconfig precedence).
 OPENSKY_CLIENT_ID =
 OPENSKY_CLIENT_SECRET =
+POSTHOG_API_KEY =
 
 #include? "Tailspot.secrets.xcconfig"

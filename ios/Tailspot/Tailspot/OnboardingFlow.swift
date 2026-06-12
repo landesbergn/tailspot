@@ -18,6 +18,7 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import os
 
 // MARK: - Gate
 
@@ -78,8 +79,12 @@ struct OnboardingFlow: View {
     /// then creates its own LocationManager.
     @StateObject private var locationForPermissions = LocationManager()
     @State private var permissionsRequested = false
+    /// Non-nil when the backend returned 409 (handle taken) during the
+    /// last claim attempt.
+    @State private var handleTakenError: String? = nil
 
     private let totalSteps = 3
+    private let accountClient = TailspotAccountClient()
 
     /// Suggested handles offered in the handle step. Picked up at
     /// init time and stay fixed for the duration of the flow — no
@@ -247,6 +252,7 @@ struct OnboardingFlow: View {
                         .foregroundStyle(Brand.Color.textPrimary)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .onChange(of: draftHandle) { _, _ in handleTakenError = nil }
                     if !draftHandle.isEmpty {
                         availabilityPill
                     }
@@ -268,6 +274,11 @@ struct OnboardingFlow: View {
                 Text("Letters, numbers, underscores. 3–20 characters.")
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textTertiary)
+                if let takenMsg = handleTakenError {
+                    Label(takenMsg, systemImage: "exclamationmark.circle.fill")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.alertCaution)
+                }
             }
 
             // Suggestion chips.
@@ -422,8 +433,37 @@ struct OnboardingFlow: View {
         if step < totalSteps - 1 {
             withAnimation { step += 1 }
         } else {
-            // Persist handle, mark onboarding done.
-            handle = draftHandle.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Persist handle locally first — onboarding completes even if
+            // the backend claim fails. The backend call is best-effort: a
+            // 409 shows an inline error and leaves the user on the handle
+            // step so they can pick a different name.
+            let trimmed = draftHandle.trimmingCharacters(in: .whitespacesAndNewlines)
+            Task { await claimHandleIfNeeded(trimmed) }
+        }
+    }
+
+    /// Attempt to claim `trimmed` on the backend. On success (or no backend
+    /// conflict) persist locally and finish onboarding. On 409 (taken), set
+    /// `handleTakenError` so the UI shows an inline error and the user stays
+    /// on the handle step.
+    private func claimHandleIfNeeded(_ trimmed: String) async {
+        do {
+            try await accountClient.ensureRegistered()
+            try await accountClient.claimHandle(trimmed)
+            // Success — persist locally and continue.
+            handle = trimmed
+            handleTakenError = nil
+            Analytics.capture("handle_claimed", ["result": .string("success")])
+            onFinish()
+        } catch AccountError.handleTaken {
+            handleTakenError = "@\(trimmed) is already taken. Try a different handle."
+            Analytics.capture("handle_claimed", ["result": .string("taken")])
+        } catch {
+            // Network/auth failure — persist locally anyway and move on.
+            // The handle claim can be retried from Settings later.
+            Log.ui.error("Onboarding: handle claim failed (non-fatal): \(error, privacy: .public)")
+            handle = trimmed
+            handleTakenError = nil
             onFinish()
         }
     }

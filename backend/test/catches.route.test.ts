@@ -131,6 +131,43 @@ describe("POST /v1/catches", () => {
     expect(replayBody.typecode).toBe("B738");
   });
 
+  it("null aircraft: accepted, scored normally, verdict unverifiable (backfill path)", async () => {
+    // A pre-WP-1.7 iOS catch that never recorded the aircraft's position sends
+    // aircraft:null. It must succeed, score from its icao24 (B738 → rare → 100),
+    // and store an "unverifiable" verdict (no position to validate against).
+    const body = catchBody("aaaaaa", "99999999-9999-4999-8999-999999999999");
+    const nullAircraft = { ...body, aircraft: null };
+    const res = await post(nullAircraft);
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toEqual({
+      catchId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      points: 100, // rare — scored from icao24, not the (absent) position
+      rarity: "rare",
+      typecode: "B738",
+      duplicate: false,
+    });
+
+    // The stored row carries null aircraft columns + the unverifiable verdict.
+    const rows = await db
+      .select({
+        aircraftLat: catches.aircraftLat,
+        aircraftLon: catches.aircraftLon,
+        aircraftAltitudeMeters: catches.aircraftAltitudeMeters,
+        aircraftPositionTimestamp: catches.aircraftPositionTimestamp,
+        validation: catches.validation,
+      })
+      .from(catches)
+      .where(eq(catches.catchUuid, nullAircraft.catchUuid))
+      .limit(1);
+    expect(rows[0].aircraftLat).toBeNull();
+    expect(rows[0].aircraftLon).toBeNull();
+    expect(rows[0].aircraftAltitudeMeters).toBeNull();
+    expect(rows[0].aircraftPositionTimestamp).toBeNull();
+    const validation = rows[0].validation as { verdict: string; reasons: string[] };
+    expect(validation.verdict).toBe("unverifiable");
+    expect(validation.reasons).toContain("no aircraft position recorded");
+  });
+
   it("401 when the token is bad or absent", async () => {
     const noAuth = await post(catchBody("aaaaaa", "44444444-4444-4444-8444-444444444444"), "");
     expect(noAuth.statusCode).toBe(401);
@@ -152,6 +189,8 @@ describe("POST /v1/catches", () => {
         "missing aircraft altitude",
         { ...base, aircraft: { ...base.aircraft, altitudeMeters: undefined } },
       ],
+      // aircraft may be null, but a present-but-non-object value is still malformed.
+      ["aircraft is a non-object scalar", { ...base, aircraft: "nope" }],
     ];
     for (const [label, body] of cases) {
       it(`rejects ${label}`, async () => {

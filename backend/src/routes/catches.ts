@@ -100,11 +100,14 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     if (typeof observerRaw !== "object" || observerRaw === null) {
       return reply.code(422).send({ error: "observer object required" });
     }
-    if (typeof aircraftRaw !== "object" || aircraftRaw === null) {
-      return reply.code(422).send({ error: "aircraft object required" });
+    // The aircraft block is NULLABLE (the whole object may be null). iOS Catch
+    // rows recorded before WP 1.7 never stored the aircraft's position; they're
+    // backfilled with aircraft:null. A present-but-non-object aircraft is still
+    // malformed (422). Null → no angular validation, verdict "unverifiable".
+    if (aircraftRaw !== null && typeof aircraftRaw !== "object") {
+      return reply.code(422).send({ error: "aircraft must be an object or null" });
     }
     const o = observerRaw as Record<string, unknown>;
-    const a = aircraftRaw as Record<string, unknown>;
 
     const obsLat = num(o.lat, 90);
     const obsLon = num(o.lon, 180);
@@ -124,17 +127,30 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       return reply.code(422).send({ error: "observer pose angles must be numbers or null" });
     }
 
-    const acLat = num(a.lat, 90);
-    const acLon = num(a.lon, 180);
-    const acAlt = num(a.altitudeMeters);
-    if (acLat === null || acLon === null || acAlt === null) {
-      return reply
-        .code(422)
-        .send({ error: "aircraft.lat/lon/altitudeMeters must be valid numbers" });
-    }
-    const aircraftPositionTimestamp = numOrNull(a.positionTimestamp);
-    if (aircraftPositionTimestamp === undefined) {
-      return reply.code(422).send({ error: "aircraft.positionTimestamp must be a number or null" });
+    // Parse the aircraft block only when present. Null → all aircraft fields null.
+    let aircraft: AircraftPosition | null = null;
+    if (aircraftRaw !== null) {
+      const a = aircraftRaw as Record<string, unknown>;
+      const acLat = num(a.lat, 90);
+      const acLon = num(a.lon, 180);
+      const acAlt = num(a.altitudeMeters);
+      if (acLat === null || acLon === null || acAlt === null) {
+        return reply
+          .code(422)
+          .send({ error: "aircraft.lat/lon/altitudeMeters must be valid numbers" });
+      }
+      const aircraftPositionTimestamp = numOrNull(a.positionTimestamp);
+      if (aircraftPositionTimestamp === undefined) {
+        return reply
+          .code(422)
+          .send({ error: "aircraft.positionTimestamp must be a number or null" });
+      }
+      aircraft = {
+        lat: acLat,
+        lon: acLon,
+        altitudeMeters: acAlt,
+        positionTimestamp: aircraftPositionTimestamp,
+      };
     }
 
     // ── Server-side resolution (typecode → rarity → points) ─────────────────
@@ -148,12 +164,6 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       headingDeg,
       elevationDeg,
       headingAccuracyDeg,
-    };
-    const aircraft: AircraftPosition = {
-      lat: acLat,
-      lon: acLon,
-      altitudeMeters: acAlt,
-      positionTimestamp: aircraftPositionTimestamp,
     };
     const validation: ValidationResult = validateCatch(observer, aircraft, caughtAt, nowSeconds());
     // A counter for telemetry — NOT a gate. We want to know the real-world
@@ -178,11 +188,11 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       headingDeg,
       elevationDeg,
       headingAccuracyDeg,
-      aircraftLat: acLat,
-      aircraftLon: acLon,
-      aircraftAltitudeMeters: acAlt,
+      aircraftLat: aircraft?.lat ?? null,
+      aircraftLon: aircraft?.lon ?? null,
+      aircraftAltitudeMeters: aircraft?.altitudeMeters ?? null,
       aircraftPositionTimestamp:
-        aircraftPositionTimestamp === null ? null : new Date(aircraftPositionTimestamp * 1000),
+        aircraft?.positionTimestamp == null ? null : new Date(aircraft.positionTimestamp * 1000),
       validation,
     });
 

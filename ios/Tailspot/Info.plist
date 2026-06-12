@@ -87,6 +87,16 @@
 	<string>$(OPENSKY_CLIENT_SECRET)</string>
 
 	<!--
+		PostHog project API key for anonymous product analytics.
+		Same substitution pattern as the OpenSky credentials above.
+		When absent or empty, Analytics.swift is a silent no-op.
+		Value comes from POSTHOG_API_KEY in Tailspot.secrets.xcconfig
+		(gitignored; never committed).
+	-->
+	<key>PostHogAPIKey</key>
+	<string>$(POSTHOG_API_KEY)</string>
+
+	<!--
 		Bundled custom fonts. B612 Mono is open source (SIL OFL 1.1)
 		and was designed by Airbus for cockpit MFD displays — used
 		throughout the app for callsigns, ICAO codes, headings, and

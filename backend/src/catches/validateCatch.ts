@@ -121,14 +121,24 @@ export function angularDifferenceDeg(a: number, b: number): number {
 /**
  * Validate a catch. Returns the verdict + reasons; NEVER throws on bad geometry
  * (it reports it). `serverNowSeconds` is injected so tests are deterministic.
+ *
+ * `aircraft` may be null: a catch from an iOS row that never recorded the
+ * aircraft's position (pre-WP-1.7 catches being backfilled). With no position
+ * there is nothing to correlate the pose against, so the verdict is
+ * "unverifiable" — the catch is still accepted and scored from its icao24.
  */
 export function validateCatch(
   observer: ObserverPose,
-  aircraft: AircraftPosition,
+  aircraft: AircraftPosition | null,
   caughtAt: number,
   serverNowSeconds: number,
   config: ValidateConfig = DEFAULT_VALIDATE_CONFIG,
 ): ValidationResult {
+  // No aircraft position recorded → nothing to validate against. Unverifiable.
+  if (aircraft === null) {
+    return { verdict: "unverifiable", reasons: ["no aircraft position recorded"] };
+  }
+
   const reasons: string[] = [];
 
   // Coordinate sanity first — if the inputs are garbage, nothing downstream is
