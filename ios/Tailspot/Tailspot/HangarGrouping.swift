@@ -164,6 +164,26 @@ enum HangarGrouping {
         }
     }
 
+    /// Returns the representative catch for a model group — the earliest
+    /// first-caught Catch across all tails in the group. "Earliest" is
+    /// the collectible-meaningful choice: it's the moment the user first
+    /// encountered this model, and that's what the card at the top of
+    /// `ModelSlotDetailView` commemorates. Ties (same caughtAt on two
+    /// different rows' firstCatch) are broken by icao24 ascending so the
+    /// result is stable across re-renders and test runs.
+    ///
+    /// Returns nil only when `tails` is empty (no catches for this model).
+    static func representativeCatch(in tails: [HangarRow]) -> Catch? {
+        tails
+            .min {
+                let aDate = $0.firstCatch.caughtAt
+                let bDate = $1.firstCatch.caughtAt
+                if aDate != bDate { return aDate < bDate }
+                return $0.icao24 < $1.icao24
+            }?
+            .firstCatch
+    }
+
     /// Returns one `ModelSlot` per entry in the given set, with the
     /// dedup'd HangarRows that fall into each slot attached. Rows that
     /// don't match any entry in the set are dropped from the result —
