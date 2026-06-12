@@ -25,9 +25,11 @@
 //    2. Hero framing — the camera sits slightly below and in front, so
 //       the plane looms a touch (a dead-side orthographic view feels
 //       like a blueprint, not a collectible).
-//    3. Interaction — drag to orbit (yaw free, pitch clamped), pinch to
-//       zoom, and a gentle idle yaw that the user can interrupt. Holding
-//       and turning the model is what sells "it's really in there."
+//    3. Interaction — arcball/trackball drag (full free tumble, no axis
+//       locked), pinch to zoom, flick-momentum that decays naturally, and
+//       a gentle idle yaw that blends back in after the model settles.
+//       Holding and turning the model is what sells "it's really in there";
+//       flicking it mid-spin and grabbing it back seals the deal.
 //
 //  ── SceneKit / SwiftUI bridging notes (Noah's iOS learning) ──────────
 //  SceneKit is UIKit-era, so we bridge it into SwiftUI with
@@ -53,26 +55,34 @@ private enum Spike {
     /// Idle auto-rotation rate. ~12 s per full revolution (gentle).
     /// Set to 0 to disable the idle spin entirely (Noah: animation is
     /// optional — flip this to 0 to judge the static hero pose).
-    static let idleYawRadiansPerSecond: CGFloat = (2 * .pi) / 12.0
+    static let idleYawRadiansPerSecond: Float = Float(2 * Double.pi) / 12.0
 
-    /// How long after the user lifts their finger before the idle spin
-    /// resumes.
+    /// How long after the user lifts their finger (AND momentum decays)
+    /// before the idle spin resumes.
     static let idleResumeDelay: TimeInterval = 2.0
 
-    /// Pitch clamp for drag-to-orbit. The user can tilt the nose up/down
-    /// this far but no further — keeps the plane from flipping belly-up.
-    static let maxPitchRadians: CGFloat = .pi / 6   // ±30°
+    /// How long idle spin ramps up from 0 to full speed (smooth blend-in).
+    static let idleRampDuration: TimeInterval = 1.0
 
-    /// Pinch-zoom clamp, expressed as a camera-distance multiplier
-    /// (smaller = closer). 0.8 = 25% closer, 1.5 = 50% further.
-    static let minZoom: CGFloat = 0.8
-    static let maxZoom: CGFloat = 1.5
+    /// Pinch-zoom range (camera-distance multiplier). Wider than the old
+    /// 0.8–1.5 range — no rubber-band needed at these extents.
+    static let minZoom: CGFloat = 0.5
+    static let maxZoom: CGFloat = 2.5
 
-    /// Drag sensitivity: screen points → radians of model rotation.
-    static let dragRadiansPerPoint: CGFloat = 0.01
+    /// Arcball drag sensitivity: screen points → radians of rotation.
+    /// Controls how fast the plane spins as you drag across it.
+    static let dragRadiansPerPoint: Float = 0.013
 
-    /// Resting camera distance from the model (model is normalized to
-    /// ~2 units across, centered at origin).
+    /// Momentum damping rate (natural units: 1/s). Higher = stops faster.
+    /// 2.5/s gives a ~400 ms half-life — snappy enough to feel responsive,
+    /// slow enough to feel weighty. Flick-and-grab will demonstrate this.
+    static let momentumDamping: Float = 2.5
+
+    /// Angular velocity below which momentum is considered "fully decayed"
+    /// and the idle-resume timer may begin.
+    static let momentumStopThreshold: Float = 0.05  // rad/s
+
+    /// Resting camera distance from the model (model is ~2 units across).
     static let baseCameraDistance: CGFloat = 4.2
 }
 
@@ -96,9 +106,9 @@ private struct Aircraft3DViewport: UIViewRepresentable {
         scnView.antialiasingMode = .multisampling4X
         scnView.isOpaque = false
         scnView.rendersContinuously = true         // drive the idle spin
-        // allowsCameraControl is intentionally OFF — the built-in
-        // controller is unconstrained (rolls, flips, unbounded zoom) and
-        // feels cheap. We supply our own clamped gestures below.
+        // allowsCameraControl is intentionally OFF — the built-in controller
+        // competes with our arcball gestures and ignores our momentum/idle
+        // system. We own all gesture handling in the Coordinator.
         scnView.allowsCameraControl = false
 
         let scene = buildScene()
@@ -289,36 +299,84 @@ private struct Aircraft3DViewport: UIViewRepresentable {
 
     // MARK: Coordinator (mutable interaction state)
 
-    /// Holds the SCNView reference and all gesture/idle state. SceneKit
-    /// render-loop callback + UIKit gesture targets both need an object
-    /// (not the value-type SwiftUI View), so this is where the spike's
-    /// interactivity actually lives.
+    /// Holds the SCNView reference and all gesture/idle/momentum state.
+    ///
+    /// ── Arcball rotation (Noah's iOS learning) ───────────────────────
+    /// Instead of mapping dx → yaw and dy → pitch (euler decomposition),
+    /// we use quaternion-based trackball rotation. The idea: imagine a
+    /// virtual sphere filling the viewport. When you drag your finger, you
+    /// rotate that sphere about the axis perpendicular to the drag direction.
+    ///
+    ///   drag vector (dx, dy) in screen space
+    ///   → rotation axis in view space = normalize(dy, dx, 0)
+    ///     (note the swap: dragging RIGHT rotates about the Y axis, which
+    ///      is the intuitive "yaw"; dragging UP rotates about the X axis)
+    ///   → angle = drag_distance * sensitivity
+    ///   → quaternion q = simd_quatf(angle: angle, axis: axis)
+    ///   → new orientation = q * current_orientation  (left-multiply so
+    ///     the rotation is always in view space, not model space — this
+    ///     is what prevents gimbal lock)
+    ///
+    /// Because the axis is always perpendicular to the drag, every drag
+    /// direction works uniformly — there's no "dead zone" at the poles,
+    /// no locked axis, no flip. It feels like spinning a physical ball.
+    ///
+    /// ── Momentum ─────────────────────────────────────────────────────
+    /// On pan-end we record velocity (pts/s from UIKit) → convert to an
+    /// angular velocity (rad/s). Each render frame we apply that rotation
+    /// and decay it: ω *= exp(-damping * dt). When ω < threshold we stop
+    /// and start the idle-resume timer. Touch-down clears ω immediately.
     @MainActor
     final class Coordinator: NSObject, SCNSceneRendererDelegate {
         private weak var scnView: SCNView?
         private var modelNode: SCNNode?
         private var cameraNode: SCNNode?
 
-        /// Current accumulated orbit, in radians. Yaw wraps freely; pitch
-        /// is clamped in handlePan.
-        private var yaw: CGFloat = Float.pi.cgFloat * 0.78
-        private var pitch: CGFloat = -0.12
+        /// Accumulated rotation as a unit quaternion. Starts at the hero
+        /// pose set in buildScene() and drifts as the user interacts.
+        private var orientation: simd_quatf = {
+            // Match the initial eulerAngles from buildScene:
+            //   x: -0.12 (nose-up), y: π*0.78 (three-quarter), z: 0.05
+            // simd_quatf(angle:axis:) is Euler-order-free; we compose three
+            // individual quaternions. Right-to-left application matches the
+            // ZYX Euler convention SceneKit uses.
+            let qx = simd_quatf(angle: -0.12, axis: simd_float3(1, 0, 0))
+            let qy = simd_quatf(angle: Float.pi * 0.78, axis: simd_float3(0, 1, 0))
+            let qz = simd_quatf(angle: 0.05, axis: simd_float3(0, 0, 1))
+            return simd_normalize(qz * qy * qx)
+        }()
+
+        /// Momentum: current angular velocity in rad/s, and the axis it
+        /// rotates about (already in view space, ready to compose into a
+        /// quaternion each frame).
+        private var momentumAngularVelocity: Float = 0
+        private var momentumAxis: simd_float3 = simd_float3(0, 1, 0)
 
         /// Camera-distance multiplier from pinch (clamped minZoom…maxZoom).
         private var zoom: CGFloat = 1.0
         private var pinchStartZoom: CGFloat = 1.0
 
-        /// Idle-spin bookkeeping. While the user touches we freeze the
-        /// auto-rotation; `idleResumeAt` is the clock time it may restart.
+        /// Interaction / idle bookkeeping.
+        /// `isInteracting` is true while a finger is down — suppresses
+        /// momentum and idle.
+        /// `interactionEndedAt` is stamped when the finger lifts so we
+        /// can start the idle countdown only after momentum decays too.
         private var isInteracting = false
-        private var idleResumeAt: TimeInterval = 0
+        private var interactionEndedAt: TimeInterval = 0
         private var lastFrameTime: TimeInterval = 0
+
+        /// How far along the idle ramp we are [0…1]. Ramps up from 0 over
+        /// `idleRampDuration` once both idle-resume-delay AND momentum-
+        /// decay conditions are satisfied.
+        private var idleRampProgress: Double = 0
 
         func configure(scnView: SCNView, tint: UIColor) {
             self.scnView = scnView
-            self.modelNode = scnView.scene?.rootNode.childNode(withName: "modelContainer", recursively: false)
-            self.cameraNode = scnView.scene?.rootNode.childNode(withName: "camera", recursively: false)
-            applyTransform()
+            self.modelNode = scnView.scene?.rootNode.childNode(
+                withName: "modelContainer", recursively: false)
+            self.cameraNode = scnView.scene?.rootNode.childNode(
+                withName: "camera", recursively: false)
+            applyOrientation()
         }
 
         // ── Gestures ─────────────────────────────────────────────────
@@ -328,19 +386,48 @@ private struct Aircraft3DViewport: UIViewRepresentable {
             switch gr.state {
             case .began:
                 isInteracting = true
+                // Grab the ball mid-spin: zero out momentum immediately.
+                momentumAngularVelocity = 0
+                idleRampProgress = 0
             case .changed:
                 let t = gr.translation(in: view)
-                // Horizontal drag → yaw (free), vertical drag → pitch
-                // (clamped). Reset the translation each step so we
-                // accumulate deltas rather than absolute offsets.
-                yaw += t.x * Spike.dragRadiansPerPoint
-                pitch -= t.y * Spike.dragRadiansPerPoint
-                pitch = max(-Spike.maxPitchRadians, min(Spike.maxPitchRadians, pitch))
                 gr.setTranslation(.zero, in: view)
-                applyTransform()
+
+                // Compute the arcball rotation for this drag delta.
+                let dx = Float(t.x)
+                let dy = Float(t.y)
+                let dist = sqrt(dx * dx + dy * dy)
+                guard dist > 1e-4 else { break }
+
+                // Axis perpendicular to drag, in view space.
+                // Dragging right → rotate around +Y (yaw right).
+                // Dragging up   → rotate around +X (pitch up).
+                let axis = simd_normalize(simd_float3(dy, dx, 0))
+                let angle = dist * Spike.dragRadiansPerPoint
+
+                // Left-multiply so the delta is always in camera/view space,
+                // not the accumulated model space — this is the key that
+                // makes trackball feel natural at any orientation.
+                let delta = simd_quatf(angle: angle, axis: axis)
+                orientation = simd_normalize(delta * orientation)
+                applyOrientation()
+
             case .ended, .cancelled, .failed:
                 isInteracting = false
-                idleResumeAt = CACurrentMediaTime() + Spike.idleResumeDelay
+                interactionEndedAt = CACurrentMediaTime()
+
+                // Seed momentum from UIKit's velocity.
+                let vel = gr.velocity(in: view)
+                let vx = Float(vel.x)
+                let vy = Float(vel.y)
+                let speed = sqrt(vx * vx + vy * vy)
+                if speed > 10 {
+                    // Convert px/s to rad/s using the same sensitivity factor.
+                    momentumAngularVelocity = speed * Spike.dragRadiansPerPoint
+                    momentumAxis = simd_normalize(simd_float3(vy, vx, 0))
+                } else {
+                    momentumAngularVelocity = 0
+                }
             default:
                 break
             }
@@ -351,15 +438,17 @@ private struct Aircraft3DViewport: UIViewRepresentable {
             case .began:
                 isInteracting = true
                 pinchStartZoom = zoom
+                momentumAngularVelocity = 0
+                idleRampProgress = 0
             case .changed:
-                // Pinch out (scale > 1) brings the plane closer → smaller
-                // distance multiplier. Invert and clamp.
+                // Pinch out (scale > 1) brings the camera closer → smaller
+                // distance multiplier. Clamp without rubber-band.
                 let proposed = pinchStartZoom / gr.scale
                 zoom = max(Spike.minZoom, min(Spike.maxZoom, proposed))
                 applyCameraDistance()
             case .ended, .cancelled, .failed:
                 isInteracting = false
-                idleResumeAt = CACurrentMediaTime() + Spike.idleResumeDelay
+                interactionEndedAt = CACurrentMediaTime()
             default:
                 break
             }
@@ -367,8 +456,11 @@ private struct Aircraft3DViewport: UIViewRepresentable {
 
         // ── Transform application ────────────────────────────────────
 
-        private func applyTransform() {
-            modelNode?.eulerAngles = SCNVector3(Float(pitch), Float(yaw), 0.05)
+        /// Push the current quaternion orientation into the SceneKit node.
+        /// SceneKit accepts simdOrientation (a simd_quatf) directly —
+        /// no Euler decomposition needed, no gimbal lock possible.
+        private func applyOrientation() {
+            modelNode?.simdOrientation = orientation
             applyCameraDistance()
         }
 
@@ -379,33 +471,73 @@ private struct Aircraft3DViewport: UIViewRepresentable {
             cam.look(at: SCNVector3(0, 0.05, 0))
         }
 
-        // ── Idle spin (render-loop driven) ───────────────────────────
+        // ── Render-loop: momentum + idle spin ────────────────────────
 
         nonisolated func renderer(_ renderer: SCNSceneRenderer,
                                   updateAtTime time: TimeInterval) {
-            // SceneKit calls this off the main actor on its render thread.
-            // Hop to the main actor to touch our state + the node.
+            // SceneKit calls this on its render thread; hop to MainActor
+            // before touching any mutable state or the node.
             Task { @MainActor in
-                self.advanceIdle(time)
+                self.advanceFrame(time)
             }
         }
 
-        private func advanceIdle(_ time: TimeInterval) {
+        private func advanceFrame(_ time: TimeInterval) {
             defer { lastFrameTime = time }
             guard lastFrameTime != 0 else { return }   // skip first frame
-            let dt = time - lastFrameTime
-            guard !isInteracting,
-                  time >= idleResumeAt,
-                  Spike.idleYawRadiansPerSecond != 0 else { return }
-            yaw += Spike.idleYawRadiansPerSecond * CGFloat(dt)
-            modelNode?.eulerAngles = SCNVector3(Float(pitch), Float(yaw), 0.05)
+            let dt = Float(time - lastFrameTime)
+            guard dt > 0 else { return }
+
+            if isInteracting { return }
+
+            var dirty = false
+
+            // ── Momentum decay ───────────────────────────────────────
+            // Apply and exponentially decay the angular velocity seeded
+            // at pan-end. exp(-k*dt) is the continuous-time decay factor
+            // for a first-order system with rate constant k (= damping).
+            if momentumAngularVelocity > Spike.momentumStopThreshold {
+                let angle = momentumAngularVelocity * dt
+                let q = simd_quatf(angle: angle, axis: momentumAxis)
+                orientation = simd_normalize(q * orientation)
+                momentumAngularVelocity *= exp(-Spike.momentumDamping * dt)
+                if momentumAngularVelocity <= Spike.momentumStopThreshold {
+                    momentumAngularVelocity = 0
+                }
+                dirty = true
+            }
+
+            // ── Idle yaw (resumes only after delay AND momentum gone) ─
+            // The idle-ramp prevents a jarring snap: speed ramps from 0
+            // to full over `idleRampDuration` seconds once conditions met.
+            if Spike.idleYawRadiansPerSecond > 0 &&
+               momentumAngularVelocity == 0 &&
+               time >= interactionEndedAt + Spike.idleResumeDelay {
+
+                // Advance the ramp toward 1.0.
+                idleRampProgress = min(1.0,
+                    idleRampProgress + Double(dt) / Spike.idleRampDuration)
+
+                let effectiveRate = Spike.idleYawRadiansPerSecond
+                    * Float(idleRampProgress)
+                let angle = effectiveRate * dt
+                // Idle always rotates about world-up (Y axis). Left-multiply
+                // so it spins in view space (looks like a turntable).
+                let q = simd_quatf(angle: angle, axis: simd_float3(0, 1, 0))
+                orientation = simd_normalize(q * orientation)
+                dirty = true
+            } else if isInteracting || momentumAngularVelocity > 0 {
+                // Reset ramp when the user re-grabs or new momentum starts.
+                idleRampProgress = 0
+            }
+
+            if dirty { applyOrientation() }
         }
     }
 }
 
-private extension Float {
-    var cgFloat: CGFloat { CGFloat(self) }
-}
+// (No Float extension needed — the coordinator works in simd_float3/simd_quatf
+// directly, so no CGFloat↔Float bridging helpers are required.)
 
 // MARK: - The spike card
 
@@ -597,7 +729,7 @@ struct Card3DSpikeView: View {
 
                 Card3DSpikeCard(plane: demoPlane(rarity))
 
-                Text("Drag to orbit · pinch to zoom · let go and it drifts")
+                Text("Flick to spin · grab to stop · pinch to zoom")
                     .font(Brand.Font.mono(size: 11))
                     .foregroundStyle(Brand.Color.textSecondary)
                     .multilineTextAlignment(.center)
