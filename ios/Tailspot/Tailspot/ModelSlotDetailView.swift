@@ -2,15 +2,25 @@
 //  ModelSlotDetailView.swift
 //  Tailspot
 //
-//  The screen between Set detail and Tail detail — lists every
-//  distinct tail (icao24) the user has caught of one model. The model
-//  is now derived from caught planes (no curated entry list), so the
-//  view takes a `ModelGroup` rather than a `CardSetEntry`.
+//  Model-slot detail — card-first view for a caught model in a set.
 //
-//  Reached by tapping a model row in `SetDetailView`. Each row is one
-//  `HangarRow` (collapsed by icao24) and pushes the existing
-//  `CatchDetailView` via the `HangarRow` navigation destination wired
-//  in `HangarView`.
+//  Layout (top to bottom):
+//    • Custom back bar (HangarChildBar — matches SetDetailView chrome)
+//    • Card hero: CatchCardView at .lg for the *representative* catch
+//      (earliest first-caught across all tails; see
+//      `HangarGrouping.representativeCatch(in:)` for the rule).
+//    • "TAILS (N)" section listing every HangarRow — one per distinct
+//      icao24 — each navigating to CatchDetailView via the HangarRow
+//      navigation destination wired in HangarView.
+//
+//  Representative-catch rule: earliest `firstCatch.caughtAt` across all
+//  tails of the model. That's the "first time you ever caught this model"
+//  moment — the collectible meaning behind the card. Ties break by
+//  icao24 ascending so rerenders stay stable.
+//
+//  Reached by tapping a model row in SetDetailView. Uncaught models
+//  (no tails) are non-navigable in SetDetailView, so this view only
+//  ever shows with tails.count >= 1.
 //
 
 import SwiftUI
@@ -20,6 +30,13 @@ struct ModelSlotDetailView: View {
     let set: CardSet
     let group: ModelGroup
 
+    /// The catch whose card sits at the top of the screen. Nil only
+    /// if the group has no tails — callers guarantee at least one tail,
+    /// but the type system allows nil so we handle it gracefully.
+    private var representativeCatch: Catch? {
+        HangarGrouping.representativeCatch(in: group.tails)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Custom back bar — HangarView hides the system nav bar
@@ -28,38 +45,12 @@ struct ModelSlotDetailView: View {
             HangarChildBar(title: displayModel)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(set.title.uppercased())
-                        .font(Brand.Font.mono(size: 10, weight: .semibold))
-                        .tracking(1)
-                        .foregroundStyle(Brand.Color.textTertiary)
-
-                    Text(displayModel)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Brand.Color.textPrimary)
-
-                    Text("\(group.distinctTailCount) distinct tail\(group.distinctTailCount == 1 ? "" : "s")")
-                        .font(Brand.Font.mono(size: 11, weight: .regular))
-                        .foregroundStyle(set.type.tint)
-
-                    Text("TAILS YOU'VE CAUGHT")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                        .padding(.top, 14)
-                        .padding(.bottom, 4)
-
-                    VStack(spacing: 6) {
-                        ForEach(group.tails) { row in
-                            NavigationLink(value: row) {
-                                tailRow(row)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                VStack(spacing: 20) {
+                    cardHero
+                    tailsSection
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, 16)
             }
         }
         .background(Brand.Color.bgPrimary)
@@ -68,6 +59,52 @@ struct ModelSlotDetailView: View {
         // the why — `.navigationBarBackButtonHidden(true)` disables the
         // interactive pop gesture too, which we don't want.
     }
+
+    // MARK: - Card hero
+
+    /// The model's card at the top: CatchCardView(.lg) for the
+    /// representative (earliest) catch of this model. Centered and
+    /// given a little breathing room so it reads as the focal point.
+    @ViewBuilder
+    private var cardHero: some View {
+        if let repCatch = representativeCatch {
+            VStack(spacing: 8) {
+                CatchCardView(
+                    plane: CardPlane(catchRecord: repCatch),
+                    size: .lg
+                )
+                Text("FIRST CAUGHT")
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Tails section
+
+    private var tailsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Section header: "TAILS (N)"
+            Text("TAILS (\(group.distinctTailCount))")
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+
+            VStack(spacing: 6) {
+                ForEach(group.tails) { row in
+                    NavigationLink(value: row) {
+                        tailRow(row)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Helpers
 
     /// The group key is already the canonical display name; only the
     /// Unknown sentinel needs a friendlier label.
