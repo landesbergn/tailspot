@@ -104,6 +104,10 @@ struct ContentView: View {
     /// URL of the recording the user wants to analyze. Non-nil →
     /// `ReplayReportView` sheet is presented for that file.
     @State private var replayURL: URL?
+    /// SPIKE-ONLY (feat/card-3d-spike): drives the interactive 3D-card
+    /// exploration sheet, reachable from the debug TOOLS section. Remove
+    /// with the rest of the spike if it doesn't graduate.
+    @State private var showCard3DSpike = false
     /// Bridges to `PreviewView` so the auto-catch path can grab a
     /// still photo. `PreviewView.bridgeCapture(to:)` installs the
     /// capture closure at `makeUIView` time. Held via `@State` (not
@@ -458,6 +462,10 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
+        }
+        // SPIKE-ONLY (feat/card-3d-spike): interactive 3D-card exploration.
+        .sheet(isPresented: $showCard3DSpike) {
+            Card3DSpikeView()
         }
         .task {
             // Dismiss the launch splash after ~600ms, then crossfade to
@@ -1278,6 +1286,7 @@ struct ContentView: View {
             Group {
                 recordingRow
                 analyzeRow
+                card3DSpikeRow   // SPIKE-ONLY (feat/card-3d-spike)
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1577,6 +1586,20 @@ struct ContentView: View {
         .onTapGesture {
             if let latest { replayURL = latest }
         }
+    }
+
+    /// SPIKE-ONLY (feat/card-3d-spike): debug-overlay row that opens the
+    /// interactive 3D-card exploration. Presents `Card3DSpikeView` as a
+    /// sheet. Remove with the rest of the spike if it doesn't graduate.
+    private var card3DSpikeRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "cube.transparent")
+                .foregroundStyle(Brand.Color.textPrimary.opacity(0.85))
+            Text("3D card spike")
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture { showCard3DSpike = true }
     }
 
     /// One tick's worth of sensor state + the currently-visible ADS-B
