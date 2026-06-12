@@ -98,6 +98,10 @@ private struct Aircraft3DViewport: UIViewRepresentable {
     /// feel like it changes the object, not just the frame.
     let rarityTint: UIColor
 
+    /// Which family's model to load. Drives resource name + orientation
+    /// adjustments via `CardModelRegistry`.
+    let family: AircraftFamily
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> SCNView {
@@ -111,7 +115,7 @@ private struct Aircraft3DViewport: UIViewRepresentable {
         // system. We own all gesture handling in the Coordinator.
         scnView.allowsCameraControl = false
 
-        let scene = buildScene()
+        let scene = buildScene(family: family)
         scnView.scene = scene
         context.coordinator.configure(scnView: scnView, tint: rarityTint)
 
@@ -136,18 +140,26 @@ private struct Aircraft3DViewport: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: SCNView, context: Context) {
-        // No SwiftUI-state-driven updates needed; the coordinator owns
-        // all mutable interaction state. (If rarityTint could change live
-        // we'd re-tint the rim here — it can't in the spike.)
+        // Family or tint could change when the user swaps via the picker.
+        // Rebuild the scene in-place: replace the SceneKit scene entirely.
+        // The coordinator re-links its node references via configure().
+        let newScene = buildScene(family: family)
+        uiView.scene = newScene
+        context.coordinator.configure(scnView: uiView, tint: rarityTint)
     }
 
     // MARK: Scene construction
 
     /// Builds the full scene graph: model node (loaded from the bundled
-    /// OBJ, re-materialized in code), camera, and the 3-point light rig.
-    private func buildScene() -> SCNScene {
+    /// OBJ via `CardModelRegistry`), camera, and the 3-point light rig.
+    ///
+    /// - Parameter family: which aircraft family's OBJ to load.
+    ///   If the family is unavailable (no bundled OBJ yet), renders a
+    ///   placeholder geometry so the viewport isn't an empty void.
+    private func buildScene(family: AircraftFamily) -> SCNScene {
         let scene = SCNScene()
         scene.background.contents = UIColor.clear
+        let config = CardModelRegistry.config(for: family)
 
         // ── Model ────────────────────────────────────────────────────
         // The OBJ ships in the app bundle (synchronized folder). We load
@@ -155,31 +167,70 @@ private struct Aircraft3DViewport: UIViewRepresentable {
         // node so we can rotate the plane independently of the camera.
         let modelContainer = SCNNode()
         modelContainer.name = "modelContainer"
-        if let url = Bundle.main.url(forResource: "Boeing747", withExtension: "obj"),
+
+        if config.isAvailable,
+           let resourceName = config.resourceName,
+           let url = Bundle.main.url(forResource: resourceName, withExtension: "obj"),
            let loaded = try? SCNScene(url: url, options: [
                .createNormalsIfAbsent: true
            ]) {
             for child in loaded.rootNode.childNodes {
                 modelContainer.addChildNode(child)
             }
+            // Apply per-model orientation fix before the hero pose.
+            let adj = config.orientationAdjustment
+            if adj.x != 0 || adj.y != 0 || adj.z != 0 {
+                modelContainer.eulerAngles = adj
+            }
+            // Per-model scale adjustment on top of the normalized 2.0-unit scale.
+            if config.sceneKitScale != 1.0 {
+                modelContainer.scale = SCNVector3(
+                    config.sceneKitScale, config.sceneKitScale, config.sceneKitScale)
+            }
             applyMaterials(to: modelContainer)
         } else {
-            // Defensive: if the asset is missing, drop in a placeholder
-            // box so the viewport isn't an empty void (visible signal
-            // that the bundle resource didn't ship).
-            let box = SCNNode(geometry: SCNBox(width: 1.4, height: 0.3, length: 1.4, chamferRadius: 0.05))
-            box.geometry?.firstMaterial?.diffuse.contents = UIColor.systemTeal
+            // Unavailable family: lock icon placeholder — a dashed-edge box
+            // with the family name label to signal "model coming soon."
+            let box = SCNNode(geometry: SCNBox(width: 1.4, height: 0.5, length: 1.4, chamferRadius: 0.08))
+            let mat = SCNMaterial()
+            mat.lightingModel = .constant
+            mat.diffuse.contents = UIColor(white: 0.18, alpha: 1.0)
+            mat.emission.contents = UIColor(white: 0.22, alpha: 1.0)
+            box.geometry?.firstMaterial = mat
             modelContainer.addChildNode(box)
+
+            // Small floating text node — family chip label.
+            let text = SCNText(string: family.chipLabel, extrusionDepth: 0.04)
+            text.font = UIFont.monospacedSystemFont(ofSize: 0.22, weight: .bold)
+            text.flatness = 0.3
+            let textNode = SCNNode(geometry: text)
+            let tMat = SCNMaterial()
+            tMat.lightingModel = .constant
+            tMat.diffuse.contents = UIColor(white: 0.45, alpha: 1.0)
+            text.firstMaterial = tMat
+            // Center text above the box.
+            let (tMin, tMax) = (text.boundingBox.min, text.boundingBox.max)
+            let tW = tMax.x - tMin.x
+            textNode.position = SCNVector3(-tW / 2, 0.42, 0)
+            modelContainer.addChildNode(textNode)
         }
 
-        // Hero pose: nose toward the viewer's left-front, a slight bank
-        // and a touch of nose-up so it reads as "in flight," not parked.
-        modelContainer.eulerAngles = SCNVector3(
-            x: -0.12,                 // gentle nose-up
-            y: Float.pi * 0.78,       // three-quarter front view
-            z: 0.05                   // barely-there bank
-        )
-        scene.rootNode.addChildNode(modelContainer)
+        // Hero pose: wrap the modelContainer in an outer "poseNode" so the
+        // per-model orientationAdjustment (applied directly on modelContainer)
+        // doesn't conflict with the hero pose euler angles. The coordinator's
+        // arcball rotation drives poseNode's simdOrientation, not modelContainer.
+        //
+        // Nose toward the viewer's left-front, a slight bank and a touch of
+        // nose-up so it reads as "in flight," not parked.
+        let poseNode = SCNNode()
+        poseNode.name = "modelContainer"   // coordinator looks up by this name
+        let heroPose = simd_quatf(angle: -0.12, axis: simd_float3(1, 0, 0))   // nose-up
+            * simd_quatf(angle: Float.pi * 0.78, axis: simd_float3(0, 1, 0)) // 3/4 front
+            * simd_quatf(angle: 0.05, axis: simd_float3(0, 0, 1))            // bank
+        poseNode.simdOrientation = simd_normalize(heroPose)
+        modelContainer.name = "modelMesh"  // distinguish from poseNode
+        poseNode.addChildNode(modelContainer)
+        scene.rootNode.addChildNode(poseNode)
 
         // ── Camera ───────────────────────────────────────────────────
         // Slightly below and in front of the model (hero angle). A modest
@@ -334,16 +385,17 @@ private struct Aircraft3DViewport: UIViewRepresentable {
 
         /// Accumulated rotation as a unit quaternion. Starts at the hero
         /// pose set in buildScene() and drifts as the user interacts.
-        private var orientation: simd_quatf = {
-            // Match the initial eulerAngles from buildScene:
-            //   x: -0.12 (nose-up), y: π*0.78 (three-quarter), z: 0.05
-            // simd_quatf(angle:axis:) is Euler-order-free; we compose three
-            // individual quaternions. Right-to-left application matches the
-            // ZYX Euler convention SceneKit uses.
+        /// Reset to the hero pose each time `configure()` is called so a
+        /// family swap snaps back to a clean hero angle.
+        private var orientation: simd_quatf = Coordinator.heroOrientation
+
+        /// Hero pose quaternion — composited the same way buildScene()
+        /// does it so they stay in sync. Left-multiply order (X then Y then Z).
+        private static let heroOrientation: simd_quatf = {
             let qx = simd_quatf(angle: -0.12, axis: simd_float3(1, 0, 0))
             let qy = simd_quatf(angle: Float.pi * 0.78, axis: simd_float3(0, 1, 0))
             let qz = simd_quatf(angle: 0.05, axis: simd_float3(0, 0, 1))
-            return simd_normalize(qz * qy * qx)
+            return simd_normalize(qx * qy * qz)
         }()
 
         /// Momentum: current angular velocity in rad/s, and the axis it
@@ -376,6 +428,11 @@ private struct Aircraft3DViewport: UIViewRepresentable {
                 withName: "modelContainer", recursively: false)
             self.cameraNode = scnView.scene?.rootNode.childNode(
                 withName: "camera", recursively: false)
+            // Reset to hero pose so family swaps start from a clean angle.
+            orientation = Coordinator.heroOrientation
+            momentumAngularVelocity = 0
+            idleRampProgress = 0
+            zoom = 1.0
             applyOrientation()
         }
 
@@ -547,6 +604,8 @@ private struct Aircraft3DViewport: UIViewRepresentable {
 /// judged in context — not floating on its own.
 struct Card3DSpikeCard: View {
     let plane: CardPlane
+    /// Which aircraft family model to render in the 3D viewport.
+    var family: AircraftFamily = .jumbo
     var holoIntensity: Double = 0.85
 
     // md dimensions, copied from CatchCardView.CardSize.md so the spike
@@ -619,7 +678,7 @@ struct Card3DSpikeCard: View {
                     center: .init(x: 0.5, y: 0.62),
                     startRadius: 4, endRadius: viewportHeight * 0.7
                 )
-                Aircraft3DViewport(rarityTint: UIColor(plane.rarity.tint))
+                Aircraft3DViewport(rarityTint: UIColor(plane.rarity.tint), family: family)
             }
             .frame(height: viewportHeight)
             .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -694,9 +753,13 @@ struct Card3DSpikeCard: View {
 
 // MARK: - Spike host screen (the sheet)
 
-/// Full-screen host presented from the debug TOOLS row. Lets Noah swap
-/// rarity tiers to feel how the rim-light tint + holo treatment change
-/// the model's presence, with a one-line instruction.
+/// Full-screen host presented from the debug TOOLS row. Lets Noah review
+/// the entire fleet's model coherence in one sitting: a family picker swaps
+/// the model in the card viewport; a rarity picker cycles the rim-light tint
+/// and holo treatment.
+///
+/// Unavailable families show the locked placeholder treatment (gray box +
+/// chip label) so the selector still renders something useful.
 struct Card3DSpikeView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -704,36 +767,134 @@ struct Card3DSpikeView: View {
     /// the rim glow + holo can be judged across tiers.
     @State private var rarity: Rarity = .epic
 
-    private let demoPlane: (Rarity) -> CardPlane = { r in
-        CardPlane(
-            callsign: "BAW286",
-            model: "Boeing 747-400",
-            carrier: "Spike Airways",
-            rarity: r,
-            type: .wide,
-            altText: "FL360",
-            speedText: "488 kt",
-            distText: "9 km"
-        )
+    /// Which aircraft family model is currently showing.
+    @State private var family: AircraftFamily = .jumbo
+
+    /// Per-family demo plane metadata (callsign / model / carrier / type).
+    private func demoPlane(rarity: Rarity, family: AircraftFamily) -> CardPlane {
+        switch family {
+        case .jumbo:
+            return CardPlane(callsign: "BAW286", model: "Boeing 747-400",
+                             carrier: "British Airways", rarity: rarity, type: .wide,
+                             altText: "FL360", speedText: "488 kt", distText: "9 km")
+        case .narrowbody:
+            return CardPlane(callsign: "UAL482", model: "Airbus A320-200",
+                             carrier: "United Airlines", rarity: rarity, type: .narrow,
+                             altText: "FL280", speedText: "440 kt", distText: "6 km")
+        case .widebody:
+            return CardPlane(callsign: "ANA12", model: "Boeing 787-9 Dreamliner",
+                             carrier: "ANA", rarity: rarity, type: .wide,
+                             altText: "FL340", speedText: "465 kt", distText: "11 km")
+        case .gaProp:
+            return CardPlane(callsign: "N12345", model: "Cessna 172",
+                             carrier: nil, rarity: rarity, type: .ga,
+                             altText: "3,500 ft", speedText: "110 kt", distText: "2 km")
+        case .helicopter:
+            return CardPlane(callsign: "N456HX", model: "Bell 206",
+                             carrier: nil, rarity: rarity, type: .ga,
+                             altText: "1,200 ft", speedText: "90 kt", distText: "1 km")
+        case .regionalJet:
+            return CardPlane(callsign: "SKW4501", model: "Embraer E175",
+                             carrier: "SkyWest", rarity: rarity, type: .regional,
+                             altText: "FL240", speedText: "415 kt", distText: "5 km")
+        case .bizjet:
+            return CardPlane(callsign: "N88BJ", model: "Gulfstream G550",
+                             carrier: nil, rarity: rarity, type: .biz,
+                             altText: "FL450", speedText: "476 kt", distText: "14 km")
+        case .turboprop:
+            return CardPlane(callsign: "N22TP", model: "Beechcraft King Air 350",
+                             carrier: nil, rarity: rarity, type: .ga,
+                             altText: "FL250", speedText: "310 kt", distText: "7 km")
+        case .militaryFighter:
+            return CardPlane(callsign: "VIPER1", model: "F-16C Fighting Falcon",
+                             carrier: "USAF", rarity: rarity, type: .mil,
+                             altText: "20,000 ft", speedText: "800 kt", distText: "8 km")
+        case .militaryTransport:
+            return CardPlane(callsign: "REACH99", model: "C-17 Globemaster",
+                             carrier: "USAF", rarity: rarity, type: .mil,
+                             altText: "28,000 ft", speedText: "450 kt", distText: "12 km")
+        }
     }
 
     var body: some View {
         ZStack {
             Brand.Color.bgPrimary.ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Text("3D CARD SPIKE")
                     .font(Brand.Font.mono(size: 12, weight: .bold))
                     .tracking(1.5)
                     .foregroundStyle(Brand.Color.textTertiary)
 
-                Card3DSpikeCard(plane: demoPlane(rarity))
+                // Family picker — horizontal scrolling chip row.
+                // Available families are full-opacity; unavailable (no model
+                // yet) are dimmed so Noah can see what's missing at a glance.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(AircraftFamily.allCases) { f in
+                            let config = CardModelRegistry.config(for: f)
+                            let isSelected = f == family
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    family = f
+                                }
+                            } label: {
+                                Text(f.chipLabel)
+                                    .font(Brand.Font.mono(size: 11, weight: .bold))
+                                    .tracking(0.8)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        isSelected
+                                        ? Brand.Color.cyan.opacity(0.25)
+                                        : Color.white.opacity(0.06)
+                                    )
+                                    .foregroundStyle(
+                                        isSelected
+                                        ? Brand.Color.cyan
+                                        : (config.isAvailable
+                                           ? Brand.Color.textSecondary
+                                           : Brand.Color.textTertiary)
+                                    )
+                                    .clipShape(Capsule())
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                isSelected
+                                                ? Brand.Color.cyan.opacity(0.6)
+                                                : Color.white.opacity(0.08),
+                                                lineWidth: 1
+                                            )
+                                    )
+                                    .opacity(config.isAvailable ? 1.0 : 0.5)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
 
-                Text("Flick to spin · grab to stop · pinch to zoom")
-                    .font(Brand.Font.mono(size: 11))
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .multilineTextAlignment(.center)
+                // The card itself — family and rarity both live-update.
+                Card3DSpikeCard(
+                    plane: demoPlane(rarity: rarity, family: family),
+                    family: family
+                )
 
+                // Hint line: available or pending.
+                let config = CardModelRegistry.config(for: family)
+                if config.isAvailable {
+                    Text("Flick to spin · grab to stop · pinch to zoom")
+                        .font(Brand.Font.mono(size: 11))
+                        .foregroundStyle(Brand.Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("Model pending — download from Sketchfab (login required)")
+                        .font(Brand.Font.mono(size: 10))
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+
+                // Rarity picker.
                 Picker("Rarity", selection: $rarity) {
                     ForEach(Rarity.allCases, id: \.self) { r in
                         Text(r.label).tag(r)
@@ -742,7 +903,7 @@ struct Card3DSpikeView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 24)
             }
-            .padding()
+            .padding(.vertical)
 
             VStack {
                 HStack {
