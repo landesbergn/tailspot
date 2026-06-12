@@ -129,3 +129,9 @@ tools/hangar-options/
 # Python bytecode caches
 __pycache__/
 *.pyc
+
+# Card-silhouette spike scratch (intermediate trace bitmaps + previews).
+# The committed surface is tools/cards/{references,generated,svg2swift.py,
+# SOURCES.md}; work/ and preview/ are regenerable scratch.
+tools/cards/work/
+tools/cards/preview/
