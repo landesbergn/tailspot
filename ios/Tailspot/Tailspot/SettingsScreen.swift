@@ -2,10 +2,25 @@
 //  SettingsScreen.swift
 //  Tailspot
 //
-//  iOS-grouped settings: identity (handle), privacy (public hangar
-//  toggle, location-when-in-use disclosure), playback (live/mock
-//  source toggle, autocatch hold duration display), about (version,
-//  acknowledgements).
+//  Organised into three sections in order:
+//    SPOTTER  — handle claim (the only real identity setting)
+//    APP      — nothing real to show yet; removed vestigial toggles:
+//                 • "Public hangar" was cut from beta scope — the
+//                   tailspot.profile.public key is still written during
+//                   onboarding but the toggle here controlled nothing
+//                   server-side; revive when backend public-hangar
+//                   endpoint ships (PLAN §9 #2).
+//                 • "Rare-aircraft alerts" toggle (tailspot.notif.rare)
+//                   never wired to push infrastructure; honest coming-soon
+//                   state is in NotificationsScreen — remove here to avoid
+//                   a fake affordance (PLAN §9 #2).
+//                 • Playback rows (Source / Autocatch hold / Visibility cap)
+//                   were display-only labels, not real settings — source
+//                   toggle lives in the debug overlay, the others are
+//                   in-code constants. Removed to cut clutter.
+//    ABOUT    — legal links (Privacy Policy, Terms, Attributions —
+//               ODbL attribution is a licence obligation), data-source
+//               credit, plus the tap-to-copy version footer.
 //
 
 import SwiftUI
@@ -13,19 +28,27 @@ import os
 
 struct SettingsScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
-    @AppStorage("tailspot.profile.public") private var publicProfile: Bool = true
-    @AppStorage("tailspot.notif.rare") private var notifyRare: Bool = false
 
     @State private var handleDraft: String = ""
     @State private var handleTakenError: String? = nil
     @State private var isSavingHandle = false
+    @State private var savedHandleSuccess: String? = nil   // brief "claimed" confirmation
     private let accountClient = TailspotAccountClient()
+
+    /// True when the draft differs from the saved handle and is non-empty.
+    private var isDirty: Bool {
+        let t = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !t.isEmpty && t != handle
+    }
 
     var body: some View {
         List {
+
+            // MARK: SPOTTER
+
             Section {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack {
+                    HStack(spacing: 6) {
                         Text("Handle")
                         Spacer()
                         Text("@")
@@ -35,63 +58,96 @@ struct SettingsScreen: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(Brand.Font.mono(size: 17))
-                            .onChange(of: handleDraft) { _, _ in handleTakenError = nil }
+                            .onChange(of: handleDraft) { _, _ in
+                                handleTakenError = nil
+                                savedHandleSuccess = nil
+                            }
                             .onSubmit { Task { await saveHandle() } }
                         if isSavingHandle {
-                            ProgressView().scaleEffect(0.75).tint(Brand.Color.cyan)
+                            ProgressView()
+                                .scaleEffect(0.75)
+                                .tint(Brand.Color.cyan)
                         }
                     }
+
+                    // Inline error (409 taken) — shown below the field.
                     if let takenMsg = handleTakenError {
                         Label(takenMsg, systemImage: "exclamationmark.circle.fill")
                             .font(Brand.Font.caption)
                             .foregroundStyle(Brand.Color.alertCaution)
-                            .padding(.top, 4)
+                            .padding(.top, 6)
+                    }
+
+                    // Transient success confirmation — clears automatically.
+                    if let successMsg = savedHandleSuccess {
+                        Label(successMsg, systemImage: "checkmark.circle.fill")
+                            .font(Brand.Font.caption)
+                            .foregroundStyle(Brand.Color.alertNormal)
+                            .padding(.top, 6)
                     }
                 }
-            } header: {
-                Text("Identity")
-            } footer: {
-                Text("Your handle is the only thing visible on the leaderboard. Submit to claim it on the server.")
-            }
 
-            Section {
-                Toggle("Public hangar", isOn: $publicProfile)
-                LabeledLink(label: "Location data", value: "While-in-use")
-                LabeledLink(label: "Camera", value: "AR preview only")
-            } header: {
-                Text("Privacy")
-            } footer: {
-                Text("Public hangar lets other spotters visit your catches. Location is read live but never written to disk or transmitted.")
-            }
-
-            Section("Playback") {
-                LabeledLink(label: "Source", value: "LIVE or MOCK in debug overlay")
-                LabeledLink(label: "Autocatch hold", value: "3.0 s")
-                LabeledLink(label: "Visibility cap", value: "30 km")
-            }
-
-            Section {
-                Toggle("Rare-aircraft alerts", isOn: $notifyRare)
-                NavigationLink("All notifications") {
-                    NotificationsScreen()
+                // Explicit Save / Claim button — disabled while no change or invalid.
+                // Complements onSubmit (Return key) so the user always has a
+                // visible affordance, especially on external keyboards where Return
+                // focus is not obvious.
+                Button {
+                    Task { await saveHandle() }
+                } label: {
+                    HStack {
+                        Spacer()
+                        if isSavingHandle {
+                            ProgressView().scaleEffect(0.85).tint(.white)
+                        } else {
+                            Text("Save handle")
+                                .font(Brand.Font.mono(size: 15, weight: .bold))
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 10)
+                    .background(isDirty ? Brand.Color.cyan : Brand.Color.bgElevated,
+                                in: .rect(cornerRadius: 10))
+                    .foregroundStyle(isDirty ? Brand.Color.bgPrimary : Brand.Color.textTertiary)
                 }
+                .buttonStyle(.plain)
+                .disabled(!isDirty || isSavingHandle)
+                .animation(.easeInOut(duration: 0.15), value: isDirty)
+
             } header: {
-                Text("Notifications")
+                Text("SPOTTER")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
             } footer: {
-                Text("Get a push when a rare-tier or higher airframe is overhead within the next 5 minutes.")
+                Text("Your handle is the only thing visible on the leaderboard. Claim it to reserve your spot.")
             }
 
-            Section("About") {
-                LabeledLink(label: "Data source", value: "OpenSky Network")
-                LabeledLink(label: "Photos", value: "Planespotters.net")
-            }
+            // MARK: ABOUT
 
-            // Version/build footer at the page bottom — tester-visible,
-            // tap-to-copy so bug reports can paste an exact identifier.
-            // Replaces the separate Version + Build rows we used to
-            // have inside About.
             Section {
+                // Legal links — open URLs in Safari.
+                // Attributions row is REQUIRED to satisfy the ODbL licence
+                // obligation for OpenSky data; do not remove.
+                legalLink(label: "Privacy Policy",
+                          url: URL(string: "https://tailspot.app/privacy.html")!)
+                legalLink(label: "Terms of Use",
+                          url: URL(string: "https://tailspot.app/terms.html")!)
+                legalLink(label: "Attributions",
+                          url: URL(string: "https://tailspot.app/attributions.html")!)
+
+                LabeledContent("Data source", value: "OpenSky Network")
+                LabeledContent("Photos", value: "Planespotters.net")
+
+            } header: {
+                Text("ABOUT")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
             } footer: {
+                // Version/build footer — tester-visible, tap-to-copy so bug
+                // reports can paste an exact identifier.
                 versionFooter
             }
         }
@@ -101,13 +157,15 @@ struct SettingsScreen: View {
         .onAppear { handleDraft = handle }
     }
 
+    // MARK: - Handle claim
+
     /// Send the current `handleDraft` to the backend. On success persists
-    /// locally. On 409 shows an inline "taken" error. Non-handle-taken
-    /// errors are logged and persisted locally anyway (backend claim can
-    /// be retried on next launch).
+    /// locally and shows a brief confirmation. On 409 shows an inline
+    /// "taken" error. Non-handle-taken errors are logged and persisted
+    /// locally anyway (backend claim can be retried on next launch).
     private func saveHandle() async {
         let trimmed = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed == handleDraft, // already trimmed — don't re-trim mid-type
+        guard trimmed == handleDraft,   // already trimmed — don't re-trim mid-type
               !trimmed.isEmpty else { return }
         isSavingHandle = true
         defer { isSavingHandle = false }
@@ -116,7 +174,17 @@ struct SettingsScreen: View {
             try await accountClient.claimHandle(trimmed)
             handle = trimmed
             handleTakenError = nil
+            savedHandleSuccess = "@\(trimmed) claimed"
             Analytics.capture("handle_claimed", ["result": .string("success")])
+            // Stop the spinner BEFORE the auto-clear sleep — the deferred
+            // reset only fires at function exit, which would otherwise keep
+            // the Save button spinning/disabled for the whole 3 s.
+            isSavingHandle = false
+            // Auto-clear the success state after 3 s.
+            try? await Task.sleep(for: .seconds(3))
+            if savedHandleSuccess == "@\(trimmed) claimed" {
+                savedHandleSuccess = nil
+            }
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken"
             Analytics.capture("handle_claimed", ["result": .string("taken")])
@@ -126,6 +194,27 @@ struct SettingsScreen: View {
             handleTakenError = nil
         }
     }
+
+    // MARK: - Legal link row
+
+    @ViewBuilder
+    private func legalLink(label: String, url: URL) -> some View {
+        Button {
+            UIApplication.shared.open(url)
+        } label: {
+            HStack {
+                Text(label)
+                    .foregroundStyle(Color.primary)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Version footer
 
     /// "Tailspot 0.1.0 (build N) · tap to copy". Tap copies the same
     /// string to the clipboard so a tester reporting a bug can paste
@@ -154,17 +243,7 @@ struct SettingsScreen: View {
     }
 }
 
-private struct LabeledLink: View {
-    let label: String
-    let value: String
-    var body: some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(value).foregroundStyle(Brand.Color.textSecondary)
-        }
-    }
-}
+// MARK: - Bundle version helpers
 
 private extension Bundle {
     var shortVersion: String {
