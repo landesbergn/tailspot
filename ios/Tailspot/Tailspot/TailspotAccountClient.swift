@@ -201,10 +201,14 @@ nonisolated enum AccountError: Error, LocalizedError {
     }
 }
 
+// `nonisolated` is required on these file-scope constants: Xcode 26's
+// MainActor default isolation makes top-level lets implicitly main-actor-
+// bound, and the nonisolated TailspotAccountClient below references them —
+// an error under Swift 6 language mode (caught in Noah's IDE build).
 /// UserDefaults key for the device ID (non-secret, public-facing identifier).
-private let deviceIdDefaultsKey = "tailspot.account.deviceId"
+nonisolated private let deviceIdDefaultsKey = "tailspot.account.deviceId"
 /// Keychain account name for the device bearer token.
-private let deviceTokenKeychainAccount = "deviceToken"
+nonisolated private let deviceTokenKeychainAccount = "deviceToken"
 
 nonisolated struct TailspotAccountClient {
     /// Production API base URL.
