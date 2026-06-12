@@ -30,6 +30,14 @@ struct ModelSlotDetailView: View {
     let set: CardSet
     let group: ModelGroup
 
+    /// Shared zoom-transition namespace from the Hangar NavigationStack —
+    /// used to zoom each tail's `CatchDetailView` open from the tapped
+    /// row. See `HangarZoomNamespace.swift`.
+    @Environment(\.hangarZoomNamespace) private var zoomNamespace
+    /// Bumped on each tail-row tap to drive a light `.sensoryFeedback`
+    /// impact, matching native cell-selection haptics.
+    @State private var tapTick = 0
+
     /// The catch whose card sits at the top of the screen. Nil only
     /// if the group has no tails — callers guarantee at least one tail,
     /// but the type system allows nil so we handle it gracefully.
@@ -44,17 +52,26 @@ struct ModelSlotDetailView: View {
             // back here. Use a matching custom chrome instead.
             HangarChildBar(title: displayModel)
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    cardHero
-                    tailsSection
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
+            // Native List (insetGrouped): the card hero rides in a
+            // borderless full-width row at the top, then the tails ride
+            // in a real `Section` so they get system separators, press
+            // highlights, and scroll physics. Brand dark look is kept by
+            // hiding the stock grouped background.
+            List {
+                cardHero
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                tailsSection
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .contentMargins(.bottom, 24, for: .scrollContent)
         }
         .background(Brand.Color.bgPrimary)
         .toolbar(.hidden, for: .navigationBar)
+        .sensoryFeedback(.impact(weight: .light), trigger: tapTick)
         // Preserves swipe-from-left-edge to pop. See SetDetailView for
         // the why — `.navigationBarBackButtonHidden(true)` disables the
         // interactive pop gesture too, which we don't want.
@@ -84,24 +101,28 @@ struct ModelSlotDetailView: View {
 
     // MARK: - Tails section
 
+    /// Native `Section` of tail rows. Header keeps the Brand mono
+    /// "TAILS (N)" identity; rows are real `List` rows (native
+    /// separators + press highlight) and each is a zoom source so the
+    /// catch card grows out of the tapped tail.
     private var tailsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Section header: "TAILS (N)"
+        Section {
+            ForEach(group.tails) { row in
+                NavigationLink(value: row) {
+                    tailRow(row)
+                }
+                .matchedZoomSource(id: row, in: zoomNamespace)
+                .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .simultaneousGesture(TapGesture().onEnded { tapTick += 1 })
+            }
+        } header: {
             Text("TAILS (\(group.distinctTailCount))")
                 .font(Brand.Font.mono(size: 10, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
-
-            VStack(spacing: 6) {
-                ForEach(group.tails) { row in
-                    NavigationLink(value: row) {
-                        tailRow(row)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Helpers
@@ -141,6 +162,8 @@ struct ModelSlotDetailView: View {
                 .font(Brand.Font.mono(size: 10, weight: .regular))
                 .foregroundStyle(Brand.Color.textTertiary)
         }
+        // System `List` + `NavigationLink` supplies the native trailing
+        // disclosure chevron — no hand-rolled one here.
         .padding(.vertical, 8)
         .padding(.trailing, 12)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 7))
