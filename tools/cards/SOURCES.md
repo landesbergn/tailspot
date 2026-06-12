@@ -18,7 +18,7 @@ verification was required.) The reference bitmaps live in
 | Card slot | Aircraft traced | File | License | Author / origin |
 |---|---|---|---|---|
 | **A320** (narrowbody twin) | Boeing KC-46 Pegasus — plan-view silhouette | [`File:Boeing_KC-46_Pegasus_plan_view_silhouette_drawing.jpg`](https://commons.wikimedia.org/wiki/File:Boeing_KC-46_Pegasus_plan_view_silhouette_drawing.jpg) | **Public domain** (PD-USGov-Military-Air Force) | US Air Force / Philip Bryant |
-| **747** (widebody quad) | Boeing 747 (NASA Shuttle Carrier Aircraft) — 3-view, top panel | [`File:Shuttle_Carrier_Aircraft_diagram.gif`](https://commons.wikimedia.org/wiki/File:Shuttle_Carrier_Aircraft_diagram.gif) | **Public domain** (PD-USGov-NASA) | NASA Dryden, Feb 1998 |
+| **747** (widebody quad) | Boeing 747 (NASA Shuttle Carrier Aircraft) — proportions only, procedural redraw | [`File:Shuttle_Carrier_Aircraft_diagram.gif`](https://commons.wikimedia.org/wiki/File:Shuttle_Carrier_Aircraft_diagram.gif) | **Public domain** (PD-USGov-NASA) | NASA Dryden, Feb 1998 |
 | **Citation** (T-tail bizjet) | Learjet 24 — 3-view, top panel | [`File:Learjet_24_3-View_line_art.gif`](https://commons.wikimedia.org/wiki/File:Learjet_24_3-View_line_art.gif) | **Public domain** (PD-USGov-NASA) | NASA |
 | **C172** (GA high-wing) | Cessna 172 — 3-view, top panel | [`File:Cessna_172.svg`](https://commons.wikimedia.org/wiki/File:Cessna_172.svg) | **CC0** | Marek Cel (Commons: *Cel 84*) |
 | **Heli** (Bell 206) | Bell OH-58A Kiowa (military Bell 206) — 3-view, plan panel | [`File:Bell_OH-58A_Kiowa_3-view_line_drawing.png`](https://commons.wikimedia.org/wiki/File:Bell_OH-58A_Kiowa_3-view_line_drawing.png) | **Public domain** (PD-USGov) | US Army manual |
@@ -126,9 +126,8 @@ in `ios/Tailspot/Tailspot/CardSilhouettes.swift` (the type names are
 load-bearing — the spike harness references them):
 
 ```sh
-python3 svg2swift.py work/kc46.svg    --name A320     --aspect 0.996 > generated/A320.swift
-python3 svg2swift.py work/747.svg     --name B747     --aspect 1.043 > generated/B747.swift
-python3 svg2swift.py work/learjet.svg --name Citation --aspect 0.902 > generated/Citation.swift
+python3 svg2swift.py work/kc46.svg    --name A320     --aspect 0.996 --no-flip > generated/A320.swift
+python3 svg2swift.py work/learjet.svg --name Citation --aspect 0.902 --no-flip > generated/Citation.swift
 python3 svg2swift.py work/c172.svg    --name C172     --aspect 1.339 > generated/C172.swift
 ```
 
@@ -136,18 +135,46 @@ python3 svg2swift.py work/c172.svg    --name C172     --aspect 1.339 > generated
 normalized path renders undistorted). `svg2swift.py` flips y so the
 already-nose-up reference maps to design-y 0 = nose.
 
+**A320 and Citation `--no-flip` note:** Both the KC-46 Pegasus plan-view
+silhouette image and the Learjet 24 3-view GIF have the nose pointing DOWN
+in the extracted plan panel (both references are rendered nose-at-bottom in
+the plan-view image). The default `flip_y=True` path in `normalize()` would
+produce `ny = 1 - t`, placing the bottom (nose) at ny=1 (tail end) — wrong.
+`--no-flip` keeps `ny = t`, so the reference's bottom (nose) maps to ny=0
+(screen top) as the design-space spec requires.
+
+**C172 is nose-UP in its reference** (the CC0 SVG shows the aircraft with nose
+at the top), so `flip_y=True` (default) applies correctly there.
+
+**B747 not traced:** The SCA diagram's Space Shuttle orbiter (mounted piggyback)
+has a delta wing that merges with the 747's own wing in the plan view, producing
+a composite silhouette where the stabilizer span appears ≈ the wing span. No
+other clean public-domain 747 plan view exists (all Commons 747 3-views are
+CC-BY-SA). `B747Silhouette` is therefore a reference-proportioned procedural
+redraw (like `HeliSilhouette`) built to the SCA plan-view measured proportions.
+The `work/747.svg` and `work/747_final.pbm` files still exist as intermediate
+products of the aborted trace.
+
 Control-point counts (kept under "a few hundred" per the spec, via potrace
 `--turdsize`/`--opttolerance` and a pre-trace blur to drop panel-line notches):
-C172 ≈ 170, 747 ≈ 310, KC-46/A320 ≈ 262, Learjet/Citation ≈ 226.
+C172 ≈ 170, KC-46/A320 ≈ 262, Learjet/Citation ≈ 226. B747: procedural (no count).
 
-## Helicopter: NOT a literal trace
+## B747 and Helicopter: NOT literal traces
 
-The Bell OH-58A plan view is a **dimensioned engineering drawing** — its rotor
-blades and dimension/leader lines bridge the airframe interior to the page
-exterior, so the flood-fill silhouette leaks (verified: the fill floods the
-whole page). The `HeliSilhouette` body is therefore a **reference-proportioned
-procedural redraw** built to the measured Bell 206 plan proportions (cabin in
-the forward third, thin tail boom ~half the length, tail rotor + horizontal
-stabilizer, skids); the disc + crossed main-rotor blades stay procedural. This
-is documented in `CardSilhouettes.swift` and is the honest split: four literal
-traces + one reference-proportioned redraw.
+**B747:** See above (pipeline section). `B747Silhouette` is a
+**reference-proportioned procedural redraw** built to the NASA SCA plan-view
+measured proportions — four underwing engines, swept wing, characteristic
+upper-deck hump, horizontal stabilizer ~34% of wing span.
+
+**Helicopter:** The Bell OH-58A plan view is a **dimensioned engineering
+drawing** — its rotor blades and dimension/leader lines bridge the airframe
+interior to the page exterior, so the flood-fill silhouette leaks (verified:
+the fill floods the whole page). The `HeliSilhouette` body is therefore a
+**reference-proportioned procedural redraw** built to the measured Bell 206
+plan proportions (cabin in the forward third, thin tail boom ~half the length,
+tail rotor + horizontal stabilizer, skids); the disc + crossed main-rotor
+blades stay procedural.
+
+This is documented in `CardSilhouettes.swift` and is the honest split: three
+literal traces (A320/KC-46, Citation/Learjet, C172) + two reference-proportioned
+procedural redraws (B747, Heli).
