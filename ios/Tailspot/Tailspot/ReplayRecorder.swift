@@ -56,6 +56,7 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
     /// did — without these, the analyzer would compute center-driven
     /// locks and diverge whenever tap-to-ID was used.
     case tapPin(TapPin)
+    case emptyTap(EmptyTap)
     /// User cleared the pin (tap-same-plane toggle, tap-empty-sky, or
     /// pinned plane left visibility). Separate from `tapPin` rather than
     /// folded into a nil-icao form so the wire format is unambiguous.
@@ -75,6 +76,25 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
         let timestamp: Date
         let sensor: SensorSnapshot
         let aircraft: [AircraftSnapshot]
+    }
+
+    /// "I see a plane here and you're showing me nothing" — recorded when
+    /// a tap matches no label (added 2026-06-12 after three field misses;
+    /// the user's frustrated tap is the most honest miss signal we have).
+    /// `nearestIcao24`/`reason` carry the app's own diagnosis at tap time:
+    /// reason ∈ "filtered" (in data, hidden tier), "off-frame" (visible
+    /// tier, outside the current FOV), "on-screen" (projected on screen
+    /// but farther than the tap radius), "nothing-nearby".
+    struct EmptyTap: Codable, Equatable, Sendable {
+        let timestamp: Date
+        let x: Double
+        let y: Double
+        let nearestIcao24: String?
+        let nearestCallsign: String?
+        let nearestSlantMeters: Double?
+        let nearestElevationDeg: Double?
+        let nearestAngularOffsetDeg: Double?
+        let reason: String
     }
 
     struct TapPin: Codable, Equatable, Sendable {
@@ -199,6 +219,7 @@ nonisolated extension ReplayEvent: Codable {
         case sessionStart = "session-start"
         case tick
         case tapPin = "tap-pin"
+        case emptyTap = "empty-tap"
         case unpin
     }
 
@@ -212,6 +233,8 @@ nonisolated extension ReplayEvent: Codable {
             self = .tick(try Tick(from: decoder))
         case .tapPin:
             self = .tapPin(try TapPin(from: decoder))
+        case .emptyTap:
+            self = .emptyTap(try EmptyTap(from: decoder))
         case .unpin:
             self = .unpin(try Unpin(from: decoder))
         }
@@ -229,6 +252,9 @@ nonisolated extension ReplayEvent: Codable {
         case .tapPin(let p):
             try c.encode(Kind.tapPin, forKey: .type)
             try p.encode(to: encoder)
+        case .emptyTap(let e):
+            try c.encode(Kind.emptyTap, forKey: .type)
+            try e.encode(to: encoder)
         case .unpin(let u):
             try c.encode(Kind.unpin, forKey: .type)
             try u.encode(to: encoder)
@@ -354,6 +380,13 @@ final class ReplayRecorder: ObservableObject {
             x: tapPoint.map { Double($0.x) },
             y: tapPoint.map { Double($0.y) }
         )))
+    }
+
+    /// Append an empty-sky-tap event with the app's own miss diagnosis.
+    /// See EmptyTap. No-op unless recording.
+    func recordEmptyTap(_ tap: ReplayEvent.EmptyTap) {
+        guard isRecording else { return }
+        writeOrStop(.emptyTap(tap))
     }
 
     /// Append an unpin event. Called when the user clears the pin

@@ -142,16 +142,49 @@ extension ObservedAircraft {
     /// Explicitly does NOT account for weather (clouds, haze vary by
     /// day) or atmospheric scattering. The curve encodes a typical Bay
     /// Area day; per-condition adjustment is out of scope for v0.
-    var isLikelyVisibleToObserver: Bool {
-        // Hysteresis: a plane already shown last frame keeps a wider cap so
-        // it doesn't blink off when it hovers at the boundary. New planes
-        // must clear the inner cap to appear.
-        let cap = wasShownLastFrame
-            ? visibilityCapMeters * Self.visibilityHysteresisFactor
-            : visibilityCapMeters
-        return elevationDeg > Self.minVisibleElevationDeg
-            && slantDistanceMeters < cap
+    var isLikelyVisibleToObserver: Bool { visibilityTier != .hidden }
+
+    /// Visibility is a TIER, not a boolean — the 2026-06-12 doctrine change.
+    ///
+    /// Three field sessions produced misses with three causes, two of them
+    /// the same kind: a hard distance cutoff guessing wrong about what the
+    /// eye can see (ANA179: 19.2 km contrail pruned by the 13 km plateau;
+    /// SKW5480: CONFIRMED VISIBLE at 18.0 km / 12.1° where the cap said
+    /// 7.7 km — directly contradicting the Berkeley ghost dataset that fit
+    /// the curve). Visibility is conditions-dependent (haze, sun angle,
+    /// contrails, airframe size); no static curve is right on both sides.
+    /// And the costs are asymmetric: a ghost label is a shrug, a hidden
+    /// visible plane is the product failing at its one job.
+    ///
+    /// So the curve no longer controls EXISTENCE, only EMPHASIS:
+    ///   .full   — inside the confidence curve (unchanged math): normal label.
+    ///   .faint  — beyond the curve but above the horizon floor and inside
+    ///             `faintVisibilityCeilingMeters`: dimmed label. Ghosts land
+    ///             here (quiet); real-but-far planes land here (catchable).
+    ///   .hidden — below the horizon floor or beyond the faint ceiling:
+    ///             not rendered. The floor still owns terrain clutter.
+    ///
+    /// Hysteresis applies at BOTH boundaries (full↔faint styling flicker is
+    /// merely ugly; faint↔hidden existence flicker breaks lock-on, as the
+    /// ASA733 field report showed for the old single boundary).
+    enum VisibilityTier: Equatable, Sendable { case full, faint, hidden }
+
+    var visibilityTier: VisibilityTier {
+        guard elevationDeg > Self.minVisibleElevationDeg else { return .hidden }
+        let h = wasShownLastFrame ? Self.visibilityHysteresisFactor : 1.0
+        if slantDistanceMeters < visibilityCapMeters * h { return .full }
+        if slantDistanceMeters < Self.faintVisibilityCeilingMeters * h { return .faint }
+        return .hidden
     }
+
+    /// Outer existence ceiling for the faint tier. 35 km covers every
+    /// confirmed-visible field datum with margin (SKW5480 18.0 km, ANA179
+    /// 19.2 km, GTI9648 16.6 km) while still excluding the genuinely
+    /// absurd (a 50 km bbox-edge plane at 2° elevation). The small-airframe
+    /// half-cap deliberately does NOT apply here — it shapes emphasis via
+    /// the full tier, but a GA plane the user can SEE must never be
+    /// unlabelable. Tunable.
+    static let faintVisibilityCeilingMeters: Double = 35_000
 
     /// The effective distance cap for THIS aircraft: the elevation curve,
     /// halved for small airframes. Field data 2026-06-06: N3001B (a GA

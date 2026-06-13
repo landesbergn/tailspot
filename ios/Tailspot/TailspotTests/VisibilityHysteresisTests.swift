@@ -36,17 +36,27 @@ struct VisibilityHysteresisTests {
     }
 
     @Test func planeJustPastCapHiddenUnlessAlreadyShown() {
+        // Tiered visibility (2026-06-12): the EXISTENCE boundary moved to
+        // the faint ceiling; the curve cap is now the full↔faint styling
+        // boundary. Hysteresis still applies at both.
         let cap = ObservedAircraft.maxVisibleDistanceMeters
-        var a = obs(slant: cap + 500)         // just past the inner cap
-        a.wasShownLastFrame = false
-        #expect(a.isLikelyVisibleToObserver == false)   // appear gate: hidden
-        a.wasShownLastFrame = true
-        #expect(a.isLikelyVisibleToObserver == true)    // stay gate: held by hysteresis
+        var styling = obs(slant: cap + 500)   // just past the full-tier cap
+        styling.wasShownLastFrame = false
+        #expect(styling.visibilityTier == .faint)       // appear gate: demoted
+        styling.wasShownLastFrame = true
+        #expect(styling.visibilityTier == .full)        // stay gate: held by hysteresis
+
+        let ceiling = ObservedAircraft.faintVisibilityCeilingMeters
+        var existence = obs(slant: ceiling + 500)       // just past the faint ceiling
+        existence.wasShownLastFrame = false
+        #expect(existence.isLikelyVisibleToObserver == false)
+        existence.wasShownLastFrame = true
+        #expect(existence.isLikelyVisibleToObserver == true)
     }
 
     @Test func planeFarPastOuterBandDropsEvenIfShown() {
-        let cap = ObservedAircraft.maxVisibleDistanceMeters
-        var a = obs(slant: cap * ObservedAircraft.visibilityHysteresisFactor + 500)
+        let ceiling = ObservedAircraft.faintVisibilityCeilingMeters
+        var a = obs(slant: ceiling * ObservedAircraft.visibilityHysteresisFactor + 500)
         a.wasShownLastFrame = true
         #expect(a.isLikelyVisibleToObserver == false)
     }
@@ -60,7 +70,8 @@ struct VisibilityHysteresisTests {
     /// The state machine end-to-end via the shared helper: appear at the
     /// inner cap, stay within the outer band (no flicker), drop beyond it.
     @Test func stateMachineHoldsAtBoundaryThenDrops() {
-        let cap = ObservedAircraft.maxVisibleDistanceMeters
+        // Existence boundary = the faint ceiling under tiered visibility.
+        let cap = ObservedAircraft.faintVisibilityCeilingMeters
 
         // frame 1: just past inner cap, nothing shown yet → does not appear
         var f1 = [obs(slant: cap + 200)]
