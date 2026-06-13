@@ -327,6 +327,80 @@ struct HangarGroupingTests {
                 "Unknown group must sort last, got: \(groups.map(\.model))")
     }
 
+    // MARK: - representativeCatch
+
+    /// Empty tail list → nil (no representative catch to show).
+    @Test func representativeCatchOfEmptyGroupIsNil() {
+        #expect(HangarGrouping.representativeCatch(in: []) == nil)
+    }
+
+    /// Single tail → that tail's firstCatch.
+    @Test func representativeCatchOfSingleTailIsFirstCatch() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "solo", manufacturer: "BOEING", model: "737", caughtAt: t0),
+        ], by: .recent)
+        let row = groups[0].rows[0]
+        let rep = HangarGrouping.representativeCatch(in: [row])
+        #expect(rep?.icao24 == "solo")
+        #expect(rep?.caughtAt == t0)
+    }
+
+    /// Multiple tails → the one whose firstCatch is earliest is chosen.
+    @Test func representativeCatchPicksEarliest() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        // Three tails of the same model — each has ONE catch, so
+        // firstCatch == mostRecent. "old" is the earliest.
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "new",  manufacturer: "BOEING", model: "737", caughtAt: t0.addingTimeInterval(120)),
+            makeCatch(icao: "old",  manufacturer: "BOEING", model: "737", caughtAt: t0),
+            makeCatch(icao: "mid",  manufacturer: "BOEING", model: "737", caughtAt: t0.addingTimeInterval(60)),
+        ], by: .recent)
+        let rows = groups[0].rows
+        let rep = HangarGrouping.representativeCatch(in: rows)
+        #expect(rep?.icao24 == "old",
+                "Expected 'old' (t0), got icao24 = \(rep?.icao24 ?? "nil")")
+        #expect(rep?.caughtAt == t0)
+    }
+
+    /// When a tail has multiple catches, the tail's *firstCatch* (earliest
+    /// of that icao24's allCatches) drives the comparison — NOT mostRecent.
+    /// If "early-icao" was first seen earlier than "late-icao", it should
+    /// win even if its most-recent catch is newer.
+    @Test func representativeCatchUsesFirstCatchNotMostRecent() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        // "early-icao": first caught at t0 (but also caught again at t0+200).
+        // "late-icao":  only caught at t0+100.
+        // mostRecent of "early-icao" is t0+200, which is after t0+100 —
+        // but firstCatch of "early-icao" is t0, which is before t0+100.
+        // So the representative should be "early-icao".
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "early-icao", manufacturer: "AIRBUS", model: "A320", caughtAt: t0),
+            makeCatch(icao: "early-icao", manufacturer: "AIRBUS", model: "A320", caughtAt: t0.addingTimeInterval(200)),
+            makeCatch(icao: "late-icao",  manufacturer: "AIRBUS", model: "A320", caughtAt: t0.addingTimeInterval(100)),
+        ], by: .recent)
+        let rows = groups[0].rows
+        let rep = HangarGrouping.representativeCatch(in: rows)
+        #expect(rep?.icao24 == "early-icao",
+                "Expected 'early-icao' (firstCatch = t0), got icao24 = \(rep?.icao24 ?? "nil")")
+        #expect(rep?.caughtAt == t0)
+    }
+
+    /// Ties on firstCatch.caughtAt break by icao24 ascending — stable
+    /// across rerenders (no non-determinism).
+    @Test func representativeCatchTiesBreakByIcao24Ascending() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let groups = HangarGrouping.group([
+            makeCatch(icao: "zzz", manufacturer: "BOEING", model: "777", caughtAt: t0),
+            makeCatch(icao: "aaa", manufacturer: "BOEING", model: "777", caughtAt: t0),
+        ], by: .recent)
+        let rows = groups[0].rows
+        let rep = HangarGrouping.representativeCatch(in: rows)
+        // "aaa" < "zzz" alphabetically, so "aaa" should win.
+        #expect(rep?.icao24 == "aaa",
+                "Expected 'aaa' (lexicographically first), got \(rep?.icao24 ?? "nil")")
+    }
+
     // MARK: - Space-variant and engine-code styles collapse into one group
 
     /// Old catches (no typecode) with space-style ("A380 842") or raw

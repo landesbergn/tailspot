@@ -35,6 +35,14 @@ struct HangarView: View {
         )
     }
 
+    /// One shared namespace for every zoom transition inside this stack
+    /// (set cell → set detail, model cell → model detail, tail row →
+    /// catch detail). Published through the environment so source cells
+    /// and the `navigationDestination` destinations — which live in
+    /// different views — can match by the route's stable id. See
+    /// `HangarZoomNamespace.swift`.
+    @Namespace private var zoomNamespace
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -43,6 +51,7 @@ struct HangarView: View {
             }
                 .toolbar(.hidden, for: .navigationBar)
                 .background(Brand.Color.bgPrimary)
+                .environment(\.hangarZoomNamespace, zoomNamespace)
                 .task {
                     // Collection-wide airframe-fact backfill: resolves
                     // typecode (and other static fields) for catches
@@ -53,6 +62,10 @@ struct HangarView: View {
                 }
                 .navigationDestination(for: HangarRow.self) { row in
                     CatchDetailView(row: row)
+                        // Zoom the catch card open from whichever cell
+                        // was tapped (Recent grid, a set's tail row, …),
+                        // matched by the row's stable icao24 id.
+                        .zoomTransition(id: row, in: zoomNamespace)
                 }
                 .navigationDestination(for: SetDetailRoute.self) { route in
                     // Task 16 — real `SetDetailView` (model-slot grid)
@@ -74,6 +87,10 @@ struct HangarView: View {
                     // to "no tails" gracefully rather than crashing.
                     if let set = CardSets.all.first(where: { $0.id == route.setId }) {
                         ModelGroupBridge(set: set, modelName: route.model)
+                            // Grow the model-slot card out of the tapped
+                            // SetDetailView model cell (same `route` id on
+                            // both ends of the match).
+                            .zoomTransition(id: route, in: zoomNamespace)
                     }
                 }
         }

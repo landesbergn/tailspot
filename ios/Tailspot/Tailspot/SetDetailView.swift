@@ -19,6 +19,14 @@ struct SetDetailView: View {
     let set: CardSet
 
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
+    /// Shared zoom-transition namespace from the Hangar NavigationStack.
+    /// Tapping a model cell zooms its `ModelSlotDetailView` open from the
+    /// tapped frame instead of sliding in as a flat push. See
+    /// `HangarZoomNamespace.swift`.
+    @Environment(\.hangarZoomNamespace) private var zoomNamespace
+    /// Bumped on each model-cell tap so `.sensoryFeedback` fires a light
+    /// impact — the same physical "tick" iOS gives native cell selection.
+    @State private var tapTick = 0
 
     private var rows: [HangarRow] {
         HangarGrouping.group(catches, by: .recent).first?.rows ?? []
@@ -37,21 +45,34 @@ struct SetDetailView: View {
             // back here. Use a matching custom chrome instead.
             HangarChildBar(title: set.title)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    if groups.isEmpty {
-                        emptyHint
-                    } else {
-                        modelList
-                    }
+            // Native List (insetGrouped) replaces the hand-stacked
+            // ScrollView + VStack: we get system row insets, separators,
+            // tap highlight states, and scroll physics for free. The
+            // Brand dark look is preserved by hiding the stock grouped
+            // background (`.scrollContentBackground(.hidden)`) and
+            // painting our own row/section backgrounds.
+            List {
+                header
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 12, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                if groups.isEmpty {
+                    emptyHint
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } else {
+                    modelSection
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .contentMargins(.bottom, 24, for: .scrollContent)
         }
         .background(Brand.Color.bgPrimary)
         .toolbar(.hidden, for: .navigationBar)
+        .sensoryFeedback(.impact(weight: .light), trigger: tapTick)
         // Keep the interactive-pop gesture (swipe-from-left-edge) by
         // NOT setting `.navigationBarBackButtonHidden(true)` — that
         // flag disables the gesture in addition to hiding the back
@@ -96,14 +117,30 @@ struct SetDetailView: View {
 
     // MARK: - Model list
 
-    private var modelList: some View {
-        VStack(spacing: 8) {
+    /// One native `Section` per set. The header keeps the Brand mono
+    /// "MODELS" label (the HUD-flavored identity stays); the rows are
+    /// real `List` rows so they pick up native separators, the system
+    /// press-highlight, and swipe geometry. Each cell is a zoom source
+    /// keyed by the route, so the tapped frame is what grows into the
+    /// model detail.
+    private var modelSection: some View {
+        Section {
             ForEach(groups) { group in
-                NavigationLink(value: ModelSlotRoute(setId: set.id, model: group.model)) {
+                let route = ModelSlotRoute(setId: set.id, model: group.model)
+                NavigationLink(value: route) {
                     modelRow(group)
                 }
-                .buttonStyle(.plain)
+                .matchedZoomSource(id: route, in: zoomNamespace)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .simultaneousGesture(TapGesture().onEnded { tapTick += 1 })
             }
+        } header: {
+            Text("MODELS")
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
         }
     }
 
@@ -124,6 +161,8 @@ struct SetDetailView: View {
                     .foregroundStyle(Brand.Color.textTertiary)
             }
         }
+        // System `List` + `NavigationLink` already draws the native
+        // trailing disclosure chevron; we don't hand-roll one.
         .padding(.vertical, 10)
         .padding(.horizontal, 14)
         .background(Brand.Color.bgElevated)
