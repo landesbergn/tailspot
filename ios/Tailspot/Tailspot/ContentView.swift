@@ -22,6 +22,15 @@ struct ContentView: View {
     private static let baseHfovDeg: Double = 56
     private static let baseVfovDeg: Double = 72
 
+    /// Reserved vertical zones the edge-of-frame chevrons must stay out of:
+    /// the top compass/zoom pills (`.padding(.top, 12)` + two ~26pt pills) and
+    /// the bottom capture bar (72pt button + 28pt padding + safe-area inset).
+    /// Generous so a chevron never overlaps a control even when both pills are
+    /// present. Chevrons are an ambient hint, not a control, so erring toward a
+    /// tighter usable band is correct.
+    private static let edgeIndicatorTopInset: CGFloat = 96
+    private static let edgeIndicatorBottomInset: CGFloat = 140
+
     /// Compass accuracy must exceed this (degrees) for the caution
     /// badge to be considered. Bumped from 10° to 25° because typical
     /// urban CL readings are 10–20° even when the compass is fine —
@@ -315,6 +324,55 @@ struct ContentView: View {
                                     )
                                 }
                             }
+
+                            // Edge-of-frame "finder scope" chevrons. Any
+                            // visible plane that does NOT project on-screen at
+                            // the current heading/zoom gets a small chevron
+                            // pinned to the screen edge in its direction, with
+                            // its callsign. Motivated by GTI9648 (2026-06-12):
+                            // at 5× zoom the FOV is ~11°, narrower than the
+                            // session's ±11° compass error, so an in-data plane
+                            // sat just off-frame and the sky looked empty. The
+                            // chevron tells the user which way to pan.
+                            //
+                            // Built from the SAME per-frame `basis` the labels
+                            // project through, so a plane is shown by exactly
+                            // one of {PlaneLabel, chevron} — never both, never
+                            // neither (proven in OffscreenIndicatorTests). The
+                            // usable rect is shrunk to keep chevrons out of the
+                            // top compass/zoom pills and the bottom capture bar.
+                            let offscreenCandidates: [(icao24: String, label: String, frame: Geo.CameraFrameVector)] =
+                                visible.map { obs in
+                                    let cs = obs.aircraft.callsign?
+                                        .trimmingCharacters(in: .whitespaces)
+                                        .nonEmpty
+                                        ?? obs.aircraft.icao24.uppercased()
+                                    let f = Geo.cameraFrameVector(
+                                        targetBearingDeg: obs.bearingDeg,
+                                        targetElevationDeg: obs.elevationDeg,
+                                        basis: basis
+                                    )
+                                    return (obs.aircraft.icao24, cs, f)
+                                }
+                            let usableRect = CGRect(
+                                x: 0,
+                                y: Self.edgeIndicatorTopInset,
+                                width: geo.size.width,
+                                height: max(0, geo.size.height
+                                    - Self.edgeIndicatorTopInset
+                                    - Self.edgeIndicatorBottomInset)
+                            )
+                            let edgeIndicators = OffscreenIndicators.indicators(
+                                candidates: offscreenCandidates,
+                                screenSize: geo.size,
+                                usableRect: usableRect,
+                                hfovDeg: effectiveHfov,
+                                vfovDeg: effectiveVfov
+                            )
+                            ForEach(edgeIndicators, id: \.icao24) { ind in
+                                EdgeIndicatorView(indicator: ind)
+                            }
+                            .allowsHitTesting(false)
 
                             if visible.isEmpty {
                                 // Empty-sky overlay. Shown when nothing
@@ -1908,6 +1966,62 @@ private struct PlaneLabel: View {
 
 private extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
+}
+
+// MARK: - Edge-of-frame indicator
+
+/// A chevron + callsign chip pinned to the screen edge, pointing toward an
+/// off-frame aircraft. Same HUD vocabulary as `PlaneLabel` (cyan, B612 mono),
+/// but DIMMED relative to on-screen labels — it's a "look this way" hint, not
+/// the primary readout. The chevron rotates to point along the pan direction;
+/// the chip sits just inboard of it so the whole indicator stays on-screen.
+///
+/// `position(_:)` places the indicator's center at the computed edge anchor,
+/// so as the plane pans toward frame the anchor slides along the edge and the
+/// indicator slides with it — then vanishes the instant the real PlaneLabel
+/// takes over (the on/off test is a strict complement; see
+/// OffscreenIndicatorTests). Animatable on `.point` so the slide is smooth.
+private struct EdgeIndicatorView: View {
+    let indicator: OffscreenIndicator
+
+    /// Which side of the chevron the chip sits on, so the chip reads inboard
+    /// (toward screen center) rather than off the edge. Derived from the
+    /// chevron angle: pointing right → chip to the left, etc.
+    private var chipLeading: Bool {
+        // angleDeg: 0 = right, ±180 = left. Chip goes opposite the arrow.
+        abs(indicator.angleDeg) < 90
+    }
+
+    var body: some View {
+        // Chevron glyph (natural orientation points right) rotated to the
+        // computed pan direction.
+        let chevron = Image(systemName: "chevron.right")
+            .font(.system(size: 18, weight: .bold))
+            .foregroundStyle(Brand.Color.cyan.opacity(0.85))
+            .rotationEffect(.degrees(indicator.angleDeg))
+
+        let chip = Text(indicator.label)
+            .font(Brand.Font.mono(size: 9, weight: .bold))
+            .foregroundStyle(Brand.Color.cyan.opacity(0.85))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(Brand.Color.bgPrimary.opacity(0.5),
+                        in: .rect(cornerRadius: 3))
+
+        HStack(spacing: 3) {
+            if chipLeading {
+                chip
+                chevron
+            } else {
+                chevron
+                chip
+            }
+        }
+        // Dimmed relative to the full-strength on-screen labels.
+        .opacity(0.7)
+        .position(indicator.point)
+        .allowsHitTesting(false)
+    }
 }
 
 // MARK: - Lock-on bracket shapes

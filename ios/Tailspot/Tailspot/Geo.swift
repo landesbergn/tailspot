@@ -199,6 +199,39 @@ nonisolated enum Geo {
         atan2(gravityX, -gravityY).degrees
     }
 
+    /// A target's direction expressed in the camera's own frame: the three
+    /// dot products of the target unit vector against the basis axes, before
+    /// any perspective divide or FOV clamp. `z > 0` ⇒ in front of the camera;
+    /// `x` is screen-rightward, `y` is screen-upward (both in world units).
+    ///
+    /// Shared by `screenPosition` (which divides + clamps) and the
+    /// off-screen-indicator edge math (which needs the un-clamped direction,
+    /// including the behind-camera case where `z <= 0`). Keeping one
+    /// projection of (bearing, elevation) → camera frame guarantees the
+    /// on-screen label test and the off-screen chevron test can never drift.
+    nonisolated struct CameraFrameVector: Equatable, Sendable {
+        let x: Double   // screen-right component
+        let y: Double   // screen-up component
+        let z: Double   // forward (bore-sight) component; > 0 ⇒ in front
+    }
+
+    /// Project an angular target (bearing/elevation) into the camera frame.
+    /// No clamp, no divide — see `CameraFrameVector`.
+    static func cameraFrameVector(
+        targetBearingDeg: Double,
+        targetElevationDeg: Double,
+        basis: CameraBasis
+    ) -> CameraFrameVector {
+        let b = targetBearingDeg.radians
+        let e = targetElevationDeg.radians
+        let t = SIMD3<Double>(cos(e) * sin(b), cos(e) * cos(b), sin(e))
+        return CameraFrameVector(
+            x: simd_dot(t, basis.right),
+            y: simd_dot(t, basis.up),
+            z: simd_dot(t, basis.forward)
+        )
+    }
+
     /// Pinhole-project an angular target (bearing/elevation) through a
     /// precomputed camera basis. Returns nil if the target is behind the
     /// camera or outside the view frustum.
@@ -210,18 +243,16 @@ nonisolated enum Geo {
         hfovDeg: Double,
         vfovDeg: Double
     ) -> CGPoint? {
-        let b = targetBearingDeg.radians
-        let e = targetElevationDeg.radians
-        let t = SIMD3<Double>(cos(e) * sin(b), cos(e) * cos(b), sin(e))
-
-        let zCam = simd_dot(t, basis.forward)
-        guard zCam > 0 else { return nil }   // target behind the camera
-        let xCam = simd_dot(t, basis.right)
-        let yCam = simd_dot(t, basis.up)
+        let v = cameraFrameVector(
+            targetBearingDeg: targetBearingDeg,
+            targetElevationDeg: targetElevationDeg,
+            basis: basis
+        )
+        guard v.z > 0 else { return nil }   // target behind the camera
 
         // Perspective divide, then normalize against the half-FOV tangents.
-        let xRel = (xCam / zCam) / tan((hfovDeg / 2).radians)
-        let yRel = (yCam / zCam) / tan((vfovDeg / 2).radians)
+        let xRel = (v.x / v.z) / tan((hfovDeg / 2).radians)
+        let yRel = (v.y / v.z) / tan((vfovDeg / 2).radians)
         guard abs(xRel) <= 1, abs(yRel) <= 1 else { return nil }
 
         return CGPoint(
