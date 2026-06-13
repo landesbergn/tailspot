@@ -109,6 +109,13 @@ struct ContentView: View {
     /// capture closure at `makeUIView` time. Held via `@State` (not
     /// `@StateObject`) — it's a one-method mailbox, not a publisher.
     @State private var captureBridge = CameraCaptureBridge()
+    /// Frame tap for visual confirmation — same mailbox pattern as
+    /// captureBridge. Wired to the pipeline in the root `.task` below.
+    @State private var frameBridge = CameraFrameBridge()
+    /// Visual confirmation: detector + tracker behind the camera tap
+    /// (SWIFT-DESIGN.md). Publishes per-icao corrected positions that the
+    /// lock bracket prefers over the geometric prediction.
+    @StateObject private var visualConfirm = VisualConfirmationPipeline()
     /// Guards re-entry of the capture button while a catch is in
     /// flight. Cleared when the user dismisses the reveal sheet.
     /// NOTE: T7 un-wired the read at the button site when collapsing
@@ -157,7 +164,8 @@ struct ContentView: View {
             // Main AR view and overlays (camera, lock brackets, debug panels, etc.)
             ZStack {
                 if cameraAuthorized {
-                    CameraPreview(zoomFactor: zoom, captureBridge: captureBridge)
+                    CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
+                                  frameBridge: frameBridge)
                         .ignoresSafeArea()
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
@@ -289,9 +297,18 @@ struct ContentView: View {
                                     let metaForPlane: AircraftMetadata? = isPinned
                                         ? (lockedMetadata ?? (ambientMetadata[icao] ?? nil))
                                         : (ambientMetadata[icao] ?? nil)
+                                    // Visual confirmation: the locked plane's
+                                    // bracket snaps to the detector's fix when
+                                    // one is live; everything else (and the
+                                    // fallback) stays at the geometric
+                                    // prediction. Pre-catch only — the catch
+                                    // photo path still uses onScreenPositions.
+                                    let drawPos = (isPinned
+                                        ? visualConfirm.fixes[icao]?.screenPoint
+                                        : nil) ?? pos
                                     PlaneLabel(
                                         aircraft: obs,
-                                        position: pos,
+                                        position: drawPos,
                                         isPinned: isPinned,
                                         isDimmed: pinnedIcaoForLabels != nil && !isPinned,
                                         metadata: metaForPlane
@@ -363,6 +380,18 @@ struct ContentView: View {
                             let onScreenPositions: [String: CGPoint] = Dictionary(
                                 onScreenProjected.map { ($0.icao, $0.position) },
                                 uniquingKeysWith: { first, _ in first }
+                            )
+                            // Visual confirmation: tell the detector where
+                            // the current lock target is predicted to be.
+                            // Lock-only write (safe inside body); the
+                            // detector picks it up on its next frame.
+                            let _ = visualConfirm.updateTarget(
+                                lockOn.state.targetIcao24.flatMap { icao in
+                                    onScreenPositions[icao].map {
+                                        .init(icao24: icao, predictedScreen: $0,
+                                              screenSize: geo.size)
+                                    }
+                                }
                             )
                             let pinForCapture = lockOn.state.targetIcao24
                             let mode: CaptureMode = {
@@ -572,10 +601,21 @@ struct ContentView: View {
         // toggles on; tears down when it toggles off (Task is cancelled
         // because .task(id:) re-runs on id change).
         .task(id: recorder.isRecording) {
+            // Mirror the recording flag into the detection pipeline so it
+            // saves ground-truth crop frames alongside the replay JSONL.
+            visualConfirm.setRecording(recorder.isRecording)
             guard recorder.isRecording else { return }
             while recorder.isRecording, !Task.isCancelled {
                 recordReplayTick()
                 try? await Task.sleep(for: .seconds(1))
+            }
+        }
+        .task {
+            // Wire the camera frame tap into the detection pipeline once.
+            // The handler runs on the camera's video queue; ingestFrame is
+            // nonisolated and lock-guarded for exactly that.
+            frameBridge.frameHandler = { [weak visualConfirm] buffer in
+                visualConfirm?.ingestFrame(buffer)
             }
         }
         .sheet(isPresented: Binding(
@@ -1278,6 +1318,7 @@ struct ContentView: View {
             Group {
                 recordingRow
                 analyzeRow
+                visualConfirmRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1516,6 +1557,36 @@ struct ContentView: View {
                 // OPENSKY → TAILSPOT API
                 adsb.useBackend = true
             }
+        }
+    }
+
+    /// Tap-to-toggle row for visual confirmation. Shows availability
+    /// (model in bundle), the on/off state, and — when a fix is live —
+    /// a cyan FIX tag with its confidence, so a field session can see at
+    /// a glance whether the detector is locked onto the real plane.
+    private var visualConfirmRow: some View {
+        HStack(spacing: 8) {
+            Text("Visual confirm:")
+            if !visualConfirm.isAvailable {
+                Text("[NO MODEL]").foregroundStyle(Brand.Color.alertWarning).bold()
+            } else {
+                Text(visualConfirm.enabled ? "[ON]" : "[OFF]")
+                    .foregroundStyle(visualConfirm.enabled
+                                     ? Brand.Color.alertNormal
+                                     : Brand.Color.textTertiary)
+                    .bold()
+                if let fix = visualConfirm.fixes.values.first {
+                    Text(String(format: "[FIX %.2f]", fix.confidence))
+                        .foregroundStyle(Brand.Color.cyan)
+                        .bold()
+                }
+            }
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture {
+            guard visualConfirm.isAvailable else { return }
+            visualConfirm.enabled.toggle()
         }
     }
 

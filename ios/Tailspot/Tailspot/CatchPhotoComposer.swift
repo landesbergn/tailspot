@@ -174,4 +174,17 @@ nonisolated struct AspectFillTransform: Equatable {
             y: (screenPoint.y - offsetY) / s
         )
     }
+
+    /// Inverse of `photoPoint(fromScreenPoint:)`: photo-pixel → screen
+    /// point. Used by visual confirmation to map a detector hit (found in
+    /// camera-buffer pixels) back onto the AR overlay's coordinate space.
+    func screenPoint(fromPhotoPoint photoPoint: CGPoint) -> CGPoint {
+        let s = scale
+        let offsetX = (screenSize.width - photoSize.width * s) / 2.0
+        let offsetY = (screenSize.height - photoSize.height * s) / 2.0
+        return CGPoint(
+            x: photoPoint.x * s + offsetX,
+            y: photoPoint.y * s + offsetY
+        )
+    }
 }
