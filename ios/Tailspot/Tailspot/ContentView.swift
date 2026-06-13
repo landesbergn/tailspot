@@ -1889,12 +1889,14 @@ struct ContentView: View {
         var best: (obs: ObservedAircraft, offsetDeg: Double, onScreen: Bool)? = nil
         for obs in adsb.observed {
             let v = Geo.cameraFrameVector(
-                bearingDeg: obs.bearingDeg, elevationDeg: obs.elevationDeg, basis: basis
+                targetBearingDeg: obs.bearingDeg,
+                targetElevationDeg: obs.elevationDeg,
+                basis: basis
             )
             // Camera-frame angles (forward = +z); behind-camera planes get a
             // large synthetic offset so they lose to anything in front.
-            let azDeg = Geo.toDegrees(atan2(v.x, max(v.z, 1e-6)))
-            let elDeg = Geo.toDegrees(atan2(v.y, max(v.z, 1e-6)))
+            let azDeg = atan2(v.x, max(v.z, 1e-6)) * 180 / .pi
+            let elDeg = atan2(v.y, max(v.z, 1e-6)) * 180 / .pi
             let off = v.z <= 0
                 ? 180.0
                 : ((azDeg - tapAzDeg) * (azDeg - tapAzDeg)
