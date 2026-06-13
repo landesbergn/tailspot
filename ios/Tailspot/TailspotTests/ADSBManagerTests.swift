@@ -339,9 +339,16 @@ struct ADSBManagerTests {
     }
 
     @Test func notVisibleWhenTooFar() {
-        // Past even the 25 km contrail ceiling at high elevation.
-        let obs = Self.observed(elevationDeg: 45, slantDistanceMeters: 30_000)
-        #expect(!obs.isLikelyVisibleToObserver)
+        // 30 km @ 45° is past the FULL curve (25 km) but inside the faint
+        // ceiling (35 km) — tiered visibility (2026-06-12) renders it as a
+        // dimmed label rather than hiding it.
+        let nearFar = Self.observed(elevationDeg: 45, slantDistanceMeters: 30_000)
+        #expect(nearFar.visibilityTier == .faint)
+        #expect(nearFar.isLikelyVisibleToObserver)
+        // Existence ends at the faint ceiling: 36 km is hidden outright.
+        let beyond = Self.observed(elevationDeg: 45, slantDistanceMeters: 36_000)
+        #expect(beyond.visibilityTier == .hidden)
+        #expect(!beyond.isLikelyVisibleToObserver)
     }
 
     @Test func visibleAtEdgeOfRange() {
@@ -371,24 +378,31 @@ struct ADSBManagerTests {
     @Test func farLowElevationGhostIsFiltered() {
         // The 2026-06-04 field session's ghost signature: 21 km @ 3.5°
         // (N2838Q) was labeled but invisible — far + low is haze/clutter.
+        // Demoted to faint under tiered visibility (see daytime ghost case).
         let obs = Self.observed(elevationDeg: 3.5, slantDistanceMeters: 21_000)
-        #expect(!obs.isLikelyVisibleToObserver)
+        #expect(obs.visibilityTier == .faint)
     }
 
     @Test func nightHighElevationGhostIsFiltered() {
         // 2026-06-04 night session: 20.5 km @ 11° (SKW5983) was labeled
         // but NOT visible — tap-pin ground truth. High elevation does not
         // rescue a distant airframe.
+        // Demoted to faint under tiered visibility (see daytime ghost case).
         let obs = Self.observed(elevationDeg: 11, slantDistanceMeters: 20_500)
-        #expect(!obs.isLikelyVisibleToObserver)
+        #expect(obs.visibilityTier == .faint)
     }
 
     @Test func daytimeMidElevationGhostIsFiltered() {
         // 2026-06-06 daytime session: 33.3 km @ 10.8° (TZP30) was the
         // reported false positive that motivated moving the plateau off
         // the 10° edge.
+        // Tiered visibility (2026-06-12): this confirmed ghost is DEMOTED
+        // to faint (a quiet label), not hidden — SKW5480 proved the same
+        // geometry class can be genuinely visible on a clear day, and the
+        // cost asymmetry (hidden visible plane >> quiet ghost label) says
+        // when in doubt, show dimly.
         let obs = Self.observed(elevationDeg: 10.8, slantDistanceMeters: 33_300)
-        #expect(!obs.isLikelyVisibleToObserver)
+        #expect(obs.visibilityTier == .faint)
     }
 
     @Test func urbanCloseGhostsAreFiltered() {
@@ -399,10 +413,13 @@ struct ADSBManagerTests {
         //   N21866 6.3 km @ 4.1°
         //   VJA534 8.1 km @ 12.3°
         //   SWA3042 11 km @ 17.4° (737 in daylight — still invisible)
-        #expect(!Self.observed(elevationDeg: 1.9, slantDistanceMeters: 9_300).isLikelyVisibleToObserver)
-        #expect(!Self.observed(elevationDeg: 4.1, slantDistanceMeters: 6_300).isLikelyVisibleToObserver)
-        #expect(!Self.observed(elevationDeg: 12.3, slantDistanceMeters: 8_100).isLikelyVisibleToObserver)
-        #expect(!Self.observed(elevationDeg: 17.4, slantDistanceMeters: 11_000).isLikelyVisibleToObserver)
+        // Tiered visibility (2026-06-12): confirmed ghosts demote to faint
+        // (quiet label) rather than hide — full labels stay reserved for
+        // the confidence curve these cases sit outside of.
+        #expect(Self.observed(elevationDeg: 1.9, slantDistanceMeters: 9_300).visibilityTier == .faint)
+        #expect(Self.observed(elevationDeg: 4.1, slantDistanceMeters: 6_300).visibilityTier == .faint)
+        #expect(Self.observed(elevationDeg: 12.3, slantDistanceMeters: 8_100).visibilityTier == .faint)
+        #expect(Self.observed(elevationDeg: 17.4, slantDistanceMeters: 11_000).visibilityTier == .faint)
     }
 
     @Test func confirmedSightingsAreKept() {
@@ -421,10 +438,14 @@ struct ADSBManagerTests {
         // single subtends a third of an airliner — the N-number heuristic
         // halves its cap to ~3.3 km. The identical geometry under an
         // airline callsign stays visible.
-        #expect(!Self.observed(elevationDeg: 8, slantDistanceMeters: 4_800, callsign: "N3001B").isLikelyVisibleToObserver)
-        #expect(Self.observed(elevationDeg: 8, slantDistanceMeters: 4_800, callsign: "SKW123").isLikelyVisibleToObserver)
-        // And a genuinely-close GA plane still shows (2 km @ 8°).
-        #expect(Self.observed(elevationDeg: 8, slantDistanceMeters: 2_000, callsign: "N3001B").isLikelyVisibleToObserver)
+        // Under tiered visibility (2026-06-12) the GA half-cap shapes
+        // EMPHASIS, not existence: the confirmed N3001B ghost is demoted
+        // to faint (quiet) while the same geometry under an airline
+        // callsign earns a full label.
+        #expect(Self.observed(elevationDeg: 8, slantDistanceMeters: 4_800, callsign: "N3001B").visibilityTier == .faint)
+        #expect(Self.observed(elevationDeg: 8, slantDistanceMeters: 4_800, callsign: "SKW123").visibilityTier == .full)
+        // And a genuinely-close GA plane still gets the full treatment.
+        #expect(Self.observed(elevationDeg: 8, slantDistanceMeters: 2_000, callsign: "N3001B").visibilityTier == .full)
     }
 
     @Test func smallAirframeHeuristic() {

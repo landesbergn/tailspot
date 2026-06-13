@@ -229,6 +229,9 @@ struct ReplayAnalyzer {
             case .tapPin(let p):
                 pinnedIcao = p.icao24
                 engine.forceLock(targetIcao24: p.icao24, now: p.timestamp)
+            case .emptyTap:
+                // Diagnostic ground truth only — no engine effect.
+                break
             case .unpin:
                 pinnedIcao = nil
                 // Engine state isn't reset here — the next tick will
@@ -252,6 +255,7 @@ struct ReplayAnalyzer {
         case .tick(let t):         return t.timestamp
         case .tapPin(let p):       return p.timestamp
         case .unpin(let u):        return u.timestamp
+        case .emptyTap(let e):     return e.timestamp
         }
     }
 

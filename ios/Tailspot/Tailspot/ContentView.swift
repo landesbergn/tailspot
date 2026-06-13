@@ -319,7 +319,11 @@ struct ContentView: View {
                                         aircraft: obs,
                                         position: drawPos,
                                         isPinned: isPinned,
-                                        isDimmed: pinnedIcaoForLabels != nil && !isPinned,
+                                        // Faint visibility tier (2026-06-12
+                                        // doctrine): beyond-confidence planes
+                                        // render quiet instead of hidden.
+                                        isDimmed: (pinnedIcaoForLabels != nil && !isPinned)
+                                            || obs.visibilityTier == .faint,
                                         metadata: metaForPlane
                                     )
                                 }
@@ -1850,8 +1854,91 @@ struct ContentView: View {
         }
 
         // (4) Truly empty frame — brief NO AIRCRAFT HERE ripple at
-        // the tap point.
+        // the tap point, AND a recorded miss diagnosis: the user is
+        // telling us they see something we aren't labeling (2026-06-12,
+        // after three field misses — the frustrated tap is the most
+        // honest signal we have).
         showEmptyTapRipple(at: point)
+        recordEmptySkyTapDiagnosis(
+            at: point, in: screenSize,
+            phoneHeadingDeg: phoneHeadingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg, now: now
+        )
+    }
+
+    /// Build + record the empty-sky-tap diagnosis: find the nearest
+    /// in-data aircraft to the tapped direction across ALL observed
+    /// aircraft (including hidden tiers — that is the point), classify
+    /// why it wasn't taprable, write a replay event (when recording) and
+    /// an analytics event (always; angles + ids only, no location).
+    private func recordEmptySkyTapDiagnosis(
+        at point: CGPoint, in screenSize: CGSize,
+        phoneHeadingDeg: Double, cameraElevationDeg: Double,
+        rollDeg: Double, hfovDeg: Double, vfovDeg: Double, now: Date
+    ) {
+        let basis = Geo.cameraBasis(
+            headingDeg: phoneHeadingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg
+        )
+        // Tap direction as angular offsets from the view axis.
+        let tapAzDeg = (Double(point.x) / Double(screenSize.width) - 0.5) * hfovDeg
+        let tapElDeg = (0.5 - Double(point.y) / Double(screenSize.height)) * vfovDeg
+
+        var best: (obs: ObservedAircraft, offsetDeg: Double, onScreen: Bool)? = nil
+        for obs in adsb.observed {
+            let v = Geo.cameraFrameVector(
+                targetBearingDeg: obs.bearingDeg,
+                targetElevationDeg: obs.elevationDeg,
+                basis: basis
+            )
+            // Camera-frame angles (forward = +z); behind-camera planes get a
+            // large synthetic offset so they lose to anything in front.
+            let azDeg = atan2(v.x, max(v.z, 1e-6)) * 180 / .pi
+            let elDeg = atan2(v.y, max(v.z, 1e-6)) * 180 / .pi
+            let off = v.z <= 0
+                ? 180.0
+                : ((azDeg - tapAzDeg) * (azDeg - tapAzDeg)
+                    + (elDeg - tapElDeg) * (elDeg - tapElDeg)).squareRoot()
+            if best == nil || off < best!.offsetDeg {
+                let onScreen = obs.screenPosition(
+                    basis: basis, in: screenSize, hfovDeg: hfovDeg, vfovDeg: vfovDeg
+                ) != nil
+                best = (obs, off, onScreen)
+            }
+        }
+
+        let reason: String
+        if let b = best, b.offsetDeg <= 40 {
+            if b.obs.visibilityTier == .hidden { reason = "filtered" }
+            else if !b.onScreen { reason = "off-frame" }
+            else { reason = "on-screen" }
+        } else {
+            reason = "nothing-nearby"
+        }
+
+        let tap = ReplayEvent.EmptyTap(
+            timestamp: now,
+            x: Double(point.x), y: Double(point.y),
+            nearestIcao24: best?.obs.aircraft.icao24,
+            nearestCallsign: best?.obs.aircraft.callsign,
+            nearestSlantMeters: best?.obs.slantDistanceMeters,
+            nearestElevationDeg: best?.obs.elevationDeg,
+            nearestAngularOffsetDeg: best?.offsetDeg,
+            reason: reason
+        )
+        recorder.recordEmptyTap(tap)
+
+        var props: [String: AnalyticsValue] = ["reason": .string(reason)]
+        if let b = best {
+            props["nearest_icao24"] = .string(b.obs.aircraft.icao24)
+            if let cs = b.obs.aircraft.callsign { props["nearest_callsign"] = .string(cs) }
+            props["nearest_slant_km"] = .double(b.obs.slantDistanceMeters / 1000)
+            props["nearest_elevation_deg"] = .double(b.obs.elevationDeg)
+            props["nearest_offset_deg"] = .double(b.offsetDeg)
+        }
+        Analytics.capture("empty_sky_tap", props)
     }
 
     /// Trigger a brief NO AIRCRAFT HERE ripple at the given tap
