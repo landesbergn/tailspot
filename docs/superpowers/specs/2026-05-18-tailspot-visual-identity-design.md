@@ -1,7 +1,18 @@
 # Tailspot — Visual Identity Spec
 
-**Status:** approved 2026-05-18 (Noah)
-**Implementation phases:** A (this session) → B (next session) → C (later)
+**Status:** approved 2026-05-18 (Noah); **reconciled to shipping code 2026-06-13.**
+**Implementation phases:** A ✅ · B ✅ · C ✅ (all shipped over subsequent sessions — see CHANGELOG).
+
+> **2026-06-13 reconciliation note.** This doc is the original approved
+> design intent. Where the shipping app diverged, the divergence has been
+> folded in below and flagged `[shipped]`. The two biggest truths the
+> original draft did not anticipate:
+> 1. **The HUD font is B612 Mono, not SF Mono** — Airbus's actual cockpit
+>    display typeface (SIL OFL 1.1), bundled in-app. A stronger identity
+>    choice than the system monospace the draft assumed. See §3.
+> 2. **The game-system color tokens (rarity tiers, aircraft-type tints)**
+>    are now a first-class part of the palette, living in `GameSystem.swift`
+>    alongside `Brand.swift`. See §2.5.
 
 ---
 
@@ -66,21 +77,71 @@ never decorative.
 - Yellow on white, green on white, blue on black
 - Any sub-13pt text in cyan or pure blue
 
+### 2.5 Game-system tints `[shipped]`
+
+These did not exist in the original draft; they emerged with the collection
+game and now carry real semantic weight. They live in **`GameSystem.swift`**
+(not `Brand.swift`) because they are bound to game enums — but they are part
+of the one palette. They are **decorative/categorical**, which is why they sit
+outside the strict FAA alert set; they must never be mistaken for alert tiers
+(note `rare` deliberately equals `accent.cyan`, and `legendary` equals
+`alert.caution`'s amber — used here as a tier color, not a caution).
+
+**Rarity tiers** (card borders, badges, the AR HUD rarity tag):
+
+| Tier | Hex |
+|---|---|
+| common | `#8595A5` |
+| uncommon | `#4ECCA3` |
+| rare | `#00D4FF` |
+| epic | `#9B5DE5` |
+| legendary | `#FFB800` |
+
+**Aircraft-type tints** (type pills in cards / detail):
+
+| Type | Hex |
+|---|---|
+| narrow | `#5B9DDB` |
+| wide | `#7E5FE6` |
+| regional | `#3DD68C` |
+| biz | `#E6B847` |
+| mil | `#88936A` |
+| ga | `#E66B7A` |
+| heritage | `#E68847` |
+
 ## 3. Typography tokens
 
-`Brand.Font` namespace. SF Mono = the "HUD voice" (instrument-readout feel).
-SF Pro = the "collector voice" (human-readable cards, sheets, body).
+`Brand.Font` namespace. Two voices: the **"HUD voice"** (instrument-readout
+feel) and the **"collector voice"** (human-readable cards, sheets, body).
 
-| Token | Spec | Use |
+> **`[shipped]` — the HUD voice is B612 Mono, not SF Mono.** The original
+> draft assumed the system monospace (`design: .monospaced`). The app instead
+> bundles **B612 Mono** — the open-source typeface Airbus designed for cockpit
+> displays (SIL OFL 1.1, declared in `Info.plist` via `UIAppFonts`). It is the
+> literal instrument font, which is exactly the identity we were reaching for.
+> The collector voice remains **SF Pro** (`design: .default`).
+>
+> B612 Mono ships in **Regular + Bold physical faces only** (plus their
+> italics). The `mono(size:weight:italic:)` helper maps SwiftUI weight
+> requests down: `ultraLight…medium` → Regular face, `semibold…black` → Bold
+> face. Italic must be requested explicitly. Letter-spacing / uppercasing
+> from the original draft are applied at the call site, not baked into the
+> token.
+
+| Token | Spec `[shipped]` | Use |
 |---|---|---|
-| `font.wordmark` | SF Mono, 24pt bold, +4 letter-spacing, uppercase | The `TAILSPOT` wordmark in headers/splash |
-| `font.hudCallsign` | SF Mono, 13pt bold, +1 letter-spacing | Locked-plane callsign |
-| `font.hudData` | SF Mono, 10pt regular | Data rows under the callsign (altitude, speed, distance) |
+| `font.wordmark` | B612 Mono, 24pt bold (call site adds +4 tracking, uppercase) | The `TAILSPOT` wordmark in headers/splash |
+| `font.hudCallsign` | B612 Mono, 13pt bold | Locked-plane callsign |
+| `font.hudData` | B612 Mono, 10pt regular | Data rows under the callsign (altitude, speed, distance) |
 | `font.cardTitle` | SF Pro, 17pt semibold | Aircraft type on a Hangar card |
 | `font.cardSubtitle` | SF Pro, 13pt regular | Operator + timestamp on a Hangar card |
-| `font.label` | SF Pro, 11pt semibold, +1 tracking, uppercase | Section headers, tags |
+| `font.label` | SF Pro, 11pt semibold (call site adds tracking, uppercase) | Section headers, tags |
 | `font.body` | SF Pro, 15pt regular | Default body text in sheets, detail views |
 | `font.caption` | SF Pro, 12pt regular | Subdued auxiliary text |
+
+> Beyond these named tokens, callers reach for `Brand.Font.mono(size:weight:)`
+> directly for one-off HUD readouts (section labels, debug panel, pills) — the
+> mono face is the recurring "this is an instrument" signal across the app.
 
 ## 4. Brand mark and lockup
 
@@ -94,7 +155,7 @@ Corner-bracket reticle framing a plane silhouette.
 
 ### Wordmark
 
-`TAILSPOT` in SF Mono, 24pt bold, +4 letter-spacing, color = `text.primary`.
+`TAILSPOT` in B612 Mono, 24pt bold, +4 letter-spacing, color = `text.primary`.
 Plain — no special treatment on individual letters.
 
 ### Lockup
@@ -175,44 +236,67 @@ How the tokens compose into the recurring UI pieces.
 
 ## 6. Code architecture
 
-All tokens in `ios/Tailspot/Tailspot/Brand.swift`:
+Foundation, text, accent, and alert tokens live in
+`ios/Tailspot/Tailspot/Brand.swift`; the rarity/type tints (§2.5) live in
+`ios/Tailspot/Tailspot/GameSystem.swift`. Actual shipping `Brand.swift`:
 
 ```swift
 import SwiftUI
 
-enum Brand {
-    enum Color {
-        // foundations
+nonisolated enum Brand {
+    nonisolated enum Color {
         static let bgPrimary    = SwiftUI.Color(hex: 0x0A0E1A)
         static let bgElevated   = SwiftUI.Color(hex: 0x1A2030)
         static let bgSurface    = SwiftUI.Color(hex: 0x050810)
-        // text
+
         static let textPrimary   = SwiftUI.Color(hex: 0xE8F4FF)
         static let textSecondary = SwiftUI.Color(hex: 0xA0B0C0)
         static let textTertiary  = SwiftUI.Color(hex: 0x7F8B98)
-        // brand accent
-        static let cyan          = SwiftUI.Color(hex: 0x00D4FF)
-        // alert tiers
+
+        static let cyan = SwiftUI.Color(hex: 0x00D4FF)
+
         static let alertWarning  = SwiftUI.Color(hex: 0xFF5555)
         static let alertCaution  = SwiftUI.Color(hex: 0xFFB800)
         static let alertAdvisory = SwiftUI.Color(hex: 0xFF6BE6)
         static let alertNormal   = SwiftUI.Color(hex: 0x3DD68C)
     }
 
-    enum Font {
-        static let wordmark     = SwiftUI.Font.system(size: 24, weight: .bold, design: .monospaced)
-        static let hudCallsign  = SwiftUI.Font.system(size: 13, weight: .bold, design: .monospaced)
-        static let hudData      = SwiftUI.Font.system(size: 10, weight: .regular, design: .monospaced)
+    nonisolated enum Font {
+        /// B612 Mono = Airbus's cockpit display font (SIL OFL 1.1, bundled
+        /// via UIAppFonts). Ships Regular + Bold faces only; SwiftUI weight
+        /// requests map down (regular/medium → Regular, semibold+ → Bold).
+        static func mono(size: CGFloat,
+                         weight: SwiftUI.Font.Weight = .regular,
+                         italic: Bool = false) -> SwiftUI.Font {
+            let isBold: Bool
+            switch weight {
+            case .ultraLight, .thin, .light, .regular, .medium: isBold = false
+            default:                                            isBold = true
+            }
+            let name: String
+            switch (isBold, italic) {
+            case (false, false): name = "B612Mono-Regular"
+            case (true,  false): name = "B612Mono-Bold"
+            case (false, true):  name = "B612Mono-Italic"
+            case (true,  true):  name = "B612Mono-BoldItalic"
+            }
+            return .custom(name, size: size)
+        }
+
+        static let wordmark    = mono(size: 24, weight: .bold)
+        static let hudCallsign = mono(size: 13, weight: .bold)
+        static let hudData     = mono(size: 10, weight: .regular)
+
         static let cardTitle    = SwiftUI.Font.system(size: 17, weight: .semibold, design: .default)
-        static let cardSubtitle = SwiftUI.Font.system(size: 13, weight: .regular, design: .default)
+        static let cardSubtitle = SwiftUI.Font.system(size: 13, weight: .regular,  design: .default)
         static let label        = SwiftUI.Font.system(size: 11, weight: .semibold, design: .default)
-        static let body         = SwiftUI.Font.system(size: 15, weight: .regular, design: .default)
-        static let caption      = SwiftUI.Font.system(size: 12, weight: .regular, design: .default)
+        static let body         = SwiftUI.Font.system(size: 15, weight: .regular,  design: .default)
+        static let caption      = SwiftUI.Font.system(size: 12, weight: .regular,  design: .default)
     }
 }
 
 // Helper extension so `Color(hex: 0x0A0E1A)` reads cleanly above.
-extension SwiftUI.Color {
+nonisolated extension SwiftUI.Color {
     init(hex: UInt32, alpha: Double = 1.0) {
         let r = Double((hex >> 16) & 0xFF) / 255.0
         let g = Double((hex >>  8) & 0xFF) / 255.0
@@ -221,6 +305,12 @@ extension SwiftUI.Color {
     }
 }
 ```
+
+> `nonisolated` on the enums + the `Color(hex:)` extension is required under
+> Xcode 26's MainActor-default isolation — these are pure value tokens used
+> from any actor. (Drift-prone: a new top-level token missing `nonisolated`
+> compiles as a warning under `xcodebuild` but errors in Swift 6 language
+> mode — Noah's IDE build catches it.)
 
 ### Migration plan
 
@@ -241,6 +331,14 @@ Spot-check files that need touching for Phase A:
 
 Brand identity ships in three phases. Each phase commits separately so the
 risk is contained and Phase A can be field-verified before Phase B starts.
+
+> **`[shipped]` status (2026-06-13):** all three phases landed across
+> subsequent sessions (token migration, magenta-pinned state, splash screen,
+> Hangar dedupe + swipe-delete + rarity, app icon, 4-step onboarding, Settings
+> with full brand application). The bullets below are preserved as the
+> original plan-of-record; treat them as history, not a to-do list. The live
+> Hangar later moved toward native iOS `List` structure + Brand skin (zoom
+> transitions, haptics) — a direction the original component spec predates.
 
 ### Phase A — Tokens + light retheme (this session, ~3–4 hrs)
 
@@ -281,11 +379,20 @@ HUD — not just recolored versions of today's components.
 - First-launch onboarding (permissions explainer + compass-calibration teach)
 - Settings / About screen with full brand application
 
-## 8. Open items deferred to implementation
+## 8. Open items deferred to implementation `[resolved]`
 
-- Whether the lockup uses `Image(systemName: "airplane")` literally or a custom SVG export — current decision: SF Symbol, but we'll revisit during Phase B if the brackets-around-symbol composition needs a custom asset.
-- Exact splash animation timing — Phase B.
-- Hangar rarity scoring algorithm — Phase B.
+- ~~Lockup: SF Symbol vs custom SVG~~ → **SF Symbol held.** The mark uses
+  `Image(systemName: "airplane")`; no custom plane asset ships.
+- ~~Splash animation timing~~ → shipped (~600 ms hold, crossfade to AR view).
+- ~~Hangar rarity scoring algorithm~~ → shipped as the **activity-rarity
+  model** (see `2026-06-08-activity-rarity-design.md`); rarity is typecode-
+  first and consistency-tested against `AircraftTypes.json`.
+
+**New open item (post-spec, 2026-06-13):** the **card hero treatment** is
+unsettled. v1 ships real per-tail photos (Planespotters). A 3D-model card
+direction was prototyped and approved in feel but parked for visual
+consistency; flat traced silhouettes also exist as a fallback. No settled
+"card front" recipe yet — the most likely subject of the next design pass.
 
 ## 9. Out of scope
 
