@@ -155,7 +155,7 @@ struct SetDetailScreen: View {
                             NavigationLink {
                                 SetSlotCardView(entry: entry, matchingCatches: matching)
                             } label: {
-                                CatchCardView(plane: CardPlane(catchRecord: rep), size: .sm)
+                                SetSlotCard(entry: entry, representative: rep)
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -210,49 +210,151 @@ struct SetDetailScreen: View {
     }
 }
 
-// MARK: - Ghost slot card (locked target)
+// MARK: - Slot cards (uniform grid)
+//
+// Both the caught card and the ghost share the exact same footprint
+// (fill-width column, image area on top, solid label strip below, fixed
+// height) so the set page reads as a clean, uniform wall. Purpose-built
+// for the grid — NOT the standalone CatchCardView, whose callsign/rarity
+// header, type pill, points, and rarity-tinted border don't belong here.
 
-/// A locked slot rendered as a ghost of a card — same 150×210 footprint as
-/// CatchCardView(.sm) so the set page reads as a uniform card wall. Names the
-/// target (you should know what to hunt) with a dashed, dimmed treatment;
-/// rare-and-above still flags a small sparkle.
+private enum SlotCardMetrics {
+    static let imageHeight: CGFloat = 118
+    static let totalHeight: CGFloat = 176
+    static let corner: CGFloat = 14
+}
+
+/// A CAUGHT slot: the catch photo (your capture) on top, with the model
+/// name + operator in a solid strip below so text is always legible. Rarity
+/// is signalled only by a small sparkle on rare-and-above.
+private struct SetSlotCard: View {
+    let entry: CardSetEntry
+    let representative: Catch
+
+    private var photoURL: URL? {
+        representative.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                if let photoURL {
+                    AsyncImage(url: photoURL) { phase in
+                        if case .success(let img) = phase {
+                            img.resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            SlotPlaceholder()
+                        }
+                    }
+                } else {
+                    SlotPlaceholder()
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: SlotCardMetrics.imageHeight)
+            .clipped()
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text(entry.canonicalName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .lineLimit(1)
+                    if entry.rarity.isNotable {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                            .foregroundStyle(entry.rarity.tint)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Text(representative.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "—")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: SlotCardMetrics.totalHeight)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: SlotCardMetrics.corner))
+        .clipShape(RoundedRectangle(cornerRadius: SlotCardMetrics.corner))
+        .overlay(
+            RoundedRectangle(cornerRadius: SlotCardMetrics.corner)
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+/// A LOCKED slot: same footprint as the caught card, dashed + dimmed, naming
+/// the target to hunt. Rare-and-above keeps its sparkle.
 private struct GhostSlotCard: View {
     let entry: CardSetEntry
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "airplane")
-                .font(.system(size: 46, weight: .ultraLight))
-                .foregroundStyle(Brand.Color.textTertiary.opacity(0.35))
-                .rotationEffect(.degrees(-45))
-            VStack(spacing: 5) {
-                Text(entry.canonicalName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .lineLimit(1)
+        VStack(spacing: 0) {
+            ZStack {
+                Brand.Color.bgSurface.opacity(0.5)
+                Image(systemName: "airplane")
+                    .font(.system(size: 30, weight: .ultraLight))
+                    .foregroundStyle(Brand.Color.textTertiary.opacity(0.3))
+                    .rotationEffect(.degrees(-45))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: SlotCardMetrics.imageHeight)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Text(entry.canonicalName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .lineLimit(1)
+                    if entry.rarity.isNotable {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                            .foregroundStyle(entry.rarity.tint.opacity(0.7))
+                    }
+                    Spacer(minLength: 0)
+                }
                 HStack(spacing: 4) {
                     Image(systemName: "lock.fill").font(.system(size: 8))
                     Text("NOT CAUGHT")
-                        .font(Brand.Font.mono(size: 8, weight: .bold))
-                        .tracking(0.8)
-                    if entry.rarity.isNotable {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 9))
-                            .foregroundStyle(entry.rarity.tint)
-                    }
+                        .font(Brand.Font.mono(size: 9, weight: .bold))
+                        .tracking(0.6)
                 }
                 .foregroundStyle(Brand.Color.textTertiary.opacity(0.7))
             }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 150, height: 210)
-        .background(Brand.Color.bgElevated.opacity(0.4), in: .rect(cornerRadius: 12))
+        .frame(height: SlotCardMetrics.totalHeight)
+        .background(Brand.Color.bgElevated.opacity(0.35), in: .rect(cornerRadius: SlotCardMetrics.corner))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: SlotCardMetrics.corner)
                 .strokeBorder(Brand.Color.textTertiary.opacity(0.22),
                               style: .init(lineWidth: 1, dash: [5, 5]))
         )
         .contentShape(.rect)
     }
+}
+
+/// Calm placeholder for the image area when no capture photo exists — a
+/// single muted glyph, not the busy diagonal stripes of the standalone card.
+private struct SlotPlaceholder: View {
+    var body: some View {
+        ZStack {
+            Brand.Color.bgSurface
+            Image(systemName: "airplane")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(Brand.Color.textTertiary.opacity(0.5))
+                .rotationEffect(.degrees(-45))
+        }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 // MARK: - Locked-slot target sheet
