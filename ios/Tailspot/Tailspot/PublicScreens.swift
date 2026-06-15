@@ -163,9 +163,9 @@ struct LeaderboardScreen: View {
     private func podiumColumn(entry: LeaderboardEntry?, height: CGFloat, rank: Int) -> some View {
         let tint: Color = {
             switch rank {
-            case 1: return Color(hex: 0xFFC74A)
-            case 2: return Color(hex: 0xC5D0DA)
-            case 3: return Color(hex: 0xC26B3F)
+            case 1: return Brand.Color.podiumGold
+            case 2: return Brand.Color.podiumSilver
+            case 3: return Brand.Color.podiumBronze
             default: return Brand.Color.textTertiary
             }
         }()

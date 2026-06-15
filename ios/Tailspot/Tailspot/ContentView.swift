@@ -1132,7 +1132,7 @@ struct ContentView: View {
                 if isMulti {
                     Text("×\(count)")
                         .font(Brand.Font.mono(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Brand.Color.bgPrimary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(Brand.Color.alertAdvisory, in: .capsule)

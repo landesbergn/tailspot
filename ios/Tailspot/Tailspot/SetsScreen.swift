@@ -92,7 +92,7 @@ struct SetsScreen: View {
                     if complete {
                         Text("COMPLETE")
                             .font(Brand.Font.mono(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Brand.Color.bgPrimary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(Brand.Color.alertNormal, in: .capsule)
