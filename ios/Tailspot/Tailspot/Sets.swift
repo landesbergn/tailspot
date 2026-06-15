@@ -311,6 +311,196 @@ nonisolated enum CardSets {
         ),
     ]
 
+    /// Make/model FAMILY sets — the second collection lens. Where `all`
+    /// groups by broad type (every narrow-body together), `families` groups
+    /// by airframe lineage: every 737 variant, every A320 variant, etc. A
+    /// family is the most natural "complete the collection" unit — a bounded,
+    /// recognizable set of variants you can realistically fill.
+    ///
+    /// Each entry carries its real ICAO `representativeTypecode`, so matching
+    /// is precise (B738 → 737-800, A20N → A320neo) via the typecode path in
+    /// `matches`. Rarity mirrors `AircraftTypes.json` for that typecode
+    /// (pinned by FamilySetsTests, same contract as the type sets). The
+    /// `type` field drives the family's tint/glyph in the browser.
+    static let families: [CardSet] = [
+        .init(id: "fam-737", type: .narrow, title: "Boeing 737", entries: [
+            .init(id: "f737-700", canonicalName: "737-700", rarity: .common,
+                  modelTokens: ["737-7", "737-700"],
+                  summary: "Shortest current-gen 737. Southwest's backbone.",
+                  representativeTypecode: "B737"),
+            .init(id: "f737-800", canonicalName: "737-800", rarity: .common,
+                  modelTokens: ["737-8", "737-800"],
+                  summary: "The definitive 737. Most-built variant of the family.",
+                  representativeTypecode: "B738"),
+            .init(id: "f737-900", canonicalName: "737-900", rarity: .common,
+                  modelTokens: ["737-9", "737-900"],
+                  summary: "Stretched NG. Common on US legacy carriers.",
+                  representativeTypecode: "B739"),
+            .init(id: "f737-max8", canonicalName: "737 MAX 8", rarity: .common,
+                  modelTokens: ["max 8", "737 max 8", "737-8 max"],
+                  summary: "Re-engined NG. Split-tip winglets are the tell.",
+                  representativeTypecode: "B38M"),
+            .init(id: "f737-max9", canonicalName: "737 MAX 9", rarity: .common,
+                  modelTokens: ["max 9", "737 max 9", "737-9 max"],
+                  summary: "Stretched MAX. United and Alaska fly the most.",
+                  representativeTypecode: "B39M"),
+        ]),
+        .init(id: "fam-a320", type: .narrow, title: "Airbus A320 Family", entries: [
+            // Classic ceo variants are TYPECODE-ONLY (empty tokens): the neo
+            // canonical names contain "a320" etc., so a token would let a neo
+            // catch bleed into the classic slot. The typecode (A320 vs A20N)
+            // is the unambiguous variant identity.
+            .init(id: "fa319", canonicalName: "A319", rarity: .common,
+                  modelTokens: [], summary: "Shortened A320. Same cockpit, fewer rows.",
+                  representativeTypecode: "A319"),
+            .init(id: "fa320", canonicalName: "A320", rarity: .common,
+                  modelTokens: [], summary: "The baseline of Airbus's narrow-body family.",
+                  representativeTypecode: "A320"),
+            .init(id: "fa321", canonicalName: "A321", rarity: .common,
+                  modelTokens: [], summary: "Stretched A320. Longest of the ceo family.",
+                  representativeTypecode: "A321"),
+            .init(id: "fa319neo", canonicalName: "A319neo", rarity: .common,
+                  modelTokens: ["a319neo"], summary: "New-engine A319. Rare — most orders went larger.",
+                  representativeTypecode: "A19N"),
+            .init(id: "fa320neo", canonicalName: "A320neo", rarity: .common,
+                  modelTokens: ["a320neo"], summary: "New-engine option. Bigger fan, sharklets.",
+                  representativeTypecode: "A20N"),
+            .init(id: "fa321neo", canonicalName: "A321neo", rarity: .common,
+                  modelTokens: ["a321neo"], summary: "Longest, longest-range narrow-body Airbus.",
+                  representativeTypecode: "A21N"),
+        ]),
+        .init(id: "fam-777", type: .wide, title: "Boeing 777", entries: [
+            .init(id: "f777-200", canonicalName: "777-200", rarity: .uncommon,
+                  modelTokens: ["777-200", "777-2"], summary: "Original 777. Twin GE90s.",
+                  representativeTypecode: "B772"),
+            .init(id: "f777-200lr", canonicalName: "777-200LR", rarity: .uncommon,
+                  modelTokens: ["777-200lr", "777lr"], summary: "Ultra-long-range. 'Worldliner'.",
+                  representativeTypecode: "B77L"),
+            // Typecode-only: "777-300" is a substring of "777-300ER", so a
+            // token would let a -300ER catch bleed into the -300 slot.
+            .init(id: "f777-300", canonicalName: "777-300", rarity: .uncommon,
+                  modelTokens: [], summary: "Stretched 777, original engines.",
+                  representativeTypecode: "B773"),
+            .init(id: "f777-300er", canonicalName: "777-300ER", rarity: .uncommon,
+                  modelTokens: ["777-300er", "777er"], summary: "The workhorse long-hauler. Raked wingtips.",
+                  representativeTypecode: "B77W"),
+        ]),
+        .init(id: "fam-787", type: .wide, title: "Boeing 787 Dreamliner", entries: [
+            .init(id: "f787-8", canonicalName: "787-8", rarity: .uncommon,
+                  modelTokens: ["787-8"], summary: "First Dreamliner. Composite fuselage.",
+                  representativeTypecode: "B788"),
+            .init(id: "f787-9", canonicalName: "787-9", rarity: .uncommon,
+                  modelTokens: ["787-9"], summary: "Stretched, longer-range. The common 787.",
+                  representativeTypecode: "B789"),
+            .init(id: "f787-10", canonicalName: "787-10", rarity: .uncommon,
+                  modelTokens: ["787-10"], summary: "Longest Dreamliner. Regional long-haul.",
+                  representativeTypecode: "B78X"),
+        ]),
+        .init(id: "fam-a330", type: .wide, title: "Airbus A330", entries: [
+            .init(id: "fa330-200", canonicalName: "A330-200", rarity: .uncommon,
+                  modelTokens: ["a330-2", "a330-200"], summary: "Shorter, longer-range A330.",
+                  representativeTypecode: "A332"),
+            .init(id: "fa330-300", canonicalName: "A330-300", rarity: .uncommon,
+                  modelTokens: ["a330-3", "a330-300"], summary: "Original stretched A330.",
+                  representativeTypecode: "A333"),
+            .init(id: "fa330-800", canonicalName: "A330-800neo", rarity: .uncommon,
+                  modelTokens: ["a330-800"], summary: "Re-engined neo, shorter. Rare.",
+                  representativeTypecode: "A338"),
+            .init(id: "fa330-900", canonicalName: "A330-900neo", rarity: .uncommon,
+                  modelTokens: ["a330-900"], summary: "Re-engined neo, the common one.",
+                  representativeTypecode: "A339"),
+        ]),
+        .init(id: "fam-a350", type: .wide, title: "Airbus A350", entries: [
+            .init(id: "fa350-900", canonicalName: "A350-900", rarity: .uncommon,
+                  modelTokens: ["a350-900", "a350-9"], summary: "Curved cockpit mask. Carbon long-hauler.",
+                  representativeTypecode: "A359"),
+            .init(id: "fa350-1000", canonicalName: "A350-1000", rarity: .uncommon,
+                  modelTokens: ["a350-1000", "a350-10"], summary: "Stretched A350. Six-wheel main gear.",
+                  representativeTypecode: "A35K"),
+        ]),
+        .init(id: "fam-747", type: .wide, title: "Boeing 747", entries: [
+            .init(id: "f747-400", canonicalName: "747-400", rarity: .rare,
+                  modelTokens: ["747-400", "747-4"], summary: "The classic Queen. Mostly cargo now.",
+                  representativeTypecode: "B744"),
+            .init(id: "f747-8", canonicalName: "747-8", rarity: .epic,
+                  modelTokens: ["747-8"], summary: "Final, stretched 747. New engines + wing.",
+                  representativeTypecode: "B748"),
+            .init(id: "f747-sp", canonicalName: "747SP", rarity: .rare,
+                  modelTokens: ["747sp"], summary: "Stubby long-range special. Vanishingly rare.",
+                  representativeTypecode: "B74S"),
+        ]),
+        .init(id: "fam-767", type: .wide, title: "Boeing 767", entries: [
+            .init(id: "f767-200", canonicalName: "767-200", rarity: .uncommon,
+                  modelTokens: ["767-200", "767-2"], summary: "Original twin-aisle 767.",
+                  representativeTypecode: "B762"),
+            .init(id: "f767-300", canonicalName: "767-300", rarity: .uncommon,
+                  modelTokens: ["767-300", "767-3"], summary: "Stretched 767. Heavy on cargo routes.",
+                  representativeTypecode: "B763"),
+            .init(id: "f767-400", canonicalName: "767-400", rarity: .uncommon,
+                  modelTokens: ["767-400", "767-4"], summary: "Longest 767. Delta + United only.",
+                  representativeTypecode: "B764"),
+        ]),
+        .init(id: "fam-ejet", type: .regional, title: "Embraer E-Jet", entries: [
+            .init(id: "fe170", canonicalName: "E170", rarity: .common,
+                  modelTokens: ["e170", "e-170", "erj 170"], summary: "Smallest E-Jet. Four-abreast regional.",
+                  representativeTypecode: "E170"),
+            .init(id: "fe175", canonicalName: "E175", rarity: .common,
+                  modelTokens: ["e175", "e-175", "erj 175"], summary: "The US regional-jet standard.",
+                  representativeTypecode: "E75L"),
+            .init(id: "fe190", canonicalName: "E190", rarity: .uncommon,
+                  modelTokens: ["e190", "e-190", "erj 190"], summary: "Larger E-Jet. Mainline-feel regional.",
+                  representativeTypecode: "E190"),
+            .init(id: "fe195", canonicalName: "E195", rarity: .uncommon,
+                  modelTokens: ["e195", "e-195", "erj 195"], summary: "Longest classic E-Jet.",
+                  representativeTypecode: "E195"),
+        ]),
+        .init(id: "fam-crj", type: .regional, title: "Bombardier CRJ", entries: [
+            .init(id: "fcrj200", canonicalName: "CRJ-200", rarity: .common,
+                  modelTokens: ["crj-2", "crj200", "crj 200"], summary: "The original 50-seat regional jet.",
+                  representativeTypecode: "CRJ2"),
+            .init(id: "fcrj700", canonicalName: "CRJ-700", rarity: .common,
+                  modelTokens: ["crj-7", "crj700", "crj 700"], summary: "Stretched CRJ. 70 seats.",
+                  representativeTypecode: "CRJ7"),
+            .init(id: "fcrj900", canonicalName: "CRJ-900", rarity: .common,
+                  modelTokens: ["crj-9", "crj900", "crj 900"], summary: "90-seat CRJ. US regional staple.",
+                  representativeTypecode: "CRJ9"),
+            .init(id: "fcrj1000", canonicalName: "CRJ-1000", rarity: .common,
+                  modelTokens: ["crj-1000", "crj1000", "crj 1000"], summary: "Longest CRJ. Rare in the US.",
+                  representativeTypecode: "CRJX"),
+        ]),
+        .init(id: "fam-citation", type: .biz, title: "Cessna Citation", entries: [
+            .init(id: "fc-cj", canonicalName: "CitationJet / CJ", rarity: .uncommon,
+                  modelTokens: ["citationjet", "525 citation", "cj1"], summary: "Entry CitationJet. The 525 line.",
+                  representativeTypecode: "C525"),
+            .init(id: "fc-cj4", canonicalName: "Citation CJ4", rarity: .uncommon,
+                  modelTokens: ["cj4", "525c"], summary: "Largest single-pilot CJ.",
+                  representativeTypecode: "C25C"),
+            .init(id: "fc-xls", canonicalName: "Citation XLS", rarity: .uncommon,
+                  modelTokens: ["xls", "560xl", "excel"], summary: "Best-selling midsize Citation.",
+                  representativeTypecode: "C56X"),
+            .init(id: "fc-sovereign", canonicalName: "Citation Sovereign", rarity: .uncommon,
+                  modelTokens: ["sovereign", "680 citation"], summary: "Midsize, transcontinental range.",
+                  representativeTypecode: "C680"),
+            .init(id: "fc-longitude", canonicalName: "Citation Longitude", rarity: .uncommon,
+                  modelTokens: ["longitude", "700 citation"], summary: "Top of the Citation line.",
+                  representativeTypecode: "C700"),
+        ]),
+        .init(id: "fam-gulfstream", type: .biz, title: "Gulfstream", entries: [
+            .init(id: "fg-iv", canonicalName: "Gulfstream IV", rarity: .uncommon,
+                  modelTokens: ["gulfstream iv", "g-iv", "giv"], summary: "Classic large-cabin Gulfstream.",
+                  representativeTypecode: "GLF4"),
+            .init(id: "fg-280", canonicalName: "Gulfstream G280", rarity: .uncommon,
+                  modelTokens: ["g280", "g-280"], summary: "Super-midsize. Israeli-built.",
+                  representativeTypecode: "G280"),
+            .init(id: "fg-550", canonicalName: "Gulfstream G550", rarity: .uncommon,
+                  modelTokens: ["g550", "g-550"], summary: "Long-range large cabin. Ubiquitous at the top.",
+                  representativeTypecode: "GLF5"),
+            .init(id: "fg-650", canonicalName: "Gulfstream G650", rarity: .rare,
+                  modelTokens: ["g650", "g-650"], summary: "Flagship ultra-long-range. The status jet.",
+                  representativeTypecode: "GLF6"),
+        ]),
+    ]
+
     /// Slot status for a single entry against a catch list.
     enum SlotStatus: Equatable {
         case locked
@@ -323,6 +513,19 @@ nonisolated enum CardSets {
     /// replacement: membership can only gain from canonicalization,
     /// never lose. Single source of truth for Catch → CardSetEntry.
     nonisolated static func matches(catch c: Catch, entry: CardSetEntry) -> Bool {
+        // Precise path (added for family sets, 2026-06-15): exact ICAO
+        // typecode equality. Family lenses distinguish variants the model
+        // string can't (A320 vs A320neo, 777-300 vs 777-300ER) — the typecode
+        // is the unambiguous variant identity, and the backend resolves it for
+        // virtually every airliner. This is a UNION with the token path below
+        // (membership can only gain), so existing type-set behavior is
+        // unchanged for token-matched catches.
+        if let tc = entry.representativeTypecode,
+           let ctc = c.typecode,
+           !ctc.isEmpty,
+           tc.caseInsensitiveCompare(ctc) == .orderedSame {
+            return true
+        }
         let raw = c.model?.lowercased() ?? ""
         let canonical = AircraftNaming.canonical(
             typecode: c.typecode,
@@ -350,5 +553,27 @@ nonisolated enum CardSets {
     static func progress(of set: CardSet, against catches: [Catch]) -> (caught: Int, total: Int) {
         let s = status(of: set, against: catches)
         return (s.filter { if case .caught = $0.1 { return true } else { return false } }.count, s.count)
+    }
+
+    /// The set list for a given browser lens.
+    static func sets(for lens: SetLens) -> [CardSet] {
+        switch lens {
+        case .type:   return all
+        case .family: return families
+        }
+    }
+}
+
+/// The two ways to slice the collection in the Sets browser.
+///   .type   — broad category (every narrow-body together)   → `CardSets.all`
+///   .family — airframe lineage (every 737 variant together) → `CardSets.families`
+nonisolated enum SetLens: String, CaseIterable, Identifiable, Sendable {
+    case type, family
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .type:   return "By Type"
+        case .family: return "By Family"
+        }
     }
 }

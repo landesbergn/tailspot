@@ -146,7 +146,7 @@ struct HangarView: View {
                 HangarSegmentedSwitcher(selection: segment)
                 Group {
                     switch segment.wrappedValue {
-                    case .sets:     HangarSetsView()
+                    case .sets:     SetsBrowser()   // completion-driven collection browser (By Type / By Family)
                     case .recent:   HangarRecentView()
                     case .trophies: HangarTrophiesView()
                     }
