@@ -30,14 +30,6 @@ struct SetsBrowser: View {
 
     private var sets: [CardSet] { CardSets.sets(for: lens) }
 
-    /// Aggregate completion across the visible lens.
-    private var totals: (caught: Int, total: Int) {
-        sets.reduce(into: (0, 0)) { acc, set in
-            let p = CardSets.progress(of: set, against: catches)
-            acc.0 += p.caught; acc.1 += p.total
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             Picker("Lens", selection: $lens.animation(.easeInOut(duration: 0.2))) {
@@ -50,12 +42,6 @@ struct SetsBrowser: View {
             .background(Brand.Color.bgPrimary)
 
             List {
-                Section {
-                    overallHero
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
                 Section {
                     ForEach(sets) { set in
                         NavigationLink(value: set) {
@@ -76,34 +62,6 @@ struct SetsBrowser: View {
         }
         .background(Brand.Color.bgPrimary)
         .navigationDestination(for: CardSet.self) { SetDetailScreen(set: $0) }
-    }
-
-    private var overallHero: some View {
-        let t = totals
-        let frac = t.total == 0 ? 0 : Double(t.caught) / Double(t.total)
-        return HStack(spacing: 18) {
-            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 7)
-                .frame(width: 62, height: 62)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("COLLECTION")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Brand.Color.cyan)
-                Text("\(t.caught) of \(t.total) collected")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text("across \(sets.count) \(lens == .type ? "categories" : "families")")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 16))
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
     }
 }
 
@@ -183,24 +141,26 @@ struct SetDetailScreen: View {
             ScrollView {
             VStack(spacing: 20) {
                 header
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(Array(slotStatus.enumerated()), id: \.element.0.id) { idx, pair in
+                LazyVGrid(columns: columns, spacing: 18) {
+                    ForEach(Array(slotStatus.enumerated()), id: \.element.0.id) { _, pair in
                         let entry = pair.0
-                        let isCaught = pair.1 != .locked
-                        let tile = SlotChecklistTile(index: idx + 1, entry: entry, isCaught: isCaught)
-                        if isCaught {
-                            // Caught → push the full card (photo + catch info)
-                            // and every tail of this model.
+                        // Filled slots show the catch's REAL collectible card
+                        // (photo, points, holo on rare+) — the set page becomes a
+                        // wall of your own cards instead of generic glyphs. Locked
+                        // slots are ghost-card placeholders to hunt.
+                        let matching = catches.filter { CardSets.matches(catch: $0, entry: entry) }
+                        let rep = HangarGrouping.representativeCatch(
+                            in: HangarGrouping.group(matching, by: .recent).first?.rows ?? [])
+                        if let rep {
                             NavigationLink {
-                                SetSlotCardView(
-                                    entry: entry,
-                                    matchingCatches: catches.filter { CardSets.matches(catch: $0, entry: entry) }
-                                )
-                            } label: { tile }
+                                SetSlotCardView(entry: entry, matchingCatches: matching)
+                            } label: {
+                                CatchCardView(plane: CardPlane(catchRecord: rep), size: .sm)
+                            }
                             .buttonStyle(.plain)
                         } else {
-                            // Locked → a light "here's the target" sheet.
-                            tile.onTapGesture { inspected = entry }
+                            GhostSlotCard(entry: entry)
+                                .onTapGesture { inspected = entry }
                         }
                     }
                 }
@@ -250,63 +210,47 @@ struct SetDetailScreen: View {
     }
 }
 
-// MARK: - Checklist tile
+// MARK: - Ghost slot card (locked target)
 
-private struct SlotChecklistTile: View {
-    let index: Int
+/// A locked slot rendered as a ghost of a card — same 150×210 footprint as
+/// CatchCardView(.sm) so the set page reads as a uniform card wall. Names the
+/// target (you should know what to hunt) with a dashed, dimmed treatment;
+/// rare-and-above still flags a small sparkle.
+private struct GhostSlotCard: View {
     let entry: CardSetEntry
-    let isCaught: Bool
 
     var body: some View {
-        VStack(spacing: 9) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isCaught ? entry.rarity.tint.opacity(0.15) : Brand.Color.bgElevated)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(
-                                isCaught ? entry.rarity.tint : Brand.Color.textTertiary.opacity(0.22),
-                                style: .init(lineWidth: 1, dash: isCaught ? [] : [4, 4])
-                            )
-                    )
-                Image(systemName: "airplane")
-                    .font(.system(size: 34, weight: isCaught ? .regular : .ultraLight))
-                    .foregroundStyle(isCaught ? entry.rarity.tint : Brand.Color.textTertiary.opacity(0.4))
-                    .rotationEffect(.degrees(-45))
-                VStack {
-                    HStack {
-                        Text(String(format: "#%02d", index))
-                            .font(Brand.Font.mono(size: 9, weight: .bold))
-                            .foregroundStyle(Brand.Color.textTertiary)
-                        Spacer()
-                        Image(systemName: isCaught ? "checkmark.circle.fill" : "lock.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(isCaught ? Brand.Color.alertNormal
-                                                      : Brand.Color.textTertiary.opacity(0.5))
-                    }
-                    Spacer()
-                }
-                .padding(9)
-            }
-            .aspectRatio(1.25, contentMode: .fit)
-
-            // Name shown even when locked — the set is a checklist of
-            // targets, so you should know what you're hunting. No rarity
-            // text: only rare-and-above gets a small sparkle so the
-            // special ones stand out without labelling every common plane.
-            HStack(spacing: 4) {
+        VStack(spacing: 12) {
+            Image(systemName: "airplane")
+                .font(.system(size: 46, weight: .ultraLight))
+                .foregroundStyle(Brand.Color.textTertiary.opacity(0.35))
+                .rotationEffect(.degrees(-45))
+            VStack(spacing: 5) {
                 Text(entry.canonicalName)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isCaught ? Brand.Color.textPrimary : Brand.Color.textTertiary)
+                    .foregroundStyle(Brand.Color.textTertiary)
                     .lineLimit(1)
-                if entry.rarity.isNotable {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                        .foregroundStyle(entry.rarity.tint)
-                        .opacity(isCaught ? 1 : 0.6)
+                HStack(spacing: 4) {
+                    Image(systemName: "lock.fill").font(.system(size: 8))
+                    Text("NOT CAUGHT")
+                        .font(Brand.Font.mono(size: 8, weight: .bold))
+                        .tracking(0.8)
+                    if entry.rarity.isNotable {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 9))
+                            .foregroundStyle(entry.rarity.tint)
+                    }
                 }
+                .foregroundStyle(Brand.Color.textTertiary.opacity(0.7))
             }
         }
+        .frame(width: 150, height: 210)
+        .background(Brand.Color.bgElevated.opacity(0.4), in: .rect(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Brand.Color.textTertiary.opacity(0.22),
+                              style: .init(lineWidth: 1, dash: [5, 5]))
+        )
         .contentShape(.rect)
     }
 }
