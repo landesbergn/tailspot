@@ -378,31 +378,34 @@ struct ADSBManagerTests {
     @Test func farLowElevationGhostIsFiltered() {
         // The 2026-06-04 field session's ghost signature: 21 km @ 3.5°
         // (N2838Q) was labeled but invisible — far + low is haze/clutter.
-        // Demoted to faint under tiered visibility (see daytime ghost case).
+        // Precision band (2026-06-15): well beyond 2× the ~5.2 km curve cap
+        // at 3.5°, so HIDDEN — the desired outcome for a confirmed ghost.
         let obs = Self.observed(elevationDeg: 3.5, slantDistanceMeters: 21_000)
-        #expect(obs.visibilityTier == .faint)
+        #expect(obs.visibilityTier == .hidden)
     }
 
     @Test func nightHighElevationGhostIsFiltered() {
         // 2026-06-04 night session: 20.5 km @ 11° (SKW5983) was labeled
         // but NOT visible — tap-pin ground truth. High elevation does not
         // rescue a distant airframe.
-        // Demoted to faint under tiered visibility (see daytime ghost case).
+        // Precision band (2026-06-15): 20.5 km is past 2× the ~7.4 km curve
+        // cap at 11°, so HIDDEN.
         let obs = Self.observed(elevationDeg: 11, slantDistanceMeters: 20_500)
-        #expect(obs.visibilityTier == .faint)
+        #expect(obs.visibilityTier == .hidden)
     }
 
     @Test func daytimeMidElevationGhostIsFiltered() {
         // 2026-06-06 daytime session: 33.3 km @ 10.8° (TZP30) was the
         // reported false positive that motivated moving the plateau off
         // the 10° edge.
-        // Tiered visibility (2026-06-12): this confirmed ghost is DEMOTED
-        // to faint (a quiet label), not hidden — SKW5480 proved the same
-        // geometry class can be genuinely visible on a clear day, and the
-        // cost asymmetry (hidden visible plane >> quiet ghost label) says
-        // when in doubt, show dimly.
+        // Precision band (2026-06-15): the dense-MLAT field session showed
+        // the old "demote far ghosts to a quiet faint label" doctrine
+        // produced ~20 false labels per frame. This confirmed ghost (33 km
+        // @ 10.8°, far past 2× the curve) is now HIDDEN. The cost asymmetry
+        // flipped: against a 76-contact feed, a wall of ghost labels is
+        // worse than missing the occasional clear-day far plane.
         let obs = Self.observed(elevationDeg: 10.8, slantDistanceMeters: 33_300)
-        #expect(obs.visibilityTier == .faint)
+        #expect(obs.visibilityTier == .hidden)
     }
 
     @Test func urbanCloseGhostsAreFiltered() {
