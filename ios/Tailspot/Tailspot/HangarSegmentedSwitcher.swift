@@ -2,8 +2,13 @@
 //  HangarSegmentedSwitcher.swift
 //  Tailspot
 //
-//  3-segment switcher used at the top of the Hangar sheet. Cyan-on-
-//  bgElevated, matches the canvas design. Spec § 4.1.
+//  Top-of-Hangar segment switcher (Sets / Recent / Trophies).
+//
+//  Rebuilt 2026-06-15: the hand-rolled version had ~30pt-tall buttons
+//  whose taps dropped near the edges (Noah field-reported laggy/missed
+//  taps). This version uses an iOS 26 Liquid Glass track with a
+//  matched-geometry selection pill, 44pt-tall tap targets, and a capsule
+//  `contentShape` so the whole segment is hittable.
 //
 
 import SwiftUI
@@ -22,31 +27,39 @@ enum HangarSegment: String, CaseIterable, Identifiable {
 
 struct HangarSegmentedSwitcher: View {
     @Binding var selection: HangarSegment
+    @Namespace private var pill
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 6) {
             ForEach(HangarSegment.allCases) { seg in
-                Button {
-                    selection = seg
-                } label: {
-                    Text(seg.label)
-                        .font(.system(size: 13, weight: selection == seg ? .semibold : .medium))
-                        .foregroundStyle(selection == seg ? Brand.Color.textPrimary : Brand.Color.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .background(
-                            selection == seg
-                                ? Brand.Color.bgSurface
-                                : Color.clear,
-                            in: .rect(cornerRadius: 8)
-                        )
-                }
-                .buttonStyle(.plain)
+                segmentButton(seg)
             }
         }
-        .padding(3)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+        .padding(5)
+        .glassEffect(.regular, in: .capsule)   // iOS 26 Liquid Glass track
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
+    }
+
+    private func segmentButton(_ seg: HangarSegment) -> some View {
+        let isSelected = selection == seg
+        return Button {
+            withAnimation(.snappy(duration: 0.28)) { selection = seg }
+        } label: {
+            Text(seg.label)
+                .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? Brand.Color.bgPrimary : Brand.Color.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(Brand.Color.cyan)
+                            .matchedGeometryEffect(id: "hangarSegPill", in: pill)
+                    }
+                }
+                .contentShape(.capsule)   // full-segment hit area
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
