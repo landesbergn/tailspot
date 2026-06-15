@@ -1546,6 +1546,14 @@ struct ContentView: View {
                                      : Brand.Color.alertCaution)
             }
 
+            // Failover tag — backend selected but the last fetch fell back
+            // to OpenSky (api.tailspot.app unreachable). Clears on recovery.
+            if adsb.useBackend && !adsb.useMock && adsb.backendDegraded {
+                Text("→ OPENSKY")
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
+                    .foregroundStyle(Brand.Color.alertCaution)
+            }
+
             Spacer()
         }
         .contentShape(.rect)

@@ -393,24 +393,48 @@ final class ADSBManager: ObservableObject {
     @Published var lastErrorIsTransient: Bool = false
     @Published var lastFetched: Date?
 
+    /// True when the backend was the selected source but its last fetch
+    /// failed and we transparently fell back to OpenSky for that poll
+    /// (see `fetchAircraftWithFailover`). Surfaced in the debug overlay so a
+    /// field session can see failover happening; clears on the next
+    /// successful backend fetch.
+    @Published var backendDegraded: Bool = false
+
     /// Toggle between the live OpenSky source and a synthetic mock for
     /// couch-testing. Flipping it triggers an immediate refresh.
     @Published var useMock: Bool = false {
         didSet { Task { await refreshNow() } }
     }
 
-    /// Field-validation toggle for the backend cutover (WP 1.8): swaps the
-    /// live source between OpenSky (device-direct, still the default) and
-    /// the Tailspot backend proxy (api.tailspot.app — adsb.lol data with
-    /// MLAT, so GA aircraft and helicopters appear that OpenSky's free tier
-    /// never shows). Persisted so a field session survives app restarts;
-    /// ignored while `useMock` is on. Once the backend is validated in the
-    /// field, the cutover makes it the only source and this toggle goes away.
-    @Published var useBackend: Bool = UserDefaults.standard.bool(
-        forKey: ADSBManager.useBackendDefaultsKey
-    ) {
+    /// Selects the live data source: the Tailspot backend proxy
+    /// (api.tailspot.app — adsb.lol data WITH MLAT, so GA aircraft and
+    /// helicopters appear that OpenSky's free tier never shows, plus merged
+    /// FAA / DOC-8643 metadata) or OpenSky device-direct.
+    ///
+    /// As of 0.5.0 the backend is the DEFAULT. The default is registered in
+    /// `TailspotApp.init` via `UserDefaults.register(defaults:)` (skipped when
+    /// the app is hosting a unit-test run) rather than hardcoded here, so it
+    /// applies to every install that hasn't explicitly toggled the source,
+    /// while tests — which inject an ephemeral `defaults` store and don't run
+    /// that registration — stay on OpenSky-direct. A tester's explicit opt-out
+    /// persists in the standard domain and wins.
+    ///
+    /// When the backend is active and a fetch fails, `fetchAircraftWithFailover`
+    /// transparently retries against OpenSky for that poll — so backend-default
+    /// degrades to exactly OpenSky-only behavior on an api.tailspot.app blip,
+    /// never to an empty sky.
+    ///
+    /// Persisted so a field session (and an opt-out) survives restarts;
+    /// ignored while `useMock` is on. The destructive WP 1.8 cutover (delete
+    /// OpenSky entirely, rotate the secret) stays deferred until the field A/B
+    /// confirms the backend in the wild.
+    /// Initialized in `init` from the injected `defaults` store (so the
+    /// suite can hand each test an ephemeral store instead of racing the
+    /// process-global `.standard` — the convention from the 2026-06-11 CI
+    /// flakes). The `didSet` persists changes back to the same store.
+    @Published var useBackend: Bool {
         didSet {
-            UserDefaults.standard.set(useBackend, forKey: ADSBManager.useBackendDefaultsKey)
+            defaults.set(useBackend, forKey: ADSBManager.useBackendDefaultsKey)
             Task { await refreshNow() }
         }
     }
@@ -444,6 +468,10 @@ final class ADSBManager: ObservableObject {
     private let liveSource: ADSBSource
     private let mockSource: ADSBSource
     private let backendSource: ADSBSource
+    /// Backing store for the persisted `useBackend` toggle. Injectable so
+    /// tests use an ephemeral store and never race the process-global
+    /// `.standard`; production passes `.standard`.
+    private let defaults: UserDefaults
     /// Effective source. Mock wins (couch-testing trumps everything),
     /// then the backend toggle, then the OpenSky default. Both the bbox
     /// poll AND `metadata(for:)` route through this, so flipping the
@@ -451,6 +479,53 @@ final class ADSBManager: ObservableObject {
     private var source: ADSBSource {
         if useMock { return mockSource }
         return useBackend ? backendSource : liveSource
+    }
+
+    /// Fetch the bbox with automatic backend→OpenSky failover.
+    ///
+    /// When the backend is the active source and its fetch throws, retry the
+    /// SAME bbox against OpenSky for this one poll. With the backend
+    /// default-on (0.5.0) this means a backend blip degrades the app to
+    /// exactly today's OpenSky-only behavior — never worse, never an empty
+    /// sky. Mock and OpenSky-direct modes fetch their single source with no
+    /// failover. The fallback's error is rethrown (so OpenSky's 429 still
+    /// drives the existing backoff in `refresh`).
+    private func fetchAircraftWithFailover(
+        lamin: Double, lomin: Double, lamax: Double, lomax: Double
+    ) async throws -> [Aircraft] {
+        guard !useMock, useBackend else {
+            return try await source.aircraftInBbox(
+                lamin: lamin, lomin: lomin, lamax: lamax, lomax: lomax)
+        }
+        do {
+            let raw = try await backendSource.aircraftInBbox(
+                lamin: lamin, lomin: lomin, lamax: lamax, lomax: lomax)
+            if backendDegraded { backendDegraded = false }
+            return raw
+        } catch {
+            Log.adsb.error("backend bbox fetch failed (\(error.localizedDescription, privacy: .public)); failing over to OpenSky")
+            backendDegraded = true
+            return try await liveSource.aircraftInBbox(
+                lamin: lamin, lomin: lomin, lamax: lamax, lomax: lomax)
+        }
+    }
+
+    /// Metadata lookup with the same backend→OpenSky failover as the bbox
+    /// poll: a backend blip falls back to OpenSky's (sparser) metadata
+    /// rather than failing the detail view outright.
+    private func fetchMetadataWithFailover(icao24: String) async throws -> AircraftMetadata? {
+        guard !useMock, useBackend else {
+            return try await source.aircraftMetadata(icao24: icao24)
+        }
+        do {
+            let value = try await backendSource.aircraftMetadata(icao24: icao24)
+            if backendDegraded { backendDegraded = false }
+            return value
+        } catch {
+            Log.adsb.error("backend metadata fetch failed for \(icao24, privacy: .public) (\(error.localizedDescription, privacy: .public)); failing over to OpenSky")
+            backendDegraded = true
+            return try await liveSource.aircraftMetadata(icao24: icao24)
+        }
     }
 
     /// Whether the live source has OAuth credentials. Surfaced for
@@ -477,15 +552,24 @@ final class ADSBManager: ObservableObject {
     /// Default init keeps the production behavior unchanged. The
     /// parameters exist so tests can inject a fixture source — without
     /// them, every method on this class would have to be tested against
-    /// the real OpenSky network, which is slow and flaky.
+    /// the real OpenSky network, which is slow and flaky. `defaults`
+    /// defaults to `.standard` for production; tests pass an ephemeral
+    /// store so the persisted `useBackend` toggle never races the
+    /// process-global one.
     init(
         liveSource: ADSBSource = OpenSkyClient(),
         mockSource: ADSBSource = MockADSBSource(),
-        backendSource: ADSBSource = TailspotBackendClient()
+        backendSource: ADSBSource = TailspotBackendClient(),
+        defaults: UserDefaults = .standard
     ) {
         self.liveSource = liveSource
         self.mockSource = mockSource
         self.backendSource = backendSource
+        self.defaults = defaults
+        // First assignment of `useBackend` (it has no default) — runs inside
+        // init, so the `didSet` does NOT fire and we don't write the store
+        // back during construction.
+        self.useBackend = defaults.bool(forKey: ADSBManager.useBackendDefaultsKey)
     }
 
     /// Start polling. The provider closure is called on each tick to
@@ -562,7 +646,7 @@ final class ADSBManager: ObservableObject {
         let dLon = radiusKm / (111.0 * cos(observerLat * .pi / 180))
 
         do {
-            let raw = try await source.aircraftInBbox(
+            let raw = try await fetchAircraftWithFailover(
                 lamin: observerLat - dLat,
                 lomin: observerLon - dLon,
                 lamax: observerLat + dLat,
@@ -603,7 +687,7 @@ final class ADSBManager: ObservableObject {
             return value
         case .notFetched:
             do {
-                let fetched = try await source.aircraftMetadata(icao24: icao24)
+                let fetched = try await fetchMetadataWithFailover(icao24: icao24)
                 await metadataCache.set(icao24: icao24, value: fetched)
                 return fetched
             } catch {
