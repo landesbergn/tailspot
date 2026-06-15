@@ -127,17 +127,14 @@ private struct SetCompletionCard: View {
         let p = CardSets.progress(of: set, against: catches)
         let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
         let complete = p.total > 0 && p.caught == p.total
-        return HStack(spacing: 13) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(set.type.tint.opacity(0.18))
-                Text(set.type.glyph)
-                    .font(Brand.Font.mono(size: 17, weight: .bold))
-                    .foregroundStyle(set.type.tint)
-            }
-            .frame(width: 42, height: 42)
+        return HStack(spacing: 14) {
+            // The completion ring is the leading anchor now (replacing the
+            // type-letter pill) — it keeps the set's category color via the
+            // tint while making "% complete" the thing you read first.
+            CompletionRing(progress: frac, tint: set.type.tint, lineWidth: 5)
+                .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(set.title)
                         .font(Brand.Font.cardTitle)
@@ -149,20 +146,13 @@ private struct SetCompletionCard: View {
                             .foregroundStyle(Brand.Color.alertNormal)
                     }
                 }
-                ProgressBar(fraction: frac, tint: set.type.tint)
-                    .frame(height: 5)
                 Text("\(p.caught) of \(p.total) \(lens == .type ? "models" : "variants")")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .font(Brand.Font.mono(size: 11, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()
             }
 
             Spacer(minLength: 4)
-
-            Text("\(Int((frac * 100).rounded()))%")
-                .font(Brand.Font.mono(size: 13, weight: .heavy))
-                .foregroundStyle(complete ? Brand.Color.alertNormal : set.type.tint)
-                .monospacedDigit()
         }
         .padding(.vertical, 6)
     }
@@ -185,32 +175,48 @@ struct SetDetailScreen: View {
     ]
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            // Custom back bar — the Hangar hides the system nav bar, so a
+            // system back button wouldn't render there. HangarChildBar pops
+            // via dismiss() and works in both the Hangar and Profile stacks.
+            HangarChildBar(title: set.title)
+            ScrollView {
             VStack(spacing: 20) {
                 header
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(Array(slotStatus.enumerated()), id: \.element.0.id) { idx, pair in
+                        let entry = pair.0
                         let isCaught = pair.1 != .locked
-                        SlotChecklistTile(index: idx + 1, entry: pair.0, isCaught: isCaught)
-                            .onTapGesture { inspected = pair.0 }
+                        let tile = SlotChecklistTile(index: idx + 1, entry: entry, isCaught: isCaught)
+                        if isCaught {
+                            // Caught → push the full card (photo + catch info)
+                            // and every tail of this model.
+                            NavigationLink {
+                                SetSlotCardView(
+                                    entry: entry,
+                                    matchingCatches: catches.filter { CardSets.matches(catch: $0, entry: entry) }
+                                )
+                            } label: { tile }
+                            .buttonStyle(.plain)
+                        } else {
+                            // Locked → a light "here's the target" sheet.
+                            tile.onTapGesture { inspected = entry }
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 28)
             }
             .padding(.top, 8)
+            }
         }
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
-        .navigationTitle(set.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .sheet(item: $inspected) { entry in
-            SlotDetailSheet(
-                entry: entry,
-                isCaught: slotStatus.first { $0.0.id == entry.id }?.1 != .locked,
-                matchingCatches: catches.filter { CardSets.matches(catch: $0, entry: entry) }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
+            LockedSlotSheet(entry: entry)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -222,7 +228,6 @@ struct SetDetailScreen: View {
             CompletionRing(progress: frac, tint: set.type.tint, lineWidth: 8)
                 .frame(width: 84, height: 84)
             VStack(alignment: .leading, spacing: 6) {
-                TypeBadge(type: set.type, size: .sm)
                 Text("\(p.caught) of \(p.total) collected")
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
@@ -285,37 +290,45 @@ private struct SlotChecklistTile: View {
             }
             .aspectRatio(1.25, contentMode: .fit)
 
-            VStack(spacing: 3) {
-                // Name shown even when locked — the set is a checklist of
-                // targets, so you should know what you're hunting.
+            // Name shown even when locked — the set is a checklist of
+            // targets, so you should know what you're hunting. No rarity
+            // text: only rare-and-above gets a small sparkle so the
+            // special ones stand out without labelling every common plane.
+            HStack(spacing: 4) {
                 Text(entry.canonicalName)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isCaught ? Brand.Color.textPrimary : Brand.Color.textTertiary)
                     .lineLimit(1)
-                    .multilineTextAlignment(.center)
-                RarityBadge(rarity: entry.rarity, size: .sm)
-                    .opacity(isCaught ? 1 : 0.5)
+                if entry.rarity.isNotable {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10))
+                        .foregroundStyle(entry.rarity.tint)
+                        .opacity(isCaught ? 1 : 0.6)
+                }
             }
         }
         .contentShape(.rect)
     }
 }
 
-// MARK: - Slot detail sheet
+// MARK: - Locked-slot target sheet
 
-private struct SlotDetailSheet: View {
+/// Lightweight sheet for a LOCKED slot: names the target and nudges you
+/// to go catch it. (Caught slots navigate to the full card instead.)
+private struct LockedSlotSheet: View {
     let entry: CardSetEntry
-    let isCaught: Bool
-    let matchingCatches: [Catch]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
                 ZStack {
-                    Circle().fill(entry.rarity.tint.opacity(0.16))
+                    Circle().fill(Brand.Color.bgElevated)
+                        .overlay(Circle().strokeBorder(
+                            Brand.Color.textTertiary.opacity(0.25),
+                            style: .init(lineWidth: 1, dash: [4, 4])))
                     Image(systemName: "airplane")
                         .font(.system(size: 22))
-                        .foregroundStyle(entry.rarity.tint)
+                        .foregroundStyle(Brand.Color.textTertiary)
                         .rotationEffect(.degrees(-45))
                 }
                 .frame(width: 52, height: 52)
@@ -323,14 +336,13 @@ private struct SlotDetailSheet: View {
                     Text(entry.canonicalName)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(Brand.Color.textPrimary)
-                    RarityBadge(rarity: entry.rarity, size: .sm)
+                    if entry.rarity.isNotable {
+                        Label(entry.rarity.label, systemImage: "sparkles")
+                            .font(Brand.Font.mono(size: 11, weight: .bold))
+                            .foregroundStyle(entry.rarity.tint)
+                    }
                 }
                 Spacer()
-                if isCaught {
-                    Label("Caught", systemImage: "checkmark.circle.fill")
-                        .font(Brand.Font.mono(size: 12, weight: .bold))
-                        .foregroundStyle(Brand.Color.alertNormal)
-                }
             }
 
             Text(entry.summary)
@@ -339,32 +351,10 @@ private struct SlotDetailSheet: View {
 
             Divider().overlay(Brand.Color.textTertiary.opacity(0.2))
 
-            if isCaught {
-                Text("\(matchingCatches.count) in your hangar")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                ForEach(matchingCatches.prefix(3)) { c in
-                    HStack(spacing: 8) {
-                        Image(systemName: "airplane.circle.fill")
-                            .foregroundStyle(entry.rarity.tint)
-                        Text(c.callsign ?? c.icao24.uppercased())
-                            .font(Brand.Font.mono(size: 13, weight: .bold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                        Spacer()
-                        if let op = c.operatorName {
-                            Text(op).font(Brand.Font.caption)
-                                .foregroundStyle(Brand.Color.textSecondary)
-                                .lineLimit(1)
-                        }
-                    }
-                }
-            } else {
-                Label("Not yet caught — point, lock, and capture one to fill this slot.",
-                      systemImage: "scope")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-            }
+            Label("Not yet caught — point, lock, and capture one to fill this slot.",
+                  systemImage: "scope")
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textSecondary)
 
             Spacer()
         }
@@ -372,6 +362,96 @@ private struct SlotDetailSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
     }
+}
+
+// MARK: - Caught-slot card (photo + catch info + every tail)
+
+/// Tapping a CAUGHT slot opens this: the model's card (with photo) for the
+/// representative catch, then a TAILS section listing every distinct tail
+/// you've caught of this model — each opening its full CatchDetailView.
+/// Reuses HangarGrouping so it stays consistent with the Hangar's own model
+/// view, but uses HangarChildBar + standard navigation so it works from both
+/// the Hangar (system bar hidden) and Profile entry points.
+private struct SetSlotCardView: View {
+    let entry: CardSetEntry
+    let matchingCatches: [Catch]
+
+    private var rows: [HangarRow] {
+        HangarGrouping.group(matchingCatches, by: .recent).first?.rows ?? []
+    }
+    private var representative: Catch? {
+        HangarGrouping.representativeCatch(in: rows)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HangarChildBar(title: entry.canonicalName)
+            List {
+                if let rep = representative {
+                    VStack(spacing: 8) {
+                        CatchCardView(plane: CardPlane(catchRecord: rep), size: .lg)
+                        Text("FIRST CAUGHT")
+                            .font(Brand.Font.mono(size: 9, weight: .semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(Brand.Color.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+                Section {
+                    ForEach(rows) { row in
+                        NavigationLink { CatchDetailView(row: row) } label: { tailRow(row) }
+                            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                } header: {
+                    Text("TAILS (\(rows.count))")
+                        .font(Brand.Font.mono(size: 10, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+        }
+        .background(Brand.Color.bgPrimary)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+    }
+
+    private func tailRow(_ row: HangarRow) -> some View {
+        let cs = row.mostRecent.callsign?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = (cs?.isEmpty == false) ? cs! : row.icao24.uppercased()
+        let reg = row.mostRecent.registration?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tail = (reg?.isEmpty == false) ? reg! : row.icao24
+        return HStack(spacing: 10) {
+            Rectangle().fill(row.rarity.tint).frame(width: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
+                    .foregroundStyle(Brand.Color.cyan)
+                Text("\(tail) · \(row.mostRecent.operatorName ?? "—")")
+                    .font(Brand.Font.mono(size: 10))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 8))
+    }
+}
+
+private extension Rarity {
+    /// Rare and above — the tiers worth flagging with a small indicator.
+    var isNotable: Bool { ordinal >= Rarity.rare.ordinal }
 }
 
 // MARK: - Reusable progress views
@@ -396,22 +476,6 @@ struct CompletionRing: View {
                 .monospacedDigit()
         }
         .animation(.easeInOut(duration: 0.3), value: progress)
-    }
-}
-
-/// Slim horizontal completion bar.
-private struct ProgressBar: View {
-    let fraction: Double
-    let tint: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Brand.Color.textTertiary.opacity(0.18))
-                Capsule().fill(tint)
-                    .frame(width: geo.size.width * CGFloat(max(0, min(1, fraction))))
-            }
-        }
     }
 }
 
