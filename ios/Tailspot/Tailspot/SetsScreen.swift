@@ -432,66 +432,146 @@ private struct SetSlotCardView: View {
     var body: some View {
         VStack(spacing: 0) {
             HangarChildBar(title: entry.canonicalName)
-            List {
-                if let rep = representative {
-                    VStack(spacing: 8) {
-                        CatchCardView(plane: CardPlane(catchRecord: rep), size: .lg)
-                        Text("FIRST CAUGHT")
-                            .font(Brand.Font.mono(size: 9, weight: .semibold))
-                            .tracking(1.2)
-                            .foregroundStyle(Brand.Color.textTertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+            ScrollView {
+                VStack(spacing: 18) {
+                    hero
+                    tailsSection
                 }
-                Section {
-                    ForEach(rows) { row in
-                        NavigationLink { CatchDetailView(row: row) } label: { tailRow(row) }
-                            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                    }
-                } header: {
-                    Text("TAILS (\(rows.count))")
-                        .font(Brand.Font.mono(size: 10, weight: .semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                }
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 28)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
         }
         .background(Brand.Color.bgPrimary)
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
     }
 
+    // MARK: Hero
+
+    private var heroPhotoURL: URL? {
+        representative?.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+    }
+
+    /// First-caught date — the meaningful, always-present datum. Per-catch
+    /// stats (altitude, speed, distance) live in each tail's CatchDetailView,
+    /// so the hero never shows empty "—" chips.
+    private var firstCaughtText: String? {
+        guard let c = representative else { return nil }
+        return "First caught \(c.caughtAt.formatted(.dateTime.month().day().year()))"
+    }
+
+    private var hero: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                if let heroPhotoURL {
+                    AsyncImage(url: heroPhotoURL) { phase in
+                        if case .success(let img) = phase {
+                            img.resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            SlotPlaceholder()
+                        }
+                    }
+                } else {
+                    SlotPlaceholder()
+                }
+            }
+            .frame(height: 200)
+            .frame(maxWidth: .infinity)
+            .clipped()
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    // The slot name is typecode-authoritative — show it, not the
+                    // catch's free-text model (which can disagree, e.g. an A20N
+                    // catch whose model string reads "A321neo").
+                    Text(entry.canonicalName)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                    if entry.rarity.isNotable {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14))
+                            .foregroundStyle(entry.rarity.tint)
+                    }
+                    Spacer(minLength: 0)
+                }
+                if let op = representative?.operatorName?
+                    .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+                    Text(op)
+                        .font(Brand.Font.body)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                }
+                if let firstCaughtText {
+                    Text(firstCaughtText)
+                        .font(Brand.Font.mono(size: 11, weight: .regular))
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .padding(.top, 2)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    // MARK: Tails
+
+    private var tailsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("TAILS (\(rows.count))")
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+                .padding(.leading, 4)
+            ForEach(rows) { row in
+                NavigationLink { CatchDetailView(row: row) } label: { tailRow(row) }
+                    .buttonStyle(.plain)
+            }
+        }
+    }
+
     private func tailRow(_ row: HangarRow) -> some View {
-        let cs = row.mostRecent.callsign?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let title = (cs?.isEmpty == false) ? cs! : row.icao24.uppercased()
-        let reg = row.mostRecent.registration?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let tail = (reg?.isEmpty == false) ? reg! : row.icao24
+        let callsign = row.mostRecent.callsign?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let reg = row.mostRecent.registration?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let op = row.mostRecent.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        // Title: callsign, else the registration, else the hex id (last resort).
+        let title = callsign ?? reg ?? row.icao24.uppercased()
+        // Subtitle: registration (only if not already the title) + operator,
+        // joined with " · " — never the raw hex, never a dangling separator.
+        let regPart = (callsign == nil) ? nil : reg
+        let subtitle = [regPart, op].compactMap { $0 }.joined(separator: " · ")
         return HStack(spacing: 10) {
-            Rectangle().fill(row.rarity.tint).frame(width: 3)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Brand.Color.cyan)
+                .frame(width: 3, height: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
+                    .font(Brand.Font.mono(size: 13, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
-                Text("\(tail) · \(row.mostRecent.operatorName ?? "—")")
-                    .font(Brand.Font.mono(size: 10))
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .lineLimit(1)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(Brand.Font.mono(size: 10))
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .lineLimit(1)
+                }
             }
-            Spacer()
+            Spacer(minLength: 8)
+            Text(row.firstCatch.caughtAt,
+                 format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+                .font(Brand.Font.mono(size: 10))
+                .foregroundStyle(Brand.Color.textTertiary)
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Brand.Color.textTertiary)
+                .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 11)
         .padding(.horizontal, 12)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 8))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
     }
 }
 
