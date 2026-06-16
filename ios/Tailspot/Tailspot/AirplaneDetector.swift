@@ -108,15 +108,15 @@ nonisolated final class AirplaneDetector: Sendable {
             return []
         }
 
-        // Flatten the (1, 8400, 85) output. The decoder owns all scoring/
-        // un-letterbox math; letterboxScale converts 640-space back to
-        // crop-space (no pad — our crop fills the input exactly).
-        let count = tensorArray.count
-        var tensor = [Float](repeating: 0, count: count)
-        tensorArray.withUnsafeBufferPointer(ofType: Float32.self) { src in
-            _ = tensor.withUnsafeMutableBufferPointer { dst in
-                dst.baseAddress!.update(from: src.baseAddress!, count: count)
-            }
+        // Reconstruct the logical (8400, 85) row-major tensor the decoder
+        // expects, HONORING the array's strides + dtype. The previous code
+        // blind-copied the backing buffer as contiguous Float32 — but the
+        // FP16-compute output (Neural Engine / GPU) can come back padded or
+        // non-contiguous, which scrambled every anchor and produced impossible
+        // scores (>1) + zero-size boxes, so the bracket snapped off the plane.
+        guard let tensor = Self.logicalTensor(from: tensorArray) else {
+            Log.ui.error("AirplaneDetector: unexpected detections tensor shape/dtype \(tensorArray.shape, privacy: .public)")
+            return []
         }
 
         let decoded = AirplaneDetectionDecoder.decode(
@@ -132,6 +132,57 @@ nonisolated final class AirplaneDetector: Sendable {
                 confidence: $0.confidence
             )
         }
+    }
+
+    /// Copy the model's `(1, 8400, 85)` output into the logical row-major
+    /// `[Float]` the decoder expects, HONORING the MLMultiArray's strides and
+    /// dtype.
+    ///
+    /// This is the fix for the field bug where the AR bracket snapped off the
+    /// plane: CoreML's output (FP16 compute on the Neural Engine / GPU) can be
+    /// returned padded or non-contiguous, and the old blind contiguous copy
+    /// then read the wrong memory — yielding impossible scores (objectness ×
+    /// class > 1, seen at ~150 in recordings) and zero-size boxes. Indexing
+    /// every element through its stride reconstructs the correct tensor
+    /// regardless of backing layout. Returns nil on an unexpected shape or an
+    /// unsupported dtype (caller treats nil as "no detections" this frame).
+    nonisolated static func logicalTensor(from array: MLMultiArray) -> [Float]? {
+        let shape = array.shape.map(\.intValue)
+        let strides = array.strides.map(\.intValue)
+        guard shape.count == 3,
+              shape[0] == 1,
+              shape[1] == AirplaneDetectionDecoder.anchorCount,
+              shape[2] == AirplaneDetectionDecoder.anchorStride,
+              strides.count == 3
+        else { return nil }
+
+        let anchors = shape[1]
+        let chans = shape[2]
+        let sA = strides[1]
+        let sC = strides[2]
+        var out = [Float](repeating: 0, count: anchors * chans)
+
+        switch array.dataType {
+        case .float32:
+            array.withUnsafeBufferPointer(ofType: Float32.self) { src in
+                for a in 0 ..< anchors {
+                    let rb = a * sA
+                    let db = a * chans
+                    for c in 0 ..< chans { out[db + c] = src[rb + c * sC] }
+                }
+            }
+        case .float16:
+            array.withUnsafeBufferPointer(ofType: Float16.self) { src in
+                for a in 0 ..< anchors {
+                    let rb = a * sA
+                    let db = a * chans
+                    for c in 0 ..< chans { out[db + c] = Float(src[rb + c * sC]) }
+                }
+            }
+        default:
+            return nil
+        }
+        return out
     }
 
     /// Render a 640×640 CIImage into the model's (1, 3, 640, 640) float32
