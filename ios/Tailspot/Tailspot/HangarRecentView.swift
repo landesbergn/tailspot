@@ -2,9 +2,11 @@
 //  HangarRecentView.swift
 //  Tailspot
 //
-//  Recent-view body for the Hangar sheet — chronological dedup'd
-//  MiniCard grid sorted by first-catch desc. No filters; that's a
-//  Sets-view affordance. Spec § 6.
+//  Recent-view body for the Hangar sheet — a chronological feed of the
+//  dedup'd catches, newest-first, each rendered as the shared TailCard
+//  (callsign · airline · date · location). No filters and no rarity/type
+//  chrome; that's a Sets-view affordance and pre-redesign noise
+//  respectively. Spec § 6.
 //
 
 import SwiftUI
@@ -28,16 +30,10 @@ struct HangarRecentView: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .padding(.top, 32)
             } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
-                    ],
-                    spacing: 12
-                ) {
+                LazyVStack(spacing: 10) {
                     ForEach(rows) { row in
                         NavigationLink(value: row) {
-                            MiniCardView(row: row)
+                            TailCard(row: row)
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
@@ -50,7 +46,7 @@ struct HangarRecentView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 4)
+                .padding(.top, 8)
                 .padding(.bottom, 32)
             }
         }
