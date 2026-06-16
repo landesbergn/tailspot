@@ -144,24 +144,23 @@ struct HangarView: View {
         } else {
             VStack(spacing: 0) {
                 HangarSegmentedSwitcher(selection: segment)
-                // Keep all three segments ALIVE and switch via opacity rather
-                // than a `switch` that tears down + rebuilds the view (re-running
-                // its @Query + derived work) on every tap — that rebuild was the
-                // switch lag Noah reported. The hidden segments don't recompute
-                // while the Hangar is open (catches are static), so switching is
-                // an instant opacity toggle.
-                let seg = segment.wrappedValue
-                ZStack {
+                // A paged TabView keeps every segment alive (no @Query re-run
+                // or List rebuild on switch — that was the original lag) AND
+                // hands the cross-segment transition to UIKit's page view,
+                // which stays smooth even with the List-backed Trophies page.
+                // The earlier keep-alive ZStack cross-faded two stacked
+                // UICollectionView Lists, which is what still felt janky.
+                // The segment buttons drive `selection`; horizontal swipe
+                // between pages comes free. Page dots hidden.
+                TabView(selection: segment) {
                     SetsBrowser()
-                        .opacity(seg == .sets ? 1 : 0)
-                        .allowsHitTesting(seg == .sets)
+                        .tag(HangarSegment.sets)
                     HangarRecentView()
-                        .opacity(seg == .recent ? 1 : 0)
-                        .allowsHitTesting(seg == .recent)
+                        .tag(HangarSegment.recent)
                     HangarTrophiesView()
-                        .opacity(seg == .trophies ? 1 : 0)
-                        .allowsHitTesting(seg == .trophies)
+                        .tag(HangarSegment.trophies)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(Brand.Color.bgPrimary)
         }

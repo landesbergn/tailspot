@@ -29,31 +29,40 @@ import SwiftData
 struct SetsBrowser: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
-    // Ordered by % complete (closest-to-done first) so the sets you're most
-    // likely to finish bubble to the top.
-    private var sets: [CardSet] {
-        CardSets.families.sorted { a, b in
-            let fa = fraction(a), fb = fraction(b)
-            return fa != fb ? fa > fb : a.title < b.title
-        }
-    }
-
-    private func fraction(_ set: CardSet) -> Double {
-        let p = CardSets.progress(of: set, against: catches)
-        return p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
-    }
-
-    var body: some View {
-        List {
-            ForEach(sets) { set in
-                NavigationLink(value: set) {
-                    SetCompletionCard(set: set, catches: catches)
-                }
-                .listRowBackground(Brand.Color.bgElevated)
+    // Each set's progress is computed ONCE here (single pass over the
+    // families), then we sort by % complete — closest-to-done first, so the
+    // sets you're most likely to finish bubble to the top. The previous
+    // version sorted with a comparator that recomputed progress for both
+    // sides of every comparison (~10× the work); precomputing keeps the
+    // body cheap, which matters now that the segment is kept alive.
+    private var scored: [(set: CardSet, progress: (caught: Int, total: Int))] {
+        CardSets.families
+            .map { (set: $0, progress: CardSets.progress(of: $0, against: catches)) }
+            .sorted { a, b in
+                let fa = a.progress.total == 0 ? 0 : Double(a.progress.caught) / Double(a.progress.total)
+                let fb = b.progress.total == 0 ? 0 : Double(b.progress.caught) / Double(b.progress.total)
+                return fa != fb ? fa > fb : a.set.title < b.set.title
             }
+    }
+
+    // ScrollView + LazyVStack (not a List) so the top spacing matches the
+    // Recent feed exactly and the kept-alive segment stays lightweight —
+    // an inset-grouped List is UICollectionView-backed and adds its own
+    // section inset before the first row.
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ForEach(scored, id: \.set.id) { item in
+                    NavigationLink(value: item.set) {
+                        SetCompletionCard(set: item.set, progress: item.progress)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
         .background(Brand.Color.bgPrimary)
         .navigationDestination(for: CardSet.self) { SetDetailScreen(set: $0) }
     }
@@ -72,12 +81,11 @@ struct SetsScreen: View {
 
 private struct SetCompletionCard: View {
     let set: CardSet
-    let catches: [Catch]
+    let progress: (caught: Int, total: Int)
 
     var body: some View {
-        let p = CardSets.progress(of: set, against: catches)
-        let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
-        let complete = p.total > 0 && p.caught == p.total
+        let frac = progress.total == 0 ? 0 : Double(progress.caught) / Double(progress.total)
+        let complete = progress.total > 0 && progress.caught == progress.total
         return HStack(spacing: 14) {
             CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 5)
                 .frame(width: 44, height: 44)
@@ -94,15 +102,26 @@ private struct SetCompletionCard: View {
                             .foregroundStyle(Brand.Color.alertNormal)
                     }
                 }
-                Text("\(p.caught) of \(p.total) variants")
+                Text("\(progress.caught) of \(progress.total) variants")
                     .font(Brand.Font.mono(size: 11, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()
             }
 
             Spacer(minLength: 4)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
         }
-        .padding(.vertical, 6)
+        // Same card chrome as TailCard so the Sets browser and the Recent
+        // feed read as one design language.
+        .padding(12)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 
