@@ -66,6 +66,17 @@ class CatchUploader {
         }
 
         var successCount = 0
+        // The backend rate-limits catch uploads (token bucket, ~60/min per
+        // device). The old loop blasted every pending row straight through, so
+        // a backlog backfill drained the bucket in milliseconds, most rows got
+        // 429'd, and they re-stormed on the next launch (never reaching the
+        // leaderboard). Now a 429 makes us wait for the bucket to refill and
+        // retry the SAME row — bounded, so a huge backlog can't hang the task;
+        // whatever's left simply defers to the next foreground transition.
+        var rateLimitWaits = 0
+        let maxRateLimitWaits = 90   // ~90 × 1.2 s ≈ a <2 min ceiling per run
+
+        uploadLoop:
         for catchRow in pendingRows {
             // Assign a stable UUID for this catch if it doesn't have one yet.
             if catchRow.serverUuid == nil {
@@ -73,40 +84,55 @@ class CatchUploader {
             }
             guard let uuid = catchRow.serverUuid else { continue }
 
-            do {
-                let response = try await client.uploadCatch(
-                    catchUuid: uuid,
-                    icao24: catchRow.icao24,
-                    callsign: catchRow.callsign,
-                    caughtAt: catchRow.caughtAt,
-                    observerLat: catchRow.observerLat,
-                    observerLon: catchRow.observerLon,
-                    headingDeg: nil,
-                    elevationDeg: nil,
-                    headingAccuracyDeg: nil
-                )
-                // Mark uploaded regardless of duplicate status — both mean the
-                // server has accepted this catch.
-                catchRow.uploadedAt = Date()
-                successCount += 1
-                Log.ui.info(
-                    "CatchUploader: uploaded \(catchRow.icao24, privacy: .public) pts=\(response.points, privacy: .public) dup=\(response.duplicate, privacy: .public)"
-                )
-                // Analytics: record the successful upload. Rarity comes from
-                // the server response when present (authoritative); falls back
-                // to the local resolved value. No location — only aggregate
-                // gameplay data.
-                let rarityString = response.rarity ?? catchRow.resolvedRarity.rawValue
-                Analytics.capture("catch_uploaded", [
-                    "rarity":    .string(rarityString),
-                    "points":    .int(response.points),
-                    "duplicate": .bool(response.duplicate),
-                ])
-            } catch {
-                // Non-fatal: leave pending for the next foreground transition.
-                Log.ui.error(
-                    "CatchUploader: upload failed icao=\(catchRow.icao24, privacy: .public) err=\(error, privacy: .public)"
-                )
+            while true {
+                do {
+                    let response = try await client.uploadCatch(
+                        catchUuid: uuid,
+                        icao24: catchRow.icao24,
+                        callsign: catchRow.callsign,
+                        caughtAt: catchRow.caughtAt,
+                        observerLat: catchRow.observerLat,
+                        observerLon: catchRow.observerLon,
+                        headingDeg: nil,
+                        elevationDeg: nil,
+                        headingAccuracyDeg: nil
+                    )
+                    // Mark uploaded regardless of duplicate status — both mean
+                    // the server has accepted this catch.
+                    catchRow.uploadedAt = Date()
+                    successCount += 1
+                    Log.ui.info(
+                        "CatchUploader: uploaded \(catchRow.icao24, privacy: .public) pts=\(response.points, privacy: .public) dup=\(response.duplicate, privacy: .public)"
+                    )
+                    // Analytics: record the successful upload. Rarity comes from
+                    // the server response when present (authoritative); falls back
+                    // to the local resolved value. No location — only aggregate
+                    // gameplay data.
+                    let rarityString = response.rarity ?? catchRow.resolvedRarity.rawValue
+                    Analytics.capture("catch_uploaded", [
+                        "rarity":    .string(rarityString),
+                        "points":    .int(response.points),
+                        "duplicate": .bool(response.duplicate),
+                    ])
+                    break   // success → move to the next catch
+                } catch AccountError.http(let status) where status == 429 {
+                    // Rate limited. Wait for the bucket to refill (~1 token/sec
+                    // at 60/min) and retry this same row, up to the ceiling.
+                    guard rateLimitWaits < maxRateLimitWaits else {
+                        Log.ui.notice("CatchUploader: rate limited; deferring remaining catches to the next launch")
+                        break uploadLoop
+                    }
+                    rateLimitWaits += 1
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    if Task.isCancelled { break uploadLoop }
+                    // loop retries the same catchRow
+                } catch {
+                    // Non-rate-limit error: leave this row pending and move on.
+                    Log.ui.error(
+                        "CatchUploader: upload failed icao=\(catchRow.icao24, privacy: .public) err=\(error, privacy: .public)"
+                    )
+                    break
+                }
             }
         }
 
