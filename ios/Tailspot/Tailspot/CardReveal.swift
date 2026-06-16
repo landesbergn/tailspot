@@ -39,6 +39,9 @@ struct CardReveal: View {
 
     @State private var showingBack = false
     @State private var animateIn = false
+    /// Rendered share-card image, prepared once on appear (ImageRenderer is
+    /// synchronous and this view animates — never render it on the body path).
+    @State private var shareImage: Image?
 
     var body: some View {
         ZStack {
@@ -84,8 +87,19 @@ struct CardReveal: View {
             withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
                 animateIn = true
             }
+            if shareImage == nil {
+                shareImage = CatchShare.image(for: plane, photo: CatchShare.loadLocalPhoto(plane.photoURL))
+            }
         }
         .background(.black) // covers any underlying view bleed-through
+    }
+
+    /// Text that rides as the share-sheet preview title.
+    private var shareTitle: String {
+        let cs = plane.callsign?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (cs?.isEmpty == false ? cs! : "a plane")
+        let model = plane.model.map { " · \($0)" } ?? ""
+        return "Caught \(name)\(model) on Tailspot"
     }
 
     // MARK: - Backdrop
@@ -240,17 +254,32 @@ struct CardReveal: View {
 
     private var buttons: some View {
         VStack(spacing: 10) {
-            Button {
-                onViewInHangar()
-            } label: {
-                Text("View in Hangar")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: 12))
+            HStack(spacing: 10) {
+                Button {
+                    onViewInHangar()
+                } label: {
+                    Text("View in Hangar")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+
+                // Share the catch as a polished card image (prepared on appear).
+                if let shareImage {
+                    ShareLink(item: shareImage, preview: SharePreview(shareTitle, image: shareImage)) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
 
             Button {
                 onDismiss()

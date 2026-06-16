@@ -243,7 +243,10 @@ struct CatchDetailView: View {
     /// discs with a white 10% hairline. System nav bar is hidden so they
     /// own the top of the view.
     private var chromeBar: some View {
-        HStack {
+        // Render the share card once per build (ImageRenderer is synchronous;
+        // this view isn't on a hot render path).
+        let img = shareImage
+        return HStack {
             chromePill(icon: "chevron.left") { dismiss() }
             Spacer()
             Button {
@@ -253,12 +256,22 @@ struct CatchDetailView: View {
             }
             .buttonStyle(.plain)
             .padding(.trailing, 8)
-            ShareLink(item: shareText) {
+            // Share a polished card image (not just text) so friends get a
+            // clean card instead of a screenshot; the text rides as the
+            // preview title.
+            ShareLink(item: img, preview: SharePreview(shareText, image: img)) {
                 chromePillBody(icon: "square.and.arrow.up")
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
+    }
+
+    /// Rendered share-card image for this catch — the local capture photo
+    /// when present, else the card's branded placeholder.
+    private var shareImage: Image {
+        let photo = CatchShare.loadLocalPhoto(catchCardPlane.photoURL)
+        return CatchShare.image(for: catchCardPlane, photo: photo)
     }
 
     private func chromePill(icon: String, action: @escaping () -> Void) -> some View {
