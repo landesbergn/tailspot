@@ -281,9 +281,10 @@ private struct TailCard: View {
         let c = row.mostRecent
         let reg = c.registration?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         let callsign = c.callsign?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        // Tail number is the registration (N-number etc.); fall back to the
-        // callsign, then the hex id.
-        let tailNumber = reg ?? callsign ?? row.icao24.uppercased()
+        // Lead with the flight callsign (e.g. SWA4244) — the identifier Noah
+        // wants — not the opaque N-registration. Fall back to the registration,
+        // then the hex id, only when there's no callsign.
+        let tailNumber = callsign ?? reg ?? row.icao24.uppercased()
         // Resolve the airline from the callsign when no operator was recorded;
         // GA-format callsigns fall back to "Private".
         let airline = Airlines.operatorLabel(operatorName: c.operatorName, callsign: c.callsign)
