@@ -176,7 +176,11 @@ struct HangarTrophiesView: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()
                 Spacer(minLength: 6)
-                ProgressBar(fill: fill, tint: Color(hex: next.tier.outerHex))
+                // Progress is always cyan — the app's one "your progress" color
+                // (matches the Sets completion rings). Tinting it the NEXT tier's
+                // metal clashed with the current tier on the hex + label (a silver
+                // medal got a gold bar); the metal now means tier, cyan means climb.
+                ProgressBar(fill: fill, tint: Brand.Color.cyan)
                     .frame(width: 76, height: 4)
             }
             .padding(.top, 1)
