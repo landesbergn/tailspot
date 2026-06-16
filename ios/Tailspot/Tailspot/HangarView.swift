@@ -144,12 +144,23 @@ struct HangarView: View {
         } else {
             VStack(spacing: 0) {
                 HangarSegmentedSwitcher(selection: segment)
-                Group {
-                    switch segment.wrappedValue {
-                    case .sets:     SetsBrowser()   // completion-driven collection browser (By Type / By Family)
-                    case .recent:   HangarRecentView()
-                    case .trophies: HangarTrophiesView()
-                    }
+                // Keep all three segments ALIVE and switch via opacity rather
+                // than a `switch` that tears down + rebuilds the view (re-running
+                // its @Query + derived work) on every tap — that rebuild was the
+                // switch lag Noah reported. The hidden segments don't recompute
+                // while the Hangar is open (catches are static), so switching is
+                // an instant opacity toggle.
+                let seg = segment.wrappedValue
+                ZStack {
+                    SetsBrowser()
+                        .opacity(seg == .sets ? 1 : 0)
+                        .allowsHitTesting(seg == .sets)
+                    HangarRecentView()
+                        .opacity(seg == .recent ? 1 : 0)
+                        .allowsHitTesting(seg == .recent)
+                    HangarTrophiesView()
+                        .opacity(seg == .trophies ? 1 : 0)
+                        .allowsHitTesting(seg == .trophies)
                 }
             }
             .background(Brand.Color.bgPrimary)
