@@ -3,13 +3,20 @@
 //  Tailspot
 //
 //  Trophies-view body for the Hangar sheet. Renders the achievement
-//  ladder (Earned / In progress / Locked partition) plus the hero
-//  tier-overview strip. Spec § 4.2, § 7. Used by HangarView when the
-//  user picks the Trophies segment.
+//  ladder (Earned / In progress / Locked) plus the hero tier-overview
+//  card. Spec § 4.2, § 7. Used by HangarView's Trophies segment.
 //
 //  This view is the body of the former standalone TrophiesScreen —
 //  TrophiesScreen now wraps this view so any remaining push paths
 //  (e.g. settings, future deep links) still work.
+//
+//  Layout matches the Sets and Recent feeds: a ScrollView + LazyVStack
+//  of rounded cards (NOT a List). The List was inset-grouped and
+//  UICollectionView-backed, which — stacked with the other heavy
+//  segment — was part of the Trophies-tab lag; the bigger cost was the
+//  blur-shadowed trophy badges re-compositing every frame, fixed in
+//  TrophyView (drawingGroup + no blur). LazyVStack also means only the
+//  on-screen badges render at all.
 //
 
 import SwiftUI
@@ -17,166 +24,127 @@ import SwiftData
 
 struct HangarTrophiesView: View {
     @Query private var catches: [Catch]
-    /// Computed once per `catches` change. The `body` re-evaluates
-    /// on @Query updates, but this keeps the cost off the per-row
-    /// path.
-    private var inputs: TrophyProgressInputs {
-        Trophies.inputs(from: catches)
-    }
-
-    private var unlockedCount: Int {
-        Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
-    }
-
-    // MARK: - Partition by status
-
-    /// Trophies the user has unlocked at any tier.
-    private var earnedTrophies: [Achievement] {
-        Trophies.roster.filter { !$0.isLocked(inputs: inputs) }
-    }
-
-    /// Locked trophies with at least one tier whose threshold the
-    /// user is at least 25 % of the way to. Surfaces "close to
-    /// unlocking" candidates so the screen suggests where to push.
-    private var inProgressTrophies: [Achievement] {
-        Trophies.roster.filter { ach in
-            guard ach.isLocked(inputs: inputs),
-                  let next = ach.nextTier(inputs: inputs) else { return false }
-            let p = ach.currentProgress(inputs: inputs)
-            return Double(p) / Double(max(1, next.at)) >= 0.25
-        }
-    }
-
-    /// Locked + not close — rendered as anonymous "???" cards so the
-    /// user has a discoverable surface area to play toward.
-    private var lockedTrophies: [Achievement] {
-        Trophies.roster.filter { ach in
-            ach.isLocked(inputs: inputs) && !inProgressTrophies.contains(ach)
-        }
-    }
 
     var body: some View {
-        List {
-            Section {
-                heroStrip
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-            if !earnedTrophies.isEmpty {
-                Section("Earned") {
-                    ForEach(earnedTrophies) { ach in
-                        achievementRow(ach)
-                    }
+        // Compute the aggregate ONCE per render and derive the three
+        // partitions from it — the old version recomputed `inputs` (an
+        // O(catches) pass) on every access of every computed property.
+        let inputs = Trophies.inputs(from: catches)
+        let earned = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }
+        let inProgress = Trophies.roster.filter { isInProgress($0, inputs: inputs) }
+        let inProgressIDs = Set(inProgress.map(\.id))
+        let locked = Trophies.roster.filter { $0.isLocked(inputs: inputs) && !inProgressIDs.contains($0.id) }
+
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                heroCard(inputs: inputs, unlocked: earned.count, inProgressCount: inProgress.count)
+                    .padding(.bottom, 2)
+
+                if !earned.isEmpty {
+                    sectionHeader("EARNED", count: earned.count)
+                    ForEach(earned) { achievementCard($0, inputs: inputs) }
+                }
+                if !inProgress.isEmpty {
+                    sectionHeader("IN PROGRESS", count: inProgress.count)
+                    ForEach(inProgress) { achievementCard($0, inputs: inputs) }
+                }
+                if !locked.isEmpty {
+                    sectionHeader("LOCKED", count: locked.count)
+                    ForEach(locked) { lockedCard($0) }
                 }
             }
-            if !inProgressTrophies.isEmpty {
-                Section {
-                    ForEach(inProgressTrophies) { ach in
-                        achievementRow(ach)
-                    }
-                } header: {
-                    Text("In progress")
-                } footer: {
-                    Text("Close to unlocking — keep catching.")
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                }
-            }
-            if !lockedTrophies.isEmpty {
-                Section("Locked") {
-                    ForEach(lockedTrophies) { ach in
-                        hiddenRow(ach)
-                    }
-                }
-            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
         }
-        .listStyle(.insetGrouped)
+        .background(Brand.Color.bgPrimary)
     }
 
-    /// Cards rendered in the LOCKED section. Hides the title +
-    /// summary behind "???" placeholders so the user discovers them
-    /// by playing. Tappable later (defer detail-sheet to a future
-    /// iteration) — for now this is a static row.
-    private func hiddenRow(_ ach: Achievement) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            TrophyView(tier: .bronze, iconName: ach.iconName, size: 56, locked: true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("???")
-                    .font(Brand.Font.cardTitle)
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text("Hidden trophy — unlock by playing.")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
+    /// Locked, but at least 25 % of the way to its next tier — the
+    /// "close to unlocking" bucket that tells the user where to push.
+    private func isInProgress(_ ach: Achievement, inputs: TrophyProgressInputs) -> Bool {
+        guard ach.isLocked(inputs: inputs), let next = ach.nextTier(inputs: inputs) else { return false }
+        return Double(ach.currentProgress(inputs: inputs)) / Double(max(1, next.at)) >= 0.25
     }
 
-    // MARK: - Hero strip
+    // MARK: - Section header
 
-    /// Tier overview: one of each tier the user has earned, lined up
-    /// at the top so the page opens with the most visually
-    /// satisfying content.
-    private var heroStrip: some View {
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+            Text("\(count)")
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
+                .monospacedDigit()
+        }
+        .padding(.leading, 4)
+        .padding(.top, 8)
+    }
+
+    // MARK: - Hero card
+
+    private func heroCard(inputs: TrophyProgressInputs, unlocked: Int, inProgressCount: Int) -> some View {
         let tierCounts = Dictionary(grouping: Trophies.roster.compactMap { $0.currentTier(inputs: inputs) }) { $0 }
             .mapValues(\.count)
-        return VStack(spacing: 14) {
-            HStack(spacing: 18) {
+        return VStack(spacing: 16) {
+            HStack(spacing: 0) {
                 ForEach(TrophyTier.allCases, id: \.self) { tier in
-                    tierColumn(tier: tier, count: tierCounts[tier] ?? 0)
+                    tierColumn(tier: tier, count: tierCounts[tier] ?? 0, inputs: inputs)
+                        .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, 24)
-            VStack(spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("\(unlockedCount)")
-                        .font(Brand.Font.mono(size: 32, weight: .heavy))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .monospacedDigit()
-                    Text("of \(Trophies.roster.count)")
-                        .font(Brand.Font.cardSubtitle)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                        .monospacedDigit()
-                }
-                if !inProgressTrophies.isEmpty {
-                    Text("\(inProgressTrophies.count) close to unlocking")
-                        .font(Brand.Font.mono(size: 11, weight: .semibold))
-                        .tracking(0.6)
+            Rectangle()
+                .fill(Brand.Color.textPrimary.opacity(0.06))
+                .frame(height: 1)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(unlocked)")
+                    .font(Brand.Font.mono(size: 30, weight: .heavy))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .monospacedDigit()
+                Text("of \(Trophies.roster.count) unlocked")
+                    .font(Brand.Font.cardSubtitle)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .monospacedDigit()
+                Spacer(minLength: 4)
+                if inProgressCount > 0 {
+                    Text("\(inProgressCount) CLOSE")
+                        .font(Brand.Font.mono(size: 10, weight: .bold))
+                        .tracking(0.8)
                         .foregroundStyle(Brand.Color.cyan)
-                } else {
-                    Text("UNLOCKED")
-                        .font(Brand.Font.mono(size: 10, weight: .semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.textTertiary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Brand.Color.cyan.opacity(0.16), in: .capsule)
                 }
             }
         }
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity)
-        .background(Brand.Color.bgElevated)
+        .padding(16)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
+        )
     }
 
-    private func tierColumn(tier: TrophyTier, count: Int) -> some View {
+    private func tierColumn(tier: TrophyTier, count: Int, inputs: TrophyProgressInputs) -> some View {
         VStack(spacing: 6) {
-            // Show a representative trophy in this tier from the
-            // roster; pick the first achievement currently at this
-            // tier so the icon means something to the user.
-            let rep = representativeIcon(for: tier)
-            TrophyView(tier: tier, iconName: rep, size: 44, locked: count == 0)
-                .opacity(count == 0 ? 0.55 : 1)
+            TrophyView(tier: tier, iconName: representativeIcon(for: tier, inputs: inputs), size: 46, locked: count == 0)
+                .opacity(count == 0 ? 0.45 : 1)
             Text("\(count)")
-                .font(Brand.Font.mono(size: 14, weight: .bold))
-                .foregroundStyle(Color(hex: tier.outerHex))
+                .font(Brand.Font.mono(size: 13, weight: .bold))
+                .foregroundStyle(count == 0 ? Brand.Color.textTertiary : Color(hex: tier.outerHex))
                 .monospacedDigit()
         }
     }
 
-    /// First achievement currently at `tier`, falling back to a
-    /// stable per-tier default so the strip never renders blank.
-    private func representativeIcon(for tier: TrophyTier) -> String {
-        let found = Trophies.roster.first { $0.currentTier(inputs: inputs) == tier }
-        if let found { return found.iconName }
+    /// First achievement currently at `tier`, falling back to a stable
+    /// per-tier default so the strip never renders blank.
+    private func representativeIcon(for tier: TrophyTier, inputs: TrophyProgressInputs) -> String {
+        if let found = Trophies.roster.first(where: { $0.currentTier(inputs: inputs) == tier }) {
+            return found.iconName
+        }
         switch tier {
         case .bronze:   return "catcher"
         case .silver:   return "diamond"
@@ -185,9 +153,9 @@ struct HangarTrophiesView: View {
         }
     }
 
-    // MARK: - Row
+    // MARK: - Achievement card (earned + in-progress)
 
-    private func achievementRow(_ ach: Achievement) -> some View {
+    private func achievementCard(_ ach: Achievement, inputs: TrophyProgressInputs) -> some View {
         let current = ach.currentTier(inputs: inputs)
         let next = ach.nextTier(inputs: inputs)
         let progress = ach.currentProgress(inputs: inputs)
@@ -195,24 +163,32 @@ struct HangarTrophiesView: View {
             TrophyView(
                 tier: current ?? .bronze,
                 iconName: ach.iconName,
-                size: 56,
+                size: 52,
                 locked: current == nil
             )
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(ach.title)
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(ach.summary)
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
+                    .lineLimit(1)
                 rowFooter(ach: ach, current: current, next: next, progress: progress)
             }
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
+        )
     }
 
-    /// Bottom line of the row: either "TIER · progress / next" with
-    /// a progress bar, or "MAX" when every tier is already unlocked.
+    /// Bottom line of the row: either "TIER · progress / next" with a
+    /// progress bar, or "MAX" when every tier is already unlocked.
     @ViewBuilder
     private func rowFooter(ach: Achievement, current: TrophyTier?, next: AchievementTier?, progress: Int) -> some View {
         if let next {
@@ -232,14 +208,43 @@ struct HangarTrophiesView: View {
                     .monospacedDigit()
                 Spacer(minLength: 6)
                 ProgressBar(fill: fill, tint: Color(hex: next.tier.outerHex))
-                    .frame(width: 72, height: 4)
+                    .frame(width: 76, height: 4)
             }
+            .padding(.top, 1)
         } else if let current {
             Text("\(current.label) · MAX")
                 .font(Brand.Font.mono(size: 10, weight: .bold))
                 .foregroundStyle(Color(hex: current.outerHex))
                 .tracking(0.8)
+                .padding(.top, 1)
         }
+    }
+
+    // MARK: - Locked card
+
+    /// LOCKED section card: hides the title + summary behind "???" so
+    /// the user discovers them by playing.
+    private func lockedCard(_ ach: Achievement) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            TrophyView(tier: .bronze, iconName: ach.iconName, size: 52, locked: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("???")
+                    .font(Brand.Font.cardTitle)
+                    .foregroundStyle(Brand.Color.textSecondary)
+                Text("Hidden trophy — unlock by playing.")
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.Color.bgElevated.opacity(0.5), in: .rect(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.05), lineWidth: 1)
+        )
     }
 }
 
@@ -251,7 +256,7 @@ private struct ProgressBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Brand.Color.bgElevated)
+                Capsule().fill(Brand.Color.bgSurface)
                 Capsule().fill(tint)
                     .frame(width: geo.size.width * CGFloat(fill))
             }
