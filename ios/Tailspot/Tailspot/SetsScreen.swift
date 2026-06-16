@@ -26,40 +26,23 @@ import SwiftData
 
 struct SetsBrowser: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
-    @State private var lens: SetLens = .type
 
-    private var sets: [CardSet] { CardSets.sets(for: lens) }
+    // Sets are organized by make/model FAMILY (Boeing 737, Airbus A320, …).
+    // The old By Type / By Family lens toggle was dropped — family is the one
+    // collection view.
+    private var sets: [CardSet] { CardSets.families }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Lens", selection: $lens.animation(.easeInOut(duration: 0.2))) {
-                ForEach(SetLens.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            .background(Brand.Color.bgPrimary)
-
-            List {
-                Section {
-                    ForEach(sets) { set in
-                        NavigationLink(value: set) {
-                            SetCompletionCard(set: set, lens: lens, catches: catches)
-                        }
-                        .listRowBackground(Brand.Color.bgElevated)
-                    }
-                } header: {
-                    Text(lens == .type ? "Categories" : "Families")
-                        .font(Brand.Font.mono(size: 10, weight: .semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.textTertiary)
+        List {
+            ForEach(sets) { set in
+                NavigationLink(value: set) {
+                    SetCompletionCard(set: set, catches: catches)
                 }
+                .listRowBackground(Brand.Color.bgElevated)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Brand.Color.bgPrimary)
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .background(Brand.Color.bgPrimary)
         .navigationDestination(for: CardSet.self) { SetDetailScreen(set: $0) }
     }
@@ -78,7 +61,6 @@ struct SetsScreen: View {
 
 private struct SetCompletionCard: View {
     let set: CardSet
-    let lens: SetLens
     let catches: [Catch]
 
     var body: some View {
@@ -104,7 +86,7 @@ private struct SetCompletionCard: View {
                             .foregroundStyle(Brand.Color.alertNormal)
                     }
                 }
-                Text("\(p.caught) of \(p.total) \(lens == .type ? "models" : "variants")")
+                Text("\(p.caught) of \(p.total) variants")
                     .font(Brand.Font.mono(size: 11, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()

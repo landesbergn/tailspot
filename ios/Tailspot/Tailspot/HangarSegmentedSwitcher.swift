@@ -35,6 +35,11 @@ struct HangarSegmentedSwitcher: View {
                 segmentButton(seg)
             }
         }
+        // Animate ONLY the pill, scoped to the switcher. Previously the tap
+        // used withAnimation { selection = ... }, which animated the whole
+        // downstream content swap (Sets/Recent/Trophies rebuild) — that's what
+        // felt slow/laggy. Here the content swaps instantly; just the pill slides.
+        .animation(.snappy(duration: 0.22), value: selection)
         .padding(5)
         .glassEffect(.regular, in: .capsule)   // iOS 26 Liquid Glass track
         .padding(.horizontal, 16)
@@ -44,7 +49,7 @@ struct HangarSegmentedSwitcher: View {
     private func segmentButton(_ seg: HangarSegment) -> some View {
         let isSelected = selection == seg
         return Button {
-            withAnimation(.snappy(duration: 0.28)) { selection = seg }
+            selection = seg
         } label: {
             Text(seg.label)
                 .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
