@@ -284,7 +284,9 @@ private struct TailCard: View {
         // Tail number is the registration (N-number etc.); fall back to the
         // callsign, then the hex id.
         let tailNumber = reg ?? callsign ?? row.icao24.uppercased()
-        let airline = c.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        // Resolve the airline from the callsign when no operator was recorded;
+        // GA-format callsigns fall back to "Private".
+        let airline = Airlines.operatorLabel(operatorName: c.operatorName, callsign: c.callsign)
         let place = c.placeName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
 
         return HStack(spacing: 12) {
@@ -309,7 +311,7 @@ private struct TailCard: View {
                     .font(Brand.Font.mono(size: 15, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
                     .lineLimit(1)
-                Text(airline ?? "Unknown operator")
+                Text(airline)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .lineLimit(1)

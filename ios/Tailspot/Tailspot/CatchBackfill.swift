@@ -66,11 +66,24 @@ enum CatchBackfill {
     /// idempotent, swallows errors. Saves once at the end. Runs in the
     /// background off a Hangar `.task`; never blocks UI.
     static func backfillAll(_ catches: [Catch], in context: ModelContext) async {
+        var changedAny = false
+        // Offline operator backfill: resolve the airline from the callsign's
+        // ICAO prefix for any catch missing an operator (the feed often supplies
+        // none). No network; covers ALL catches — not just those that also need
+        // typecode/registration, which is the only thing `needsMetadata` gates.
+        for c in catches where c.operatorName == nil {
+            if let airline = Airlines.name(forCallsign: c.callsign) {
+                c.operatorName = airline
+                changedAny = true
+            }
+        }
         // Group by icao24 so we fetch once per airframe, not per row.
         let needing = catches.filter(needsMetadata)
-        guard !needing.isEmpty else { return }
+        guard !needing.isEmpty else {
+            if changedAny { try? context.save() }
+            return
+        }
         let byIcao = Dictionary(grouping: needing) { $0.icao24 }
-        var changedAny = false
         for (icao, rows) in byIcao {
             let trimmed = icao.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }

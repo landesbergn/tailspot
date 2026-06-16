@@ -921,7 +921,8 @@ struct ContentView: View {
                     callsign: observed?.aircraft.callsign,
                     model: metadata?.model,
                     manufacturer: metadata?.manufacturerName,
-                    operatorName: metadata?.operatorName,
+                    operatorName: metadata?.operatorName
+                        ?? Airlines.name(forCallsign: observed?.aircraft.callsign),
                     photoFilename: photoFilename,
                     caughtAt: now,
                     observerLat: observerLat,
