@@ -441,6 +441,12 @@ nonisolated enum Trophies {
 
 extension Achievement {
 
+    /// A one-shot ("1 of 1") award: a single milestone you either have or
+    /// don't — rendered as a **Badge**. Multi-tier awards level up through
+    /// bronze → platinum and are rendered as **Medals**.
+    var isOneShot: Bool { tiers.count == 1 }
+    var isLeveled: Bool { tiers.count > 1 }
+
     /// Current value of the progress metric.
     func currentProgress(inputs: TrophyProgressInputs) -> Int {
         progress(inputs)
