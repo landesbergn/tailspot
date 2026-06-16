@@ -29,7 +29,19 @@ import SwiftData
 struct SetsBrowser: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
-    private var sets: [CardSet] { CardSets.families }
+    // Ordered by % complete (closest-to-done first) so the sets you're most
+    // likely to finish bubble to the top.
+    private var sets: [CardSet] {
+        CardSets.families.sorted { a, b in
+            let fa = fraction(a), fb = fraction(b)
+            return fa != fb ? fa > fb : a.title < b.title
+        }
+    }
+
+    private func fraction(_ set: CardSet) -> Double {
+        let p = CardSets.progress(of: set, against: catches)
+        return p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
+    }
 
     var body: some View {
         List {
@@ -67,7 +79,7 @@ private struct SetCompletionCard: View {
         let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
         let complete = p.total > 0 && p.caught == p.total
         return HStack(spacing: 14) {
-            CompletionRing(progress: frac, tint: set.type.tint, lineWidth: 5)
+            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 5)
                 .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -143,7 +155,7 @@ struct SetDetailScreen: View {
         let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
         let complete = p.total > 0 && p.caught == p.total
         return HStack(spacing: 16) {
-            CompletionRing(progress: frac, tint: set.type.tint, lineWidth: 7)
+            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 7)
                 .frame(width: 64, height: 64)
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(p.caught) of \(p.total) collected")
@@ -161,7 +173,7 @@ struct SetDetailScreen: View {
         let caught = tailCount > 0
         return HStack(spacing: 12) {
             Circle()
-                .fill(caught ? entry.rarity.tint : Brand.Color.textTertiary.opacity(0.3))
+                .fill(caught ? Brand.Color.cyan : Brand.Color.textTertiary.opacity(0.3))
                 .frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -189,7 +201,7 @@ struct SetDetailScreen: View {
             if caught {
                 Text("\(tailCount)")
                     .font(Brand.Font.mono(size: 16, weight: .heavy))
-                    .foregroundStyle(entry.rarity.tint)
+                    .foregroundStyle(Brand.Color.cyan)
                     .monospacedDigit()
             }
         }
@@ -267,11 +279,12 @@ private struct TailCard: View {
 
     var body: some View {
         let c = row.mostRecent
-        let callsign = c.callsign?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         let reg = c.registration?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        let op = c.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        let title = callsign ?? reg ?? row.icao24.uppercased()
-        let subtitle = [(callsign == nil ? nil : reg), op].compactMap { $0 }.joined(separator: " · ")
+        let callsign = c.callsign?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        // Tail number is the registration (N-number etc.); fall back to the
+        // callsign, then the hex id.
+        let tailNumber = reg ?? callsign ?? row.icao24.uppercased()
+        let airline = c.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         let place = c.placeName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
 
         return HStack(spacing: 12) {
@@ -292,33 +305,29 @@ private struct TailCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 11))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(Brand.Font.mono(size: 14, weight: .bold))
+                Text(tailNumber)
+                    .font(Brand.Font.mono(size: 15, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
                     .lineLimit(1)
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Brand.Color.textSecondary)
-                        .lineLimit(1)
-                }
+                Text(airline ?? "Unknown operator")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .lineLimit(1)
                 Label {
                     Text(c.caughtAt.formatted(.dateTime.month().day().year()))
                 } icon: {
-                    Image(systemName: "clock")
+                    Image(systemName: "calendar")
+                }
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textSecondary)
+                Label {
+                    Text(place ?? "Location unknown")
+                } icon: {
+                    Image(systemName: "mappin.and.ellipse")
                 }
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textTertiary)
-                if let place {
-                    Label {
-                        Text(place)
-                    } icon: {
-                        Image(systemName: "mappin.and.ellipse")
-                    }
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .lineLimit(1)
-                }
+                .lineLimit(1)
             }
 
             Spacer(minLength: 4)
