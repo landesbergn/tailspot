@@ -70,6 +70,7 @@ struct CatchDetailView: View {
                 .padding(.top, 8)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .swipeBackEnabled()
         .alert(deleteTitle, isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { performDelete() }
             Button("Cancel", role: .cancel) {}

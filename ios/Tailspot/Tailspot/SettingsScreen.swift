@@ -97,7 +97,9 @@ struct SettingsScreen: View {
                     HStack {
                         Spacer()
                         if isSavingHandle {
-                            ProgressView().scaleEffect(0.85).tint(.white)
+                            // Match the button's dark foreground (bgPrimary on
+                            // cyan), not white — higher contrast on the cyan fill.
+                            ProgressView().scaleEffect(0.85).tint(Brand.Color.bgPrimary)
                         } else {
                             Text("Save handle")
                                 .font(Brand.Font.mono(size: 15, weight: .bold))

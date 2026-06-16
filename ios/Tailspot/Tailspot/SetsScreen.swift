@@ -2,245 +2,321 @@
 //  SetsScreen.swift
 //  Tailspot
 //
-//  Browser of all CardSets with per-set progress, plus a detail
-//  drill-down for an individual set showing every slot — caught
-//  ones full-color, uncaught ones as rarity-tinted silhouettes.
+//  The Sets collection, organized by make/model FAMILY (Boeing 737,
+//  Airbus A320, …). Three levels:
+//
+//    1. SetsBrowser     — every family, with % complete (ring + X of N).
+//    2. SetDetailScreen — one family → a LIST of its models, each showing
+//                         how many you've caught + the most recent catch.
+//    3. ModelDetailScreen — one model → CARDS of each tail you've caught,
+//                         showing when and where, tapping into the full
+//                         CatchDetailView.
+//
+//  `SetsBrowser` is the reusable body (it relies on an ambient
+//  NavigationStack); `SetsScreen` adds the title for the Profile entry,
+//  and the Hangar's Sets segment renders `SetsBrowser` directly.
+//
+//  Back navigation: the pushed screens use HangarChildBar + `.toolbar(.hidden)`
+//  ONLY (never `.navigationBarBackButtonHidden(true)`, which would disable the
+//  swipe-from-left-edge pop). So both the chevron and the edge swipe work.
 //
 
 import SwiftUI
 import SwiftData
 
-struct SetsScreen: View {
+// MARK: - Browser
+
+struct SetsBrowser: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
+    // Each set's progress is computed ONCE here (single pass over the
+    // families), then we sort by % complete — closest-to-done first, so the
+    // sets you're most likely to finish bubble to the top. The previous
+    // version sorted with a comparator that recomputed progress for both
+    // sides of every comparison (~10× the work); precomputing keeps the
+    // body cheap, which matters now that the segment is kept alive.
+    private var scored: [(set: CardSet, progress: (caught: Int, total: Int))] {
+        CardSets.families
+            .map { (set: $0, progress: CardSets.progress(of: $0, against: catches)) }
+            .sorted { a, b in
+                let fa = a.progress.total == 0 ? 0 : Double(a.progress.caught) / Double(a.progress.total)
+                let fb = b.progress.total == 0 ? 0 : Double(b.progress.caught) / Double(b.progress.total)
+                return fa != fb ? fa > fb : a.set.title < b.set.title
+            }
+    }
+
+    // ScrollView + LazyVStack (not a List) so the top spacing matches the
+    // Recent feed exactly and the kept-alive segment stays lightweight —
+    // an inset-grouped List is UICollectionView-backed and adds its own
+    // section inset before the first row.
     var body: some View {
-        List {
-            Section {
-                summaryHero
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-            Section("Sets") {
-                ForEach(CardSets.all) { set in
-                    NavigationLink(value: set) {
-                        setRow(set)
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                ForEach(scored, id: \.set.id) { item in
+                    NavigationLink(value: item.set) {
+                        SetCompletionCard(set: item.set, progress: item.progress)
                     }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
         }
-        .listStyle(.insetGrouped)
-        .navigationTitle("Sets")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: CardSet.self) { set in
-            SetDetailScreen(set: set)
-        }
+        .background(Brand.Color.bgPrimary)
+        .navigationDestination(for: CardSet.self) { SetDetailScreen(set: $0) }
     }
+}
 
-    private var summaryHero: some View {
-        let totals = CardSets.all.map { CardSets.progress(of: $0, against: catches) }
-        let caught = totals.reduce(0) { $0 + $1.caught }
-        let total = totals.reduce(0) { $0 + $1.total }
-        return VStack(alignment: .leading, spacing: 6) {
-            Text("SPOTTER SETS")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Brand.Color.cyan)
-            Text("Sets by type")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(Brand.Color.textPrimary)
-            HStack(spacing: 12) {
-                Text("\(caught)")
-                    .font(Brand.Font.mono(size: 32, weight: .heavy))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .monospacedDigit()
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("of \(total) slots")
-                        .font(Brand.Font.cardSubtitle)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                    Text("ACROSS \(CardSets.all.count) SETS")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
-                        .tracking(1)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                }
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Brand.Color.bgElevated)
+/// Profile entry point.
+struct SetsScreen: View {
+    var body: some View {
+        SetsBrowser()
+            .navigationTitle("Sets")
+            .navigationBarTitleDisplayMode(.inline)
     }
+}
 
-    private func setRow(_ set: CardSet) -> some View {
-        let progress = CardSets.progress(of: set, against: catches)
-        let fill = progress.total == 0 ? 0 : Double(progress.caught) / Double(progress.total)
-        let complete = progress.caught == progress.total
-        return HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(set.type.tint.opacity(0.20))
-                Text(set.type.glyph)
-                    .font(Brand.Font.mono(size: 16, weight: .bold))
-                    .foregroundStyle(set.type.tint)
-            }
-            .frame(width: 36, height: 40)
+// MARK: - Completion card (browser row)
+
+private struct SetCompletionCard: View {
+    let set: CardSet
+    let progress: (caught: Int, total: Int)
+
+    var body: some View {
+        let frac = progress.total == 0 ? 0 : Double(progress.caught) / Double(progress.total)
+        let complete = progress.total > 0 && progress.caught == progress.total
+        return HStack(spacing: 14) {
+            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 5)
+                .frame(width: 44, height: 44)
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(set.title)
                         .font(Brand.Font.cardTitle)
                         .foregroundStyle(Brand.Color.textPrimary)
+                        .lineLimit(1)
                     if complete {
-                        Text("COMPLETE")
-                            .font(Brand.Font.mono(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Brand.Color.alertNormal, in: .capsule)
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Brand.Color.alertNormal)
                     }
                 }
-                HStack(spacing: 8) {
-                    Text("\(progress.caught) / \(progress.total)")
-                        .font(Brand.Font.mono(size: 11, weight: .semibold))
-                        .foregroundStyle(Brand.Color.textSecondary)
-                        .monospacedDigit()
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Brand.Color.bgElevated)
-                            Capsule().fill(set.type.tint).frame(width: geo.size.width * CGFloat(fill))
-                        }
-                    }
-                    .frame(height: 4)
-                }
+                Text("\(progress.caught) of \(progress.total) variants")
+                    .font(Brand.Font.mono(size: 11, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .monospacedDigit()
             }
-            Spacer(minLength: 0)
+
+            Spacer(minLength: 4)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
         }
-        .padding(.vertical, 4)
+        // Same card chrome as TailCard so the Sets browser and the Recent
+        // feed read as one design language.
+        .padding(12)
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 
-// MARK: - Detail
+// MARK: - Set detail (a family → list of its models)
 
 struct SetDetailScreen: View {
     let set: CardSet
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
-    private var slotStatus: [(CardSetEntry, CardSets.SlotStatus)] {
-        CardSets.status(of: set, against: catches)
+    var body: some View {
+        VStack(spacing: 0) {
+            HangarChildBar(title: set.title)
+            List {
+                Section {
+                    header
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+                Section {
+                    ForEach(set.entries) { entry in
+                        let matching = catches.filter { CardSets.matches(catch: $0, entry: entry) }
+                        let tailCount = Set(matching.map(\.icao24)).count
+                        let mostRecent = matching.map(\.caughtAt).max()
+                        NavigationLink {
+                            ModelDetailScreen(entry: entry)
+                        } label: {
+                            modelRow(entry: entry, tailCount: tailCount, mostRecent: mostRecent)
+                        }
+                        .listRowBackground(Brand.Color.bgElevated)
+                    }
+                } header: {
+                    Text("MODELS")
+                        .font(Brand.Font.mono(size: 10, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Brand.Color.bgPrimary)
+        }
+        .background(Brand.Color.bgPrimary.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .swipeBackEnabled()
+    }
+
+    private var header: some View {
+        let p = CardSets.progress(of: set, against: catches)
+        let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
+        let complete = p.total > 0 && p.caught == p.total
+        return HStack(spacing: 16) {
+            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 7)
+                .frame(width: 64, height: 64)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(p.caught) of \(p.total) collected")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                Text(complete ? "Set complete" : "Catch \(p.total - p.caught) more to finish.")
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(complete ? Brand.Color.alertNormal : Brand.Color.textSecondary)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func modelRow(entry: CardSetEntry, tailCount: Int, mostRecent: Date?) -> some View {
+        let caught = tailCount > 0
+        return HStack(spacing: 12) {
+            Circle()
+                .fill(caught ? Brand.Color.cyan : Brand.Color.textTertiary.opacity(0.3))
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(entry.canonicalName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(caught ? Brand.Color.textPrimary : Brand.Color.textTertiary)
+                        .lineLimit(1)
+                    if entry.rarity.isNotable {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                            .foregroundStyle(entry.rarity.tint)
+                    }
+                }
+                if caught, let mostRecent {
+                    Text("Caught \(mostRecent.formatted(.relative(presentation: .named)))")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                } else {
+                    Text("Not caught yet")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                }
+            }
+            Spacer(minLength: 8)
+            if caught {
+                Text("\(tailCount)")
+                    .font(Brand.Font.mono(size: 16, weight: .heavy))
+                    .foregroundStyle(Brand.Color.cyan)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.vertical, 5)
+        .contentShape(.rect)
+    }
+}
+
+// MARK: - Model detail (a model → cards of every tail caught)
+
+struct ModelDetailScreen: View {
+    let entry: CardSetEntry
+    @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
+
+    private var rows: [HangarRow] {
+        let matching = catches.filter { CardSets.matches(catch: $0, entry: entry) }
+        return HangarGrouping.group(matching, by: .recent).first?.rows ?? []
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                heroHeader
-                logbookLabel
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                ], spacing: 12) {
-                    ForEach(Array(slotStatus.enumerated()), id: \.element.0.id) { idx, pair in
-                        slotTile(index: idx + 1, entry: pair.0, status: pair.1)
+        VStack(spacing: 0) {
+            HangarChildBar(title: entry.canonicalName)
+            ScrollView {
+                if rows.isEmpty {
+                    emptyState
+                } else {
+                    LazyVStack(spacing: 12) {
+                        ForEach(rows) { row in
+                            NavigationLink {
+                                CatchDetailView(row: row)
+                            } label: {
+                                TailCard(row: row)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 28)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
             }
         }
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
-        .navigationTitle(set.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .swipeBackEnabled()
     }
 
-    private var logbookLabel: some View {
-        HStack {
-            Text("LOGBOOK · \(set.entries.count) ENTRIES")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
-                .tracking(1.4)
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "binoculars")
+                .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Brand.Color.textTertiary)
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-    }
-
-    private var heroHeader: some View {
-        let progress = CardSets.progress(of: set, against: catches)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                TypeBadge(type: set.type, size: .lg)
-                Spacer()
-                Text("\(progress.caught) / \(progress.total)")
-                    .font(Brand.Font.mono(size: 18, weight: .heavy))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .monospacedDigit()
-            }
-            Text(set.title)
-                .font(.system(size: 28, weight: .bold))
+            Text("No \(entry.canonicalName) yet")
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text("Catch every airframe to complete this set.")
+            Text("Point, lock, and capture one to add it to your collection.")
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
+                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 40)
+        .padding(.top, 80)
     }
+}
 
-    @ViewBuilder
-    private func slotTile(index: Int, entry: CardSetEntry, status: CardSets.SlotStatus) -> some View {
-        let isCaught: Bool = {
-            if case .caught = status { return true }
-            return false
-        }()
-        VStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isCaught
-                          ? entry.rarity.tint.opacity(0.14)
-                          : Brand.Color.bgElevated)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(
-                                isCaught ? entry.rarity.tint : Brand.Color.textTertiary.opacity(0.25),
-                                style: .init(lineWidth: 1, dash: isCaught ? [] : [3, 3])
-                            )
-                    )
-                // The silhouette / glyph treatment.
-                Image(systemName: "airplane")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(isCaught
-                                     ? entry.rarity.tint
-                                     : Brand.Color.textTertiary.opacity(0.45))
-                // Top-leading: entry number; top-trailing: caught
-                // checkmark (only when caught).
-                VStack {
-                    HStack {
-                        Text(String(format: "#%02d", index))
-                            .font(Brand.Font.mono(size: 9, weight: .bold))
-                            .tracking(0.8)
-                            .foregroundStyle(Brand.Color.textTertiary)
-                            .padding(8)
-                        Spacer()
-                        if isCaught {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Brand.Color.alertNormal)
-                                .padding(8)
-                        }
-                    }
-                    Spacer()
-                }
-            }
-            .aspectRatio(1.2, contentMode: .fit)
-            VStack(spacing: 2) {
-                Text(isCaught ? entry.canonicalName : "Not yet caught")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isCaught
-                                     ? Brand.Color.textPrimary
-                                     : Brand.Color.textTertiary)
-                    .lineLimit(1)
-                    .multilineTextAlignment(.center)
-                RarityBadge(rarity: entry.rarity, size: .sm)
-                    .opacity(isCaught ? 1 : 0.55)
-            }
+// TailCard + SlotPlaceholder moved to TailCardView.swift so the Recent
+// feed and the model-detail screen render the identical clean card.
+
+private extension Rarity {
+    /// Rare and above — the tiers worth flagging with a small indicator.
+    var isNotable: Bool { ordinal >= Rarity.rare.ordinal }
+}
+
+// MARK: - Reusable progress views
+
+/// Circular completion ring with a centered percentage.
+struct CompletionRing: View {
+    let progress: Double          // 0…1
+    var tint: Color = Brand.Color.cyan
+    var lineWidth: CGFloat = 7
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Brand.Color.textTertiary.opacity(0.18), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: max(0.0001, min(1, progress)))
+                .stroke(tint, style: .init(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text("\(Int((progress * 100).rounded()))%")
+                .font(Brand.Font.mono(size: lineWidth >= 8 ? 18 : 13, weight: .heavy))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .monospacedDigit()
         }
+        .animation(.easeInOut(duration: 0.3), value: progress)
     }
 }
 

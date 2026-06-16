@@ -144,13 +144,23 @@ struct HangarView: View {
         } else {
             VStack(spacing: 0) {
                 HangarSegmentedSwitcher(selection: segment)
-                Group {
-                    switch segment.wrappedValue {
-                    case .sets:     HangarSetsView()
-                    case .recent:   HangarRecentView()
-                    case .trophies: HangarTrophiesView()
-                    }
+                // A paged TabView keeps every segment alive (no @Query re-run
+                // or List rebuild on switch — that was the original lag) AND
+                // hands the cross-segment transition to UIKit's page view,
+                // which stays smooth even with the List-backed Trophies page.
+                // The earlier keep-alive ZStack cross-faded two stacked
+                // UICollectionView Lists, which is what still felt janky.
+                // The segment buttons drive `selection`; horizontal swipe
+                // between pages comes free. Page dots hidden.
+                TabView(selection: segment) {
+                    SetsBrowser()
+                        .tag(HangarSegment.sets)
+                    HangarRecentView()
+                        .tag(HangarSegment.recent)
+                    HangarTrophiesView()
+                        .tag(HangarSegment.trophies)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(Brand.Color.bgPrimary)
         }
@@ -195,7 +205,7 @@ struct HangarView: View {
             } label: {
                 Text("Open AR view")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.black.opacity(0.88))
+                    .foregroundStyle(Brand.Color.bgPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Brand.Color.cyan, in: .rect(cornerRadius: 12))

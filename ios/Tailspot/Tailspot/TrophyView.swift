@@ -34,7 +34,6 @@ struct TrophyView: View {
     private var unlockedHex: some View {
         let outer = Color(hex: tier.outerHex)
         let inner = Color(hex: tier.innerHex)
-        let glow = outer.opacity(0.4)
         let iconColor = outer
         let pip = outer
         return ZStack {
@@ -45,6 +44,17 @@ struct TrophyView: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ))
+            // Metallic sheen along the rim — a cheap hairline stroke, NOT a
+            // blur. Gives the badge depth without an offscreen render pass.
+            HexShape()
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.45), .clear, .black.opacity(0.25)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: max(0.75, size * 0.02)
+                )
             // Inner well — dark radial with the tier's inner tone.
             HexShape()
                 .fill(RadialGradient(
@@ -64,11 +74,17 @@ struct TrophyView: View {
                     Circle()
                         .strokeBorder(.black.opacity(0.55), lineWidth: 1.5)
                 )
-                .shadow(color: glow, radius: 6)
                 .offset(x: size * 0.22, y: size * 0.34)
         }
         .frame(width: size, height: size)
-        .shadow(color: glow, radius: size * 0.18, x: 0, y: 4)
+        // Rasterize the whole badge — gradients + the multi-path vector icon —
+        // into ONE Metal texture. Trophies never animate internally, so the
+        // expensive vector work is cached once; compositing the texture during
+        // a scroll or a segment page-slide is then trivial. This (with the
+        // blur shadows removed above) is the fix for the laggy Trophies tab:
+        // ~20 badges each forcing an offscreen blur pass per frame was the
+        // cost that survived both the keep-alive ZStack and the TabView.
+        .drawingGroup()
     }
 
     // MARK: - Locked
@@ -143,6 +159,10 @@ struct TrophyIcon: View {
             case "night":         NightOwlIcon().style(color, filled: true)
             case "heritage":      HeritageIcon().style(color)
             case "coast":         CoastIcon().style(color, filled: true)
+            case "narrowbody":    NarrowBodyIcon().style(color, filled: true)
+            case "ticket":        TicketIcon().style(color, lineWidth: 1.8 * scale)
+            case "gems":          GemsIcon().style(color, lineWidth: 1.7 * scale)
+            case "calendar":      CalendarIcon().style(color, lineWidth: 1.7 * scale)
             default:              CatcherIcon().style(color, lineWidth: 2 * scale, dashed: true)
             }
         }
@@ -488,6 +508,102 @@ private struct CoastIcon: Shape {
     }
 }
 
+private struct NarrowBodyIcon: Shape {
+    /// Single-aisle silhouette — a slimmer wingspan than WideBodyIcon so the
+    /// two read as distinct airframe classes at badge size.
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        p.move(to: .init(x: 16*s, y: 3*s))
+        p.addCurve(to: .init(x: 17.4*s, y: 6*s),
+                   control1: .init(x: 16.9*s, y: 3*s),
+                   control2: .init(x: 17.2*s, y: 4.6*s))
+        p.addLine(to: .init(x: 17.7*s, y: 13*s))
+        p.addLine(to: .init(x: 24*s, y: 16.6*s))
+        p.addLine(to: .init(x: 24*s, y: 18*s))
+        p.addLine(to: .init(x: 17.7*s, y: 16.6*s))
+        p.addLine(to: .init(x: 17.4*s, y: 22*s))
+        p.addLine(to: .init(x: 19.4*s, y: 23.6*s))
+        p.addLine(to: .init(x: 19.4*s, y: 24.3*s))
+        p.addLine(to: .init(x: 16*s, y: 23.4*s))
+        p.addLine(to: .init(x: 12.6*s, y: 24.3*s))
+        p.addLine(to: .init(x: 12.6*s, y: 23.6*s))
+        p.addLine(to: .init(x: 14.6*s, y: 22*s))
+        p.addLine(to: .init(x: 14.3*s, y: 16.6*s))
+        p.addLine(to: .init(x: 8*s, y: 18*s))
+        p.addLine(to: .init(x: 8*s, y: 16.6*s))
+        p.addLine(to: .init(x: 14.3*s, y: 13*s))
+        p.addLine(to: .init(x: 14.6*s, y: 6*s))
+        p.addCurve(to: .init(x: 16*s, y: 3*s),
+                   control1: .init(x: 14.8*s, y: 4.6*s),
+                   control2: .init(x: 15.1*s, y: 3*s))
+        p.closeSubpath()
+        return p
+    }
+}
+
+private struct TicketIcon: Shape {
+    /// Boarding pass — rounded body with a perforation line and two stub rules.
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 4*s, y: 9*s, width: 24*s, height: 14*s),
+                         cornerSize: .init(width: 2.5*s, height: 2.5*s))
+        // Perforation between stub and body.
+        p.move(to: .init(x: 20*s, y: 9*s)); p.addLine(to: .init(x: 20*s, y: 23*s))
+        // Two rules on the body.
+        p.move(to: .init(x: 7*s, y: 14*s));  p.addLine(to: .init(x: 16*s, y: 14*s))
+        p.move(to: .init(x: 7*s, y: 18*s));  p.addLine(to: .init(x: 13*s, y: 18*s))
+        return p
+    }
+}
+
+private struct GemsIcon: Shape {
+    /// A small cluster of three cut gems — distinct from the single DiamondIcon.
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func gem(cx: CGFloat, cy: CGFloat, r: CGFloat, into p: inout Path) {
+            p.move(to: .init(x: cx*s, y: (cy - r)*s))
+            p.addLine(to: .init(x: (cx + r*0.72)*s, y: cy*s))
+            p.addLine(to: .init(x: cx*s, y: (cy + r)*s))
+            p.addLine(to: .init(x: (cx - r*0.72)*s, y: cy*s))
+            p.closeSubpath()
+            // Center facet.
+            p.move(to: .init(x: (cx - r*0.72)*s, y: cy*s))
+            p.addLine(to: .init(x: (cx + r*0.72)*s, y: cy*s))
+        }
+        var p = Path()
+        gem(cx: 16, cy: 9.5, r: 5.5, into: &p)
+        gem(cx: 9.5, cy: 21, r: 4.8, into: &p)
+        gem(cx: 22.5, cy: 21, r: 4.8, into: &p)
+        return p
+    }
+}
+
+private struct CalendarIcon: Shape {
+    /// Calendar — frame, header rule, two hangers, and a grid of day dots.
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 5*s, y: 7*s, width: 22*s, height: 20*s),
+                         cornerSize: .init(width: 2.5*s, height: 2.5*s))
+        // Header divider.
+        p.move(to: .init(x: 5*s, y: 13*s)); p.addLine(to: .init(x: 27*s, y: 13*s))
+        // Hangers.
+        p.move(to: .init(x: 11*s, y: 5*s)); p.addLine(to: .init(x: 11*s, y: 9*s))
+        p.move(to: .init(x: 21*s, y: 5*s)); p.addLine(to: .init(x: 21*s, y: 9*s))
+        // Day dots (2 rows × 3).
+        for row in 0..<2 {
+            for col in 0..<3 {
+                let cx = 10.5 + CGFloat(col) * 5.5
+                let cy = 17.5 + CGFloat(row) * 4.5
+                p.addEllipse(in: CGRect(x: (cx - 0.9)*s, y: (cy - 0.9)*s, width: 1.8*s, height: 1.8*s))
+            }
+        }
+        return p
+    }
+}
+
 // MARK: - Shape styling helper
 
 private extension Shape {
@@ -518,7 +634,8 @@ private extension Shape {
         let icons = [
             "catcher", "widebody", "regional", "longlens", "world",
             "constellation", "quintet", "diamond", "sparkle", "crown",
-            "centurion", "setmaster", "night", "heritage", "coast"
+            "centurion", "setmaster", "night", "heritage", "coast",
+            "narrowbody", "ticket", "gems", "calendar"
         ]
         let tiers: [TrophyTier] = [.bronze, .silver, .gold, .platinum]
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 16) {

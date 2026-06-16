@@ -5,6 +5,72 @@ that file focused on the live state plus durable guidance. The live "Current
 state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
 Git history and PLAN.md §9 remain the authoritative record.
 
+## 2026-06-11 — backend deployed + leaderboard live + field-driven visibility fix
+
+**The backend is DEPLOYED and the social layer is live.** Two days of program
+execution: `https://api.tailspot.app` (Fly.io `tailspot-api`, sjc; Postgres
+`tailspot-db`; runbook `docs/backend-handoff.md` — every command verified on
+the real deploy) serves positions (adsb.lol, MLAT incl.), merged metadata
+(313,523 FAA tails + DOC 8643 + the WP 1.4b typecode map: 71% of US tails
+resolve `source:"merged"` with clean names + rarity), anonymous identity,
+catch ingestion, and the leaderboard. PRs #12–#19 landed; highlights:
+
+1. **WP 1.7 leaderboard live (PR #16).** `TailspotAccountClient` (device
+   token in Keychain — `AfterFirstUnlockThisDeviceOnly`, security-reviewed),
+   handle claim wired to onboarding + Settings (409 → inline "taken"),
+   `CatchUploader` backfills existing catches (`aircraft: null` → server
+   verdict "unverifiable" — contract relaxed for this), real
+   `LeaderboardScreen`. PublicHangarScreen REMOVED; NotificationsScreen
+   reduced to one honest line (fake toggles deleted).
+
+2. **Field-driven visibility fix (PR #17), the day's best story:** Noah
+   photographed a contrail plane at Sea Ranch that never got a label.
+   Replay analysis identified it as ANA179 (12.1 km cruise, slant 19.2 km,
+   elevation 39.1°, bearing matching his camera within ~5°) — delivered by
+   the backend, hidden by the 13 km visibility plateau. The curve gained a
+   contrail segment (13 km @ 30° → 25 km @ 45°+, low-elevation half
+   untouched); the photo+replay is the documented field datum in
+   `ObservedAircraft.maxVisibleDistance` and `VisibilityContrailTests`.
+
+3. **Visual confirmation camera half BUILT (PR #13, OPEN — held for Noah's
+   device eyeball):** frame tap in CameraPreview (8 fps, portrait-rotated),
+   `AirplaneDetector` (direct MLModel on a 640 px native-res crop around
+   the predicted position), `VisualFixTracker` association, bracket
+   snapping for the locked plane, 1 Hz ground-truth crop JPEGs to
+   `Documents/replays/frames/` while recording. Feature-flagged: Debug ON,
+   Release OFF until the field go/no-go. The combined build (this + all of
+   main) is installed on Noah's phone.
+
+4. **Observability (PR #19):** `Analytics.swift` — PostHog via plain REST
+   `/batch/` (NO SDK per the no-deps rule), distinct_id = the account
+   deviceId, no-op without `POSTHOG_API_KEY` (xcconfig→Info.plist, same
+   flow as OpenSky creds). MetricKit subscriber logs + captures crash/hang
+   headlines. AR-session events deferred until PR #13 merges (ContentView
+   ownership). **Noah activation step:** create PostHog project "Tailspot",
+   put `POSTHOG_API_KEY = phc_…` in `Tailspot.secrets.xcconfig`.
+
+5. **Rarity divergences fixed (PR #18):** HUD tier now typecode-first via
+   `resolveAROverlayRarity` (mirrors `Catch.resolvedRarity`); 24 of 47
+   Sets-catalog entries were stale and got re-tiered, with an exhaustive
+   consistency test pinning every entry to `AircraftTypes.json`.
+
+6. **Also:** debug panel redesigned (PR #12: one OPENSKY→TAILSPOT→MOCK
+   cycling source row, sections, artifacts deleted, collapsible aircraft
+   list); ops runbook (PR #14); legal drafts (PR #15, OPEN — Noah must
+   read; flags an OpenSky-as-fallback compliance loose end: recommendation
+   is dropping OpenSky from the prod ladder after adsb.lol is field-proven).
+
+**Process learnings (now conventions):** (a) NEVER rebase an already-pushed
+branch — force-push is permission-blocked; merge main into the branch
+instead (squash-merge makes branch history cosmetic). (b) Tests must not
+touch process-global state (standard UserDefaults, statics) outside a
+single `.serialized` owner suite — Swift Testing runs suites in parallel
+and CI clones race where local runs pass. (c) Keychain APIs don't work in
+CI simulator clones — probe availability and skip. (d) Don't run two
+disk-heavy jobs (xcodebuild + model downloads) concurrently.
+
+**Tests: iOS 379+ on `main`, backend 164+, all green.**
+
 ## 2026-06-10 — production v1 program: backend complete, IP scrub shipped, visual-confirmation spike
 
 **The production v1 program (spec: `docs/superpowers/specs/2026-06-10-production-v1-program-design.md`)

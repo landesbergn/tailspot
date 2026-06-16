@@ -65,31 +65,59 @@ struct FieldReplayRegressionTests {
         #expect(allVisible, "GTI9648 (16.6 km @ 43.8°) must pass visibility")
     }
 
-    /// Field miss #3 (2026-06-12, Berkeley): SKW5480 at 18.0 km / 12.1° —
-    /// CONFIRMED VISIBLE by Noah, hidden by the low-elevation cap
-    /// (~7.7 km at that elevation). The case that ended boolean
-    /// visibility: under tiered visibility it must be at least faint —
-    /// i.e. never absent from the overlay/list.
-    @Test func skw5480LowElevationVisiblePlaneIsNeverHidden() throws {
+    /// Field case #3 (2026-06-12, Berkeley) — REVISED for the precision
+    /// doctrine (2026-06-15). SKW5480 at 18.0 km / 12.1° was confirmed
+    /// visible on a clear day, and under the old "never hide inside 35 km"
+    /// tier it was pinned always-visible. The backend's dense MLAT feed made
+    /// that flat ceiling untenable (replay-2026-06-15: 76 contacts, ~20 false
+    /// faint labels), so the faint band is now `faintBandFactor`× the curve.
+    /// SKW5480 sits beyond it and no longer auto-labels — the deliberate
+    /// precision tradeoff (it also contradicts the ghost data: 8.1 km @ 12°
+    /// was a confirmed ghost). The fixture stays; the assertion is inverted
+    /// to PIN the intended behavior, not to bless the miss. Recall for this
+    /// far class is a planned tap-to-reveal affordance.
+    @Test func skw5480FarPlaneNotAutoLabeledUnderPrecisionPolicy() throws {
         let report = try analyze("replay-2026-06-13T001130Z")
         let sightings = report.ticks.flatMap(\.aircraft).filter { $0.icao24 == "a04f49" }
         #expect(!sightings.isEmpty, "SKW5480 missing from fixture data")
-        let allVisible = sightings.allSatisfy { $0.isVisible }
-        #expect(allVisible, "SKW5480 (confirmed visible, 18.0 km @ 12.1°) must never be hidden")
+        let allHidden = sightings.allSatisfy { !$0.isVisible }
+        #expect(allHidden, "SKW5480 (18.0 km @ 12.1°) is intentionally not auto-labeled under the precision band")
     }
 
-    /// Field miss #4 (2026-06-12 evening, Berkeley): a close GA fly-by
-    /// (best candidate N21866, 5.8 km / 6°) produced no label — the
-    /// small-airframe HALF-cap put its threshold at ~3 km. The same tail
-    /// was a confirmed GHOST at 6.3 km on 2026-06-06: one aircraft,
-    /// field-documented on both sides of the curve. The half-cap now
-    /// shapes emphasis only; close GA must always be at least faint.
-    @Test func n21866CloseGAFlybyIsNeverHidden() throws {
+    /// Field case #4 (2026-06-12 evening, Berkeley) — REVISED for the
+    /// precision doctrine (2026-06-15). N21866 (GA fly-by) was confirmed
+    /// visible once and a confirmed GHOST at 6.3 km on 2026-06-06 — one
+    /// tail, documented on both sides of the margin. Under the precision
+    /// band it behaves exactly as a close fly-by should: labeled at closest
+    /// approach (inside 2× the GA half-cap), dropped as it recedes. So
+    /// unlike far traffic (SKW5480), close GA stays CATCHABLE — the band
+    /// shows it when it's actually near. The assertion pins the recall
+    /// floor: it must be visible in at least its closest tick(s).
+    @Test func n21866CloseGAFlybyIsCatchableAtClosestApproach() throws {
         let report = try analyze("replay-2026-06-13T002736Z")
         let sightings = report.ticks.flatMap(\.aircraft).filter { $0.icao24 == "a1da83" }
         #expect(!sightings.isEmpty, "N21866 missing from fixture data")
-        let allVisible = sightings.allSatisfy { $0.isVisible }
-        #expect(allVisible, "N21866 (5.8 km @ 6°, GA fly-by) must never be hidden")
+        #expect(sightings.contains { $0.isVisible },
+                "N21866 (close GA fly-by) must be labelable at closest approach, not entirely hidden")
+    }
+
+    /// Field datum (2026-06-15, Berkeley) — the precision turning point and
+    /// the reason the flat faint ceiling died. The first 0.5.0 backend
+    /// session pulled 76 MLAT contacts in a single tick, of which exactly
+    /// ONE — FDX350, an FDX freighter at 4.9 km / 19.4° — was actually
+    /// visible (Noah pinned it; everything else was far/low/on the horizon).
+    /// The old flat 35 km ceiling surfaced ~20 of the rest as faint labels.
+    /// With the curve-relative band, FDX350 stays full and the firehose is
+    /// gone. This fixture pins both halves: the real plane stays, the wall
+    /// of false labels does not return.
+    @Test func precisionBandSuppressesMLATFirehose() throws {
+        let report = try analyze("replay-2026-06-15T001746Z")
+        let fedex = report.ticks.flatMap(\.aircraft).filter { $0.icao24 == "ac1846" }
+        #expect(!fedex.isEmpty, "FDX350 missing from fixture data")
+        #expect(fedex.allSatisfy { $0.isVisible }, "FDX350 (4.9 km @ 19.4°) must stay labeled")
+        let maxVisible = report.ticks.map(\.visibleCount).max() ?? 0
+        #expect(maxVisible <= 3,
+                "precision band must keep the 76-contact MLAT feed to a handful of labels (got \(maxVisible))")
     }
 
     /// The faint ceiling still excludes the absurd: in the SKW5480

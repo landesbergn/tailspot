@@ -8,82 +8,61 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-11 [backend deployed + leaderboard live + field-driven visibility fix])
+## Current state (as of session ending 2026-06-16 [0.5.0 cut: backend default-on + full Hangar redesign])
 
-**The backend is DEPLOYED and the social layer is live.** Two days of program
-execution: `https://api.tailspot.app` (Fly.io `tailspot-api`, sjc; Postgres
-`tailspot-db`; runbook `docs/backend-handoff.md` — every command verified on
-the real deploy) serves positions (adsb.lol, MLAT incl.), merged metadata
-(313,523 FAA tails + DOC 8643 + the WP 1.4b typecode map: 71% of US tails
-resolve `source:"merged"` with clean names + rarity), anonymous identity,
-catch ingestion, and the leaderboard. PRs #12–#19 landed; highlights:
+**0.5.0 is the release — backend becomes the default ADS-B source and the
+Hangar is fully redesigned.** Shipped via PR #32 (the release PR — it grew
+from "Sets redesign" to carry the whole 0.5.0: `feat/backend-default-failover`
+was merged into it so `main` transitions `0.2.2 → 0.5.0` in one Xcode Cloud
+build, no intermediate half-state to TestFlight). `MARKETING_VERSION` 0.5.0.
 
-1. **WP 1.7 leaderboard live (PR #16).** `TailspotAccountClient` (device
-   token in Keychain — `AfterFirstUnlockThisDeviceOnly`, security-reviewed),
-   handle claim wired to onboarding + Settings (409 → inline "taken"),
-   `CatchUploader` backfills existing catches (`aircraft: null` → server
-   verdict "unverifiable" — contract relaxed for this), real
-   `LeaderboardScreen`. PublicHangarScreen REMOVED; NotificationsScreen
-   reduced to one honest line (fake toggles deleted).
+1. **Backend default-on with auto-failover (was `feat/backend-default-failover`).**
+   `ADSBManager` now uses the Tailspot backend (`api.tailspot.app`, adsb.lol +
+   MLAT) as the live source, auto-failing-over to OpenSky on backend trouble.
+   Precision elevation-aware visibility (kills the MLAT firehose), podium color
+   tokens. **The OpenSky secret was deliberately NOT rotated** — it's kept as
+   the failover rung, so no existing tester is broken. Rotation is a future
+   coordinated event (warn testers first), to happen only once adsb.lol is
+   fully field-proven and OpenSky is dropped from the prod ladder.
 
-2. **Field-driven visibility fix (PR #17), the day's best story:** Noah
-   photographed a contrail plane at Sea Ranch that never got a label.
-   Replay analysis identified it as ANA179 (12.1 km cruise, slant 19.2 km,
-   elevation 39.1°, bearing matching his camera within ~5°) — delivered by
-   the backend, hidden by the 13 km visibility plateau. The curve gained a
-   contrail segment (13 km @ 30° → 25 km @ 45°+, low-elevation half
-   untouched); the photo+replay is the documented field datum in
-   `ObservedAircraft.maxVisibleDistance` and `VisibilityContrailTests`.
-
-3. **Visual confirmation camera half BUILT (PR #13, OPEN — held for Noah's
-   device eyeball):** frame tap in CameraPreview (8 fps, portrait-rotated),
-   `AirplaneDetector` (direct MLModel on a 640 px native-res crop around
-   the predicted position), `VisualFixTracker` association, bracket
-   snapping for the locked plane, 1 Hz ground-truth crop JPEGs to
-   `Documents/replays/frames/` while recording. Feature-flagged: Debug ON,
-   Release OFF until the field go/no-go. The combined build (this + all of
-   main) is installed on Noah's phone.
-
-4. **Observability (PR #19):** `Analytics.swift` — PostHog via plain REST
-   `/batch/` (NO SDK per the no-deps rule), distinct_id = the account
-   deviceId, no-op without `POSTHOG_API_KEY` (xcconfig→Info.plist, same
-   flow as OpenSky creds). MetricKit subscriber logs + captures crash/hang
-   headlines. AR-session events deferred until PR #13 merges (ContentView
-   ownership). **Noah activation step:** create PostHog project "Tailspot",
-   put `POSTHOG_API_KEY = phc_…` in `Tailspot.secrets.xcconfig`.
-
-5. **Rarity divergences fixed (PR #18):** HUD tier now typecode-first via
-   `resolveAROverlayRarity` (mirrors `Catch.resolvedRarity`); 24 of 47
-   Sets-catalog entries were stale and got re-tiered, with an exhaustive
-   consistency test pinning every entry to `AircraftTypes.json`.
-
-6. **Also:** debug panel redesigned (PR #12: one OPENSKY→TAILSPOT→MOCK
-   cycling source row, sections, artifacts deleted, collapsible aircraft
-   list); ops runbook (PR #14); legal drafts (PR #15, OPEN — Noah must
-   read; flags an OpenSky-as-fallback compliance loose end: recommendation
-   is dropping OpenSky from the prod ladder after adsb.lol is field-proven).
+2. **Hangar redesign (the bulk of PR #32), one card language across three tabs:**
+   - **Sets** — completion-driven make/model families, ordered by % complete,
+     cyan `CompletionRing` + "X of N variants"; tap a family → list of its
+     models (count + most-recent) → tail cards → `CatchDetailView`. MECE
+     coverage (GA props, Comac, Citation variants, …).
+   - **Recent** — a chronological feed of the shared `TailCard` (photo · cyan
+     callsign · airline · date · location). Tail lists lead with the **flight
+     callsign**, not the N-registration; "Unknown operator" resolves/backfills
+     from the callsign's ICAO prefix (`Airlines.swift`, offline).
+   - **Trophies** — awards split into **MEDALS** (leveled, bronze→platinum,
+     progress bar to next tier — goal-framed "→ SILVER 17/30", never "LOCKED")
+     and **BADGES** (1-of-1 feats, earned/locked, no tier). 19 awards (6 new:
+     Single Aisle, Frequent Flyer, Globetrotter, Set Master, Rare Hunter,
+     Regular). Two-stat header ("N/14 MEDALS · M/5 BADGES").
+   - Shell: segments switch via a **paged `TabView`** (kept alive, smooth);
+     `TrophyView` caches each hex via `.drawingGroup()` (no blur shadow) — the
+     fix for the trophies-tab compositing lag.
 
 **Process learnings (now conventions):** (a) NEVER rebase an already-pushed
-branch — force-push is permission-blocked; merge main into the branch
-instead (squash-merge makes branch history cosmetic). (b) Tests must not
-touch process-global state (standard UserDefaults, statics) outside a
-single `.serialized` owner suite — Swift Testing runs suites in parallel
-and CI clones race where local runs pass (three CI flakes on 2026-06-11:
-keychain entitlements, defaults key, `Analytics._testQueue`). (c) Keychain
-APIs don't work in CI simulator clones — probe availability and skip.
-(d) Don't run two disk-heavy jobs (xcodebuild + model downloads)
-concurrently — a disk-full killed two agents on 2026-06-10.
+branch — merge main into the branch instead (squash-merge makes branch
+history cosmetic). (b) **When iterating across branches, `git checkout` the
+PR branch BEFORE editing** — editing on the throwaway `integration` branch
+stranded commits off PR #32 repeatedly this session; recover via cherry-pick
+or by re-pointing the tree to `integration` (the proven combination). (c)
+Tests must not touch process-global state outside a single `.serialized`
+owner suite (CI clones race). (d) Keychain APIs don't work in CI sim clones.
+(e) Cross-file SwiftUI SourceKit errors ("Cannot find 'Catch'/'Brand'") are
+cascade noise — `xcodebuild test` is the real check.
 
-**Waiting on Noah:** PR #13 device eyeball; PR #15 legal read + privacy-
-policy hosting (tailspot.app owned, on Namecheap); PostHog key; a field
-session (covers three gates: backend A/B for WP 1.8 cutover, visual-confirm
-verdict, detection go/no-go recording). **Then:** WP 1.8 cutover (delete
-baked OpenSky creds + rotate + warn testers + `MARKETING_VERSION` 0.5.0).
-**Next engineering:** UX polish pass (Settings flagged by Noah — handle
-field needs a real Save affordance), card style spike (Stage 2b, needs
-Noah's sign-off by design), AR analytics events after #13.
+**Waiting on Noah / next:** OpenSky secret rotation (deferred — coordinate +
+warn testers, after adsb.lol fully field-proven); PR #13 visual-confirm
+device eyeball; PostHog key (`POSTHOG_API_KEY` in `Tailspot.secrets.xcconfig`);
+legal read + privacy-policy hosting (PR #15, tailspot.app on Namecheap);
+website redesign (flighty.com as the bar). Watch App Store Connect → TestFlight
+→ Crashes after the 0.5.0 build lands.
 
-**Tests: iOS 379+ on `main`, backend 164+, all green.**
+**Tests: iOS suite green (all TrophiesTests + the full suite pass locally);
+backend 164+, all green.**
 
 ## Working model
 

@@ -110,6 +110,52 @@ nonisolated struct TrophyProgressInputs: Sendable {
     /// approximates by "caughtAt local hour 20–6"; refine later with
     /// proper solar-position calc).
     let nightCatches: Int
+    // Metrics added with the trophy-roster expansion (2026-06-16). Defaulted
+    // in the initializer so the existing call sites (tests, `.zero`) compile
+    // unchanged.
+    let narrowBodyCatches: Int      // resolved type == .narrow
+    let uniqueOperators: Int        // distinct non-empty operator names
+    let uniquePlaces: Int           // distinct non-empty catch locations
+    let completedSets: Int          // fully-collected make/model families
+    let distinctDays: Int           // distinct calendar days with a catch
+
+    init(
+        totalCatches: Int,
+        uniqueAirframes: Int,
+        wideBodyCatches: Int,
+        regionalCatches: Int,
+        heritageCatches: Int,
+        rareTierCatches: Int,
+        epicTierCatches: Int,
+        legendaryTierCatches: Int,
+        rarePlusUnique: Int,
+        longestSlantKm: Double,
+        bestMultiCatchCount: Int,
+        nightCatches: Int,
+        narrowBodyCatches: Int = 0,
+        uniqueOperators: Int = 0,
+        uniquePlaces: Int = 0,
+        completedSets: Int = 0,
+        distinctDays: Int = 0
+    ) {
+        self.totalCatches = totalCatches
+        self.uniqueAirframes = uniqueAirframes
+        self.wideBodyCatches = wideBodyCatches
+        self.regionalCatches = regionalCatches
+        self.heritageCatches = heritageCatches
+        self.rareTierCatches = rareTierCatches
+        self.epicTierCatches = epicTierCatches
+        self.legendaryTierCatches = legendaryTierCatches
+        self.rarePlusUnique = rarePlusUnique
+        self.longestSlantKm = longestSlantKm
+        self.bestMultiCatchCount = bestMultiCatchCount
+        self.nightCatches = nightCatches
+        self.narrowBodyCatches = narrowBodyCatches
+        self.uniqueOperators = uniqueOperators
+        self.uniquePlaces = uniquePlaces
+        self.completedSets = completedSets
+        self.distinctDays = distinctDays
+    }
 
     static let zero = TrophyProgressInputs(
         totalCatches: 0, uniqueAirframes: 0,
@@ -249,6 +295,73 @@ nonisolated enum Trophies {
             ],
             progress: { $0.nightCatches }
         ),
+        Achievement(
+            id: "narrow", title: "Single Aisle",
+            summary: "Narrow-body airframes caught",
+            iconName: "narrowbody",
+            tiers: [
+                .init(tier: .bronze, at: 10),
+                .init(tier: .silver, at: 40),
+                .init(tier: .gold,   at: 120),
+            ],
+            progress: { $0.narrowBodyCatches }
+        ),
+        Achievement(
+            id: "airlines", title: "Frequent Flyer",
+            summary: "Different airlines collected",
+            iconName: "ticket",
+            tiers: [
+                .init(tier: .bronze, at: 5),
+                .init(tier: .silver, at: 15),
+                .init(tier: .gold,   at: 30),
+            ],
+            progress: { $0.uniqueOperators }
+        ),
+        Achievement(
+            id: "places", title: "Globetrotter",
+            summary: "Spotting locations visited",
+            iconName: "coast",
+            tiers: [
+                .init(tier: .bronze, at: 3),
+                .init(tier: .silver, at: 10),
+                .init(tier: .gold,   at: 25),
+            ],
+            progress: { $0.uniquePlaces }
+        ),
+        Achievement(
+            id: "setmaster", title: "Set Master",
+            summary: "Make/model sets completed",
+            iconName: "setmaster",
+            tiers: [
+                .init(tier: .bronze, at: 1),
+                .init(tier: .silver, at: 3),
+                .init(tier: .gold,   at: 8),
+            ],
+            progress: { $0.completedSets }
+        ),
+        Achievement(
+            id: "rarehunter", title: "Rare Hunter",
+            summary: "Distinct rare-or-better airframes",
+            iconName: "gems",
+            tiers: [
+                .init(tier: .bronze,   at: 1),
+                .init(tier: .silver,   at: 5),
+                .init(tier: .gold,     at: 20),
+                .init(tier: .platinum, at: 50),
+            ],
+            progress: { $0.rarePlusUnique }
+        ),
+        Achievement(
+            id: "regular", title: "Regular",
+            summary: "Days out catching",
+            iconName: "calendar",
+            tiers: [
+                .init(tier: .bronze, at: 3),
+                .init(tier: .silver, at: 10),
+                .init(tier: .gold,   at: 30),
+            ],
+            progress: { $0.distinctDays }
+        ),
     ]
 
     // MARK: - Evaluation
@@ -257,7 +370,10 @@ nonisolated enum Trophies {
     static func inputs(from catches: [Catch]) -> TrophyProgressInputs {
         var unique = Set<String>()
         var rarePlusUnique = Set<String>()
-        var wide = 0, regional = 0, heritage = 0
+        var operators = Set<String>()
+        var places = Set<String>()
+        var days = Set<Date>()
+        var wide = 0, narrow = 0, regional = 0, heritage = 0
         var rare = 0, epic = 0, legendary = 0
         var longest: Double = 0
         var night = 0
@@ -274,15 +390,29 @@ nonisolated enum Trophies {
             default: break
             }
             switch t {
+            case .narrow:   narrow += 1
             case .wide:     wide += 1
             case .regional: regional += 1
             case .heritage: heritage += 1
             default: break
             }
+            if let op = c.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines), !op.isEmpty {
+                operators.insert(op)
+            }
+            if let place = c.placeName?.trimmingCharacters(in: .whitespacesAndNewlines), !place.isEmpty {
+                places.insert(place)
+            }
+            days.insert(calendar.startOfDay(for: c.caughtAt))
             let km = c.slantDistanceMeters / 1000
             if km > longest { longest = km }
             let hour = calendar.component(.hour, from: c.caughtAt)
             if hour >= 20 || hour < 6 { night += 1 }
+        }
+
+        // Fully-collected make/model families — drives the Set Master trophy.
+        let completedSets = CardSets.families.reduce(into: 0) { acc, set in
+            let p = CardSets.progress(of: set, against: catches)
+            if p.total > 0 && p.caught == p.total { acc += 1 }
         }
 
         return TrophyProgressInputs(
@@ -297,7 +427,12 @@ nonisolated enum Trophies {
             rarePlusUnique: rarePlusUnique.count,
             longestSlantKm: longest,
             bestMultiCatchCount: 0,
-            nightCatches: night
+            nightCatches: night,
+            narrowBodyCatches: narrow,
+            uniqueOperators: operators.count,
+            uniquePlaces: places.count,
+            completedSets: completedSets,
+            distinctDays: days.count
         )
     }
 }
@@ -305,6 +440,12 @@ nonisolated enum Trophies {
 // MARK: - Per-achievement evaluation
 
 extension Achievement {
+
+    /// A one-shot ("1 of 1") award: a single milestone you either have or
+    /// don't — rendered as a **Badge**. Multi-tier awards level up through
+    /// bronze → platinum and are rendered as **Medals**.
+    var isOneShot: Bool { tiers.count == 1 }
+    var isLeveled: Bool { tiers.count > 1 }
 
     /// Current value of the progress metric.
     func currentProgress(inputs: TrophyProgressInputs) -> Int {
