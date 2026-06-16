@@ -100,13 +100,19 @@ struct OnboardingFlow: View {
         ZStack {
             Brand.Color.bgPrimary.ignoresSafeArea()
             backdrop.ignoresSafeArea()
-            VStack {
-                content
-                Spacer(minLength: 0)
+            VStack(spacing: 16) {
+                // Scroll the step content so it never truncates or clips on
+                // shorter iPhones (e.g. SE / 8, 667pt) — the old fixed VStack
+                // compressed the title to one line ("Spot every plane ove…",
+                // issue #36). The footer button stays pinned below.
+                ScrollView(.vertical, showsIndicators: false) {
+                    content
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 80)
+                }
                 footer
             }
             .padding(.horizontal, 28)
-            .padding(.top, 80)
             .padding(.bottom, 40)
         }
     }
