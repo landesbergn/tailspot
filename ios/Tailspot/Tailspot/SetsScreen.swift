@@ -135,6 +135,7 @@ struct SetDetailScreen: View {
         }
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .swipeBackEnabled()
     }
 
     private var header: some View {
@@ -233,6 +234,7 @@ struct ModelDetailScreen: View {
         }
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        .swipeBackEnabled()
     }
 
     private var emptyState: some View {
