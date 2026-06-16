@@ -205,7 +205,7 @@ struct HangarView: View {
             } label: {
                 Text("Open AR view")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.black.opacity(0.88))
+                    .foregroundStyle(Brand.Color.bgPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Brand.Color.cyan, in: .rect(cornerRadius: 12))

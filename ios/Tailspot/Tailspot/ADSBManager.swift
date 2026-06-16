@@ -158,11 +158,13 @@ extension ObservedAircraft {
     ///
     /// So the curve no longer controls EXISTENCE, only EMPHASIS:
     ///   .full   — inside the confidence curve (unchanged math): normal label.
-    ///   .faint  — beyond the curve but above the horizon floor and inside
-    ///             `faintVisibilityCeilingMeters`: dimmed label. Ghosts land
-    ///             here (quiet); real-but-far planes land here (catchable).
-    ///   .hidden — below the horizon floor or beyond the faint ceiling:
-    ///             not rendered. The floor still owns terrain clutter.
+    ///   .faint  — beyond the curve but within `faintBandFactor`× of it and
+    ///             above the horizon floor: dimmed label. A thin margin past
+    ///             the confident edge, so a plane hovering at the cap dims
+    ///             rather than vanishing frame-to-frame.
+    ///   .hidden — below the horizon floor or beyond the faint band:
+    ///             not rendered. The floor still owns terrain clutter, the
+    ///             band now owns the far/low MLAT firehose.
     ///
     /// Hysteresis applies at BOTH boundaries (full↔faint styling flicker is
     /// merely ugly; faint↔hidden existence flicker breaks lock-on, as the
@@ -172,19 +174,48 @@ extension ObservedAircraft {
     var visibilityTier: VisibilityTier {
         guard elevationDeg > Self.minVisibleElevationDeg else { return .hidden }
         let h = wasShownLastFrame ? Self.visibilityHysteresisFactor : 1.0
-        if slantDistanceMeters < visibilityCapMeters * h { return .full }
-        if slantDistanceMeters < Self.faintVisibilityCeilingMeters * h { return .faint }
+        let fullCap = visibilityCapMeters * h
+        if slantDistanceMeters < fullCap { return .full }
+        // Faint reaches faintBandFactor× the curve, but never past an absolute
+        // sanity ceiling: at low elevation the 2× band is the tighter bound
+        // (kills the far/low MLAT firehose), at high elevation the curve is
+        // already wide so the ceiling is the tighter bound (a 40 km plane
+        // isn't catchable at any elevation — and a 36 km @ 45° contact is
+        // 25 km up, physically impossible).
+        let faintReach = min(visibilityCapMeters * Self.faintBandFactor,
+                             Self.faintCeilingMeters) * h
+        if slantDistanceMeters < faintReach { return .faint }
         return .hidden
     }
 
-    /// Outer existence ceiling for the faint tier. 35 km covers every
-    /// confirmed-visible field datum with margin (SKW5480 18.0 km, ANA179
-    /// 19.2 km, GTI9648 16.6 km) while still excluding the genuinely
-    /// absurd (a 50 km bbox-edge plane at 2° elevation). The small-airframe
-    /// half-cap deliberately does NOT apply here — it shapes emphasis via
-    /// the full tier, but a GA plane the user can SEE must never be
-    /// unlabelable. Tunable.
-    static let faintVisibilityCeilingMeters: Double = 35_000
+    /// The faint tier extends from the confident curve out to this multiple
+    /// of it — an elevation-aware band, NOT a flat ceiling. The flat 35 km
+    /// ceiling this replaces was fine against sparse OpenSky data, but once
+    /// the backend's MLAT feed arrived (0.5.0) a single dense Berkeley tick
+    /// carried 76 contacts and ~20 of them — far, low, near the horizon —
+    /// surfaced as faint labels while exactly ONE plane (FDX350, 4.9 km @
+    /// 19°) was actually visible (field recording replay-2026-06-15T001746Z).
+    /// Tying the faint band to the (haze-aware) curve instead keeps it tight
+    /// where the air is thick and generous where it's clear (high-elevation
+    /// contrail traffic still gets a wide band).
+    ///
+    /// 2.0 is the precision lean Noah chose 2026-06-15: a clean HUD of what
+    /// you can see beats catching every marginal far plane. The deliberate
+    /// cost is that the old "never hide inside 35 km" field cases — SKW5480
+    /// (18 km @ 12°) and N21866 (5.8 km @ ~5°, GA) — no longer auto-label.
+    /// Both are genuinely marginal: SKW5480 contradicts the ghost data, and
+    /// N21866 was itself a confirmed ghost at 6.3 km on another day. Recall
+    /// for that far/marginal class is deferred to a future tap-to-reveal
+    /// affordance. Tunable.
+    static let faintBandFactor: Double = 2.0
+
+    /// Absolute outer ceiling on the faint tier, applied alongside the
+    /// `faintBandFactor`× band (whichever is tighter wins). At high elevation
+    /// the curve is already 25 km, so 2× would reach 50 km — past anything
+    /// realistically catchable and past physically-possible altitudes. 35 km
+    /// is the sanity bound (it still clears every confirmed-visible datum:
+    /// ANA179 19.2 km, GTI9648 16.6 km, all full-tier anyway). Tunable.
+    static let faintCeilingMeters: Double = 35_000
 
     /// The effective distance cap for THIS aircraft: the elevation curve,
     /// halved for small airframes. Field data 2026-06-06: N3001B (a GA
@@ -393,24 +424,48 @@ final class ADSBManager: ObservableObject {
     @Published var lastErrorIsTransient: Bool = false
     @Published var lastFetched: Date?
 
+    /// True when the backend was the selected source but its last fetch
+    /// failed and we transparently fell back to OpenSky for that poll
+    /// (see `fetchAircraftWithFailover`). Surfaced in the debug overlay so a
+    /// field session can see failover happening; clears on the next
+    /// successful backend fetch.
+    @Published var backendDegraded: Bool = false
+
     /// Toggle between the live OpenSky source and a synthetic mock for
     /// couch-testing. Flipping it triggers an immediate refresh.
     @Published var useMock: Bool = false {
         didSet { Task { await refreshNow() } }
     }
 
-    /// Field-validation toggle for the backend cutover (WP 1.8): swaps the
-    /// live source between OpenSky (device-direct, still the default) and
-    /// the Tailspot backend proxy (api.tailspot.app — adsb.lol data with
-    /// MLAT, so GA aircraft and helicopters appear that OpenSky's free tier
-    /// never shows). Persisted so a field session survives app restarts;
-    /// ignored while `useMock` is on. Once the backend is validated in the
-    /// field, the cutover makes it the only source and this toggle goes away.
-    @Published var useBackend: Bool = UserDefaults.standard.bool(
-        forKey: ADSBManager.useBackendDefaultsKey
-    ) {
+    /// Selects the live data source: the Tailspot backend proxy
+    /// (api.tailspot.app — adsb.lol data WITH MLAT, so GA aircraft and
+    /// helicopters appear that OpenSky's free tier never shows, plus merged
+    /// FAA / DOC-8643 metadata) or OpenSky device-direct.
+    ///
+    /// As of 0.5.0 the backend is the DEFAULT. The default is registered in
+    /// `TailspotApp.init` via `UserDefaults.register(defaults:)` (skipped when
+    /// the app is hosting a unit-test run) rather than hardcoded here, so it
+    /// applies to every install that hasn't explicitly toggled the source,
+    /// while tests — which inject an ephemeral `defaults` store and don't run
+    /// that registration — stay on OpenSky-direct. A tester's explicit opt-out
+    /// persists in the standard domain and wins.
+    ///
+    /// When the backend is active and a fetch fails, `fetchAircraftWithFailover`
+    /// transparently retries against OpenSky for that poll — so backend-default
+    /// degrades to exactly OpenSky-only behavior on an api.tailspot.app blip,
+    /// never to an empty sky.
+    ///
+    /// Persisted so a field session (and an opt-out) survives restarts;
+    /// ignored while `useMock` is on. The destructive WP 1.8 cutover (delete
+    /// OpenSky entirely, rotate the secret) stays deferred until the field A/B
+    /// confirms the backend in the wild.
+    /// Initialized in `init` from the injected `defaults` store (so the
+    /// suite can hand each test an ephemeral store instead of racing the
+    /// process-global `.standard` — the convention from the 2026-06-11 CI
+    /// flakes). The `didSet` persists changes back to the same store.
+    @Published var useBackend: Bool {
         didSet {
-            UserDefaults.standard.set(useBackend, forKey: ADSBManager.useBackendDefaultsKey)
+            defaults.set(useBackend, forKey: ADSBManager.useBackendDefaultsKey)
             Task { await refreshNow() }
         }
     }
@@ -444,6 +499,10 @@ final class ADSBManager: ObservableObject {
     private let liveSource: ADSBSource
     private let mockSource: ADSBSource
     private let backendSource: ADSBSource
+    /// Backing store for the persisted `useBackend` toggle. Injectable so
+    /// tests use an ephemeral store and never race the process-global
+    /// `.standard`; production passes `.standard`.
+    private let defaults: UserDefaults
     /// Effective source. Mock wins (couch-testing trumps everything),
     /// then the backend toggle, then the OpenSky default. Both the bbox
     /// poll AND `metadata(for:)` route through this, so flipping the
@@ -451,6 +510,53 @@ final class ADSBManager: ObservableObject {
     private var source: ADSBSource {
         if useMock { return mockSource }
         return useBackend ? backendSource : liveSource
+    }
+
+    /// Fetch the bbox with automatic backend→OpenSky failover.
+    ///
+    /// When the backend is the active source and its fetch throws, retry the
+    /// SAME bbox against OpenSky for this one poll. With the backend
+    /// default-on (0.5.0) this means a backend blip degrades the app to
+    /// exactly today's OpenSky-only behavior — never worse, never an empty
+    /// sky. Mock and OpenSky-direct modes fetch their single source with no
+    /// failover. The fallback's error is rethrown (so OpenSky's 429 still
+    /// drives the existing backoff in `refresh`).
+    private func fetchAircraftWithFailover(
+        lamin: Double, lomin: Double, lamax: Double, lomax: Double
+    ) async throws -> [Aircraft] {
+        guard !useMock, useBackend else {
+            return try await source.aircraftInBbox(
+                lamin: lamin, lomin: lomin, lamax: lamax, lomax: lomax)
+        }
+        do {
+            let raw = try await backendSource.aircraftInBbox(
+                lamin: lamin, lomin: lomin, lamax: lamax, lomax: lomax)
+            if backendDegraded { backendDegraded = false }
+            return raw
+        } catch {
+            Log.adsb.error("backend bbox fetch failed (\(error.localizedDescription, privacy: .public)); failing over to OpenSky")
+            backendDegraded = true
+            return try await liveSource.aircraftInBbox(
+                lamin: lamin, lomin: lomin, lamax: lamax, lomax: lomax)
+        }
+    }
+
+    /// Metadata lookup with the same backend→OpenSky failover as the bbox
+    /// poll: a backend blip falls back to OpenSky's (sparser) metadata
+    /// rather than failing the detail view outright.
+    private func fetchMetadataWithFailover(icao24: String) async throws -> AircraftMetadata? {
+        guard !useMock, useBackend else {
+            return try await source.aircraftMetadata(icao24: icao24)
+        }
+        do {
+            let value = try await backendSource.aircraftMetadata(icao24: icao24)
+            if backendDegraded { backendDegraded = false }
+            return value
+        } catch {
+            Log.adsb.error("backend metadata fetch failed for \(icao24, privacy: .public) (\(error.localizedDescription, privacy: .public)); failing over to OpenSky")
+            backendDegraded = true
+            return try await liveSource.aircraftMetadata(icao24: icao24)
+        }
     }
 
     /// Whether the live source has OAuth credentials. Surfaced for
@@ -477,15 +583,24 @@ final class ADSBManager: ObservableObject {
     /// Default init keeps the production behavior unchanged. The
     /// parameters exist so tests can inject a fixture source — without
     /// them, every method on this class would have to be tested against
-    /// the real OpenSky network, which is slow and flaky.
+    /// the real OpenSky network, which is slow and flaky. `defaults`
+    /// defaults to `.standard` for production; tests pass an ephemeral
+    /// store so the persisted `useBackend` toggle never races the
+    /// process-global one.
     init(
         liveSource: ADSBSource = OpenSkyClient(),
         mockSource: ADSBSource = MockADSBSource(),
-        backendSource: ADSBSource = TailspotBackendClient()
+        backendSource: ADSBSource = TailspotBackendClient(),
+        defaults: UserDefaults = .standard
     ) {
         self.liveSource = liveSource
         self.mockSource = mockSource
         self.backendSource = backendSource
+        self.defaults = defaults
+        // First assignment of `useBackend` (it has no default) — runs inside
+        // init, so the `didSet` does NOT fire and we don't write the store
+        // back during construction.
+        self.useBackend = defaults.bool(forKey: ADSBManager.useBackendDefaultsKey)
     }
 
     /// Start polling. The provider closure is called on each tick to
@@ -562,7 +677,7 @@ final class ADSBManager: ObservableObject {
         let dLon = radiusKm / (111.0 * cos(observerLat * .pi / 180))
 
         do {
-            let raw = try await source.aircraftInBbox(
+            let raw = try await fetchAircraftWithFailover(
                 lamin: observerLat - dLat,
                 lomin: observerLon - dLon,
                 lamax: observerLat + dLat,
@@ -603,7 +718,7 @@ final class ADSBManager: ObservableObject {
             return value
         case .notFetched:
             do {
-                let fetched = try await source.aircraftMetadata(icao24: icao24)
+                let fetched = try await fetchMetadataWithFailover(icao24: icao24)
                 await metadataCache.set(icao24: icao24, value: fetched)
                 return fetched
             } catch {

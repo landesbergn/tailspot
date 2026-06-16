@@ -39,6 +39,13 @@ nonisolated enum Brand {
         static let alertCaution  = SwiftUI.Color(hex: 0xFFB800)
         static let alertAdvisory = SwiftUI.Color(hex: 0xFF6BE6)
         static let alertNormal   = SwiftUI.Color(hex: 0x3DD68C)
+
+        /// Leaderboard podium medals. Not part of the HUD/collector palette —
+        /// these are universal gold/silver/bronze semantics — but routed
+        /// through Brand so every color in the app lives in one file.
+        static let podiumGold   = SwiftUI.Color(hex: 0xFFC74A)
+        static let podiumSilver = SwiftUI.Color(hex: 0xC5D0DA)
+        static let podiumBronze = SwiftUI.Color(hex: 0xC26B3F)
     }
 
     // MARK: - Font

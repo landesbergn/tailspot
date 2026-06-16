@@ -1133,7 +1133,7 @@ struct ContentView: View {
                 if isMulti {
                     Text("×\(count)")
                         .font(Brand.Font.mono(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Brand.Color.bgPrimary)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(Brand.Color.alertAdvisory, in: .capsule)
@@ -1545,6 +1545,14 @@ struct ContentView: View {
                     .foregroundStyle(adsb.liveSourceIsAuthed
                                      ? Brand.Color.alertNormal
                                      : Brand.Color.alertCaution)
+            }
+
+            // Failover tag — backend selected but the last fetch fell back
+            // to OpenSky (api.tailspot.app unreachable). Clears on recovery.
+            if adsb.useBackend && !adsb.useMock && adsb.backendDegraded {
+                Text("→ OPENSKY")
+                    .font(Brand.Font.mono(size: 12, weight: .bold))
+                    .foregroundStyle(Brand.Color.alertCaution)
             }
 
             Spacer()
