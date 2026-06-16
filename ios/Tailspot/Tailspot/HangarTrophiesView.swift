@@ -158,8 +158,14 @@ struct HangarTrophiesView: View {
         )
     }
 
-    /// Tier label + "progress / next" + a bar filling the CURRENT tier
-    /// segment; or "GOLD · MAX" once the top tier is reached.
+    /// Always framed around the NEXT goal: "→ SILVER  17 / 30" with a cyan
+    /// bar filling the current tier segment; or "GOLD · MAX" at the top.
+    ///
+    /// The tier you've already earned is shown by the hex color — so the
+    /// footer never needs the word "LOCKED" (which read as a contradiction
+    /// next to a near-full "9 / 10"). The goal label + count are neutral so
+    /// the hex's metal is the card's only tier color; the bar is cyan, the
+    /// app's progress color.
     @ViewBuilder
     private func medalFooter(ach: Achievement, current: TrophyTier?, next: AchievementTier?, progress: Int) -> some View {
         if let next {
@@ -167,19 +173,15 @@ struct HangarTrophiesView: View {
             let span = max(1, next.at - prevAt)
             let fill = max(0, min(1, Double(progress - prevAt) / Double(span)))
             HStack(spacing: 6) {
-                Text(current?.label ?? "LOCKED")
+                Text("→ \(next.tier.label)")
                     .font(Brand.Font.mono(size: 9, weight: .bold))
-                    .foregroundStyle(current.map { Color(hex: $0.outerHex) } ?? Brand.Color.textTertiary)
+                    .foregroundStyle(Brand.Color.textSecondary)
                     .tracking(0.8)
                 Text("\(progress) / \(next.at)")
                     .font(Brand.Font.mono(size: 11, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()
                 Spacer(minLength: 6)
-                // Progress is always cyan — the app's one "your progress" color
-                // (matches the Sets completion rings). Tinting it the NEXT tier's
-                // metal clashed with the current tier on the hex + label (a silver
-                // medal got a gold bar); the metal now means tier, cyan means climb.
                 ProgressBar(fill: fill, tint: Brand.Color.cyan)
                     .frame(width: 76, height: 4)
             }
