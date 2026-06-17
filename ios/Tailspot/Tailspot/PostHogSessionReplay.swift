@@ -31,13 +31,20 @@ enum PostHogSessionReplay {
 
         let config = PostHogConfig(apiKey: key, host: host)
         config.sessionReplay = true
-        // Wireframe mode (NOT screenshot): replays render structural wireframes,
-        // never screen pixels — so the live camera / AR view is never recorded.
-        // The camera view is ALSO explicitly masked via `.postHogMask()` in
-        // ContentView, so it stays excluded even if screenshot mode is ever
-        // turned on later.
-        config.sessionReplayConfig.screenshotMode = false
+        // Screenshot mode (NOT wireframe). PostHog's wireframe mode rebuilds the
+        // replay from the UIKit view hierarchy, which a SwiftUI app on Xcode 26 /
+        // iOS 26 doesn't expose the way it expects — SwiftUI now backs views with
+        // sublayers instead of subviews, so wireframe traversal records blank
+        // screens (posthog-ios#408). Declarative UI (SwiftUI, like Compose on
+        // Android) therefore *requires* screenshot mode to record anything usable.
+        // Privacy is preserved by masking instead of by mode: the live camera /
+        // AR preview is explicitly excluded via `.postHogMask()` in ContentView
+        // (the AR overlays layered on top still record), and text inputs are
+        // masked below. Aircraft card art isn't sensitive, so images stay visible
+        // for useful recordings.
+        config.sessionReplayConfig.screenshotMode = true
         config.sessionReplayConfig.maskAllTextInputs = true
+        config.sessionReplayConfig.maskAllImages = false
         // Events are sent by our REST Analytics pipeline; don't let the SDK
         // autocapture them too (it would double-count). Replay only.
         config.captureApplicationLifecycleEvents = false
