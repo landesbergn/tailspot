@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		4F660D322FE211A200510461 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 4F660D312FE211A200510461 /* PostHog */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		4F9708D52FAADF73007D8633 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -55,6 +59,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4F660D322FE211A200510461 /* PostHog in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +123,7 @@
 			);
 			name = Tailspot;
 			packageProductDependencies = (
+				4F660D312FE211A200510461 /* PostHog */,
 			);
 			productName = Tailspot;
 			productReference = 4F9708C72FAADF72007D8633 /* Tailspot.app */;
@@ -201,6 +207,9 @@
 			);
 			mainGroup = 4F9708BE2FAADF72007D8633;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4F660D302FE211A200510461 /* XCRemoteSwiftPackageReference "posthog-ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4F9708C82FAADF72007D8633 /* Products */;
 			projectDirPath = "";
@@ -578,6 +587,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4F660D302FE211A200510461 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/PostHog/posthog-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.60.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4F660D312FE211A200510461 /* PostHog */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F660D302FE211A200510461 /* XCRemoteSwiftPackageReference "posthog-ios" */;
+			productName = PostHog;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4F9708BF2FAADF72007D8633 /* Project object */;
 }
