@@ -8,7 +8,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-16 [0.5.0 cut: backend default-on + full Hangar redesign])
+## Current state (as of session ending 2026-06-17 [post-0.5.0: PostHog session replay fixed + decode fix shipped])
+
+**Post-0.5.0 maintenance release (same `MARKETING_VERSION` 0.5.0, build
+auto-bumps — nothing user-visible).** Shipped on `main` via three PRs: #39
+(visual-confirm decode fix), #41 (PostHog session replay, now working), #42
+(manual-ship docs). Highlights of this session:
+
+- **PostHog product events were never broken** — they flow via the SDK-free
+  REST pipeline (`Analytics.swift`); "missing" events were just the Replay/
+  Activity views filtering test-account devices. Confirmed live via the PostHog
+  MCP.
+- **Session replay now works** (`PostHogSessionReplay.swift`). Three fixes
+  found by field-testing against live PostHog data: (a) **screenshot mode**, not
+  wireframe — SwiftUI on iOS 26 renders blank in wireframe (posthog-ios#408);
+  (b) the full-screen `.postHogMask()` on the root `CameraPreview` was blacking
+  the WHOLE window (every other screen is a sheet over it) — removed, since the
+  camera is a GPU surface screenshot mode can't read and renders black on its
+  own; (c) `flushAt = 1` + `captureApplicationLifecycleEvents = true` fixed
+  ~1-in-7 capture (short sessions never hit a flush trigger). Text unmasked
+  (`maskAllTextInputs = false`) since Tailspot's text is non-sensitive game
+  data; `config.debug` is DEBUG-only. **Diagnosis lesson:** prefer querying
+  live PostHog (MCP) + an on-device experiment over chaining inference from
+  forum posts — the "SDK bug" theory was wrong; it was our own mask + flush.
+- **Decode fix (#39)** is dormant in Release (visual confirmation is
+  `#if DEBUG` + off by default), so it changes nothing for testers — it's
+  there for Noah's own dev builds and the visual-confirmation field re-record.
+
+The 0.5.0 state below remains the live baseline of the app.
 
 **0.5.0 is the release — backend becomes the default ADS-B source and the
 Hangar is fully redesigned.** Shipped via PR #32 (the release PR — it grew
@@ -289,9 +316,9 @@ See PLAN.md §8 for the file-by-file layout. Quick highlights:
 
 ## Workflow notes
 
-**TestFlight is live (since 2026-05-26), so `main` is a tester-facing branch:** any push there can be picked up by the next Xcode Cloud build and installed on a tester's phone.
+**TestFlight is live (since 2026-05-26), but shipping is MANUAL as of 2026-06-16.** Merging to `main` no longer reaches testers: the Xcode Cloud Branch-Changes start condition was removed (it was pinging testers on every merge). `main` is the always-green integration line; a TestFlight build happens only when someone clicks **Start Build** in Xcode Cloud (App Store Connect → Xcode Cloud → workflow → Start Build on `main`, or Xcode → Integrate → Start Build), which bundles everything merged since the last build.
 
-- **`main` is shippable, and enforced.** All changes reach `main` via a PR with a green **Unit tests** check (GitHub Actions); branch protection blocks direct pushes, admins included. Branch → field-test with `bin/deploy` → PR → squash-merge → ships. Autonomous commit + `bin/deploy` happen freely *on feature branches*; the PR merge is the one deliberate checkpoint. Canonical process: `CONTRIBUTING.md`.
+- **`main` is the integration line; ship is a separate, batched, manual step.** All changes reach `main` via a PR with a green **Unit tests** check (GitHub Actions); branch protection blocks direct pushes, admins included. Branch → field-test with `bin/deploy` → PR → squash-merge → **lands on `main` (does NOT ship)**. Merge freely; batch the TestFlight build via a deliberate Start Build when ready. Autonomous commit + `bin/deploy` + merges happen freely; **only Noah triggers the ship** (the build going to testers is his call). Canonical process: `CONTRIBUTING.md`.
 - **Build numbers auto-bump in CI.** `ios/Tailspot/ci_scripts/ci_pre_xcodebuild.sh` rewrites `CURRENT_PROJECT_VERSION` to match `CI_BUILD_NUMBER` per Xcode Cloud archive. Don't touch `CURRENT_PROJECT_VERSION` in `project.pbxproj` manually — the committed value stays at `1`.
 - **Keep the SAME `MARKETING_VERSION` by default; let the build number increment.** Per Noah (2026-06-08): TestFlight/App Review clears builds under an already-approved version string faster than a fresh version. Bump `MARKETING_VERSION` (edit `project.pbxproj`, e.g. `0.2.x → 0.3.0`) only for major changes worth flagging to testers. (Supersedes the earlier bump-per-user-visible-change habit.)
 - **SwiftData migrations stay lightweight.** Once testers have catches, every model change must be additive (new optional fields with defaults). Breaking schema changes lose tester data; if ever needed, bump the model version explicitly with a custom migration.
