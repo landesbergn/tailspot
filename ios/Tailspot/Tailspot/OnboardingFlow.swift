@@ -38,15 +38,26 @@ enum Onboarding {
 /// The conditional below makes the swap exclusive.
 struct RootView: View {
     @AppStorage(Onboarding.storageKey) private var completed: Bool = false
+    @Environment(\.modelContext) private var modelContext
     /// Existing-user migration. When the Hangar already has catches,
     /// the user predates onboarding — flip them through automatically
     /// so they aren't walled out of the AR view by a new launch screen.
     @Query private var existingCatches: [Catch]
     @State private var didMigrate = false
 
+    /// UI-test hook: launch the app straight into the Hangar (skipping
+    /// onboarding + the camera/permission AR flow the simulator can't run) so
+    /// the Sets-navigation regression test can tap through reliably. Gated on a
+    /// launch argument that production never passes — see SetsNavigationUITests.
+    private var uiTestHangar: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uiTestHangar")
+    }
+
     var body: some View {
         Group {
-            if completed {
+            if uiTestHangar {
+                HangarView()
+            } else if completed {
                 ContentView()
             } else {
                 OnboardingFlow {
@@ -57,6 +68,25 @@ struct RootView: View {
         .task {
             guard !didMigrate else { return }
             didMigrate = true
+            if uiTestHangar {
+                // Seed one catch so the Hangar shows its segmented Sets browser
+                // (the empty state hides it). icao24 only — the Sets list shows
+                // every family regardless of catch contents.
+                if existingCatches.isEmpty {
+                    modelContext.insert(Catch(
+                        icao24: "uitest",
+                        callsign: "UAL1",
+                        model: "737-800",
+                        manufacturer: "BOEING",
+                        operatorName: "United Airlines",
+                        caughtAt: Date(timeIntervalSince1970: 1_716_000_000),
+                        observerLat: 37.87, observerLon: -122.27,
+                        slantDistanceMeters: 5000
+                    ))
+                    try? modelContext.save()
+                }
+                return
+            }
             if !completed, !existingCatches.isEmpty {
                 completed = true
             }
