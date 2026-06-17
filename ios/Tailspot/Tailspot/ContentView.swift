@@ -168,11 +168,11 @@ struct ContentView: View {
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
                                   frameBridge: frameBridge)
                         .ignoresSafeArea()
-                        // Exclude the live camera/AR feed from PostHog session
-                        // replay — recordings must never capture the camera.
-                        // (Wireframe mode already avoids pixel capture; this is
-                        // explicit belt-and-suspenders.)
-                        .postHogMask()
+                        // EXPERIMENT (all-black replay diagnosis): the full-screen
+                        // .postHogMask() here masked the whole window on every
+                        // screen (sheets present over this root). Removed to test
+                        // whether SwiftUI captures at all + whether the camera
+                        // (a GPU surface) renders black on its own without a mask.
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
                 }
