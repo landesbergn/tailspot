@@ -57,6 +57,7 @@ struct SetsBrowser: View {
                         SetCompletionCard(set: item.set, progress: item.progress)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("setCard")   // SetsNavigationUITests
                 }
             }
             .padding(.horizontal, 16)

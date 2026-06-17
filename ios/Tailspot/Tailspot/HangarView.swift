@@ -67,6 +67,16 @@ struct HangarView: View {
                         // matched by the row's stable icao24 id.
                         .zoomTransition(id: row, in: zoomNamespace)
                 }
+                // Tapping a set in the Sets segment pushes its detail. This
+                // destination MUST live here on the NavigationStack — NOT inside
+                // SetsBrowser — because SetsBrowser renders inside the paged
+                // TabView below, and SwiftUI does not register a
+                // navigationDestination declared inside a TabView page with the
+                // enclosing stack, so the set tap silently did nothing. The
+                // standalone Profile path keeps its own copy in SetsBrowser.
+                .navigationDestination(for: CardSet.self) { set in
+                    SetDetailScreen(set: set)
+                }
                 .navigationDestination(for: SetDetailRoute.self) { route in
                     // Task 16 — real `SetDetailView` (model-slot grid)
                     // lives in `SetDetailView.swift`. If a set id ever
