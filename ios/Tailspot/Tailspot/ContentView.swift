@@ -11,6 +11,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import os
+import PostHog   // session-replay masking of the camera view
 
 struct ContentView: View {
     /// Camera FOV at 1× zoom (approximate for iPhone 16 main wide camera
@@ -167,6 +168,11 @@ struct ContentView: View {
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
                                   frameBridge: frameBridge)
                         .ignoresSafeArea()
+                        // EXPERIMENT (all-black replay diagnosis): the full-screen
+                        // .postHogMask() here masked the whole window on every
+                        // screen (sheets present over this root). Removed to test
+                        // whether SwiftUI captures at all + whether the camera
+                        // (a GPU surface) renders black on its own without a mask.
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
                 }

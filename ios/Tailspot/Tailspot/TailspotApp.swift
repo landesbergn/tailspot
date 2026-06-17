@@ -49,6 +49,12 @@ struct TailspotApp: App {
         // Register MetricKit subscriber once at launch. The subscriber
         // lives as a singleton so MetricKit retains the weak reference correctly.
         MetricsSubscriber.shared.register()
+        // PostHog session replay (recordings only — product events still go
+        // through the SDK-free REST Analytics pipeline). No-op without a key.
+        // Skipped under unit tests for the same reason as the register above.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            PostHogSessionReplay.start()
+        }
     }
 
     var body: some Scene {
