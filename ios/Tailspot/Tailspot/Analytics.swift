@@ -317,6 +317,11 @@ nonisolated enum Analytics {
 
     // MARK: - Bundle key resolution
 
+    /// The PostHog project API key from Info.plist (xcconfig-substituted),
+    /// or nil/empty when unset. Exposed so the session-replay SDK setup uses
+    /// the exact same key + key-name as this REST analytics pipeline.
+    static var apiKey: String? { apiKeyFromBundle() }
+
     private static func apiKeyFromBundle() -> String? {
         Bundle.main.object(forInfoDictionaryKey: "PostHogAPIKey") as? String
     }

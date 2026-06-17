@@ -11,6 +11,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import os
+import PostHog   // session-replay masking of the camera view
 
 struct ContentView: View {
     /// Camera FOV at 1× zoom (approximate for iPhone 16 main wide camera
@@ -167,6 +168,11 @@ struct ContentView: View {
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
                                   frameBridge: frameBridge)
                         .ignoresSafeArea()
+                        // Exclude the live camera/AR feed from PostHog session
+                        // replay — recordings must never capture the camera.
+                        // (Wireframe mode already avoids pixel capture; this is
+                        // explicit belt-and-suspenders.)
+                        .postHogMask()
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
                 }
