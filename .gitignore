@@ -134,3 +134,9 @@ tools/hangar-options/
 # Python bytecode caches
 __pycache__/
 *.pyc
+
+# Compound Engineering local config (machine-local; example file stays tracked)
+.compound-engineering/*.local.yaml
+
+# Replay sessions pulled off the device for analysis (local only)
+pulled-replays/
