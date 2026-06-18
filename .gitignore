@@ -39,6 +39,11 @@ xcuserdata/
 Packages/
 Package.pins
 Package.resolved
+# ...but DO commit the app's resolved dependency pins. Xcode Cloud runs with
+# automatic SPM resolution DISABLED and fails the archive unless a pinned
+# Package.resolved is checked in (mirrors the single-shared-xcscheme `!`
+# exception below). This is the right call for an app (vs a library).
+!ios/Tailspot/Tailspot.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 .swiftpm/
 
 # Inside .xcodeproj: keep project.pbxproj and xcshareddata, drop user state.
