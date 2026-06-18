@@ -3,31 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tailspot</title>
-  <meta name="description" content="Point your phone at a plane. Catch it. Collect them all. Tailspot is a plane-spotting game for iOS.">
+  <title>Tailspot — point your phone at a plane, collect them all</title>
+  <meta name="description" content="Tailspot is a plane-spotting collection game for iOS. Point your phone at any aircraft overhead and it's identified in real time from live ADS-B. Tap to catch it.">
+  <meta name="theme-color" content="#0A0E1A">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <!-- Open Graph / social -->
+  <meta property="og:title" content="Tailspot">
+  <meta property="og:description" content="Point your phone at a plane. Collect them all.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://tailspot.app">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <nav class="site-nav">
   <a class="wordmark" href="/">Tailspot</a>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a class="nav-cta" href="#get">Get the app</a></li>
+  </ul>
 </nav>
 
-<main class="page">
-  <div class="hero">
-    <span class="hero-wordmark">Tailspot</span>
-    <span class="hero-badge">Coming soon to TestFlight</span>
+<!-- ───────────────── Hero ───────────────── -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <h1 class="hero-title">Catch the planes flying overhead.<br><span class="accent">Build your collection.</span></h1>
+      <div class="cta-row">
+        <span class="btn btn-primary" role="text">Coming soon&nbsp;·&nbsp;iOS</span>
+        <a class="btn btn-ghost" href="#how">See how it works ↓</a>
+      </div>
+    </div>
+
+    <!-- On-brand AR HUD mockup (pure CSS/SVG, mirrors the in-app lock-on) -->
+    <div class="hero-visual" aria-hidden="true">
+      <div class="hud">
+        <span class="hud-status">● LOCKED</span>
+        <span class="hud-call">UAL2476</span>
+
+        <div class="hud-reticle">
+          <span class="hud-corner tl"></span>
+          <span class="hud-corner tr"></span>
+          <span class="hud-corner bl"></span>
+          <span class="hud-corner br"></span>
+          <svg class="hud-plane" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="aircraft">
+            <path d="M21 16v-2l-8-5V3.5C13 2.67 12.33 2 11.5 2S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+          </svg>
+        </div>
+
+        <div class="hud-chip">
+          <span class="hud-chip-airline">United</span>
+          <span class="hud-chip-model">Boeing 737-900</span>
+          <span class="hud-chip-route">SFO → ORD</span>
+        </div>
+      </div>
+    </div>
   </div>
-</main>
+</header>
+
+<!-- ───────────────── How it works ───────────────── -->
+<section class="section" id="how">
+  <h2 class="section-title">How it works</h2>
+
+  <div class="features">
+    <article class="feature">
+      <h3 class="feature-h"><span class="feature-num">01</span> Aim</h3>
+      <p>Point at any plane. It's identified live from ADS-B.</p>
+    </article>
+    <article class="feature">
+      <h3 class="feature-h"><span class="feature-num">02</span> Catch</h3>
+      <p>Tap to catch it as a card.</p>
+    </article>
+    <article class="feature">
+      <h3 class="feature-h"><span class="feature-num">03</span> Collect</h3>
+      <p>Fill sets, earn trophies, climb the leaderboard.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────── Get the app ───────────────── -->
+<section class="section cta-final" id="get">
+  <h2 class="section-title">Get Tailspot</h2>
+  <span class="btn btn-primary btn-lg" role="text">Coming soon to the App Store</span>
+  <p class="hero-note">Currently in private TestFlight beta.</p>
+</section>
 
 <footer class="site-footer">
-  <span class="footer-brand">Tailspot</span>
+  <div class="footer-brand-group">
+    <span class="footer-brand">Tailspot</span>
+    <span class="footer-coords" title="Field-tested under the SFO/OAK approach">37.87° N · 122.27° W</span>
+  </div>
   <ul class="footer-links">
     <li><a href="privacy.html">Privacy Policy</a></li>
     <li><a href="terms.html">Terms of Service</a></li>
     <li><a href="attributions.html">Attributions</a></li>
   </ul>
 </footer>
+
+<script>
+  // Rotating HUD traffic — real flights, shown the friendly way: airline,
+  // make + model, and whether it's climbing out or coming in to land. The
+  // callsign rides along up top as the techy detail.
+  (function () {
+    var feed = [
+      { call: 'UAL2476', airline: 'United',             model: 'Boeing 737-900',   route: 'SFO → ORD' },
+      { call: 'BAW117',  airline: 'British Airways',    model: 'Airbus A350-1000', route: 'LHR → JFK' },
+      { call: 'DLH441',  airline: 'Lufthansa',          model: 'Boeing 747-8',     route: 'FRA → SFO' },
+      { call: 'UAE201',  airline: 'Emirates',           model: 'Airbus A380',      route: 'DXB → JFK' },
+      { call: 'SIA22',   airline: 'Singapore Airlines', model: 'Airbus A350-900',  route: 'SIN → EWR' },
+      { call: 'AAL100',  airline: 'American',           model: 'Boeing 777-300ER', route: 'JFK → LHR' },
+      { call: 'QFA9',    airline: 'Qantas',             model: 'Boeing 787-9',     route: 'PER → LHR' },
+      { call: 'AFR007',  airline: 'Air France',         model: 'Boeing 777-200',   route: 'CDG → JFK' }
+    ];
+    var chip    = document.querySelector('.hud-chip');
+    var callEl  = document.querySelector('.hud-call');
+    var airEl   = document.querySelector('.hud-chip-airline');
+    var modelEl = document.querySelector('.hud-chip-model');
+    var routeEl = document.querySelector('.hud-chip-route');
+    if (!chip || !airEl || !modelEl) return;
+
+    function render(e) {
+      if (callEl) callEl.textContent = e.call;
+      airEl.textContent = e.airline;
+      modelEl.textContent = e.model;
+      if (routeEl) routeEl.textContent = e.route;
+    }
+
+    var i = 0; // static markup already shows feed[0] (United)
+    setInterval(function () {
+      i = (i + 1) % feed.length;
+      chip.style.opacity = '0';
+      setTimeout(function () { render(feed[i]); chip.style.opacity = '1'; }, 220);
+    }, 3000);
+  })();
+</script>
 
 </body>
 </html>
