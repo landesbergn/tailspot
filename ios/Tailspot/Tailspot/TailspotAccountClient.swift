@@ -111,6 +111,28 @@ nonisolated struct UploadCatchRequest: Encodable {
         let headingDeg: Double?
         let elevationDeg: Double?
         let headingAccuracyDeg: Double?
+
+        // Emit EXPLICIT JSON null for nil pose angles. The synthesized Encodable
+        // omits nil optionals (encodeIfPresent), but the backend rejects an
+        // ABSENT pose key as malformed (422) — it accepts only a number or an
+        // explicit null. Omitting these was the catch-upload 422 storm: every
+        // catch sends nil pose (the Catch model never stored it), so every
+        // upload was rejected and the leaderboard silently never filled.
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(lat, forKey: .lat)
+            try c.encode(lon, forKey: .lon)
+            if let headingDeg { try c.encode(headingDeg, forKey: .headingDeg) }
+            else { try c.encodeNil(forKey: .headingDeg) }
+            if let elevationDeg { try c.encode(elevationDeg, forKey: .elevationDeg) }
+            else { try c.encodeNil(forKey: .elevationDeg) }
+            if let headingAccuracyDeg { try c.encode(headingAccuracyDeg, forKey: .headingAccuracyDeg) }
+            else { try c.encodeNil(forKey: .headingAccuracyDeg) }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case lat, lon, headingDeg, elevationDeg, headingAccuracyDeg
+        }
     }
 
     let catchUuid: String
