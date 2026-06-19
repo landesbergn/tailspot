@@ -57,6 +57,27 @@ nonisolated struct FailureModeReport: Equatable, Sendable {
     func findings(for mode: FailureMode) -> [FailureModeFinding] {
         findings.filter { $0.mode == mode }
     }
+
+    /// A compact, localized summary — the surface the #1 data-usefulness bar
+    /// is judged against. Names each mode, the tick it occurred at, the
+    /// plane, and the ground-truth delta, so a reader (or Claude) can jump to
+    /// the failing moment without re-deriving context. Deterministic: no
+    /// timestamps or locale-sensitive formatting, so the text is stable
+    /// across runs.
+    func diagnose() -> String {
+        guard !findings.isEmpty else { return "No failure modes scored." }
+        var lines: [String] = []
+        let modes = FailureMode.allCases.filter { modesFired.contains($0) }
+        lines.append("Failure modes: \(modes.count) (\(modes.map(\.rawValue).joined(separator: ", ")))")
+        for mode in modes {
+            let fs = findings(for: mode)
+            lines.append("  \(mode.rawValue) — \(fs.count) finding\(fs.count == 1 ? "" : "s")")
+            for f in fs {
+                lines.append("    t#\(f.tickIndex)  \(f.icao24 ?? "—")  \(f.detail)")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
 }
 
 // MARK: - Scoring tuning
