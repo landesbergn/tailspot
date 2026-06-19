@@ -24,6 +24,13 @@ struct TailspotApp: App {
     /// .active). Per-catch immediate upload is a follow-up (PLAN §9).
     private let uploader = CatchUploader()
 
+    /// Durable handle sync — re-claims the locally-chosen handle on the
+    /// backend until it's confirmed. Fires alongside the uploader on every
+    /// foreground. Without this, a handle claim that failed once (offline /
+    /// token-not-ready / cold-start) was lost forever and the user never
+    /// appeared on the leaderboard (the babyjoda bug).
+    private let handleSyncer = HandleSyncer()
+
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -68,12 +75,22 @@ struct TailspotApp: App {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                // Upload any pending catches when the app comes to the
-                // foreground. `uploadPending` is idempotent and non-throwing
-                // at the top level; failures per-row are logged and retried
-                // on the next foreground transition.
+                // Sync backend state on every foreground. Both steps are
+                // idempotent and non-throwing; per-item failures are logged
+                // and retried on the next foreground transition.
                 let ctx = container.mainContext
-                Task { await uploader.uploadPending(context: ctx) }
+                Task {
+                    // Register ONCE up front so the handle sync and catch
+                    // upload below can't race two POST /v1/devices calls on a
+                    // fresh install (ensureRegistered short-circuits on the
+                    // stored token thereafter). Errors here are non-fatal —
+                    // each step re-attempts registration and aborts cleanly.
+                    try? await TailspotAccountClient().ensureRegistered()
+                    // Handle first: cheap, and it unblocks leaderboard
+                    // visibility without waiting behind a catch backlog.
+                    await handleSyncer.syncIfNeeded()
+                    await uploader.uploadPending(context: ctx)
+                }
 
                 // app_opened fires on every foreground activation (cold launch
                 // and background→foreground). Version + build let us correlate

@@ -486,8 +486,10 @@ struct OnboardingFlow: View {
         do {
             try await accountClient.ensureRegistered()
             try await accountClient.claimHandle(trimmed)
-            // Success — persist locally and continue.
+            // Success — persist locally and record the backend confirmation so
+            // HandleSyncer knows this handle is already on the server.
             handle = trimmed
+            UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
             handleTakenError = nil
             Analytics.capture("handle_claimed", ["result": .string("success")])
             onFinish()

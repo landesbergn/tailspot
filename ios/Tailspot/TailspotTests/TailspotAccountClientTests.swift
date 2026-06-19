@@ -514,6 +514,156 @@ struct CatchUploaderTests {
     }
 }
 
+// MARK: - HandleSyncer semantics
+
+/// A fake `HandleClaiming` whose claim outcome is configurable. Records the
+/// handles it was asked to claim and how often registration was called.
+final class FakeClaimClient: HandleClaiming {
+    enum Outcome { case success, taken, failure(Error) }
+    var outcome: Outcome = .success
+    var registrationError: Error?
+    var claimedHandles: [String] = []
+    var registrationCallCount = 0
+
+    @discardableResult
+    func ensureRegistered() async throws -> String {
+        registrationCallCount += 1
+        if let e = registrationError { throw e }
+        return "fake-device-id"
+    }
+
+    func claimHandle(_ handle: String) async throws {
+        switch outcome {
+        case .success: claimedHandles.append(handle)
+        case .taken: throw AccountError.handleTaken
+        case .failure(let e): throw e
+        }
+    }
+}
+
+@Suite("HandleSyncer semantics")
+@MainActor
+struct HandleSyncerTests {
+    /// A UserDefaults suite isolated per-test so reads/writes don't touch the
+    /// app's real handle state or collide across parallel tests.
+    private func makeDefaults() -> UserDefaults {
+        let suite = "tailspot.test.handle.\(UUID().uuidString)"
+        return UserDefaults(suiteName: suite)!
+    }
+
+    /// The babyjoda case: a non-placeholder handle that was never confirmed on
+    /// the backend gets claimed, and `confirmed` is recorded so it won't repeat.
+    @Test func strandedHandleGetsClaimedAndConfirmed() async {
+        let defaults = makeDefaults()
+        defaults.set("babyjoda", forKey: SpotterHandle.storageKey)
+        // confirmedKey absent → never synced.
+
+        let fake = FakeClaimClient()
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(fake.claimedHandles == ["babyjoda"])
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == "babyjoda")
+    }
+
+    /// Steady state: local == confirmed → no network call at all.
+    @Test func alreadyConfirmedIsNoOp() async {
+        let defaults = makeDefaults()
+        defaults.set("noah", forKey: SpotterHandle.storageKey)
+        defaults.set("noah", forKey: SpotterHandle.confirmedKey)
+
+        let fake = FakeClaimClient()
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(fake.claimedHandles.isEmpty)
+        #expect(fake.registrationCallCount == 0)
+    }
+
+    /// The untouched default placeholder (user never chose a handle) is never
+    /// auto-claimed — that would collide everyone on "spotter_42".
+    @Test func untouchedPlaceholderIsNotClaimed() async {
+        let defaults = makeDefaults()
+        defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
+        // confirmedKey absent.
+
+        let fake = FakeClaimClient()
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(fake.claimedHandles.isEmpty)
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == nil)
+    }
+
+    /// No handle chosen at all → no-op.
+    @Test func emptyHandleIsNoOp() async {
+        let defaults = makeDefaults()
+        let fake = FakeClaimClient()
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+        #expect(fake.claimedHandles.isEmpty)
+    }
+
+    /// A transient failure leaves `confirmed` unset so the next foreground retries.
+    @Test func transientFailureLeavesUnconfirmed() async {
+        let defaults = makeDefaults()
+        defaults.set("babyjoda", forKey: SpotterHandle.storageKey)
+
+        let fake = FakeClaimClient()
+        fake.outcome = .failure(AccountError.http(status: 503))
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == nil)
+
+        // Next foreground: backend recovers → claim succeeds, now confirmed.
+        fake.outcome = .success
+        await syncer.syncIfNeeded()
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == "babyjoda")
+    }
+
+    /// A 409 (taken by another device) leaves `confirmed` unset and doesn't crash.
+    @Test func takenHandleLeavesUnconfirmed() async {
+        let defaults = makeDefaults()
+        defaults.set("popular_name", forKey: SpotterHandle.storageKey)
+
+        let fake = FakeClaimClient()
+        fake.outcome = .taken
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == nil)
+    }
+
+    /// A rename (local differs from a previously-confirmed value) re-claims.
+    @Test func renameReclaims() async {
+        let defaults = makeDefaults()
+        defaults.set("newname", forKey: SpotterHandle.storageKey)
+        defaults.set("oldname", forKey: SpotterHandle.confirmedKey)
+
+        let fake = FakeClaimClient()
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(fake.claimedHandles == ["newname"])
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == "newname")
+    }
+
+    /// Registration failure aborts before claiming — handle stays unconfirmed.
+    @Test func registrationFailureAborts() async {
+        let defaults = makeDefaults()
+        defaults.set("babyjoda", forKey: SpotterHandle.storageKey)
+
+        let fake = FakeClaimClient()
+        fake.registrationError = AccountError.http(status: 503)
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(fake.claimedHandles.isEmpty)
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == nil)
+    }
+}
+
 // MARK: - Catch migration additivity
 
 @Suite("Catch migration additivity (WP 1.7 fields)")
