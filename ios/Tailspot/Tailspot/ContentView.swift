@@ -1620,8 +1620,9 @@ struct ContentView: View {
     /// --domain-identifier com.landesberg.Tailspot
     /// --source Documents/replays --destination ./replays`.
     private var recordingRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: recorder.isRecording ? "record.circle.fill" : "record.circle")
+                .font(.title3)
                 .foregroundStyle(recorder.isRecording ? Brand.Color.alertWarning : Brand.Color.textPrimary.opacity(0.85))
             if recorder.isRecording {
                 Text("REC \(recorder.eventCount) +log  \(recorder.currentFileURL?.lastPathComponent ?? "—")")
@@ -1632,6 +1633,17 @@ struct ContentView: View {
             }
             Spacer()
         }
+        // Full-width, padded tap target — a single-line row was too small to
+        // hit reliably (on-device feedback). The background signals it's a
+        // button and the padding grows the hit area.
+        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(recorder.isRecording
+                      ? Brand.Color.alertWarning.opacity(0.18)
+                      : Color.white.opacity(0.07))
+        )
         .contentShape(.rect)
         .onTapGesture {
             toggleRecording()
