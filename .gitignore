@@ -140,3 +140,9 @@ __pycache__/
 
 # Replay sessions pulled off the device for analysis (local only)
 pulled-replays/
+
+# Local-tier replay corpus — full-fidelity recordings (real GPS + logs)
+# used by FailureModeRegressionTests. Never committed; the redacted CI
+# tier (FieldReplays/) is what runs in public CI.
+ios/Tailspot/TailspotTests/local-*.jsonl
+ios/Tailspot/TailspotTests/local-*.log
