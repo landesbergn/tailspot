@@ -1337,7 +1337,16 @@ struct ContentView: View {
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
         }
-        .background(Brand.Color.bgPrimary.opacity(0.55), in: .rect(cornerRadius: 12))
+        // Inner padding so content isn't jammed against the panel edge, plus a
+        // hairline border for definition — declutter pass (on-device feedback
+        // that the readout looked busy/ugly). Content is unchanged; it's useful
+        // in shared screenshots.
+        .padding(14)
+        .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
     // MARK: - Bottom: nearby-aircraft list
