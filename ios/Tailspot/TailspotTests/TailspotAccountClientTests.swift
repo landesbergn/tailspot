@@ -224,7 +224,11 @@ struct TailspotAccountClientDTOTests {
         // ...and its value must be NSNull (JSON null).
         #expect(obj["aircraft"] is NSNull)
         #expect((obj["observer"] as? [String: Any])?["lat"] as? Double == 37.87)
-        #expect((obj["observer"] as? [String: Any])?["headingAccuracyDeg"] == nil)
+        // A nil pose angle must encode as EXPLICIT null, present in the object —
+        // the backend 422s an absent pose key. (This previously asserted the key
+        // was absent, codifying the catch-upload 422 bug.)
+        #expect((obj["observer"] as? [String: Any])?.keys.contains("headingAccuracyDeg") == true)
+        #expect((obj["observer"] as? [String: Any])?["headingAccuracyDeg"] is NSNull)
     }
 
     // ── AccountError ─────────────────────────────────────────────────
