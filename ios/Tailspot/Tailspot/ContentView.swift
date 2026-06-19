@@ -105,6 +105,16 @@ struct ContentView: View {
     /// leaving visibility also clears. Taps drive `forceLock()` on
     /// the engine — the only way into `.locked` after Task 4.
     @State private var pinnedIcao: String?
+    /// Tap-to-reveal (2026-06-19): a plane the user explicitly tapped even
+    /// though the visibility filter hid it (an `empty-tap` with reason
+    /// "filtered"). FDX1268 — a clearly-visible freighter on approach at
+    /// 10.9 km — sits in the same low/fast/large-airframe class as the MLAT
+    /// firehose the precision band kills, so it can't be ambient-labeled
+    /// without resurfacing that clutter. A tap is the explicit intent the
+    /// ambient filter lacks: we surface THIS one plane (and only while it's
+    /// the pin) by treating it as visible for labeling / lock / catch.
+    /// Always kept equal to `pinnedIcao` while set; cleared together with it.
+    @State private var revealedIcao: String?
     /// URL of the recording the user wants to analyze. Non-nil →
     /// `ReplayReportView` sheet is presented for that file.
     @State private var replayURL: URL?
@@ -199,7 +209,14 @@ struct ContentView: View {
 
                     TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
                         let now = context.date
-                        let visible = adsb.observed.filter(\.isLikelyVisibleToObserver)
+                        // Interactive-visible set: the ambient visibility tier
+                        // PLUS any tap-revealed plane (see `revealedIcao`). The
+                        // revealed plane rides the existing pinned-plane path —
+                        // labeled, lockable, catchable — without loosening the
+                        // ambient filter for everyone else.
+                        let visible = adsb.observed.filter {
+                            $0.isLikelyVisibleToObserver || $0.aircraft.icao24 == revealedIcao
+                        }
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
                         // Camera roll from the gravity vector (robust at the
@@ -536,7 +553,7 @@ struct ContentView: View {
         // observation is a free in-memory hit.
         .task(id: visibleIcaoSignature) {
             let icaos = adsb.observed
-                .filter(\.isLikelyVisibleToObserver)
+                .filter { $0.isLikelyVisibleToObserver || $0.aircraft.icao24 == revealedIcao }
                 .map(\.aircraft.icao24)
             // Prune session-stale entries. `ambientMetadata` is a view-
             // local mirror of the bounded MetadataCache actor; without
@@ -556,6 +573,10 @@ struct ContentView: View {
         .onChange(of: lockOn.state.targetIcao24) { _, newIcao in
             if let pin = pinnedIcao, newIcao != pin {
                 pinnedIcao = nil
+                // A revealed plane is only visible *because* it's pinned; once
+                // the engine moves off it (it left the data / sticky expired),
+                // drop the reveal so it falls back out of the visible set.
+                revealedIcao = nil
             }
         }
         // Compass-warning debounce. Watches CL's heading accuracy
@@ -650,7 +671,7 @@ struct ContentView: View {
     /// re-runs when membership actually changes.
     private var visibleIcaoSignature: String {
         adsb.observed
-            .filter(\.isLikelyVisibleToObserver)
+            .filter { $0.isLikelyVisibleToObserver || $0.aircraft.icao24 == revealedIcao }
             .map(\.aircraft.icao24)
             .sorted()
             .joined(separator: ",")
@@ -1799,9 +1820,11 @@ struct ContentView: View {
                 // would still hold .locked until forced.
                 recorder.recordUnpin(at: now)
                 pinnedIcao = nil
+                revealedIcao = nil
                 lockOn.unpin()
             } else {
                 pinnedIcao = icao
+                revealedIcao = nil   // a normal pin is a visible plane, not a reveal
                 recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
                 // forceLock is the only way into .locked — the user
                 // just pointed at this plane, so the engine jumps
@@ -1815,6 +1838,7 @@ struct ContentView: View {
         if pinned != nil {
             recorder.recordUnpin(at: now)
             pinnedIcao = nil
+            revealedIcao = nil
             lockOn.unpin()
             return
         }
@@ -1834,23 +1858,41 @@ struct ContentView: View {
             lockZoneRadius: wideRadius
         ) {
             pinnedIcao = icao
+            revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
             lockOn.forceLock(targetIcao24: icao, now: now)
             return
         }
 
-        // (4) Truly empty frame — brief NO AIRCRAFT HERE ripple at
-        // the tap point, AND a recorded miss diagnosis: the user is
-        // telling us they see something we aren't labeling (2026-06-12,
-        // after three field misses — the frustrated tap is the most
-        // honest signal we have).
-        showEmptyTapRipple(at: point)
-        recordEmptySkyTapDiagnosis(
+        // (4) No visible plane under the tap. Diagnose the nearest in-data
+        // plane (ALL tiers, including hidden) and record the miss signal —
+        // the frustrated tap is the most honest miss signal we have
+        // (2026-06-12, after three field misses). NEW 2026-06-19: if that
+        // nearest plane is FILTERED and near the tap, the user is pointing at
+        // a real plane the precision band deliberately hid (the FDX1268
+        // class — inseparable from the MLAT firehose, so it can't be
+        // ambient-labeled). The tap is the explicit intent the ambient filter
+        // lacks, so REVEAL it: pin + force-lock so it labels and becomes
+        // catchable, without loosening the filter for everyone else.
+        let diagnosis = recordEmptySkyTapDiagnosis(
             at: point, in: screenSize,
             phoneHeadingDeg: phoneHeadingDeg,
             cameraElevationDeg: cameraElevationDeg,
             rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg, now: now
         )
+        if let d = diagnosis, d.reason == "filtered" {
+            let icao = d.obs.aircraft.icao24
+            revealedIcao = icao
+            pinnedIcao = icao
+            recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
+            lockOn.forceLock(targetIcao24: icao, now: now)
+            Analytics.capture("tap_reveal", ["icao24": .string(icao)])
+            return
+        }
+
+        // Truly nothing reachable under the tap — brief NO AIRCRAFT HERE
+        // ripple at the tap point.
+        showEmptyTapRipple(at: point)
     }
 
     /// Build + record the empty-sky-tap diagnosis: find the nearest
@@ -1858,11 +1900,16 @@ struct ContentView: View {
     /// aircraft (including hidden tiers — that is the point), classify
     /// why it wasn't taprable, write a replay event (when recording) and
     /// an analytics event (always; angles + ids only, no location).
+    ///
+    /// Returns the nearest plane + its classification so the caller can act
+    /// on it (tap-to-reveal a `filtered` plane). Returns nil only when no
+    /// aircraft are in data at all.
+    @discardableResult
     private func recordEmptySkyTapDiagnosis(
         at point: CGPoint, in screenSize: CGSize,
         phoneHeadingDeg: Double, cameraElevationDeg: Double,
         rollDeg: Double, hfovDeg: Double, vfovDeg: Double, now: Date
-    ) {
+    ) -> (obs: ObservedAircraft, reason: String)? {
         let basis = Geo.cameraBasis(
             headingDeg: phoneHeadingDeg,
             cameraElevationDeg: cameraElevationDeg,
@@ -1925,6 +1972,8 @@ struct ContentView: View {
             props["nearest_offset_deg"] = .double(b.offsetDeg)
         }
         Analytics.capture("empty_sky_tap", props)
+
+        return best.map { ($0.obs, reason) }
     }
 
     /// Trigger a brief NO AIRCRAFT HERE ripple at the given tap
