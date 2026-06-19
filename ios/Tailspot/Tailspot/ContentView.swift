@@ -49,6 +49,9 @@ struct ContentView: View {
     /// task captures the current sensor state + visible aircraft and
     /// appends a tick line to `Documents/replays/replay-<utc>.jsonl`.
     @StateObject private var recorder = ReplayRecorder()
+    /// Captures the session's os.Logger output to a `.log` paired with the
+    /// recording (U3); driven by the same record toggle as the recorder.
+    @State private var logCapture = LogCapture()
     @State private var cameraAuthorized = false
     /// Hidden by default. Tap the small wrench glyph in the top-right
     /// to reveal the sensor readout (top) + nearby-aircraft list
@@ -1617,11 +1620,12 @@ struct ContentView: View {
     /// --domain-identifier com.landesberg.Tailspot
     /// --source Documents/replays --destination ./replays`.
     private var recordingRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: recorder.isRecording ? "record.circle.fill" : "record.circle")
+                .font(.title3)
                 .foregroundStyle(recorder.isRecording ? Brand.Color.alertWarning : Brand.Color.textPrimary.opacity(0.85))
             if recorder.isRecording {
-                Text("REC \(recorder.eventCount)  \(recorder.currentFileURL?.lastPathComponent ?? "—")")
+                Text("REC \(recorder.eventCount) +log  \(recorder.currentFileURL?.lastPathComponent ?? "—")")
                     .lineLimit(1)
                     .truncationMode(.middle)
             } else {
@@ -1629,6 +1633,17 @@ struct ContentView: View {
             }
             Spacer()
         }
+        // Full-width, padded tap target — a single-line row was too small to
+        // hit reliably (on-device feedback). The background signals it's a
+        // button and the padding grows the hit area.
+        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(recorder.isRecording
+                      ? Brand.Color.alertWarning.opacity(0.18)
+                      : Color.white.opacity(0.07))
+        )
         .contentShape(.rect)
         .onTapGesture {
             toggleRecording()
@@ -1638,9 +1653,14 @@ struct ContentView: View {
     private func toggleRecording() {
         if recorder.isRecording {
             recorder.stop()
+            logCapture.stop()
         } else {
             do {
-                _ = try recorder.start()
+                let url = try recorder.start()
+                // Pair the session log to the recording (.jsonl → .log) and
+                // capture os.Logger output for the session window (U3).
+                let logURL = url.deletingPathExtension().appendingPathExtension("log")
+                logCapture.start(at: logURL, since: Date())
             } catch {
                 Log.ui.error("Failed to start replay recording: \(error.localizedDescription, privacy: .public)")
             }
