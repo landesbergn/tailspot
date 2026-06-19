@@ -347,6 +347,10 @@ struct ProfileStats {
 
 enum SpotterHandle {
     static let storageKey = "tailspot.spotter.handle"
+    /// The handle value the backend has confirmed for THIS device. Written by
+    /// the claim paths (onboarding/Settings) on success and by `HandleSyncer`.
+    /// When it differs from `storageKey`, the handle still needs syncing.
+    static let confirmedKey = "tailspot.spotter.handle.confirmed"
     static let defaultPlaceholder = "spotter_42"
 }
 

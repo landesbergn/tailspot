@@ -175,6 +175,9 @@ struct SettingsScreen: View {
             try await accountClient.ensureRegistered()
             try await accountClient.claimHandle(trimmed)
             handle = trimmed
+            // Record the backend confirmation so HandleSyncer treats this
+            // handle as already-synced and won't redundantly re-claim it.
+            UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
             handleTakenError = nil
             savedHandleSuccess = "@\(trimmed) claimed"
             Analytics.capture("handle_claimed", ["result": .string("success")])
