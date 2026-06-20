@@ -155,11 +155,6 @@ struct ContentView: View {
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
-    /// Opacity of the launch splash screen. Starts at 1.0 (opaque),
-    /// animates to 0 after ~600ms, then the AR view underneath becomes
-    /// interactive. The splash absorbs taps for the first half of the
-    /// fade so no gestures fire while it's mostly visible.
-    @State private var splashOpacity: Double = 1.0
     /// Collapsed by default. Tap the NEARBY AIRCRAFT header in the
     /// debug panel to expand the per-plane list.
     @State private var showAircraftList = false
@@ -506,11 +501,6 @@ struct ContentView: View {
                 }
                 #endif
             }
-
-            // Launch splash screen: brand lockup centered on near-black
-            // background. Holds for ~600ms then crossfades to the AR view.
-            // Absorbs taps for the first half of its fade.
-            splashOverlay
         }
         .overlay { trophyUnlockOverlay }
         // Seed at launch and re-diff on every new catch (idempotent +
@@ -532,16 +522,6 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
-        }
-        .task {
-            // Dismiss the launch splash after ~600ms, then crossfade to
-            // the AR view over 400ms. This runs once when ContentView
-            // first appears (no id: to retrigger), so the splash fires
-            // exactly at launch.
-            try? await Task.sleep(for: .milliseconds(1400))
-            withAnimation(.easeOut(duration: 0.6)) {
-                splashOpacity = 0
-            }
         }
         .task {
             await requestCameraPermission()
@@ -807,32 +787,6 @@ struct ContentView: View {
            !showHangar, !showProfile, !showCompassSheet {
             TrophyUnlockView(center: unlockCenter)
                 .transition(.opacity)
-        }
-    }
-
-    // MARK: - Launch splash
-
-    /// Brand splash screen: centered airplane glyph + TAILSPOT wordmark
-    /// on a near-black background. Shown at launch for ~600ms, then
-    /// crossfades to transparent. The splash absorbs taps for the first
-    /// half of its fade to prevent accidental AR gestures mid-animation.
-    @ViewBuilder
-    private var splashOverlay: some View {
-        if splashOpacity > 0 {
-            ZStack {
-                Brand.Color.bgPrimary.ignoresSafeArea()
-                HStack(spacing: 14) {
-                    Image(systemName: "airplane")
-                        .font(.system(size: 56))
-                        .foregroundStyle(Brand.Color.cyan)
-                    Text("TAILSPOT")
-                        .font(Brand.Font.mono(size: 32, weight: .bold))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .tracking(4)
-                }
-            }
-            .opacity(splashOpacity)
-            .allowsHitTesting(splashOpacity > 0.5)
         }
     }
 

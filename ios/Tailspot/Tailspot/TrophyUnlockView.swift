@@ -29,7 +29,15 @@ struct TrophyUnlockView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.82).ignoresSafeArea()
+            // Opaque branded spotlight — NOT a translucent scrim. A
+            // see-through backdrop let the live camera bleed through behind
+            // the moment, which read as junky; this makes the celebration a
+            // clean full takeover with a subtle center glow.
+            RadialGradient(
+                colors: [Brand.Color.bgElevated, Brand.Color.bgPrimary],
+                center: .center, startRadius: 0, endRadius: 520
+            )
+            .ignoresSafeArea()
 
             if let recap = center.pendingRecap {
                 recapCard(recap)
