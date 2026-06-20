@@ -1286,11 +1286,12 @@ struct ContentView: View {
         }
     }
 
-    /// Faint cyan corner-bracket box at screen center. 200×200 px;
-    /// 24 % opacity so it stays out of the way until it becomes the
-    /// only thing on screen.
+    /// Cyan corner-bracket box at screen center. 200×200 px. The cyan is
+    /// kept low (55 %) so it stays out of the way until it's the only thing
+    /// on screen; the dark halo behind it (full opacity, from `LockBrackets`)
+    /// keeps it findable against a bright sky. Tune on-device (R5).
     private var emptyReticle: some View {
-        LockBrackets(boxSize: 200, color: Brand.Color.cyan, opacity: 0.24)
+        LockBrackets(boxSize: 200, color: Brand.Color.cyan, opacity: 0.55)
     }
 
     // MARK: - Top: sensor readout
@@ -2052,20 +2053,33 @@ private struct LockBrackets: View {
     let opacity: Double
     var armLength: CGFloat { max(8, boxSize * 0.22) }
     var lineWidth: CGFloat = 2
+    /// Dark outline drawn behind the colored strokes so the brackets stay
+    /// legible against a bright sky. Held at full opacity even when `opacity`
+    /// fades the colored strokes, so a faint bracket keeps a crisp dark edge.
+    var haloColor: Color = Brand.Color.hudBracketHalo
+    var haloWidth: CGFloat = 1.5
 
     var body: some View {
         ZStack {
-            CornerBracket(armLength: armLength, corner: .topLeft)
-                .stroke(color, style: .init(lineWidth: lineWidth, lineCap: .round))
-            CornerBracket(armLength: armLength, corner: .topRight)
-                .stroke(color, style: .init(lineWidth: lineWidth, lineCap: .round))
-            CornerBracket(armLength: armLength, corner: .bottomLeft)
-                .stroke(color, style: .init(lineWidth: lineWidth, lineCap: .round))
-            CornerBracket(armLength: armLength, corner: .bottomRight)
-                .stroke(color, style: .init(lineWidth: lineWidth, lineCap: .round))
+            // Halo: wider dark under-stroke, full opacity.
+            corners(stroke: haloColor, width: lineWidth + 2 * haloWidth)
+            // Colored brackets: faded by `opacity`; the halo behind stays crisp.
+            corners(stroke: color, width: lineWidth)
+                .opacity(opacity)
         }
         .frame(width: boxSize, height: boxSize)
-        .opacity(opacity)
+    }
+
+    /// The four L-shaped corner brackets stroked in one color + width.
+    /// Factored out so the halo pass and the colored pass share one definition.
+    private func corners(stroke: Color, width: CGFloat) -> some View {
+        let style = StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
+        return ZStack {
+            CornerBracket(armLength: armLength, corner: .topLeft).stroke(stroke, style: style)
+            CornerBracket(armLength: armLength, corner: .topRight).stroke(stroke, style: style)
+            CornerBracket(armLength: armLength, corner: .bottomLeft).stroke(stroke, style: style)
+            CornerBracket(armLength: armLength, corner: .bottomRight).stroke(stroke, style: style)
+        }
     }
 }
 
