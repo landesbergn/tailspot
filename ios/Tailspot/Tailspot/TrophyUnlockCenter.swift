@@ -71,7 +71,13 @@ final class TrophyUnlockCenter: ObservableObject {
     /// tier as acknowledged. A crash mid-celebration can then at worst
     /// re-show an in-progress moment — never re-fire a fully-seen one.
     func markShown(_ event: TrophyUnlockEvent) {
+        // Fire analytics exactly once per crossing. If the tier is already
+        // acknowledged, this is a re-presentation (the overlay unmounted and
+        // remounted — e.g. a sheet opened and closed while the event was
+        // parked at the head), so commit silently without a duplicate event.
+        let alreadyShown = ledger.acknowledgedOrdinal(for: event.achievementID) >= event.newTier.ordinal
         ledger.setAcknowledged(event.newTier.ordinal, for: event.achievementID)
+        guard !alreadyShown else { return }
         Analytics.capture("trophy_unlocked", [
             "achievement": .string(event.achievementID),
             "tier": .string(event.newTier.label),

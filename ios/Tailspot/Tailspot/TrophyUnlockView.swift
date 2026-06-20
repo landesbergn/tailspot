@@ -41,8 +41,11 @@ struct TrophyUnlockView: View {
         }
         .sensoryFeedback(.success, trigger: hapticTick)
         // Re-run per head so each queued event gets its own commit, anim,
-        // haptic, and (for hidden) `???`→reveal beat.
-        .task(id: center.head?.id) { await presentHead() }
+        // haptic, and (for hidden) `???`→reveal beat. Keyed on `eventTaskKey`
+        // (nil while a recap is up) so an event queued *behind* the recap
+        // isn't committed/animated until the recap is dismissed — and then
+        // re-fires so it gets its proper entrance.
+        .task(id: eventTaskKey) { await presentHead() }
         .task(id: center.pendingRecap) {
             guard center.pendingRecap != nil else { return }
             hapticTick &+= 1
@@ -163,8 +166,15 @@ struct TrophyUnlockView: View {
 
     // MARK: - Presentation
 
+    /// Task id for the event presentation — nil while a recap is showing, so
+    /// the event sitting behind it isn't committed/animated early; flips to
+    /// the head's id when the recap clears, re-firing `presentHead`.
+    private var eventTaskKey: String? {
+        center.pendingRecap == nil ? center.head?.id : nil
+    }
+
     private func presentHead() async {
-        guard let event = center.head else { return }
+        guard center.pendingRecap == nil, let event = center.head else { return }
         center.markShown(event)                       // commit-on-shown
         revealed = !event.achievement.hidden          // non-hidden: identity up front
         hapticTick &+= 1
