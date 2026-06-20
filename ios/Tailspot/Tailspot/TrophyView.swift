@@ -106,6 +106,11 @@ struct TrophyView: View {
                 .foregroundStyle(Brand.Color.textTertiary)
         }
         .frame(width: size, height: size)
+        // Match `unlockedHex`'s rasterization so locked and unlocked hexes
+        // composite identically during a segment page-slide — without this
+        // the two paths render through different pipelines and the locked
+        // ones could flicker on the Trophies tab transition.
+        .drawingGroup()
     }
 }
 

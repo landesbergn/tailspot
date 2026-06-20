@@ -23,6 +23,33 @@
 import SwiftUI
 import SwiftData
 
+/// Pure resolver for what a trophy card displays. Hidden ("secret") awards
+/// render as a `???` mystery card with their teaser until earned, then show
+/// their real identity — keeping the masking logic unit-testable without
+/// SwiftUI, and the VoiceOver label honest ("Locked secret trophy" rather
+/// than three spoken question marks).
+nonisolated struct TrophyCardPresentation: Equatable {
+    let title: String
+    let subtitle: String
+    let accessibilityLabel: String
+    /// True when the card is showing the `???` mystery treatment.
+    let masked: Bool
+
+    init(_ achievement: Achievement, earned: Bool) {
+        if achievement.hidden && !earned {
+            title = "???"
+            subtitle = achievement.teaser ?? "A secret to uncover."
+            accessibilityLabel = "Locked secret trophy"
+            masked = true
+        } else {
+            title = achievement.title
+            subtitle = achievement.summary
+            accessibilityLabel = achievement.title
+            masked = false
+        }
+    }
+}
+
 struct HangarTrophiesView: View {
     @Query private var catches: [Catch]
 
@@ -135,17 +162,22 @@ struct HangarTrophiesView: View {
         let current = ach.currentTier(inputs: inputs)
         let next = ach.nextTier(inputs: inputs)
         let progress = ach.currentProgress(inputs: inputs)
+        let display = TrophyCardPresentation(ach, earned: current != nil)
         return HStack(alignment: .center, spacing: 14) {
             TrophyView(tier: current ?? .bronze, iconName: ach.iconName, size: 52, locked: current == nil)
             VStack(alignment: .leading, spacing: 5) {
-                Text(ach.title)
+                Text(display.title)
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(Brand.Color.textPrimary)
-                Text(ach.summary)
+                Text(display.subtitle)
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
                     .lineLimit(1)
-                medalFooter(ach: ach, current: current, next: next, progress: progress)
+                // Suppress the goal footer on a masked medal — "→ SILVER 0/2"
+                // would spoil the secret.
+                if !display.masked {
+                    medalFooter(ach: ach, current: current, next: next, progress: progress)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -156,6 +188,8 @@ struct HangarTrophiesView: View {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(display.accessibilityLabel)
     }
 
     /// Always framed around the NEXT goal: "→ SILVER  17 / 30" with a cyan
@@ -199,15 +233,16 @@ struct HangarTrophiesView: View {
 
     private func badgeCard(_ ach: Achievement, inputs: TrophyProgressInputs) -> some View {
         let earned = !ach.isLocked(inputs: inputs)
+        let display = TrophyCardPresentation(ach, earned: earned)
         let tier = ach.tiers.first?.tier ?? .gold
         let tint = Color(hex: tier.outerHex)
         return HStack(alignment: .center, spacing: 14) {
             TrophyView(tier: tier, iconName: ach.iconName, size: 52, locked: !earned)
             VStack(alignment: .leading, spacing: 5) {
-                Text(ach.title)
+                Text(display.title)
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
-                Text(ach.summary)
+                Text(display.subtitle)
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
                     .lineLimit(1)
@@ -216,6 +251,14 @@ struct HangarTrophiesView: View {
                         .font(Brand.Font.mono(size: 10, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(tint)
+                        .padding(.top, 1)
+                } else if display.masked {
+                    // A secret the user hasn't earned: hint there's something
+                    // here, but don't say "locked" like a known award.
+                    Label("SECRET", systemImage: "questionmark.circle")
+                        .font(Brand.Font.mono(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(Brand.Color.textTertiary)
                         .padding(.top, 1)
                 } else {
                     Label("LOCKED", systemImage: "lock.fill")
@@ -237,6 +280,8 @@ struct HangarTrophiesView: View {
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(Brand.Color.textPrimary.opacity(earned ? 0.06 : 0.04), lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(display.accessibilityLabel + (earned ? ", earned" : ", locked"))
     }
 }
 

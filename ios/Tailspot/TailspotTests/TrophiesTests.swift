@@ -475,3 +475,40 @@ struct TrophiesHiddenAndMetricsTests {
         }
     }
 }
+
+@Suite("TrophyCardPresentation")
+@MainActor
+struct TrophyCardPresentationTests {
+
+    private func ach(hidden: Bool, teaser: String?) -> Achievement {
+        Achievement(
+            id: "x", title: "Real Title", summary: "Real summary", iconName: "crown",
+            tiers: [.init(tier: .gold, at: 1)],
+            hidden: hidden, teaser: teaser,
+            progress: { _ in 0 }
+        )
+    }
+
+    @Test func hiddenLockedShowsMystery() {
+        let p = TrophyCardPresentation(ach(hidden: true, teaser: "A teaser"), earned: false)
+        #expect(p.title == "???")
+        #expect(p.subtitle == "A teaser")
+        #expect(p.accessibilityLabel == "Locked secret trophy")
+        #expect(p.masked)
+    }
+
+    @Test func hiddenEarnedShowsRealIdentity() {
+        let p = TrophyCardPresentation(ach(hidden: true, teaser: "A teaser"), earned: true)
+        #expect(p.title == "Real Title")
+        #expect(p.subtitle == "Real summary")
+        #expect(p.masked == false)
+    }
+
+    @Test func nonHiddenLockedShowsRealIdentity() {
+        // A normal locked award keeps its real name + criteria — no masking.
+        let p = TrophyCardPresentation(ach(hidden: false, teaser: nil), earned: false)
+        #expect(p.title == "Real Title")
+        #expect(p.subtitle == "Real summary")
+        #expect(p.masked == false)
+    }
+}
