@@ -2,13 +2,15 @@
 //  PostHogSessionReplay.swift
 //  Tailspot
 //
-//  Sets up PostHog iOS **session replay only**. Product events still flow
-//  through our own SDK-free REST pipeline (Analytics.swift) — this is the
-//  first third-party SDK in the app and it's here purely for screen
-//  recordings, which have no REST path. To avoid double-counting, the SDK's
-//  autocapture (lifecycle + screen views) is disabled; we never call
-//  PostHogSDK.capture. distinct_id is aligned to the same anonymous device id
-//  the REST events use, so a recording and its events resolve to one person.
+//  Sets up the PostHog iOS SDK. Its original and primary job is **session
+//  replay** (screen recordings have no REST path). Most product events still
+//  flow through our own SDK-free REST pipeline (Analytics.swift), but we now
+//  also call PostHogSDK.capture directly for things the REST path can't express
+//  today — notably person-property `$set` (e.g. the claimed handle, via
+//  `capture(_:userProperties:)`). The SDK's autocapture (lifecycle + screen
+//  views) stays disabled so it never double-counts the REST funnels, and the
+//  SDK's distinct_id is aligned to the same anonymous device id the REST events
+//  use, so recordings, REST events, and SDK events resolve to one person.
 //
 //  Called once from TailspotApp.init (skipped under unit tests). No-op when
 //  the PostHog key is absent — same key + key-name (PostHogAPIKey, Info.plist)
@@ -22,6 +24,17 @@ import PostHog
 enum PostHogSessionReplay {
     /// PostHog US ingestion host — matches the REST endpoint in Analytics.swift.
     private static let host = "https://us.i.posthog.com"
+
+    /// Capture a product event through the SDK and optionally `$set` person
+    /// properties on the profile. Used sparingly — most product events go via
+    /// the SDK-free REST pipeline (Analytics.swift); this is for what the REST
+    /// path can't express today, like setting the claimed handle as a person
+    /// property. No-op when the PostHog key is absent (same guard as `start()`),
+    /// so keyless / CI / unit-test builds never touch the SDK.
+    static func capture(_ event: String, userProperties: [String: String] = [:]) {
+        guard Analytics.apiKey?.isEmpty == false else { return }
+        PostHogSDK.shared.capture(event, properties: [:], userProperties: userProperties)
+    }
 
     static func start() {
         guard let key = Analytics.apiKey, !key.isEmpty else {
