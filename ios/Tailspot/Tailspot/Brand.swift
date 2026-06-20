@@ -35,6 +35,14 @@ nonisolated enum Brand {
 
         static let cyan = SwiftUI.Color(hex: 0x00D4FF)
 
+        /// Dark outline drawn *behind* the cyan HUD lock-on brackets so they
+        /// stay legible against a bright sky (cyan-on-blue is low contrast).
+        /// Reuses the near-black `bgSurface` value; held at full opacity behind
+        /// the (sometimes faded) cyan strokes so even a faint bracket keeps a
+        /// crisp dark edge. `CatchPhotoComposer` duplicates this as a `UIColor`
+        /// (it stays SwiftUI-independent), so keep the two in sync.
+        static let hudBracketHalo = SwiftUI.Color(hex: 0x050810)
+
         static let alertWarning  = SwiftUI.Color(hex: 0xFF5555)
         static let alertCaution  = SwiftUI.Color(hex: 0xFFB800)
         static let alertAdvisory = SwiftUI.Color(hex: 0xFF6BE6)
