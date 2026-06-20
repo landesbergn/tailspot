@@ -57,6 +57,10 @@ nonisolated enum TrophyTier: String, CaseIterable, Equatable, Sendable {
         case .platinum: return 0x005A73
         }
     }
+
+    /// Rank index, ascending: bronze=0 … platinum=3. Used by the unlock
+    /// ledger to compare "tier you've been shown" against current tier.
+    var ordinal: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 }
 
 // MARK: - Achievement definitions
@@ -79,6 +83,14 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     /// Tiers in ascending order of `at`.
     let tiers: [AchievementTier]
 
+    /// Hidden ("secret") awards render as a `???` mystery card with their
+    /// `teaser` until earned; on earn, the real title/summary is revealed.
+    /// Non-hidden awards always show their real identity. Defaults to false.
+    let hidden: Bool
+    /// Vague hint shown on the mystery card while a `hidden` award is locked
+    /// (e.g. "Three in a hurry"). Ignored for non-hidden awards.
+    let teaser: String?
+
     /// The progress metric this achievement tracks. Resolved against
     /// a `TrophyProgressInputs` value (totals derived from the Hangar
     /// contents) at evaluation time. Marked `@Sendable` because
@@ -86,6 +98,29 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     /// `Trophies.all` only read fields off the passed-in inputs (no
     /// captured state), so they're trivially Sendable in practice.
     let progress: @Sendable (TrophyProgressInputs) -> Int
+
+    /// Explicit init so `hidden`/`teaser` can default — and so they sit
+    /// *before* the trailing `progress` closure, keeping every existing
+    /// `Achievement(... progress: { ... })` call site source-compatible.
+    init(
+        id: String,
+        title: String,
+        summary: String,
+        iconName: String,
+        tiers: [AchievementTier],
+        hidden: Bool = false,
+        teaser: String? = nil,
+        progress: @escaping @Sendable (TrophyProgressInputs) -> Int
+    ) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.iconName = iconName
+        self.tiers = tiers
+        self.hidden = hidden
+        self.teaser = teaser
+        self.progress = progress
+    }
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
 }
@@ -118,6 +153,14 @@ nonisolated struct TrophyProgressInputs: Sendable {
     let uniquePlaces: Int           // distinct non-empty catch locations
     let completedSets: Int          // fully-collected make/model families
     let distinctDays: Int           // distinct calendar days with a catch
+    // Metrics added with the trophies/unlock-moments round (2026-06-20).
+    // Defaulted in the initializer so existing call sites compile unchanged.
+    let distinctCountries: Int      // distinct non-empty observer countries
+    let farCatchCount: Int          // catches at slant distance >= 25 km
+    let redEyeCatches: Int          // caughtAt hour in [2, 5)
+    let bestBurstWithinTenMin: Int  // max catches inside any 10-min window
+    let hasRepeatAirframeAcrossDays: Bool  // an icao24 caught on >= 2 days
+    let longestDayStreak: Int       // longest run of consecutive catch-days
 
     init(
         totalCatches: Int,
@@ -136,7 +179,13 @@ nonisolated struct TrophyProgressInputs: Sendable {
         uniqueOperators: Int = 0,
         uniquePlaces: Int = 0,
         completedSets: Int = 0,
-        distinctDays: Int = 0
+        distinctDays: Int = 0,
+        distinctCountries: Int = 0,
+        farCatchCount: Int = 0,
+        redEyeCatches: Int = 0,
+        bestBurstWithinTenMin: Int = 0,
+        hasRepeatAirframeAcrossDays: Bool = false,
+        longestDayStreak: Int = 0
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -155,6 +204,12 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.uniquePlaces = uniquePlaces
         self.completedSets = completedSets
         self.distinctDays = distinctDays
+        self.distinctCountries = distinctCountries
+        self.farCatchCount = farCatchCount
+        self.redEyeCatches = redEyeCatches
+        self.bestBurstWithinTenMin = bestBurstWithinTenMin
+        self.hasRepeatAirframeAcrossDays = hasRepeatAirframeAcrossDays
+        self.longestDayStreak = longestDayStreak
     }
 
     static let zero = TrophyProgressInputs(
@@ -209,14 +264,17 @@ nonisolated enum Trophies {
         ),
         Achievement(
             id: "longshot", title: "Long Lens",
-            summary: "Catches farther than 30 km",
+            summary: "Catches farther than 25 km",
             iconName: "longlens",
             tiers: [
                 .init(tier: .bronze, at: 1),
                 .init(tier: .silver, at: 5),
                 .init(tier: .gold,   at: 15),
             ],
-            progress: { Int($0.longestSlantKm >= 30 ? 1 : 0) }
+            // Counts catches at >= 25 km (inside the < 30 km visibility cap so
+            // they actually register) — was a capped 0/1 that could never
+            // reach silver/gold.
+            progress: { $0.farCatchCount }
         ),
         Achievement(
             id: "world", title: "World Tour",
@@ -238,6 +296,11 @@ nonisolated enum Trophies {
                 .init(tier: .silver, at: 5),
                 .init(tier: .gold,   at: 20),
             ],
+            // Hidden-dormant: bestMultiCatchCount is hardcoded 0 until the
+            // multi-catch mechanic + frame-count stamping ship (PLAN §9 #5).
+            // Rendered as a `???` mystery card rather than visibly-locked.
+            hidden: true,
+            teaser: "More than one at a time…",
             progress: { max(0, $0.bestMultiCatchCount >= 2 ? 1 : 0) }
         ),
         Achievement(
@@ -245,6 +308,9 @@ nonisolated enum Trophies {
             summary: "Five planes in a single frame",
             iconName: "quintet",
             tiers: [.init(tier: .gold, at: 1)],
+            // Hidden-dormant alongside Constellation (see above).
+            hidden: true,
+            teaser: "A whole formation at once…",
             progress: { $0.bestMultiCatchCount >= 5 ? 1 : 0 }
         ),
         Achievement(
@@ -362,6 +428,54 @@ nonisolated enum Trophies {
             ],
             progress: { $0.distinctDays }
         ),
+
+        // ── Hidden "secret" badges (2026-06-20) — render as `???` mystery
+        //    cards until earned, then reveal. Deliberately hard/rare. ──
+        Achievement(
+            id: "mrworldwide", title: "Mr. Worldwide",
+            summary: "Caught planes in 2+ countries",
+            iconName: "world",
+            tiers: [.init(tier: .gold, at: 1)],
+            hidden: true,
+            teaser: "Catch under more than one flag.",
+            progress: { $0.distinctCountries >= 2 ? 1 : 0 }
+        ),
+        Achievement(
+            id: "hattrick", title: "Hat Trick",
+            summary: "Three catches within ten minutes",
+            iconName: "sparkle",
+            tiers: [.init(tier: .silver, at: 1)],
+            hidden: true,
+            teaser: "Three in a hurry.",
+            progress: { $0.bestBurstWithinTenMin >= 3 ? 1 : 0 }
+        ),
+        Achievement(
+            id: "redeye", title: "Red Eye",
+            summary: "A catch between 2 and 5 AM",
+            iconName: "night",
+            tiers: [.init(tier: .bronze, at: 1)],
+            hidden: true,
+            teaser: "Caught something at a strange hour.",
+            progress: { min(1, $0.redEyeCatches) }
+        ),
+        Achievement(
+            id: "repeat", title: "Repeat Customer",
+            summary: "Caught the same airframe on two days",
+            iconName: "ticket",
+            tiers: [.init(tier: .bronze, at: 1)],
+            hidden: true,
+            teaser: "Some planes come back around.",
+            progress: { $0.hasRepeatAirframeAcrossDays ? 1 : 0 }
+        ),
+        Achievement(
+            id: "streak", title: "Streak",
+            summary: "Caught planes seven days in a row",
+            iconName: "calendar",
+            tiers: [.init(tier: .gold, at: 1)],
+            hidden: true,
+            teaser: "Keep showing up.",
+            progress: { $0.longestDayStreak >= 7 ? 1 : 0 }
+        ),
     ]
 
     // MARK: - Evaluation
@@ -373,10 +487,15 @@ nonisolated enum Trophies {
         var operators = Set<String>()
         var places = Set<String>()
         var days = Set<Date>()
+        var countries = Set<String>()
         var wide = 0, narrow = 0, regional = 0, heritage = 0
         var rare = 0, epic = 0, legendary = 0
         var longest: Double = 0
-        var night = 0
+        var night = 0, far = 0, redEye = 0
+        // Per-airframe day set (repeat-customer) and all catch timestamps
+        // (burst) — derived after the loop.
+        var icaoDays: [String: Set<Date>] = [:]
+        var timestamps: [Date] = []
         let calendar = Calendar(identifier: .gregorian)
 
         for c in catches {
@@ -402,12 +521,27 @@ nonisolated enum Trophies {
             if let place = c.placeName?.trimmingCharacters(in: .whitespacesAndNewlines), !place.isEmpty {
                 places.insert(place)
             }
-            days.insert(calendar.startOfDay(for: c.caughtAt))
+            if let country = c.country?.trimmingCharacters(in: .whitespacesAndNewlines), !country.isEmpty {
+                countries.insert(country)
+            }
+            let day = calendar.startOfDay(for: c.caughtAt)
+            days.insert(day)
+            icaoDays[c.icao24, default: []].insert(day)
+            timestamps.append(c.caughtAt)
             let km = c.slantDistanceMeters / 1000
             if km > longest { longest = km }
+            if km >= 25 { far += 1 }
             let hour = calendar.component(.hour, from: c.caughtAt)
             if hour >= 20 || hour < 6 { night += 1 }
+            if hour >= 2 && hour < 5 { redEye += 1 }
         }
+
+        // Repeat customer: any airframe caught on two or more distinct days.
+        let hasRepeat = icaoDays.values.contains { $0.count >= 2 }
+        // Hat Trick: most catches inside any 10-minute (600 s) sliding window.
+        let bestBurst = maxCountWithinWindow(timestamps, seconds: 600)
+        // Streak: longest run of consecutive calendar days with a catch.
+        let longestStreak = longestConsecutiveDayRun(days, calendar: calendar)
 
         // Fully-collected make/model families — drives the Set Master trophy.
         let completedSets = CardSets.families.reduce(into: 0) { acc, set in
@@ -432,8 +566,51 @@ nonisolated enum Trophies {
             uniqueOperators: operators.count,
             uniquePlaces: places.count,
             completedSets: completedSets,
-            distinctDays: days.count
+            distinctDays: days.count,
+            distinctCountries: countries.count,
+            farCatchCount: far,
+            redEyeCatches: redEye,
+            bestBurstWithinTenMin: bestBurst,
+            hasRepeatAirframeAcrossDays: hasRepeat,
+            longestDayStreak: longestStreak
         )
+    }
+
+    /// Max number of timestamps inside any sliding window of `seconds`.
+    /// Two-pointer over the sorted sequence: each timestamp is a candidate
+    /// window start, so a burst spanning a fixed-bucket boundary still
+    /// counts. O(n log n) sort + O(n) sweep — cheap enough for the per-render
+    /// `inputs(from:)` even at hundreds of catches.
+    static func maxCountWithinWindow(_ times: [Date], seconds: TimeInterval) -> Int {
+        guard !times.isEmpty else { return 0 }
+        let sorted = times.sorted()
+        var best = 1
+        var i = 0
+        for j in sorted.indices {
+            while sorted[j].timeIntervalSince(sorted[i]) > seconds { i += 1 }
+            best = max(best, j - i + 1)
+        }
+        return best
+    }
+
+    /// Longest run of consecutive calendar days present in `days` (a set of
+    /// start-of-day dates), using the SAME calendar as the day-bucketing so
+    /// boundaries don't disagree across metrics.
+    static func longestConsecutiveDayRun(_ days: Set<Date>, calendar: Calendar) -> Int {
+        guard !days.isEmpty else { return 0 }
+        let sorted = days.sorted()
+        var best = 1
+        var run = 1
+        for k in 1..<sorted.count {
+            if let next = calendar.date(byAdding: .day, value: 1, to: sorted[k - 1]),
+               calendar.isDate(next, inSameDayAs: sorted[k]) {
+                run += 1
+            } else {
+                run = 1
+            }
+            best = max(best, run)
+        }
+        return best
     }
 }
 

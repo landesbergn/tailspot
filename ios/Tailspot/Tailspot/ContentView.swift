@@ -966,11 +966,13 @@ struct ContentView: View {
                 // placeName stays nil; CatchDetailView's backfill
                 // retries on a later open.
                 Task { @MainActor in
-                    guard let place = await ReverseGeocode.placeName(
+                    let (place, country) = await ReverseGeocode.placeAndCountry(
                         lat: observerLat, lon: observerLon
-                    ) else { return }
-                    for row in newCatches where row.placeName == nil && !row.isDeleted {
-                        row.placeName = place
+                    )
+                    guard place != nil || country != nil else { return }
+                    for row in newCatches where !row.isDeleted {
+                        if row.placeName == nil { row.placeName = place }
+                        if row.country == nil { row.country = country }
                     }
                     try? modelContext.save()
                 }

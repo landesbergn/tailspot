@@ -41,20 +41,57 @@ nonisolated enum ReverseGeocode {
     /// callers persist nil and retry on a later view-open.
     @MainActor
     static func placeName(lat: Double, lon: Double) async -> String? {
-        guard lat != 0 || lon != 0 else { return nil }
+        await placeAndCountry(lat: lat, lon: lon).place
+    }
+
+    /// Reverse-geocode to a stable COUNTRY key — ISO code preferred (e.g.
+    /// "US"), else the country display name. nil on failure. Used by the
+    /// detail-view backfill to fill `Catch.country` on its own.
+    @MainActor
+    static func country(lat: Double, lon: Double) async -> String? {
+        await placeAndCountry(lat: lat, lon: lon).country
+    }
+
+    /// One reverse-geocode → both the display place and the country key,
+    /// so the catch-time stamp fills `placeName` and `country` without a
+    /// second request. Both nil on any failure.
+    @MainActor
+    static func placeAndCountry(lat: Double, lon: Double) async -> (place: String?, country: String?) {
+        guard lat != 0 || lon != 0 else { return (nil, nil) }
         let location = CLLocation(latitude: lat, longitude: lon)
         guard let request = MKReverseGeocodingRequest(location: location),
               let item = try? await request.mapItems.first
-        else { return nil }
+        else { return (nil, nil) }
         let rep = item.addressRepresentations
         // Apple's locale-aware formatter gives "Berkeley, CA" (US) or
         // "Toulouse, Occitanie" (FR) without re-assembling adminArea.
-        if let cityContext = rep?.cityWithContext { return cityContext }
-        // Tail: no city — degrade through region/country/nil via format.
-        // adminArea is always nil here — MKAddressRepresentations has
-        // no state/province field; "Region, Country" output needs a
-        // direct format() caller.
-        return format(locality: rep?.cityName, adminArea: nil, country: rep?.regionName)
+        let place: String?
+        if let cityContext = rep?.cityWithContext {
+            place = cityContext
+        } else {
+            // Tail: no city — degrade through region/country/nil via format.
+            place = format(locality: rep?.cityName, adminArea: nil, country: rep?.regionName)
+        }
+        return (place, countryKey(from: item))
+    }
+
+    /// Stable country identifier off the map item's placemark: the ISO
+    /// country code when present (locale-independent — "US" everywhere),
+    /// else the country display name. `MKMapItem.placemark` is the
+    /// documented carrier of `isoCountryCode` (deprecated on iOS 26 but
+    /// still the only structured ISO source — the address-representation
+    /// surface exposes only locale-formatted region/city strings).
+    @MainActor
+    private static func countryKey(from item: MKMapItem) -> String? {
+        countryKey(isoCountryCode: item.placemark.isoCountryCode, country: item.placemark.country)
+    }
+
+    /// Pure ISO-preferred fallback, extracted so the degradation path is
+    /// unit-testable without a live geocode: ISO code wins; else the
+    /// country display name; else nil. Empty/whitespace collapses to nil.
+    nonisolated static func countryKey(isoCountryCode: String?, country: String?) -> String? {
+        if let iso = isoCountryCode?.trimmedNonEmpty { return iso }
+        return country?.trimmedNonEmpty
     }
 
     /// Locale-aware assembly, deliberately NOT US-hardcoded:

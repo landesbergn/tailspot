@@ -336,3 +336,142 @@ struct MultiCatchComboTests {
         #expect(MultiCatchReveal.comboMultiplier(for: 1) == 1.0)
     }
 }
+
+// MARK: - 2026-06-20 round: new metrics + hidden trophies
+
+@Suite("Trophies — hidden trophies + 2026-06-20 metrics")
+@MainActor
+struct TrophiesHiddenAndMetricsTests {
+
+    /// Production buckets days/hours with a gregorian calendar; the tests do
+    /// too so day/hour boundaries agree exactly.
+    private let cal = Calendar(identifier: .gregorian)
+
+    /// A date `dayOffset` days from a fixed base, at `hour` local time.
+    private func date(dayOffset: Int = 0, hour: Int = 12) -> Date {
+        let base = cal.startOfDay(for: Date(timeIntervalSince1970: 1_716_000_000))
+        let shifted = cal.date(byAdding: .day, value: dayOffset, to: base)!
+        return cal.date(bySettingHour: hour, minute: 0, second: 0, of: shifted)!
+    }
+
+    private func mk(icao: String = String(UUID().uuidString.prefix(6)).lowercased(),
+                    slantKm: Double = 1, country: String? = nil,
+                    at: Date = Date(timeIntervalSince1970: 1_716_000_000)) -> Catch {
+        Catch(
+            icao24: icao, callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: at, observerLat: 0, observerLon: 0,
+            slantDistanceMeters: slantKm * 1000, country: country
+        )
+    }
+
+    private func ach(_ id: String) -> Achievement {
+        Trophies.roster.first { $0.id == id }!
+    }
+
+    // MARK: - Pure window/streak helpers
+
+    @Test func burstSlidesAcrossBucketBoundary() {
+        // 0 / 8 / 9 minutes all fall in one 10-min window → 3.
+        let times = [date(hour: 0), date(hour: 0).addingTimeInterval(8 * 60), date(hour: 0).addingTimeInterval(9 * 60)]
+        #expect(Trophies.maxCountWithinWindow(times, seconds: 600) == 3)
+    }
+
+    @Test func burstFixedBucketsWouldUndercount() {
+        // 0 / 6 / 12 minutes: no 10-min window holds all three → 2.
+        let t0 = date(hour: 0)
+        let times = [t0, t0.addingTimeInterval(6 * 60), t0.addingTimeInterval(12 * 60)]
+        #expect(Trophies.maxCountWithinWindow(times, seconds: 600) == 2)
+        #expect(Trophies.maxCountWithinWindow([], seconds: 600) == 0)
+    }
+
+    @Test func consecutiveDayRun() {
+        let three: Set<Date> = [date(dayOffset: 0), date(dayOffset: 1), date(dayOffset: 2)]
+        #expect(Trophies.longestConsecutiveDayRun(three, calendar: cal) == 3)
+        // A gap breaks the run: 0,1, [skip 2], 3 → longest is 2.
+        let gapped: Set<Date> = [date(dayOffset: 0), date(dayOffset: 1), date(dayOffset: 3)]
+        #expect(Trophies.longestConsecutiveDayRun(gapped, calendar: cal) == 2)
+    }
+
+    // MARK: - inputs(from:) metrics
+
+    @Test func distinctCountriesCountsNonEmpty() {
+        let inputs = Trophies.inputs(from: [
+            mk(country: "US"), mk(country: "CA"), mk(country: "US"), mk(country: nil), mk(country: "  "),
+        ])
+        #expect(inputs.distinctCountries == 2)
+    }
+
+    @Test func farCatchCountAtTwentyFiveKm() {
+        let inputs = Trophies.inputs(from: [mk(slantKm: 26), mk(slantKm: 24), mk(slantKm: 25)])
+        #expect(inputs.farCatchCount == 2)  // 26 and 25 qualify, 24 doesn't
+    }
+
+    @Test func redEyeCountsTwoToFiveAM() {
+        let inputs = Trophies.inputs(from: [
+            mk(at: date(hour: 3)), mk(at: date(hour: 12)), mk(at: date(hour: 2)), mk(at: date(hour: 5)),
+        ])
+        #expect(inputs.redEyeCatches == 2)  // 03:00 and 02:00; 05:00 and 12:00 excluded
+    }
+
+    @Test func repeatAirframeAcrossDays() {
+        let twoDays = Trophies.inputs(from: [
+            mk(icao: "aaa111", at: date(dayOffset: 0)), mk(icao: "aaa111", at: date(dayOffset: 1)),
+        ])
+        #expect(twoDays.hasRepeatAirframeAcrossDays)
+        let sameDay = Trophies.inputs(from: [
+            mk(icao: "bbb222", at: date(dayOffset: 0, hour: 9)), mk(icao: "bbb222", at: date(dayOffset: 0, hour: 14)),
+        ])
+        #expect(sameDay.hasRepeatAirframeAcrossDays == false)
+    }
+
+    @Test func longestStreakSevenConsecutive() {
+        let catches = (0..<7).map { mk(at: date(dayOffset: $0)) }
+        #expect(Trophies.inputs(from: catches).longestDayStreak == 7)
+    }
+
+    // MARK: - New trophies
+
+    @Test func mrWorldwideHiddenLockedAtOneCountryEarnedAtTwo() {
+        let trophy = ach("mrworldwide")
+        #expect(trophy.hidden)
+        #expect(trophy.isLocked(inputs: Trophies.inputs(from: [mk(country: "US")])))
+        #expect(trophy.isLocked(inputs: Trophies.inputs(from: [mk(country: "US"), mk(country: "CA")])) == false)
+    }
+
+    @Test func streakBadgeEarnsAtSevenLockedAtSix() {
+        let trophy = ach("streak")
+        #expect(trophy.hidden)
+        #expect(trophy.isOneShot)  // a badge, not a leveled medal
+        let six = Trophies.inputs(from: (0..<6).map { mk(at: date(dayOffset: $0)) })
+        let seven = Trophies.inputs(from: (0..<7).map { mk(at: date(dayOffset: $0)) })
+        #expect(trophy.isLocked(inputs: six))
+        #expect(trophy.isLocked(inputs: seven) == false)
+    }
+
+    @Test func longLensClimbsWithFarCatches() {
+        let trophy = ach("longshot")
+        let fiveFar = Trophies.inputs(from: (0..<5).map { _ in mk(slantKm: 26) })
+        #expect(trophy.currentTier(inputs: fiveFar) == .silver)   // bronze@1, silver@5
+        let fifteenFar = Trophies.inputs(from: (0..<15).map { _ in mk(slantKm: 30) })
+        #expect(trophy.currentTier(inputs: fifteenFar) == .gold)
+    }
+
+    @Test func constellationAndQuintetAreHiddenAndDormant() {
+        for id in ["multi", "quintet"] {
+            let trophy = ach(id)
+            #expect(trophy.hidden)
+            // bestMultiCatchCount is hardcoded 0 → still locked under any catches.
+            #expect(trophy.isLocked(inputs: Trophies.inputs(from: (0..<10).map { _ in mk() })))
+        }
+    }
+
+    @Test func allFiveNewBadgesAreHiddenWithTeasers() {
+        let newBadges = ["mrworldwide", "hattrick", "redeye", "repeat", "streak"]
+        for id in newBadges {
+            let trophy = ach(id)
+            #expect(trophy.hidden, "\(id) should be hidden")
+            #expect(trophy.teaser?.isEmpty == false, "\(id) should carry a teaser")
+            #expect(trophy.isOneShot, "\(id) should be a one-shot badge")
+        }
+    }
+}
