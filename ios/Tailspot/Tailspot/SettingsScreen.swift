@@ -181,6 +181,8 @@ struct SettingsScreen: View {
             handleTakenError = nil
             savedHandleSuccess = "@\(trimmed) claimed"
             Analytics.capture("handle_claimed", ["result": .string("success")])
+            // Set the claimed handle as a PostHog person property (SDK $set).
+            PostHogSessionReplay.capture("handle claimed", userProperties: ["handle": trimmed])
             // Stop the spinner BEFORE the auto-clear sleep — the deferred
             // reset only fires at function exit, which would otherwise keep
             // the Save button spinning/disabled for the whole 3 s.
