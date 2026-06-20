@@ -2,19 +2,18 @@
 //  TrophyUnlockView.swift
 //  Tailspot
 //
-//  The full-screen "moment" — a dimmed takeover over the live AR that
-//  celebrates a newly-unlocked trophy. Drains `TrophyUnlockCenter`'s
-//  queue one event at a time (tap to advance), and renders the one-time
-//  recap first when present.
+//  The full-screen "moment" — an opaque branded takeover over the live AR
+//  that celebrates a newly-unlocked achievement. Drains
+//  `TrophyUnlockCenter`'s queue one event at a time (tap to advance), and
+//  renders the one-time recap first when present.
 //
-//  Mounted once at a root level (ContentView / HangarView) via the
-//  unified `rootModal` cover — see KTD-5. Reads `head` / `pendingRecap`
-//  and drives the queue through the center's methods.
+//  Mounted once at a root level (ContentView) — see KTD-5. Achievements are
+//  binary now: every unlock is just "UNLOCKED" (or "SECRET UNLOCKED" for a
+//  previously-hidden one), in the brand cyan, not a metal tier.
 //
-//  Accessibility + Reduce Motion are first-class here: a hidden trophy
-//  opens on a neutral `???` hex (no tier-color spoiler) and reveals to
-//  its real metal; VoiceOver gets a modal label, a Dismiss action, and a
-//  reveal announcement; Reduce Motion swaps the zoom/shine for a fade.
+//  Accessibility + Reduce Motion are first-class: VoiceOver gets a modal
+//  label, a Dismiss action, and an unlock announcement; Reduce Motion swaps
+//  the zoom/shine for a fade.
 //
 
 import SwiftUI
@@ -24,15 +23,16 @@ struct TrophyUnlockView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var appeared = false
-    @State private var revealed = false   // hidden `???` → real identity
     @State private var hapticTick = 0
+
+    /// Achievements render in a single cyan-family hex — set apart from the
+    /// rarity/type pills by shape + a consistent cool tone (not gold).
+    private let tier: TrophyTier = .platinum
 
     var body: some View {
         ZStack {
-            // Opaque branded spotlight — NOT a translucent scrim. A
-            // see-through backdrop let the live camera bleed through behind
-            // the moment, which read as junky; this makes the celebration a
-            // clean full takeover with a subtle center glow.
+            // Opaque branded spotlight — a clean full takeover, not a
+            // translucent scrim over the live camera.
             RadialGradient(
                 colors: [Brand.Color.bgElevated, Brand.Color.bgPrimary],
                 center: .center, startRadius: 0, endRadius: 520
@@ -48,11 +48,9 @@ struct TrophyUnlockView: View {
             }
         }
         .sensoryFeedback(.success, trigger: hapticTick)
-        // Re-run per head so each queued event gets its own commit, anim,
-        // haptic, and (for hidden) `???`→reveal beat. Keyed on `eventTaskKey`
-        // (nil while a recap is up) so an event queued *behind* the recap
-        // isn't committed/animated until the recap is dismissed — and then
-        // re-fires so it gets its proper entrance.
+        // Keyed on `eventTaskKey` (nil while a recap is up) so an event queued
+        // *behind* the recap isn't committed/animated until the recap is
+        // dismissed — then it re-fires for its proper entrance.
         .task(id: eventTaskKey) { await presentHead() }
         .task(id: center.pendingRecap) {
             guard center.pendingRecap != nil else { return }
@@ -65,35 +63,22 @@ struct TrophyUnlockView: View {
 
     @ViewBuilder
     private func eventCard(_ event: TrophyUnlockEvent) -> some View {
-        let hiddenMasked = event.achievement.hidden && !revealed
         VStack(spacing: 18) {
-            // Banner — held back until reveal so a hidden trophy's tier
-            // (the metal color) isn't spoiled before its name.
-            Text(hiddenMasked ? "SECRET UNLOCKED" : bannerText(event))
+            Text(event.achievement.secret ? "SECRET UNLOCKED" : "UNLOCKED")
                 .font(Brand.Font.mono(size: 12, weight: .bold))
                 .tracking(2)
-                .foregroundStyle(hiddenMasked ? Brand.Color.textSecondary
-                                              : Color(hex: event.newTier.outerHex))
+                .foregroundStyle(Brand.Color.cyan)
 
-            // Hex: neutral locked-grey while `???`, real tier metal on reveal.
-            Group {
-                if hiddenMasked {
-                    TrophyView(tier: .bronze, iconName: event.achievement.iconName,
-                               size: 132, locked: true)
-                } else {
-                    TrophyView(tier: event.newTier, iconName: event.achievement.iconName,
-                               size: 132)
-                }
-            }
-            .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
-            .opacity(appeared ? 1 : 0)
+            TrophyView(tier: tier, iconName: event.achievement.iconName, size: 132)
+                .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
+                .opacity(appeared ? 1 : 0)
 
-            Text(hiddenMasked ? "???" : event.achievement.title)
+            Text(event.achievement.title)
                 .font(Brand.Font.mono(size: 24, weight: .heavy))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(hiddenMasked ? (event.achievement.teaser ?? "") : event.achievement.summary)
+            Text(event.achievement.summary)
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -107,7 +92,7 @@ struct TrophyUnlockView: View {
         .onTapGesture { center.advance() }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isModal)
-        .accessibilityLabel(accessibilityLabel(event, masked: hiddenMasked))
+        .accessibilityLabel("\(event.achievement.title) unlocked. \(event.achievement.summary)")
         .accessibilityAction(named: "Dismiss") { center.advance() }
     }
 
@@ -144,15 +129,15 @@ struct TrophyUnlockView: View {
                 .font(Brand.Font.mono(size: 12, weight: .bold))
                 .tracking(2)
                 .foregroundStyle(Brand.Color.cyan)
-            TrophyView(tier: .gold, iconName: "crown", size: 120)
+            TrophyView(tier: tier, iconName: "crown", size: 120)
                 .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
                 .opacity(appeared ? 1 : 0)
-            Text("New: trophies now unlock with a moment.")
+            Text("New: achievements now unlock with a moment.")
                 .font(Brand.Font.cardTitle)
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 28)
-            Text("You've already earned \(recap.medals) medal\(recap.medals == 1 ? "" : "s") and \(recap.badges) badge\(recap.badges == 1 ? "" : "s"). Keep catching to unlock more.")
+            Text("You've already earned \(recap.earned) achievement\(recap.earned == 1 ? "" : "s"). Keep catching to unlock more — some are hidden until you find them.")
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -168,15 +153,15 @@ struct TrophyUnlockView: View {
         .onTapGesture { center.dismissRecap() }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isModal)
-        .accessibilityLabel("Trophy case: \(recap.medals) medals and \(recap.badges) badges already earned. Trophies now unlock with a moment.")
+        .accessibilityLabel("Trophy case: \(recap.earned) achievements already earned. Achievements now unlock with a moment.")
         .accessibilityAction(named: "Dismiss") { center.dismissRecap() }
     }
 
     // MARK: - Presentation
 
     /// Task id for the event presentation — nil while a recap is showing, so
-    /// the event sitting behind it isn't committed/animated early; flips to
-    /// the head's id when the recap clears, re-firing `presentHead`.
+    /// the event behind it isn't committed/animated early; flips to the head's
+    /// id when the recap clears, re-firing `presentHead`.
     private var eventTaskKey: String? {
         center.pendingRecap == nil ? center.head?.id : nil
     }
@@ -184,16 +169,8 @@ struct TrophyUnlockView: View {
     private func presentHead() async {
         guard center.pendingRecap == nil, let event = center.head else { return }
         center.markShown(event)                       // commit-on-shown
-        revealed = !event.achievement.hidden          // non-hidden: identity up front
         hapticTick &+= 1
         animateIn()
-        guard event.achievement.hidden else { return }
-        // Brief `???` beat, then reveal the real metal + name.
-        try? await Task.sleep(for: .seconds(reduceMotion ? 0.1 : 0.9))
-        guard center.head?.id == event.id else { return }  // user didn't tap past it
-        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8)) {
-            revealed = true
-        }
         AccessibilityNotification.Announcement("\(event.achievement.title) unlocked").post()
     }
 
@@ -204,31 +181,16 @@ struct TrophyUnlockView: View {
             appeared = true
         }
     }
-
-    private func bannerText(_ event: TrophyUnlockEvent) -> String {
-        switch event.kind {
-        case .badgeEarned: return "UNLOCKED"
-        case .tierUp:      return "NEW · \(event.newTier.label)"
-        }
-    }
-
-    private func accessibilityLabel(_ event: TrophyUnlockEvent, masked: Bool) -> String {
-        if masked { return "Secret trophy unlocked. \(event.achievement.teaser ?? "")" }
-        switch event.kind {
-        case .badgeEarned: return "\(event.achievement.title) unlocked. \(event.achievement.summary)"
-        case .tierUp:      return "Reached \(event.newTier.label), \(event.achievement.title). \(event.achievement.summary)"
-        }
-    }
 }
 
-#Preview("Tier up") {
+#Preview("Unlock") {
     let center = TrophyUnlockCenter()
-    center.debugEnqueueSample(hidden: false)
+    center.debugEnqueueSample(secret: false)
     return TrophyUnlockView(center: center)
 }
 
-#Preview("Hidden reveal") {
+#Preview("Secret unlock") {
     let center = TrophyUnlockCenter()
-    center.debugEnqueueSample(hidden: true)
+    center.debugEnqueueSample(secret: true)
     return TrophyUnlockView(center: center)
 }

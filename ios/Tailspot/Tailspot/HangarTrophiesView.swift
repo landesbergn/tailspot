@@ -2,278 +2,88 @@
 //  HangarTrophiesView.swift
 //  Tailspot
 //
-//  Trophies-view body for the Hangar sheet. Awards come in two clearly
-//  separated kinds (Spec § 7, clarified 2026-06-16):
+//  Trophies-view body for the Hangar sheet. Achievements are BINARY —
+//  earned or not, one flat pool (no medals/badges split, no metal tiers,
+//  no header). Redesigned 2026-06-20 (Noah) after the leveled-metal model
+//  conflated with the aircraft rarity/type pills:
 //
-//    • MEDALS  — leveled awards. Climb bronze → silver → gold → platinum
-//                by catching more (Catcher, Night Owl, …). The metal
-//                coloring IS the meaning: it's your current tier, and a
-//                progress bar shows the climb to the next one.
-//    • BADGES  — one-of-one feats. A single milestone you either have or
-//                you don't (First Rare, Legendary, Quintet, …). No tiers,
-//                no progress bar — just earned or locked. The absence of a
-//                bar is the signal that it isn't leveled.
+//    • Earned achievements lead, in a distinct CYAN hex (the brand accent,
+//      deliberately NOT the gold that read as "legendary" rarity).
+//    • Visible-locked achievements show their real name + a quiet "62 / 100"
+//      toward the single goal — it's still binary, just "how close".
+//    • SECRET achievements are absent from the list entirely until earned,
+//      then they appear (with a moment from TrophyUnlockView).
 //
-//  Layout matches the Sets and Recent feeds: a ScrollView + LazyVStack of
-//  rounded cards (NOT a List), so only on-screen badges render and the
-//  spacing is consistent. TrophyView caches each hex as a Metal texture
-//  (drawingGroup, no blur shadow) so scrolling/segment-paging stays smooth.
+//  Layout matches the Sets/Recent feeds: a ScrollView + LazyVStack of
+//  rounded cards. TrophyView caches each hex (drawingGroup) so paging stays
+//  smooth.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Pure resolver for what a trophy card displays. Hidden ("secret") awards
-/// render as a `???` mystery card with their teaser until earned, then show
-/// their real identity — keeping the masking logic unit-testable without
-/// SwiftUI, and the VoiceOver label honest ("Locked secret trophy" rather
-/// than three spoken question marks).
-nonisolated struct TrophyCardPresentation: Equatable {
-    let title: String
-    let subtitle: String
-    let accessibilityLabel: String
-    /// True when the card is showing the `???` mystery treatment.
-    let masked: Bool
-
-    init(_ achievement: Achievement, earned: Bool) {
-        if achievement.hidden && !earned {
-            title = "???"
-            subtitle = achievement.teaser ?? "A secret to uncover."
-            accessibilityLabel = "Locked secret trophy"
-            masked = true
-        } else {
-            title = achievement.title
-            subtitle = achievement.summary
-            accessibilityLabel = achievement.title
-            masked = false
-        }
+/// Which achievements the Trophies tab shows, and in what order. Pure so the
+/// "secret stays hidden until earned" + "earned first" rules are unit-testable
+/// without SwiftUI.
+nonisolated enum TrophyBoard {
+    static func visible(
+        roster: [Achievement] = Trophies.roster,
+        inputs: TrophyProgressInputs
+    ) -> [Achievement] {
+        // Secret achievements are hidden until earned; everything else always
+        // shows. `filter` preserves roster order, so partitioning earned-first
+        // keeps a stable order within each group.
+        let shown = roster.filter { !$0.secret || $0.isEarned(inputs: inputs) }
+        let earned = shown.filter { $0.isEarned(inputs: inputs) }
+        let locked = shown.filter { !$0.isEarned(inputs: inputs) }
+        return earned + locked
     }
 }
 
 struct HangarTrophiesView: View {
     @Query private var catches: [Catch]
 
+    /// The single accent for an earned achievement hex — cyan-family metal,
+    /// chosen to sit apart from the rarity/type palettes (grey/green/cyan/
+    /// purple/gold pills) by shape + a consistent cool tone, not gold.
+    private let earnedTier: TrophyTier = .platinum
+
     var body: some View {
-        // Compute the aggregate ONCE and split the roster by kind.
         let inputs = Trophies.inputs(from: catches)
-        let medals = Trophies.roster.filter(\.isLeveled).sorted {
-            let ca = medalCompletion($0, inputs: inputs), cb = medalCompletion($1, inputs: inputs)
-            return ca != cb ? ca > cb : $0.title < $1.title
-        }
-        let badges = Trophies.roster.filter(\.isOneShot).sorted {
-            let ea = !$0.isLocked(inputs: inputs), eb = !$1.isLocked(inputs: inputs)
-            return ea != eb ? ea : $0.title < $1.title
-        }
-        let medalsStarted = medals.filter { !$0.isLocked(inputs: inputs) }.count
-        let badgesEarned = badges.filter { !$0.isLocked(inputs: inputs) }.count
-
+        let items = TrophyBoard.visible(inputs: inputs)
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                headerCard(medalsStarted: medalsStarted, medalTotal: medals.count,
-                           badgesEarned: badgesEarned, badgeTotal: badges.count)
-                    .padding(.bottom, 2)
-
-                sectionHeader("MEDALS", subtitle: "Tiered — level up bronze → platinum",
-                              earned: medalsStarted, total: medals.count)
-                ForEach(medals) { medalCard($0, inputs: inputs) }
-
-                sectionHeader("BADGES", subtitle: "One-time feats — earned or not",
-                              earned: badgesEarned, total: badges.count)
-                ForEach(badges) { badgeCard($0, inputs: inputs) }
+            LazyVStack(alignment: .leading, spacing: 10) {
+                ForEach(items) { card($0, inputs: inputs) }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.top, 12)
             .padding(.bottom, 32)
         }
         .background(Brand.Color.bgPrimary)
     }
 
-    /// Overall completion of a leveled medal (progress toward its top tier),
-    /// used only for sort order so the closest-to-maxed medals bubble up.
-    private func medalCompletion(_ ach: Achievement, inputs: TrophyProgressInputs) -> Double {
-        guard let maxAt = ach.tiers.last?.at, maxAt > 0 else { return 0 }
-        return min(1, Double(ach.currentProgress(inputs: inputs)) / Double(maxAt))
-    }
-
-    // MARK: - Header
-
-    private func headerCard(medalsStarted: Int, medalTotal: Int, badgesEarned: Int, badgeTotal: Int) -> some View {
-        HStack(spacing: 0) {
-            statTile(value: medalsStarted, total: medalTotal, label: "MEDALS")
-            Rectangle()
-                .fill(Brand.Color.textPrimary.opacity(0.08))
-                .frame(width: 1, height: 44)
-            statTile(value: badgesEarned, total: badgeTotal, label: "BADGES")
-        }
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
-        )
-    }
-
-    private func statTile(value: Int, total: Int, label: String) -> some View {
-        VStack(spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("\(value)")
-                    .font(Brand.Font.mono(size: 28, weight: .heavy))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .monospacedDigit()
-                Text("/ \(total)")
-                    .font(Brand.Font.mono(size: 13, weight: .bold))
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .monospacedDigit()
-            }
-            Text(label)
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Brand.Color.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - Section header
-
-    private func sectionHeader(_ title: String, subtitle: String, earned: Int, total: Int) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(Brand.Font.mono(size: 11, weight: .bold))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                Text("\(earned) / \(total)")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textTertiary.opacity(0.7))
-                    .monospacedDigit()
-            }
-            Text(subtitle)
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
-        }
-        .padding(.leading, 4)
-        .padding(.top, 10)
-    }
-
-    // MARK: - Medal card (leveled)
-
-    private func medalCard(_ ach: Achievement, inputs: TrophyProgressInputs) -> some View {
-        let current = ach.currentTier(inputs: inputs)
-        let next = ach.nextTier(inputs: inputs)
-        let progress = ach.currentProgress(inputs: inputs)
-        let display = TrophyCardPresentation(ach, earned: current != nil)
-        return HStack(alignment: .center, spacing: 14) {
-            TrophyView(tier: current ?? .bronze, iconName: ach.iconName, size: 52, locked: current == nil)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(display.title)
-                    .font(Brand.Font.cardTitle)
-                    .foregroundStyle(Brand.Color.textPrimary)
-                Text(display.subtitle)
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .lineLimit(1)
-                // Suppress the goal footer on a masked medal — "→ SILVER 0/2"
-                // would spoil the secret.
-                if !display.masked {
-                    medalFooter(ach: ach, current: current, next: next, progress: progress)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(display.accessibilityLabel)
-    }
-
-    /// Always framed around the NEXT goal: "→ SILVER  17 / 30" with a cyan
-    /// bar filling the current tier segment; or "GOLD · MAX" at the top.
-    ///
-    /// The tier you've already earned is shown by the hex color — so the
-    /// footer never needs the word "LOCKED" (which read as a contradiction
-    /// next to a near-full "9 / 10"). The goal label + count are neutral so
-    /// the hex's metal is the card's only tier color; the bar is cyan, the
-    /// app's progress color.
     @ViewBuilder
-    private func medalFooter(ach: Achievement, current: TrophyTier?, next: AchievementTier?, progress: Int) -> some View {
-        if let next {
-            let prevAt = ach.tiers.last { progress >= $0.at }?.at ?? 0
-            let span = max(1, next.at - prevAt)
-            let fill = max(0, min(1, Double(progress - prevAt) / Double(span)))
-            HStack(spacing: 6) {
-                Text("→ \(next.tier.label)")
-                    .font(Brand.Font.mono(size: 9, weight: .bold))
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .tracking(0.8)
-                Text("\(progress) / \(next.at)")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .monospacedDigit()
-                Spacer(minLength: 6)
-                ProgressBar(fill: fill, tint: Brand.Color.cyan)
-                    .frame(width: 76, height: 4)
-            }
-            .padding(.top, 1)
-        } else if let current {
-            Text("\(current.label) · MAX")
-                .font(Brand.Font.mono(size: 10, weight: .bold))
-                .foregroundStyle(Color(hex: current.outerHex))
-                .tracking(0.8)
-                .padding(.top, 1)
-        }
-    }
-
-    // MARK: - Badge card (one of one)
-
-    private func badgeCard(_ ach: Achievement, inputs: TrophyProgressInputs) -> some View {
-        let earned = !ach.isLocked(inputs: inputs)
-        let display = TrophyCardPresentation(ach, earned: earned)
-        let tier = ach.tiers.first?.tier ?? .gold
-        let tint = Color(hex: tier.outerHex)
-        return HStack(alignment: .center, spacing: 14) {
-            TrophyView(tier: tier, iconName: ach.iconName, size: 52, locked: !earned)
+    private func card(_ ach: Achievement, inputs: TrophyProgressInputs) -> some View {
+        let earned = ach.isEarned(inputs: inputs)
+        let progress = ach.currentProgress(inputs: inputs)
+        HStack(alignment: .center, spacing: 14) {
+            TrophyView(tier: earnedTier, iconName: ach.iconName, size: 52, locked: !earned)
             VStack(alignment: .leading, spacing: 5) {
-                Text(display.title)
+                Text(ach.title)
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
-                Text(display.subtitle)
+                Text(ach.summary)
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
                     .lineLimit(1)
-                if earned {
-                    Label("EARNED", systemImage: "checkmark.seal.fill")
-                        .font(Brand.Font.mono(size: 10, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundStyle(tint)
-                        .padding(.top, 1)
-                } else if display.masked {
-                    // A secret the user hasn't earned: hint there's something
-                    // here, but don't say "locked" like a known award.
-                    Label("SECRET", systemImage: "questionmark.circle")
-                        .font(Brand.Font.mono(size: 10, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                        .padding(.top, 1)
-                } else {
-                    Label("LOCKED", systemImage: "lock.fill")
-                        .font(Brand.Font.mono(size: 10, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                        .padding(.top, 1)
-                }
+                footer(ach: ach, earned: earned, progress: progress)
             }
             Spacer(minLength: 0)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            (earned ? Brand.Color.bgElevated : Brand.Color.bgElevated.opacity(0.5)),
+            earned ? Brand.Color.bgElevated : Brand.Color.bgElevated.opacity(0.5),
             in: .rect(cornerRadius: 14)
         )
         .overlay(
@@ -281,7 +91,37 @@ struct HangarTrophiesView: View {
                 .strokeBorder(Brand.Color.textPrimary.opacity(earned ? 0.06 : 0.04), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(display.accessibilityLabel + (earned ? ", earned" : ", locked"))
+        .accessibilityLabel("\(ach.title), \(earned ? "earned" : "locked"). \(ach.summary)")
+    }
+
+    @ViewBuilder
+    private func footer(ach: Achievement, earned: Bool, progress: Int) -> some View {
+        if earned {
+            Label("EARNED", systemImage: "checkmark.seal.fill")
+                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(Brand.Color.cyan)
+                .padding(.top, 1)
+        } else if ach.threshold > 1 {
+            // Binary, but show how close you are to the single goal.
+            let frac = Double(min(progress, ach.threshold)) / Double(ach.threshold)
+            HStack(spacing: 6) {
+                Text("\(min(progress, ach.threshold)) / \(ach.threshold)")
+                    .font(Brand.Font.mono(size: 11, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .monospacedDigit()
+                Spacer(minLength: 6)
+                ProgressBar(fill: frac, tint: Brand.Color.cyan)
+                    .frame(width: 76, height: 4)
+            }
+            .padding(.top, 1)
+        } else {
+            Label("LOCKED", systemImage: "lock.fill")
+                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(Brand.Color.textTertiary)
+                .padding(.top, 1)
+        }
     }
 }
 
@@ -295,7 +135,7 @@ private struct ProgressBar: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Brand.Color.bgSurface)
                 Capsule().fill(tint)
-                    .frame(width: geo.size.width * CGFloat(fill))
+                    .frame(width: geo.size.width * CGFloat(max(0, min(1, fill))))
             }
         }
     }

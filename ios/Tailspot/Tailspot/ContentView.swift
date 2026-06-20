@@ -464,8 +464,8 @@ struct ContentView: View {
                         // haptic / a11y / hidden-reveal path can be eyeballed
                         // on-device without waiting for an organic crossing.
                         HStack(spacing: 8) {
-                            Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(hidden: false) }
-                            Button("⚑ Secret") { unlockCenter.debugEnqueueSample(hidden: true) }
+                            Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
+                            Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
                         }
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .buttonStyle(.bordered)

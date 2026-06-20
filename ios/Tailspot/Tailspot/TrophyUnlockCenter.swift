@@ -22,8 +22,7 @@ import Combine
 /// update, so existing testers learn the feature exists without a
 /// per-trophy celebration flood.
 nonisolated struct TrophyRecap: Equatable, Sendable {
-    let medals: Int
-    let badges: Int
+    let earned: Int
 }
 
 @MainActor
@@ -80,9 +79,7 @@ final class TrophyUnlockCenter: ObservableObject {
         guard !alreadyShown else { return }
         Analytics.capture("trophy_unlocked", [
             "achievement": .string(event.achievementID),
-            "tier": .string(event.newTier.label),
-            "kind": .string(event.kind == .badgeEarned ? "badge" : "tier_up"),
-            "hidden": .bool(event.achievement.hidden),
+            "secret": .bool(event.achievement.secret),
         ])
     }
 
@@ -103,8 +100,7 @@ final class TrophyUnlockCenter: ObservableObject {
     func dismissRecap() {
         if let recap = pendingRecap {
             Analytics.capture("trophy_recap_shown", [
-                "medals": .int(recap.medals),
-                "badges": .int(recap.badges),
+                "earned": .int(recap.earned),
             ])
         }
         ledger.markRecapShown()
@@ -113,14 +109,11 @@ final class TrophyUnlockCenter: ObservableObject {
 
     private func queueRecapIfNeeded(inputs: TrophyProgressInputs) {
         guard !ledger.recapShown else { return }
-        let earned = roster.filter { !$0.isLocked(inputs: inputs) }
+        let earnedCount = roster.filter { $0.isEarned(inputs: inputs) }.count
         // Nothing earned (fresh install) → no recap; mark shown so we don't
         // re-check on every launch.
-        guard !earned.isEmpty else { ledger.markRecapShown(); return }
-        pendingRecap = TrophyRecap(
-            medals: earned.filter(\.isLeveled).count,
-            badges: earned.filter(\.isOneShot).count
-        )
+        guard earnedCount > 0 else { ledger.markRecapShown(); return }
+        pendingRecap = TrophyRecap(earned: earnedCount)
     }
 
     #if DEBUG
@@ -128,8 +121,8 @@ final class TrophyUnlockCenter: ObservableObject {
     /// haptic + a11y + hidden reveal) can be exercised on-device without
     /// waiting for an organic crossing — several new trophies are hard to
     /// trigger solo. Wired into the debug overlay.
-    func debugEnqueueSample(hidden: Bool) {
-        let id = hidden ? "redeye" : "catcher"
+    func debugEnqueueSample(secret: Bool) {
+        let id = secret ? "redeye" : "catcher"
         guard let ach = roster.first(where: { $0.id == id }) ?? roster.first else { return }
         let tier = ach.tiers.first?.tier ?? .bronze
         let event = TrophyUnlockEvent(

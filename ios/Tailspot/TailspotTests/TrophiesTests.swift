@@ -122,92 +122,27 @@ struct TrophiesTests {
 
     // MARK: - Per-achievement evaluation
 
-    @Test func catcherLockedWithZeroCatches() {
-        guard let catcher = Trophies.roster.first(where: { $0.id == "catcher" }) else {
-            Issue.record("catcher not in roster")
-            return
-        }
-        let inputs = TrophyProgressInputs.zero
-        #expect(catcher.isLocked(inputs: inputs))
-        #expect(catcher.currentTier(inputs: inputs) == nil)
-        #expect(catcher.nextTier(inputs: inputs)?.at == 10)
+    @Test func catcherEarnsAtTwentyFive() {
+        let catcher = Trophies.roster.first { $0.id == "catcher" }!
+        let twentyFour = Trophies.inputs(from: (0..<24).map { _ in mk(model: "737-800", manufacturer: "BOEING") })
+        #expect(catcher.isEarned(inputs: twentyFour) == false)
+        let twentyFive = Trophies.inputs(from: (0..<25).map { _ in mk(model: "737-800", manufacturer: "BOEING") })
+        #expect(catcher.isEarned(inputs: twentyFive))
+        #expect(catcher.threshold == 25)
     }
 
-    @Test func catcherClimbsBronzeAtTen() {
-        guard let catcher = Trophies.roster.first(where: { $0.id == "catcher" }) else {
-            Issue.record("catcher not in roster"); return
-        }
-        // Build 10 cheap catches; the classifier will resolve them
-        // as common-narrow but that's fine for catcher (counts all).
-        let catches = (0..<10).map { _ in mk(model: "737-800", manufacturer: "BOEING") }
-        let inputs = Trophies.inputs(from: catches)
-        #expect(catcher.currentTier(inputs: inputs) == .bronze)
-        #expect(catcher.nextTier(inputs: inputs)?.tier == .silver)
-        #expect(catcher.nextTier(inputs: inputs)?.at == 50)
+    @Test func legendaryEarnsAtOneLegendaryCatch() {
+        let legendary = Trophies.roster.first { $0.id == "legendary" }!
+        #expect(legendary.isEarned(inputs: .zero) == false)
+        let one = Trophies.inputs(from: [mk(model: "VC-25", manufacturer: "BOEING", operatorName: "USAF")])
+        #expect(legendary.isEarned(inputs: one))
     }
 
-    @Test func catcherMaxPlatinumAtThousand() {
-        guard let catcher = Trophies.roster.first(where: { $0.id == "catcher" }) else {
-            Issue.record("catcher not in roster"); return
+    @Test func everyAchievementIsBinarySingleTier() {
+        // Binary model: each achievement has exactly one threshold (no ramp).
+        for ach in Trophies.roster {
+            #expect(ach.tiers.count == 1, "\(ach.id) should be single-tier (binary)")
         }
-        let inputs = TrophyProgressInputs(
-            totalCatches: 1500, uniqueAirframes: 0,
-            wideBodyCatches: 0, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(catcher.currentTier(inputs: inputs) == .platinum)
-        #expect(catcher.nextTier(inputs: inputs) == nil)
-    }
-
-    @Test func legendaryUnlocksAtOneLegendaryCatch() {
-        guard let legendary = Trophies.roster.first(where: { $0.id == "legendary" }) else {
-            Issue.record("legendary not in roster"); return
-        }
-        let none = TrophyProgressInputs.zero
-        #expect(legendary.isLocked(inputs: none))
-
-        let one = TrophyProgressInputs(
-            totalCatches: 1, uniqueAirframes: 1,
-            wideBodyCatches: 0, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 1,
-            rarePlusUnique: 1, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(legendary.currentTier(inputs: one) == .platinum)
-        #expect(legendary.nextTier(inputs: one) == nil)
-    }
-
-    @Test func wideAwakeStaggersBronzeSilverGold() {
-        guard let heavy = Trophies.roster.first(where: { $0.id == "heavy" }) else {
-            Issue.record("heavy not in roster"); return
-        }
-        let inputs5 = TrophyProgressInputs(
-            totalCatches: 5, uniqueAirframes: 5,
-            wideBodyCatches: 5, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(heavy.currentTier(inputs: inputs5) == .bronze)
-        let inputs20 = TrophyProgressInputs(
-            totalCatches: 20, uniqueAirframes: 20,
-            wideBodyCatches: 20, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(heavy.currentTier(inputs: inputs20) == .silver)
-        let inputs50 = TrophyProgressInputs(
-            totalCatches: 50, uniqueAirframes: 50,
-            wideBodyCatches: 50, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(heavy.currentTier(inputs: inputs50) == .gold)
-        #expect(heavy.nextTier(inputs: inputs50) == nil)
     }
 
     @Test func rosterIsNotEmptyAndHasUniqueIDs() {
@@ -431,84 +366,90 @@ struct TrophiesHiddenAndMetricsTests {
 
     // MARK: - New trophies
 
-    @Test func mrWorldwideHiddenLockedAtOneCountryEarnedAtTwo() {
+    @Test func mrWorldwideSecretEarnsAtTwoCountries() {
         let trophy = ach("mrworldwide")
-        #expect(trophy.hidden)
-        #expect(trophy.isLocked(inputs: Trophies.inputs(from: [mk(country: "US")])))
-        #expect(trophy.isLocked(inputs: Trophies.inputs(from: [mk(country: "US"), mk(country: "CA")])) == false)
+        #expect(trophy.secret)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: [mk(country: "US")])) == false)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: [mk(country: "US"), mk(country: "CA")])))
     }
 
-    @Test func streakBadgeEarnsAtSevenLockedAtSix() {
+    @Test func streakSecretEarnsAtSevenLockedAtSix() {
         let trophy = ach("streak")
-        #expect(trophy.hidden)
-        #expect(trophy.isOneShot)  // a badge, not a leveled medal
+        #expect(trophy.secret)
         let six = Trophies.inputs(from: (0..<6).map { mk(at: date(dayOffset: $0)) })
         let seven = Trophies.inputs(from: (0..<7).map { mk(at: date(dayOffset: $0)) })
-        #expect(trophy.isLocked(inputs: six))
-        #expect(trophy.isLocked(inputs: seven) == false)
+        #expect(trophy.isEarned(inputs: six) == false)
+        #expect(trophy.isEarned(inputs: seven))
     }
 
-    @Test func longLensClimbsWithFarCatches() {
+    @Test func longLensSecretEarnsAtFiveFarCatches() {
         let trophy = ach("longshot")
-        let fiveFar = Trophies.inputs(from: (0..<5).map { _ in mk(slantKm: 26) })
-        #expect(trophy.currentTier(inputs: fiveFar) == .silver)   // bronze@1, silver@5
-        let fifteenFar = Trophies.inputs(from: (0..<15).map { _ in mk(slantKm: 30) })
-        #expect(trophy.currentTier(inputs: fifteenFar) == .gold)
+        #expect(trophy.secret)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<4).map { _ in mk(slantKm: 26) })) == false)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<5).map { _ in mk(slantKm: 26) })))
     }
 
-    @Test func constellationAndQuintetAreHiddenAndDormant() {
+    @Test func constellationAndQuintetAreSecretAndDormant() {
         for id in ["multi", "quintet"] {
             let trophy = ach(id)
-            #expect(trophy.hidden)
+            #expect(trophy.secret)
             // bestMultiCatchCount is hardcoded 0 → still locked under any catches.
-            #expect(trophy.isLocked(inputs: Trophies.inputs(from: (0..<10).map { _ in mk() })))
+            #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<10).map { _ in mk() })) == false)
         }
     }
 
-    @Test func allFiveNewBadgesAreHiddenWithTeasers() {
-        let newBadges = ["mrworldwide", "hattrick", "redeye", "repeat", "streak"]
-        for id in newBadges {
+    @Test func allSecretAchievementsAreFlaggedSecretAndBinary() {
+        let secrets = ["mrworldwide", "hattrick", "redeye", "repeat", "streak", "longshot", "multi", "quintet"]
+        for id in secrets {
             let trophy = ach(id)
-            #expect(trophy.hidden, "\(id) should be hidden")
-            #expect(trophy.teaser?.isEmpty == false, "\(id) should carry a teaser")
-            #expect(trophy.isOneShot, "\(id) should be a one-shot badge")
+            #expect(trophy.secret, "\(id) should be secret")
+            #expect(trophy.tiers.count == 1, "\(id) should be a single binary threshold")
+        }
+        // And the visible ones are NOT secret.
+        for id in ["catcher", "centurion", "heavy", "legendary"] {
+            #expect(ach(id).secret == false, "\(id) should be visible")
         }
     }
 }
 
-@Suite("TrophyCardPresentation")
+@Suite("TrophyBoard")
 @MainActor
-struct TrophyCardPresentationTests {
+struct TrophyBoardTests {
 
-    private func ach(hidden: Bool, teaser: String?) -> Achievement {
-        Achievement(
-            id: "x", title: "Real Title", summary: "Real summary", iconName: "crown",
-            tiers: [.init(tier: .gold, at: 1)],
-            hidden: hidden, teaser: teaser,
-            progress: { _ in 0 }
+    private func ach(_ id: String, secret: Bool, at: Int) -> Achievement {
+        Achievement(id: id, title: id, summary: "", iconName: "crown",
+                    tiers: [.init(tier: .gold, at: at)], secret: secret,
+                    progress: { $0.totalCatches })
+    }
+
+    private func inputs(total: Int) -> TrophyProgressInputs {
+        TrophyProgressInputs(
+            totalCatches: total, uniqueAirframes: 0,
+            wideBodyCatches: 0, regionalCatches: 0, heritageCatches: 0,
+            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
+            rarePlusUnique: 0, longestSlantKm: 0,
+            bestMultiCatchCount: 0, nightCatches: 0
         )
     }
 
-    @Test func hiddenLockedShowsMystery() {
-        let p = TrophyCardPresentation(ach(hidden: true, teaser: "A teaser"), earned: false)
-        #expect(p.title == "???")
-        #expect(p.subtitle == "A teaser")
-        #expect(p.accessibilityLabel == "Locked secret trophy")
-        #expect(p.masked)
+    @Test func secretLockedHiddenVisibleLockedShownEarnedFirst() {
+        let roster = [
+            ach("v1", secret: false, at: 1),   // earned at total>=1
+            ach("v2", secret: false, at: 10),  // visible, locked
+            ach("s1", secret: true,  at: 1),   // secret, earned
+            ach("s2", secret: true,  at: 10),  // secret, locked → hidden
+        ]
+        let shown = TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id)
+        // s2 (secret + locked) is absent; v2 (visible + locked) is present.
+        #expect(shown.contains("s2") == false)
+        #expect(shown.contains("v2"))
+        // Earned (v1, s1) come before the locked v2.
+        #expect(shown == ["v1", "s1", "v2"])
     }
 
-    @Test func hiddenEarnedShowsRealIdentity() {
-        let p = TrophyCardPresentation(ach(hidden: true, teaser: "A teaser"), earned: true)
-        #expect(p.title == "Real Title")
-        #expect(p.subtitle == "Real summary")
-        #expect(p.masked == false)
-    }
-
-    @Test func nonHiddenLockedShowsRealIdentity() {
-        // A normal locked award keeps its real name + criteria — no masking.
-        let p = TrophyCardPresentation(ach(hidden: false, teaser: nil), earned: false)
-        #expect(p.title == "Real Title")
-        #expect(p.subtitle == "Real summary")
-        #expect(p.masked == false)
+    @Test func earnedSecretAppears() {
+        let roster = [ach("s1", secret: true, at: 1)]
+        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 0)).isEmpty)      // locked → hidden
+        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id) == ["s1"])  // earned → shown
     }
 }

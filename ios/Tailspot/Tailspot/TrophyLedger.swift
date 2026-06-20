@@ -25,10 +25,12 @@ import Foundation
 nonisolated struct UserDefaultsTrophyLedger {
     private let defaults: UserDefaults
 
-    /// Namespaced + versioned so a future schema change is a clean re-key.
-    private let mapKey = "trophy.ledger.acknowledged.v1"
-    private let seededKey = "trophy.ledger.seeded.v1"
-    private let recapKey = "trophy.ledger.recapShown.v1"
+    /// Namespaced + versioned. Bumped to v2 with the binary-roster redesign
+    /// (new achievement ids) — a clean reset so the new roster re-seeds
+    /// silently on next launch instead of flooding on the new ids.
+    private let mapKey = "trophy.ledger.acknowledged.v2"
+    private let seededKey = "trophy.ledger.seeded.v2"
+    private let recapKey = "trophy.ledger.recapShown.v2"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

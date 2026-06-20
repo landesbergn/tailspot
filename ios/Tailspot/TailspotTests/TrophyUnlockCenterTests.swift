@@ -127,8 +127,7 @@ struct TrophyUnlockCenterTests {
         // seeds AND queues exactly one recap.
         center.enqueueNewUnlocks(from: catches(2))
         #expect(center.pendingRecap != nil)
-        #expect(center.pendingRecap?.medals == 1)
-        #expect(center.pendingRecap?.badges == 0)
+        #expect(center.pendingRecap?.earned == 1)   // medal "m" earned at 2 catches
 
         center.dismissRecap()
         #expect(center.pendingRecap == nil)
