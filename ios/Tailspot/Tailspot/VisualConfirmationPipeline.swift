@@ -80,7 +80,11 @@ final class VisualConfirmationPipeline: ObservableObject {
     private let busy = OSAllocatedUnfairLock<Bool>(initialState: false)
 
     private var tracker = VisualFixTracker(gateRadius: 150)
-    private let frameSaver = CropFrameSaver()
+    // `nonisolated`: CropFrameSaver is itself a nonisolated class (it uses
+    // nonisolated(unsafe) state by design) and is called synchronously from the
+    // background detection queue. Without this the property inherits the class's
+    // @MainActor isolation and can't be touched from that Sendable closure.
+    nonisolated private let frameSaver = CropFrameSaver()
 
     init(detector: AirplaneDetector? = AirplaneDetector()) {
         self.detector = detector
@@ -125,12 +129,16 @@ final class VisualConfirmationPipeline: ObservableObject {
         guard !wasBusy else { return }
 
         let recording = recordingSnapshot.withLock { $0 }
+        // CVPixelBuffer isn't Sendable, but a CoreVideo buffer is safe to hand
+        // to a single serial queue. `nonisolated(unsafe)` opts this one capture
+        // out of the Swift 6 data-race check for the @Sendable closure below.
+        nonisolated(unsafe) let frame = pixelBuffer
         detectionQueue.async { [weak self] in
             defer { self?.busy.withLock { $0 = false } }
             guard let self else { return }
 
-            let bufferSize = CGSize(width: CVPixelBufferGetWidth(pixelBuffer),
-                                    height: CVPixelBufferGetHeight(pixelBuffer))
+            let bufferSize = CGSize(width: CVPixelBufferGetWidth(frame),
+                                    height: CVPixelBufferGetHeight(frame))
             let transform = AspectFillTransform(screenSize: target.screenSize,
                                                 photoSize: bufferSize)
             let predictedBuffer = transform.photoPoint(fromScreenPoint: target.predictedScreen)
@@ -138,7 +146,7 @@ final class VisualConfirmationPipeline: ObservableObject {
                                                  side: Self.cropSidePixels,
                                                  in: bufferSize)
 
-            let detections = detector.detect(in: pixelBuffer, cropRect: crop)
+            let detections = detector.detect(in: frame, cropRect: crop)
 
             // Buffer-space → screen-space for the tracker/overlay.
             let screenDetections = detections.map {
@@ -156,7 +164,7 @@ final class VisualConfirmationPipeline: ObservableObject {
             let gate = Self.cropSidePixels / 2 * transform.scale
 
             if recording {
-                self.frameSaver.saveIfDue(pixelBuffer: pixelBuffer, crop: crop,
+                self.frameSaver.saveIfDue(pixelBuffer: frame, crop: crop,
                                           target: target, detections: detections)
             }
 

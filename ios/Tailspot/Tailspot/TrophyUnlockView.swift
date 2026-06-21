@@ -236,14 +236,22 @@ private struct RayBurst: Shape {
     }
 }
 
+// `#Preview`'s trailing closure is a `@ViewBuilder`, so it can't hold an
+// explicit `return` or an intermediate `Void`-returning setup call. Build the
+// configured center in an immediately-invoked closure on the argument instead,
+// keeping the builder body a single view expression.
 #Preview("Unlock") {
-    let center = TrophyUnlockCenter()
-    center.debugEnqueueSample(secret: false)
-    return TrophyUnlockView(center: center)
+    TrophyUnlockView(center: {
+        let center = TrophyUnlockCenter()
+        center.debugEnqueueSample(secret: false)
+        return center
+    }())
 }
 
 #Preview("Secret unlock") {
-    let center = TrophyUnlockCenter()
-    center.debugEnqueueSample(secret: true)
-    return TrophyUnlockView(center: center)
+    TrophyUnlockView(center: {
+        let center = TrophyUnlockCenter()
+        center.debugEnqueueSample(secret: true)
+        return center
+    }())
 }
