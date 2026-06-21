@@ -16,8 +16,9 @@
 //  Device token is stored in the system Keychain (kSecClassGenericPassword,
 //  service "com.landesberg.tailspot", account "deviceToken") via the
 //  KeychainStore helper below. Device ID (a UUID string, not a secret) is
-//  stored in UserDefaults. The token is never written to UserDefaults — it
-//  is a credential and must not be plist-exportable.
+//  stored via DeviceID — Keychain source of truth (account "deviceId") with a
+//  UserDefaults mirror — so it survives reinstall. The token is never written
+//  to UserDefaults; it is a credential and must not be plist-exportable.
 //
 
 import Foundation
@@ -61,6 +62,14 @@ nonisolated enum KeychainStore {
 
     /// Read the secret for `account`. Returns nil if not found or on error.
     static func load(account: String) -> String? {
+        loadWithStatus(account: account).value
+    }
+
+    /// Like `load`, but also returns the raw `OSStatus` so callers can tell a
+    /// genuine not-found (`errSecItemNotFound`) from a locked/unavailable read
+    /// (e.g. `errSecInteractionNotAllowed` before first unlock). `DeviceID`
+    /// needs this distinction so a locked read never triggers id regeneration.
+    static func loadWithStatus(account: String) -> (value: String?, status: OSStatus) {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -73,9 +82,9 @@ nonisolated enum KeychainStore {
         guard status == errSecSuccess,
               let data = result as? Data,
               let string = String(data: data, encoding: .utf8) else {
-            return nil
+            return (nil, status)
         }
-        return string
+        return (string, status)
     }
 
     /// Delete the stored secret for `account`. Safe to call when absent.
@@ -226,8 +235,6 @@ nonisolated enum AccountError: Error, LocalizedError {
 // MainActor default isolation makes top-level lets implicitly main-actor-
 // bound, and the nonisolated TailspotAccountClient below references them —
 // an error under Swift 6 language mode (caught in Noah's IDE build).
-/// UserDefaults key for the device ID (non-secret, public-facing identifier).
-nonisolated private let deviceIdDefaultsKey = "tailspot.account.deviceId"
 /// Keychain account name for the device bearer token.
 nonisolated private let deviceTokenKeychainAccount = "deviceToken"
 
@@ -251,9 +258,12 @@ nonisolated struct TailspotAccountClient {
         KeychainStore.load(account: deviceTokenKeychainAccount)
     }
 
-    /// The device ID stored in UserDefaults, or nil if not yet registered.
+    /// The persisted device ID (Keychain-backed via `DeviceID`, with a
+    /// UserDefaults mirror), or nil if none is established yet. Read-only — it
+    /// does not generate one, so the registration short-circuit reflects true
+    /// presence.
     var storedDeviceId: String? {
-        UserDefaults.standard.string(forKey: deviceIdDefaultsKey)
+        DeviceID.currentIfPresent()
     }
 
     // MARK: - ensureRegistered
@@ -289,9 +299,11 @@ nonisolated struct TailspotAccountClient {
             throw AccountError.decoding(error)
         }
 
-        // Persist: token → Keychain (secret), id → UserDefaults (non-secret).
+        // Persist: token → Keychain (secret); id → DeviceID (Keychain source of
+        // truth + UserDefaults mirror) so it survives reinstall and stays equal
+        // to the analytics distinct_id.
         KeychainStore.save(secret: response.deviceToken, account: deviceTokenKeychainAccount)
-        UserDefaults.standard.set(response.deviceId, forKey: deviceIdDefaultsKey)
+        DeviceID.set(response.deviceId)
 
         return response.deviceId
     }
