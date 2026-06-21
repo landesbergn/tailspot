@@ -1275,7 +1275,7 @@ struct ContentView: View {
     ///
     /// `rawCount` is the count of bbox-level aircraft (pre-visibility
     /// filter). When > 0 we can tell the user "no aircraft in view ·
-    /// N in range" so they understand traffic IS there, just below
+    /// N nearby" so they understand traffic IS there, just below
     /// the horizon or past 30 km.
     private func emptySkyOverlay(rawCount: Int) -> some View {
         let lastErr = adsb.lastError
@@ -1285,9 +1285,9 @@ struct ContentView: View {
             if let lastErr { return lastErr.uppercased() }
             if neverFetched { return "SCANNING SKY…" }
             if rawCount > 0 {
-                return "NO AIRCRAFT IN VIEW · \(rawCount) IN RANGE"
+                return "NO AIRCRAFT IN VIEW · \(rawCount) NEARBY"
             }
-            return "NO AIRCRAFT IN RANGE"
+            return "NO AIRCRAFT NEARBY"
         }()
         // Hard errors (auth, transport) → amber caution. Transient
         // errors (auto-recovering rate-limit backoff) and the neutral
@@ -1559,7 +1559,7 @@ struct ContentView: View {
     private var emptyListMessage: String {
         if let err = adsb.lastError { return err }
         if adsb.lastFetched == nil  { return "Waiting for first fetch…" }
-        return "No aircraft in range."
+        return "No aircraft nearby."
     }
 
     private func formatADSBStatus() -> String {
