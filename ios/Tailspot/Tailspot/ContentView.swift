@@ -1275,7 +1275,7 @@ struct ContentView: View {
     ///
     /// `rawCount` is the count of bbox-level aircraft (pre-visibility
     /// filter). When > 0 we can tell the user "no aircraft in view ·
-    /// N in range" so they understand traffic IS there, just below
+    /// N nearby" so they understand traffic IS there, just below
     /// the horizon or past 30 km.
     private func emptySkyOverlay(rawCount: Int) -> some View {
         let lastErr = adsb.lastError
@@ -1285,9 +1285,9 @@ struct ContentView: View {
             if let lastErr { return lastErr.uppercased() }
             if neverFetched { return "SCANNING SKY…" }
             if rawCount > 0 {
-                return "NO AIRCRAFT IN VIEW · \(rawCount) IN RANGE"
+                return "NO AIRCRAFT IN VIEW · \(rawCount) NEARBY"
             }
-            return "NO AIRCRAFT IN RANGE"
+            return "NO AIRCRAFT NEARBY"
         }()
         // Hard errors (auth, transport) → amber caution. Transient
         // errors (auto-recovering rate-limit backoff) and the neutral
@@ -1303,6 +1303,15 @@ struct ContentView: View {
                 // is in view (the per-plane brackets in `PlaneLabel`).
                 // Only the low status pill remains so the user still
                 // knows whether we're scanning / out of range / errored.
+                //
+                // `maxWidth: .infinity` is load-bearing: it makes this
+                // VStack fill the GeometryReader's width so the pill
+                // centers horizontally. (GeometryReader pins content to
+                // .topLeading, so without it the pill jams against the
+                // left edge.) The pill used to rely on a sibling
+                // `emptyReticle.position(...)` to stretch the ZStack —
+                // removing that reticle (#62) silently un-centered the
+                // pill. Declaring our own width stops that recurring.
                 VStack {
                     Spacer()
                     HStack(spacing: 8) {
@@ -1320,6 +1329,7 @@ struct ContentView: View {
                     .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
                     .padding(.bottom, geo.size.height * 0.18)
                 }
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -1549,7 +1559,7 @@ struct ContentView: View {
     private var emptyListMessage: String {
         if let err = adsb.lastError { return err }
         if adsb.lastFetched == nil  { return "Waiting for first fetch…" }
-        return "No aircraft in range."
+        return "No aircraft nearby."
     }
 
     private func formatADSBStatus() -> String {
