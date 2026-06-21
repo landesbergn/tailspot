@@ -170,6 +170,13 @@ nonisolated struct TrophyProgressInputs: Sendable {
     let fastestVelocityMps: Double  // max recorded catch ground speed (m/s)
     let bestCatchesInOneDay: Int    // most catches in any single day
     let dayPartsCovered: Int        // distinct of {night, morning, afternoon, evening}
+    // Metrics added with the 2026-06-21 second trophy batch.
+    let lowestAltitudeM: Double     // min recorded catch altitude (m); .greatestFiniteMagnitude if none
+    let maxCatchesAtOnePlace: Int   // most catches at any single place
+    let distinctTypes: Int          // distinct resolved aircraft types
+    let weekendDaysHit: Int         // distinct weekend days caught on (0–2)
+    let hadDawnCatch: Bool          // a catch in the 4–7 AM window
+    let hadConsecutiveSameOperator: Bool  // two time-adjacent catches, same airline
 
     init(
         totalCatches: Int,
@@ -199,7 +206,13 @@ nonisolated struct TrophyProgressInputs: Sendable {
         highestAltitudeM: Double = 0,
         fastestVelocityMps: Double = 0,
         bestCatchesInOneDay: Int = 0,
-        dayPartsCovered: Int = 0
+        dayPartsCovered: Int = 0,
+        lowestAltitudeM: Double = .greatestFiniteMagnitude,
+        maxCatchesAtOnePlace: Int = 0,
+        distinctTypes: Int = 0,
+        weekendDaysHit: Int = 0,
+        hadDawnCatch: Bool = false,
+        hadConsecutiveSameOperator: Bool = false
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -229,6 +242,12 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.fastestVelocityMps = fastestVelocityMps
         self.bestCatchesInOneDay = bestCatchesInOneDay
         self.dayPartsCovered = dayPartsCovered
+        self.lowestAltitudeM = lowestAltitudeM
+        self.maxCatchesAtOnePlace = maxCatchesAtOnePlace
+        self.distinctTypes = distinctTypes
+        self.weekendDaysHit = weekendDaysHit
+        self.hadDawnCatch = hadDawnCatch
+        self.hadConsecutiveSameOperator = hadConsecutiveSameOperator
     }
 
     static let zero = TrophyProgressInputs(
@@ -380,6 +399,17 @@ nonisolated enum Trophies {
                     iconName: "prop", tiers: [.init(tier: .gold, at: 1)],
                     progress: { $0.caughtTags.contains("turboprop") ? 1 : 0 }),
 
+        // ── Collection / habit (visible) ──
+        Achievement(id: "varietypack", title: "Variety Pack", summary: "Catch 5 different aircraft types",
+                    iconName: "grid", tiers: [.init(tier: .gold, at: 5)],
+                    progress: { $0.distinctTypes }),
+        Achievement(id: "fulldeck", title: "Full Deck", summary: "Catch all 7 aircraft types",
+                    iconName: "grid", tiers: [.init(tier: .gold, at: 7)],
+                    prerequisite: "varietypack", progress: { $0.distinctTypes }),
+        Achievement(id: "homebody", title: "Homebody", summary: "10 catches from one spot",
+                    iconName: "home", tiers: [.init(tier: .gold, at: 10)],
+                    progress: { $0.maxCatchesAtOnePlace }),
+
         // ── Secret — absent from the list until earned, then they appear. ──
         Achievement(id: "mrworldwide", title: "Mr. Worldwide", summary: "Caught planes in 2+ countries",
                     iconName: "worldwide", tiers: [.init(tier: .gold, at: 1)], secret: true,
@@ -423,6 +453,18 @@ nonisolated enum Trophies {
         Achievement(id: "aroundclock", title: "Around the Clock", summary: "Catch in all four parts of the day",
                     iconName: "clock", tiers: [.init(tier: .gold, at: 4)], secret: true,
                     progress: { $0.dayPartsCovered }),
+        Achievement(id: "ondeck", title: "On the Deck", summary: "Catch one below 3,000 ft",
+                    iconName: "approach", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.lowestAltitudeM <= 1000 ? 1 : 0 }),
+        Achievement(id: "weekend", title: "Weekend Warrior", summary: "Catch on a Saturday and a Sunday",
+                    iconName: "weekend", tiers: [.init(tier: .gold, at: 2)], secret: true,
+                    progress: { $0.weekendDaysHit }),
+        Achievement(id: "dawn", title: "Dawn Patrol", summary: "A catch between 4 and 7 AM",
+                    iconName: "sunrise", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.hadDawnCatch ? 1 : 0 }),
+        Achievement(id: "doubleheader", title: "Doubleheader", summary: "Two of the same airline in a row",
+                    iconName: "twin", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.hadConsecutiveSameOperator ? 1 : 0 }),
     ]
 
     // MARK: - Evaluation
@@ -441,8 +483,14 @@ nonisolated enum Trophies {
         var night = 0, far = 0, redEye = 0
         var tags = Set<String>()
         var highestAlt: Double = 0, fastestVel: Double = 0
+        var lowestAlt = Double.greatestFiniteMagnitude
         var dayCounts: [Date: Int] = [:]   // catches per day → best-in-day
         var dayParts = Set<String>()       // distinct {night, morning, afternoon, evening}
+        var placeCounts: [String: Int] = [:]  // catches per place → best-at-one-place
+        var types = Set<String>()          // distinct resolved aircraft types
+        var weekendDays = Set<Int>()       // distinct weekend weekdays caught on
+        var hadDawn = false
+        var opTimeline: [(Date, String)] = []  // (time, operator) → consecutive check
         // Per-airframe day set (repeat-customer) and all catch timestamps
         // (burst) — derived after the loop.
         var icaoDays: [String: Set<Date>] = [:]
@@ -468,9 +516,11 @@ nonisolated enum Trophies {
             }
             if let op = c.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines), !op.isEmpty {
                 operators.insert(op)
+                opTimeline.append((c.caughtAt, op.lowercased()))
             }
             if let place = c.placeName?.trimmingCharacters(in: .whitespacesAndNewlines), !place.isEmpty {
                 places.insert(place)
+                placeCounts[place, default: 0] += 1
             }
             if let country = c.country?.trimmingCharacters(in: .whitespacesAndNewlines), !country.isEmpty {
                 countries.insert(country)
@@ -487,10 +537,17 @@ nonisolated enum Trophies {
             if hour >= 20 || hour < 6 { night += 1 }
             if hour >= 2 && hour < 5 { redEye += 1 }
             dayParts.insert(dayPart(forHour: hour))
+            if hour >= 4 && hour < 7 { hadDawn = true }
             tags.formUnion(aircraftTags(model: c.model, manufacturer: c.manufacturer,
                                         typecode: c.typecode, operatorName: c.operatorName, type: t))
-            if let alt = c.altitudeMeters, alt > highestAlt { highestAlt = alt }
+            types.insert(t.rawValue)
+            if let alt = c.altitudeMeters {
+                if alt > highestAlt { highestAlt = alt }
+                if alt > 0 && alt < lowestAlt { lowestAlt = alt }  // skip ground/bad zeros
+            }
             if let vel = c.velocityMps, vel > fastestVel { fastestVel = vel }
+            let weekday = calendar.component(.weekday, from: c.caughtAt)
+            if weekday == 1 || weekday == 7 { weekendDays.insert(weekday) }
         }
 
         // Repeat customer: any airframe caught on two or more distinct days.
@@ -499,6 +556,8 @@ nonisolated enum Trophies {
         let bestBurst = maxCountWithinWindow(timestamps, seconds: 600)
         // Streak: longest run of consecutive calendar days with a catch.
         let longestStreak = longestConsecutiveDayRun(days, calendar: calendar)
+        // Doubleheader: two time-adjacent catches share an operator.
+        let consecutiveOp = hasConsecutiveSameOperator(opTimeline)
 
         // Fully-collected make/model families — drives the Set Master trophy.
         let completedSets = CardSets.families.reduce(into: 0) { acc, set in
@@ -534,8 +593,24 @@ nonisolated enum Trophies {
             highestAltitudeM: highestAlt,
             fastestVelocityMps: fastestVel,
             bestCatchesInOneDay: dayCounts.values.max() ?? 0,
-            dayPartsCovered: dayParts.count
+            dayPartsCovered: dayParts.count,
+            lowestAltitudeM: lowestAlt,
+            maxCatchesAtOnePlace: placeCounts.values.max() ?? 0,
+            distinctTypes: types.count,
+            weekendDaysHit: weekendDays.count,
+            hadDawnCatch: hadDawn,
+            hadConsecutiveSameOperator: consecutiveOp
         )
+    }
+
+    /// True if any two time-adjacent catches share the same operator
+    /// (Doubleheader). Sorts the (time, operator) timeline and scans neighbors.
+    static func hasConsecutiveSameOperator(_ timeline: [(Date, String)]) -> Bool {
+        let sorted = timeline.sorted { $0.0 < $1.0 }
+        for i in 1..<max(1, sorted.count) where i < sorted.count {
+            if sorted[i].1 == sorted[i - 1].1 { return true }
+        }
+        return false
     }
 
     /// Which part of the day an hour falls in (for the Around the Clock trophy).

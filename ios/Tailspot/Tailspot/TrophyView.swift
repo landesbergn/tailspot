@@ -183,6 +183,12 @@ struct TrophyIcon: View {
             case "speed":         SpeedIcon().style(color, lineWidth: 2 * scale)
             case "stack":         StackIcon().style(color, filled: true)
             case "clock":         ClockIcon().style(color, lineWidth: 1.9 * scale)
+            case "approach":      ApproachIcon().style(color, lineWidth: 2 * scale)
+            case "grid":          GridIcon().style(color, filled: true)
+            case "home":          HomeIcon().style(color, lineWidth: 1.9 * scale)
+            case "weekend":       SunIcon().style(color, lineWidth: 1.9 * scale)
+            case "sunrise":       SunriseIcon().style(color, lineWidth: 1.9 * scale)
+            case "twin":          TwinIcon().style(color, lineWidth: 1.8 * scale)
             default:              CatcherIcon().style(color, lineWidth: 2 * scale, dashed: true)
             }
         }
@@ -706,6 +712,89 @@ private struct ClockIcon: Shape {
     }
 }
 
+/// On the Deck — a double down-chevron (low, descending).
+private struct ApproachIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(8, 8));  p.addLine(to: pt(16, 17)); p.addLine(to: pt(24, 8))
+        p.move(to: pt(8, 17)); p.addLine(to: pt(16, 26)); p.addLine(to: pt(24, 17))
+        return p
+    }
+}
+
+/// Variety Pack / Full Deck — a 2×2 grid of tiles (a varied collection).
+private struct GridIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        for (x, y) in [(7.0, 7.0), (18.0, 7.0), (7.0, 18.0), (18.0, 18.0)] {
+            p.addRoundedRect(in: CGRect(x: x * s, y: y * s, width: 7 * s, height: 7 * s),
+                             cornerSize: .init(width: 1.6 * s, height: 1.6 * s))
+        }
+        return p
+    }
+}
+
+/// Homebody — a house.
+private struct HomeIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(5, 15)); p.addLine(to: pt(16, 6)); p.addLine(to: pt(27, 15))   // roof
+        p.move(to: pt(8, 13)); p.addLine(to: pt(8, 26)); p.addLine(to: pt(24, 26)); p.addLine(to: pt(24, 13))  // walls
+        p.move(to: pt(13, 26)); p.addLine(to: pt(13, 19)); p.addLine(to: pt(19, 19)); p.addLine(to: pt(19, 26))  // door
+        return p
+    }
+}
+
+/// Weekend Warrior — a sun.
+private struct SunIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        let c = CGPoint(x: 16 * s, y: 16 * s)
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 11 * s, y: 11 * s, width: 10 * s, height: 10 * s))   // disc
+        for i in 0..<8 {                                                                 // 8 rays
+            let a = Double(i) * .pi / 4
+            let inner = CGPoint(x: c.x + CGFloat(cos(a)) * 8 * s, y: c.y + CGFloat(sin(a)) * 8 * s)
+            let outer = CGPoint(x: c.x + CGFloat(cos(a)) * 12.5 * s, y: c.y + CGFloat(sin(a)) * 12.5 * s)
+            p.move(to: inner); p.addLine(to: outer)
+        }
+        return p
+    }
+}
+
+/// Dawn Patrol — a sun rising over the horizon.
+private struct SunriseIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(4, 23)); p.addLine(to: pt(28, 23))                                 // horizon
+        p.addArc(center: pt(16, 23), radius: 6 * s, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)  // half sun
+        p.move(to: pt(16, 11)); p.addLine(to: pt(16, 8))                                 // up ray
+        p.move(to: pt(8, 15));  p.addLine(to: pt(6, 13))                                 // left ray
+        p.move(to: pt(24, 15)); p.addLine(to: pt(26, 13))                                // right ray
+        return p
+    }
+}
+
+/// Doubleheader — two overlapping cards (the same thing, twice).
+private struct TwinIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 6 * s, y: 9 * s, width: 16 * s, height: 11 * s),
+                         cornerSize: .init(width: 2 * s, height: 2 * s))   // back
+        p.addRoundedRect(in: CGRect(x: 11 * s, y: 13 * s, width: 16 * s, height: 11 * s),
+                         cornerSize: .init(width: 2 * s, height: 2 * s))   // front
+        return p
+    }
+}
+
 private struct HeritageIcon: Shape {
     func path(in rect: CGRect) -> Path {
         let s = rect.width / 32
@@ -876,6 +965,7 @@ let trophyIconNames = [
     "eye", "hattrick", "worldwide", "repeat", "streak",
     "jumbo", "cargo", "bizjet", "prop", "star", "heli",
     "altitude", "speed", "stack", "clock",
+    "approach", "grid", "home", "weekend", "sunrise", "twin",
 ]
 
 #if DEBUG

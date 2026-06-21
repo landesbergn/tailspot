@@ -470,12 +470,17 @@ struct TrophiesExpansionTests {
     }
     private func ach(_ id: String) -> Achievement { Trophies.roster.first { $0.id == id }! }
     private func mk(model: String? = nil, manufacturer: String? = nil, operatorName: String? = nil,
-                    altM: Double? = nil, velMps: Double? = nil,
+                    altM: Double? = nil, velMps: Double? = nil, place: String? = nil,
                     at: Date = Date(timeIntervalSince1970: 1_716_000_000)) -> Catch {
         Catch(icao24: String(UUID().uuidString.prefix(6)), callsign: nil, model: model,
               manufacturer: manufacturer, operatorName: operatorName, caughtAt: at,
               observerLat: 0, observerLon: 0, slantDistanceMeters: 0,
-              altitudeMeters: altM, velocityMps: velMps)
+              altitudeMeters: altM, velocityMps: velMps, placeName: place)
+    }
+
+    /// A date at a fixed Y/M/D at noon — weekday is stable regardless of zone.
+    private func ymd(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        cal.date(from: DateComponents(year: y, month: m, day: d, hour: 12))!
     }
 
     // MARK: - Tag classifier
@@ -550,5 +555,62 @@ struct TrophiesExpansionTests {
         #expect(t.isEarned(inputs: Trophies.inputs(from: allFour)))
         let three = [8, 14, 19].map { mk(at: date(hour: $0)) }
         #expect(t.isEarned(inputs: Trophies.inputs(from: three)) == false)
+    }
+
+    // MARK: - Second batch
+
+    @Test func onTheDeckSecretBelowAThousandMeters() {
+        let t = ach("ondeck")
+        #expect(t.secret)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 600)])))            // low
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 5000)])) == false)  // cruising
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk()])) == false)            // no altitude data
+        // A zero/bad altitude is ignored — the genuinely-low one still counts.
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 0), mk(altM: 700)])))
+    }
+
+    @Test func homebodyTenAtOnePlace() {
+        let here = (0..<10).map { _ in mk(place: "Berkeley, CA") }
+        #expect(Trophies.inputs(from: here).maxCatchesAtOnePlace == 10)
+        #expect(ach("homebody").isEarned(inputs: Trophies.inputs(from: here)))
+        // Spread across two places → best is 5, not earned.
+        let split = (0..<5).map { _ in mk(place: "A") } + (0..<5).map { _ in mk(place: "B") }
+        #expect(ach("homebody").isEarned(inputs: Trophies.inputs(from: split)) == false)
+    }
+
+    @Test func varietyPackCountsDistinctTypes() {
+        // 737 narrow, A350 wide, E175 regional, Citation biz, Cessna ga → 5 types.
+        let catches = [
+            mk(model: "737-800", manufacturer: "Boeing"),
+            mk(model: "A350-900", manufacturer: "Airbus"),
+            mk(model: "E175", manufacturer: "Embraer"),
+            mk(model: "Citation X", manufacturer: "Cessna"),
+            mk(model: "Cessna 172", manufacturer: "Cessna"),
+        ]
+        let inputs = Trophies.inputs(from: catches)
+        #expect(inputs.distinctTypes >= 5)
+        #expect(ach("varietypack").isEarned(inputs: inputs))
+    }
+
+    @Test func dawnPatrolSecretInEarlyMorning() {
+        #expect(ach("dawn").isEarned(inputs: Trophies.inputs(from: [mk(at: date(hour: 5))])))
+        #expect(ach("dawn").isEarned(inputs: Trophies.inputs(from: [mk(at: date(hour: 12))])) == false)
+    }
+
+    @Test func weekendWarriorNeedsSaturdayAndSunday() {
+        let sat = ymd(2024, 5, 18)   // a Saturday
+        let sun = ymd(2024, 5, 19)   // a Sunday
+        #expect(ach("weekend").isEarned(inputs: Trophies.inputs(from: [mk(at: sat), mk(at: sun)])))
+        #expect(ach("weekend").isEarned(inputs: Trophies.inputs(from: [mk(at: sat), mk(at: sat)])) == false)
+    }
+
+    @Test func doubleheaderConsecutiveOperator() {
+        let t0 = date(hour: 9)
+        #expect(Trophies.hasConsecutiveSameOperator([(t0, "united"), (t0.addingTimeInterval(120), "united")]))
+        #expect(Trophies.hasConsecutiveSameOperator([(t0, "united"), (t0.addingTimeInterval(120), "delta")]) == false)
+        #expect(Trophies.hasConsecutiveSameOperator([]) == false)
+        #expect(Trophies.hasConsecutiveSameOperator([(t0, "united")]) == false)
+        // Sorted by time, so input order doesn't matter.
+        #expect(Trophies.hasConsecutiveSameOperator([(t0.addingTimeInterval(120), "ual"), (t0, "ual")]))
     }
 }
