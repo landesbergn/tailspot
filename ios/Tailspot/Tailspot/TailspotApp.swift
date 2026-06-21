@@ -75,7 +75,7 @@ struct TailspotApp: App {
                     // fresh install (ensureRegistered short-circuits on the
                     // stored token thereafter). Errors here are non-fatal —
                     // each step re-attempts registration and aborts cleanly.
-                    try? await TailspotAccountClient().ensureRegistered()
+                    _ = try? await TailspotAccountClient().ensureRegistered()
                     // Handle first: cheap, and it unblocks leaderboard
                     // visibility without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
