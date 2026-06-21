@@ -8,9 +8,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session 2026-06-21 [cutover: OpenSky + mock source removed; backend is the only ADS-B source])
+## Current state (as of 2026-06-21 — two rounds: trophies/achievements overhaul shipped (#56); ADS-B source cutover (below))
 
-**Branch `fix/mock-mode-field-safety` (off `main`, not yet merged). Triggered
+**Trophies / achievements overhaul SHIPPED 2026-06-21 (PR #56).** The Trophies
+tab is rebuilt around a real **unlock moment**: `TrophyUnlockView` is a
+full-screen "NEW TROPHY" celebration (cyan hex, glow + rotating ray-burst,
+haptic, Reduce-Motion + VoiceOver paths) driven by `TrophyUnlockCenter` +
+`UserDefaultsTrophyLedger` — the ledger records which awards have been *shown*,
+so a newly-earned one is detected as a transition and fired exactly once
+(commit-on-shown, seeds silently on first run so existing testers aren't
+flooded, one-time "trophy case" recap on update). Fires `trophy_unlocked` /
+`trophy_recap_shown` via the PostHog REST pipeline (`Analytics.swift`). The
+roster is now **binary** — every achievement earned-or-not, no bronze→platinum
+metals, no medals/badges split, no stat header; earned hexes render in a
+distinct **cyan** (off the rarity/legendary gold). Count families split into
+**milestone chains** that reveal progressively via `Achievement.prerequisite`
+(Centurion appears only after Catcher); two unearned states — **visible** (real
+name + a quiet `62/100`) and **secret** (a locked `???` placeholder). ~56
+achievements incl. a new reverse-geocoded `Catch.country` trophy (Mr.
+Worldwide) and a big av-geek/everyday expansion; 31 custom hex icons reviewable
+in a DEBUG `⚑ Icons` gallery. Pure `Trophies.swift` (diff/aggregation +
+heuristic aircraft-tag classifier) and `TrophyBoard` filtering are unit-tested.
+**Deferred:** scoring/points/rareness + medal-system rework (PLAN §9 #10);
+Constellation/Quintet stay secret-dormant until multi-catch ships (§9 #5); the
+catch-a-kind heuristic matcher wants real-world tuning as catches land.
+
+---
+
+**ADS-B source cutover — branch `fix/mock-mode-field-safety` (off `main`, not yet merged). Triggered
 by a field session in Bali where a real Citilink flight (CTV9661) "failed to
 capture" and was identified as a "United Airlines B737" that doesn't exist.**
 
