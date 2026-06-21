@@ -402,7 +402,7 @@ struct AnalyticsDistinctIdTests {
         let knownId = "test-device-uuid-\(UUID().uuidString)"
         defaults.set(knownId, forKey: testKey)
 
-        let id = Analytics.distinctId(defaults: defaults)
+        let id = Analytics.distinctId(defaults: defaults, durable: FakeDeviceIDStore())
         #expect(id == knownId)
     }
 
@@ -410,7 +410,7 @@ struct AnalyticsDistinctIdTests {
         let defaults = isolatedDefaults()
         defaults.removeObject(forKey: testKey)
 
-        let id = Analytics.distinctId(defaults: defaults)
+        let id = Analytics.distinctId(defaults: defaults, durable: FakeDeviceIDStore())
         // Should be a non-empty UUID string.
         #expect(!id.isEmpty)
         // Should have been stored.
@@ -429,8 +429,9 @@ struct AnalyticsDistinctIdTests {
         let knownId = "contract-test-\(UUID().uuidString)"
         defaults.set(knownId, forKey: "tailspot.account.deviceId")
 
-        // Analytics reads from the same key.
-        let analyticsId = Analytics.distinctId(defaults: defaults)
+        // Analytics reads from the same key (now via DeviceID's shared mirror key).
+        let analyticsId = Analytics.distinctId(defaults: defaults, durable: FakeDeviceIDStore())
         #expect(analyticsId == knownId)
+        #expect(DeviceID.mirrorKey == "tailspot.account.deviceId")
     }
 }
