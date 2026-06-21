@@ -5,32 +5,38 @@
 	<!--
 		PrivacyInfo.xcprivacy — App Store privacy manifest.
 		Required for App Store submission (iOS 17+); strongly
-		recommended for TestFlight. Declares (a) the categories of
-		required-reason APIs we use and the reason codes, and (b)
-		the categories of user data we collect, what we do with it,
-		and whether we link it to identity or use for tracking.
+		recommended for TestFlight. Declares (a) the required-reason
+		APIs we use and the reason codes, and (b) the categories of
+		user data we collect, what we do with it, and whether we link
+		it to identity or use it for tracking.
 
-		Tailspot v0:
-		  - No backend, no third-party SDKs, no analytics. Data stays
-		    on the device.
-		  - No user accounts, no authentication, no linking to identity.
-		  - No tracking (NSPrivacyTracking = false).
+		DRAFT — review before the next TestFlight/App Store build, and
+		keep the App Store Connect privacy "nutrition label" in sync
+		(this manifest and the label are separate surfaces; the manifest
+		does not auto-populate the label).
+
+		Current data flows (no longer the v0 "all on-device" posture):
+		  - Backend (api.tailspot.app): device registration, handle
+		    claim, catch upload, leaderboard. Auth via a per-device
+		    bearer token.
+		  - PostHog: product-analytics events via an SDK-free REST
+		    pipeline (Analytics.swift) + the PostHog SDK for session
+		    replay and person-property $set. distinct_id is an
+		    anonymous, Keychain-persistent device id (not linked to a
+		    real-world identity).
+		  - MetricKit: on-device diagnostics (crash counts, hang rate,
+		    peak memory) summarized into PostHog events.
+
+		Tracking: still NSPrivacyTracking = false. "Tracking" in Apple's
+		sense is linking to third-party data for ads or sharing with a
+		data broker; Tailspot's analytics are first-party and the device
+		id is anonymous and not shared for advertising. (Confirm with a
+		privacy/legal read.)
 
 		Required-reason APIs touched:
-		  - UserDefaults (via @AppStorage for onboarding state,
-		    handle, notification toggles, etc.)
-		  - FileTimestamp (via FileManager.attributesOfItem for
-		    "most recent recording" in the replay analyzer).
-
-		Data collected (on-device only):
-		  - Precise location (to match heading + GPS to ADS-B positions).
-		  - Photos (the JPEG snapped when catching a plane).
-
-		If/when the backend ships, this manifest will need updates:
-		  - Add networking required-reason if we exchange identifiers.
-		  - Declare data linked to user identity (handle, catches list).
-		  - Declare data shared with third-parties (OpenSky, if not
-		    proxied) under NSPrivacyCollectedDataTypeLinked.
+		  - UserDefaults (@AppStorage for onboarding, handle, toggles).
+		  - FileTimestamp (FileManager.attributesOfItem in the replay
+		    analyzer). Keychain is NOT a required-reason API.
 	-->
 
 	<key>NSPrivacyTracking</key>
@@ -63,6 +69,7 @@
 
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
+		<!-- Precise location: matches heading + GPS to ADS-B positions. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
@@ -75,11 +82,82 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
+		<!-- Photos: the JPEG snapped when catching a plane (stored on-device). -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- Anonymous device id (PostHog distinct_id + backend device id),
+		     Keychain-persistent. Not linked to a real-world identity. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- Product interaction: PostHog product events + session replay. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+			</array>
+		</dict>
+		<!-- Crash data: MetricKit crash counts → PostHog. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCrashData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- Performance data: MetricKit hang rate, peak memory → PostHog. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePerformanceData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- User ID: the chosen spotter handle (public on the leaderboard,
+		     tied to the device — linked). Pseudonymous; no email/account. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
