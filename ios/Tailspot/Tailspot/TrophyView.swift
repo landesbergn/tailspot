@@ -634,19 +634,45 @@ private extension Shape {
     }
 }
 
+/// Every trophy icon name in the set — the single source of truth for the
+/// debug gallery and the preview below.
+let trophyIconNames = [
+    "catcher", "widebody", "regional", "longlens", "world",
+    "constellation", "quintet", "diamond", "sparkle", "crown",
+    "centurion", "setmaster", "night", "heritage", "coast",
+    "narrowbody", "ticket", "gems", "calendar",
+]
+
+#if DEBUG
+/// DEBUG-only grid of every trophy icon (in the earned cyan hex) for visual
+/// review — "loop through each badge". Presented from the debug panel.
+struct TrophyIconGallery: View {
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 22) {
+                ForEach(trophyIconNames, id: \.self) { name in
+                    VStack(spacing: 8) {
+                        TrophyView(tier: .platinum, iconName: name, size: 76)
+                        Text(name)
+                            .font(Brand.Font.mono(size: 10, weight: .semibold))
+                            .foregroundStyle(Brand.Color.textTertiary)
+                    }
+                }
+            }
+            .padding(24)
+        }
+        .background(Brand.Color.bgPrimary)
+    }
+}
+#endif
+
 #Preview {
     ScrollView {
-        let icons = [
-            "catcher", "widebody", "regional", "longlens", "world",
-            "constellation", "quintet", "diamond", "sparkle", "crown",
-            "centurion", "setmaster", "night", "heritage", "coast",
-            "narrowbody", "ticket", "gems", "calendar"
-        ]
         let tiers: [TrophyTier] = [.bronze, .silver, .gold, .platinum]
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 16) {
-            ForEach(0..<icons.count, id: \.self) { idx in
+            ForEach(0..<trophyIconNames.count, id: \.self) { idx in
                 let tier = tiers[idx % tiers.count]
-                TrophyView(tier: tier, iconName: icons[idx], size: 72)
+                TrophyView(tier: tier, iconName: trophyIconNames[idx], size: 72)
             }
             TrophyView(tier: .bronze, iconName: "catcher", size: 72, locked: true)
         }

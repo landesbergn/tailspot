@@ -58,6 +58,8 @@ struct ContentView: View {
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
     @State private var showDebug = false
+    /// DEBUG-only: presents the trophy-icon gallery for visual review.
+    @State private var showIconGallery = false
     /// Drives the Hangar sheet (collection of past catches). Opened
     /// via the tray glyph in the top-trailing corner.
     @State private var showHangar = false
@@ -466,6 +468,7 @@ struct ContentView: View {
                         HStack(spacing: 8) {
                             Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
                             Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
+                            Button("⚑ Icons") { showIconGallery = true }
                         }
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .buttonStyle(.bordered)
@@ -523,6 +526,9 @@ struct ContentView: View {
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
         }
+        #if DEBUG
+        .sheet(isPresented: $showIconGallery) { TrophyIconGallery() }
+        #endif
         .task {
             await requestCameraPermission()
             location.requestPermissionAndStart()
