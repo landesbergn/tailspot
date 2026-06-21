@@ -24,6 +24,7 @@ struct TrophyUnlockView: View {
 
     @State private var appeared = false
     @State private var hapticTick = 0
+    @State private var rayAngle = 0.0
 
     /// Achievements render in a single cyan-family hex — set apart from the
     /// rarity/type pills by shape + a consistent cool tone (not gold).
@@ -57,6 +58,40 @@ struct TrophyUnlockView: View {
             hapticTick &+= 1
             animateIn()
         }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 22).repeatForever(autoreverses: false)) {
+                rayAngle = 360
+            }
+        }
+    }
+
+    // MARK: - Celebratory hex (glow halo + rotating ray burst behind it)
+
+    @ViewBuilder
+    private func celebratoryHex(_ iconName: String, size: CGFloat) -> some View {
+        ZStack {
+            // Soft cyan halo.
+            Circle()
+                .fill(RadialGradient(
+                    colors: [Brand.Color.cyan.opacity(0.30), .clear],
+                    center: .center, startRadius: 0, endRadius: size * 1.25))
+                .frame(width: size * 2.6, height: size * 2.6)
+            // Slowly-rotating rays, faded at the center so they don't cover the
+            // hex, and at the rim. Suppressed under Reduce Motion.
+            if !reduceMotion {
+                RayBurst(count: 12)
+                    .fill(Brand.Color.cyan.opacity(0.18))
+                    .frame(width: size * 2.4, height: size * 2.4)
+                    .mask(RadialGradient(
+                        colors: [.clear, .white, .clear],
+                        center: .center, startRadius: size * 0.55, endRadius: size * 1.2))
+                    .rotationEffect(.degrees(rayAngle))
+            }
+            TrophyView(tier: tier, iconName: iconName, size: size)
+        }
+        .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
+        .opacity(appeared ? 1 : 0)
     }
 
     // MARK: - Event card
@@ -64,14 +99,12 @@ struct TrophyUnlockView: View {
     @ViewBuilder
     private func eventCard(_ event: TrophyUnlockEvent) -> some View {
         VStack(spacing: 18) {
-            Text(event.achievement.secret ? "SECRET UNLOCKED" : "UNLOCKED")
-                .font(Brand.Font.mono(size: 12, weight: .bold))
-                .tracking(2)
+            Text("NEW TROPHY")
+                .font(Brand.Font.mono(size: 13, weight: .heavy))
+                .tracking(4)
                 .foregroundStyle(Brand.Color.cyan)
 
-            TrophyView(tier: tier, iconName: event.achievement.iconName, size: 132)
-                .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
-                .opacity(appeared ? 1 : 0)
+            celebratoryHex(event.achievement.iconName, size: 132)
 
             Text(event.achievement.title)
                 .font(Brand.Font.mono(size: 24, weight: .heavy))
@@ -129,9 +162,7 @@ struct TrophyUnlockView: View {
                 .font(Brand.Font.mono(size: 12, weight: .bold))
                 .tracking(2)
                 .foregroundStyle(Brand.Color.cyan)
-            TrophyView(tier: tier, iconName: "crown", size: 120)
-                .scaleEffect(appeared ? 1 : (reduceMotion ? 1 : 0.4))
-                .opacity(appeared ? 1 : 0)
+            celebratoryHex("crown", size: 120)
             Text("New: achievements now unlock with a moment.")
                 .font(Brand.Font.cardTitle)
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -180,6 +211,28 @@ struct TrophyUnlockView: View {
                                    : .spring(response: 0.5, dampingFraction: 0.7)) {
             appeared = true
         }
+    }
+}
+
+/// A starburst of `count` triangular rays radiating from center — the soft
+/// celebration glow behind a new trophy.
+private struct RayBurst: Shape {
+    let count: Int
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let r = min(rect.width, rect.height) / 2
+        let halfWidth = (.pi / Double(count)) * 0.5
+        for i in 0..<count {
+            let a = Double(i) / Double(count) * 2 * .pi
+            p.move(to: c)
+            p.addLine(to: CGPoint(x: c.x + CGFloat(cos(a - halfWidth)) * r,
+                                  y: c.y + CGFloat(sin(a - halfWidth)) * r))
+            p.addLine(to: CGPoint(x: c.x + CGFloat(cos(a + halfWidth)) * r,
+                                  y: c.y + CGFloat(sin(a + halfWidth)) * r))
+            p.closeSubpath()
+        }
+        return p
     }
 }
 

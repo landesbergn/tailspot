@@ -83,11 +83,16 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     /// Tiers in ascending order of `at`.
     let tiers: [AchievementTier]
 
-    /// Secret achievements are completely hidden until earned — absent from
-    /// the Trophies list while locked, then they appear (with a moment).
-    /// Non-secret achievements are always visible so the user can chase them.
-    /// Defaults to false (visible).
+    /// Secret achievements show as a locked `???` placeholder (no name or
+    /// details) until earned, then reveal with a moment. Non-secret
+    /// achievements show their real identity. Defaults to false (visible).
     let secret: Bool
+
+    /// For milestone chains (Catcher → Centurion → Sky Veteran): the id of the
+    /// achievement that must be earned before this one appears in the list, so
+    /// later milestones stay hidden until the prior is complete. nil = no
+    /// prerequisite (always visible). Ignored for secret achievements.
+    let prerequisite: String?
 
     /// The progress metric this achievement tracks. Resolved against
     /// a `TrophyProgressInputs` value (totals derived from the Hangar
@@ -107,6 +112,7 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
         iconName: String,
         tiers: [AchievementTier],
         secret: Bool = false,
+        prerequisite: String? = nil,
         progress: @escaping @Sendable (TrophyProgressInputs) -> Int
     ) {
         self.id = id
@@ -115,6 +121,7 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
         self.iconName = iconName
         self.tiers = tiers
         self.secret = secret
+        self.prerequisite = prerequisite
         self.progress = progress
     }
 
@@ -233,10 +240,10 @@ nonisolated enum Trophies {
                     progress: { $0.totalCatches }),
         Achievement(id: "centurion", title: "Centurion", summary: "Reach 100 catches",
                     iconName: "centurion", tiers: [.init(tier: .gold, at: 100)],
-                    progress: { $0.totalCatches }),
+                    prerequisite: "catcher", progress: { $0.totalCatches }),
         Achievement(id: "veteran", title: "Sky Veteran", summary: "Reach 500 catches",
                     iconName: "catcher", tiers: [.init(tier: .gold, at: 500)],
-                    progress: { $0.totalCatches }),
+                    prerequisite: "centurion", progress: { $0.totalCatches }),
 
         // ── Wide-body ──
         Achievement(id: "heavy", title: "Wide Awake", summary: "Catch 10 wide-bodies",
@@ -244,7 +251,7 @@ nonisolated enum Trophies {
                     progress: { $0.wideBodyCatches }),
         Achievement(id: "heavy2", title: "Heavy Hitter", summary: "Catch 50 wide-bodies",
                     iconName: "widebody", tiers: [.init(tier: .gold, at: 50)],
-                    progress: { $0.wideBodyCatches }),
+                    prerequisite: "heavy", progress: { $0.wideBodyCatches }),
 
         // ── Narrow-body ──
         Achievement(id: "narrow", title: "Single Aisle", summary: "Catch 25 narrow-bodies",
@@ -252,7 +259,7 @@ nonisolated enum Trophies {
                     progress: { $0.narrowBodyCatches }),
         Achievement(id: "narrow2", title: "Workhorse", summary: "Catch 120 narrow-bodies",
                     iconName: "narrowbody", tiers: [.init(tier: .gold, at: 120)],
-                    progress: { $0.narrowBodyCatches }),
+                    prerequisite: "narrow", progress: { $0.narrowBodyCatches }),
 
         // ── Regional ──
         Achievement(id: "regional", title: "Regional Pilot", summary: "Catch 15 regional jets",
@@ -260,7 +267,7 @@ nonisolated enum Trophies {
                     progress: { $0.regionalCatches }),
         Achievement(id: "regional2", title: "Puddle Jumper", summary: "Catch 60 regional jets",
                     iconName: "regional", tiers: [.init(tier: .gold, at: 60)],
-                    progress: { $0.regionalCatches }),
+                    prerequisite: "regional", progress: { $0.regionalCatches }),
 
         // ── Unique airframes ──
         Achievement(id: "world", title: "Collector", summary: "Catalogue 25 unique airframes",
@@ -268,7 +275,7 @@ nonisolated enum Trophies {
                     progress: { $0.uniqueAirframes }),
         Achievement(id: "world2", title: "World Tour", summary: "Catalogue 100 unique airframes",
                     iconName: "world", tiers: [.init(tier: .gold, at: 100)],
-                    progress: { $0.uniqueAirframes }),
+                    prerequisite: "world", progress: { $0.uniqueAirframes }),
 
         // ── Airlines ──
         Achievement(id: "airlines", title: "Frequent Flyer", summary: "Collect 10 airlines",
@@ -276,7 +283,7 @@ nonisolated enum Trophies {
                     progress: { $0.uniqueOperators }),
         Achievement(id: "airlines2", title: "Airline Buff", summary: "Collect 30 airlines",
                     iconName: "ticket", tiers: [.init(tier: .gold, at: 30)],
-                    progress: { $0.uniqueOperators }),
+                    prerequisite: "airlines", progress: { $0.uniqueOperators }),
 
         // ── Places ──
         Achievement(id: "places", title: "Globetrotter", summary: "Spot from 10 locations",
@@ -284,7 +291,7 @@ nonisolated enum Trophies {
                     progress: { $0.uniquePlaces }),
         Achievement(id: "places2", title: "Wanderer", summary: "Spot from 25 locations",
                     iconName: "coast", tiers: [.init(tier: .gold, at: 25)],
-                    progress: { $0.uniquePlaces }),
+                    prerequisite: "places", progress: { $0.uniquePlaces }),
 
         // ── Sets ──
         Achievement(id: "setcollector", title: "Set Collector", summary: "Complete 3 sets",
@@ -292,7 +299,7 @@ nonisolated enum Trophies {
                     progress: { $0.completedSets }),
         Achievement(id: "setmaster", title: "Set Master", summary: "Complete 8 sets",
                     iconName: "setmaster", tiers: [.init(tier: .gold, at: 8)],
-                    progress: { $0.completedSets }),
+                    prerequisite: "setcollector", progress: { $0.completedSets }),
 
         // ── Rare-or-better airframes ──
         Achievement(id: "rarehunter", title: "Rare Hunter", summary: "Find 5 rare-or-better airframes",
@@ -300,7 +307,7 @@ nonisolated enum Trophies {
                     progress: { $0.rarePlusUnique }),
         Achievement(id: "rarehunter2", title: "Treasure Hunter", summary: "Find 25 rare-or-better airframes",
                     iconName: "gems", tiers: [.init(tier: .gold, at: 25)],
-                    progress: { $0.rarePlusUnique }),
+                    prerequisite: "rarehunter", progress: { $0.rarePlusUnique }),
 
         // ── Days out ──
         Achievement(id: "regular", title: "Regular", summary: "Catch on 10 different days",
@@ -308,7 +315,7 @@ nonisolated enum Trophies {
                     progress: { $0.distinctDays }),
         Achievement(id: "devotee", title: "Devotee", summary: "Catch on 40 different days",
                     iconName: "calendar", tiers: [.init(tier: .gold, at: 40)],
-                    progress: { $0.distinctDays }),
+                    prerequisite: "regular", progress: { $0.distinctDays }),
 
         // ── Night ──
         Achievement(id: "night", title: "Night Owl", summary: "Catch 5 after sundown",
@@ -316,7 +323,7 @@ nonisolated enum Trophies {
                     progress: { $0.nightCatches }),
         Achievement(id: "night2", title: "Nocturnal", summary: "Catch 25 after sundown",
                     iconName: "night", tiers: [.init(tier: .gold, at: 25)],
-                    progress: { $0.nightCatches }),
+                    prerequisite: "night", progress: { $0.nightCatches }),
 
         // ── Heritage ──
         Achievement(id: "heritage", title: "Heritage", summary: "Catch a heritage aircraft",
@@ -324,7 +331,7 @@ nonisolated enum Trophies {
                     progress: { $0.heritageCatches }),
         Achievement(id: "heritage2", title: "Living History", summary: "Catch 5 heritage aircraft",
                     iconName: "heritage", tiers: [.init(tier: .gold, at: 5)],
-                    progress: { $0.heritageCatches }),
+                    prerequisite: "heritage", progress: { $0.heritageCatches }),
 
         // ── Rarity one-shots ──
         Achievement(id: "firstrare", title: "First Rare", summary: "Catch a rare-tier plane",

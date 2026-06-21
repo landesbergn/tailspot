@@ -30,12 +30,21 @@ nonisolated enum TrophyBoard {
         roster: [Achievement] = Trophies.roster,
         inputs: TrophyProgressInputs
     ) -> [Achievement] {
-        // Secret achievements are hidden until earned; everything else always
-        // shows. `filter` preserves roster order, so partitioning earned-first
-        // keeps a stable order within each group.
-        let shown = roster.filter { !$0.secret || $0.isEarned(inputs: inputs) }
-        let earned = shown.filter { $0.isEarned(inputs: inputs) }
-        let locked = shown.filter { !$0.isEarned(inputs: inputs) }
+        let earnedIds = Set(roster.filter { $0.isEarned(inputs: inputs) }.map(\.id))
+        func shows(_ ach: Achievement) -> Bool {
+            // Secret achievements are always in the list (masked while locked).
+            if ach.secret { return true }
+            // Earned ones always show; otherwise a chained milestone appears
+            // only once its prerequisite is earned (progressive reveal).
+            if earnedIds.contains(ach.id) { return true }
+            if let prereq = ach.prerequisite { return earnedIds.contains(prereq) }
+            return true
+        }
+        // `filter` preserves roster order, so partitioning earned-first keeps a
+        // stable order within each group.
+        let shown = roster.filter(shows)
+        let earned = shown.filter { earnedIds.contains($0.id) }
+        let locked = shown.filter { !earnedIds.contains($0.id) }
         return earned + locked
     }
 }
@@ -65,18 +74,21 @@ struct HangarTrophiesView: View {
     @ViewBuilder
     private func card(_ ach: Achievement, inputs: TrophyProgressInputs) -> some View {
         let earned = ach.isEarned(inputs: inputs)
+        // Secret + locked → a `???` placeholder with no name or details, so it
+        // exists in the list without spoiling what it is.
+        let masked = ach.secret && !earned
         let progress = ach.currentProgress(inputs: inputs)
         HStack(alignment: .center, spacing: 14) {
             TrophyView(tier: earnedTier, iconName: ach.iconName, size: 52, locked: !earned)
             VStack(alignment: .leading, spacing: 5) {
-                Text(ach.title)
+                Text(masked ? "???" : ach.title)
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
-                Text(ach.summary)
+                Text(masked ? "Hidden achievement" : ach.summary)
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
                     .lineLimit(1)
-                footer(ach: ach, earned: earned, progress: progress)
+                footer(masked: masked, earned: earned, ach: ach, progress: progress)
             }
             Spacer(minLength: 0)
         }
@@ -91,18 +103,17 @@ struct HangarTrophiesView: View {
                 .strokeBorder(Brand.Color.textPrimary.opacity(earned ? 0.06 : 0.04), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(ach.title), \(earned ? "earned" : "locked"). \(ach.summary)")
+        .accessibilityLabel(masked
+            ? "Hidden achievement, locked"
+            : "\(ach.title), \(earned ? "earned" : "locked"). \(ach.summary)")
     }
 
     @ViewBuilder
-    private func footer(ach: Achievement, earned: Bool, progress: Int) -> some View {
+    private func footer(masked: Bool, earned: Bool, ach: Achievement, progress: Int) -> some View {
         if earned {
-            Label("EARNED", systemImage: "checkmark.seal.fill")
-                .font(Brand.Font.mono(size: 10, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(Brand.Color.cyan)
-                .padding(.top, 1)
-        } else if ach.threshold > 1 {
+            // The cyan hex already signals earned — no "EARNED" label needed.
+            EmptyView()
+        } else if !masked && ach.threshold > 1 {
             // Binary, but show how close you are to the single goal.
             let frac = Double(min(progress, ach.threshold)) / Double(ach.threshold)
             HStack(spacing: 6) {

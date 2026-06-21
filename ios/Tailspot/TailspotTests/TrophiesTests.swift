@@ -416,9 +416,9 @@ struct TrophiesHiddenAndMetricsTests {
 @MainActor
 struct TrophyBoardTests {
 
-    private func ach(_ id: String, secret: Bool, at: Int) -> Achievement {
+    private func ach(_ id: String, secret: Bool = false, prerequisite: String? = nil, at: Int) -> Achievement {
         Achievement(id: id, title: id, summary: "", iconName: "crown",
-                    tiers: [.init(tier: .gold, at: at)], secret: secret,
+                    tiers: [.init(tier: .gold, at: at)], secret: secret, prerequisite: prerequisite,
                     progress: { $0.totalCatches })
     }
 
@@ -432,24 +432,28 @@ struct TrophyBoardTests {
         )
     }
 
-    @Test func secretLockedHiddenVisibleLockedShownEarnedFirst() {
+    @Test func secretAlwaysPresentVisibleLockedShownEarnedFirst() {
         let roster = [
-            ach("v1", secret: false, at: 1),   // earned at total>=1
-            ach("v2", secret: false, at: 10),  // visible, locked
-            ach("s1", secret: true,  at: 1),   // secret, earned
-            ach("s2", secret: true,  at: 10),  // secret, locked → hidden
+            ach("v1", at: 1),                  // earned at total>=1
+            ach("v2", at: 10),                 // visible, locked
+            ach("s1", secret: true, at: 1),    // secret, earned
+            ach("s2", secret: true, at: 10),   // secret, locked → masked but present
         ]
         let shown = TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id)
-        // s2 (secret + locked) is absent; v2 (visible + locked) is present.
-        #expect(shown.contains("s2") == false)
+        #expect(shown.contains("s2"))   // secret-locked is present (rendered masked)
         #expect(shown.contains("v2"))
-        // Earned (v1, s1) come before the locked v2.
-        #expect(shown == ["v1", "s1", "v2"])
+        // Earned (v1, s1) first, then locked (v2, s2) in roster order.
+        #expect(shown == ["v1", "s1", "v2", "s2"])
     }
 
-    @Test func earnedSecretAppears() {
-        let roster = [ach("s1", secret: true, at: 1)]
-        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 0)).isEmpty)      // locked → hidden
-        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id) == ["s1"])  // earned → shown
+    @Test func milestonePrerequisiteGatesNextUntilPriorEarned() {
+        let roster = [
+            ach("m1", at: 5),                       // first milestone, no prereq
+            ach("m2", prerequisite: "m1", at: 50),  // hidden until m1 earned
+        ]
+        // m1 not earned → m2 absent.
+        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id) == ["m1"])
+        // m1 earned → m2 appears.
+        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 5)).map(\.id) == ["m1", "m2"])
     }
 }
