@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tailspot — Achievements scheme mockups</title>
+<style>
+  :root{
+    /* Brand tokens (from Brand.swift) */
+    --bg-primary:#0A0E1A; --bg-elevated:#1A2030; --bg-surface:#050810;
+    --text-primary:#E8F4FF; --text-secondary:#A0B0C0; --text-tertiary:#7F8B98;
+    --cyan:#00D4FF;
+    /* rarity */
+    --r-common:#8595A5; --r-uncommon:#4ECCA3; --r-rare:#00D4FF; --r-epic:#9B5DE5; --r-legendary:#FFB800;
+    /* type */
+    --t-narrow:#5B9DDB; --t-wide:#7E5FE6; --t-regional:#3DD68C; --t-biz:#E6B847;
+    /* trophy metals (current) */
+    --m-bronze:#C26B3F; --m-silver:#C5D0DA; --m-gold:#FFC74A; --m-platinum:#A9F4FF;
+    /* warm metallic ramp (scheme 3) */
+    --w-copper:#C8794A; --w-brass:#D9A441; --w-gold:#F4C95B; --w-plat:#9FE8C9;
+    --mono:"SF Mono",ui-monospace,"Roboto Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#05060c;color:var(--text-primary);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;line-height:1.5;}
+  .wrap{max-width:1280px;margin:0 auto;padding:32px 20px 80px;}
+  h1{font-size:26px;letter-spacing:.5px;margin:0 0 4px;}
+  .sub{color:var(--text-secondary);font-size:14px;margin:0 0 28px;max-width:760px;}
+  h2{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--text-secondary);
+     text-transform:uppercase;margin:36px 0 12px;border-top:1px solid #1a2030;padding-top:18px;}
+  .note{color:var(--text-tertiary);font-size:13px;max-width:760px;margin:0 0 18px;}
+  .rec{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.2px;
+       color:#04121a;background:var(--cyan);padding:3px 8px;border-radius:5px;vertical-align:middle;margin-left:8px;}
+
+  /* conflation strip */
+  .conflict{display:flex;gap:28px;flex-wrap:wrap;background:var(--bg-elevated);border:1px solid #ffffff10;
+            border-radius:14px;padding:18px 20px;margin-bottom:8px;}
+  .conflict .grp{display:flex;flex-direction:column;gap:8px;}
+  .conflict .lbl{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--text-tertiary);text-transform:uppercase;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+
+  /* pills (rarity + type) */
+  .pill{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.6px;
+        padding:3px 9px;border-radius:999px;border:1px solid currentColor;}
+  .pill.fill{border:none;color:#05060c;}
+  .tpill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;font-weight:700;
+         padding:3px 9px 3px 4px;border-radius:999px;color:#05060c;}
+  .tpill .glyph{width:16px;height:16px;border-radius:999px;background:#05060c22;display:grid;place-items:center;
+                font-size:10px;color:#05060c;}
+
+  /* layout of 4 scheme columns */
+  .cols{display:grid;grid-template-columns:repeat(4,minmax(248px,1fr));gap:18px;align-items:start;}
+  @media(max-width:1100px){.cols{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:620px){.cols{grid-template-columns:1fr;}}
+  .col{background:#0c111d;border:1px solid #ffffff0d;border-radius:18px;padding:14px;}
+  .col h3{font-family:var(--mono);font-size:12px;letter-spacing:1px;margin:2px 0 2px;display:flex;align-items:center;gap:6px;}
+  .col .tag{font-size:11px;color:var(--text-tertiary);margin:0 0 12px;min-height:32px;}
+
+  /* phone-ish trophy panel */
+  .panel{background:var(--bg-primary);border-radius:14px;padding:12px;}
+  .phdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding:2px 2px 10px;
+        border-bottom:1px solid #ffffff10;}
+  .phdr .h-l{font-family:var(--mono);font-size:11px;letter-spacing:1.4px;color:var(--text-secondary);}
+  .phdr .h-r{font-family:var(--mono);font-size:11px;color:var(--text-tertiary);text-align:right;}
+  .phdr .big{font-family:var(--mono);font-weight:800;font-size:20px;color:var(--text-primary);}
+
+  .card{display:flex;gap:11px;align-items:center;background:var(--bg-elevated);border:1px solid #ffffff10;
+        border-radius:12px;padding:10px;margin-bottom:8px;}
+  .card.locked{background:#141a28;border-color:#ffffff08;}
+  .card .body{flex:1;min-width:0;}
+  .card .title{font-size:14px;font-weight:600;color:var(--text-primary);}
+  .card .title.dim{color:var(--text-secondary);}
+  .card .desc{font-size:11.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .foot{display:flex;align-items:center;gap:6px;margin-top:5px;}
+  .foot .goal{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.6px;color:var(--text-secondary);}
+  .foot .cnt{font-family:var(--mono);font-size:10px;color:var(--text-tertiary);}
+  .bar{flex:1;height:4px;border-radius:99px;background:var(--bg-surface);overflow:hidden;min-width:38px;}
+  .bar > i{display:block;height:100%;background:var(--cyan);}
+  .tagm{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.6px;display:inline-flex;align-items:center;gap:4px;margin-top:4px;}
+
+  /* hex badge */
+  .hex{width:50px;height:50px;flex:none;position:relative;display:grid;place-items:center;
+       clip-path:polygon(50% 0,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%);}
+  .hex svg{width:54%;height:54%;}
+  .hex.lockhex{background:var(--bg-surface);clip-path:none;border:1px dashed #ffffff25;border-radius:10px;}
+  .hex.lockhex svg{width:42%;height:42%;}
+  .pip{position:absolute;right:-2px;bottom:-1px;width:18px;height:18px;border-radius:99px;
+       border:2px solid #05060c;display:grid;place-items:center;font-family:var(--mono);font-weight:800;font-size:9px;color:#05060c;}
+
+  /* ring (scheme 1) */
+  .ring{width:52px;height:52px;flex:none;border-radius:99px;display:grid;place-items:center;position:relative;}
+  .ring .inner{width:40px;height:40px;border-radius:99px;background:var(--bg-elevated);display:grid;place-items:center;}
+  .ring .inner svg{width:22px;height:22px;}
+  .ring .lvl{position:absolute;right:-3px;bottom:-3px;background:var(--cyan);color:#04121a;font-family:var(--mono);
+             font-weight:800;font-size:9px;letter-spacing:.3px;padding:1px 4px;border-radius:6px;border:2px solid #05060c;}
+
+  .legend{font-size:12px;color:var(--text-tertiary);margin-top:10px;}
+  .swrap{margin-top:6px;}
+  code{font-family:var(--mono);font-size:12px;color:var(--cyan);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Tailspot — Achievements, four ways</h1>
+  <p class="sub">Mockups for the Trophies-screen redesign. Styled to the app's real tokens (Brand.swift colors, the hex badge, the card language). The goal: a scheme that's game-friendly <em>and</em> stops the achievement badges from being conflated with the aircraft rarity + type pills.</p>
+
+  <h2>The problem — three colored-badge systems collide</h2>
+  <p class="note">The app already spends two color systems on every plane. The trophy <strong>metals</strong> are a third — and trophy <span style="color:var(--m-gold)">gold</span> reads almost identical to <span style="color:var(--r-legendary)">legendary</span> rarity gold. "Medals/Badges" as words also collide with these "badges."</p>
+  <div class="conflict">
+    <div class="grp">
+      <span class="lbl">1 · Rarity pills</span>
+      <div class="row">
+        <span class="pill" style="color:var(--r-common)">COMMON</span>
+        <span class="pill" style="color:var(--r-uncommon)">UNCOMMON</span>
+        <span class="pill" style="color:var(--r-rare)">RARE</span>
+        <span class="pill" style="color:var(--r-epic)">EPIC</span>
+        <span class="pill" style="color:var(--r-legendary)">★ LEGENDARY</span>
+      </div>
+    </div>
+    <div class="grp">
+      <span class="lbl">2 · Type pills</span>
+      <div class="row">
+        <span class="tpill" style="background:var(--t-narrow)"><span class="glyph">N</span>NARROW</span>
+        <span class="tpill" style="background:var(--t-wide)"><span class="glyph">W</span>WIDE</span>
+        <span class="tpill" style="background:var(--t-biz)"><span class="glyph">B</span>BIZ</span>
+      </div>
+    </div>
+    <div class="grp">
+      <span class="lbl">3 · Trophy metals (today)</span>
+      <div class="row">
+        <span class="pill fill" style="background:var(--m-bronze)">BRONZE</span>
+        <span class="pill fill" style="background:var(--m-silver)">SILVER</span>
+        <span class="pill fill" style="background:var(--m-gold)">GOLD</span>
+        <span class="pill fill" style="background:var(--m-platinum)">PLATINUM</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">Research takeaway (Khan Academy, Apple Fitness rosettes, Strava): <strong>disambiguate by shape + naming, not color</strong> — it survives grayscale &amp; colorblindness. And for a <strong>collection/catching</strong> game, count-gated progression (Pokémon GO medals) is the proven fit.</p>
+
+  <h2>The schemes</h2>
+  <div class="cols">
+
+    <!-- ===================== CURRENT ===================== -->
+    <div class="col">
+      <h3>0 · Current</h3>
+      <p class="tag">What's on your phone now — metals + a medals/badges split.</p>
+      <div class="panel">
+        <div class="phdr"><div><div class="big">11</div><div class="h-l">MEDALS</div></div><div><div class="big" style="text-align:right">4</div><div class="h-r">BADGES</div></div></div>
+        <!-- medal -->
+        <div class="card">
+          <div class="hex" style="background:linear-gradient(135deg,var(--m-silver),#6C7986)"><svg viewBox="0 0 32 32" fill="#C5D0DA"><path d="M16 4l2 8 7 4-7 1-.3 6-1.7-1-1.7 1L14 17l-7-1 7-4z"/></svg><span class="pip" style="background:var(--m-silver)">●</span></div>
+          <div class="body"><div class="title">Wide Awake</div><div class="desc">Wide-body airframes caught</div>
+            <div class="foot"><span class="goal" style="color:var(--text-secondary)">→ GOLD</span><span class="cnt">20 / 50</span><span class="bar"><i style="width:40%"></i></span></div></div>
+        </div>
+        <!-- badge -->
+        <div class="card">
+          <div class="hex" style="background:linear-gradient(135deg,var(--m-gold),#9C6E00)"><svg viewBox="0 0 32 32" fill="#FFC74A"><path d="M4 12l3 12h18l3-12-6 5-6-9-6 9z"/></svg><span class="pip" style="background:var(--m-gold)">●</span></div>
+          <div class="body"><div class="title">Legendary</div><div class="desc">Catch a legendary plane</div>
+            <div class="tagm" style="color:var(--m-gold)">✓ EARNED</div></div>
+        </div>
+        <div class="card locked">
+          <div class="hex lockhex"><svg viewBox="0 0 24 24" fill="none" stroke="#7F8B98" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></div>
+          <div class="body"><div class="title dim">Single Aisle</div><div class="desc">Narrow-body airframes caught</div>
+            <div class="tagm" style="color:var(--text-tertiary)">🔒 LOCKED</div></div>
+        </div>
+      </div>
+      <p class="legend">Issue: metal gold ≈ legendary gold; "badges" overloaded; the N/M counter isn't a clear "how far am I".</p>
+    </div>
+
+    <!-- ===================== SCHEME 1 ===================== -->
+    <div class="col">
+      <h3>1 · Unified Levels <span class="rec">RECOMMENDED</span></h3>
+      <p class="tag">One "Achievements" pool. A cyan progress <strong>ring</strong> + level numeral replaces metals. Neutral icon → never reads like a pill.</p>
+      <div class="panel">
+        <div class="phdr"><div><div class="big">SPOTTER&nbsp;LVL&nbsp;8</div><div class="h-l">ACHIEVEMENTS</div></div><div><div class="h-r" style="margin-top:6px">15 / 24<br>earned</div></div></div>
+        <!-- leveled -->
+        <div class="card">
+          <div class="ring" style="background:conic-gradient(var(--cyan) 75%,#0b1422 0)">
+            <div class="inner"><svg viewBox="0 0 32 32" fill="#E8F4FF"><path d="M16 4l2 8 7 4-7 1-.3 6-1.7-1-1.7 1L14 17l-7-1 7-4z"/></svg></div>
+            <span class="lvl">LVL III</span></div>
+          <div class="body"><div class="title">Wide Awake</div><div class="desc">20 widebodies caught</div>
+            <div class="foot"><span class="goal" style="color:var(--text-secondary)">→ IV</span><span class="cnt">37 / 50</span><span class="bar"><i style="width:74%"></i></span></div></div>
+        </div>
+        <div class="card">
+          <div class="ring" style="background:conic-gradient(var(--cyan) 100%,#0b1422 0)">
+            <div class="inner"><svg viewBox="0 0 32 32" fill="#E8F4FF"><path d="M14 4a10 10 0 100 24 8 8 0 01-3-19 1 1 0 013-5z"/></svg></div>
+            <span class="lvl" style="background:#E8F4FF;color:#04121a">MAX</span></div>
+          <div class="body"><div class="title">Night Owl</div><div class="desc">Catches after sundown</div>
+            <div class="foot"><span class="goal" style="color:var(--cyan)">LVL V · MAX</span></div></div>
+        </div>
+        <!-- secret -->
+        <div class="card locked">
+          <div class="ring" style="background:#0b1422"><div class="inner"><svg viewBox="0 0 24 24" fill="none" stroke="#7F8B98" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></div></div>
+          <div class="body"><div class="title dim">???</div><div class="desc">Caught something at a strange hour.</div>
+            <div class="tagm" style="color:var(--text-tertiary)">◇ SECRET</div></div>
+        </div>
+      </div>
+      <p class="legend">Level numeral = the "tier". Secrets are level-1 achievements ("DISCOVERED" on earn). No backend, fits the catching loop. Shape (hex+ring) + cyan, never a colored pill.</p>
+    </div>
+
+    <!-- ===================== SCHEME 2 ===================== -->
+    <div class="col">
+      <h3>2 · Binary + Rarity %</h3>
+      <p class="tag">Earned-once, no tiers. Depth = how many you've collected + a global rarity %. Steam/Xbox model.</p>
+      <div class="panel">
+        <div class="phdr"><div><div class="big">18 / 30</div><div class="h-l">ACHIEVEMENTS</div></div><div><div class="h-r" style="margin-top:6px">3 rare<br>★ found</div></div></div>
+        <div class="card">
+          <div class="hex" style="background:#22304a"><svg viewBox="0 0 32 32" fill="#E8F4FF"><path d="M16 4l2 8 7 4-7 1-.3 6-1.7-1-1.7 1L14 17l-7-1 7-4z"/></svg></div>
+          <div class="body"><div class="title">Centurion</div><div class="desc">Reach 100 catches</div>
+            <div class="foot"><span class="tagm" style="color:var(--r-uncommon)">✓ EARNED</span><span class="cnt" style="margin-left:auto">earned by 12%</span></div></div>
+        </div>
+        <div class="card" style="box-shadow:0 0 16px #FFB80033;border-color:#FFB80055">
+          <div class="hex" style="background:#3a2f10;box-shadow:0 0 12px #FFB80055"><svg viewBox="0 0 32 32" fill="#FFB800"><path d="M4 12l3 12h18l3-12-6 5-6-9-6 9z"/></svg></div>
+          <div class="body"><div class="title">Legendary</div><div class="desc">Catch a legendary plane</div>
+            <div class="foot"><span class="tagm" style="color:var(--r-legendary)">★ RARE · EARNED</span><span class="cnt" style="margin-left:auto">earned by 2%</span></div></div>
+        </div>
+        <div class="card locked">
+          <div class="hex lockhex"><svg viewBox="0 0 24 24" fill="none" stroke="#7F8B98" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></div>
+          <div class="body"><div class="title dim">???</div><div class="desc">A secret to uncover.</div>
+            <div class="tagm" style="color:var(--text-tertiary)">◇ SECRET</div></div>
+        </div>
+      </div>
+      <p class="legend">Cleanest visually (no tier colors at all). But the rarity-% half <strong>needs a backend</strong> computing per-achievement unlock % — ships later. Loses the "keep climbing" hook.</p>
+    </div>
+
+    <!-- ===================== SCHEME 3 ===================== -->
+    <div class="col">
+      <h3>3 · PSN Split + Collector</h3>
+      <p class="tag">Keep leveled tiers, but a WARM copper→brass→gold ramp (orthogonal to the cool rarity palette) + a "Collector" capstone.</p>
+      <div class="panel">
+        <div class="phdr"><div><div class="big">22 / 24</div><div class="h-l">AWARDS</div></div><div><div class="h-r" style="margin-top:6px">COLLECTOR<br>locked</div></div></div>
+        <div class="card">
+          <div class="hex" style="background:linear-gradient(135deg,var(--w-brass),#7a5320)"><svg viewBox="0 0 32 32" fill="#F4C95B"><path d="M16 4l2 8 7 4-7 1-.3 6-1.7-1-1.7 1L14 17l-7-1 7-4z"/></svg><span class="pip" style="background:var(--w-brass)">●</span></div>
+          <div class="body"><div class="title">Wide Awake</div><div class="desc">Wide-body airframes caught</div>
+            <div class="foot"><span class="goal" style="color:var(--w-gold)">→ GOLD</span><span class="cnt">20 / 50</span><span class="bar"><i style="width:40%;background:var(--w-gold)"></i></span></div></div>
+        </div>
+        <!-- capstone -->
+        <div class="card" style="background:linear-gradient(135deg,#1d2740,#101728);border-color:#9FE8C955">
+          <div class="hex" style="background:linear-gradient(135deg,var(--w-plat),#1f6b52);box-shadow:0 0 14px #9FE8C955"><svg viewBox="0 0 32 32" fill="#9FE8C9"><path d="M4 12l3 12h18l3-12-6 5-6-9-6 9z"/></svg></div>
+          <div class="body"><div class="title" style="color:var(--w-plat)">COLLECTOR</div><div class="desc">Earn every other award</div>
+            <div class="foot"><span class="goal" style="color:var(--w-plat)">CAPSTONE</span><span class="cnt">22 / 24</span></div></div>
+        </div>
+        <div class="card locked">
+          <div class="hex lockhex"><svg viewBox="0 0 24 24" fill="none" stroke="#7F8B98" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></div>
+          <div class="body"><div class="title dim">???</div><div class="desc">A secret to uncover.</div>
+            <div class="tagm" style="color:var(--text-tertiary)">◇ SECRET</div></div>
+        </div>
+      </div>
+      <p class="legend">Richest precedent (PS Trophies) + a big "earn everything" capstone moment. But it still leans on color tiers — most at-risk of the conflation, needs careful palette tuning.</p>
+    </div>
+
+  </div>
+
+  <h2>My recommendation</h2>
+  <p class="note"><strong>Scheme 1 (Unified Levels).</strong> It's the only one that fixes all three problems at once: the cyan ring + level numeral kills the metal-vs-rarity-gold collision (no metals at all), "Achievements" as one pool kills the medals/badges word overload, and a single <code>SPOTTER LVL</code> + <code>15/24</code> header reads as "how far am I" instead of two disconnected counts. It keeps the count-gated climb that suits a catching game, needs no backend, and the secret trophies slot in as level-1 achievements. Scheme 2 is the cleanest long-term once the backend can serve real rarity %; Scheme 3 has the best precedent but is the riskiest on conflation.</p>
+  <p class="note">Open it, compare, and tell me which to build (or which bits to mix — e.g. Scheme 1's look + Scheme 3's "Collector" capstone moment is a strong combination).</p>
+
+</div>
+</body>
+</html>

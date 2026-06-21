@@ -78,6 +78,13 @@ final class Catch {
     /// post-save at catch time (never blocks the catch) or by the
     /// detail-view backfill.
     var placeName: String?
+    /// Reverse-geocoded observer COUNTRY — a stable key (ISO country code
+    /// when available, else the country display name), e.g. "US". Same
+    /// fill-if-nil lifecycle as `placeName` (post-save at catch time or the
+    /// detail-view backfill). Drives the Mr. Worldwide trophy (catch in 2+
+    /// countries). Added 2026-06 — optional + nil-default for lightweight
+    /// migration; pre-existing rows backfill on a later detail-view open.
+    var country: String?
     /// Stable per-device UUID for this catch, used as the server-side
     /// idempotency key when uploading to `POST /v1/catches`. Assigned
     /// lazily by `CatchUploader` (not at insert time) so existing rows
@@ -109,6 +116,7 @@ final class Catch {
         altitudeMeters: Double? = nil,
         velocityMps: Double? = nil,
         placeName: String? = nil,
+        country: String? = nil,
         rarity: Rarity? = nil,
         aircraftType: AircraftType? = nil
     ) {
@@ -127,6 +135,7 @@ final class Catch {
         self.altitudeMeters = altitudeMeters
         self.velocityMps = velocityMps
         self.placeName = placeName
+        self.country = country
         // If the caller didn't explicitly classify, run the classifier
         // at insert time so the row is born with a stable (rarity, type)
         // pair. Rows written before this field existed end up with nil

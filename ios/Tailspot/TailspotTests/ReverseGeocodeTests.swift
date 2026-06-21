@@ -44,4 +44,21 @@ struct ReverseGeocodeTests {
         #expect(ReverseGeocode.format(locality: nil, adminArea: nil, country: nil) == nil)
         #expect(ReverseGeocode.format(locality: "", adminArea: "  ", country: "") == nil)
     }
+
+    // MARK: - Country key (ISO-preferred fallback)
+
+    @Test func countryPrefersISOCode() {
+        #expect(ReverseGeocode.countryKey(isoCountryCode: "US", country: "United States") == "US")
+    }
+
+    @Test func countryFallsBackToDisplayNameWhenNoISO() {
+        #expect(ReverseGeocode.countryKey(isoCountryCode: nil, country: "France") == "France")
+        // Empty/whitespace ISO collapses to nil → fall back to the name.
+        #expect(ReverseGeocode.countryKey(isoCountryCode: "  ", country: "Germany") == "Germany")
+    }
+
+    @Test func countryNilWhenNeitherPresent() {
+        #expect(ReverseGeocode.countryKey(isoCountryCode: nil, country: nil) == nil)
+        #expect(ReverseGeocode.countryKey(isoCountryCode: "", country: "") == nil)
+    }
 }
