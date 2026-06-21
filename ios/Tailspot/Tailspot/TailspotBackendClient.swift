@@ -11,17 +11,18 @@
 //
 //  Deliberate seams:
 //  - `baseURL` is injectable (tests, local dev server, future hostname move).
-//  - Errors are thrown as `OpenSkyClient.ClientError` so ADSBManager's
-//    existing 429-backoff (`catch OpenSkyClient.ClientError.rateLimited`)
-//    works unchanged. A shared error enum is cutover (WP 1.8) cleanup —
-//    renaming it now would touch ADSBManager for no behavior change.
+//  - Errors are thrown as `ADSBSourceError` (a source-neutral enum) so
+//    ADSBManager's 429-backoff (`catch ADSBSourceError.rateLimited`) works.
 //  - The wire DTOs (`BackendAircraftResponse` etc.) are separate from
 //    `Aircraft`, mirroring how `AircraftSnapshot` stays separate in the
 //    replay format: backend wire changes must not ripple into core types.
 //
-//  This client is NOT yet the default source — ContentView still builds
-//  ADSBManager with OpenSkyClient. The flip happens at cutover (WP 1.8),
-//  after field-testing a build that uses this client end-to-end.
+//  This is the ONLY ADS-B source. OpenSky (device-direct) and the mock
+//  source were removed in the 2026-06-21 cutover: the backend is field-proven,
+//  and the silent backend→OpenSky failover hid backend problems mid-session
+//  while dragging along an OAuth-secret apparatus that had leaked twice. If
+//  api.tailspot.app is unreachable now, the app surfaces the error rather than
+//  degrading to a sparser source.
 //
 
 import Foundation
@@ -124,14 +125,14 @@ nonisolated struct TailspotBackendClient: ADSBSource {
             URLQueryItem(name: "lamax", value: String(lamax)),
             URLQueryItem(name: "lomax", value: String(lomax)),
         ]
-        guard let url = comps?.url else { throw OpenSkyClient.ClientError.badURL }
+        guard let url = comps?.url else { throw ADSBSourceError.badURL }
 
         let data = try await get(url)
         do {
             let decoded = try JSONDecoder().decode(BackendAircraftResponse.self, from: data)
             return decoded.aircraft.map { $0.asAircraft() }
         } catch {
-            throw OpenSkyClient.ClientError.decoding(error)
+            throw ADSBSourceError.decoding(error)
         }
     }
 
@@ -140,7 +141,7 @@ nonisolated struct TailspotBackendClient: ADSBSource {
         let data: Data
         do {
             data = try await get(url)
-        } catch OpenSkyClient.ClientError.http(let status) where status == 404 {
+        } catch ADSBSourceError.http(let status) where status == 404 {
             // Unknown airframe is a real answer, not an error — the metadata
             // cache stores nil as a known-miss so we don't re-fetch.
             return nil
@@ -149,7 +150,7 @@ nonisolated struct TailspotBackendClient: ADSBSource {
             return try JSONDecoder().decode(BackendMetadata.self, from: data)
                 .asAircraftMetadata()
         } catch {
-            throw OpenSkyClient.ClientError.decoding(error)
+            throw ADSBSourceError.decoding(error)
         }
     }
 
@@ -157,12 +158,12 @@ nonisolated struct TailspotBackendClient: ADSBSource {
     private func get(_ url: URL) async throws -> Data {
         let (data, response) = try await session.data(from: url)
         guard let http = response as? HTTPURLResponse else {
-            throw OpenSkyClient.ClientError.http(status: -1)
+            throw ADSBSourceError.http(status: -1)
         }
         switch http.statusCode {
         case 200: return data
-        case 429: throw OpenSkyClient.ClientError.rateLimited
-        default: throw OpenSkyClient.ClientError.http(status: http.statusCode)
+        case 429: throw ADSBSourceError.rateLimited
+        default: throw ADSBSourceError.http(status: http.statusCode)
         }
     }
 }

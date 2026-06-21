@@ -73,25 +73,13 @@
 	<false/>
 
 	<!--
-		Custom keys for OpenSky OAuth2 credentials. Values are
-		substituted from xcconfig at build time. When the xcconfig
-		secrets file is missing the substitution resolves to empty
-		strings (and OpenSkyClient falls back to anonymous mode).
-
-		These values are present in the shipped binary — anyone with
-		the .ipa can extract them. v0 only; backend proxy for v1.
-	-->
-	<key>OpenSkyClientID</key>
-	<string>$(OPENSKY_CLIENT_ID)</string>
-	<key>OpenSkyClientSecret</key>
-	<string>$(OPENSKY_CLIENT_SECRET)</string>
-
-	<!--
 		PostHog project API key for anonymous product analytics.
-		Same substitution pattern as the OpenSky credentials above.
-		When absent or empty, Analytics.swift is a silent no-op.
-		Value comes from POSTHOG_API_KEY in Tailspot.secrets.xcconfig
-		(gitignored; never committed).
+		$(VAR) is substituted from xcconfig at build time. When absent
+		or empty, Analytics.swift is a silent no-op. Value comes from
+		POSTHOG_API_KEY in Tailspot.secrets.xcconfig (gitignored; never
+		committed). This is the ONLY remaining build-time secret — the
+		OpenSky OAuth credentials were removed in the 2026-06-21 cutover,
+		so the shipped binary no longer carries any extractable API secret.
 	-->
 	<key>PostHogAPIKey</key>
 	<string>$(POSTHOG_API_KEY)</string>

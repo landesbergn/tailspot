@@ -365,13 +365,16 @@ struct CatchDetailView: View {
             }
         }
 
-        if first.placeName == nil, first.observerLat != 0 || first.observerLon != 0 {
-            if let place = await ReverseGeocode.placeName(
+        // Place + country are both properties of the observer location, so
+        // one geocode fills whichever is still nil (fill-if-nil; never
+        // overwrites a recorded value).
+        if (first.placeName == nil || first.country == nil),
+           first.observerLat != 0 || first.observerLon != 0 {
+            let (place, country) = await ReverseGeocode.placeAndCountry(
                 lat: first.observerLat, lon: first.observerLon
-            ) {
-                first.placeName = place
-                dirty = true
-            }
+            )
+            if first.placeName == nil, let place { first.placeName = place; dirty = true }
+            if first.country == nil, let country { first.country = country; dirty = true }
         }
 
         if dirty { try? modelContext.save() }

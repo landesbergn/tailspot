@@ -106,6 +106,11 @@ struct TrophyView: View {
                 .foregroundStyle(Brand.Color.textTertiary)
         }
         .frame(width: size, height: size)
+        // Match `unlockedHex`'s rasterization so locked and unlocked hexes
+        // composite identically during a segment page-slide — without this
+        // the two paths render through different pipelines and the locked
+        // ones could flicker on the Trophies tab transition.
+        .drawingGroup()
     }
 }
 
@@ -163,6 +168,27 @@ struct TrophyIcon: View {
             case "ticket":        TicketIcon().style(color, lineWidth: 1.8 * scale)
             case "gems":          GemsIcon().style(color, lineWidth: 1.7 * scale)
             case "calendar":      CalendarIcon().style(color, lineWidth: 1.7 * scale)
+            case "eye":           EyeIcon().style(color, lineWidth: 1.9 * scale)
+            case "hattrick":      TopHatIcon().style(color, lineWidth: 2 * scale)
+            case "worldwide":     WorldwideIcon().style(color, lineWidth: 1.9 * scale)
+            case "repeat":        RepeatIcon().style(color, lineWidth: 2 * scale)
+            case "streak":        FlameIcon().style(color, filled: true)
+            case "jumbo":         JumboIcon().style(color, lineWidth: 1.8 * scale)
+            case "cargo":         CargoIcon().style(color, lineWidth: 1.8 * scale)
+            case "bizjet":        BizjetIcon().style(color, lineWidth: 1.8 * scale)
+            case "prop":          PropIcon().style(color, lineWidth: 2 * scale)
+            case "star":          StarIcon().style(color, filled: true)
+            case "heli":          HeliIcon().style(color, lineWidth: 1.8 * scale)
+            case "altitude":      AltitudeIcon().style(color, lineWidth: 2 * scale)
+            case "speed":         SpeedIcon().style(color, lineWidth: 2 * scale)
+            case "stack":         StackIcon().style(color, filled: true)
+            case "clock":         ClockIcon().style(color, lineWidth: 1.9 * scale)
+            case "approach":      ApproachIcon().style(color, lineWidth: 2 * scale)
+            case "grid":          GridIcon().style(color, filled: true)
+            case "home":          HomeIcon().style(color, lineWidth: 1.9 * scale)
+            case "weekend":       SunIcon().style(color, lineWidth: 1.9 * scale)
+            case "sunrise":       SunriseIcon().style(color, lineWidth: 1.9 * scale)
+            case "twin":          TwinIcon().style(color, lineWidth: 1.8 * scale)
             default:              CatcherIcon().style(color, lineWidth: 2 * scale, dashed: true)
             }
         }
@@ -448,23 +474,323 @@ private struct SetMasterIcon: Shape {
 private struct NightOwlIcon: Shape {
     func path(in rect: CGRect) -> Path {
         let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
         var p = Path()
-        // Moon (rough crescent via path).
-        p.move(to: .init(x: 14*s, y: 4*s))
-        p.addCurve(to: .init(x: 14*s, y: 28*s),
-                   control1: .init(x: 2*s,  y: 4*s),
-                   control2: .init(x: 2*s,  y: 28*s))
-        p.addCurve(to: .init(x: 11*s, y:  9*s),
-                   control1: .init(x: 17*s, y: 24*s),
-                   control2: .init(x: 11*s, y: 14*s))
-        p.addCurve(to: .init(x: 14*s, y:  4*s),
-                   control1: .init(x: 12*s, y:  8*s),
-                   control2: .init(x: 13*s, y:  6*s))
+        // Clean crescent: outer edge bulges far left, the inner "bite" bulges
+        // less, both meeting at the top (18,5) and bottom (18,27) points.
+        p.move(to: pt(18, 5))
+        p.addCurve(to: pt(18, 27), control1: pt(4, 8),  control2: pt(4, 24))    // outer edge
+        p.addCurve(to: pt(18, 5),  control1: pt(14, 22), control2: pt(14, 10))  // inner bite
         p.closeSubpath()
-        // Star dots.
-        p.addEllipse(in: CGRect(x: 23*s, y:  8*s, width: 2*s, height: 2*s))
-        p.addEllipse(in: CGRect(x: 24.8*s, y: 12.8*s, width: 2.4*s, height: 2.4*s))
-        p.addEllipse(in: CGRect(x: 21.2*s, y: 15.2*s, width: 1.6*s, height: 1.6*s))
+        // Two small stars.
+        p.addEllipse(in: CGRect(x: 23 * s, y: 9 * s, width: 2.4 * s, height: 2.4 * s))
+        p.addEllipse(in: CGRect(x: 25.4 * s, y: 14 * s, width: 1.8 * s, height: 1.8 * s))
+        return p
+    }
+}
+
+/// Red Eye — an almond eye with a pupil.
+private struct EyeIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(5, 16))
+        p.addQuadCurve(to: pt(27, 16), control: pt(16, 8))    // upper lid
+        p.addQuadCurve(to: pt(5, 16), control: pt(16, 24))    // lower lid
+        p.addEllipse(in: CGRect(x: 13 * s, y: 13 * s, width: 6 * s, height: 6 * s))  // pupil
+        return p
+    }
+}
+
+/// Hat Trick — a top hat (the hat-trick tradition).
+private struct TopHatIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(4, 23)); p.addLine(to: pt(28, 23))      // brim
+        p.move(to: pt(9, 23))                                 // crown
+        p.addLine(to: pt(10, 7))
+        p.addLine(to: pt(22, 7))
+        p.addLine(to: pt(23, 23))
+        p.move(to: pt(9.6, 18)); p.addLine(to: pt(22.4, 18))  // band
+        return p
+    }
+}
+
+/// Mr. Worldwide — a globe with a flag planted on it.
+private struct WorldwideIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 5 * s, y: 9 * s, width: 17 * s, height: 17 * s))  // globe
+        p.move(to: pt(5, 17.5)); p.addLine(to: pt(22, 17.5))                          // equator
+        p.move(to: pt(13.5, 9)); p.addCurve(to: pt(13.5, 26), control1: pt(8.5, 14), control2: pt(8.5, 21))
+        p.move(to: pt(13.5, 9)); p.addCurve(to: pt(13.5, 26), control1: pt(18.5, 14), control2: pt(18.5, 21))
+        p.move(to: pt(22, 4)); p.addLine(to: pt(22, 13))                              // flag pole
+        p.move(to: pt(22, 4)); p.addLine(to: pt(27.5, 5.8)); p.addLine(to: pt(22, 7.6))  // pennant
+        return p
+    }
+}
+
+/// Repeat Customer — two arrows cycling round (it comes back around).
+private struct RepeatIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(7, 14)); p.addQuadCurve(to: pt(25, 14), control: pt(16, 4))   // top arc
+        p.move(to: pt(21, 13)); p.addLine(to: pt(25, 14)); p.addLine(to: pt(24, 10))  // top arrowhead
+        p.move(to: pt(25, 18)); p.addQuadCurve(to: pt(7, 18), control: pt(16, 28))  // bottom arc
+        p.move(to: pt(11, 19)); p.addLine(to: pt(7, 18)); p.addLine(to: pt(8, 22))    // bottom arrowhead
+        return p
+    }
+}
+
+/// Streak — a flame (you're on fire).
+private struct FlameIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(16, 3))
+        p.addCurve(to: pt(24, 19), control1: pt(19, 9),  control2: pt(24, 12))
+        p.addCurve(to: pt(16, 29), control1: pt(24, 25), control2: pt(20, 29))
+        p.addCurve(to: pt(8, 19),  control1: pt(12, 29), control2: pt(8, 25))
+        p.addCurve(to: pt(16, 3),  control1: pt(8, 13),  control2: pt(13, 11))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Heavy Metal — a four-engine giant (wing + 4 engine pods + fuselage + tail).
+private struct JumboIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(16, 5)); p.addLine(to: pt(16, 26))            // fuselage
+        p.move(to: pt(4, 15)); p.addLine(to: pt(28, 15))            // wing
+        p.move(to: pt(11, 26)); p.addLine(to: pt(21, 26))           // tailplane
+        for x in [8.0, 12.0, 20.0, 24.0] {                          // 4 engine pods
+            p.addRoundedRect(in: CGRect(x: (x - 1.4) * s, y: 16 * s, width: 2.8 * s, height: 4 * s),
+                             cornerSize: .init(width: 1 * s, height: 1 * s))
+        }
+        return p
+    }
+}
+
+/// Heavy Hauler — a shipping/cargo box.
+private struct CargoIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 6 * s, y: 8 * s, width: 20 * s, height: 18 * s),
+                         cornerSize: .init(width: 2 * s, height: 2 * s))
+        p.move(to: pt(6, 14)); p.addLine(to: pt(26, 14))           // lid line
+        p.move(to: pt(16, 8)); p.addLine(to: pt(16, 14))           // seam
+        return p
+    }
+}
+
+/// Business Class — a small sleek swept jet.
+private struct BizjetIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 15 * s, y: 5 * s, width: 2 * s, height: 20 * s),
+                         cornerSize: .init(width: 1 * s, height: 1 * s))   // thin fuselage
+        p.move(to: pt(16, 12)); p.addLine(to: pt(7, 16)); p.addLine(to: pt(16, 15))   // left wing
+        p.move(to: pt(16, 12)); p.addLine(to: pt(25, 16)); p.addLine(to: pt(16, 15))  // right wing
+        p.move(to: pt(16, 22)); p.addLine(to: pt(12, 25)); p.addLine(to: pt(16, 24))  // tail
+        p.move(to: pt(16, 22)); p.addLine(to: pt(20, 25)); p.addLine(to: pt(16, 24))
+        return p
+    }
+}
+
+/// Spinning Props — a three-blade propeller.
+private struct PropIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 14 * s, y: 14 * s, width: 4 * s, height: 4 * s))   // hub
+        p.move(to: pt(16, 16)); p.addLine(to: pt(16, 4))     // blade up
+        p.move(to: pt(16, 16)); p.addLine(to: pt(26, 22))    // blade lower-right
+        p.move(to: pt(16, 16)); p.addLine(to: pt(6, 22))     // blade lower-left
+        return p
+    }
+}
+
+/// Brass Hat — a five-point star (military).
+private struct StarIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        let c = CGPoint(x: 16 * s, y: 16.5 * s)
+        let outer = 11.5 * s, inner = 4.6 * s
+        var p = Path()
+        for i in 0..<10 {
+            let r = i.isMultiple(of: 2) ? outer : inner
+            let a = -Double.pi / 2 + Double(i) * .pi / 5
+            let point = CGPoint(x: c.x + CGFloat(cos(a)) * r, y: c.y + CGFloat(sin(a)) * r)
+            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Whirlybird — a helicopter (body + main rotor + tail boom + tail rotor).
+private struct HeliIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 8 * s, y: 13 * s, width: 12 * s, height: 9 * s))   // cabin
+        p.move(to: pt(4, 11)); p.addLine(to: pt(22, 11))           // main rotor
+        p.move(to: pt(13, 11)); p.addLine(to: pt(13, 13))          // mast
+        p.move(to: pt(20, 17)); p.addLine(to: pt(28, 17))          // tail boom
+        p.move(to: pt(28, 14)); p.addLine(to: pt(28, 20))          // tail rotor
+        p.move(to: pt(10, 22)); p.addLine(to: pt(18, 22))          // skid
+        return p
+    }
+}
+
+/// Mile High — a double up-chevron (way up there).
+private struct AltitudeIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(8, 15)); p.addLine(to: pt(16, 6));  p.addLine(to: pt(24, 15))
+        p.move(to: pt(8, 24)); p.addLine(to: pt(16, 15)); p.addLine(to: pt(24, 24))
+        return p
+    }
+}
+
+/// Speed Demon — motion lines + a forward chevron.
+private struct SpeedIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(4, 11)); p.addLine(to: pt(16, 11))
+        p.move(to: pt(4, 16)); p.addLine(to: pt(20, 16))
+        p.move(to: pt(4, 21)); p.addLine(to: pt(16, 21))
+        p.move(to: pt(20, 9)); p.addLine(to: pt(28, 16)); p.addLine(to: pt(20, 23))   // chevron
+        return p
+    }
+}
+
+/// Marathon — three stacked bars (a big pile of catches).
+private struct StackIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        for y in [9.0, 15.0, 21.0] {
+            p.addRoundedRect(in: CGRect(x: 7 * s, y: y * s, width: 18 * s, height: 3.4 * s),
+                             cornerSize: .init(width: 1.5 * s, height: 1.5 * s))
+        }
+        return p
+    }
+}
+
+/// Around the Clock — a clock face with two hands.
+private struct ClockIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 6 * s, y: 6 * s, width: 20 * s, height: 20 * s))   // face
+        p.move(to: pt(16, 16)); p.addLine(to: pt(16, 9))      // hour hand
+        p.move(to: pt(16, 16)); p.addLine(to: pt(21, 18))     // minute hand
+        return p
+    }
+}
+
+/// On the Deck — a double down-chevron (low, descending).
+private struct ApproachIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(8, 8));  p.addLine(to: pt(16, 17)); p.addLine(to: pt(24, 8))
+        p.move(to: pt(8, 17)); p.addLine(to: pt(16, 26)); p.addLine(to: pt(24, 17))
+        return p
+    }
+}
+
+/// Variety Pack / Full Deck — a 2×2 grid of tiles (a varied collection).
+private struct GridIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        for (x, y) in [(7.0, 7.0), (18.0, 7.0), (7.0, 18.0), (18.0, 18.0)] {
+            p.addRoundedRect(in: CGRect(x: x * s, y: y * s, width: 7 * s, height: 7 * s),
+                             cornerSize: .init(width: 1.6 * s, height: 1.6 * s))
+        }
+        return p
+    }
+}
+
+/// Homebody — a house.
+private struct HomeIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(5, 15)); p.addLine(to: pt(16, 6)); p.addLine(to: pt(27, 15))   // roof
+        p.move(to: pt(8, 13)); p.addLine(to: pt(8, 26)); p.addLine(to: pt(24, 26)); p.addLine(to: pt(24, 13))  // walls
+        p.move(to: pt(13, 26)); p.addLine(to: pt(13, 19)); p.addLine(to: pt(19, 19)); p.addLine(to: pt(19, 26))  // door
+        return p
+    }
+}
+
+/// Weekend Warrior — a sun.
+private struct SunIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        let c = CGPoint(x: 16 * s, y: 16 * s)
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 11 * s, y: 11 * s, width: 10 * s, height: 10 * s))   // disc
+        for i in 0..<8 {                                                                 // 8 rays
+            let a = Double(i) * .pi / 4
+            let inner = CGPoint(x: c.x + CGFloat(cos(a)) * 8 * s, y: c.y + CGFloat(sin(a)) * 8 * s)
+            let outer = CGPoint(x: c.x + CGFloat(cos(a)) * 12.5 * s, y: c.y + CGFloat(sin(a)) * 12.5 * s)
+            p.move(to: inner); p.addLine(to: outer)
+        }
+        return p
+    }
+}
+
+/// Dawn Patrol — a sun rising over the horizon.
+private struct SunriseIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(4, 23)); p.addLine(to: pt(28, 23))                                 // horizon
+        p.addArc(center: pt(16, 23), radius: 6 * s, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)  // half sun
+        p.move(to: pt(16, 11)); p.addLine(to: pt(16, 8))                                 // up ray
+        p.move(to: pt(8, 15));  p.addLine(to: pt(6, 13))                                 // left ray
+        p.move(to: pt(24, 15)); p.addLine(to: pt(26, 13))                                // right ray
+        return p
+    }
+}
+
+/// Doubleheader — two overlapping cards (the same thing, twice).
+private struct TwinIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 6 * s, y: 9 * s, width: 16 * s, height: 11 * s),
+                         cornerSize: .init(width: 2 * s, height: 2 * s))   // back
+        p.addRoundedRect(in: CGRect(x: 11 * s, y: 13 * s, width: 16 * s, height: 11 * s),
+                         cornerSize: .init(width: 2 * s, height: 2 * s))   // front
         return p
     }
 }
@@ -629,19 +955,49 @@ private extension Shape {
     }
 }
 
+/// Every trophy icon name in the set — the single source of truth for the
+/// debug gallery and the preview below.
+let trophyIconNames = [
+    "catcher", "widebody", "regional", "longlens", "world",
+    "constellation", "quintet", "diamond", "sparkle", "crown",
+    "centurion", "setmaster", "night", "heritage", "coast",
+    "narrowbody", "ticket", "gems", "calendar",
+    "eye", "hattrick", "worldwide", "repeat", "streak",
+    "jumbo", "cargo", "bizjet", "prop", "star", "heli",
+    "altitude", "speed", "stack", "clock",
+    "approach", "grid", "home", "weekend", "sunrise", "twin",
+]
+
+#if DEBUG
+/// DEBUG-only grid of every trophy icon (in the earned cyan hex) for visual
+/// review — "loop through each badge". Presented from the debug panel.
+struct TrophyIconGallery: View {
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 22) {
+                ForEach(trophyIconNames, id: \.self) { name in
+                    VStack(spacing: 8) {
+                        TrophyView(tier: .platinum, iconName: name, size: 76)
+                        Text(name)
+                            .font(Brand.Font.mono(size: 10, weight: .semibold))
+                            .foregroundStyle(Brand.Color.textTertiary)
+                    }
+                }
+            }
+            .padding(24)
+        }
+        .background(Brand.Color.bgPrimary)
+    }
+}
+#endif
+
 #Preview {
     ScrollView {
-        let icons = [
-            "catcher", "widebody", "regional", "longlens", "world",
-            "constellation", "quintet", "diamond", "sparkle", "crown",
-            "centurion", "setmaster", "night", "heritage", "coast",
-            "narrowbody", "ticket", "gems", "calendar"
-        ]
         let tiers: [TrophyTier] = [.bronze, .silver, .gold, .platinum]
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 16) {
-            ForEach(0..<icons.count, id: \.self) { idx in
+            ForEach(0..<trophyIconNames.count, id: \.self) { idx in
                 let tier = tiers[idx % tiers.count]
-                TrophyView(tier: tier, iconName: icons[idx], size: 72)
+                TrophyView(tier: tier, iconName: trophyIconNames[idx], size: 72)
             }
             TrophyView(tier: .bronze, iconName: "catcher", size: 72, locked: true)
         }

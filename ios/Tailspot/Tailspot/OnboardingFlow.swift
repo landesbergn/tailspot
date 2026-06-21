@@ -492,6 +492,8 @@ struct OnboardingFlow: View {
             UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
             handleTakenError = nil
             Analytics.capture("handle_claimed", ["result": .string("success")])
+            // Set the claimed handle as a PostHog person property (SDK $set).
+            PostHogSessionReplay.capture("handle claimed", userProperties: ["handle": trimmed])
             onFinish()
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken. Try a different handle."
