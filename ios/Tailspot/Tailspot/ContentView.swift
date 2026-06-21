@@ -1298,8 +1298,11 @@ struct ContentView: View {
             : Brand.Color.textSecondary
         return GeometryReader { geo in
             ZStack {
-                emptyReticle
-                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                // No centered reticle box here by design: the camera
+                // opens clean and a reticle only appears once a plane
+                // is in view (the per-plane brackets in `PlaneLabel`).
+                // Only the low status pill remains so the user still
+                // knows whether we're scanning / out of range / errored.
                 VStack {
                     Spacer()
                     HStack(spacing: 8) {
@@ -1319,14 +1322,6 @@ struct ContentView: View {
                 }
             }
         }
-    }
-
-    /// Cyan corner-bracket box at screen center. 200×200 px. The cyan is
-    /// kept low (55 %) so it stays out of the way until it's the only thing
-    /// on screen; the dark halo behind it (full opacity, from `LockBrackets`)
-    /// keeps it findable against a bright sky. Tune on-device (R5).
-    private var emptyReticle: some View {
-        LockBrackets(boxSize: 200, color: Brand.Color.cyan, opacity: 0.55)
     }
 
     // MARK: - Top: sensor readout
@@ -2018,7 +2013,11 @@ private struct PlaneLabel: View {
             .nonEmpty
             ?? aircraft.aircraft.icao24.uppercased()
         let bracketBoxSize: CGFloat = isPinned ? 140 : 96
-        let bracketLineWidth: CGFloat = isPinned ? 2.5 : 1.2
+        // Wider cyan strokes so the blue reads as the focus. The dark
+        // halo in `LockBrackets` is drawn at `lineWidth + 2 * haloWidth`,
+        // so a ~1.5 px black outline still rings the thicker blue and
+        // keeps the bracket legible against a bright sky.
+        let bracketLineWidth: CGFloat = isPinned ? 3.5 : 2.0
         let bracketOpacity: Double = isPinned ? 1.0 : 0.55
 
         VStack(spacing: 2) {
