@@ -21,7 +21,10 @@
 //
 
 import CoreImage
-import CoreML
+// `@preconcurrency`: CoreML's `MLModel` predates Sendable annotations, so a
+// stored `let model: MLModel` trips a Swift 6 Sendable warning. Prediction is
+// thread-safe (see the threading note above), so we suppress it at the import.
+@preconcurrency import CoreML
 import CoreVideo
 import Foundation
 import os     // os.Logger interpolation in the Log helpers

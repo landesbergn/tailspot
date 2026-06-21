@@ -701,7 +701,11 @@ nonisolated enum Trophies {
 
 // MARK: - Per-achievement evaluation
 
-extension Achievement {
+// `nonisolated` does not propagate from the struct to its extensions under
+// Xcode 26's MainActor-by-default isolation, so this extension must opt out
+// explicitly — otherwise these pure evaluators become implicitly @MainActor
+// and can't be called from `nonisolated` callers like `TrophyUnlock`.
+nonisolated extension Achievement {
 
     /// The single threshold this binary achievement is earned at.
     var threshold: Int { tiers.first?.at ?? 1 }

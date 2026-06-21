@@ -26,7 +26,10 @@
 //      automatic context style — a US-locale device shows "Berkeley,
 //      CA"; other locales may append the country.
 //    • cityName        — locality only, for the no-context fallback.
-//    • regionName      — country name, for the tail cases.
+//    • regionName      — localized country name, for the tail cases.
+//    • region?.identifier — ISO region code ("US"); the structured
+//      replacement for the deprecated placemark.isoCountryCode, used as
+//      the stable, locale-independent country key.
 //  The `format` function still handles every degradation path (no
 //  city, no admin, country-only, nil) via the no-city tail.
 //
@@ -72,18 +75,19 @@ nonisolated enum ReverseGeocode {
             // Tail: no city — degrade through region/country/nil via format.
             place = format(locality: rep?.cityName, adminArea: nil, country: rep?.regionName)
         }
-        return (place, countryKey(from: item))
+        return (place, countryKey(from: rep))
     }
 
-    /// Stable country identifier off the map item's placemark: the ISO
-    /// country code when present (locale-independent — "US" everywhere),
-    /// else the country display name. `MKMapItem.placemark` is the
-    /// documented carrier of `isoCountryCode` (deprecated on iOS 26 but
-    /// still the only structured ISO source — the address-representation
-    /// surface exposes only locale-formatted region/city strings).
+    /// Stable country identifier off the address representation: the ISO
+    /// region code when present (locale-independent — "US" everywhere),
+    /// else the localized country display name. iOS 26's
+    /// `MKAddressRepresentations.region?.identifier` is the structured ISO
+    /// source that replaced the deprecated `MKMapItem.placemark.isoCountryCode`
+    /// (the Swift overlay refines `regionCode` → `region: Locale.Region?`);
+    /// `regionName` carries the localized country name.
     @MainActor
-    private static func countryKey(from item: MKMapItem) -> String? {
-        countryKey(isoCountryCode: item.placemark.isoCountryCode, country: item.placemark.country)
+    private static func countryKey(from rep: MKAddressRepresentations?) -> String? {
+        countryKey(isoCountryCode: rep?.region?.identifier, country: rep?.regionName)
     }
 
     /// Pure ISO-preferred fallback, extracted so the degradation path is

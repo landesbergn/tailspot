@@ -42,7 +42,9 @@ enum PostHogSessionReplay {
             return
         }
 
-        let config = PostHogConfig(apiKey: key, host: host)
+        // `projectToken:` replaces the deprecated `apiKey:` label (posthog-ios
+        // ≥ 3.x); same value, just the renamed initializer.
+        let config = PostHogConfig(projectToken: key, host: host)
         config.sessionReplay = true
         // Screenshot mode (NOT wireframe). PostHog's wireframe mode rebuilds the
         // replay from the UIKit view hierarchy, which a SwiftUI app on Xcode 26 /
