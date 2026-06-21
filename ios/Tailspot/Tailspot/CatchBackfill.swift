@@ -18,11 +18,11 @@ import SwiftData
 
 @MainActor
 enum CatchBackfill {
-    /// One shared anonymous client for all backfill (per-catch + bulk).
+    /// One shared backend client for all backfill (per-catch + bulk).
     /// Bypasses ADSBManager's MetadataCache by design — the manager
     /// isn't reachable from the Hangar sheet; this is a one-shot
-    /// recovery path. Metadata works anonymously.
-    static let client = OpenSkyClient()
+    /// recovery path. The backend serves merged FAA / DOC-8643 metadata.
+    static let client: ADSBSource = TailspotBackendClient()
 
     /// Fill nil airframe fields on `catches` (all sharing one icao24)
     /// from `meta`. Pure given the inputs — no I/O. Returns true if it

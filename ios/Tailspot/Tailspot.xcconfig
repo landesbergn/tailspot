@@ -1,43 +1,27 @@
 // Tailspot.xcconfig — committed, public build configuration.
 //
-// Real OpenSky credentials live in `Tailspot.secrets.xcconfig` next
-// to this file. That file is gitignored and never committed. It
-// defines OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET; we `#include?`
-// it (the `?` makes the include optional — missing file is fine, no
-// build error). When absent, the credentials below resolve to empty
-// strings, the app launches in OpenSky's anonymous tier
-// (400 credits/day, exhausted in ~1.3hr), and OpenSkyClient logs
-// "credentials MISSING (anonymous)" so you can tell from the device
-// log stream.
+// The app no longer ships any API secret in its binary: OpenSky (the
+// only credentialed source) was removed in the 2026-06-21 cutover, so
+// there are no OAuth credentials to bake in. ADS-B now comes solely from
+// the Tailspot backend (api.tailspot.app), which needs no per-app secret.
 //
-// To set up real credentials locally:
-//   1. Copy Tailspot.secrets.example.xcconfig to Tailspot.secrets.xcconfig
-//   2. Paste your OpenSky client ID + secret
-//   3. Clean build (xcodebuild clean / Cmd+Shift+K) — Xcode caches
-//      resolved Info.plist values per-build.
-//
-// Apple's INFOPLIST_KEY_<KeyName> mechanism merges arbitrary keys
-// into the auto-generated Info.plist, but only for Apple-sanctioned
-// keys. For custom keys (OpenSkyClientID / OpenSkyClientSecret) we
-// use a manual Info.plist with $(VAR) substitution — see
-// `ios/Tailspot/Info.plist`. The substitution happens at build time,
-// so the resolved values are baked into the shipped binary.
-
-// Defaults — empty when no secrets file is present. The empty
-// strings flow into Info.plist via $(OPENSKY_CLIENT_ID) substitution
-// there; OpenSkyClient treats empty Info.plist values as "no creds"
-// and falls back to anonymous mode.
+// The one remaining build-time secret is the PostHog analytics key, which
+// is OPTIONAL — when absent the app simply disables analytics.
 //
 // POSTHOG_API_KEY: PostHog project API key for anonymous product analytics.
 // When absent or empty, Analytics is a silent no-op (zero network).
 // See ios/Tailspot/Tailspot/Analytics.swift for the full privacy posture.
 //
-// `#include?` (with the question mark) is the optional-include
-// directive — if the file is missing, no error. The secrets file,
-// when present, gets included AFTER these defaults, so its
-// assignments override (last-wins is xcconfig precedence).
-OPENSKY_CLIENT_ID =
-OPENSKY_CLIENT_SECRET =
+// It lives in `Tailspot.secrets.xcconfig` (gitignored, never committed),
+// included below via the optional-include directive `#include?` — if the
+// file is missing there's no build error. The secrets file, when present,
+// gets included AFTER this default, so its assignment overrides
+// (last-wins is xcconfig precedence). It flows into Info.plist via the
+// $(POSTHOG_API_KEY) substitution there.
+//
+// To set up the key locally: copy Tailspot.secrets.example.xcconfig to
+// Tailspot.secrets.xcconfig and paste the value (clean build after — Xcode
+// caches resolved Info.plist values per-build).
 POSTHOG_API_KEY =
 
 #include? "Tailspot.secrets.xcconfig"

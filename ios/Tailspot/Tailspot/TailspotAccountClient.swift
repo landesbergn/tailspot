@@ -9,9 +9,8 @@
 //  Conventions mirror TailspotBackendClient.swift exactly:
 //    - nonisolated struct — pure value type, safe across actors.
 //    - Separate wire DTOs (named inner types) insulated from app models.
-//    - Errors typed as AccountError (separate from OpenSkyClient.ClientError
-//      because `handleTaken` is specific to this layer; the rest of the
-//      error vocabulary is shared by convention).
+//    - Errors typed as AccountError (separate from the ADS-B sources'
+//      `ADSBSourceError` because `handleTaken` is specific to this layer).
 //    - baseURL injectable for tests / local dev.
 //
 //  Device token is stored in the system Keychain (kSecClassGenericPassword,

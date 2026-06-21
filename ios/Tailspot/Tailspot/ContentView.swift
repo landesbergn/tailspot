@@ -1530,65 +1530,17 @@ struct ContentView: View {
         return "ADSB:    fetching…"
     }
 
-    /// 3-way source cycle: OPENSKY → TAILSPOT API → MOCK → (back to OPENSKY).
-    ///
-    /// Mapping:
-    ///   OPENSKY      = useMock=false, useBackend=false
-    ///   TAILSPOT API = useMock=false, useBackend=true
-    ///   MOCK         = useMock=true  (useBackend left as-is so it's
-    ///                  remembered when cycling back to a live source)
-    ///
-    /// The [AUTH]/[ANON] tag is shown only in OPENSKY mode — it indicates
-    /// whether OAuth credentials reached the app process at launch.
+    /// Static source indicator for the debug overlay. There's exactly one
+    /// ADS-B source now (the Tailspot backend) — OpenSky and the mock source
+    /// were removed in the 2026-06-21 cutover — so this is a label, not a
+    /// toggle. Kept as a debug-overlay sanity line ("yes, the app is talking
+    /// to api.tailspot.app").
     private var sourceRow: some View {
         HStack(spacing: 8) {
-            // Source badge — color signals which tier is active
-            Group {
-                if adsb.useMock {
-                    Text("[MOCK]")
-                        .foregroundStyle(Brand.Color.alertCaution)
-                } else if adsb.useBackend {
-                    Text("[TAILSPOT API]")
-                        .foregroundStyle(Brand.Color.cyan)
-                } else {
-                    Text("[OPENSKY]")
-                        .foregroundStyle(Brand.Color.alertNormal)
-                }
-            }
-            .font(Brand.Font.mono(size: 12, weight: .bold))
-
-            // Auth tag — OPENSKY mode only
-            if !adsb.useMock && !adsb.useBackend {
-                Text(adsb.liveSourceIsAuthed ? "[AUTH]" : "[ANON]")
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
-                    .foregroundStyle(adsb.liveSourceIsAuthed
-                                     ? Brand.Color.alertNormal
-                                     : Brand.Color.alertCaution)
-            }
-
-            // Failover tag — backend selected but the last fetch fell back
-            // to OpenSky (api.tailspot.app unreachable). Clears on recovery.
-            if adsb.useBackend && !adsb.useMock && adsb.backendDegraded {
-                Text("→ OPENSKY")
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
-                    .foregroundStyle(Brand.Color.alertCaution)
-            }
-
+            Text("[TAILSPOT API]")
+                .font(Brand.Font.mono(size: 12, weight: .bold))
+                .foregroundStyle(Brand.Color.cyan)
             Spacer()
-        }
-        .contentShape(.rect)
-        .onTapGesture {
-            if adsb.useMock {
-                // MOCK → OPENSKY
-                adsb.useMock = false
-                adsb.useBackend = false
-            } else if adsb.useBackend {
-                // TAILSPOT API → MOCK
-                adsb.useMock = true
-            } else {
-                // OPENSKY → TAILSPOT API
-                adsb.useBackend = true
-            }
         }
     }
 
