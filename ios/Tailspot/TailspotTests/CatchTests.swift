@@ -69,6 +69,27 @@ struct CatchTests {
         #expect(fetched.first?.operatorName == nil)
     }
 
+    @Test func countryDefaultsToNilWhenOmitted() throws {
+        // `country` was added 2026-06 for the Mr. Worldwide trophy. Existing
+        // call sites omit it (default nil); pre-field rows decode as nil under
+        // SwiftData lightweight migration. Pin the default so a future
+        // signature change can't break the migration shape.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a3b15e",
+            callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>())
+        #expect(fetched.first?.country == nil)
+    }
+
     @Test func duplicateInsertIsRejected() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: config)
