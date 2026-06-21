@@ -35,19 +35,9 @@ struct TailspotApp: App {
 
     init() {
         Log.ui.notice("Tailspot launched")
-        // Backend is the default ADS-B source as of 0.5.0. Register the
-        // default so it applies to every install that hasn't explicitly
-        // toggled the source. SKIP it when this app is hosting a unit-test
-        // run: the test target hosts in this app, so `@main` runs first, and
-        // the registration domain is process-global — registering would force
-        // the ADSBManager tests that expect OpenSky-direct (they inject only
-        // live/mock fixtures) onto the backend. ADSBManager reads the same
-        // key; a tester's explicit opt-out lives in the standard domain and
-        // wins over this registered default. `register` only supplies a value
-        // when none exists in the persistent domains.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            UserDefaults.standard.register(defaults: [ADSBManager.useBackendDefaultsKey: true])
-        }
+        // The Tailspot backend is the only ADS-B source (OpenSky + the mock
+        // source were removed in the 2026-06-21 cutover), so there's no
+        // source default to register any more.
         do {
             container = try ModelContainer(for: Catch.self)
         } catch {

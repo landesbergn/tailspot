@@ -49,7 +49,7 @@ struct ADSBManagerTests {
 
         func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
             // Test fixture: just return nil. Tests that exercise metadata
-            // will use MockADSBSource or inject test-specific metadata.
+            // inject a metadata-specific source (see ADSBManagerMetadataTests).
             return nil
         }
     }
@@ -104,7 +104,7 @@ struct ADSBManagerTests {
             bearing: 90, distanceMeters: 10_000, altitudeMeters: 10_000, icao: "abc"
         )
         let source = FixedSource([target])
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let manager = ADSBManager(source: source)
 
         await manager.refresh(around: Self.observer())
 
@@ -127,7 +127,7 @@ struct ADSBManagerTests {
             icao: "fly"
         )
         let source = FixedSource([onGround, inAir])
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let manager = ADSBManager(source: source)
 
         await manager.refresh(around: Self.observer())
 
@@ -149,7 +149,7 @@ struct ADSBManagerTests {
         )
         // Pass them in unsorted order — manager must sort.
         let source = FixedSource([far, close, mid])
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let manager = ADSBManager(source: source)
 
         await manager.refresh(around: Self.observer())
 
@@ -159,13 +159,13 @@ struct ADSBManagerTests {
     // MARK: - Error handling
 
     @Test func rateLimitedErrorIsSurfacedAsTransientBackoffMessage() async {
-        // OpenSkyClient.ClientError.rateLimited is the typed signal that
+        // ADSBSourceError.rateLimited is the typed signal that
         // ADSBManager catches specifically to apply backoff. Verify the
         // user-facing lastError message mentions the backoff and flags
         // the error as transient so UI surfaces can render it softly
         // (the system auto-recovers; no user action required).
-        let source = FixedSource([], error: OpenSkyClient.ClientError.rateLimited)
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let source = FixedSource([], error: ADSBSourceError.rateLimited)
+        let manager = ADSBManager(source: source)
 
         await manager.refresh(around: Self.observer())
 
@@ -180,7 +180,7 @@ struct ADSBManagerTests {
         // transient flag stays false so UI surfaces treat it as a real
         // alert.
         let source = FixedSource([], error: TestError())
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let manager = ADSBManager(source: source)
 
         await manager.refresh(around: Self.observer())
 
@@ -190,7 +190,7 @@ struct ADSBManagerTests {
 
     @Test func sourceErrorsLandInLastErrorWithoutCrashing() async {
         let source = FixedSource([], error: TestError())
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let manager = ADSBManager(source: source)
 
         await manager.refresh(around: Self.observer())
 
@@ -202,7 +202,7 @@ struct ADSBManagerTests {
         let source = FixedSource([
             Self.aircraftAt(bearing: 0, distanceMeters: 10_000, altitudeMeters: 5_000, icao: "x")
         ])
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let manager = ADSBManager(source: source)
         manager.lastError = "previous"
 
         await manager.refresh(around: Self.observer())
@@ -213,7 +213,7 @@ struct ADSBManagerTests {
 
     @Test func updatesLastFetchedTimestampOnSuccess() async {
         let source = FixedSource([])
-        let manager = ADSBManager(liveSource: source, mockSource: source)
+        let manager = ADSBManager(source: source)
         #expect(manager.lastFetched == nil)
 
         let before = Date()
@@ -515,116 +515,6 @@ struct ADSBManagerTests {
         #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now) == nil)
         #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now,
                                           maxPositionAge: 250) != nil)
-    }
-
-    @Test func mockSourceIntegrationProducesFiveAircraft() async {
-        // Default ADSBManager uses real OpenSkyClient + MockADSBSource.
-        // Flipping useMock and refreshing should hit MockADSBSource,
-        // which has 5 hand-picked templates.
-        let manager = ADSBManager()
-        manager.useMock = true
-
-        await manager.refresh(around: Self.observer())
-
-        #expect(manager.observed.count == 5)
-        // All mock templates have positive elevation when observer is
-        // at sea level — sanity-check the projection math agrees.
-        for obs in manager.observed {
-            #expect(obs.elevationDeg > 0)
-        }
-    }
-}
-
-// MARK: - Backend source toggle (WP 1.6/1.8 pre-cutover)
-
-@Suite("ADSBManager backend toggle")
-@MainActor
-struct ADSBManagerBackendToggleTests {
-
-    private final class NamedSource: ADSBSource, Sendable {
-        let icao: String
-        init(icao: String) { self.icao = icao }
-
-        func aircraftInBbox(
-            lamin: Double, lomin: Double, lamax: Double, lomax: Double
-        ) async throws -> [Aircraft] {
-            [Aircraft(
-                icao24: icao, callsign: nil, originCountry: "Test",
-                longitude: -122.27, latitude: 37.96,    // ~10 km north of observer
-                altitudeMeters: 3000, velocityMps: nil, trackDeg: nil,
-                onGround: false, positionTimestamp: nil
-            )]
-        }
-
-        func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? { nil }
-    }
-
-    @Test func useBackendRoutesPollAndMetadataThroughBackendSource() async {
-        // Ephemeral defaults store, isolated from `.standard`, so the
-        // persisted `useBackend` toggle can't race concurrent suites
-        // (the 2026-06-11 CI-flake convention: no process-global state).
-        let suiteName = "tailspot.tests.backend.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let manager = ADSBManager(
-            liveSource: NamedSource(icao: "0live0"),
-            mockSource: NamedSource(icao: "0mock0"),
-            backendSource: NamedSource(icao: "0back0"),
-            defaults: defaults
-        )
-        let observer = CLLocation(latitude: 37.87, longitude: -122.27)
-
-        await manager.refresh(around: observer)
-        #expect(manager.observed.map(\.aircraft.icao24) == ["0live0"])
-
-        manager.useBackend = true
-        await manager.refresh(around: observer)
-        #expect(manager.observed.map(\.aircraft.icao24) == ["0back0"])
-
-        // Mock still wins over everything (couch-testing trumps the toggle).
-        manager.useMock = true
-        await manager.refresh(around: observer)
-        #expect(manager.observed.map(\.aircraft.icao24) == ["0mock0"])
-    }
-
-    /// A source that always throws — models api.tailspot.app being
-    /// unreachable mid-field-session.
-    private final class ThrowingSource: ADSBSource, Sendable {
-        struct Unreachable: Error {}
-        func aircraftInBbox(
-            lamin: Double, lomin: Double, lamax: Double, lomax: Double
-        ) async throws -> [Aircraft] { throw Unreachable() }
-        func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
-            throw Unreachable()
-        }
-    }
-
-    /// 0.5.0 ships the backend default-on, so a backend blip must degrade to
-    /// OpenSky for that poll — never to an empty sky. With backend selected
-    /// and its fetch throwing, the observed list must come from OpenSky and
-    /// `backendDegraded` must flip, while no user-facing error is surfaced.
-    @Test func backendFailureFailsOverToOpenSky() async {
-        let suiteName = "tailspot.tests.backend.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let manager = ADSBManager(
-            liveSource: NamedSource(icao: "0live0"),
-            mockSource: NamedSource(icao: "0mock0"),
-            backendSource: ThrowingSource(),
-            defaults: defaults
-        )
-        let observer = CLLocation(latitude: 37.87, longitude: -122.27)
-
-        manager.useBackend = true
-        await manager.refresh(around: observer)
-
-        #expect(manager.observed.map(\.aircraft.icao24) == ["0live0"],
-                "backend threw — must fail over to OpenSky's result")
-        #expect(manager.backendDegraded, "failover must mark the source degraded")
-        #expect(manager.lastError == nil,
-                "a recovered failover is not a user-facing error")
     }
 }
 

@@ -8,93 +8,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Only the **live** `Current state` block lives below; prior per-session rounds are in `CHANGELOG.md` (newest first). When you finish a round, move the previous `Current state` block to the top of `CHANGELOG.md` and write the new one here — don't stack them in this file.
 
-## Current state (as of session ending 2026-06-17 [post-0.5.0: PostHog session replay fixed + decode fix shipped])
+## Current state (as of session 2026-06-21 [cutover: OpenSky + mock source removed; backend is the only ADS-B source])
 
-**Post-0.5.0 maintenance release (same `MARKETING_VERSION` 0.5.0, build
-auto-bumps — nothing user-visible).** Shipped on `main` via three PRs: #39
-(visual-confirm decode fix), #41 (PostHog session replay, now working), #42
-(manual-ship docs). Highlights of this session:
+**Branch `fix/mock-mode-field-safety` (off `main`, not yet merged). Triggered
+by a field session in Bali where a real Citilink flight (CTV9661) "failed to
+capture" and was identified as a "United Airlines B737" that doesn't exist.**
 
-- **PostHog product events were never broken** — they flow via the SDK-free
-  REST pipeline (`Analytics.swift`); "missing" events were just the Replay/
-  Activity views filtering test-account devices. Confirmed live via the PostHog
-  MCP.
-- **Session replay now works** (`PostHogSessionReplay.swift`). Three fixes
-  found by field-testing against live PostHog data: (a) **screenshot mode**, not
-  wireframe — SwiftUI on iOS 26 renders blank in wireframe (posthog-ios#408);
-  (b) the full-screen `.postHogMask()` on the root `CameraPreview` was blacking
-  the WHOLE window (every other screen is a sheet over it) — removed, since the
-  camera is a GPU surface screenshot mode can't read and renders black on its
-  own; (c) `flushAt = 1` + `captureApplicationLifecycleEvents = true` fixed
-  ~1-in-7 capture (short sessions never hit a flush trigger). Text unmasked
-  (`maskAllTextInputs = false`) since Tailspot's text is non-sensitive game
-  data; `config.debug` is DEBUG-only. **Diagnosis lesson:** prefer querying
-  live PostHog (MCP) + an on-device experiment over chaining inference from
-  forum posts — the "SDK bug" theory was wrong; it was our own mask + flush.
-- **Decode fix (#39)** is dormant in Release (visual confirmation is
-  `#if DEBUG` + off by default), so it changes nothing for testers — it's
-  there for Noah's own dev builds and the visual-confirmation field re-record.
+- **Root cause (from the on-device replay `2026-06-21T02:14:32Z` + os_log):**
+  the app was in **MOCK** mode. A single tap on the debug source-row flips
+  Tailspot-API → MOCK, and once the wrench overlay is closed there was NO
+  indication you were seeing synthetic planes. The "United 737" was the
+  `MockADSBSource` `UAL248`/`a3b15e` fixture verbatim (`BOEING 737-800 /
+  United Airlines`). The fake catch saved to the Hangar **and queued for
+  upload to the real backend** (`CatchUploader` had no mock guard). On the
+  live source the real CTV9661 was correctly ingested (`shown=1`) but sat at
+  bearing ~222–256° while the phone pointed heading 76° — off-screen behind
+  the user — hence "nothing spotted."
 
-The 0.5.0 state below remains the live baseline of the app.
+- **Fix (per Noah's call: remove both, don't patch around them):**
+  - **Mock source removed entirely** — deleted `MockADSBSource.swift`, the
+    `useMock` toggle, and the source-cycle UI. The replay harness
+    (`ReplayRecorder`/`ReplayAnalyzer`) covers offline testing now.
+  - **OpenSky removed entirely** — deleted `OpenSkyClient.swift` and the silent
+    backend→OpenSky failover (it hid backend problems mid-session). The shared
+    error enum moved to `ADSBSourceError` in `ADSBSource.swift`. `ADSBManager`
+    now has a single injectable `source` (`init(source:)`), no `useBackend`.
+    `CatchBackfill` uses the backend client for metadata.
+  - **Credential apparatus removed** — no `OPENSKY_*` in `Tailspot.xcconfig`,
+    `Info.plist`, the secrets template, or `ci_post_clone.sh`. The shipped
+    binary now carries **no extractable API secret** beyond the optional
+    PostHog analytics key, ending the credential-leak surface (two prior leaks
+    were both OpenSky). The OpenSky secret can be deleted on its console once a
+    build with this cutover reaches testers (no tester impact).
 
-**0.5.0 is the release — backend becomes the default ADS-B source and the
-Hangar is fully redesigned.** Shipped via PR #32 (the release PR — it grew
-from "Sets redesign" to carry the whole 0.5.0: `feat/backend-default-failover`
-was merged into it so `main` transitions `0.2.2 → 0.5.0` in one Xcode Cloud
-build, no intermediate half-state to TestFlight). `MARKETING_VERSION` 0.5.0.
+- **If the backend is unreachable now**, the app surfaces an error / empty sky
+  (visible) instead of degrading to a sparser source — the intended trade for
+  debugging clarity.
 
-1. **Backend default-on with auto-failover (was `feat/backend-default-failover`).**
-   `ADSBManager` now uses the Tailspot backend (`api.tailspot.app`, adsb.lol +
-   MLAT) as the live source, auto-failing-over to OpenSky on backend trouble.
-   Precision elevation-aware visibility (kills the MLAT firehose), podium color
-   tokens. **The OpenSky secret was deliberately NOT rotated** — it's kept as
-   the failover rung, so no existing tester is broken. Rotation is a future
-   coordinated event (warn testers first), to happen only once adsb.lol is
-   fully field-proven and OpenSky is dropped from the prod ladder.
+**Tests: full iOS suite green locally (`** TEST SUCCEEDED **`); app builds
+clean (`** BUILD SUCCEEDED **`). Removed the obsolete mock-integration test +
+the entire backend-toggle test suite; swapped `OpenSkyClient.ClientError` →
+`ADSBSourceError` in fixtures.**
 
-2. **Hangar redesign (the bulk of PR #32), one card language across three tabs:**
-   - **Sets** — completion-driven make/model families, ordered by % complete,
-     cyan `CompletionRing` + "X of N variants"; tap a family → list of its
-     models (count + most-recent) → tail cards → `CatchDetailView`. MECE
-     coverage (GA props, Comac, Citation variants, …).
-   - **Recent** — a chronological feed of the shared `TailCard` (photo · cyan
-     callsign · airline · date · location). Tail lists lead with the **flight
-     callsign**, not the N-registration; "Unknown operator" resolves/backfills
-     from the callsign's ICAO prefix (`Airlines.swift`, offline).
-   - **Trophies** — awards split into **MEDALS** (leveled, bronze→platinum,
-     progress bar to next tier — goal-framed "→ SILVER 17/30", never "LOCKED")
-     and **BADGES** (1-of-1 feats, earned/locked, no tier). 19 awards (6 new:
-     Single Aisle, Frequent Flyer, Globetrotter, Set Master, Rare Hunter,
-     Regular). Two-stat header ("N/14 MEDALS · M/5 BADGES").
-   - Shell: segments switch via a **paged `TabView`** (kept alive, smooth);
-     `TrophyView` caches each hex via `.drawingGroup()` (no blur shadow) — the
-     fix for the trophies-tab compositing lag.
-
-**Process learnings (now conventions):** (a) NEVER rebase an already-pushed
-branch — merge main into the branch instead (squash-merge makes branch
-history cosmetic). (b) **When iterating across branches, `git checkout` the
-PR branch BEFORE editing** — editing on the throwaway `integration` branch
-stranded commits off PR #32 repeatedly this session; recover via cherry-pick
-or by re-pointing the tree to `integration` (the proven combination). (c)
-Tests must not touch process-global state outside a single `.serialized`
-owner suite (CI clones race). (d) Keychain APIs don't work in CI sim clones.
-(e) Cross-file SwiftUI SourceKit errors ("Cannot find 'Catch'/'Brand'") are
-cascade noise — `xcodebuild test` is the real check.
-
-**Waiting on Noah / next:** OpenSky secret rotation (deferred — coordinate +
-warn testers, after adsb.lol fully field-proven); PR #13 visual-confirm
-device eyeball; PostHog key (`POSTHOG_API_KEY` in `Tailspot.secrets.xcconfig`);
-legal read + privacy-policy hosting (PR #15, tailspot.app on Namecheap);
-website redesign (flighty.com as the bar). Watch App Store Connect → TestFlight
-→ Crashes after the 0.5.0 build lands.
-
-**Tests: iOS suite green (all TrophiesTests + the full suite pass locally);
-backend 164+, all green.**
+**Waiting on Noah / next:** field-test this branch (`bin/deploy`), then PR →
+merge → TestFlight. **Delete the existing fake "United 737" catch** from the
+Hangar (it predates the `isMock` tag, so it's untagged; it may have already
+hit the backend — worth checking the backend hangar/leaderboard for icao
+`a3b15e`). Then retire the OpenSky console credential. Still open from before:
+PR #13 visual-confirm device eyeball; PostHog key (`POSTHOG_API_KEY`); legal +
+privacy-policy hosting (PR #15); website redesign.
 
 ## Working model
 
 - Solo developer (Noah) with no prior iOS experience. Claude writes code; Noah runs it on his iPhone 16 (iOS 26.3.1) and reports back.
-- Field-test location: Berkeley/Oakland CA — under SFO/OAK approach corridors, dense ADS-B coverage. OpenSky free-tier MLAT is excluded, so most small GA, helicopters, and military traffic are invisible. Expect this.
+- Field-test location: Berkeley/Oakland CA — under SFO/OAK approach corridors, dense ADS-B coverage. The backend source includes adsb.lol MLAT, so GA, helicopters, and some military traffic now appear (they were invisible under the old OpenSky free tier). Noah also field-tests while travelling (e.g. Bali) — don't assume a US location.
 - Preference: **explain-as-we-go.** When introducing a Swift / SwiftUI / iOS pattern Noah hasn't seen, narrate it in the commit message or inline comments. He is learning iOS in parallel with shipping.
 - Pick the simplest viable iOS choice at every fork: SwiftUI over UIKit, SwiftData over Core Data, Apple-native libs over third-party, no Cocoapods/SPM deps yet.
 
@@ -122,27 +89,21 @@ Failure modes that need Noah, not a retry:
 
 `.claude/settings.json` registers a `Stop` hook running `bin/doc-staleness-check` at the end of each turn: if unpushed commits exist on `main` and none touched `CLAUDE.md` or `PLAN.md`, it blocks the turn and asks for a doc refresh (`Current state` here, §9 in PLAN.md) before stopping — replace the live `Current state` block and move the old one to `CHANGELOG.md`. The point: a session can be cleared at any time and the next agent reads docs that match what's on disk. The script self-locates via `git rev-parse --show-toplevel`. `.claude/settings.json` is gitignored; to make the hook follow the repo to other machines, add `!.claude/settings.json` to `.gitignore` and commit.
 
-## Credentials (OpenSky): xcconfig is canonical
+## Secrets: PostHog key only (OpenSky removed 2026-06-21)
 
-For LIVE mode the app authenticates to OpenSky via OAuth2 client-credentials. Anonymous tier (400 credits/day) exhausts in ~1.3 hr at the 20 s default poll rate; the registered tier (4000/day) is comfortable for testing.
+**The app no longer ships any ADS-B API secret.** The OpenSky source (the only credentialed one — OAuth2 client-credentials) and the synthetic mock source were both removed in the 2026-06-21 cutover. ADS-B now comes solely from the Tailspot backend (`api.tailspot.app`), which needs no per-app secret. There is no `OpenSkyClient`, no `MockADSBSource`, no `useMock` / `useBackend` toggle, and no OAuth credential apparatus — `ADSBManager` has a single injectable `source` (`TailspotBackendClient()` in prod, a fixture in tests).
 
-**Canonical path:** `ios/Tailspot/Tailspot.secrets.xcconfig` (gitignored) holds the real `client_id` + `client_secret`; the committed `Tailspot.xcconfig` `#include?`s it; Info.plist substitutes `$(OPENSKY_CLIENT_ID)` / `$(OPENSKY_CLIENT_SECRET)`; `OpenSkyClient.init` reads them from `Bundle.main.infoDictionary`. Xcode Cloud writes the same file via `ci_post_clone.sh` from workflow env vars. **One source of truth.**
+**The one remaining build-time secret is the PostHog analytics key, and it's optional.** `ios/Tailspot/Tailspot.secrets.xcconfig` (gitignored) holds `POSTHOG_API_KEY`; the committed `Tailspot.xcconfig` `#include?`s it; Info.plist substitutes `$(POSTHOG_API_KEY)`; Xcode Cloud writes the same file via `ci_post_clone.sh` from a workflow env var. When absent, `Analytics.swift` is a silent no-op. It's a write-only anonymous-analytics key — baked into the binary is acceptable.
 
-**The xcscheme path is deprecated.** `OpenSkyClient.init` resolves explicit → env vars → Bundle, so a stale env var in a user-only xcscheme silently wins over a fresh secrets file (this cost a debugging hour once). Don't add env vars to schemes; if you must for dev, keep exactly one source populated.
+**Leak hygiene still applies** (two real leaks in this repo's history, both OpenSky). Inspect `git diff --cached` before every commit for any secret string; finding `paste-your-` means you staged the example template (fine), a real value means abort. Secrets belong only in the gitignored `Tailspot.secrets.xcconfig` — never in `.swift` files, plists, commit messages, or a staged secrets file.
 
-**OAuth endpoint quirk:** OpenSky's token URL is on the **older Keycloak path with the `/auth/` prefix** — `https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token`. The modern path without `/auth/` 404s. Empirically verified; documented in a comment in `OpenSkyClient.swift`. API docs: https://openskynetwork.github.io/opensky-api/rest.html.
-
-**Leak prevention and response** (two leaks in this repo's history already):
-
-1. **The committed shared scheme is bare** — no env vars. `.gitignore` allows exactly one shared scheme file (`Tailspot.xcscheme`) via a `!` exception so `xcodebuild` works on fresh clones; gitignore does NOT protect already-tracked files. Inspect `git diff --cached` before every commit for `OPENSKY`, `client_secret`, or `EnvironmentVariable` — finding `paste-your-` means you staged the example template (fine); a real secret means abort. Credentials don't belong in `.swift` files, plists, commit messages, or a staged `Tailspot.secrets.xcconfig`.
-2. **If a secret leaks:** tell Noah immediately, rotate on OpenSky's API console (don't wait), update `Tailspot.secrets.xcconfig` locally, push a new Xcode Cloud build. Rotation is the mitigation, not history rewriting (prior leaks remain recoverable from GitHub's dangling-objects cache anyway).
-3. **Rotation breaks testers.** The secret is baked into shipped binaries; rotating OAuth-fails every old TestFlight build ("API limit" forever) until testers update. Warn testers before any rotation. The real fix is the backend proxy (PLAN.md §1).
+**The OpenSky secret can now be retired safely.** It was deliberately kept un-rotated as the failover rung so old TestFlight builds wouldn't break. Once a build with this cutover reaches testers, no shipped binary uses OpenSky any more, so the credential can be deleted on the OpenSky console (no tester impact) — closing the leak surface for good.
 
 ## Tests
 
 Unit tests live in `ios/Tailspot/TailspotTests/` and use Swift Testing (`@Test`, `#expect`, `@Suite`) — not XCTest. UI tests in `TailspotUITests/` are Xcode template scaffolding, slow (~3 min cold sim), and not part of the regular workflow.
 
-Run after substantive code changes, and always before committing/deploying when touching Geo, Aircraft decoding, ADSBManager, the OpenSky client, or anything they depend on:
+Run after substantive code changes, and always before committing/deploying when touching Geo, Aircraft decoding, ADSBManager, the backend source client, or anything they depend on:
 
 ```
 xcodebuild test \
@@ -163,7 +124,7 @@ The Xcode 26 app template sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`. Ever
 Convention in this repo:
 
 - **UI / state-holding types stay MainActor.** `LocationManager`, `MotionManager`, `ADSBManager`, SwiftUI views — all rely on @Published mutations being main-thread-safe by construction.
-- **Pure data, geometry, and Sendable cross-actor types are explicitly `nonisolated`.** `Aircraft`, `FailableDecodable`, the `ADSBSource` protocol, `OpenSkyClient`, `MockADSBSource`, `Geo` and its private number-extension all carry `nonisolated`.
+- **Pure data, geometry, and Sendable cross-actor types are explicitly `nonisolated`.** `Aircraft`, `FailableDecodable`, the `ADSBSource` protocol, `ADSBSourceError`, `TailspotBackendClient`, `Geo` and its private number-extension all carry `nonisolated`.
 - **Extensions get their own isolation.** `nonisolated struct Aircraft` does NOT propagate to `extension Aircraft: Decodable {}` — that extension also needs `nonisolated extension Aircraft: Decodable`. Same for any other extensions on nonisolated types.
 
 If you see a warning like *"main actor-isolated conformance of X to Y cannot be used in nonisolated context"* — the fix is almost always `nonisolated` on the extension.
@@ -175,7 +136,7 @@ These decisions are settled (PLAN.md §1) and shouldn't be relitigated without a
 - **Plane identification is geometric, not visual.** Inputs are GPS + true-north heading + camera elevation + ADS-B aircraft positions; the ID is angular correlation, not ML/CoreML object detection. **However**, per PLAN.md §1.1a, the *AR reticle placement* may eventually use CV (Vision + YOLOv8 COCO airplane class) to lock onto the actual plane image rather than the predicted position. Deferred but planned.
 - **Backend from day 1**, not optional — needed for ADS-B caching, anti-cheat, sync, leaderboards. **Not yet built.** Phase 1.
 - **Disambiguation is a v1 design problem**, not polish: when multiple aircraft fall within the angular tolerance, render an overlay tag for *each* and let the user tap one. Already in code.
-- **OpenSky free tier** is the v1 ADS-B provider — Tailspot is free with no monetization, so OpenSky's non-commercial terms fit. The `ADSBSource` protocol abstracts this; swapping to a paid provider is one file's worth of work.
+- **The Tailspot backend** (`api.tailspot.app`, adsb.lol + MLAT) is the ADS-B provider — the single source as of the 2026-06-21 cutover (OpenSky-direct and the mock source were removed). The `ADSBSource` protocol still abstracts it, so swapping or adding a provider is one file's worth of work.
 - **Photos:** commissioned illustrated cards (aircraft type × airline livery), not real photos. Sidesteps licensing.
 
 ## Key code patterns
@@ -184,7 +145,7 @@ These are the load-bearing patterns in the current codebase. Understand them bef
 
 ### ADSBSource protocol + injectable manager
 
-`ADSBManager.init(liveSource: ADSBSource = OpenSkyClient(), mockSource: ADSBSource = MockADSBSource())` lets the UI use real sources and tests inject fixtures. The `useMock` `@Published` flag switches between them at runtime; flipping it kicks an immediate refresh via `refreshNow()`.
+`ADSBManager.init(source: ADSBSource = TailspotBackendClient())` lets the UI use the real backend source and tests inject a fixture. There is exactly one source now (OpenSky-direct and the mock source were removed in the 2026-06-21 cutover), so there's no runtime source toggle — the protocol seam exists purely so tests can substitute a fixture (and a future source can drop in). `ContentView`'s `@StateObject private var adsb = ADSBManager()` depends on the no-arg default.
 
 ### Split fetch from annotation
 
@@ -229,13 +190,13 @@ The subsystem is always `"com.landesberg.tailspot"` — `bin/log-tail` predicate
 
 **Do not `print(...)` from app code.** Existing `print` calls were migrated; new ones won't be visible in the deploy-loop logs.
 
-### OpenSky OAuth token caching
+### Source error type
 
-`OpenSkyClient` uses `OSAllocatedUnfairLock<CachedToken?>` for its token cache so the class can be `Sendable` without an `actor`. Tokens refresh when within 30 s of expiry. Don't replace this with an actor unless you also rework the `ADSBSource` protocol's isolation.
+`ADSBSourceError` (in `ADSBSource.swift`) is the source-neutral transport-error enum (`badURL` / `rateLimited` / `http(status:)` / `decoding`). `TailspotBackendClient` throws it; `ADSBManager.refresh` matches `ADSBSourceError.rateLimited` to drive the 429 backoff. (Formerly `OpenSkyClient.ClientError`; promoted to a shared type in the 2026-06-21 cutover when OpenSky was deleted.)
 
 ### Metadata lookup + cache
 
-Per-icao24 metadata (manufacturer / model / registration / operator) is fetched via `OpenSkyClient.aircraftMetadata(icao24:)` and stored in a per-session `MetadataCache` actor (cap 500, bounded LRU). `ADSBManager.metadata(for:)` is the single entry point: cache hit → return; miss → fetch + cache (including `nil` 404 results as known-misses, so we don't re-fetch them). Transport errors are NOT cached so a later tap retries. Consumed by `AircraftDetailView.task` and `ContentView.task(id: lockOn.state.targetIcao24)`.
+Per-icao24 metadata (manufacturer / model / registration / operator) is fetched via the backend source's `aircraftMetadata(icao24:)` and stored in a per-session `MetadataCache` actor (cap 500, bounded LRU). `ADSBManager.metadata(for:)` is the single entry point: cache hit → return; miss → fetch + cache (including `nil` 404 results as known-misses, so we don't re-fetch them). Transport errors are NOT cached so a later tap retries. Consumed by `AircraftDetailView.task` and `ContentView.task(id: lockOn.state.targetIcao24)`. (The Hangar's offline backfill, `CatchBackfill`, uses its own `TailspotBackendClient` instance — it isn't reachable from the manager.)
 
 ### Lock-on state machine
 
@@ -298,7 +259,7 @@ Why this design: when you change projection math, visibility cutoffs, or lock-on
 
 ### Debug overlay toggle
 
-The sensor readout and aircraft-list panels are hidden by default; a wrench glyph in the top-right corner toggles them via `@State var showDebug`. The LIVE/MOCK source toggle lives inside the sensor readout — so it's only reachable when debug is on. Field-testing UI stays clean.
+The sensor readout and aircraft-list panels are hidden by default; a wrench glyph in the top-right corner toggles them via `@State var showDebug`. The source row inside the sensor readout is now a static `[TAILSPOT API]` indicator (the LIVE/MOCK/OpenSky toggle was removed in the 2026-06-21 cutover — there's only one source). Field-testing UI stays clean.
 
 ## Repository layout
 
@@ -306,7 +267,7 @@ See PLAN.md §8 for the file-by-file layout. Quick highlights:
 
 - `PLAN.md` — product + technical plan
 - `CLAUDE.md` — this file
-- `ios/Tailspot/Tailspot.xcodeproj/xcshareddata/xcschemes/Tailspot.xcscheme` — the **only** shared scheme. See "Credentials (OpenSky)" before editing it or running `git add ios/`.
+- `ios/Tailspot/Tailspot.xcodeproj/xcshareddata/xcschemes/Tailspot.xcscheme` — the **only** shared scheme. See "Secrets: PostHog key only" before editing it or running `git add ios/`.
 - `ios/Tailspot/Tailspot/` — Xcode project source. Uses **Xcode 16 synchronized folders**: any `*.swift` dropped into this directory is automatically added to the Xcode project. No manual "Add Files to Project" step.
 - `backend/`, `shared/`, `tools/replay-harness/` — planned (PLAN.md §8); not created yet.
 
@@ -344,7 +305,7 @@ Top of the queue now (per PLAN.md §9):
 3. **Capture `os_log` output from the device** (PLAN §9 #4).
 4. **Multi-catch AR state + 3-card fan reveal** (PLAN §9 #5) — detect 2-5 visible planes in a single magenta capture frame, hold-to-capture, fan-reveal N cards. CardReveal is parameterizable for multi; the AR detection logic is the new work.
 
-Lower priority: OpenSky secret rotation (#6, demoted per Noah).
+Lower priority: ~~OpenSky secret rotation (#6)~~ — resolved by the 2026-06-21 cutover (OpenSky removed entirely; retire the console credential once a cutover build reaches testers).
 
 **Phase B and Phase C** of the original visual identity (HUD label redesign, Hangar polish, app icon, onboarding) are largely superseded by the design-canvas direction now landing in PLAN §9 #2-#6. Don't relitigate Phase B/C — port the canvas surfaces directly.
 
