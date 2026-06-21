@@ -168,6 +168,11 @@ struct TrophyIcon: View {
             case "ticket":        TicketIcon().style(color, lineWidth: 1.8 * scale)
             case "gems":          GemsIcon().style(color, lineWidth: 1.7 * scale)
             case "calendar":      CalendarIcon().style(color, lineWidth: 1.7 * scale)
+            case "eye":           EyeIcon().style(color, lineWidth: 1.9 * scale)
+            case "hattrick":      TopHatIcon().style(color, lineWidth: 2 * scale)
+            case "worldwide":     WorldwideIcon().style(color, lineWidth: 1.9 * scale)
+            case "repeat":        RepeatIcon().style(color, lineWidth: 2 * scale)
+            case "streak":        FlameIcon().style(color, filled: true)
             default:              CatcherIcon().style(color, lineWidth: 2 * scale, dashed: true)
             }
         }
@@ -453,23 +458,93 @@ private struct SetMasterIcon: Shape {
 private struct NightOwlIcon: Shape {
     func path(in rect: CGRect) -> Path {
         let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
         var p = Path()
-        // Moon (rough crescent via path).
-        p.move(to: .init(x: 14*s, y: 4*s))
-        p.addCurve(to: .init(x: 14*s, y: 28*s),
-                   control1: .init(x: 2*s,  y: 4*s),
-                   control2: .init(x: 2*s,  y: 28*s))
-        p.addCurve(to: .init(x: 11*s, y:  9*s),
-                   control1: .init(x: 17*s, y: 24*s),
-                   control2: .init(x: 11*s, y: 14*s))
-        p.addCurve(to: .init(x: 14*s, y:  4*s),
-                   control1: .init(x: 12*s, y:  8*s),
-                   control2: .init(x: 13*s, y:  6*s))
+        // Clean crescent: outer edge bulges far left, the inner "bite" bulges
+        // less, both meeting at the top (18,5) and bottom (18,27) points.
+        p.move(to: pt(18, 5))
+        p.addCurve(to: pt(18, 27), control1: pt(4, 8),  control2: pt(4, 24))    // outer edge
+        p.addCurve(to: pt(18, 5),  control1: pt(14, 22), control2: pt(14, 10))  // inner bite
         p.closeSubpath()
-        // Star dots.
-        p.addEllipse(in: CGRect(x: 23*s, y:  8*s, width: 2*s, height: 2*s))
-        p.addEllipse(in: CGRect(x: 24.8*s, y: 12.8*s, width: 2.4*s, height: 2.4*s))
-        p.addEllipse(in: CGRect(x: 21.2*s, y: 15.2*s, width: 1.6*s, height: 1.6*s))
+        // Two small stars.
+        p.addEllipse(in: CGRect(x: 23 * s, y: 9 * s, width: 2.4 * s, height: 2.4 * s))
+        p.addEllipse(in: CGRect(x: 25.4 * s, y: 14 * s, width: 1.8 * s, height: 1.8 * s))
+        return p
+    }
+}
+
+/// Red Eye — an almond eye with a pupil.
+private struct EyeIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(5, 16))
+        p.addQuadCurve(to: pt(27, 16), control: pt(16, 8))    // upper lid
+        p.addQuadCurve(to: pt(5, 16), control: pt(16, 24))    // lower lid
+        p.addEllipse(in: CGRect(x: 13 * s, y: 13 * s, width: 6 * s, height: 6 * s))  // pupil
+        return p
+    }
+}
+
+/// Hat Trick — a top hat (the hat-trick tradition).
+private struct TopHatIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(4, 23)); p.addLine(to: pt(28, 23))      // brim
+        p.move(to: pt(9, 23))                                 // crown
+        p.addLine(to: pt(10, 7))
+        p.addLine(to: pt(22, 7))
+        p.addLine(to: pt(23, 23))
+        p.move(to: pt(9.6, 18)); p.addLine(to: pt(22.4, 18))  // band
+        return p
+    }
+}
+
+/// Mr. Worldwide — a globe with a flag planted on it.
+private struct WorldwideIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 5 * s, y: 9 * s, width: 17 * s, height: 17 * s))  // globe
+        p.move(to: pt(5, 17.5)); p.addLine(to: pt(22, 17.5))                          // equator
+        p.move(to: pt(13.5, 9)); p.addCurve(to: pt(13.5, 26), control1: pt(8.5, 14), control2: pt(8.5, 21))
+        p.move(to: pt(13.5, 9)); p.addCurve(to: pt(13.5, 26), control1: pt(18.5, 14), control2: pt(18.5, 21))
+        p.move(to: pt(22, 4)); p.addLine(to: pt(22, 13))                              // flag pole
+        p.move(to: pt(22, 4)); p.addLine(to: pt(27.5, 5.8)); p.addLine(to: pt(22, 7.6))  // pennant
+        return p
+    }
+}
+
+/// Repeat Customer — two arrows cycling round (it comes back around).
+private struct RepeatIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(7, 14)); p.addQuadCurve(to: pt(25, 14), control: pt(16, 4))   // top arc
+        p.move(to: pt(21, 13)); p.addLine(to: pt(25, 14)); p.addLine(to: pt(24, 10))  // top arrowhead
+        p.move(to: pt(25, 18)); p.addQuadCurve(to: pt(7, 18), control: pt(16, 28))  // bottom arc
+        p.move(to: pt(11, 19)); p.addLine(to: pt(7, 18)); p.addLine(to: pt(8, 22))    // bottom arrowhead
+        return p
+    }
+}
+
+/// Streak — a flame (you're on fire).
+private struct FlameIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(16, 3))
+        p.addCurve(to: pt(24, 19), control1: pt(19, 9),  control2: pt(24, 12))
+        p.addCurve(to: pt(16, 29), control1: pt(24, 25), control2: pt(20, 29))
+        p.addCurve(to: pt(8, 19),  control1: pt(12, 29), control2: pt(8, 25))
+        p.addCurve(to: pt(16, 3),  control1: pt(8, 13),  control2: pt(13, 11))
+        p.closeSubpath()
         return p
     }
 }
@@ -641,6 +716,7 @@ let trophyIconNames = [
     "constellation", "quintet", "diamond", "sparkle", "crown",
     "centurion", "setmaster", "night", "heritage", "coast",
     "narrowbody", "ticket", "gems", "calendar",
+    "eye", "hattrick", "worldwide", "repeat", "streak",
 ]
 
 #if DEBUG
