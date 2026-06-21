@@ -73,6 +73,54 @@ struct FailureModeScoringTests {
         #expect(report.findings(for: .missedPlane).first?.icao24 == "far001")
     }
 
+    @Test func emptyTapOnFilteredPlaneScoresMissed() {
+        // The FDX1268 class: a plane in-data but past the visibility cap, so
+        // the user can't pin it — the tap records an `empty-tap` whose own
+        // reason is "filtered". No tap-pin exists, so only the empty-tap pass
+        // can catch it.
+        let far = westAircraft(icao: "far001", altMeters: 1000, lonOffset: -0.9)
+        let report = ReplayAnalyzer().scoreFailureModes([
+            .tick(tick(at: 0.5, sensor: berkeleySensor(), aircraft: [far])),
+            .emptyTap(.init(timestamp: t0.addingTimeInterval(0.6), x: 195, y: 472,
+                            nearestIcao24: "far001", nearestCallsign: "FDX1268",
+                            nearestSlantMeters: 80_000, nearestElevationDeg: 0.5,
+                            nearestAngularOffsetDeg: 5, reason: "filtered")),
+        ])
+        #expect(report.modesFired == [.missedPlane])
+        #expect(report.findings(for: .missedPlane).first?.icao24 == "far001")
+    }
+
+    @Test func emptyTapNonFilteredReasonsDoNotScoreMissed() {
+        // off-frame / on-screen / nothing-nearby are not filter misses — only
+        // "filtered" means the visibility tier hid an in-data plane.
+        let visiblePlane = westAircraft(icao: "vis001")  // ~3 km, in-view
+        let base: [ReplayEvent] = [.tick(tick(at: 0.5, sensor: berkeleySensor(), aircraft: [visiblePlane]))]
+        for reason in ["off-frame", "on-screen", "nothing-nearby"] {
+            let report = ReplayAnalyzer().scoreFailureModes(base + [
+                .emptyTap(.init(timestamp: t0.addingTimeInterval(0.6), x: 0, y: 0,
+                                nearestIcao24: "vis001", nearestCallsign: nil,
+                                nearestSlantMeters: 3000, nearestElevationDeg: 5,
+                                nearestAngularOffsetDeg: 5, reason: reason)),
+            ])
+            #expect(!report.modesFired.contains(.missedPlane), "reason=\(reason) is not a filter miss")
+        }
+    }
+
+    @Test func emptyTapMissedDoesNotDoubleCountWithPin() {
+        // A filtered plane that is ALSO (somehow) pinned must yield exactly one
+        // missed finding for that tick+icao, not two.
+        let far = westAircraft(icao: "far001", altMeters: 1000, lonOffset: -0.9)
+        let report = ReplayAnalyzer().scoreFailureModes([
+            .tapPin(.init(timestamp: t0, icao24: "far001")),
+            .tick(tick(at: 0.5, sensor: berkeleySensor(), aircraft: [far])),
+            .emptyTap(.init(timestamp: t0.addingTimeInterval(0.6), x: 195, y: 472,
+                            nearestIcao24: "far001", nearestCallsign: "FDX1268",
+                            nearestSlantMeters: 80_000, nearestElevationDeg: 0.5,
+                            nearestAngularOffsetDeg: 5, reason: "filtered")),
+        ])
+        #expect(report.findings(for: .missedPlane).count == 1)
+    }
+
     // MARK: - Spatial offset (mode 3)
 
     @Test func pinFarFromProjectedLabelScoresOffset() {
