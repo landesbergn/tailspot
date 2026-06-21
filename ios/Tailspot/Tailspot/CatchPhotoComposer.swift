@@ -46,6 +46,20 @@ nonisolated enum CatchPhotoComposer {
         alpha: 1.0
     )
 
+    /// Dark halo drawn behind the cyan bracket so it stays legible against a
+    /// bright sky. Matches `Brand.Color.hudBracketHalo` (0x050810) on the
+    /// SwiftUI side — keep the two in sync.
+    static let bracketHaloColor = UIColor(
+        red: 5.0 / 255.0,
+        green: 8.0 / 255.0,
+        blue: 16.0 / 255.0,
+        alpha: 1.0
+    )
+
+    /// On-screen halo half-width in points; matches `LockBrackets.haloWidth`.
+    /// Scaled to photo pixels by 1 / aspectFillScale inside `compose(...)`.
+    static let bracketScreenHaloWidth: CGFloat = 1.5
+
     /// Compose the JPEG with a cyan bracket drawn around the plane at
     /// `overlay.screenPosition`. Returns nil if the JPEG can't be
     /// decoded or if the dimensions are unusable; callers should fall
@@ -65,6 +79,9 @@ nonisolated enum CatchPhotoComposer {
         let photoBoxSize = bracketScreenBoxSize / transform.scale
         let photoLineWidth = bracketScreenLineWidth / transform.scale
         let photoArm = max(8.0, bracketScreenBoxSize * 0.22) / transform.scale
+        // Floor the scaled halo so it never collapses to nothing when the photo
+        // is small relative to the screen (transform.scale > 1).
+        let photoHaloWidth = max(0.5, bracketScreenHaloWidth / transform.scale)
 
         // Render at the photo's native pixel resolution (not the
         // device scale). A 12MP photo blown up 3× would be 36MP for no
@@ -81,7 +98,9 @@ nonisolated enum CatchPhotoComposer {
                 boxSize: photoBoxSize,
                 armLength: photoArm,
                 lineWidth: photoLineWidth,
-                color: bracketColor
+                color: bracketColor,
+                haloColor: bracketHaloColor,
+                haloWidth: photoHaloWidth
             )
         }
         return composed.jpegData(compressionQuality: 0.9)
@@ -93,7 +112,32 @@ nonisolated enum CatchPhotoComposer {
         boxSize: CGFloat,
         armLength: CGFloat,
         lineWidth: CGFloat,
-        color: UIColor
+        color: UIColor,
+        haloColor: UIColor,
+        haloWidth: CGFloat
+    ) {
+        cg.setLineCap(.round)
+        cg.setLineJoin(.round)
+        // Halo pass: wider dark under-stroke so the bracket reads against a
+        // bright sky. Drawn first, beneath the colored pass.
+        strokeBracketPaths(in: cg, center: center, boxSize: boxSize,
+                           armLength: armLength, color: haloColor,
+                           lineWidth: lineWidth + 2 * haloWidth)
+        // Colored pass on top.
+        strokeBracketPaths(in: cg, center: center, boxSize: boxSize,
+                           armLength: armLength, color: color,
+                           lineWidth: lineWidth)
+    }
+
+    /// Strokes the four L-shaped corner brackets in one color + width. Shared
+    /// by the halo and colored passes; line cap/join are set by the caller.
+    private static func strokeBracketPaths(
+        in cg: CGContext,
+        center: CGPoint,
+        boxSize: CGFloat,
+        armLength: CGFloat,
+        color: UIColor,
+        lineWidth: CGFloat
     ) {
         let half = boxSize / 2
         let left = center.x - half
@@ -103,8 +147,6 @@ nonisolated enum CatchPhotoComposer {
 
         cg.setStrokeColor(color.cgColor)
         cg.setLineWidth(lineWidth)
-        cg.setLineCap(.round)
-        cg.setLineJoin(.round)
 
         // top-left
         cg.move(to: CGPoint(x: left, y: top + armLength))
