@@ -177,7 +177,61 @@ extension ReplayAnalyzer {
             }
         }
 
+        // Missed (1), from empty-taps: when the visibility filter hides a
+        // plane, the user can't tap-pin it — the tap lands on "empty" sky and
+        // the app records an `empty-tap` whose own diagnosis says `filtered`
+        // (in data, hidden tier). That frustrated tap is the purest missed
+        // signal we have — the user pointed AT a plane and the app showed
+        // nothing — and the pin-derived pass above can never see it (no pin
+        // exists). Score each such tap as a missed plane at the tick that was
+        // on screen when it fired. This is what lets the bench auto-diagnose
+        // the FDX1268 class instead of waiting for someone to notice on a walk.
+        findings.append(contentsOf: Self.emptyTapMissedFindings(events, report: report,
+                                                                 alreadyMissed: findings))
+
         return FailureModeReport(findings: findings)
+    }
+
+    /// Missed-plane findings derived from `empty-tap` events with
+    /// `reason == "filtered"`. Aligns each tap to the tick on screen when it
+    /// fired (the latest tick at or before the tap), and only scores it if the
+    /// named plane is genuinely present-but-hidden in that tick's analysis —
+    /// so the finding tracks the CURRENT engine behavior (fix the filter and
+    /// the finding clears; that's the regression contract). De-dupes against
+    /// pin-derived misses for the same (tick, icao).
+    private static func emptyTapMissedFindings(
+        _ events: [ReplayEvent], report: ReplayReport,
+        alreadyMissed: [FailureModeFinding]
+    ) -> [FailureModeFinding] {
+        let tickTimes = report.ticks.map(\.timestamp)
+        guard !tickTimes.isEmpty else { return [] }
+        var seen = Set(alreadyMissed.filter { $0.mode == .missedPlane }
+            .map { "\($0.tickIndex)|\($0.icao24 ?? "")" })
+        var out: [FailureModeFinding] = []
+        let ordered = events.sorted { eventTimestamp($0) < eventTimestamp($1) }
+        for case .emptyTap(let tap) in ordered {
+            guard tap.reason == "filtered", let icao = tap.nearestIcao24 else { continue }
+            let ti = tickIndex(at: tap.timestamp, in: tickTimes)
+            guard let ar = report.ticks[ti].aircraft.first(where: { $0.icao24 == icao }),
+                  !ar.isVisible else { continue }
+            let key = "\(ti)|\(icao)"
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            out.append(.init(mode: .missedPlane, tickIndex: ti,
+                timestamp: report.ticks[ti].timestamp, icao24: icao,
+                detail: String(format: "empty-tap on filtered %@ (%.1f km @ %+.1f°)",
+                               icao, ar.slantDistanceMeters / 1000, ar.elevationDeg)))
+        }
+        return out
+    }
+
+    /// Index of the tick on screen at `time`: the last tick at or before it,
+    /// or tick 0 for a tap that fired before the first tick. `times` is
+    /// ascending (analyze emits ticks in timestamp order).
+    private static func tickIndex(at time: Date, in times: [Date]) -> Int {
+        var idx = 0
+        for (i, t) in times.enumerated() where t <= time { idx = i }
+        return idx
     }
 
     /// The pinned icao + tap point active at each tick, in tick order.
