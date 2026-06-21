@@ -296,23 +296,17 @@ nonisolated enum Analytics {
 
     // MARK: - DeviceID
 
-    private static let deviceIdKey = "tailspot.account.deviceId"
-
-    /// The anonymous device identifier — the same value TailspotAccountClient
-    /// stores under "tailspot.account.deviceId". If absent (first-ever launch
-    /// before any registration), we generate-and-store under that exact key
-    /// so all callers share the same UUID.
-    /// `defaults` is injectable so tests can use an isolated suite —
-    /// Swift Testing runs suites in PARALLEL, and several suites touching
-    /// the one real standard-defaults key raced on CI (2026-06-11).
-    static func distinctId(defaults: UserDefaults = .standard) -> String {
-        if let existing = defaults.string(forKey: deviceIdKey),
-           !existing.isEmpty {
-            return existing
-        }
-        let generated = UUID().uuidString
-        defaults.set(generated, forKey: deviceIdKey)
-        return generated
+    /// The anonymous device identifier, shared with TailspotAccountClient and
+    /// reported to PostHog as `distinct_id`. Backed by `DeviceID` (Keychain
+    /// source of truth + UserDefaults mirror) so it survives app reinstall —
+    /// before, a UserDefaults-only id reset on every reinstall and fragmented
+    /// one device into many PostHog persons.
+    /// `defaults`/`durable` are injectable so tests use an isolated UserDefaults
+    /// suite and an in-memory store: Swift Testing runs suites in PARALLEL, and
+    /// the real Keychain is process-global and can't be isolated per suite.
+    static func distinctId(defaults: UserDefaults = .standard,
+                           durable: DeviceIDDurableStore = KeychainDeviceIDStore()) -> String {
+        DeviceID.current(mirror: defaults, durable: durable)
     }
 
     // MARK: - Bundle key resolution
