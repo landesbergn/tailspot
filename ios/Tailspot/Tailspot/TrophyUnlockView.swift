@@ -240,6 +240,13 @@ private struct RayBurst: Shape {
 // explicit `return` or an intermediate `Void`-returning setup call. Build the
 // configured center in an immediately-invoked closure on the argument instead,
 // keeping the builder body a single view expression.
+//
+// Both previews must live inside `#if DEBUG`: they call
+// `TrophyUnlockCenter.debugEnqueueSample`, which is itself `#if DEBUG`-only.
+// `#Preview` bodies are compiled in every configuration, so without this guard
+// a Release build (device deploy / archive) fails to resolve the call even
+// though Debug simulator builds and the unit-test CI don't.
+#if DEBUG
 #Preview("Unlock") {
     TrophyUnlockView(center: {
         let center = TrophyUnlockCenter()
@@ -255,3 +262,4 @@ private struct RayBurst: Shape {
         return center
     }())
 }
+#endif
