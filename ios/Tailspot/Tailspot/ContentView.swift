@@ -58,6 +58,8 @@ struct ContentView: View {
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
     @State private var showDebug = false
+    /// DEBUG-only: presents the trophy-icon gallery for visual review.
+    @State private var showIconGallery = false
     /// Drives the Hangar sheet (collection of past catches). Opened
     /// via the tray glyph in the top-trailing corner.
     @State private var showHangar = false
@@ -146,14 +148,15 @@ struct ContentView: View {
     /// captures N≥2 planes from a single frame. Non-nil → full-screen
     /// `MultiCatchReveal` sheet is presented.
     @State private var pendingMultiReveal: PendingMultiReveal?
+    /// Owns the trophy unlock queue + ledger. Seeded on its first
+    /// `enqueueNewUnlocks` (fired by the `catches`-count task below), so an
+    /// existing tester is never flooded. Survives the Hangar sheet as a
+    /// `@StateObject`, so a moment interrupted by backgrounding re-renders
+    /// on return (the overlay is declarative, bound to `hasPending`).
+    @StateObject private var unlockCenter = TrophyUnlockCenter()
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
-    /// Opacity of the launch splash screen. Starts at 1.0 (opaque),
-    /// animates to 0 after ~600ms, then the AR view underneath becomes
-    /// interactive. The splash absorbs taps for the first half of the
-    /// fade so no gestures fire while it's mostly visible.
-    @State private var splashOpacity: Double = 1.0
     /// Collapsed by default. Tap the NEARBY AIRCRAFT header in the
     /// debug panel to expand the per-plane list.
     @State private var showAircraftList = false
@@ -458,6 +461,21 @@ struct ContentView: View {
                             .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
+                        #if DEBUG
+                        // Force the trophy-unlock moment so the animation /
+                        // haptic / a11y / hidden-reveal path can be eyeballed
+                        // on-device without waiting for an organic crossing.
+                        HStack(spacing: 8) {
+                            Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
+                            Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
+                            Button("⚑ Icons") { showIconGallery = true }
+                        }
+                        .font(Brand.Font.mono(size: 11, weight: .bold))
+                        .buttonStyle(.bordered)
+                        .tint(Brand.Color.cyan)
+                        .padding(.horizontal, 12)
+                        #endif
+
                         Spacer(minLength: 0)
 
                         aircraftList
@@ -486,11 +504,18 @@ struct ContentView: View {
                 }
                 #endif
             }
-
-            // Launch splash screen: brand lockup centered on near-black
-            // background. Holds for ~600ms then crossfades to the AR view.
-            // Absorbs taps for the first half of its fade.
-            splashOverlay
+        }
+        .overlay { trophyUnlockOverlay }
+        // Seed at launch and re-diff on every new catch (idempotent +
+        // deduped). Drives the catch-flow celebration; the reveal cover
+        // shows first, then this overlay once it dismisses.
+        .task(id: catches.count) {
+            unlockCenter.enqueueNewUnlocks(from: catches)
+        }
+        // When the Hangar closes, re-diff — a country backfill done inside
+        // CatchDetailView can cross Mr. Worldwide while the sheet was open.
+        .onChange(of: showHangar) { _, isShowing in
+            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
@@ -501,16 +526,9 @@ struct ContentView: View {
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
         }
-        .task {
-            // Dismiss the launch splash after ~600ms, then crossfade to
-            // the AR view over 400ms. This runs once when ContentView
-            // first appears (no id: to retrigger), so the splash fires
-            // exactly at launch.
-            try? await Task.sleep(for: .milliseconds(1400))
-            withAnimation(.easeOut(duration: 0.6)) {
-                splashOpacity = 0
-            }
-        }
+        #if DEBUG
+        .sheet(isPresented: $showIconGallery) { TrophyIconGallery() }
+        #endif
         .task {
             await requestCameraPermission()
             location.requestPermissionAndStart()
@@ -760,29 +778,21 @@ struct ContentView: View {
         .accessibilityLabel(showDebug ? "Hide debug overlays" : "Show debug overlays")
     }
 
-    // MARK: - Launch splash
+    // MARK: - Trophy unlock overlay
 
-    /// Brand splash screen: centered airplane glyph + TAILSPOT wordmark
-    /// on a near-black background. Shown at launch for ~600ms, then
-    /// crossfades to transparent. The splash absorbs taps for the first
-    /// half of its fade to prevent accidental AR gestures mid-animation.
+    /// The trophy-unlock celebration, presented over the AR as a gated
+    /// overlay (not a third `fullScreenCover`, which would race the reveal
+    /// covers' dismissal). Shown only when nothing else is on top: no card
+    /// reveal, no sheet. A fallback unlock discovered while a sheet is open
+    /// surfaces when the sheet dismisses (the `catches`-count and
+    /// `showHangar` tasks re-enqueue).
     @ViewBuilder
-    private var splashOverlay: some View {
-        if splashOpacity > 0 {
-            ZStack {
-                Brand.Color.bgPrimary.ignoresSafeArea()
-                HStack(spacing: 14) {
-                    Image(systemName: "airplane")
-                        .font(.system(size: 56))
-                        .foregroundStyle(Brand.Color.cyan)
-                    Text("TAILSPOT")
-                        .font(Brand.Font.mono(size: 32, weight: .bold))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .tracking(4)
-                }
-            }
-            .opacity(splashOpacity)
-            .allowsHitTesting(splashOpacity > 0.5)
+    private var trophyUnlockOverlay: some View {
+        if unlockCenter.hasPending,
+           pendingReveal == nil, pendingMultiReveal == nil,
+           !showHangar, !showProfile, !showCompassSheet {
+            TrophyUnlockView(center: unlockCenter)
+                .transition(.opacity)
         }
     }
 
@@ -966,13 +976,17 @@ struct ContentView: View {
                 // placeName stays nil; CatchDetailView's backfill
                 // retries on a later open.
                 Task { @MainActor in
-                    guard let place = await ReverseGeocode.placeName(
+                    let (place, country) = await ReverseGeocode.placeAndCountry(
                         lat: observerLat, lon: observerLon
-                    ) else { return }
-                    for row in newCatches where row.placeName == nil && !row.isDeleted {
-                        row.placeName = place
+                    )
+                    guard place != nil || country != nil else { return }
+                    for row in newCatches where !row.isDeleted {
+                        if row.placeName == nil { row.placeName = place }
+                        if row.country == nil { row.country = country }
                     }
                     try? modelContext.save()
+                    // A late country stamp can cross Mr. Worldwide — re-diff.
+                    unlockCenter.enqueueNewUnlocks(from: catches)
                 }
             } else if !duplicates.isEmpty {
                 Log.adsb.notice("Catch: all \(duplicates.count, privacy: .public) target(s) already in Hangar")
@@ -1530,65 +1544,17 @@ struct ContentView: View {
         return "ADSB:    fetching…"
     }
 
-    /// 3-way source cycle: OPENSKY → TAILSPOT API → MOCK → (back to OPENSKY).
-    ///
-    /// Mapping:
-    ///   OPENSKY      = useMock=false, useBackend=false
-    ///   TAILSPOT API = useMock=false, useBackend=true
-    ///   MOCK         = useMock=true  (useBackend left as-is so it's
-    ///                  remembered when cycling back to a live source)
-    ///
-    /// The [AUTH]/[ANON] tag is shown only in OPENSKY mode — it indicates
-    /// whether OAuth credentials reached the app process at launch.
+    /// Static source indicator for the debug overlay. There's exactly one
+    /// ADS-B source now (the Tailspot backend) — OpenSky and the mock source
+    /// were removed in the 2026-06-21 cutover — so this is a label, not a
+    /// toggle. Kept as a debug-overlay sanity line ("yes, the app is talking
+    /// to api.tailspot.app").
     private var sourceRow: some View {
         HStack(spacing: 8) {
-            // Source badge — color signals which tier is active
-            Group {
-                if adsb.useMock {
-                    Text("[MOCK]")
-                        .foregroundStyle(Brand.Color.alertCaution)
-                } else if adsb.useBackend {
-                    Text("[TAILSPOT API]")
-                        .foregroundStyle(Brand.Color.cyan)
-                } else {
-                    Text("[OPENSKY]")
-                        .foregroundStyle(Brand.Color.alertNormal)
-                }
-            }
-            .font(Brand.Font.mono(size: 12, weight: .bold))
-
-            // Auth tag — OPENSKY mode only
-            if !adsb.useMock && !adsb.useBackend {
-                Text(adsb.liveSourceIsAuthed ? "[AUTH]" : "[ANON]")
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
-                    .foregroundStyle(adsb.liveSourceIsAuthed
-                                     ? Brand.Color.alertNormal
-                                     : Brand.Color.alertCaution)
-            }
-
-            // Failover tag — backend selected but the last fetch fell back
-            // to OpenSky (api.tailspot.app unreachable). Clears on recovery.
-            if adsb.useBackend && !adsb.useMock && adsb.backendDegraded {
-                Text("→ OPENSKY")
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
-                    .foregroundStyle(Brand.Color.alertCaution)
-            }
-
+            Text("[TAILSPOT API]")
+                .font(Brand.Font.mono(size: 12, weight: .bold))
+                .foregroundStyle(Brand.Color.cyan)
             Spacer()
-        }
-        .contentShape(.rect)
-        .onTapGesture {
-            if adsb.useMock {
-                // MOCK → OPENSKY
-                adsb.useMock = false
-                adsb.useBackend = false
-            } else if adsb.useBackend {
-                // TAILSPOT API → MOCK
-                adsb.useMock = true
-            } else {
-                // OPENSKY → TAILSPOT API
-                adsb.useBackend = true
-            }
         }
     }
 

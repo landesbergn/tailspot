@@ -122,92 +122,27 @@ struct TrophiesTests {
 
     // MARK: - Per-achievement evaluation
 
-    @Test func catcherLockedWithZeroCatches() {
-        guard let catcher = Trophies.roster.first(where: { $0.id == "catcher" }) else {
-            Issue.record("catcher not in roster")
-            return
-        }
-        let inputs = TrophyProgressInputs.zero
-        #expect(catcher.isLocked(inputs: inputs))
-        #expect(catcher.currentTier(inputs: inputs) == nil)
-        #expect(catcher.nextTier(inputs: inputs)?.at == 10)
+    @Test func catcherEarnsAtTwentyFive() {
+        let catcher = Trophies.roster.first { $0.id == "catcher" }!
+        let twentyFour = Trophies.inputs(from: (0..<24).map { _ in mk(model: "737-800", manufacturer: "BOEING") })
+        #expect(catcher.isEarned(inputs: twentyFour) == false)
+        let twentyFive = Trophies.inputs(from: (0..<25).map { _ in mk(model: "737-800", manufacturer: "BOEING") })
+        #expect(catcher.isEarned(inputs: twentyFive))
+        #expect(catcher.threshold == 25)
     }
 
-    @Test func catcherClimbsBronzeAtTen() {
-        guard let catcher = Trophies.roster.first(where: { $0.id == "catcher" }) else {
-            Issue.record("catcher not in roster"); return
-        }
-        // Build 10 cheap catches; the classifier will resolve them
-        // as common-narrow but that's fine for catcher (counts all).
-        let catches = (0..<10).map { _ in mk(model: "737-800", manufacturer: "BOEING") }
-        let inputs = Trophies.inputs(from: catches)
-        #expect(catcher.currentTier(inputs: inputs) == .bronze)
-        #expect(catcher.nextTier(inputs: inputs)?.tier == .silver)
-        #expect(catcher.nextTier(inputs: inputs)?.at == 50)
+    @Test func legendaryEarnsAtOneLegendaryCatch() {
+        let legendary = Trophies.roster.first { $0.id == "legendary" }!
+        #expect(legendary.isEarned(inputs: .zero) == false)
+        let one = Trophies.inputs(from: [mk(model: "VC-25", manufacturer: "BOEING", operatorName: "USAF")])
+        #expect(legendary.isEarned(inputs: one))
     }
 
-    @Test func catcherMaxPlatinumAtThousand() {
-        guard let catcher = Trophies.roster.first(where: { $0.id == "catcher" }) else {
-            Issue.record("catcher not in roster"); return
+    @Test func everyAchievementIsBinarySingleTier() {
+        // Binary model: each achievement has exactly one threshold (no ramp).
+        for ach in Trophies.roster {
+            #expect(ach.tiers.count == 1, "\(ach.id) should be single-tier (binary)")
         }
-        let inputs = TrophyProgressInputs(
-            totalCatches: 1500, uniqueAirframes: 0,
-            wideBodyCatches: 0, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(catcher.currentTier(inputs: inputs) == .platinum)
-        #expect(catcher.nextTier(inputs: inputs) == nil)
-    }
-
-    @Test func legendaryUnlocksAtOneLegendaryCatch() {
-        guard let legendary = Trophies.roster.first(where: { $0.id == "legendary" }) else {
-            Issue.record("legendary not in roster"); return
-        }
-        let none = TrophyProgressInputs.zero
-        #expect(legendary.isLocked(inputs: none))
-
-        let one = TrophyProgressInputs(
-            totalCatches: 1, uniqueAirframes: 1,
-            wideBodyCatches: 0, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 1,
-            rarePlusUnique: 1, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(legendary.currentTier(inputs: one) == .platinum)
-        #expect(legendary.nextTier(inputs: one) == nil)
-    }
-
-    @Test func wideAwakeStaggersBronzeSilverGold() {
-        guard let heavy = Trophies.roster.first(where: { $0.id == "heavy" }) else {
-            Issue.record("heavy not in roster"); return
-        }
-        let inputs5 = TrophyProgressInputs(
-            totalCatches: 5, uniqueAirframes: 5,
-            wideBodyCatches: 5, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(heavy.currentTier(inputs: inputs5) == .bronze)
-        let inputs20 = TrophyProgressInputs(
-            totalCatches: 20, uniqueAirframes: 20,
-            wideBodyCatches: 20, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(heavy.currentTier(inputs: inputs20) == .silver)
-        let inputs50 = TrophyProgressInputs(
-            totalCatches: 50, uniqueAirframes: 50,
-            wideBodyCatches: 50, regionalCatches: 0, heritageCatches: 0,
-            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
-            rarePlusUnique: 0, longestSlantKm: 0,
-            bestMultiCatchCount: 0, nightCatches: 0
-        )
-        #expect(heavy.currentTier(inputs: inputs50) == .gold)
-        #expect(heavy.nextTier(inputs: inputs50) == nil)
     }
 
     @Test func rosterIsNotEmptyAndHasUniqueIDs() {
@@ -334,5 +269,348 @@ struct MultiCatchComboTests {
         // Defensive against a bad caller — fan-of-1 shouldn't bonus.
         #expect(MultiCatchReveal.comboMultiplier(for: 0) == 1.0)
         #expect(MultiCatchReveal.comboMultiplier(for: 1) == 1.0)
+    }
+}
+
+// MARK: - 2026-06-20 round: new metrics + hidden trophies
+
+@Suite("Trophies — hidden trophies + 2026-06-20 metrics")
+@MainActor
+struct TrophiesHiddenAndMetricsTests {
+
+    /// Production buckets days/hours with a gregorian calendar; the tests do
+    /// too so day/hour boundaries agree exactly.
+    private let cal = Calendar(identifier: .gregorian)
+
+    /// A date `dayOffset` days from a fixed base, at `hour` local time.
+    private func date(dayOffset: Int = 0, hour: Int = 12) -> Date {
+        let base = cal.startOfDay(for: Date(timeIntervalSince1970: 1_716_000_000))
+        let shifted = cal.date(byAdding: .day, value: dayOffset, to: base)!
+        return cal.date(bySettingHour: hour, minute: 0, second: 0, of: shifted)!
+    }
+
+    private func mk(icao: String = String(UUID().uuidString.prefix(6)).lowercased(),
+                    slantKm: Double = 1, country: String? = nil,
+                    at: Date = Date(timeIntervalSince1970: 1_716_000_000)) -> Catch {
+        Catch(
+            icao24: icao, callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: at, observerLat: 0, observerLon: 0,
+            slantDistanceMeters: slantKm * 1000, country: country
+        )
+    }
+
+    private func ach(_ id: String) -> Achievement {
+        Trophies.roster.first { $0.id == id }!
+    }
+
+    // MARK: - Pure window/streak helpers
+
+    @Test func burstSlidesAcrossBucketBoundary() {
+        // 0 / 8 / 9 minutes all fall in one 10-min window → 3.
+        let times = [date(hour: 0), date(hour: 0).addingTimeInterval(8 * 60), date(hour: 0).addingTimeInterval(9 * 60)]
+        #expect(Trophies.maxCountWithinWindow(times, seconds: 600) == 3)
+    }
+
+    @Test func burstFixedBucketsWouldUndercount() {
+        // 0 / 6 / 12 minutes: no 10-min window holds all three → 2.
+        let t0 = date(hour: 0)
+        let times = [t0, t0.addingTimeInterval(6 * 60), t0.addingTimeInterval(12 * 60)]
+        #expect(Trophies.maxCountWithinWindow(times, seconds: 600) == 2)
+        #expect(Trophies.maxCountWithinWindow([], seconds: 600) == 0)
+    }
+
+    @Test func consecutiveDayRun() {
+        let three: Set<Date> = [date(dayOffset: 0), date(dayOffset: 1), date(dayOffset: 2)]
+        #expect(Trophies.longestConsecutiveDayRun(three, calendar: cal) == 3)
+        // A gap breaks the run: 0,1, [skip 2], 3 → longest is 2.
+        let gapped: Set<Date> = [date(dayOffset: 0), date(dayOffset: 1), date(dayOffset: 3)]
+        #expect(Trophies.longestConsecutiveDayRun(gapped, calendar: cal) == 2)
+    }
+
+    // MARK: - inputs(from:) metrics
+
+    @Test func distinctCountriesCountsNonEmpty() {
+        let inputs = Trophies.inputs(from: [
+            mk(country: "US"), mk(country: "CA"), mk(country: "US"), mk(country: nil), mk(country: "  "),
+        ])
+        #expect(inputs.distinctCountries == 2)
+    }
+
+    @Test func farCatchCountAtTwentyFiveKm() {
+        let inputs = Trophies.inputs(from: [mk(slantKm: 26), mk(slantKm: 24), mk(slantKm: 25)])
+        #expect(inputs.farCatchCount == 2)  // 26 and 25 qualify, 24 doesn't
+    }
+
+    @Test func redEyeCountsTwoToFiveAM() {
+        let inputs = Trophies.inputs(from: [
+            mk(at: date(hour: 3)), mk(at: date(hour: 12)), mk(at: date(hour: 2)), mk(at: date(hour: 5)),
+        ])
+        #expect(inputs.redEyeCatches == 2)  // 03:00 and 02:00; 05:00 and 12:00 excluded
+    }
+
+    @Test func repeatAirframeAcrossDays() {
+        let twoDays = Trophies.inputs(from: [
+            mk(icao: "aaa111", at: date(dayOffset: 0)), mk(icao: "aaa111", at: date(dayOffset: 1)),
+        ])
+        #expect(twoDays.hasRepeatAirframeAcrossDays)
+        let sameDay = Trophies.inputs(from: [
+            mk(icao: "bbb222", at: date(dayOffset: 0, hour: 9)), mk(icao: "bbb222", at: date(dayOffset: 0, hour: 14)),
+        ])
+        #expect(sameDay.hasRepeatAirframeAcrossDays == false)
+    }
+
+    @Test func longestStreakSevenConsecutive() {
+        let catches = (0..<7).map { mk(at: date(dayOffset: $0)) }
+        #expect(Trophies.inputs(from: catches).longestDayStreak == 7)
+    }
+
+    // MARK: - New trophies
+
+    @Test func mrWorldwideSecretEarnsAtTwoCountries() {
+        let trophy = ach("mrworldwide")
+        #expect(trophy.secret)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: [mk(country: "US")])) == false)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: [mk(country: "US"), mk(country: "CA")])))
+    }
+
+    @Test func streakSecretEarnsAtSevenLockedAtSix() {
+        let trophy = ach("streak")
+        #expect(trophy.secret)
+        let six = Trophies.inputs(from: (0..<6).map { mk(at: date(dayOffset: $0)) })
+        let seven = Trophies.inputs(from: (0..<7).map { mk(at: date(dayOffset: $0)) })
+        #expect(trophy.isEarned(inputs: six) == false)
+        #expect(trophy.isEarned(inputs: seven))
+    }
+
+    @Test func longLensSecretEarnsAtFiveFarCatches() {
+        let trophy = ach("longshot")
+        #expect(trophy.secret)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<4).map { _ in mk(slantKm: 26) })) == false)
+        #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<5).map { _ in mk(slantKm: 26) })))
+    }
+
+    @Test func constellationAndQuintetAreSecretAndDormant() {
+        for id in ["multi", "quintet"] {
+            let trophy = ach(id)
+            #expect(trophy.secret)
+            // bestMultiCatchCount is hardcoded 0 → still locked under any catches.
+            #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<10).map { _ in mk() })) == false)
+        }
+    }
+
+    @Test func allSecretAchievementsAreFlaggedSecretAndBinary() {
+        let secrets = ["mrworldwide", "hattrick", "redeye", "repeat", "streak", "longshot", "multi", "quintet"]
+        for id in secrets {
+            let trophy = ach(id)
+            #expect(trophy.secret, "\(id) should be secret")
+            #expect(trophy.tiers.count == 1, "\(id) should be a single binary threshold")
+        }
+        // And the visible ones are NOT secret.
+        for id in ["catcher", "centurion", "heavy", "legendary"] {
+            #expect(ach(id).secret == false, "\(id) should be visible")
+        }
+    }
+}
+
+@Suite("TrophyBoard")
+@MainActor
+struct TrophyBoardTests {
+
+    private func ach(_ id: String, secret: Bool = false, prerequisite: String? = nil, at: Int) -> Achievement {
+        Achievement(id: id, title: id, summary: "", iconName: "crown",
+                    tiers: [.init(tier: .gold, at: at)], secret: secret, prerequisite: prerequisite,
+                    progress: { $0.totalCatches })
+    }
+
+    private func inputs(total: Int) -> TrophyProgressInputs {
+        TrophyProgressInputs(
+            totalCatches: total, uniqueAirframes: 0,
+            wideBodyCatches: 0, regionalCatches: 0, heritageCatches: 0,
+            rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
+            rarePlusUnique: 0, longestSlantKm: 0,
+            bestMultiCatchCount: 0, nightCatches: 0
+        )
+    }
+
+    @Test func secretAlwaysPresentVisibleLockedShownEarnedFirst() {
+        let roster = [
+            ach("v1", at: 1),                  // earned at total>=1
+            ach("v2", at: 10),                 // visible, locked
+            ach("s1", secret: true, at: 1),    // secret, earned
+            ach("s2", secret: true, at: 10),   // secret, locked → masked but present
+        ]
+        let shown = TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id)
+        #expect(shown.contains("s2"))   // secret-locked is present (rendered masked)
+        #expect(shown.contains("v2"))
+        // Earned (v1, s1) first, then locked (v2, s2) in roster order.
+        #expect(shown == ["v1", "s1", "v2", "s2"])
+    }
+
+    @Test func milestonePrerequisiteGatesNextUntilPriorEarned() {
+        let roster = [
+            ach("m1", at: 5),                       // first milestone, no prereq
+            ach("m2", prerequisite: "m1", at: 50),  // hidden until m1 earned
+        ]
+        // m1 not earned → m2 absent.
+        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 1)).map(\.id) == ["m1"])
+        // m1 earned → m2 appears.
+        #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 5)).map(\.id) == ["m1", "m2"])
+    }
+}
+
+@Suite("Trophies — 2026-06-21 expansion")
+@MainActor
+struct TrophiesExpansionTests {
+
+    private let cal = Calendar(identifier: .gregorian)
+    private func date(dayOffset: Int = 0, hour: Int = 12) -> Date {
+        let base = cal.startOfDay(for: Date(timeIntervalSince1970: 1_716_000_000))
+        let shifted = cal.date(byAdding: .day, value: dayOffset, to: base)!
+        return cal.date(bySettingHour: hour, minute: 0, second: 0, of: shifted)!
+    }
+    private func ach(_ id: String) -> Achievement { Trophies.roster.first { $0.id == id }! }
+    private func mk(model: String? = nil, manufacturer: String? = nil, operatorName: String? = nil,
+                    altM: Double? = nil, velMps: Double? = nil, place: String? = nil,
+                    at: Date = Date(timeIntervalSince1970: 1_716_000_000)) -> Catch {
+        Catch(icao24: String(UUID().uuidString.prefix(6)), callsign: nil, model: model,
+              manufacturer: manufacturer, operatorName: operatorName, caughtAt: at,
+              observerLat: 0, observerLon: 0, slantDistanceMeters: 0,
+              altitudeMeters: altM, velocityMps: velMps, placeName: place)
+    }
+
+    /// A date at a fixed Y/M/D at noon — weekday is stable regardless of zone.
+    private func ymd(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        cal.date(from: DateComponents(year: y, month: m, day: d, hour: 12))!
+    }
+
+    // MARK: - Tag classifier
+
+    @Test func aircraftTagsClassify() {
+        #expect(Trophies.aircraftTags(model: "747-400", manufacturer: "Boeing", typecode: "B744", operatorName: nil, type: .wide).contains("heavymetal"))
+        #expect(Trophies.aircraftTags(model: "A380-800", manufacturer: "Airbus", typecode: "A388", operatorName: nil, type: .wide).contains("heavymetal"))
+        #expect(Trophies.aircraftTags(model: "777-300", manufacturer: "Boeing", typecode: nil, operatorName: "FedEx", type: .wide).contains("freighter"))
+        #expect(Trophies.aircraftTags(model: "ATR-72", manufacturer: "ATR", typecode: nil, operatorName: nil, type: .regional).contains("turboprop"))
+        #expect(Trophies.aircraftTags(model: nil, manufacturer: "Sikorsky", typecode: nil, operatorName: nil, type: .ga).contains("helicopter"))
+        #expect(Trophies.aircraftTags(model: "F-16", manufacturer: nil, typecode: nil, operatorName: nil, type: .mil).contains("military"))
+        #expect(Trophies.aircraftTags(model: "Citation X", manufacturer: "Cessna", typecode: nil, operatorName: nil, type: .biz).contains("bizjet"))
+        // A plain 737 narrowbody carries no special tag.
+        #expect(Trophies.aircraftTags(model: "737-800", manufacturer: "Boeing", typecode: nil, operatorName: "United", type: .narrow).isEmpty)
+    }
+
+    @Test func dayPartBuckets() {
+        #expect(Trophies.dayPart(forHour: 8) == "morning")
+        #expect(Trophies.dayPart(forHour: 14) == "afternoon")
+        #expect(Trophies.dayPart(forHour: 19) == "evening")
+        #expect(Trophies.dayPart(forHour: 23) == "night")
+        #expect(Trophies.dayPart(forHour: 3) == "night")
+    }
+
+    // MARK: - Aggregates
+
+    @Test func altitudeAndSpeedTakeMax() {
+        let inputs = Trophies.inputs(from: [mk(altM: 8000, velMps: 200), mk(altM: 12500, velMps: 270)])
+        #expect(inputs.highestAltitudeM == 12500)
+        #expect(inputs.fastestVelocityMps == 270)
+    }
+
+    @Test func bestCatchesInOneDayAndDayParts() {
+        let inputs = Trophies.inputs(from: [
+            mk(at: date(dayOffset: 0, hour: 9)),    // morning
+            mk(at: date(dayOffset: 0, hour: 14)),   // afternoon
+            mk(at: date(dayOffset: 0, hour: 23)),   // night
+            mk(at: date(dayOffset: 1, hour: 9)),    // next day
+        ])
+        #expect(inputs.bestCatchesInOneDay == 3)   // three on day 0
+        #expect(inputs.dayPartsCovered == 3)       // morning, afternoon, night
+    }
+
+    // MARK: - New trophies
+
+    @Test func firstCatchIsVisibleAndEarnsAtOne() {
+        let t = ach("firstcatch")
+        #expect(t.secret == false)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk()])))
+    }
+
+    @Test func heavyMetalEarnsOnAJumbo() {
+        let t = ach("heavymetal")
+        #expect(t.secret == false)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(model: "747-8", manufacturer: "Boeing")])))
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(model: "737-800", manufacturer: "Boeing")])) == false)
+    }
+
+    @Test func marathonSecretEarnsAtTenInADay() {
+        let t = ach("marathon")
+        #expect(t.secret)
+        let ten = (0..<10).map { _ in mk(at: date(dayOffset: 0, hour: 10)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: ten)))
+        let nine = (0..<9).map { _ in mk(at: date(dayOffset: 0, hour: 10)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: nine)) == false)
+    }
+
+    @Test func aroundTheClockSecretNeedsAllFourParts() {
+        let t = ach("aroundclock")
+        #expect(t.secret)
+        let allFour = [8, 14, 19, 23].map { mk(at: date(hour: $0)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: allFour)))
+        let three = [8, 14, 19].map { mk(at: date(hour: $0)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: three)) == false)
+    }
+
+    // MARK: - Second batch
+
+    @Test func onTheDeckSecretBelowAThousandMeters() {
+        let t = ach("ondeck")
+        #expect(t.secret)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 600)])))            // low
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 5000)])) == false)  // cruising
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk()])) == false)            // no altitude data
+        // A zero/bad altitude is ignored — the genuinely-low one still counts.
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 0), mk(altM: 700)])))
+    }
+
+    @Test func homebodyTenAtOnePlace() {
+        let here = (0..<10).map { _ in mk(place: "Berkeley, CA") }
+        #expect(Trophies.inputs(from: here).maxCatchesAtOnePlace == 10)
+        #expect(ach("homebody").isEarned(inputs: Trophies.inputs(from: here)))
+        // Spread across two places → best is 5, not earned.
+        let split = (0..<5).map { _ in mk(place: "A") } + (0..<5).map { _ in mk(place: "B") }
+        #expect(ach("homebody").isEarned(inputs: Trophies.inputs(from: split)) == false)
+    }
+
+    @Test func varietyPackCountsDistinctTypes() {
+        // 737 narrow, A350 wide, E175 regional, Citation biz, Cessna ga → 5 types.
+        let catches = [
+            mk(model: "737-800", manufacturer: "Boeing"),
+            mk(model: "A350-900", manufacturer: "Airbus"),
+            mk(model: "E175", manufacturer: "Embraer"),
+            mk(model: "Citation X", manufacturer: "Cessna"),
+            mk(model: "Cessna 172", manufacturer: "Cessna"),
+        ]
+        let inputs = Trophies.inputs(from: catches)
+        #expect(inputs.distinctTypes >= 5)
+        #expect(ach("varietypack").isEarned(inputs: inputs))
+    }
+
+    @Test func dawnPatrolSecretInEarlyMorning() {
+        #expect(ach("dawn").isEarned(inputs: Trophies.inputs(from: [mk(at: date(hour: 5))])))
+        #expect(ach("dawn").isEarned(inputs: Trophies.inputs(from: [mk(at: date(hour: 12))])) == false)
+    }
+
+    @Test func weekendWarriorNeedsSaturdayAndSunday() {
+        let sat = ymd(2024, 5, 18)   // a Saturday
+        let sun = ymd(2024, 5, 19)   // a Sunday
+        #expect(ach("weekend").isEarned(inputs: Trophies.inputs(from: [mk(at: sat), mk(at: sun)])))
+        #expect(ach("weekend").isEarned(inputs: Trophies.inputs(from: [mk(at: sat), mk(at: sat)])) == false)
+    }
+
+    @Test func doubleheaderConsecutiveOperator() {
+        let t0 = date(hour: 9)
+        #expect(Trophies.hasConsecutiveSameOperator([(t0, "united"), (t0.addingTimeInterval(120), "united")]))
+        #expect(Trophies.hasConsecutiveSameOperator([(t0, "united"), (t0.addingTimeInterval(120), "delta")]) == false)
+        #expect(Trophies.hasConsecutiveSameOperator([]) == false)
+        #expect(Trophies.hasConsecutiveSameOperator([(t0, "united")]) == false)
+        // Sorted by time, so input order doesn't matter.
+        #expect(Trophies.hasConsecutiveSameOperator([(t0.addingTimeInterval(120), "ual"), (t0, "ual")]))
     }
 }

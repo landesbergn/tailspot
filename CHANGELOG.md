@@ -5,6 +5,78 @@ that file focused on the live state plus durable guidance. The live "Current
 state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
 Git history and PLAN.md §9 remain the authoritative record.
 
+## 2026-06-17 — post-0.5.0: PostHog session replay fixed + decode fix shipped
+
+**Post-0.5.0 maintenance release (same `MARKETING_VERSION` 0.5.0, build
+auto-bumps — nothing user-visible).** Shipped on `main` via three PRs: #39
+(visual-confirm decode fix), #41 (PostHog session replay, now working), #42
+(manual-ship docs). Highlights of this session:
+
+- **PostHog product events were never broken** — they flow via the SDK-free
+  REST pipeline (`Analytics.swift`); "missing" events were just the Replay/
+  Activity views filtering test-account devices. Confirmed live via the PostHog
+  MCP.
+- **Session replay now works** (`PostHogSessionReplay.swift`). Three fixes
+  found by field-testing against live PostHog data: (a) **screenshot mode**, not
+  wireframe — SwiftUI on iOS 26 renders blank in wireframe (posthog-ios#408);
+  (b) the full-screen `.postHogMask()` on the root `CameraPreview` was blacking
+  the WHOLE window (every other screen is a sheet over it) — removed, since the
+  camera is a GPU surface screenshot mode can't read and renders black on its
+  own; (c) `flushAt = 1` + `captureApplicationLifecycleEvents = true` fixed
+  ~1-in-7 capture (short sessions never hit a flush trigger). Text unmasked
+  (`maskAllTextInputs = false`) since Tailspot's text is non-sensitive game
+  data; `config.debug` is DEBUG-only. **Diagnosis lesson:** prefer querying
+  live PostHog (MCP) + an on-device experiment over chaining inference from
+  forum posts — the "SDK bug" theory was wrong; it was our own mask + flush.
+- **Decode fix (#39)** is dormant in Release (visual confirmation is
+  `#if DEBUG` + off by default), so it changes nothing for testers — it's
+  there for Noah's own dev builds and the visual-confirmation field re-record.
+
+**0.5.0 is the release — backend becomes the default ADS-B source and the
+Hangar is fully redesigned.** Shipped via PR #32 (the release PR — it grew
+from "Sets redesign" to carry the whole 0.5.0: `feat/backend-default-failover`
+was merged into it so `main` transitions `0.2.2 → 0.5.0` in one Xcode Cloud
+build, no intermediate half-state to TestFlight). `MARKETING_VERSION` 0.5.0.
+
+1. **Backend default-on with auto-failover (was `feat/backend-default-failover`).**
+   `ADSBManager` now uses the Tailspot backend (`api.tailspot.app`, adsb.lol +
+   MLAT) as the live source, auto-failing-over to OpenSky on backend trouble.
+   Precision elevation-aware visibility (kills the MLAT firehose), podium color
+   tokens. **The OpenSky secret was deliberately NOT rotated** — it's kept as
+   the failover rung, so no existing tester is broken. Rotation is a future
+   coordinated event (warn testers first), to happen only once adsb.lol is
+   fully field-proven and OpenSky is dropped from the prod ladder. *(Superseded
+   2026-06-21: OpenSky removed entirely.)*
+
+2. **Hangar redesign (the bulk of PR #32), one card language across three tabs:**
+   - **Sets** — completion-driven make/model families, ordered by % complete,
+     cyan `CompletionRing` + "X of N variants"; tap a family → list of its
+     models (count + most-recent) → tail cards → `CatchDetailView`. MECE
+     coverage (GA props, Comac, Citation variants, …).
+   - **Recent** — a chronological feed of the shared `TailCard` (photo · cyan
+     callsign · airline · date · location). Tail lists lead with the **flight
+     callsign**, not the N-registration; "Unknown operator" resolves/backfills
+     from the callsign's ICAO prefix (`Airlines.swift`, offline).
+   - **Trophies** — awards split into **MEDALS** (leveled, bronze→platinum,
+     progress bar to next tier — goal-framed "→ SILVER 17/30", never "LOCKED")
+     and **BADGES** (1-of-1 feats, earned/locked, no tier). 19 awards (6 new:
+     Single Aisle, Frequent Flyer, Globetrotter, Set Master, Rare Hunter,
+     Regular). Two-stat header ("N/14 MEDALS · M/5 BADGES").
+   - Shell: segments switch via a **paged `TabView`** (kept alive, smooth);
+     `TrophyView` caches each hex via `.drawingGroup()` (no blur shadow) — the
+     fix for the trophies-tab compositing lag.
+
+**Process learnings (now conventions):** (a) NEVER rebase an already-pushed
+branch — merge main into the branch instead (squash-merge makes branch
+history cosmetic). (b) **When iterating across branches, `git checkout` the
+PR branch BEFORE editing** — editing on the throwaway `integration` branch
+stranded commits off PR #32 repeatedly this session; recover via cherry-pick
+or by re-pointing the tree to `integration` (the proven combination). (c)
+Tests must not touch process-global state outside a single `.serialized`
+owner suite (CI clones race). (d) Keychain APIs don't work in CI sim clones.
+(e) Cross-file SwiftUI SourceKit errors ("Cannot find 'Catch'/'Brand'") are
+cascade noise — `xcodebuild test` is the real check.
+
 ## 2026-06-11 — backend deployed + leaderboard live + field-driven visibility fix
 
 **The backend is DEPLOYED and the social layer is live.** Two days of program

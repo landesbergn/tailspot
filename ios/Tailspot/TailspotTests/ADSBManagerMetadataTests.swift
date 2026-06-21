@@ -30,7 +30,7 @@ private final class CountingMetadataSource: ADSBSource, @unchecked Sendable {
     func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
         callCounts[icao24, default: 0] += 1
         if errors.contains(icao24) {
-            throw OpenSkyClient.ClientError.rateLimited
+            throw ADSBSourceError.rateLimited
         }
         if let result = results[icao24] {
             return result
@@ -60,7 +60,7 @@ struct ADSBManagerMetadataTests {
         let expected = makeMetadata(icao24: "abc", model: "737-800")
         src.results["abc"] = expected
 
-        let mgr = ADSBManager(liveSource: src, mockSource: src)
+        let mgr = ADSBManager(source: src)
         let got = await mgr.metadata(for: "abc")
 
         #expect(got == expected)
@@ -71,7 +71,7 @@ struct ADSBManagerMetadataTests {
         let src = CountingMetadataSource()
         src.results["abc"] = makeMetadata(icao24: "abc", model: "737")
 
-        let mgr = ADSBManager(liveSource: src, mockSource: src)
+        let mgr = ADSBManager(source: src)
         _ = await mgr.metadata(for: "abc")
         _ = await mgr.metadata(for: "abc")
         _ = await mgr.metadata(for: "abc")
@@ -83,7 +83,7 @@ struct ADSBManagerMetadataTests {
         let src = CountingMetadataSource()
         // No entry in src.results -> returns nil from source.
 
-        let mgr = ADSBManager(liveSource: src, mockSource: src)
+        let mgr = ADSBManager(source: src)
         let first = await mgr.metadata(for: "xyz")
         let second = await mgr.metadata(for: "xyz")
 
@@ -97,7 +97,7 @@ struct ADSBManagerMetadataTests {
         let src = CountingMetadataSource()
         src.errors.insert("err")
 
-        let mgr = ADSBManager(liveSource: src, mockSource: src)
+        let mgr = ADSBManager(source: src)
         // First call hits the error path; we should get nil back.
         let firstResult = await mgr.metadata(for: "err")
         #expect(firstResult == nil)
