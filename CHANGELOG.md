@@ -1,9 +1,67 @@
 # Changelog
 
-Historical per-session "Current state" entries, moved out of CLAUDE.md to keep
-that file focused on the live state plus durable guidance. The live "Current
-state" block stays in CLAUDE.md; each round's prior block lands here, newest first.
-Git history and PLAN.md §9 remain the authoritative record.
+Historical per-session "Current state" entries. As of 2026-06-22, CLAUDE.md no
+longer carries a live "Current state" block — the authoritative current status
+lives in **PLAN.md §9**, and each completed round lands here, newest first.
+Git history + PLAN.md §9 remain the authoritative record.
+
+## 2026-06-21 — ADS-B source cutover: mock + OpenSky removed (PR #57)
+
+Triggered by a field session in Bali where a real Citilink flight (CTV9661)
+"failed to capture" and was identified as a "United Airlines B737" that doesn't
+exist.
+
+- **Root cause** (on-device replay `2026-06-21T02:14:32Z` + os_log): the app was
+  in **MOCK** mode. A single tap on the debug source-row flipped Tailspot-API →
+  MOCK, and once the wrench overlay was closed there was no indication you were
+  seeing synthetic planes. The "United 737" was the `MockADSBSource`
+  `UAL248`/`a3b15e` fixture verbatim (`BOEING 737-800 / United Airlines`). The
+  fake catch saved to the Hangar **and queued for upload to the real backend**
+  (`CatchUploader` had no mock guard). On the live source the real CTV9661 was
+  correctly ingested (`shown=1`) but sat at bearing ~222–256° while the phone
+  pointed heading 76° — off-screen behind the user.
+- **Fix (per Noah: remove both, don't patch around them):**
+  - **Mock source removed** — deleted `MockADSBSource.swift`, the `useMock`
+    toggle, and the source-cycle UI. The replay harness covers offline testing.
+  - **OpenSky removed** — deleted `OpenSkyClient.swift` and the silent
+    backend→OpenSky failover (it hid backend problems mid-session). The shared
+    error enum moved to `ADSBSourceError` in `ADSBSource.swift`. `ADSBManager`
+    now has a single injectable `source` (`init(source:)`), no `useBackend`.
+    `CatchBackfill` uses the backend client for metadata.
+  - **Credential apparatus removed** — no `OPENSKY_*` in `Tailspot.xcconfig`,
+    `Info.plist`, the secrets template, or `ci_post_clone.sh`. The shipped binary
+    carries no extractable API secret beyond the optional PostHog key, ending the
+    credential-leak surface (two prior leaks were both OpenSky).
+- If the backend is unreachable, the app surfaces an error / empty sky instead of
+  degrading to a sparser source — the intended trade for debugging clarity.
+- Tests: full iOS suite green; removed the obsolete mock-integration test + the
+  backend-toggle suite; swapped `OpenSkyClient.ClientError` → `ADSBSourceError`.
+- **Follow-ups at the time:** delete the fake "United 737" catch from the Hangar
+  (predates the `isMock` tag, untagged; may have hit the backend — check icao
+  `a3b15e`); retire the OpenSky console credential once a cutover build reaches
+  testers.
+
+## 2026-06-21 — Trophies / achievements overhaul shipped (PR #56)
+
+The Trophies tab rebuilt around a real **unlock moment**: `TrophyUnlockView` is a
+full-screen "NEW TROPHY" celebration (cyan hex, glow + rotating ray-burst,
+haptic, Reduce-Motion + VoiceOver paths) driven by `TrophyUnlockCenter` +
+`UserDefaultsTrophyLedger` — the ledger records which awards have been *shown*,
+so a newly-earned one is detected as a transition and fired exactly once
+(commit-on-shown, seeds silently on first run so existing testers aren't flooded,
+one-time "trophy case" recap on update). Fires `trophy_unlocked` /
+`trophy_recap_shown` via the PostHog REST pipeline (`Analytics.swift`). The
+roster is now **binary** — every achievement earned-or-not, no bronze→platinum
+metals, no medals/badges split, no stat header; earned hexes render in a distinct
+**cyan**. Count families split into **milestone chains** that reveal progressively
+via `Achievement.prerequisite` (Centurion appears only after Catcher); two
+unearned states — **visible** (real name + a quiet `62/100`) and **secret** (a
+locked `???`). ~56 achievements incl. a reverse-geocoded `Catch.country` trophy
+(Mr. Worldwide); 31 custom hex icons reviewable in a DEBUG `⚑ Icons` gallery.
+Pure `Trophies.swift` + `TrophyBoard` filtering are unit-tested. **Deferred:**
+scoring/points/rareness + medal-system rework (PLAN §9); Constellation/Quintet
+stay secret-dormant until multi-catch; the catch-a-kind heuristic matcher wants
+real-world tuning as catches land.
 
 ## 2026-06-17 — post-0.5.0: PostHog session replay fixed + decode fix shipped
 
