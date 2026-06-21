@@ -1303,6 +1303,15 @@ struct ContentView: View {
                 // is in view (the per-plane brackets in `PlaneLabel`).
                 // Only the low status pill remains so the user still
                 // knows whether we're scanning / out of range / errored.
+                //
+                // `maxWidth: .infinity` is load-bearing: it makes this
+                // VStack fill the GeometryReader's width so the pill
+                // centers horizontally. (GeometryReader pins content to
+                // .topLeading, so without it the pill jams against the
+                // left edge.) The pill used to rely on a sibling
+                // `emptyReticle.position(...)` to stretch the ZStack —
+                // removing that reticle (#62) silently un-centered the
+                // pill. Declaring our own width stops that recurring.
                 VStack {
                     Spacer()
                     HStack(spacing: 8) {
@@ -1320,6 +1329,7 @@ struct ContentView: View {
                     .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
                     .padding(.bottom, geo.size.height * 0.18)
                 }
+                .frame(maxWidth: .infinity)
             }
         }
     }
