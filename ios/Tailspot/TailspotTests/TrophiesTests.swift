@@ -457,3 +457,98 @@ struct TrophyBoardTests {
         #expect(TrophyBoard.visible(roster: roster, inputs: inputs(total: 5)).map(\.id) == ["m1", "m2"])
     }
 }
+
+@Suite("Trophies — 2026-06-21 expansion")
+@MainActor
+struct TrophiesExpansionTests {
+
+    private let cal = Calendar(identifier: .gregorian)
+    private func date(dayOffset: Int = 0, hour: Int = 12) -> Date {
+        let base = cal.startOfDay(for: Date(timeIntervalSince1970: 1_716_000_000))
+        let shifted = cal.date(byAdding: .day, value: dayOffset, to: base)!
+        return cal.date(bySettingHour: hour, minute: 0, second: 0, of: shifted)!
+    }
+    private func ach(_ id: String) -> Achievement { Trophies.roster.first { $0.id == id }! }
+    private func mk(model: String? = nil, manufacturer: String? = nil, operatorName: String? = nil,
+                    altM: Double? = nil, velMps: Double? = nil,
+                    at: Date = Date(timeIntervalSince1970: 1_716_000_000)) -> Catch {
+        Catch(icao24: String(UUID().uuidString.prefix(6)), callsign: nil, model: model,
+              manufacturer: manufacturer, operatorName: operatorName, caughtAt: at,
+              observerLat: 0, observerLon: 0, slantDistanceMeters: 0,
+              altitudeMeters: altM, velocityMps: velMps)
+    }
+
+    // MARK: - Tag classifier
+
+    @Test func aircraftTagsClassify() {
+        #expect(Trophies.aircraftTags(model: "747-400", manufacturer: "Boeing", typecode: "B744", operatorName: nil, type: .wide).contains("heavymetal"))
+        #expect(Trophies.aircraftTags(model: "A380-800", manufacturer: "Airbus", typecode: "A388", operatorName: nil, type: .wide).contains("heavymetal"))
+        #expect(Trophies.aircraftTags(model: "777-300", manufacturer: "Boeing", typecode: nil, operatorName: "FedEx", type: .wide).contains("freighter"))
+        #expect(Trophies.aircraftTags(model: "ATR-72", manufacturer: "ATR", typecode: nil, operatorName: nil, type: .regional).contains("turboprop"))
+        #expect(Trophies.aircraftTags(model: nil, manufacturer: "Sikorsky", typecode: nil, operatorName: nil, type: .ga).contains("helicopter"))
+        #expect(Trophies.aircraftTags(model: "F-16", manufacturer: nil, typecode: nil, operatorName: nil, type: .mil).contains("military"))
+        #expect(Trophies.aircraftTags(model: "Citation X", manufacturer: "Cessna", typecode: nil, operatorName: nil, type: .biz).contains("bizjet"))
+        // A plain 737 narrowbody carries no special tag.
+        #expect(Trophies.aircraftTags(model: "737-800", manufacturer: "Boeing", typecode: nil, operatorName: "United", type: .narrow).isEmpty)
+    }
+
+    @Test func dayPartBuckets() {
+        #expect(Trophies.dayPart(forHour: 8) == "morning")
+        #expect(Trophies.dayPart(forHour: 14) == "afternoon")
+        #expect(Trophies.dayPart(forHour: 19) == "evening")
+        #expect(Trophies.dayPart(forHour: 23) == "night")
+        #expect(Trophies.dayPart(forHour: 3) == "night")
+    }
+
+    // MARK: - Aggregates
+
+    @Test func altitudeAndSpeedTakeMax() {
+        let inputs = Trophies.inputs(from: [mk(altM: 8000, velMps: 200), mk(altM: 12500, velMps: 270)])
+        #expect(inputs.highestAltitudeM == 12500)
+        #expect(inputs.fastestVelocityMps == 270)
+    }
+
+    @Test func bestCatchesInOneDayAndDayParts() {
+        let inputs = Trophies.inputs(from: [
+            mk(at: date(dayOffset: 0, hour: 9)),    // morning
+            mk(at: date(dayOffset: 0, hour: 14)),   // afternoon
+            mk(at: date(dayOffset: 0, hour: 23)),   // night
+            mk(at: date(dayOffset: 1, hour: 9)),    // next day
+        ])
+        #expect(inputs.bestCatchesInOneDay == 3)   // three on day 0
+        #expect(inputs.dayPartsCovered == 3)       // morning, afternoon, night
+    }
+
+    // MARK: - New trophies
+
+    @Test func firstCatchIsVisibleAndEarnsAtOne() {
+        let t = ach("firstcatch")
+        #expect(t.secret == false)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk()])))
+    }
+
+    @Test func heavyMetalEarnsOnAJumbo() {
+        let t = ach("heavymetal")
+        #expect(t.secret == false)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(model: "747-8", manufacturer: "Boeing")])))
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(model: "737-800", manufacturer: "Boeing")])) == false)
+    }
+
+    @Test func marathonSecretEarnsAtTenInADay() {
+        let t = ach("marathon")
+        #expect(t.secret)
+        let ten = (0..<10).map { _ in mk(at: date(dayOffset: 0, hour: 10)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: ten)))
+        let nine = (0..<9).map { _ in mk(at: date(dayOffset: 0, hour: 10)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: nine)) == false)
+    }
+
+    @Test func aroundTheClockSecretNeedsAllFourParts() {
+        let t = ach("aroundclock")
+        #expect(t.secret)
+        let allFour = [8, 14, 19, 23].map { mk(at: date(hour: $0)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: allFour)))
+        let three = [8, 14, 19].map { mk(at: date(hour: $0)) }
+        #expect(t.isEarned(inputs: Trophies.inputs(from: three)) == false)
+    }
+}

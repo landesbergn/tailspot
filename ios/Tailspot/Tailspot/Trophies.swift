@@ -164,6 +164,12 @@ nonisolated struct TrophyProgressInputs: Sendable {
     let bestBurstWithinTenMin: Int  // max catches inside any 10-min window
     let hasRepeatAirframeAcrossDays: Bool  // an icao24 caught on >= 2 days
     let longestDayStreak: Int       // longest run of consecutive catch-days
+    // Metrics added with the 2026-06-21 trophy expansion.
+    let caughtTags: Set<String>     // aircraft tags (heavymetal, freighter, …)
+    let highestAltitudeM: Double    // max recorded catch altitude (m)
+    let fastestVelocityMps: Double  // max recorded catch ground speed (m/s)
+    let bestCatchesInOneDay: Int    // most catches in any single day
+    let dayPartsCovered: Int        // distinct of {night, morning, afternoon, evening}
 
     init(
         totalCatches: Int,
@@ -188,7 +194,12 @@ nonisolated struct TrophyProgressInputs: Sendable {
         redEyeCatches: Int = 0,
         bestBurstWithinTenMin: Int = 0,
         hasRepeatAirframeAcrossDays: Bool = false,
-        longestDayStreak: Int = 0
+        longestDayStreak: Int = 0,
+        caughtTags: Set<String> = [],
+        highestAltitudeM: Double = 0,
+        fastestVelocityMps: Double = 0,
+        bestCatchesInOneDay: Int = 0,
+        dayPartsCovered: Int = 0
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -213,6 +224,11 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.bestBurstWithinTenMin = bestBurstWithinTenMin
         self.hasRepeatAirframeAcrossDays = hasRepeatAirframeAcrossDays
         self.longestDayStreak = longestDayStreak
+        self.caughtTags = caughtTags
+        self.highestAltitudeM = highestAltitudeM
+        self.fastestVelocityMps = fastestVelocityMps
+        self.bestCatchesInOneDay = bestCatchesInOneDay
+        self.dayPartsCovered = dayPartsCovered
     }
 
     static let zero = TrophyProgressInputs(
@@ -235,9 +251,15 @@ nonisolated enum Trophies {
     /// earned; the rest are always visible so the user can chase them.
     static let roster: [Achievement] = [
         // ── Catch count ──
+        Achievement(id: "firstcatch", title: "First Catch", summary: "Catch your first plane",
+                    iconName: "catcher", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { $0.totalCatches }),
+        Achievement(id: "spotter", title: "Plane Spotter", summary: "Reach 5 catches",
+                    iconName: "catcher", tiers: [.init(tier: .gold, at: 5)],
+                    prerequisite: "firstcatch", progress: { $0.totalCatches }),
         Achievement(id: "catcher", title: "Catcher", summary: "Reach 25 catches",
                     iconName: "catcher", tiers: [.init(tier: .gold, at: 25)],
-                    progress: { $0.totalCatches }),
+                    prerequisite: "spotter", progress: { $0.totalCatches }),
         Achievement(id: "centurion", title: "Centurion", summary: "Reach 100 catches",
                     iconName: "centurion", tiers: [.init(tier: .gold, at: 100)],
                     prerequisite: "catcher", progress: { $0.totalCatches }),
@@ -344,6 +366,20 @@ nonisolated enum Trophies {
                     iconName: "crown", tiers: [.init(tier: .gold, at: 1)],
                     progress: { min(1, $0.legendaryTierCatches) }),
 
+        // ── Catch-a-kind (visible goals) ──
+        Achievement(id: "heavymetal", title: "Heavy Metal", summary: "Catch a 747 or A380",
+                    iconName: "jumbo", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { $0.caughtTags.contains("heavymetal") ? 1 : 0 }),
+        Achievement(id: "freighter", title: "Heavy Hauler", summary: "Catch a freighter",
+                    iconName: "cargo", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { $0.caughtTags.contains("freighter") ? 1 : 0 }),
+        Achievement(id: "bizjet", title: "Business Class", summary: "Catch a business jet",
+                    iconName: "bizjet", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { $0.caughtTags.contains("bizjet") ? 1 : 0 }),
+        Achievement(id: "turboprop", title: "Spinning Props", summary: "Catch a turboprop",
+                    iconName: "prop", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { $0.caughtTags.contains("turboprop") ? 1 : 0 }),
+
         // ── Secret — absent from the list until earned, then they appear. ──
         Achievement(id: "mrworldwide", title: "Mr. Worldwide", summary: "Caught planes in 2+ countries",
                     iconName: "worldwide", tiers: [.init(tier: .gold, at: 1)], secret: true,
@@ -369,6 +405,24 @@ nonisolated enum Trophies {
         Achievement(id: "quintet", title: "Quintet", summary: "Catch 5 planes in one frame",
                     iconName: "quintet", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.bestMultiCatchCount >= 5 ? 1 : 0 }),
+        Achievement(id: "military", title: "Brass Hat", summary: "Catch a military aircraft",
+                    iconName: "star", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.caughtTags.contains("military") ? 1 : 0 }),
+        Achievement(id: "helicopter", title: "Whirlybird", summary: "Catch a helicopter",
+                    iconName: "heli", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.caughtTags.contains("helicopter") ? 1 : 0 }),
+        Achievement(id: "milehigh", title: "Mile High", summary: "Catch one above 40,000 ft",
+                    iconName: "altitude", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.highestAltitudeM >= 12_000 ? 1 : 0 }),
+        Achievement(id: "speeddemon", title: "Speed Demon", summary: "Catch one doing 600+ mph",
+                    iconName: "speed", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.fastestVelocityMps >= 268 ? 1 : 0 }),
+        Achievement(id: "marathon", title: "Marathon", summary: "Catch 10 planes in one day",
+                    iconName: "stack", tiers: [.init(tier: .gold, at: 10)], secret: true,
+                    progress: { $0.bestCatchesInOneDay }),
+        Achievement(id: "aroundclock", title: "Around the Clock", summary: "Catch in all four parts of the day",
+                    iconName: "clock", tiers: [.init(tier: .gold, at: 4)], secret: true,
+                    progress: { $0.dayPartsCovered }),
     ]
 
     // MARK: - Evaluation
@@ -385,6 +439,10 @@ nonisolated enum Trophies {
         var rare = 0, epic = 0, legendary = 0
         var longest: Double = 0
         var night = 0, far = 0, redEye = 0
+        var tags = Set<String>()
+        var highestAlt: Double = 0, fastestVel: Double = 0
+        var dayCounts: [Date: Int] = [:]   // catches per day → best-in-day
+        var dayParts = Set<String>()       // distinct {night, morning, afternoon, evening}
         // Per-airframe day set (repeat-customer) and all catch timestamps
         // (burst) — derived after the loop.
         var icaoDays: [String: Set<Date>] = [:]
@@ -419,6 +477,7 @@ nonisolated enum Trophies {
             }
             let day = calendar.startOfDay(for: c.caughtAt)
             days.insert(day)
+            dayCounts[day, default: 0] += 1
             icaoDays[c.icao24, default: []].insert(day)
             timestamps.append(c.caughtAt)
             let km = c.slantDistanceMeters / 1000
@@ -427,6 +486,11 @@ nonisolated enum Trophies {
             let hour = calendar.component(.hour, from: c.caughtAt)
             if hour >= 20 || hour < 6 { night += 1 }
             if hour >= 2 && hour < 5 { redEye += 1 }
+            dayParts.insert(dayPart(forHour: hour))
+            tags.formUnion(aircraftTags(model: c.model, manufacturer: c.manufacturer,
+                                        typecode: c.typecode, operatorName: c.operatorName, type: t))
+            if let alt = c.altitudeMeters, alt > highestAlt { highestAlt = alt }
+            if let vel = c.velocityMps, vel > fastestVel { fastestVel = vel }
         }
 
         // Repeat customer: any airframe caught on two or more distinct days.
@@ -465,8 +529,61 @@ nonisolated enum Trophies {
             redEyeCatches: redEye,
             bestBurstWithinTenMin: bestBurst,
             hasRepeatAirframeAcrossDays: hasRepeat,
-            longestDayStreak: longestStreak
+            longestDayStreak: longestStreak,
+            caughtTags: tags,
+            highestAltitudeM: highestAlt,
+            fastestVelocityMps: fastestVel,
+            bestCatchesInOneDay: dayCounts.values.max() ?? 0,
+            dayPartsCovered: dayParts.count
         )
+    }
+
+    /// Which part of the day an hour falls in (for the Around the Clock trophy).
+    static func dayPart(forHour hour: Int) -> String {
+        switch hour {
+        case 5..<12:  return "morning"
+        case 12..<17: return "afternoon"
+        case 17..<21: return "evening"
+        default:      return "night"
+        }
+    }
+
+    /// Heuristic aircraft tags derived from a catch's metadata — drives the
+    /// "catch a <kind>" trophies. Tags are coarse and intentionally generous
+    /// (a catch can carry several).
+    static func aircraftTags(
+        model: String?, manufacturer: String?, typecode: String?,
+        operatorName: String?, type: AircraftType
+    ) -> Set<String> {
+        var tags = Set<String>()
+        let hay = "\(model ?? "") \(manufacturer ?? "") \(typecode ?? "")".lowercased()
+        let op = (operatorName ?? "").lowercased()
+
+        // Iconic four-engine giants.
+        if hay.contains("747") || hay.contains("a380") || hay.contains("a340") {
+            tags.insert("heavymetal")
+        }
+        // Freighters — cargo operator, or an explicit freighter model.
+        let cargoOps = ["fedex", "ups", "atlas", "cargolux", "dhl", "cargo",
+                        "kalitta", "abx", "amerijet", "western global", "polar air", "national air"]
+        if cargoOps.contains(where: { op.contains($0) })
+            || hay.contains("freighter") || hay.contains("-f ") || hay.hasSuffix("f")
+            || hay.contains("bcf") || hay.contains("scf") {
+            tags.insert("freighter")
+        }
+        // Turboprops.
+        let props = ["dash 8", "dhc-8", "q400", "atr ", "atr-", "king air", "pc-12", "pc12",
+                     "caravan", "c208", "saab 340", "saab 2000", "do 228", "twin otter", "metroliner"]
+        if props.contains(where: { hay.contains($0) }) { tags.insert("turboprop") }
+        // Helicopters.
+        let heli = ["helicopter", "robinson", "sikorsky", "eurocopter", "airbus helicopters",
+                    "bell ", "agusta", "leonardo heli", "md helicopter", "enstrom",
+                    "r44", "r66", "ec1", "as35", "h125", "h135", "h145", "uh-", "ah-", "ch-"]
+        if heli.contains(where: { hay.contains($0) }) { tags.insert("helicopter") }
+        // Type-derived.
+        if type == .mil { tags.insert("military") }
+        if type == .biz { tags.insert("bizjet") }
+        return tags
     }
 
     /// Max number of timestamps inside any sliding window of `seconds`.

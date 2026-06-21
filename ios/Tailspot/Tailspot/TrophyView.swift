@@ -173,6 +173,16 @@ struct TrophyIcon: View {
             case "worldwide":     WorldwideIcon().style(color, lineWidth: 1.9 * scale)
             case "repeat":        RepeatIcon().style(color, lineWidth: 2 * scale)
             case "streak":        FlameIcon().style(color, filled: true)
+            case "jumbo":         JumboIcon().style(color, lineWidth: 1.8 * scale)
+            case "cargo":         CargoIcon().style(color, lineWidth: 1.8 * scale)
+            case "bizjet":        BizjetIcon().style(color, lineWidth: 1.8 * scale)
+            case "prop":          PropIcon().style(color, lineWidth: 2 * scale)
+            case "star":          StarIcon().style(color, filled: true)
+            case "heli":          HeliIcon().style(color, lineWidth: 1.8 * scale)
+            case "altitude":      AltitudeIcon().style(color, lineWidth: 2 * scale)
+            case "speed":         SpeedIcon().style(color, lineWidth: 2 * scale)
+            case "stack":         StackIcon().style(color, filled: true)
+            case "clock":         ClockIcon().style(color, lineWidth: 1.9 * scale)
             default:              CatcherIcon().style(color, lineWidth: 2 * scale, dashed: true)
             }
         }
@@ -549,6 +559,153 @@ private struct FlameIcon: Shape {
     }
 }
 
+/// Heavy Metal — a four-engine giant (wing + 4 engine pods + fuselage + tail).
+private struct JumboIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(16, 5)); p.addLine(to: pt(16, 26))            // fuselage
+        p.move(to: pt(4, 15)); p.addLine(to: pt(28, 15))            // wing
+        p.move(to: pt(11, 26)); p.addLine(to: pt(21, 26))           // tailplane
+        for x in [8.0, 12.0, 20.0, 24.0] {                          // 4 engine pods
+            p.addRoundedRect(in: CGRect(x: (x - 1.4) * s, y: 16 * s, width: 2.8 * s, height: 4 * s),
+                             cornerSize: .init(width: 1 * s, height: 1 * s))
+        }
+        return p
+    }
+}
+
+/// Heavy Hauler — a shipping/cargo box.
+private struct CargoIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 6 * s, y: 8 * s, width: 20 * s, height: 18 * s),
+                         cornerSize: .init(width: 2 * s, height: 2 * s))
+        p.move(to: pt(6, 14)); p.addLine(to: pt(26, 14))           // lid line
+        p.move(to: pt(16, 8)); p.addLine(to: pt(16, 14))           // seam
+        return p
+    }
+}
+
+/// Business Class — a small sleek swept jet.
+private struct BizjetIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addRoundedRect(in: CGRect(x: 15 * s, y: 5 * s, width: 2 * s, height: 20 * s),
+                         cornerSize: .init(width: 1 * s, height: 1 * s))   // thin fuselage
+        p.move(to: pt(16, 12)); p.addLine(to: pt(7, 16)); p.addLine(to: pt(16, 15))   // left wing
+        p.move(to: pt(16, 12)); p.addLine(to: pt(25, 16)); p.addLine(to: pt(16, 15))  // right wing
+        p.move(to: pt(16, 22)); p.addLine(to: pt(12, 25)); p.addLine(to: pt(16, 24))  // tail
+        p.move(to: pt(16, 22)); p.addLine(to: pt(20, 25)); p.addLine(to: pt(16, 24))
+        return p
+    }
+}
+
+/// Spinning Props — a three-blade propeller.
+private struct PropIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 14 * s, y: 14 * s, width: 4 * s, height: 4 * s))   // hub
+        p.move(to: pt(16, 16)); p.addLine(to: pt(16, 4))     // blade up
+        p.move(to: pt(16, 16)); p.addLine(to: pt(26, 22))    // blade lower-right
+        p.move(to: pt(16, 16)); p.addLine(to: pt(6, 22))     // blade lower-left
+        return p
+    }
+}
+
+/// Brass Hat — a five-point star (military).
+private struct StarIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        let c = CGPoint(x: 16 * s, y: 16.5 * s)
+        let outer = 11.5 * s, inner = 4.6 * s
+        var p = Path()
+        for i in 0..<10 {
+            let r = i.isMultiple(of: 2) ? outer : inner
+            let a = -Double.pi / 2 + Double(i) * .pi / 5
+            let point = CGPoint(x: c.x + CGFloat(cos(a)) * r, y: c.y + CGFloat(sin(a)) * r)
+            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Whirlybird — a helicopter (body + main rotor + tail boom + tail rotor).
+private struct HeliIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 8 * s, y: 13 * s, width: 12 * s, height: 9 * s))   // cabin
+        p.move(to: pt(4, 11)); p.addLine(to: pt(22, 11))           // main rotor
+        p.move(to: pt(13, 11)); p.addLine(to: pt(13, 13))          // mast
+        p.move(to: pt(20, 17)); p.addLine(to: pt(28, 17))          // tail boom
+        p.move(to: pt(28, 14)); p.addLine(to: pt(28, 20))          // tail rotor
+        p.move(to: pt(10, 22)); p.addLine(to: pt(18, 22))          // skid
+        return p
+    }
+}
+
+/// Mile High — a double up-chevron (way up there).
+private struct AltitudeIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(8, 15)); p.addLine(to: pt(16, 6));  p.addLine(to: pt(24, 15))
+        p.move(to: pt(8, 24)); p.addLine(to: pt(16, 15)); p.addLine(to: pt(24, 24))
+        return p
+    }
+}
+
+/// Speed Demon — motion lines + a forward chevron.
+private struct SpeedIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(4, 11)); p.addLine(to: pt(16, 11))
+        p.move(to: pt(4, 16)); p.addLine(to: pt(20, 16))
+        p.move(to: pt(4, 21)); p.addLine(to: pt(16, 21))
+        p.move(to: pt(20, 9)); p.addLine(to: pt(28, 16)); p.addLine(to: pt(20, 23))   // chevron
+        return p
+    }
+}
+
+/// Marathon — three stacked bars (a big pile of catches).
+private struct StackIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        var p = Path()
+        for y in [9.0, 15.0, 21.0] {
+            p.addRoundedRect(in: CGRect(x: 7 * s, y: y * s, width: 18 * s, height: 3.4 * s),
+                             cornerSize: .init(width: 1.5 * s, height: 1.5 * s))
+        }
+        return p
+    }
+}
+
+/// Around the Clock — a clock face with two hands.
+private struct ClockIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 6 * s, y: 6 * s, width: 20 * s, height: 20 * s))   // face
+        p.move(to: pt(16, 16)); p.addLine(to: pt(16, 9))      // hour hand
+        p.move(to: pt(16, 16)); p.addLine(to: pt(21, 18))     // minute hand
+        return p
+    }
+}
+
 private struct HeritageIcon: Shape {
     func path(in rect: CGRect) -> Path {
         let s = rect.width / 32
@@ -717,6 +874,8 @@ let trophyIconNames = [
     "centurion", "setmaster", "night", "heritage", "coast",
     "narrowbody", "ticket", "gems", "calendar",
     "eye", "hattrick", "worldwide", "repeat", "streak",
+    "jumbo", "cargo", "bizjet", "prop", "star", "heli",
+    "altitude", "speed", "stack", "clock",
 ]
 
 #if DEBUG
