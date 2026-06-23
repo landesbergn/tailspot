@@ -187,4 +187,59 @@ struct TailspotBackendClientTests {
         let client = TailspotBackendClient()
         #expect(client.baseURL.absoluteString == "https://api.tailspot.app")
     }
+
+    @Test func decoderIgnoresUnknownKeysForBackwardCompat() throws {
+        // The backend wire contract is ADDITIVE: newer backends add optional
+        // keys (typecode/registration on aircraft) and resolve more /v1/metadata
+        // hexes, but never remove/rename/retype existing fields. Swift's
+        // synthesized Decodable ignores unknown keys — which is exactly why a
+        // user still on an OLDER app build keeps decoding a NEWER backend
+        // response without error. Pin that guarantee so a future wire change
+        // can't silently break clients that haven't updated. (Simulated here by
+        // feeding the CURRENT decoder keys it doesn't declare — the same
+        // mechanism that protects the older, narrower client struct.)
+        let aircraftJSON = """
+        {
+          "fetchedAt": 1781122007,
+          "aircraft": [
+            {
+              "icao24": "76cdb5",
+              "callsign": "SIA248",
+              "originCountry": "Singapore",
+              "longitude": 115.0,
+              "latitude": -8.5,
+              "altitudeMeters": 13906.5,
+              "velocityMps": 242.8,
+              "trackDeg": 300.0,
+              "onGround": false,
+              "positionTimestamp": 1781122007,
+              "typecode": "A359",
+              "registration": "9V-SMH",
+              "someFutureFieldOldClientsNeverSaw": { "nested": [1, 2, 3] }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let a = try JSONDecoder().decode(BackendAircraftResponse.self, from: aircraftJSON).aircraft[0]
+        #expect(a.icao24 == "76cdb5")
+        #expect(a.callsign == "SIA248") // known fields still decode; unknown key ignored, no throw
+        #expect(a.altitudeMeters == 13906.5)
+
+        // /v1/metadata for a now-resolvable foreign hex, carrying an extra key.
+        let metadataJSON = """
+        {
+          "icao24": "76cdb5",
+          "registration": "9V-SMH",
+          "manufacturer": "Airbus",
+          "model": "A350-900",
+          "typecode": "A359",
+          "operatorName": null,
+          "source": "merged",
+          "anotherFutureField": 42
+        }
+        """.data(using: .utf8)!
+        let m = try JSONDecoder().decode(BackendMetadata.self, from: metadataJSON).asAircraftMetadata()
+        #expect(m.model == "A350-900")
+        #expect(m.typecode == "A359")
+    }
 }
