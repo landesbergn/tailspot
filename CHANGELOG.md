@@ -5,6 +5,47 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-24 — Foreign-aircraft metadata: kill "Unknown aircraft" (PR #65)
+
+Field report: a caught Singapore Airlines A350 (SIA248 / `9V-SMH`) showed as
+**"Unknown aircraft"** with a GA badge and +10 pts — even though the airline
+("Singapore Airlines") resolved. Structural, not a one-off: in Bali / SE Asia
+nearly all overhead traffic is foreign-registered, so almost every catch hit it.
+
+- **Root cause:** the airline name resolves on-device from the callsign
+  (`Airlines.swift`), but make/model came only from the backend
+  `GET /v1/metadata`, which is **FAA-registry-only** and 404s for any non-US
+  hex. Meanwhile adsb.lol already sends the ICAO typecode (`t`) and registration
+  (`r`) in the same feed the backend polls — and the pipeline was dropping them.
+- **Phase 1 — forward pass-through:** backend reads `t`/`r` → optional
+  `typecode`/`registration` on `NormalizedAircraft` → `/v1/aircraft` → iOS
+  `Aircraft`/`BackendAircraft` → `Catch` at catch time, feed preferred over the
+  metadata endpoint (`Catch.preferredAirframeField`). The card/type/tier already
+  re-derive from the stored typecode, so a foreign catch now shows the real
+  model + WIDE + correct rarity at catch time. No SwiftData migration.
+- **Phase 2 — heal existing catches:** gave `/v1/metadata` a global
+  hex→(reg, typecode) source so existing "Unknown" Hangar catches self-correct
+  on open (via the already-shipped `CatchBackfill`). Two non-destructive sources,
+  both via a new `upsertRegistryFillMissing` (`coalesce(existing, incoming)` —
+  never clobbers FAA's richer US data): a bulk **ADSB Exchange `basic-ac-db`**
+  import (`ingest/mictronics.ts`, 615,656 airframes loaded to prod) + an
+  opportunistic feed-enrich (`ingest/feedEnrich.ts`) that caches type/reg from
+  each fresh position snapshot via a new `TileCache.onFreshSnapshot` hook. No
+  Drizzle migration (the `registry.source` column was already a seam).
+- **Backward-compatible for users on older app builds:** the wire is additive
+  (the shipped `Decodable` ignores the new keys — pinned by a regression test),
+  `/v1/metadata` shape unchanged (foreign hexes just return 200 instead of 404),
+  no fields removed/retyped. Old builds even *gain* the heal via their existing
+  `CatchBackfill`.
+- **Shipped to prod:** PR #65 (CI green) merged; backend deployed to Fly.io
+  (release v6, clean rolling deploy, health verified); forward fix + heal both
+  verified live (incl. the exact reported airframe `9V-SMH` → "Airbus A350-900").
+  Backend 182 tests; iOS `TailspotTests` green. Plan:
+  `docs/plans/2026-06-23-001-fix-foreign-aircraft-metadata-plan.md`.
+- **Remaining:** an iOS TestFlight build activates the catch-*time* fix for new
+  catches (the heal for existing catches is already live for all users, no app
+  update needed).
+
 ## 2026-06-21 — ADS-B source cutover: mock + OpenSky removed (PR #57)
 
 Triggered by a field session in Bali where a real Citilink flight (CTV9661)
