@@ -24,6 +24,8 @@ function plane(icao: string): NormalizedAircraft {
     trackDeg: 90,
     onGround: false,
     positionTimestamp: 1_700_000_000,
+    typecode: "B772",
+    registration: "N69020",
   };
 }
 
@@ -86,6 +88,9 @@ describe("GET /v1/aircraft", () => {
     ]) {
       expect(ac).toHaveProperty(k);
     }
+    // typecode/registration travel through the cache + route untouched.
+    expect(ac.typecode).toBe("B772");
+    expect(ac.registration).toBe("N69020");
   });
 
   it("serves a cache hit within TTL (one upstream call for two requests)", async () => {

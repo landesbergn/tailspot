@@ -48,6 +48,17 @@ export interface NormalizedAircraft {
   onGround: boolean;
   /** Unix seconds of the last position update, or null if unknown. */
   positionTimestamp: number | null;
+  /**
+   * ICAO type designator the upstream DB carries for this airframe (e.g.
+   * "A359"). Optional — present only when the feed knows it. Lets a catch
+   * resolve make/model/type/rarity at catch time without the per-hex metadata
+   * endpoint (which is FAA-only and blind to foreign tails). Omitted from the
+   * JSON when absent, so the iOS client decodes it as nil.
+   */
+  typecode?: string;
+  /** Registration / tail number from the upstream DB (e.g. "9V-SMH"). Optional,
+   *  same semantics as `typecode`. */
+  registration?: string;
 }
 
 /**

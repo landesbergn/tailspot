@@ -82,6 +82,43 @@ describe("normalizeAdsbLol", () => {
     expect(mustGet(byHex, "86e4b8").callsign).toBe("JAL58");
   });
 
+  it("passes the readsb DB typecode + registration through (incl. foreign tails)", () => {
+    const ua = mustGet(byHex, "a92d6d");
+    expect(ua.typecode).toBe("B772");
+    expect(ua.registration).toBe("N69020");
+    // A German A340 — proves a foreign (non-US) airframe carries type + reg,
+    // the exact case the FAA-only metadata endpoint can't resolve.
+    const dlh = mustGet(byHex, "3c6444");
+    expect(dlh.typecode).toBe("A346");
+    expect(dlh.registration).toBe("D-AIHK");
+  });
+
+  it("omits typecode/registration when the upstream row lacks them or they're blank", () => {
+    const resp: AdsbLolResponse = {
+      now: FIXTURE.now,
+      ac: [
+        // no t/r at all
+        { hex: "abc123", flight: "NONE1", lat: 37.5, lon: -122.5, alt_baro: 30000, seen_pos: 1.0 },
+        // blank-string t/r → trimmed away to undefined (never "" on the wire)
+        {
+          hex: "def456",
+          flight: "NONE2",
+          lat: 37.6,
+          lon: -122.4,
+          alt_baro: 30000,
+          seen_pos: 1.0,
+          t: "  ",
+          r: "",
+        },
+      ],
+    };
+    const m = new Map(normalizeAdsbLol(resp, FETCHED_AT, SF_BBOX).map((a) => [a.icao24, a]));
+    expect(mustGet(m, "abc123").typecode).toBeUndefined();
+    expect(mustGet(m, "abc123").registration).toBeUndefined();
+    expect(mustGet(m, "def456").typecode).toBeUndefined();
+    expect(mustGet(m, "def456").registration).toBeUndefined();
+  });
+
   it("lowercases the hex", () => {
     for (const a of result) expect(a.icao24).toBe(a.icao24.toLowerCase());
   });

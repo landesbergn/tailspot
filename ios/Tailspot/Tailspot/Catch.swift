@@ -199,6 +199,22 @@ final class Catch {
         descriptor.fetchLimit = 1
         return ((try? context.fetch(descriptor).first) != nil)
     }
+
+    /// The airframe field (typecode / registration) to persist on a new catch,
+    /// preferring the LIVE position feed over the per-hex metadata endpoint.
+    ///
+    /// adsb.lol carries `t`/`r` for essentially every airframe — including the
+    /// foreign-registered tails the backend's FAA-only `/v1/metadata` cannot
+    /// resolve — so the feed value is both more available and as-observed. A
+    /// blank string is treated as absent (returns nil) so the fill-only-if-nil
+    /// Hangar backfill can still heal the field later from a richer source.
+    nonisolated static func preferredAirframeField(feed: String?, metadata: String?) -> String? {
+        func cleaned(_ s: String?) -> String? {
+            guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+            return t
+        }
+        return cleaned(feed) ?? cleaned(metadata)
+    }
 }
 
 // MARK: - Photo file helpers

@@ -60,6 +60,10 @@ export interface AdsbLolAircraft {
   lon?: number | null;
   /** seconds since this position was last updated. */
   seen_pos?: number | null;
+  /** ICAO type designator from the readsb aircraft DB (e.g. "A359"). */
+  t?: string | null;
+  /** registration / tail number from the readsb aircraft DB (e.g. "9V-SMH"). */
+  r?: string | null;
 }
 
 /** Top-level /v2/point response wrapper. */
@@ -142,6 +146,11 @@ function normalizeOne(a: AdsbLolAircraft, fetchedAt: number): NormalizedAircraft
     trackDeg,
     onGround,
     positionTimestamp,
+    // Pass the readsb DB's type/registration straight through. `undefined`
+    // (missing or blank upstream) is dropped by JSON.stringify, so the wire
+    // omits the key and the iOS client sees nil — never an empty string.
+    typecode: trimField(a.t),
+    registration: trimField(a.r),
   };
 }
 
@@ -149,6 +158,14 @@ function trimCallsign(flight: string | null | undefined): string | null {
   if (typeof flight !== "string") return null;
   const t = flight.trim();
   return t.length > 0 ? t : null;
+}
+
+/** Trim an optional string field; undefined for missing/blank so the JSON key
+ *  is omitted entirely (vs. emitting `null`/`""` for every position-only row). */
+function trimField(v: string | null | undefined): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t.length > 0 ? t : undefined;
 }
 
 export interface AdsbLolProviderOptions {
