@@ -116,15 +116,16 @@ struct OnboardingFlow: View {
     private let totalSteps = 3
     private let accountClient = TailspotAccountClient()
 
-    /// Suggested handles offered in the handle step. Picked up at
-    /// init time and stay fixed for the duration of the flow — no
-    /// reshuffle while the user is mid-thought.
-    private let handleSuggestions: [String] = [
-        "spotter_42",
-        "blue_hour",
-        "approach_287",
-        "contrail_cam",
-    ]
+    /// Suggested handles offered in the handle step. Seeded with a LOCALLY
+    /// randomized set so the chips are never the old deterministic four
+    /// ("spotter_42", …) that every user collided on — then replaced by
+    /// backend-verified-free suggestions once `loadSuggestions()` returns.
+    /// Held in @State so the async load can update them; they stay fixed
+    /// thereafter unless a claim comes back taken (then they refresh).
+    @State private var handleSuggestions: [String] = HandleSuggestions.randomized(count: 4)
+    /// Latches the one-time backend fetch so re-entering the handle step
+    /// (e.g. via Back) doesn't reshuffle while the user is mid-thought.
+    @State private var suggestionsLoaded = false
 
     var body: some View {
         ZStack {
@@ -370,13 +371,18 @@ struct OnboardingFlow: View {
             .padding(14)
             .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
         }
+        // Replace the local randomized chips with backend-verified-free
+        // suggestions the first time this step appears. Best-effort.
+        .task { await loadSuggestions() }
     }
 
     /// Compact status pill rendered inside the handle field. Reads
     /// "● AVAILABLE" when the draft is valid, "● TOO SHORT" when
     /// length is wrong, "● BAD CHARS" when characters are invalid.
-    /// No real availability check (handles aren't unique yet — no
-    /// backend); this is local validation only.
+    /// This is LOCAL FORMAT validation only — "AVAILABLE" means the draft is a
+    /// well-formed handle, not that the name is free. Real uniqueness is
+    /// enforced at claim time (the backend 409 → inline "taken" error); the
+    /// suggestion chips are separately pre-filtered to free names by the backend.
     private var availabilityPill: some View {
         let label: String = {
             let t = draftHandle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -498,6 +504,8 @@ struct OnboardingFlow: View {
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken. Try a different handle."
             Analytics.capture("handle_claimed", ["result": .string("taken")])
+            // Offer a fresh set of verified-free chips so the user has a quick out.
+            await refreshSuggestions()
         } catch {
             // Network/auth failure — persist locally anyway and move on.
             // The handle claim can be retried from Settings later.
@@ -505,6 +513,32 @@ struct OnboardingFlow: View {
             handle = trimmed
             handleTakenError = nil
             onFinish()
+        }
+    }
+
+    /// Fetch backend-verified-free suggestions once and replace the local
+    /// randomized fallback. Best-effort: on any failure (offline, or the
+    /// backend endpoint not yet deployed) we keep the randomized fallback, so
+    /// the chips are never the old deterministic set regardless.
+    private func loadSuggestions() async {
+        guard !suggestionsLoaded else { return }
+        suggestionsLoaded = true
+        do {
+            let fetched = try await accountClient.suggestHandles(count: 4)
+            if !fetched.isEmpty { handleSuggestions = fetched }
+        } catch {
+            Log.ui.notice("Onboarding: suggestion fetch failed; keeping local fallback: \(error, privacy: .public)")
+        }
+    }
+
+    /// Replace the chips with a fresh free set after a claim came back taken.
+    /// Falls back to a new local randomized set if the backend is unreachable.
+    private func refreshSuggestions() async {
+        do {
+            let fetched = try await accountClient.suggestHandles(count: 4)
+            handleSuggestions = fetched.isEmpty ? HandleSuggestions.randomized(count: 4) : fetched
+        } catch {
+            handleSuggestions = HandleSuggestions.randomized(count: 4)
         }
     }
 

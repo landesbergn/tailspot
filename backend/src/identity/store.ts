@@ -12,7 +12,7 @@
  * typecode→rarity resolution catches need.
  */
 
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client.js";
 import { catches, devices, registry, typecodes } from "../db/schema.js";
 
@@ -38,6 +38,14 @@ export interface IdentityStore {
    * Re-claiming the same handle the device already holds succeeds (idempotent).
    */
   claimHandle(deviceId: string, handle: string): Promise<HandleClaimResult>;
+  /**
+   * Of the given handles, return the set of LOWERCASED handles already held by
+   * some device (compared case-insensitively). Drives onboarding suggestion
+   * filtering — the route offers only candidates NOT in this set. Empty input →
+   * empty set (no query). A returned name is free at query time only; the claim
+   * itself still races the 409 path, so this is freshness, not a reservation.
+   */
+  takenHandles(handles: string[]): Promise<Set<string>>;
 }
 
 export class DrizzleIdentityStore implements IdentityStore {
@@ -71,6 +79,16 @@ export class DrizzleIdentityStore implements IdentityStore {
     }
     await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
     return { ok: true, handle };
+  }
+
+  async takenHandles(handles: string[]): Promise<Set<string>> {
+    if (handles.length === 0) return new Set();
+    const lowers = [...new Set(handles.map((h) => h.toLowerCase()))];
+    const rows = await this.db
+      .select({ handle: devices.handle })
+      .from(devices)
+      .where(and(isNotNull(devices.handle), inArray(sql`lower(${devices.handle})`, lowers)));
+    return new Set(rows.map((r) => (r.handle as string).toLowerCase()));
   }
 }
 
