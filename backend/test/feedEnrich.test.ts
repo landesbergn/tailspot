@@ -113,11 +113,14 @@ describe("feed enrichment end to end (snapshot → registry → metadata)", () =
       },
     ]);
 
-    // A fresh feed snapshot: a foreign A350 + the US tail (now with a typecode).
+    // A fresh feed snapshot: a foreign A350 + the US tail. The US row's feed
+    // registration deliberately DIFFERS from the stored FAA one ("N999XX" vs
+    // "N123AB") so the assertion below proves the existing registration is kept,
+    // not silently overwritten by the (present, non-null) incoming value.
     const rows = registryRowsFromSnapshot(
       snapshot([
         ac({ icao24: "76cdb5", typecode: "A359", registration: "9V-SMH" }),
-        ac({ icao24: "a12345", typecode: "C172", registration: "N123AB" }),
+        ac({ icao24: "a12345", typecode: "C172", registration: "N999XX" }),
       ]),
     );
     await upsertRegistryFillMissing(db, rows);
@@ -126,10 +129,12 @@ describe("feed enrichment end to end (snapshot → registry → metadata)", () =
     const store = new DrizzleMetadataStore(db);
     expect((await store.lookup("76cdb5"))?.model).toBe("A350-900");
 
-    // The US tail kept its FAA names/source and gained the missing typecode.
+    // The US tail kept its FAA names/source/registration and gained ONLY the
+    // previously-null typecode — coalesce(existing, incoming) on every column.
     const us = (await db.select().from(registry).where(eq(registry.icao24, "a12345")))[0];
     expect(us?.manufacturerRaw).toBe("CESSNA");
     expect(us?.source).toBe("faa");
-    expect(us?.typecode).toBe("C172");
+    expect(us?.registration).toBe("N123AB"); // existing kept, not the feed's N999XX
+    expect(us?.typecode).toBe("C172"); // was null → filled
   });
 });

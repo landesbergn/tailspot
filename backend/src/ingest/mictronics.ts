@@ -11,24 +11,34 @@
  * "A359" → "Airbus A350-900" for free — no manufacturer/model strings needed
  * from this source.
  *
- * FORMAT: newline-delimited JSON (NDJSON), one aircraft per line, `.gz` allowed.
- * Only three fields are consumed; any extras are ignored:
- *   { "icao": "76cdb5", "reg": "9V-SMH", "icaotype": "A359", ... }
- * (Verify the live distribution's exact URL + field names before the first prod
- * run — see README. If the chosen artifact uses different keys, adjust
- * `recordToRegistry` only; the streaming/batching/upsert path is format-stable.)
+ * CONCRETE SOURCE (verified against the live file 2026-06-23):
+ *   https://downloads.adsbexchange.com/downloads/basic-ac-db.json.gz
+ * — the daily "basic aircraft database" (FAA + community/mictronics lineage),
+ * gzip-compressed NDJSON, one aircraft per line. Real records look like:
+ *   {"icao":"ac738e","reg":"N901GW","icaotype":null,"year":null,
+ *    "manufacturer":null,"model":null,"ownop":"…","mil":false}
+ * Only three fields are consumed (`icao`, `reg`, `icaotype`); extras are ignored
+ * and `icaotype` is frequently null (a registration-only row — kept for the tail
+ * number). If a future artifact renames keys, adjust `recordToRegistry` only;
+ * the streaming/batching/upsert path is format-stable.
+ *
+ * LICENSING: confirm ADSB Exchange's data terms + the required attribution
+ * before any App Store distribution (tracked in PLAN.md Track 3 legal). The
+ * aircraft-fact data is largely FAA public-domain + community contributions.
  *
  * NON-DESTRUCTIVE: rows upsert via `upsertRegistryFillMissing`, which inserts
  * new airframes and fills only NULL registration/typecode on existing ones —
  * so the richer FAA data for a US tail is never overwritten, and a re-run is
  * idempotent. `source` is "mictronics" on rows this import creates.
  *
- * MEMORY: the file is large (~hundreds of thousands of rows), so we STREAM-parse
- * line by line into batched upserts and never hold the whole file in memory.
+ * MEMORY: the file is large (~500k rows), so we STREAM-parse line by line into
+ * batched upserts (transparently gunzipping a `.gz` path) and never hold the
+ * whole file in memory.
  *
- * Run as a script:  npm run ingest:mictronics -- <path-to-basic-ac-db.json[.gz]> [--limit N]
- * Download is a manual / cron step (the README documents the source URL). This
- * task ships only the parser + a fixture-backed test, never the real download.
+ * Run as a script (the `.gz` is read directly — no manual gunzip):
+ *   npm run ingest:mictronics -- basic-ac-db.json.gz [--limit N]
+ * Download is a manual / cron step. This task ships only the parser + a
+ * fixture-backed test, never the real download.
  */
 
 import { createReadStream } from "node:fs";
