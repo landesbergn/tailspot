@@ -40,8 +40,50 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     /// Used by `extrapolatedPosition(at:)` to project the position forward
     /// to "now" along the reported track. Nil if OpenSky didn't report it.
     let positionTimestamp: Date?
+    /// ICAO type designator from the live position feed (e.g. "A359"), or nil
+    /// when the source didn't carry one. `TailspotBackendClient` populates this
+    /// from adsb.lol's `t` field; the legacy OpenSky positional decoder and the
+    /// replay-snapshot path leave it nil. Lets a catch resolve make/model/type
+    /// at catch time without the per-hex metadata endpoint (which is FAA-only).
+    let typecode: String?
+    /// Registration / tail number from the live feed (e.g. "9V-SMH"), or nil.
+    let registration: String?
 
     var id: String { icao24 }
+
+    /// Memberwise init with `typecode`/`registration` defaulted to nil so the
+    /// many existing construction sites — the OpenSky positional decoder, the
+    /// replay-snapshot `init(_:)`, and tests — compile unchanged; only the
+    /// backend feed path (`BackendAircraft.asAircraft`) supplies the new fields.
+    /// (An explicit init here suppresses the synthesized memberwise init, so
+    /// there's no ambiguity between the two.)
+    init(
+        icao24: String,
+        callsign: String?,
+        originCountry: String,
+        longitude: Double,
+        latitude: Double,
+        altitudeMeters: Double,
+        velocityMps: Double?,
+        trackDeg: Double?,
+        onGround: Bool,
+        positionTimestamp: Date?,
+        typecode: String? = nil,
+        registration: String? = nil
+    ) {
+        self.icao24 = icao24
+        self.callsign = callsign
+        self.originCountry = originCountry
+        self.longitude = longitude
+        self.latitude = latitude
+        self.altitudeMeters = altitudeMeters
+        self.velocityMps = velocityMps
+        self.trackDeg = trackDeg
+        self.onGround = onGround
+        self.positionTimestamp = positionTimestamp
+        self.typecode = typecode
+        self.registration = registration
+    }
 
     /// Heuristic: is this a small (GA-sized) airframe? US general-aviation
     /// aircraft fly under their registration as the callsign — `N` followed
@@ -156,6 +198,11 @@ nonisolated extension Aircraft: Decodable {
         let geo = try c.decodeIfPresent(Double.self)
 
         self.altitudeMeters = geo ?? baro ?? 0
+
+        // OpenSky's positional state vector carries no type/registration — the
+        // backend feed (BackendAircraft) is the only source that supplies them.
+        self.typecode = nil
+        self.registration = nil
 
         // 14 squawk, 15 spi, 16 position_source, 17 category — all skipped
     }

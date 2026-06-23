@@ -313,6 +313,45 @@ struct CatchTests {
         #expect(CardPlane(catchRecord: c).model == "Boeing 777-300ER")
     }
 
+    // MARK: - Live-feed airframe field preference (U3)
+
+    @Test func preferredAirframeFieldPrefersFeedThenMetadata() {
+        // Feed wins when present.
+        #expect(Catch.preferredAirframeField(feed: "A359", metadata: "A320") == "A359")
+        // Falls back to the metadata endpoint when the feed lacks it.
+        #expect(Catch.preferredAirframeField(feed: nil, metadata: "A320") == "A320")
+        // A blank feed value is treated as absent → falls back to metadata.
+        #expect(Catch.preferredAirframeField(feed: "   ", metadata: "A320") == "A320")
+        // Both blank/absent → nil, so the fill-only-if-nil Hangar backfill can
+        // still heal the field later.
+        #expect(Catch.preferredAirframeField(feed: "  ", metadata: "") == nil)
+        #expect(Catch.preferredAirframeField(feed: nil, metadata: nil) == nil)
+        // The chosen value is trimmed.
+        #expect(Catch.preferredAirframeField(feed: " 9V-SMH ", metadata: nil) == "9V-SMH")
+    }
+
+    @Test func foreignTypecodeAloneResolvesCardWithoutMetadata() {
+        // The SIA248 case: a foreign airframe the FAA-only /v1/metadata endpoint
+        // can't resolve, so model/manufacturer are nil — but the feed supplied
+        // the typecode. Storing it alone must produce a real name + correct
+        // type/tier: no "Unknown aircraft", no GA/common fallback. The airline
+        // (callsign-derived) keeps showing as before.
+        let c = Catch(
+            icao24: "76cdb5", callsign: "SIA248",
+            model: nil, manufacturer: nil,
+            operatorName: "Singapore Airlines",
+            caughtAt: Date(), observerLat: 0, observerLon: 0,
+            slantDistanceMeters: 38_600,
+            typecode: "A359"
+        )
+        let plane = CardPlane(catchRecord: c)
+        #expect(plane.model == "Airbus A350-900")
+        #expect(plane.model != "Unknown aircraft")
+        #expect(plane.type == .wide)            // not the .ga unknown-airframe default
+        #expect(c.resolvedRarity == .uncommon)  // not the .common default
+        #expect(plane.carrier == "Singapore Airlines")
+    }
+
     // MARK: - Set matcher: canonical + raw union
 
     @Test func setMatcherSeesCanonicalAndRawNames() {

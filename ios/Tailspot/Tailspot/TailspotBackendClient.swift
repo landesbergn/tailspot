@@ -42,6 +42,14 @@ nonisolated struct BackendAircraft: Decodable {
     let trackDeg: Double?
     let onGround: Bool
     let positionTimestamp: Double?
+    /// ICAO type designator from adsb.lol's `t` field (e.g. "A359"); nil when
+    /// the feed didn't carry one. Optional in the wire shape — an old backend
+    /// build that omits the key decodes as nil. This is what lets a catch
+    /// resolve make/model for a foreign airframe the FAA-only metadata endpoint
+    /// can't see.
+    let typecode: String?
+    /// Registration / tail (e.g. "9V-SMH") from adsb.lol's `r` field; nil if none.
+    let registration: String?
 
     /// Map onto the app's core `Aircraft` value. `originCountry` is
     /// non-optional there (OpenSky always sent it); the backend derives it
@@ -58,7 +66,9 @@ nonisolated struct BackendAircraft: Decodable {
             velocityMps: velocityMps,
             trackDeg: trackDeg,
             onGround: onGround,
-            positionTimestamp: positionTimestamp.map { Date(timeIntervalSince1970: $0) }
+            positionTimestamp: positionTimestamp.map { Date(timeIntervalSince1970: $0) },
+            typecode: typecode,
+            registration: registration
         )
     }
 }

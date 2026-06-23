@@ -968,11 +968,14 @@ struct ContentView: View {
                     observerLat: observerLat,
                     observerLon: observerLon,
                     slantDistanceMeters: observed?.slantDistanceMeters ?? 0,
-                    // trimmedNonEmpty-equivalent: an OpenSky "" must store
-                    // as nil or the fill-only-if-nil backfill can never
-                    // self-heal the field later.
-                    registration: metadata?.registration?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
-                    typecode: metadata?.typecode?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty,
+                    // Prefer the LIVE feed's type/registration (adsb.lol carries
+                    // them for essentially every airframe, incl. foreign tails the
+                    // FAA-only /v1/metadata endpoint can't resolve), falling back
+                    // to the metadata endpoint. See Catch.preferredAirframeField.
+                    registration: Catch.preferredAirframeField(
+                        feed: observed?.aircraft.registration, metadata: metadata?.registration),
+                    typecode: Catch.preferredAirframeField(
+                        feed: observed?.aircraft.typecode, metadata: metadata?.typecode),
                     altitudeMeters: observed?.aircraft.altitudeMeters,
                     velocityMps: observed?.aircraft.velocityMps
                 )

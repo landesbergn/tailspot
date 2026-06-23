@@ -29,7 +29,9 @@ struct TailspotBackendClientTests {
               "velocityMps": 43.6248512,
               "trackDeg": 17.15,
               "onGround": false,
-              "positionTimestamp": 1781122007
+              "positionTimestamp": 1781122007,
+              "typecode": "C172",
+              "registration": "N3717R"
             }
           ]
         }
@@ -48,9 +50,48 @@ struct TailspotBackendClientTests {
         #expect(a.trackDeg == 17.15)
         #expect(a.onGround == false)
         #expect(a.positionTimestamp == Date(timeIntervalSince1970: 1_781_122_007))
+        // Feed-supplied type/registration map straight through.
+        #expect(a.typecode == "C172")
+        #expect(a.registration == "N3717R")
         // The GA heuristic must keep working through the mapping — N-number
         // callsigns drive the small-airframe visibility half-cap.
         #expect(a.isLikelySmallAirframe)
+    }
+
+    @Test func decodesForeignTypecodeAndRegistration() throws {
+        // The motivating case: a Singapore A350 the FAA-only metadata endpoint
+        // can't resolve — but the feed carries `t`/`r` directly.
+        let json = """
+        {
+          "fetchedAt": 1781122007,
+          "aircraft": [
+            {
+              "icao24": "76cdb5",
+              "callsign": "SIA248",
+              "originCountry": "Singapore",
+              "longitude": 115.0,
+              "latitude": -8.5,
+              "altitudeMeters": 13906.5,
+              "velocityMps": 242.8,
+              "trackDeg": 300.0,
+              "onGround": false,
+              "positionTimestamp": 1781122007,
+              "typecode": "A359",
+              "registration": "9V-SMH"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let a = try JSONDecoder().decode(BackendAircraftResponse.self, from: json)
+            .aircraft[0].asAircraft()
+        #expect(a.typecode == "A359")
+        #expect(a.registration == "9V-SMH")
+        // And the typecode resolves to a real name via the bundled table —
+        // no "Unknown aircraft" once this reaches a catch.
+        let name = AircraftNaming.canonical(typecode: a.typecode, manufacturer: nil, model: nil)
+        #expect(name.model?.isEmpty == false)
+        #expect(name.type == .wide)
     }
 
     @Test func nullableFieldsDecodeAsNil() throws {
@@ -86,6 +127,11 @@ struct TailspotBackendClientTests {
         #expect(a.velocityMps == nil)
         #expect(a.trackDeg == nil)
         #expect(a.positionTimestamp == nil)
+        // typecode/registration keys are absent from this JSON entirely —
+        // proves both null-tolerance and backward-compat with a pre-feature
+        // backend build that doesn't emit them yet.
+        #expect(a.typecode == nil)
+        #expect(a.registration == nil)
         // No timestamp → extrapolation degrades gracefully to the raw fix.
         let pos = a.extrapolatedPosition(at: Date())
         #expect(pos.lat == 37.0)
@@ -140,5 +186,60 @@ struct TailspotBackendClientTests {
     @Test func clientBuildsWithDefaultProductionBaseURL() {
         let client = TailspotBackendClient()
         #expect(client.baseURL.absoluteString == "https://api.tailspot.app")
+    }
+
+    @Test func decoderIgnoresUnknownKeysForBackwardCompat() throws {
+        // The backend wire contract is ADDITIVE: newer backends add optional
+        // keys (typecode/registration on aircraft) and resolve more /v1/metadata
+        // hexes, but never remove/rename/retype existing fields. Swift's
+        // synthesized Decodable ignores unknown keys — which is exactly why a
+        // user still on an OLDER app build keeps decoding a NEWER backend
+        // response without error. Pin that guarantee so a future wire change
+        // can't silently break clients that haven't updated. (Simulated here by
+        // feeding the CURRENT decoder keys it doesn't declare — the same
+        // mechanism that protects the older, narrower client struct.)
+        let aircraftJSON = """
+        {
+          "fetchedAt": 1781122007,
+          "aircraft": [
+            {
+              "icao24": "76cdb5",
+              "callsign": "SIA248",
+              "originCountry": "Singapore",
+              "longitude": 115.0,
+              "latitude": -8.5,
+              "altitudeMeters": 13906.5,
+              "velocityMps": 242.8,
+              "trackDeg": 300.0,
+              "onGround": false,
+              "positionTimestamp": 1781122007,
+              "typecode": "A359",
+              "registration": "9V-SMH",
+              "someFutureFieldOldClientsNeverSaw": { "nested": [1, 2, 3] }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let a = try JSONDecoder().decode(BackendAircraftResponse.self, from: aircraftJSON).aircraft[0]
+        #expect(a.icao24 == "76cdb5")
+        #expect(a.callsign == "SIA248") // known fields still decode; unknown key ignored, no throw
+        #expect(a.altitudeMeters == 13906.5)
+
+        // /v1/metadata for a now-resolvable foreign hex, carrying an extra key.
+        let metadataJSON = """
+        {
+          "icao24": "76cdb5",
+          "registration": "9V-SMH",
+          "manufacturer": "Airbus",
+          "model": "A350-900",
+          "typecode": "A359",
+          "operatorName": null,
+          "source": "merged",
+          "anotherFutureField": 42
+        }
+        """.data(using: .utf8)!
+        let m = try JSONDecoder().decode(BackendMetadata.self, from: metadataJSON).asAircraftMetadata()
+        #expect(m.model == "A350-900")
+        #expect(m.typecode == "A359")
     }
 }

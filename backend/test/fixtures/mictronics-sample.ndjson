@@ -1,0 +1,6 @@
+{"icao":"76cdb5","reg":"9V-SMH","icaotype":"A359","manufacturer":"Airbus","model":"A350-941"}
+{"icao":"3C6444","reg":"D-AIHK","icaotype":"a346"}
+{"icao":"abc","reg":"BAD","icaotype":"X"}
+this line is not json
+{"icao":"a11111"}
+{"icao":"c01234","reg":"C-FABC","icaotype":"B789"}

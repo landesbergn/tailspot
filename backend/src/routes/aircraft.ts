@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { validateBbox } from "../providers/geo.js";
-import type { Bbox, PositionProvider } from "../providers/types.js";
+import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/types.js";
 import { NoFreshDataError, TileCache, type TileCacheConfig } from "./tileCache.js";
 
 /**
@@ -20,6 +20,13 @@ export interface AircraftRouteOptions {
   cacheConfig?: Partial<TileCacheConfig>;
   /** Injectable clock (unix ms) for deterministic tests. */
   now?: () => number;
+  /**
+   * Best-effort hook fired once per genuine upstream fetch (not cache hits /
+   * last-good). Production wires this to the registry-enrich sink so each fresh
+   * snapshot opportunistically fills the airframe registry from the feed's
+   * type/registration. Omitted (e.g. DB-less tests) → no enrichment.
+   */
+  onFreshSnapshot?: (snapshot: ProviderSnapshot) => void;
 }
 
 /** Parse a query value to a finite number, or undefined if absent/non-numeric. */
@@ -33,7 +40,7 @@ function parseCoord(v: unknown): number | undefined {
 }
 
 export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteOptions): void {
-  const cache = new TileCache(opts.provider, opts.cacheConfig, opts.now);
+  const cache = new TileCache(opts.provider, opts.cacheConfig, opts.now, opts.onFreshSnapshot);
 
   app.get("/v1/aircraft", async (request, reply) => {
     const q = request.query as Record<string, unknown>;
