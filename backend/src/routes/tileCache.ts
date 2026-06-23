@@ -78,6 +78,13 @@ export class TileCache {
     config: Partial<TileCacheConfig> = {},
     /** Injectable clock (unix ms) for deterministic TTL tests. */
     now: () => number = Date.now,
+    /**
+     * Best-effort hook fired ONCE per genuine upstream fetch (not on cache hits
+     * or last-good fallback), with the fresh snapshot. Used to opportunistically
+     * enrich the airframe registry from the feed's type/registration — see
+     * `makeRegistryEnrichSink`. Must never throw into the fetch path (wrapped).
+     */
+    private readonly onFreshSnapshot?: (snapshot: ProviderSnapshot) => void,
   ) {
     // Merge defaults, ignoring explicit `undefined` overrides (env-derived
     // config passes undefined for unset vars — those must NOT clobber defaults).
@@ -157,6 +164,12 @@ export class TileCache {
       .aircraftInBbox(this.tileBbox(bbox))
       .then((snapshot) => {
         this.entries.set(key, { snapshot, storedAt: Math.floor(this.now() / 1000) });
+        // Opportunistic registry enrichment — best-effort, never breaks the fetch.
+        try {
+          this.onFreshSnapshot?.(snapshot);
+        } catch {
+          /* swallow: background enrichment must not affect the served response */
+        }
         return snapshot;
       })
       .finally(() => {

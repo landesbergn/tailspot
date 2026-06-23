@@ -138,6 +138,39 @@ describe("GET /v1/aircraft", () => {
     expect(provider.calls).toBe(2);
   });
 
+  it("fires onFreshSnapshot once per upstream fetch — never on cache hit or last-good", async () => {
+    let nowMs = 1_700_000_000_000;
+    const provider = new StubProvider();
+    const fresh: number[] = [];
+    app = await buildApp({
+      provider,
+      cacheConfig: { ttlSeconds: 10, staleMaxSeconds: 60, tileSizeDeg: 0.25 },
+      now: () => nowMs,
+      onFreshSnapshot: (s) => fresh.push(s.aircraft.length),
+    });
+
+    // 1. Genuine upstream fetch → one callback (carrying the snapshot).
+    await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    expect(fresh).toEqual([1]);
+
+    // 2. Cache hit within TTL → no new callback.
+    nowMs += 5_000;
+    await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    expect(fresh).toEqual([1]);
+
+    // 3. TTL expired → refetch → second callback.
+    nowMs += 11_000;
+    await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    expect(fresh).toEqual([1, 1]);
+
+    // 4. Upstream now fails; last-good is still fresh → served stale, NO callback.
+    provider.shouldFail = true;
+    nowMs += 11_000;
+    const res = await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    expect(res.statusCode).toBe(200); // last-good fallback
+    expect(fresh).toEqual([1, 1]); // no fresh snapshot was produced
+  });
+
   it("serves last-good cache on upstream failure (with true fetchedAt)", async () => {
     let nowMs = 1_700_000_000_000;
     const provider = new StubProvider();

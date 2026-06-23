@@ -10,6 +10,7 @@ import {
   DrizzleIdentityStore,
   type IdentityStore,
 } from "./identity/store.js";
+import { makeRegistryEnrichSink } from "./ingest/feedEnrich.js";
 import { DrizzleMetadataStore, type MetadataStore } from "./metadata/store.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
@@ -45,6 +46,12 @@ export interface BuildAppOptions {
   cacheConfig?: Parameters<typeof registerAircraftRoute>[1]["cacheConfig"];
   /** Injectable clock (unix ms) for deterministic cache tests. */
   now?: () => number;
+  /**
+   * Per-fresh-fetch snapshot hook (tests inject a spy). Production defaults to
+   * the registry-enrich sink when DATABASE_URL is set; left undefined in the
+   * DB-less route tests so they never touch Postgres.
+   */
+  onFreshSnapshot?: Parameters<typeof registerAircraftRoute>[1]["onFreshSnapshot"];
   /**
    * Metadata store override (tests inject a PGlite-backed or in-memory store
    * here). Production passes nothing and we lazily build a Drizzle store over
@@ -96,10 +103,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // GET /v1/aircraft — cached, single-flighted position proxy (WP 1.3).
+  //
+  // Opportunistic registry enrichment: each fresh upstream fetch carries the
+  // typecode/registration for foreign airframes the FAA registry can't resolve,
+  // so we fire-and-forget those into the registry (non-destructive). Gated on
+  // DATABASE_URL so the DB-less route tests never touch Postgres; an injected
+  // override (tests) always wins. getDb()/Sentry stay untouched until a snapshot
+  // actually arrives.
+  const onFreshSnapshot =
+    options.onFreshSnapshot ??
+    (process.env.DATABASE_URL
+      ? makeRegistryEnrichSink(getDb, (err) =>
+          app.log.warn({ err }, "opportunistic registry enrich failed"),
+        )
+      : undefined);
   registerAircraftRoute(app, {
     provider,
     cacheConfig,
     now: options.now,
+    onFreshSnapshot,
   });
 
   // GET /v1/metadata/{icao24} — FAA + DOC 8643 merged lookup (WP 1.4).
