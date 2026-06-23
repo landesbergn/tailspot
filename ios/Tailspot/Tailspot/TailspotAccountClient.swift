@@ -111,6 +111,11 @@ nonisolated private struct ClaimHandleResponse: Decodable {
     let handle: String
 }
 
+/// Response from GET /v1/handles/suggestions.
+nonisolated struct SuggestHandlesResponse: Decodable {
+    let suggestions: [String]
+}
+
 /// Request body for POST /v1/catches.
 nonisolated struct UploadCatchRequest: Encodable {
     struct Observer: Encodable {
@@ -397,6 +402,32 @@ nonisolated struct TailspotAccountClient {
         let data = try await perform(request, expectedStatus: 200)
         do {
             return try JSONDecoder().decode(LeaderboardResponse.self, from: data)
+        } catch {
+            throw AccountError.decoding(error)
+        }
+    }
+
+    // MARK: - suggestHandles
+
+    /// Fetch up to `count` handle suggestions that the backend has verified are
+    /// FREE to claim (filtered against the devices table). Anonymous — no device
+    /// token required, so it can run before `ensureRegistered()`. The onboarding
+    /// flow falls back to a local randomized set on any failure (offline, or the
+    /// endpoint not yet deployed), so a throw here is non-fatal to onboarding.
+    func suggestHandles(count: Int = 4) async throws -> [String] {
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("v1/handles/suggestions"),
+            resolvingAgainstBaseURL: false
+        )
+        comps?.queryItems = [URLQueryItem(name: "count", value: String(count))]
+        guard let url = comps?.url else { throw AccountError.http(status: -1) }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        let data = try await perform(request, expectedStatus: 200)
+        do {
+            return try JSONDecoder().decode(SuggestHandlesResponse.self, from: data).suggestions
         } catch {
             throw AccountError.decoding(error)
         }

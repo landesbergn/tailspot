@@ -16,6 +16,7 @@ import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
 import { registerDevicesRoutes } from "./routes/devices.js";
+import { registerHandlesRoute } from "./routes/handles.js";
 import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
 
@@ -66,6 +67,12 @@ export interface BuildAppOptions {
   nowSeconds?: () => number;
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
+  /**
+   * Handle-suggestion candidate generator override (tests force a known set,
+   * including a pre-claimed handle, to assert availability filtering). Production
+   * uses the default word-bank generator.
+   */
+  handleCandidateGenerator?: (batchSize: number) => string[];
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -164,6 +171,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     createDevice: (h) => getIdentityStore().createDevice(h),
     findByTokenHash: (h) => getIdentityStore().findByTokenHash(h),
     claimHandle: (id, h) => getIdentityStore().claimHandle(id, h),
+    takenHandles: (hs) => getIdentityStore().takenHandles(hs),
   };
   const catchesStore: CatchStore = {
     resolveRarity: (icao) => getCatchStore().resolveRarity(icao),
@@ -179,8 +187,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const registerLimiter = new RateLimiter({ capacity: 20, windowMs: 60_000 }, rlNow); // 20/min per IP
   const handleLimiter = new RateLimiter({ capacity: 5, windowMs: 60_000 }, rlNow); // 5/min per device
   const catchLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per device
+  const suggestLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
 
   registerDevicesRoutes(app, { store: identity, registerLimiter, handleLimiter });
+  registerHandlesRoute(app, {
+    store: identity,
+    suggestLimiter,
+    generateCandidates: options.handleCandidateGenerator,
+  });
   registerCatchesRoute(app, {
     identityStore: identity,
     catchStore: catchesStore,

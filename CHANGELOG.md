@@ -5,6 +5,42 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-24 — Onboarding: suggested handles are always free (PR #67)
+
+First-run bug: the handle step offered the same four HARDCODED chips
+(`spotter_42`, `blue_hour`, `approach_287`, `contrail_cam`) to every user. But
+handles are case-insensitively unique on the backend, so the first person to tap
+each chip claimed it and everyone after got a 409 "already taken" — the
+suggestions were never available. (The in-code comment even still claimed
+"handles aren't unique yet — no backend.")
+
+Fixed on both sides (Noah's call: do both):
+
+- **Backend — verified-free suggestions.** New
+  `GET /v1/handles/suggestions?count=N` (anonymous, per-IP rate limited 30/min)
+  generates aviation-themed candidates (`contrail_4821`) from a word bank
+  (`identity/handleSuggester.ts`), filters them against the devices table via a
+  new `IdentityStore.takenHandles`, and returns up to N (default 4, max 10) names
+  free at query time. A claim can still race another device — handled by the
+  existing 409 path — so this is freshness, not a reservation. No schema change
+  (reads `devices.handle`), so **no Drizzle migration**.
+- **Client — randomized fallback + fetch.** `OnboardingFlow` seeds the chips from
+  a local randomized generator (`HandleSuggestions.swift`, mirrors the backend
+  word bank) so they're never the old deterministic set even offline / before the
+  backend is deployed, then replaces them with the backend's verified-free set
+  when the handle step appears. A claim that comes back taken refreshes the chips.
+  `TailspotAccountClient.suggestHandles` is the new client call.
+- **Tests:** backend +7 (`handleSuggester` generator + `handles.route` contract,
+  incl. "never suggests an already-claimed handle" and the 429 cap); iOS +6
+  (`HandleSuggestionsTests` generator incl. seeded-determinism + "never the old
+  set", and two `SuggestHandlesResponse` decode cases). Backend suite + full iOS
+  `TailspotTests` green.
+- **Deploy note:** the iOS randomized fallback ships in the normal TestFlight loop
+  and fixes the deterministic collision on its own; the hard "verified-free"
+  guarantee activates only once the **backend is deployed to Fly.io**
+  (`api.tailspot.app`). Until then the client degrades gracefully (endpoint 404 →
+  local randomized set).
+
 ## 2026-06-24 — Foreign-aircraft metadata: kill "Unknown aircraft" (PR #65)
 
 Field report: a caught Singapore Airlines A350 (SIA248 / `9V-SMH`) showed as

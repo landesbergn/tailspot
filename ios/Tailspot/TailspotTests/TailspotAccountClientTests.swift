@@ -202,6 +202,26 @@ struct TailspotAccountClientDTOTests {
         #expect(r.entries.isEmpty)
     }
 
+    // ── SuggestHandlesResponse ────────────────────────────────────────
+
+    @Test func decodesSuggestHandlesResponse() throws {
+        let json = """
+        { "suggestions": ["contrail_4821", "approach_2274", "vapor_9013"] }
+        """.data(using: .utf8)!
+
+        let r = try JSONDecoder().decode(SuggestHandlesResponse.self, from: json)
+        #expect(r.suggestions == ["contrail_4821", "approach_2274", "vapor_9013"])
+    }
+
+    @Test func decodesSuggestHandlesResponse_empty() throws {
+        let json = """
+        { "suggestions": [] }
+        """.data(using: .utf8)!
+
+        let r = try JSONDecoder().decode(SuggestHandlesResponse.self, from: json)
+        #expect(r.suggestions.isEmpty)
+    }
+
     // ── UploadCatchRequest encoding ───────────────────────────────────
 
     @Test func uploadCatchRequestEncodes_aircraftNull() throws {
