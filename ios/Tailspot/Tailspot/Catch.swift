@@ -99,6 +99,14 @@ final class Catch {
     /// migration (every pre-WP-1.7 row is "pending" and uploads on the
     /// next launch, which is the intended backfill behavior).
     var uploadedAt: Date?
+    /// User's answer to the reveal-moment "is this right?" prompt:
+    /// `true` = confirmed correct, `false` = denied (wrong plane),
+    /// `nil` = unanswered (dismissed without tapping, or a multi-catch
+    /// row where the affordance isn't shown). Moment-data — never
+    /// backfilled. Additive optional for SwiftData lightweight
+    /// migration; feeds the catch-confirmation-rate north-star
+    /// alongside the catch_confirmed / catch_denied events.
+    var confirmed: Bool?
 
     init(
         icao24: String,

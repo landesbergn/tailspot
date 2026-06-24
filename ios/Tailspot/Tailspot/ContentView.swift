@@ -624,7 +624,10 @@ struct ContentView: View {
                     captureInFlight = false
                     showHangar = true
                 },
-                isDuplicate: reveal.isDuplicate
+                isDuplicate: reveal.isDuplicate,
+                onConfirm: { isRight in
+                    confirmCatch(icao24: reveal.confirmIcao24, isRight: isRight)
+                }
             )
             .presentationBackground(.clear)
         }
@@ -710,6 +713,9 @@ struct ContentView: View {
         let plane: CardPlane
         let entryNumber: Int
         var isDuplicate: Bool = false
+        /// icao24 of the freshly-caught row this reveal can confirm/deny.
+        /// nil for duplicate reveals (no new row → affordance hidden).
+        var confirmIcao24: String? = nil
     }
 
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
@@ -1016,6 +1022,12 @@ struct ContentView: View {
                 Log.adsb.notice("Catch: all \(duplicates.count, privacy: .public) target(s) already in Hangar")
             }
 
+            // Catch-confirmation telemetry (north-star). One event per
+            // processed target: new catches carry rarity/type/slant,
+            // duplicates record the dedup hit. Fire-and-forget.
+            for row in newCatches { CatchTelemetry.firePerformed(row) }
+            for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
+
             presentReveal(newCatches: newCatches, duplicates: duplicates,
                           visibleByIcao: visibleByIcao)
         }
@@ -1076,7 +1088,8 @@ struct ContentView: View {
             pendingReveal = PendingReveal(
                 plane: plane,
                 entryNumber: uniqueIcaoCount,
-                isDuplicate: false
+                isDuplicate: false,
+                confirmIcao24: first.icao24
             )
             return
         }
@@ -1110,6 +1123,20 @@ struct ContentView: View {
         )
         descriptor.fetchLimit = 1
         return try? modelContext.fetch(descriptor).first
+    }
+
+    /// Persist the reveal-moment "is this right?" verdict on the fresh
+    /// catch row and fire the confirm/deny event. No-op when there's no
+    /// row to confirm (duplicate reveal → confirmIcao24 is nil).
+    private func confirmCatch(icao24: String?, isRight: Bool) {
+        guard let icao24, let row = fetchExistingCatch(icao: icao24) else { return }
+        row.confirmed = isRight
+        do {
+            try modelContext.save()
+        } catch {
+            Log.adsb.error("Confirm save failed for \(icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        CatchTelemetry.fireConfirmation(row, isRight: isRight)
     }
 
     /// Build a presentational `CardPlane` from a stored `Catch`,

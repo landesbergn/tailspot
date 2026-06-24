@@ -36,12 +36,18 @@ struct CardReveal: View {
     /// laid over the card front. T8 threads the flag through
     /// `PendingReveal`; T10 makes the view consume it.
     var isDuplicate: Bool = false
+    /// Reveal-moment "is this right?" callback. `true` = confirmed,
+    /// `false` = denied. nil (or a duplicate) → affordance hidden.
+    var onConfirm: ((Bool) -> Void)? = nil
 
     @State private var showingBack = false
     @State private var animateIn = false
     /// Rendered share-card image, prepared once on appear (ImageRenderer is
     /// synchronous and this view animates — never render it on the body path).
     @State private var shareImage: Image?
+    /// Latches once the user answers the "is this right?" prompt so the
+    /// affordance disappears — one tap, then gone.
+    @State private var confirmAnswered = false
 
     var body: some View {
         ZStack {
@@ -72,6 +78,9 @@ struct CardReveal: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .opacity(animateIn ? 0.8 : 0)
                     .padding(.top, 6)
+
+                confirmRow
+                    .opacity(animateIn ? 1 : 0)
 
                 Spacer(minLength: 0)
 
@@ -295,6 +304,45 @@ struct CardReveal: View {
             .buttonStyle(.plain)
         }
         .frame(maxWidth: 360)
+    }
+
+    // MARK: - Confirm affordance
+
+    /// Subtle reveal-moment "is this right?" row. Shown only for fresh
+    /// catches (`onConfirm` wired, not a duplicate) and only until the
+    /// user answers — one tap, then it fades out. Feeds the
+    /// catch-confirmation-rate signal without blocking the magic moment.
+    @ViewBuilder
+    private var confirmRow: some View {
+        if let onConfirm, !isDuplicate, !confirmAnswered {
+            HStack(spacing: 10) {
+                Text("Right plane?")
+                    .font(Brand.Font.mono(size: 11, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                confirmButton(label: "Yes", isRight: true, action: onConfirm)
+                confirmButton(label: "Not quite", isRight: false, action: onConfirm)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    private func confirmButton(
+        label: String, isRight: Bool, action: @escaping (Bool) -> Void
+    ) -> some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.2)) { confirmAnswered = true }
+            action(isRight)
+        } label: {
+            Text(label)
+                .font(Brand.Font.mono(size: 11, weight: .bold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Brand.Color.bgElevated.opacity(0.85), in: .capsule)
+                .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 }
 

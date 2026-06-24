@@ -330,6 +330,14 @@ struct CatchDetailView: View {
     /// rows referencing dead files would render placeholder stripes
     /// and the orphaned JPEGs would pile up in Documents/catches.
     private func performDelete() {
+        // Catch-confirmation telemetry (north-star): a delete is the
+        // strongest "didn't keep/trust it" signal. Fire once per delete
+        // action before the rows go away.
+        CatchTelemetry.fireDeleted(
+            icao24: row.icao24,
+            count: row.count,
+            rarity: row.allCatches.first?.resolvedRarity.rawValue
+        )
         for c in row.allCatches {
             CatchPhotoStore.delete(filename: c.photoFilename)
             modelContext.delete(c)
