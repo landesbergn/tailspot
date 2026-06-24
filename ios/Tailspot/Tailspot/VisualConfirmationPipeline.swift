@@ -131,14 +131,7 @@ final class VisualConfirmationPipeline: ObservableObject {
         if let sky = SkyFeatures.extract(from: pixelBuffer) {
             skyFeaturesSnapshot.withLock { $0 = sky }
         }
-        // Re-sync the camera-queue enabled flag from the backing key each
-        // frame so BOTH entry points take effect: the debug-overlay
-        // setter AND a plain Settings @AppStorage write (U8). Cheap,
-        // thread-safe read.
-        let enabledNow = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool
-            ?? Self.defaultEnabled
-        enabledSnapshot.withLock { $0 = enabledNow }
-        guard enabledNow,
+        guard enabledSnapshot.withLock({ $0 }),
               let target = targetSnapshot.withLock({ $0 }),
               let detector
         else { return }

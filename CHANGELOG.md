@@ -28,8 +28,8 @@ full `TailspotTests` green; awaiting device review + PR.
   friendly "head outside" nudge) is flag-gated, default **off** until validated. A
   debug-overlay "Sky gate" row flips shadow↔enforce on device. Offline validator +
   field protocol in `tools/authenticity-gate/`.
-- **Visual confirmation (U8).** Settings → CAMERA "Snap reticle to plane" beta
-  toggle (default off); pipeline reads its enable key live.
+- **Visual confirmation (U8).** Kept dev-only (debug-overlay toggle) for now —
+  no user-facing Settings toggle until the field gate validates it.
 - **Privacy (U3).** Manifest finalized; new events ride the existing Product
   Interaction declaration (no new data type). ASC nutrition-label sync is Noah's
   manual step.

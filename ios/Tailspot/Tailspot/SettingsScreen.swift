@@ -28,16 +28,6 @@ import os
 
 struct SettingsScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
-    /// Visual-confirmation opt-in (beta, U8). Bound to the same
-    /// UserDefaults key the pipeline reads; the default matches the
-    /// pipeline's per-build default (DEBUG on, Release off) so the toggle
-    /// reflects reality before it's ever touched. The pipeline re-reads
-    /// this key per frame, so the toggle takes effect live.
-    #if DEBUG
-    @AppStorage("tailspot.debug.visualConfirm") private var visualConfirmEnabled = true
-    #else
-    @AppStorage("tailspot.debug.visualConfirm") private var visualConfirmEnabled = false
-    #endif
 
     @State private var handleDraft: String = ""
     @State private var handleTakenError: String? = nil
@@ -133,21 +123,6 @@ struct SettingsScreen: View {
                     .textCase(nil)
             } footer: {
                 Text("Your handle is the only thing visible on the leaderboard. Claim it to reserve your spot.")
-            }
-
-            // MARK: CAMERA
-
-            Section {
-                Toggle("Camera aim assist", isOn: $visualConfirmEnabled)
-                    .tint(Brand.Color.cyan)
-            } header: {
-                Text("CAMERA")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .textCase(nil)
-            } footer: {
-                Text("Beta — off by default. Uses the camera to snap the targeting box onto the real plane, instead of relying only on the compass.")
             }
 
             // MARK: ABOUT
