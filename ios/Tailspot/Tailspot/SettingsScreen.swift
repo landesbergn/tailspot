@@ -28,6 +28,11 @@ import os
 
 struct SettingsScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
+    /// Visual-confirmation opt-in (beta, U8). Bound to the same
+    /// UserDefaults key the pipeline reads; default off to match the
+    /// Release default. The pipeline re-reads this key per frame, so the
+    /// toggle takes effect live.
+    @AppStorage("tailspot.debug.visualConfirm") private var visualConfirmEnabled = false
 
     @State private var handleDraft: String = ""
     @State private var handleTakenError: String? = nil
@@ -123,6 +128,21 @@ struct SettingsScreen: View {
                     .textCase(nil)
             } footer: {
                 Text("Your handle is the only thing visible on the leaderboard. Claim it to reserve your spot.")
+            }
+
+            // MARK: CAMERA
+
+            Section {
+                Toggle("Snap reticle to plane", isOn: $visualConfirmEnabled)
+                    .tint(Brand.Color.cyan)
+            } header: {
+                Text("CAMERA")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
+            } footer: {
+                Text("Beta: uses the camera to lock the box onto the actual plane image, correcting compass wobble. Off by default.")
             }
 
             // MARK: ABOUT
