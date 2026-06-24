@@ -28,10 +28,8 @@ nonisolated enum CatchTelemetry {
 
     static let performedEvent = "catch_performed"
     static let deletedEvent = "catch_deleted"
-    static let confirmedEvent = "catch_confirmed"
-    static let deniedEvent = "catch_denied"
-    static let outdoorGateShadowEvent = "outdoor_gate_shadow"
     static let blockedOutdoorsEvent = "catch_blocked_outdoors"
+    static let gateOverrideEvent = "catch_gate_override"
 
     // MARK: - Pure property builders (unit-tested)
 
@@ -78,32 +76,15 @@ nonisolated enum CatchTelemetry {
         return props
     }
 
-    /// Properties for a confirm/deny answer to the reveal "is this right?"
-    /// prompt. The verdict rides in the event NAME (catch_confirmed vs
-    /// catch_denied); the properties are identical for both.
-    static func confirmationProperties(icao24: String, rarity: String) -> [String: AnalyticsValue] {
-        [
-            "icao24": .string(icao24),
-            "rarity": .string(rarity),
-        ]
-    }
-
-    /// Properties for the v1 authenticity gate: the verdict + raw scene
-    /// signals, so the offline corpus can be re-scored and the
-    /// false-block rate watched before (and after) enforcement.
+    /// Properties for the v1 authenticity gate events (block + override):
+    /// the verdict + raw scene signals, so the false-block rate can be
+    /// watched and the corpus re-scored.
     static func outdoorGateProperties(
         verdict: SkyVerdict,
         features: SkyFeatures?,
-        gpsAccuracyMeters: Double?,
-        enforced: Bool
+        gpsAccuracyMeters: Double?
     ) -> [String: AnalyticsValue] {
-        // `enforced` distinguishes a true shadow-mode observation from an
-        // enforce-mode allow (both fire `outdoor_gate_shadow`), so the
-        // funnel can be read correctly across the shadow→enforce cutover.
-        var props: [String: AnalyticsValue] = [
-            "verdict": .string(verdict.rawValue),
-            "enforced": .bool(enforced),
-        ]
+        var props: [String: AnalyticsValue] = ["verdict": .string(verdict.rawValue)]
         if let f = features {
             props["edge_density"] = .double(f.edgeDensity)
             props["tile_variance"] = .double(f.tileVariance)
@@ -137,32 +118,22 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    @MainActor static func fireConfirmation(_ row: Catch, isRight: Bool) {
-        Analytics.capture(
-            isRight ? confirmedEvent : deniedEvent,
-            confirmationProperties(icao24: row.icao24, rarity: row.resolvedRarity.rawValue)
-        )
-    }
-
-    /// Shadow-mode gate telemetry — fired on every catch attempt while
-    /// the gate is observing-only (never blocks).
-    static func fireOutdoorGateShadow(
-        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?, enforced: Bool
+    /// Fired when the gate blocks an indoor catch (verdict `.notSky`).
+    static func fireBlockedOutdoors(
+        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
     ) {
-        Analytics.capture(outdoorGateShadowEvent, outdoorGateProperties(
-            verdict: verdict, features: features,
-            gpsAccuracyMeters: gpsAccuracyMeters, enforced: enforced
+        Analytics.capture(blockedOutdoorsEvent, outdoorGateProperties(
+            verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
         ))
     }
 
-    /// Enforcement telemetry — fired when the gate actually blocks a
-    /// catch (verdict `.notSky` while enforcing). See U7.
-    static func fireBlockedOutdoors(
-        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?, enforced: Bool
+    /// Fired when the user taps "Catch anyway" through a block — the
+    /// calibration signal for how often the gate is wrong.
+    static func fireGateOverride(
+        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
     ) {
-        Analytics.capture(blockedOutdoorsEvent, outdoorGateProperties(
-            verdict: verdict, features: features,
-            gpsAccuracyMeters: gpsAccuracyMeters, enforced: enforced
+        Analytics.capture(gateOverrideEvent, outdoorGateProperties(
+            verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
         ))
     }
 }

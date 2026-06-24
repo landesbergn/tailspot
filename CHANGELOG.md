@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-25 — Bet A pivot: all eggs into the indoor gate — branch `feat/bet-a-real-catch-trust`
+
+Product calls from Noah after reviewing the rendered screens:
+
+- **Scrapped the "is this right?" confirm/deny affordance** — removed the reveal
+  prompt, the `catch_confirmed`/`catch_denied` events, and the `Catch.confirmed`
+  field. Kept the passive `catch_performed`/`catch_deleted` events (a delete is
+  itself a "didn't trust it" signal).
+- **The gate now ships enforcing by default** — no shadow mode, no dev toggle.
+  `performCatch` split into a gate check + `runCatch`; a `.notSky` verdict blocks
+  with the nudge and a one-tap **"Catch anyway"** escape (fires
+  `catch_gate_override`, the calibration signal). Removed the debug "Indoor block"
+  row and the `outdoor_gate_shadow` event / `enforced` flag.
+- **No user-facing beta toggles** (visual confirmation stays dev-only).
+
+Decision: ship it enforcing and learn from real users (the override rate) rather
+than gate the rollout on a formal field test. Full `TailspotTests` suite green.
+
 ## 2026-06-24 — Bet A: make the catch real (telemetry + v1 authenticity gate) — branch `feat/bet-a-real-catch-trust`
 
 Executed the Bet A plan (`docs/plans/2026-06-24-001-feat-bet-a-real-catch-trust-plan.md`).

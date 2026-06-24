@@ -138,13 +138,12 @@ struct ContentView: View {
     /// the multi-button chrome. T8 will re-wire inside the new merged
     /// `performCatch(mode:)`. Reveal-dismiss callbacks still clear it.
     @State private var captureInFlight = false
-    /// v1 authenticity gate enforcement. Default OFF (shadow mode) until
-    /// the offline corpus (U6) validates the gate on device. Flip via the
-    /// debug overlay's "Sky gate" row.
-    @AppStorage("tailspot.authenticityGate.enforce") private var outdoorGateEnforced = false
-    /// Transient "you're indoors" nudge shown when an enforced catch is
-    /// blocked by the authenticity gate.
+    /// Transient "head outside" nudge shown when the gate blocks an
+    /// indoor catch.
     @State private var showIndoorNudge = false
+    /// The blocked catch's "Catch anyway" override — set when the gate
+    /// blocks, run if the user taps through the nudge.
+    @State private var overrideCatch: (() -> Void)?
     /// Bumped on each enforced block so the nudge's auto-dismiss timer
     /// re-arms (`.task(id:)`) on a rapid second block within the window.
     @State private var nudgeToken = 0
@@ -635,10 +634,7 @@ struct ContentView: View {
                     captureInFlight = false
                     showHangar = true
                 },
-                isDuplicate: reveal.isDuplicate,
-                onConfirm: { isRight in
-                    confirmCatch(icao24: reveal.confirmIcao24, isRight: isRight)
-                }
+                isDuplicate: reveal.isDuplicate
             )
             .presentationBackground(.clear)
         }
@@ -724,9 +720,6 @@ struct ContentView: View {
         let plane: CardPlane
         let entryNumber: Int
         var isDuplicate: Bool = false
-        /// icao24 of the freshly-caught row this reveal can confirm/deny.
-        /// nil for duplicate reveals (no new row → affordance hidden).
-        var confirmIcao24: String? = nil
     }
 
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
@@ -754,14 +747,34 @@ struct ContentView: View {
     @ViewBuilder
     private var indoorNudgeBanner: some View {
         if showIndoorNudge {
-            HStack(spacing: 8) {
-                Image(systemName: "airplane")
-                    .foregroundStyle(Brand.Color.cyan)
-                    .accessibilityHidden(true)
-                Text("Looks like you're indoors — head outside to catch a plane!")
-                    .font(Brand.Font.mono(size: 12, weight: .semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(Brand.Color.textPrimary)
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "airplane")
+                        .foregroundStyle(Brand.Color.cyan)
+                        .accessibilityHidden(true)
+                    Text("Looks like you're indoors — head outside to catch a plane!")
+                        .font(Brand.Font.mono(size: 12, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                }
+                // Escape hatch: a rare false-block (e.g. a dramatic warm
+                // sunset sky) is never a dead end. The tap-rate is our
+                // calibration signal (catch_gate_override).
+                Button {
+                    withAnimation { showIndoorNudge = false }
+                    let go = overrideCatch
+                    overrideCatch = nil
+                    go?()
+                } label: {
+                    Text("Catch anyway")
+                        .font(Brand.Font.mono(size: 12, weight: .bold))
+                        .foregroundStyle(Brand.Color.cyan)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Brand.Color.cyan.opacity(0.12), in: .capsule)
+                        .overlay(Capsule().strokeBorder(Brand.Color.cyan.opacity(0.4), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -774,8 +787,9 @@ struct ContentView: View {
             .padding(.bottom, 130)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .task(id: nudgeToken) {
-                try? await Task.sleep(for: .seconds(3.5))
+                try? await Task.sleep(for: .seconds(4.5))
                 withAnimation { showIndoorNudge = false }
+                overrideCatch = nil
             }
         }
     }
@@ -932,30 +946,50 @@ struct ContentView: View {
         }
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
-        captureInFlight = true
-
-        // v1 authenticity gate. Evaluate on the frame the user tapped.
-        // Enforcing + a confident "not sky" (indoors) blocks the catch
-        // with a friendly nudge and records nothing. Shadow mode (the
-        // default until U6 validates) only logs. Either way exactly one
-        // event fires per attempt.
+        // v1 authenticity gate. Evaluate the frame the user tapped: a
+        // confident "not sky" (indoors) blocks the catch and shows a
+        // nudge with a one-tap "Catch anyway" override. Everything else
+        // (sky / uncertain / no signal) proceeds — fail open.
         let skyFeatures = visualConfirm.latestSkyFeatures
         let gpsAccuracy = location.horizontalAccuracy
-        let gateVerdict = computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy)
-        if outdoorGateEnforced, gateVerdict == .notSky {
+        if computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy) == .notSky {
             CatchTelemetry.fireBlockedOutdoors(
-                verdict: gateVerdict, features: skyFeatures,
-                gpsAccuracyMeters: gpsAccuracy, enforced: true
+                verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
             )
+            // Stash the override so the nudge's "Catch anyway" runs the
+            // catch unguarded — a rare false-block is never a dead end.
+            // How often it's tapped is our calibration signal.
+            overrideCatch = {
+                CatchTelemetry.fireGateOverride(
+                    verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+                )
+                runCatch(mode: mode, screenSize: screenSize, positions: positions)
+            }
             nudgeToken &+= 1
             withAnimation { showIndoorNudge = true }
-            captureInFlight = false
             return
         }
-        CatchTelemetry.fireOutdoorGateShadow(
-            verdict: gateVerdict, features: skyFeatures,
-            gpsAccuracyMeters: gpsAccuracy, enforced: outdoorGateEnforced
-        )
+        runCatch(mode: mode, screenSize: screenSize, positions: positions)
+    }
+
+    /// The actual catch — capture the JPEG, build + save the rows, fire
+    /// `catch_performed`, present the reveal. Bypasses the authenticity
+    /// gate (the gate decision lives in `performCatch`; the nudge's
+    /// "Catch anyway" calls this directly).
+    private func runCatch(
+        mode: CaptureMode,
+        screenSize: CGSize,
+        positions: [String: CGPoint]
+    ) {
+        let icaos: [String]
+        switch mode {
+        case .disabled:         return
+        case .single(let icao): icaos = [icao]
+        case .multi(let list):  icaos = list
+        }
+        guard !icaos.isEmpty else { return }
+        guard !captureInFlight else { return }
+        captureInFlight = true
 
         // Snapshot observer pose + visible-aircraft map up front. The
         // map is keyed by icao24 so the per-row loop is O(N) (not N×M
@@ -1171,8 +1205,7 @@ struct ContentView: View {
             pendingReveal = PendingReveal(
                 plane: plane,
                 entryNumber: uniqueIcaoCount,
-                isDuplicate: false,
-                confirmIcao24: first.icao24
+                isDuplicate: false
             )
             return
         }
@@ -1206,20 +1239,6 @@ struct ContentView: View {
         )
         descriptor.fetchLimit = 1
         return try? modelContext.fetch(descriptor).first
-    }
-
-    /// Persist the reveal-moment "is this right?" verdict on the fresh
-    /// catch row and fire the confirm/deny event. No-op when there's no
-    /// row to confirm (duplicate reveal → confirmIcao24 is nil).
-    private func confirmCatch(icao24: String?, isRight: Bool) {
-        guard let icao24, let row = fetchExistingCatch(icao: icao24) else { return }
-        row.confirmed = isRight
-        do {
-            try modelContext.save()
-        } catch {
-            Log.adsb.error("Confirm save failed for \(icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-        CatchTelemetry.fireConfirmation(row, isRight: isRight)
     }
 
     /// Build a presentational `CardPlane` from a stored `Catch`,
@@ -1487,7 +1506,6 @@ struct ContentView: View {
                 recordingRow
                 analyzeRow
                 visualConfirmRow
-                authenticityGateRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1726,24 +1744,6 @@ struct ContentView: View {
             guard visualConfirm.isAvailable else { return }
             visualConfirm.enabled.toggle()
         }
-    }
-
-    /// Dev/tester-only switch (debug overlay) for the indoor-catch block.
-    /// LOGGING = the gate runs and records its verdict but never blocks
-    /// (the safe default). BLOCKING = it actually refuses indoor catches.
-    /// Flip to BLOCKING only to field-test the block; users never see this.
-    private var authenticityGateRow: some View {
-        HStack(spacing: 8) {
-            Text("Indoor block:")
-            Text(outdoorGateEnforced ? "[BLOCKING]" : "[LOGGING]")
-                .foregroundStyle(outdoorGateEnforced
-                                 ? Brand.Color.alertCaution
-                                 : Brand.Color.textTertiary)
-                .bold()
-            Spacer()
-        }
-        .contentShape(.rect)
-        .onTapGesture { outdoorGateEnforced.toggle() }
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record
