@@ -539,7 +539,8 @@ nonisolated enum Trophies {
             dayParts.insert(dayPart(forHour: hour))
             if hour >= 4 && hour < 7 { hadDawn = true }
             tags.formUnion(aircraftTags(model: c.model, manufacturer: c.manufacturer,
-                                        typecode: c.typecode, operatorName: c.operatorName, type: t))
+                                        typecode: c.typecode, operatorName: c.operatorName,
+                                        type: t, category: c.category))
             types.insert(t.rawValue)
             if let alt = c.altitudeMeters {
                 if alt > highestAlt { highestAlt = alt }
@@ -628,7 +629,7 @@ nonisolated enum Trophies {
     /// (a catch can carry several).
     static func aircraftTags(
         model: String?, manufacturer: String?, typecode: String?,
-        operatorName: String?, type: AircraftType
+        operatorName: String?, type: AircraftType, category: String? = nil
     ) -> Set<String> {
         var tags = Set<String>()
         let hay = "\(model ?? "") \(manufacturer ?? "") \(typecode ?? "")".lowercased()
@@ -650,11 +651,17 @@ nonisolated enum Trophies {
         let props = ["dash 8", "dhc-8", "q400", "atr ", "atr-", "king air", "pc-12", "pc12",
                      "caravan", "c208", "saab 340", "saab 2000", "do 228", "twin otter", "metroliner"]
         if props.contains(where: { hay.contains($0) }) { tags.insert("turboprop") }
-        // Helicopters.
+        // Helicopters. The ADS-B emitter category (A7) is authoritative — the
+        // airframe broadcasts that it IS a rotorcraft — so it wins outright. The
+        // brand/typecode string match stays as a fallback for older catches with
+        // no recorded category and for feeds that omit it.
         let heli = ["helicopter", "robinson", "sikorsky", "eurocopter", "airbus helicopters",
                     "bell ", "agusta", "leonardo heli", "md helicopter", "enstrom",
                     "r44", "r66", "ec1", "as35", "h125", "h135", "h145", "uh-", "ah-", "ch-"]
-        if heli.contains(where: { hay.contains($0) }) { tags.insert("helicopter") }
+        if EmitterCategory(rawValue: category) == .rotorcraft
+            || heli.contains(where: { hay.contains($0) }) {
+            tags.insert("helicopter")
+        }
         // Type-derived.
         if type == .mil { tags.insert("military") }
         if type == .biz { tags.insert("bizjet") }

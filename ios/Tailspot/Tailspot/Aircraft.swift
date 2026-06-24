@@ -48,15 +48,32 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     let typecode: String?
     /// Registration / tail number from the live feed (e.g. "9V-SMH"), or nil.
     let registration: String?
+    /// ADS-B emitter category broadcast by the airframe (DO-260B), e.g. "A5"
+    /// (heavy) or "A7" (rotorcraft) — uppercased by the backend. Nil when the
+    /// source didn't carry one. `TailspotBackendClient` populates this from
+    /// adsb.lol's `category`; the legacy OpenSky positional decoder and the
+    /// replay path leave it nil. Unlike the manufacturer string, this is an
+    /// authoritative rotorcraft signal — see `emitterCategory` / `isRotorcraft`.
+    let category: String?
 
     var id: String { icao24 }
 
-    /// Memberwise init with `typecode`/`registration` defaulted to nil so the
-    /// many existing construction sites — the OpenSky positional decoder, the
-    /// replay-snapshot `init(_:)`, and tests — compile unchanged; only the
-    /// backend feed path (`BackendAircraft.asAircraft`) supplies the new fields.
-    /// (An explicit init here suppresses the synthesized memberwise init, so
-    /// there's no ambiguity between the two.)
+    /// The decoded ADS-B emitter category, or nil if the feed carried none or
+    /// the code is unrecognized. Interpret via this rather than comparing the
+    /// raw string at call sites.
+    var emitterCategory: EmitterCategory? { EmitterCategory(rawValue: category) }
+
+    /// True when the airframe *broadcasts itself* as a rotorcraft (emitter
+    /// category A7). Authoritative — independent of any manufacturer/model
+    /// string match. Nil/unknown category → false.
+    var isRotorcraft: Bool { emitterCategory == .rotorcraft }
+
+    /// Memberwise init with `typecode`/`registration`/`category` defaulted to
+    /// nil so the many existing construction sites — the OpenSky positional
+    /// decoder, the replay-snapshot `init(_:)`, and tests — compile unchanged;
+    /// only the backend feed path (`BackendAircraft.asAircraft`) supplies the
+    /// new fields. (An explicit init here suppresses the synthesized memberwise
+    /// init, so there's no ambiguity between the two.)
     init(
         icao24: String,
         callsign: String?,
@@ -69,7 +86,8 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         onGround: Bool,
         positionTimestamp: Date?,
         typecode: String? = nil,
-        registration: String? = nil
+        registration: String? = nil,
+        category: String? = nil
     ) {
         self.icao24 = icao24
         self.callsign = callsign
@@ -83,6 +101,7 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         self.positionTimestamp = positionTimestamp
         self.typecode = typecode
         self.registration = registration
+        self.category = category
     }
 
     /// Heuristic: is this a small (GA-sized) airframe? US general-aviation
@@ -199,12 +218,65 @@ nonisolated extension Aircraft: Decodable {
 
         self.altitudeMeters = geo ?? baro ?? 0
 
-        // OpenSky's positional state vector carries no type/registration — the
-        // backend feed (BackendAircraft) is the only source that supplies them.
+        // OpenSky's positional state vector carries no type/registration/category
+        // in the slots we read — the backend feed (BackendAircraft) is the only
+        // source that supplies them.
         self.typecode = nil
         self.registration = nil
+        self.category = nil
 
         // 14 squawk, 15 spi, 16 position_source, 17 category — all skipped
+    }
+}
+
+// MARK: - Emitter category
+
+/// ADS-B emitter category (DO-260B). The airframe broadcasts one of these
+/// alongside its position; readsb/adsb.lol surfaces it as a two-char code
+/// ("A0"…"A7", "B0"…"B7", "C0"…"C7") and the backend uppercases it before it
+/// reaches us. Only the cases we actually reason about are spelled out — every
+/// other valid-but-uninteresting code collapses to `.other`; a nil/empty string
+/// yields `nil` via the failable init so call sites can `if let` cleanly.
+///
+/// The motivating use is `rotorcraft` (A7): the one *authoritative* "this is a
+/// helicopter" signal, independent of any manufacturer/model string match. The
+/// remaining cases are decoded now so future size/kind features (heavy, glider,
+/// UAV…) can read them without re-plumbing the wire.
+nonisolated enum EmitterCategory: Equatable, Sendable {
+    case noInfo           // A0 / B0 / C0 — emitter present but no category set
+    case light            // A1  (< 15 500 lb)
+    case small            // A2  (15 500–75 000 lb)
+    case large            // A3  (75 000–300 000 lb)
+    case highVortexLarge  // A4  (e.g. B757)
+    case heavy            // A5  (> 300 000 lb)
+    case highPerformance  // A6  (> 5 g, > 400 kt)
+    case rotorcraft       // A7  — helicopters
+    case glider           // B1  glider / sailplane
+    case lighterThanAir   // B2
+    case uav              // B6  unmanned
+    case other            // any other defined-but-uninteresting code
+
+    /// Parse a feed category code (e.g. "A7"). Case-insensitive and
+    /// whitespace-tolerant; returns nil for nil/empty input.
+    init?(rawValue: String?) {
+        guard
+            let raw = rawValue?.trimmingCharacters(in: .whitespaces).uppercased(),
+            !raw.isEmpty
+        else { return nil }
+        switch raw {
+        case "A0", "B0", "C0": self = .noInfo
+        case "A1": self = .light
+        case "A2": self = .small
+        case "A3": self = .large
+        case "A4": self = .highVortexLarge
+        case "A5": self = .heavy
+        case "A6": self = .highPerformance
+        case "A7": self = .rotorcraft
+        case "B1": self = .glider
+        case "B2": self = .lighterThanAir
+        case "B6": self = .uav
+        default: self = .other
+        }
     }
 }
 

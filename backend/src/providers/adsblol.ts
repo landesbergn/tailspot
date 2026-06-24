@@ -64,6 +64,13 @@ export interface AdsbLolAircraft {
   t?: string | null;
   /** registration / tail number from the readsb aircraft DB (e.g. "9V-SMH"). */
   r?: string | null;
+  /**
+   * ADS-B emitter category broadcast by the airframe itself, e.g. "A1"
+   * (light) … "A5" (heavy) … "A7" (rotorcraft), "B1" (glider), "B6" (UAV).
+   * This is the only field that *authoritatively* says "this is a helicopter"
+   * — DO-260B category A7 — without guessing from the manufacturer string.
+   */
+  category?: string | null;
 }
 
 /** Top-level /v2/point response wrapper. */
@@ -151,6 +158,10 @@ function normalizeOne(a: AdsbLolAircraft, fetchedAt: number): NormalizedAircraft
     // omits the key and the iOS client sees nil — never an empty string.
     typecode: trimField(a.t),
     registration: trimField(a.r),
+    // Emitter category passes through with the same omit-when-blank semantics.
+    // Uppercased so the iOS interpreter can compare against canonical codes
+    // ("A7") without re-casing; feeds occasionally emit lowercase.
+    category: trimField(a.category)?.toUpperCase(),
   };
 }
 

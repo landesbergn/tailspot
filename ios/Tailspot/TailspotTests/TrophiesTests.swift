@@ -497,6 +497,22 @@ struct TrophiesExpansionTests {
         #expect(Trophies.aircraftTags(model: "737-800", manufacturer: "Boeing", typecode: nil, operatorName: "United", type: .narrow).isEmpty)
     }
 
+    @Test func emitterCategoryDrivesHelicopterTagAuthoritatively() {
+        // Emitter category A7 tags a helicopter even when NO brand/model/typecode
+        // string matches — the whole point of plumbing the category through.
+        #expect(Trophies.aircraftTags(model: nil, manufacturer: nil, typecode: nil,
+                                      operatorName: nil, type: .ga, category: "A7")
+            .contains("helicopter"))
+        // A non-rotorcraft category must not spuriously tag a fixed-wing jet.
+        #expect(!Trophies.aircraftTags(model: "737-800", manufacturer: "Boeing", typecode: "B738",
+                                       operatorName: "United", type: .narrow, category: "A3")
+            .contains("helicopter"))
+        // No category + no heli strings → no tag (the pre-feature default).
+        #expect(!Trophies.aircraftTags(model: "C172", manufacturer: "Cessna", typecode: "C172",
+                                       operatorName: nil, type: .ga, category: nil)
+            .contains("helicopter"))
+    }
+
     @Test func dayPartBuckets() {
         #expect(Trophies.dayPart(forHour: 8) == "morning")
         #expect(Trophies.dayPart(forHour: 14) == "afternoon")
