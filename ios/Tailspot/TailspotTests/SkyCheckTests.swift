@@ -50,12 +50,13 @@ struct SkyCheckVerdictTests {
         #expect(gate.verdict(features: interior(warmth: 0.30), gpsAccuracyMeters: 8) == .notSky)
     }
 
-    @Test func indoorWithPoorGpsIsNotSky() {
-        // Busy + neutral light but a degraded fix → GPS corroborates.
-        let room = SkyFeatures(edgeDensity: 0.16, tileVariance: 0.08, warmth: 0.05, meanLuminance: 0.4)
-        #expect(gate.verdict(features: room, gpsAccuracyMeters: 120) == .notSky)
-        // No fix at all is treated as poor.
-        #expect(gate.verdict(features: room, gpsAccuracyMeters: nil) == .notSky)
+    @Test func warmIndoorBlocksRegardlessOfGps() {
+        // A busy, warm-lit interior blocks on the camera signal alone —
+        // GPS state (sharp / degraded / no fix) is irrelevant.
+        let lit = interior(warmth: 0.30)
+        #expect(gate.verdict(features: lit, gpsAccuracyMeters: 8) == .notSky)
+        #expect(gate.verdict(features: lit, gpsAccuracyMeters: 120) == .notSky)
+        #expect(gate.verdict(features: lit, gpsAccuracyMeters: nil) == .notSky)
     }
 
     @Test func busyButCoolOutdoorsWithSharpGpsFailsOpen() {
@@ -65,8 +66,18 @@ struct SkyCheckVerdictTests {
         #expect(gate.verdict(features: outdoor, gpsAccuracyMeters: 6) != .notSky)
     }
 
-    @Test func gpsOnlyCorroboratesNeverDecidesAlone() {
-        // A smooth sky with a poor fix is still sky — GPS alone can't block.
+    @Test func busyCoolOutdoorWithDegradedGpsFailsOpen() {
+        // The realistic false-block trap: a textured outdoor frame (a low
+        // plane over a cityscape, a hand near the lens) with degraded
+        // urban GPS. Camera is cool/neutral → must NOT block; GPS alone
+        // can never block (review 2026-06-24).
+        let outdoor = SkyFeatures(edgeDensity: 0.18, tileVariance: 0.09, warmth: -0.02, meanLuminance: 0.6)
+        #expect(gate.verdict(features: outdoor, gpsAccuracyMeters: 120) != .notSky)
+        #expect(gate.verdict(features: outdoor, gpsAccuracyMeters: nil) != .notSky)
+    }
+
+    @Test func gpsNeverDecidesAlone() {
+        // A smooth sky with a poor fix is still sky; GPS can't block.
         #expect(gate.verdict(features: sky(lum: 0.7), gpsAccuracyMeters: 200) == .sky)
     }
 

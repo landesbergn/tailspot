@@ -71,8 +71,6 @@ nonisolated struct SkyCheck {
         /// light to believe the white balance.
         var warmThreshold: Double = 0.18
         var luminanceForColorTrust: Double = 0.12
-        /// GPS accuracy worse than this (or no fix) corroborates "indoors".
-        var gpsPoorMeters: Double = 65
 
         static let `default` = Thresholds()
     }
@@ -82,9 +80,10 @@ nonisolated struct SkyCheck {
     /// The gate decision. Pure — same inputs always yield the same
     /// verdict.
     ///
-    /// - `gpsAccuracyMeters`: `CLLocation.horizontalAccuracy`, or nil
-    ///   when there's no usable fix (treated as poor — indoors degrades
-    ///   GPS). Corroborates the camera; never decides on its own.
+    /// - `gpsAccuracyMeters`: `CLLocation.horizontalAccuracy` (or nil).
+    ///   Recorded for telemetry/tuning but deliberately NOT used to block
+    ///   — see the body. Kept in the signature for that telemetry and for
+    ///   future tuning.
     func verdict(features f: SkyFeatures, gpsAccuracyMeters: Double?) -> SkyVerdict {
         // Primary signal: structure.
         let busy = f.edgeDensity >= thresholds.edgeBusy
@@ -98,17 +97,15 @@ nonisolated struct SkyCheck {
         let colorTrustworthy = f.meanLuminance >= thresholds.luminanceForColorTrust
         let warm = colorTrustworthy && f.warmth >= thresholds.warmThreshold
 
-        // GPS corroboration — never decisive alone.
-        let gpsPoor: Bool = {
-            guard let g = gpsAccuracyMeters, g >= 0 else { return true }
-            return g > thresholds.gpsPoorMeters
-        }()
-
-        // Confident interior: a busy frame WITH a second corroborating
-        // signal (warm light or degraded GPS). A busy-but-cool frame
-        // outdoors with a sharp fix (foliage, a textured building edge)
-        // deliberately does NOT block — fail open.
-        if busy && (warm || gpsPoor) { return .notSky }
+        // The CAMERA is decisive. Block only on a busy frame lit by warm
+        // artificial light — the signature of an interior. GPS accuracy is
+        // recorded in telemetry but is deliberately NOT a blocking signal:
+        // a degraded fix is common outdoors (urban canyon, cold start,
+        // tree cover) and must never, on its own, strand a real catch
+        // (review 2026-06-24). Cost: a cool-lit or dark interior may not
+        // block — acceptable, since missing a cheat beats false-blocking a
+        // genuine catch (fail open).
+        if busy && warm { return .notSky }
 
         // Confident sky: smooth and not warm (day OR night).
         if smooth && !warm { return .sky }

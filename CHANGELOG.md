@@ -21,8 +21,9 @@ full `TailspotTests` green; awaiting device review + PR.
   helper. Single-catch confirm only (multi-catch deferred).
 - **v1 authenticity gate (U4–U7) — the indoor-catch fix.** New `SkyCheck` answers
   "pointed at open sky?" from frame structure + colour (night-aware — never
-  brightness, so a dark night sky still reads as sky) corroborated by GPS accuracy,
-  and **fails open** (only a confident `notSky` blocks). Ships **shadow-mode first**
+  brightness, so a dark night sky still reads as sky); the camera is decisive and
+  **fails open** (only a confident warm-lit-interior `notSky` blocks; GPS accuracy
+  is logged but never blocks on its own). Ships **shadow-mode first**
   (`outdoor_gate_shadow`, never blocks); enforcement (`catch_blocked_outdoors` + a
   friendly "head outside" nudge) is flag-gated, default **off** until validated. A
   debug-overlay "Sky gate" row flips shadow↔enforce on device. Offline validator +

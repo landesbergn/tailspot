@@ -145,6 +145,9 @@ struct ContentView: View {
     /// Transient "you're indoors" nudge shown when an enforced catch is
     /// blocked by the authenticity gate.
     @State private var showIndoorNudge = false
+    /// Bumped on each enforced block so the nudge's auto-dismiss timer
+    /// re-arms (`.task(id:)`) on a rapid second block within the window.
+    @State private var nudgeToken = 0
     /// Latched compass warning. Set true after `compassBadDebounce`
     /// seconds of continuously-bad readings; cleared when accuracy
     /// crosses back under `compassGoodThreshold`. Drives the
@@ -754,6 +757,7 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 Image(systemName: "airplane")
                     .foregroundStyle(Brand.Color.cyan)
+                    .accessibilityHidden(true)
                 Text("Looks like you're indoors — head outside and point at the sky to catch a plane!")
                     .font(Brand.Font.mono(size: 12, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
@@ -769,7 +773,7 @@ struct ContentView: View {
             .padding(.horizontal, 32)
             .padding(.bottom, 130)
             .transition(.move(edge: .bottom).combined(with: .opacity))
-            .task {
+            .task(id: nudgeToken) {
                 try? await Task.sleep(for: .seconds(3.5))
                 withAnimation { showIndoorNudge = false }
             }
@@ -940,14 +944,17 @@ struct ContentView: View {
         let gateVerdict = computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy)
         if outdoorGateEnforced, gateVerdict == .notSky {
             CatchTelemetry.fireBlockedOutdoors(
-                verdict: gateVerdict, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+                verdict: gateVerdict, features: skyFeatures,
+                gpsAccuracyMeters: gpsAccuracy, enforced: true
             )
+            nudgeToken &+= 1
             withAnimation { showIndoorNudge = true }
             captureInFlight = false
             return
         }
         CatchTelemetry.fireOutdoorGateShadow(
-            verdict: gateVerdict, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+            verdict: gateVerdict, features: skyFeatures,
+            gpsAccuracyMeters: gpsAccuracy, enforced: outdoorGateEnforced
         )
 
         // Snapshot observer pose + visible-aircraft map up front. The
@@ -965,6 +972,13 @@ struct ContentView: View {
         )
 
         Task { @MainActor in
+            // Backstop: the latch is normally cleared by the reveal's
+            // dismiss callbacks, but if this task exits before a reveal
+            // is presented (e.g. an error/cancellation at an await) the
+            // catch button would soft-lock. Clear it unless a sheet
+            // actually went up.
+            var revealPresented = false
+            defer { if !revealPresented { captureInFlight = false } }
             // One JPEG, reused for every new row in this catch. If the
             // camera isn't ready (auth denied, session not running),
             // `captureJPEG` returns nil — Catches are still valid
@@ -1089,6 +1103,7 @@ struct ContentView: View {
 
             presentReveal(newCatches: newCatches, duplicates: duplicates,
                           visibleByIcao: visibleByIcao)
+            revealPresented = (pendingReveal != nil || pendingMultiReveal != nil)
         }
     }
 

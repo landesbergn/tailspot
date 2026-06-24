@@ -29,10 +29,15 @@ import os
 struct SettingsScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
     /// Visual-confirmation opt-in (beta, U8). Bound to the same
-    /// UserDefaults key the pipeline reads; default off to match the
-    /// Release default. The pipeline re-reads this key per frame, so the
-    /// toggle takes effect live.
+    /// UserDefaults key the pipeline reads; the default matches the
+    /// pipeline's per-build default (DEBUG on, Release off) so the toggle
+    /// reflects reality before it's ever touched. The pipeline re-reads
+    /// this key per frame, so the toggle takes effect live.
+    #if DEBUG
+    @AppStorage("tailspot.debug.visualConfirm") private var visualConfirmEnabled = true
+    #else
     @AppStorage("tailspot.debug.visualConfirm") private var visualConfirmEnabled = false
+    #endif
 
     @State private var handleDraft: String = ""
     @State private var handleTakenError: String? = nil

@@ -94,9 +94,16 @@ nonisolated enum CatchTelemetry {
     static func outdoorGateProperties(
         verdict: SkyVerdict,
         features: SkyFeatures?,
-        gpsAccuracyMeters: Double?
+        gpsAccuracyMeters: Double?,
+        enforced: Bool
     ) -> [String: AnalyticsValue] {
-        var props: [String: AnalyticsValue] = ["verdict": .string(verdict.rawValue)]
+        // `enforced` distinguishes a true shadow-mode observation from an
+        // enforce-mode allow (both fire `outdoor_gate_shadow`), so the
+        // funnel can be read correctly across the shadow→enforce cutover.
+        var props: [String: AnalyticsValue] = [
+            "verdict": .string(verdict.rawValue),
+            "enforced": .bool(enforced),
+        ]
         if let f = features {
             props["edge_density"] = .double(f.edgeDensity)
             props["tile_variance"] = .double(f.tileVariance)
@@ -140,20 +147,22 @@ nonisolated enum CatchTelemetry {
     /// Shadow-mode gate telemetry — fired on every catch attempt while
     /// the gate is observing-only (never blocks).
     static func fireOutdoorGateShadow(
-        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
+        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?, enforced: Bool
     ) {
         Analytics.capture(outdoorGateShadowEvent, outdoorGateProperties(
-            verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
+            verdict: verdict, features: features,
+            gpsAccuracyMeters: gpsAccuracyMeters, enforced: enforced
         ))
     }
 
     /// Enforcement telemetry — fired when the gate actually blocks a
     /// catch (verdict `.notSky` while enforcing). See U7.
     static func fireBlockedOutdoors(
-        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
+        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?, enforced: Bool
     ) {
         Analytics.capture(blockedOutdoorsEvent, outdoorGateProperties(
-            verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
+            verdict: verdict, features: features,
+            gpsAccuracyMeters: gpsAccuracyMeters, enforced: enforced
         ))
     }
 }
