@@ -10,10 +10,15 @@
 		user data we collect, what we do with it, and whether we link
 		it to identity or use it for tracking.
 
-		DRAFT — review before the next TestFlight/App Store build, and
-		keep the App Store Connect privacy "nutrition label" in sync
-		(this manifest and the label are separate surfaces; the manifest
-		does not auto-populate the label).
+		REVIEWED 2026-06-24 for the catch-confirmation telemetry
+		(catch_performed / catch_deleted / catch_confirmed / catch_denied):
+		these are Product Interaction events on the existing SDK-free REST
+		pipeline plus the anonymous device id — both already declared below,
+		so no new collected-data type or required-reason API is added (the
+		Catch.confirmed flag is stored locally and never uploaded).
+		MANUAL STEP (Noah, App Store Connect): keep the privacy "nutrition
+		label" in sync before the next build — this manifest and the label
+		are separate surfaces; the manifest does not auto-populate the label.
 
 		Current data flows (no longer the v0 "all on-device" posture):
 		  - Backend (api.tailspot.app): device registration, handle
