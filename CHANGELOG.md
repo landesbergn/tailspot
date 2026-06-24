@@ -5,6 +5,42 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-24 — Bet A: make the catch real (telemetry + v1 authenticity gate) — branch `feat/bet-a-real-catch-trust`
+
+Executed the Bet A plan (`docs/plans/2026-06-24-001-feat-bet-a-real-catch-trust-plan.md`).
+Research reframed the track: the regression bench (#2) and the visual-confirmation
+pipeline (#3) were already built, so the round focused on the genuinely-new work —
+catch-confirmation telemetry and the v1 "are you outdoors?" gate. On branch,
+full `TailspotTests` green; awaiting device review + PR.
+
+- **Catch-confirmation telemetry (U1–U2).** `catch_performed` (+ `is_duplicate`)
+  and `catch_deleted` events, plus a subtle reveal-moment "is this right?"
+  confirm/deny → `catch_confirmed` / `catch_denied` and an additive
+  `Catch.confirmed` flag. The north-star (catch-confirmation-rate) is now a real
+  PostHog funnel — it previously had no delete/mis-ID signal. Pure `CatchTelemetry`
+  helper. Single-catch confirm only (multi-catch deferred).
+- **v1 authenticity gate (U4–U7) — the indoor-catch fix.** New `SkyCheck` answers
+  "pointed at open sky?" from frame structure + colour (night-aware — never
+  brightness, so a dark night sky still reads as sky) corroborated by GPS accuracy,
+  and **fails open** (only a confident `notSky` blocks). Ships **shadow-mode first**
+  (`outdoor_gate_shadow`, never blocks); enforcement (`catch_blocked_outdoors` + a
+  friendly "head outside" nudge) is flag-gated, default **off** until validated. A
+  debug-overlay "Sky gate" row flips shadow↔enforce on device. Offline validator +
+  field protocol in `tools/authenticity-gate/`.
+- **Visual confirmation (U8).** Settings → CAMERA "Snap reticle to plane" beta
+  toggle (default off); pipeline reads its enable key live.
+- **Privacy (U3).** Manifest finalized; new events ride the existing Product
+  Interaction declaration (no new data type). ASC nutrition-label sync is Noah's
+  manual step.
+- **#2 documented shipped.** `os_log` capture is session-scoped via `LogCapture`
+  (from `OSLogStore` at recording-stop); decided **not** to add an always-on log.
+- **Model licensing (U10).** Bundled detector is stock YOLOX-S COCO (Apache-2.0,
+  via `pixeltable-yolox`) — permissive, no AGPL issue; provenance + Apache-2.0
+  compliance checklist recorded in `tools/visual-confirmation/MODEL-LICENSE.md`.
+- **Remaining (Noah, on device):** run the two field gates (visual-confirmation
+  ≥2× error reduction; authenticity-gate false-block check) then flip the Release
+  defaults; bundle the YOLOX `LICENSE`/NOTICE + Attributions-page credit.
+
 ## 2026-06-24 — Onboarding: suggested handles are always free (PR #67)
 
 First-run bug: the handle step offered the same four HARDCODED chips
