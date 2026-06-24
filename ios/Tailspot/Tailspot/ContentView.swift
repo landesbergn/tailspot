@@ -138,6 +138,13 @@ struct ContentView: View {
     /// the multi-button chrome. T8 will re-wire inside the new merged
     /// `performCatch(mode:)`. Reveal-dismiss callbacks still clear it.
     @State private var captureInFlight = false
+    /// v1 authenticity gate enforcement. Default OFF (shadow mode) until
+    /// the offline corpus (U6) validates the gate on device. Flip via the
+    /// debug overlay's "Sky gate" row.
+    @AppStorage("tailspot.authenticityGate.enforce") private var outdoorGateEnforced = false
+    /// Transient "you're indoors" nudge shown when an enforced catch is
+    /// blocked by the authenticity gate.
+    @State private var showIndoorNudge = false
     /// Latched compass warning. Set true after `compassBadDebounce`
     /// seconds of continuously-bad readings; cleared when accuracy
     /// crosses back under `compassGoodThreshold`. Drives the
@@ -606,6 +613,7 @@ struct ContentView: View {
         }
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
+        .overlay(alignment: .bottom) { indoorNudgeBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -737,6 +745,37 @@ struct ContentView: View {
     /// Tap opens `CompassCalibrationSheet` for the figure-8
     /// instructions. Surfaces only after `compassBadDebounce` seconds
     /// of consistently-bad readings (see `updateCompassWarning`).
+    /// Transient "you're indoors" nudge shown when the authenticity gate
+    /// blocks a catch (enforcing + not-sky). Auto-dismisses; tone is
+    /// light, not scolding.
+    @ViewBuilder
+    private var indoorNudgeBanner: some View {
+        if showIndoorNudge {
+            HStack(spacing: 8) {
+                Image(systemName: "airplane")
+                    .foregroundStyle(Brand.Color.cyan)
+                Text("Looks like you're indoors — head outside and point at the sky to catch a plane!")
+                    .font(Brand.Font.mono(size: 12, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(Brand.Color.textPrimary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Brand.Color.bgElevated.opacity(0.95), in: .rect(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Brand.Color.alertCaution.opacity(0.5), lineWidth: 1)
+            )
+            .padding(.horizontal, 32)
+            .padding(.bottom, 130)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .task {
+                try? await Task.sleep(for: .seconds(3.5))
+                withAnimation { showIndoorNudge = false }
+            }
+        }
+    }
+
     @ViewBuilder
     private var cautionBadge: some View {
         if isHeadingAccuracyBad {
@@ -891,10 +930,25 @@ struct ContentView: View {
         guard !captureInFlight else { return }
         captureInFlight = true
 
-        // v1 authenticity gate (SHADOW MODE — logs the verdict, does not
-        // block; U7 adds enforcement behind a flag). Evaluate on the
-        // frame the user tapped, before the async shutter.
-        evaluateOutdoorGate()
+        // v1 authenticity gate. Evaluate on the frame the user tapped.
+        // Enforcing + a confident "not sky" (indoors) blocks the catch
+        // with a friendly nudge and records nothing. Shadow mode (the
+        // default until U6 validates) only logs. Either way exactly one
+        // event fires per attempt.
+        let skyFeatures = visualConfirm.latestSkyFeatures
+        let gpsAccuracy = location.horizontalAccuracy
+        let gateVerdict = computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy)
+        if outdoorGateEnforced, gateVerdict == .notSky {
+            CatchTelemetry.fireBlockedOutdoors(
+                verdict: gateVerdict, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+            )
+            withAnimation { showIndoorNudge = true }
+            captureInFlight = false
+            return
+        }
+        CatchTelemetry.fireOutdoorGateShadow(
+            verdict: gateVerdict, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+        )
 
         // Snapshot observer pose + visible-aircraft map up front. The
         // map is keyed by icao24 so the per-row loop is O(N) (not N×M
@@ -1038,23 +1092,13 @@ struct ContentView: View {
         }
     }
 
-    /// v1 authenticity gate (SHADOW MODE). Reads the latest camera-frame
-    /// sky features + GPS accuracy, computes the "pointed at open sky?"
-    /// verdict, and fires shadow telemetry. Returns the verdict so the
-    /// enforcement path (U7) can block on `.notSky` behind a flag — for
-    /// now nothing blocks. Missing features (camera not warmed up) →
-    /// `.uncertain`, which always allows (fail open).
-    @discardableResult
-    private func evaluateOutdoorGate() -> SkyVerdict {
-        let features = visualConfirm.latestSkyFeatures
-        let gps = location.horizontalAccuracy
-        let verdict = features.map {
-            SkyCheck().verdict(features: $0, gpsAccuracyMeters: gps)
-        } ?? .uncertain
-        CatchTelemetry.fireOutdoorGateShadow(
-            verdict: verdict, features: features, gpsAccuracyMeters: gps
-        )
-        return verdict
+    /// v1 authenticity gate decision. Pure: maps the latest camera-frame
+    /// sky features + GPS accuracy to the "pointed at open sky?" verdict.
+    /// Missing features (camera not warmed up) → `.uncertain`, which
+    /// always allows (fail open). Telemetry + the enforce/block decision
+    /// live at the call site (`performCatch`).
+    private func computeOutdoorVerdict(features: SkyFeatures?, gps: Double?) -> SkyVerdict {
+        features.map { SkyCheck().verdict(features: $0, gpsAccuracyMeters: gps) } ?? .uncertain
     }
 
     /// Picks the right reveal payload based on what landed.
@@ -1428,6 +1472,7 @@ struct ContentView: View {
                 recordingRow
                 analyzeRow
                 visualConfirmRow
+                authenticityGateRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1666,6 +1711,23 @@ struct ContentView: View {
             guard visualConfirm.isAvailable else { return }
             visualConfirm.enabled.toggle()
         }
+    }
+
+    /// Tap-to-toggle the v1 authenticity (sky) gate between SHADOW (logs
+    /// only) and ENFORCE (blocks indoor catches with a nudge). Default
+    /// shadow until the offline corpus validates it (U6).
+    private var authenticityGateRow: some View {
+        HStack(spacing: 8) {
+            Text("Sky gate:")
+            Text(outdoorGateEnforced ? "[ENFORCE]" : "[SHADOW]")
+                .foregroundStyle(outdoorGateEnforced
+                                 ? Brand.Color.alertCaution
+                                 : Brand.Color.textTertiary)
+                .bold()
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture { outdoorGateEnforced.toggle() }
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record
