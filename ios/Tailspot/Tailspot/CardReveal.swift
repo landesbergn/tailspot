@@ -45,9 +45,10 @@ struct CardReveal: View {
     /// Rendered share-card image, prepared once on appear (ImageRenderer is
     /// synchronous and this view animates — never render it on the body path).
     @State private var shareImage: Image?
-    /// Latches once the user answers the "is this right?" prompt so the
-    /// affordance disappears — one tap, then gone.
-    @State private var confirmAnswered = false
+    /// Tracks the "is this right?" answer; on a tap the row swaps to a
+    /// brief acknowledgement that stays until the reveal is dismissed.
+    private enum ConfirmState { case unanswered, confirmed, denied }
+    @State private var confirmState: ConfirmState = .unanswered
 
     var body: some View {
         ZStack {
@@ -314,24 +315,46 @@ struct CardReveal: View {
     /// catch-confirmation-rate signal without blocking the magic moment.
     @ViewBuilder
     private var confirmRow: some View {
-        if let onConfirm, !isDuplicate, !confirmAnswered {
-            HStack(spacing: 10) {
-                Text("Right plane?")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                confirmButton(label: "Yes", isRight: true, action: onConfirm)
-                confirmButton(label: "Not quite", isRight: false, action: onConfirm)
+        if let onConfirm, !isDuplicate {
+            switch confirmState {
+            case .unanswered:
+                HStack(spacing: 10) {
+                    Text("Right plane?")
+                        .font(Brand.Font.mono(size: 11, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                    confirmButton(label: "Yes", isRight: true, action: onConfirm)
+                    confirmButton(label: "Not quite", isRight: false, action: onConfirm)
+                }
+                .transition(.opacity)
+            case .confirmed:
+                confirmAck(text: "Thanks!", tint: Brand.Color.alertNormal)
+            case .denied:
+                confirmAck(text: "Thanks — noted", tint: Brand.Color.textTertiary)
             }
-            .transition(.opacity)
         }
+    }
+
+    /// Brief post-answer acknowledgement that replaces the confirm row so
+    /// the tap visibly registers (rather than just vanishing).
+    private func confirmAck(text: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(tint)
+            Text(text)
+                .font(Brand.Font.mono(size: 11, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(Brand.Color.textSecondary)
+        }
+        .transition(.opacity)
     }
 
     private func confirmButton(
         label: String, isRight: Bool, action: @escaping (Bool) -> Void
     ) -> some View {
         Button {
-            withAnimation(.easeOut(duration: 0.2)) { confirmAnswered = true }
+            withAnimation(.easeOut(duration: 0.2)) {
+                confirmState = isRight ? .confirmed : .denied
+            }
             action(isRight)
         } label: {
             Text(label)

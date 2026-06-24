@@ -138,7 +138,7 @@ struct SettingsScreen: View {
             // MARK: CAMERA
 
             Section {
-                Toggle("Snap reticle to plane", isOn: $visualConfirmEnabled)
+                Toggle("Camera aim assist", isOn: $visualConfirmEnabled)
                     .tint(Brand.Color.cyan)
             } header: {
                 Text("CAMERA")
@@ -147,7 +147,7 @@ struct SettingsScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .textCase(nil)
             } footer: {
-                Text("Beta: uses the camera to lock the box onto the actual plane image, correcting compass wobble. Off by default.")
+                Text("Beta — off by default. Uses the camera to snap the targeting box onto the real plane, instead of relying only on the compass.")
             }
 
             // MARK: ABOUT

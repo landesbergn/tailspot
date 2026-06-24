@@ -758,7 +758,7 @@ struct ContentView: View {
                 Image(systemName: "airplane")
                     .foregroundStyle(Brand.Color.cyan)
                     .accessibilityHidden(true)
-                Text("Looks like you're indoors — head outside and point at the sky to catch a plane!")
+                Text("Looks like you're indoors — head outside to catch a plane!")
                     .font(Brand.Font.mono(size: 12, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(Brand.Color.textPrimary)
@@ -1728,13 +1728,14 @@ struct ContentView: View {
         }
     }
 
-    /// Tap-to-toggle the v1 authenticity (sky) gate between SHADOW (logs
-    /// only) and ENFORCE (blocks indoor catches with a nudge). Default
-    /// shadow until the offline corpus validates it (U6).
+    /// Dev/tester-only switch (debug overlay) for the indoor-catch block.
+    /// LOGGING = the gate runs and records its verdict but never blocks
+    /// (the safe default). BLOCKING = it actually refuses indoor catches.
+    /// Flip to BLOCKING only to field-test the block; users never see this.
     private var authenticityGateRow: some View {
         HStack(spacing: 8) {
-            Text("Sky gate:")
-            Text(outdoorGateEnforced ? "[ENFORCE]" : "[SHADOW]")
+            Text("Indoor block:")
+            Text(outdoorGateEnforced ? "[BLOCKING]" : "[LOGGING]")
                 .foregroundStyle(outdoorGateEnforced
                                  ? Brand.Color.alertCaution
                                  : Brand.Color.textTertiary)
