@@ -35,11 +35,13 @@ Fixed on both sides (Noah's call: do both):
   (`HandleSuggestionsTests` generator incl. seeded-determinism + "never the old
   set", and two `SuggestHandlesResponse` decode cases). Backend suite + full iOS
   `TailspotTests` green.
-- **Deploy note:** the iOS randomized fallback ships in the normal TestFlight loop
-  and fixes the deterministic collision on its own; the hard "verified-free"
-  guarantee activates only once the **backend is deployed to Fly.io**
-  (`api.tailspot.app`). Until then the client degrades gracefully (endpoint 404 →
-  local randomized set).
+- **Deploy status:** backend **deployed to Fly.io 2026-06-24** (`tailspot-api`,
+  rolling, zero-downtime) — `GET /v1/handles/suggestions` is live on
+  `api.tailspot.app` and verified returning DB-checked-free names. The iOS half
+  (the verified-free fetch + the randomized fallback) is merged to `main` but
+  reaches testers only in the **next TestFlight build** (Noah's call); until then
+  installed builds keep the old hardcoded chips, and any build degrades gracefully
+  if the endpoint is ever unreachable (404 → local randomized set).
 
 ## 2026-06-24 — Foreign-aircraft metadata: kill "Unknown aircraft" (PR #65)
 
