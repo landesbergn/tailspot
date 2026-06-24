@@ -68,6 +68,13 @@ final class Catch {
     /// ICAO type designator ("B77W") — the key into AircraftNaming's
     /// DOC 8643 table. Same migration strategy as `registration`.
     var typecode: String?
+    /// ADS-B emitter category as broadcast at the catch moment (e.g. "A5"
+    /// heavy, "A7" rotorcraft). As-observed from the live feed — the FAA-only
+    /// metadata endpoint doesn't carry it, so there's no backfill source; old
+    /// rows stay nil. Its job is authoritative rotorcraft tagging (A7 → the
+    /// "helicopter" tag / Whirlybird trophy) without guessing from brand
+    /// strings. Added 2026-06 — optional + nil-default for lightweight migration.
+    var category: String?
     /// Aircraft altitude (m MSL) at the catch moment. NEVER backfilled
     /// — the moment is unrecoverable; old rows render "—".
     var altitudeMeters: Double?
@@ -113,6 +120,7 @@ final class Catch {
         slantDistanceMeters: Double,
         registration: String? = nil,
         typecode: String? = nil,
+        category: String? = nil,
         altitudeMeters: Double? = nil,
         velocityMps: Double? = nil,
         placeName: String? = nil,
@@ -132,6 +140,7 @@ final class Catch {
         self.slantDistanceMeters = slantDistanceMeters
         self.registration = registration
         self.typecode = typecode
+        self.category = category
         self.altitudeMeters = altitudeMeters
         self.velocityMps = velocityMps
         self.placeName = placeName

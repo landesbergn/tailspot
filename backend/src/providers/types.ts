@@ -59,6 +59,14 @@ export interface NormalizedAircraft {
   /** Registration / tail number from the upstream DB (e.g. "9V-SMH"). Optional,
    *  same semantics as `typecode`. */
   registration?: string;
+  /**
+   * ADS-B emitter category the airframe broadcasts (DO-260B), uppercased:
+   * "A1" light … "A5" heavy … "A7" rotorcraft, "B1" glider, "B6" UAV. Optional,
+   * same omit-when-absent semantics as `typecode`. Unlike a manufacturer
+   * string, A7 is an authoritative "this is a helicopter" signal — the iOS
+   * client uses it to tag rotorcraft instead of guessing from brand names.
+   */
+  category?: string;
 }
 
 /**

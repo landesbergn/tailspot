@@ -132,10 +132,63 @@ struct TailspotBackendClientTests {
         // backend build that doesn't emit them yet.
         #expect(a.typecode == nil)
         #expect(a.registration == nil)
+        // Absent category key → nil, and the rotorcraft signal reads false
+        // rather than throwing — old/sparse rows degrade safely.
+        #expect(a.category == nil)
+        #expect(a.emitterCategory == nil)
+        #expect(a.isRotorcraft == false)
         // No timestamp → extrapolation degrades gracefully to the raw fix.
         let pos = a.extrapolatedPosition(at: Date())
         #expect(pos.lat == 37.0)
         #expect(pos.lon == -122.0)
+    }
+
+    @Test func decodesEmitterCategoryAndFlagsRotorcraft() throws {
+        // A medevac helicopter: the feed carries category A7, which is the
+        // authoritative "this is a rotorcraft" signal — no brand-string guess.
+        let json = """
+        {
+          "fetchedAt": 1781122007,
+          "aircraft": [
+            {
+              "icao24": "ac82ec",
+              "callsign": "REH1",
+              "originCountry": "United States",
+              "longitude": -122.27,
+              "latitude": 37.80,
+              "altitudeMeters": 381.0,
+              "velocityMps": 60.0,
+              "trackDeg": 120.0,
+              "onGround": false,
+              "positionTimestamp": 1781122007,
+              "typecode": "EC35",
+              "registration": "N911XX",
+              "category": "A7"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let a = try JSONDecoder().decode(BackendAircraftResponse.self, from: json)
+            .aircraft[0].asAircraft()
+        #expect(a.category == "A7")
+        #expect(a.emitterCategory == .rotorcraft)
+        #expect(a.isRotorcraft)
+    }
+
+    @Test func emitterCategoryParsesCodesAndToleratesJunk() {
+        #expect(EmitterCategory(rawValue: "A7") == .rotorcraft)
+        #expect(EmitterCategory(rawValue: "a7") == .rotorcraft)   // case-insensitive
+        #expect(EmitterCategory(rawValue: " A5 ") == .heavy)      // whitespace-tolerant
+        #expect(EmitterCategory(rawValue: "A1") == .light)
+        #expect(EmitterCategory(rawValue: "B1") == .glider)
+        // A recognized-but-uninteresting code still decodes (to .other), so
+        // `emitterCategory != nil` means "the feed told us something".
+        #expect(EmitterCategory(rawValue: "C3") == .other)
+        // Absent / empty → nil so call sites can `if let`.
+        #expect(EmitterCategory(rawValue: nil) == nil)
+        #expect(EmitterCategory(rawValue: "") == nil)
+        #expect(EmitterCategory(rawValue: "   ") == nil)
     }
 
     @Test func decodesMetadataAndMapsToAircraftMetadata() throws {
