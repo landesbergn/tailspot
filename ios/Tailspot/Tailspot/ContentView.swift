@@ -891,6 +891,11 @@ struct ContentView: View {
         guard !captureInFlight else { return }
         captureInFlight = true
 
+        // v1 authenticity gate (SHADOW MODE — logs the verdict, does not
+        // block; U7 adds enforcement behind a flag). Evaluate on the
+        // frame the user tapped, before the async shutter.
+        evaluateOutdoorGate()
+
         // Snapshot observer pose + visible-aircraft map up front. The
         // map is keyed by icao24 so the per-row loop is O(N) (not N×M
         // linear scans).
@@ -1031,6 +1036,25 @@ struct ContentView: View {
             presentReveal(newCatches: newCatches, duplicates: duplicates,
                           visibleByIcao: visibleByIcao)
         }
+    }
+
+    /// v1 authenticity gate (SHADOW MODE). Reads the latest camera-frame
+    /// sky features + GPS accuracy, computes the "pointed at open sky?"
+    /// verdict, and fires shadow telemetry. Returns the verdict so the
+    /// enforcement path (U7) can block on `.notSky` behind a flag — for
+    /// now nothing blocks. Missing features (camera not warmed up) →
+    /// `.uncertain`, which always allows (fail open).
+    @discardableResult
+    private func evaluateOutdoorGate() -> SkyVerdict {
+        let features = visualConfirm.latestSkyFeatures
+        let gps = location.horizontalAccuracy
+        let verdict = features.map {
+            SkyCheck().verdict(features: $0, gpsAccuracyMeters: gps)
+        } ?? .uncertain
+        CatchTelemetry.fireOutdoorGateShadow(
+            verdict: verdict, features: features, gpsAccuracyMeters: gps
+        )
+        return verdict
     }
 
     /// Picks the right reveal payload based on what landed.

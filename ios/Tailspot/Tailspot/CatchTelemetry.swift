@@ -30,6 +30,8 @@ nonisolated enum CatchTelemetry {
     static let deletedEvent = "catch_deleted"
     static let confirmedEvent = "catch_confirmed"
     static let deniedEvent = "catch_denied"
+    static let outdoorGateShadowEvent = "outdoor_gate_shadow"
+    static let blockedOutdoorsEvent = "catch_blocked_outdoors"
 
     // MARK: - Pure property builders (unit-tested)
 
@@ -86,6 +88,27 @@ nonisolated enum CatchTelemetry {
         ]
     }
 
+    /// Properties for the v1 authenticity gate: the verdict + raw scene
+    /// signals, so the offline corpus can be re-scored and the
+    /// false-block rate watched before (and after) enforcement.
+    static func outdoorGateProperties(
+        verdict: SkyVerdict,
+        features: SkyFeatures?,
+        gpsAccuracyMeters: Double?
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = ["verdict": .string(verdict.rawValue)]
+        if let f = features {
+            props["edge_density"] = .double(f.edgeDensity)
+            props["tile_variance"] = .double(f.tileVariance)
+            props["warmth"] = .double(f.warmth)
+            props["mean_luminance"] = .double(f.meanLuminance)
+        } else {
+            props["features_available"] = .bool(false)
+        }
+        if let g = gpsAccuracyMeters { props["gps_accuracy_m"] = .double(g) }
+        return props
+    }
+
     // MARK: - Fire wrappers (read MainActor-isolated `Catch`, then capture)
 
     @MainActor static func firePerformed(_ row: Catch) {
@@ -112,5 +135,25 @@ nonisolated enum CatchTelemetry {
             isRight ? confirmedEvent : deniedEvent,
             confirmationProperties(icao24: row.icao24, rarity: row.resolvedRarity.rawValue)
         )
+    }
+
+    /// Shadow-mode gate telemetry — fired on every catch attempt while
+    /// the gate is observing-only (never blocks).
+    static func fireOutdoorGateShadow(
+        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
+    ) {
+        Analytics.capture(outdoorGateShadowEvent, outdoorGateProperties(
+            verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
+        ))
+    }
+
+    /// Enforcement telemetry — fired when the gate actually blocks a
+    /// catch (verdict `.notSky` while enforcing). See U7.
+    static func fireBlockedOutdoors(
+        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
+    ) {
+        Analytics.capture(blockedOutdoorsEvent, outdoorGateProperties(
+            verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
+        ))
     }
 }

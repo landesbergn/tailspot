@@ -78,6 +78,10 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// Drops frames while a detection is in flight rather than queueing
     /// them — stale frames are worse than skipped ones.
     private let busy = OSAllocatedUnfairLock<Bool>(initialState: false)
+    /// Latest sky-scene features for the v1 authenticity gate. Written on
+    /// the camera queue every frame (independent of the detector toggle),
+    /// read at catch time. nil until the first frame arrives.
+    private let skyFeaturesSnapshot = OSAllocatedUnfairLock<SkyFeatures?>(initialState: nil)
 
     private var tracker = VisualFixTracker(gateRadius: 150)
     // `nonisolated`: CropFrameSaver is itself a nonisolated class (it uses
@@ -95,6 +99,10 @@ final class VisualConfirmationPipeline: ObservableObject {
 
     /// Whether the feature can run at all (model present in the bundle).
     var isAvailable: Bool { detector != nil }
+
+    /// Snapshot of the most recent frame's sky features (v1 authenticity
+    /// gate). nil before the first frame arrives.
+    nonisolated var latestSkyFeatures: SkyFeatures? { skyFeaturesSnapshot.withLock { $0 } }
 
     /// Called from the render loop every frame with the single plane worth
     /// confirming (lock target or pin), or nil when there isn't one.
@@ -116,6 +124,13 @@ final class VisualConfirmationPipeline: ObservableObject {
 
     /// Frame entry point — runs on the camera's video queue (~8 fps).
     nonisolated func ingestFrame(_ pixelBuffer: CVPixelBuffer) {
+        // v1 authenticity gate: compute sky features on EVERY frame,
+        // independent of the visual-confirm detector toggle and of having
+        // a lock target. Cheap (12×12 sample lattice); stored for a read
+        // at catch time.
+        if let sky = SkyFeatures.extract(from: pixelBuffer) {
+            skyFeaturesSnapshot.withLock { $0 = sky }
+        }
         guard enabledSnapshot.withLock({ $0 }),
               let target = targetSnapshot.withLock({ $0 }),
               let detector

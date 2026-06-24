@@ -54,4 +54,27 @@ struct CatchTelemetryTests {
         #expect(CatchTelemetry.performedEvent == "catch_performed")
         #expect(CatchTelemetry.deletedEvent == "catch_deleted")
     }
+
+    // MARK: - Authenticity gate telemetry (U5)
+
+    @Test func outdoorGatePropertiesCarryVerdictAndSignals() {
+        let f = SkyFeatures(edgeDensity: 0.2, tileVariance: 0.1, warmth: 0.3, meanLuminance: 0.5)
+        let p = CatchTelemetry.outdoorGateProperties(verdict: .notSky, features: f, gpsAccuracyMeters: 12)
+        #expect(p["verdict"]?.jsonValue as? String == "notSky")
+        #expect((p["edge_density"]?.jsonValue as? Double) == 0.2)
+        #expect((p["tile_variance"]?.jsonValue as? Double) == 0.1)
+        #expect((p["gps_accuracy_m"]?.jsonValue as? Double) == 12)
+    }
+
+    @Test func outdoorGatePropertiesHandleMissingFeaturesAndGps() {
+        let p = CatchTelemetry.outdoorGateProperties(verdict: .uncertain, features: nil, gpsAccuracyMeters: nil)
+        #expect(p["verdict"]?.jsonValue as? String == "uncertain")
+        #expect(p["features_available"]?.jsonValue as? Bool == false)
+        #expect(p["gps_accuracy_m"] == nil)
+    }
+
+    @Test func gateEventNamesAreStable() {
+        #expect(CatchTelemetry.outdoorGateShadowEvent == "outdoor_gate_shadow")
+        #expect(CatchTelemetry.blockedOutdoorsEvent == "catch_blocked_outdoors")
+    }
 }
