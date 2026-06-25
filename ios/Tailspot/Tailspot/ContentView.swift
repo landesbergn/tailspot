@@ -147,6 +147,11 @@ struct ContentView: View {
     /// Bumped on each enforced block so the nudge's auto-dismiss timer
     /// re-arms (`.task(id:)`) on a rapid second block within the window.
     @State private var nudgeToken = 0
+    /// Ambient "you're indoors" hint, shown proactively when the camera
+    /// has read a confident not-sky frame for a sustained spell (so a
+    /// brief misread doesn't nag). Auto-clears the moment it sees sky.
+    @State private var pointedIndoors = false
+    @State private var indoorStreak = 0
     /// Latched compass warning. Set true after `compassBadDebounce`
     /// seconds of continuously-bad readings; cleared when accuracy
     /// crosses back under `compassGoodThreshold`. Drives the
@@ -616,6 +621,7 @@ struct ContentView: View {
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
         .overlay(alignment: .bottom) { indoorNudgeBanner }
+        .overlay(alignment: .top) { indoorHintBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -678,6 +684,21 @@ struct ContentView: View {
             // nonisolated and lock-guarded for exactly that.
             frameBridge.frameHandler = { [weak visualConfirm] buffer in
                 visualConfirm?.ingestFrame(buffer)
+            }
+        }
+        // Ambient indoor hint: poll the gate verdict ~1 Hz off the
+        // already-computed sky features (no extra camera work) and
+        // debounce a sustained not-sky read into `pointedIndoors`.
+        .task {
+            while !Task.isCancelled {
+                let verdict = computeOutdoorVerdict(
+                    features: visualConfirm.latestSkyFeatures,
+                    gps: location.horizontalAccuracy
+                )
+                indoorStreak = verdict == .notSky ? indoorStreak + 1 : 0
+                let indoors = indoorStreak >= 3   // ~3 s sustained
+                if indoors != pointedIndoors { withAnimation { pointedIndoors = indoors } }
+                try? await Task.sleep(for: .seconds(1))
             }
         }
         .sheet(isPresented: Binding(
@@ -744,6 +765,29 @@ struct ContentView: View {
     /// Transient "you're indoors" nudge shown when the authenticity gate
     /// blocks a catch (enforcing + not-sky). Auto-dismisses; tone is
     /// light, not scolding.
+    /// Proactive ambient hint while the phone is pointed indoors — so the
+    /// user knows to head outside before they even try to catch. Driven by
+    /// the debounced `pointedIndoors`; auto-clears when aimed at sky.
+    @ViewBuilder
+    private var indoorHintBanner: some View {
+        if pointedIndoors {
+            HStack(spacing: 7) {
+                Image(systemName: "sun.max")
+                    .foregroundStyle(Brand.Color.cyan)
+                    .accessibilityHidden(true)
+                Text("Head outside — Tailspot catches planes in the sky")
+                    .font(Brand.Font.mono(size: 11, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textPrimary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+            .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+            .padding(.top, 60)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     @ViewBuilder
     private var indoorNudgeBanner: some View {
         if showIndoorNudge {

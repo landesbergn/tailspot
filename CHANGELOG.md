@@ -25,6 +25,10 @@ Product calls from Noah after reviewing the rendered screens:
   (`edgeBusy 0.08`, `varianceBusy 0.0275`, `warmThreshold 0.02`) passes ~96% of
   plane/sky frames and blocks ~63% of interiors. Heuristic ceiling ~85% balanced
   on the set; a learned indoor/outdoor classifier is the path beyond that.
+- **Proactive indoor hint.** The gate signal runs every camera frame, so a
+  sustained not-sky read now surfaces an ambient "head outside" banner
+  (debounced ~3s, auto-clears on sky) — warning before a catch is attempted,
+  complementing the catch-time block.
 
 Decision: ship it enforcing and learn from real users (the override rate) rather
 than gate the rollout on a formal field test. Full `TailspotTests` suite green.
