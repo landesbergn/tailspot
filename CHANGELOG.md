@@ -19,6 +19,12 @@ Product calls from Noah after reviewing the rendered screens:
   `catch_gate_override`, the calibration signal). Removed the debug "Indoor block"
   row and the `outdoor_gate_shadow` event / `enforced` flag.
 - **No user-facing beta toggles** (visual confirmation stays dev-only).
+- **Tuned the gate thresholds against a 48-image labeled set** (24 plane/sky +
+  24 interior; `tools/authenticity-gate/{tune.py,CALIBRATION.md}`). The old
+  thresholds blocked only ~12% of interiors; the new fail-open knee
+  (`edgeBusy 0.08`, `varianceBusy 0.0275`, `warmThreshold 0.02`) passes ~96% of
+  plane/sky frames and blocks ~63% of interiors. Heuristic ceiling ~85% balanced
+  on the set; a learned indoor/outdoor classifier is the path beyond that.
 
 Decision: ship it enforcing and learn from real users (the override rate) rather
 than gate the rollout on a formal field test. Full `TailspotTests` suite green.

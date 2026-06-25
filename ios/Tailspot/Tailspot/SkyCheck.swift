@@ -56,20 +56,24 @@ nonisolated struct SkyFeatures: Sendable, Equatable {
 
 nonisolated struct SkyCheck {
 
-    /// Tuning constants. **Retune against the offline corpus (U6,
-    /// tools/authenticity-gate) — do not hand-tweak without new labeled
-    /// indoor/outdoor/night sessions.** Conservative by design so only
-    /// clear interiors reach `.notSky`.
+    /// Tuning constants — calibrated 2026-06-25 against a 48-image labeled
+    /// corpus (24 plane/sky PASS + 24 interior BLOCK; see
+    /// tools/authenticity-gate). Balanced point favouring fail-open:
+    /// ~96% of plane/sky frames pass, ~63% of interiors blocked (vs 12%
+    /// before). `warmThreshold` is the trade-off knob — lower blocks more
+    /// interiors but false-blocks more warm/cluttered skies; raise it to
+    /// be more permissive. Retune only against new labeled images.
     struct Thresholds: Sendable, Equatable {
         /// At/above either of these the frame is "busy" (structured).
-        var edgeBusy: Double = 0.12
-        var varianceBusy: Double = 0.06
+        var edgeBusy: Double = 0.08
+        var varianceBusy: Double = 0.0275
         /// At/below BOTH of these the frame is "smooth" (sky-like).
         var edgeSmooth: Double = 0.06
-        var varianceSmooth: Double = 0.03
-        /// Warm artificial light, but only trusted when there's enough
-        /// light to believe the white balance.
-        var warmThreshold: Double = 0.18
+        var varianceSmooth: Double = 0.02
+        /// Warm artificial light, only trusted when there's enough light
+        /// to believe the white balance. Sky is blue/cool (warmth < this)
+        /// so it never blocks, even when cloudy/busy.
+        var warmThreshold: Double = 0.02
         var luminanceForColorTrust: Double = 0.12
 
         static let `default` = Thresholds()
