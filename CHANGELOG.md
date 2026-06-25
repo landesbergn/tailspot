@@ -5,6 +5,86 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-25 — Bet A pivot: all eggs into the indoor gate — branch `feat/bet-a-real-catch-trust`
+
+Product calls from Noah after reviewing the rendered screens:
+
+- **Scrapped the "is this right?" confirm/deny affordance** — removed the reveal
+  prompt, the `catch_confirmed`/`catch_denied` events, and the `Catch.confirmed`
+  field. Kept the passive `catch_performed`/`catch_deleted` events (a delete is
+  itself a "didn't trust it" signal).
+- **The gate now ships enforcing by default** — no shadow mode, no dev toggle.
+  `performCatch` split into a gate check + `runCatch`; a `.notSky` verdict blocks
+  with the nudge and a one-tap **"Catch anyway"** escape (fires
+  `catch_gate_override`, the calibration signal). Removed the debug "Indoor block"
+  row and the `outdoor_gate_shadow` event / `enforced` flag.
+- **No user-facing beta toggles** (visual confirmation stays dev-only).
+- **Tuned the gate thresholds against a 48-image labeled set** (24 plane/sky +
+  24 interior; `tools/authenticity-gate/{tune.py,CALIBRATION.md}`). The old
+  thresholds blocked only ~12% of interiors; the new fail-open knee
+  (`edgeBusy 0.08`, `varianceBusy 0.0275`, `warmThreshold 0.02`) passes ~96% of
+  plane/sky frames and blocks ~63% of interiors. Heuristic ceiling ~85% balanced
+  on the set; a learned indoor/outdoor classifier is the path beyond that.
+- **Proactive indoor hint.** The gate signal runs every camera frame, so a
+  sustained not-sky read now surfaces an ambient "Maybe try looking outside 😉"
+  banner (debounced ~3s, auto-clears on sky) — warning before a catch is
+  attempted, complementing the catch-time block.
+- **Field-test recalibration → block on warm light alone.** First on-device test:
+  pointed at a plain warm-lit ceiling, no warning fired. The ceiling read
+  `edge 0.02` — as *smooth as the sky* — so the "busy AND warm" rule never
+  triggered (a featureless ceiling has no clutter to detect; structure can't
+  separate it from sky). Only its warm light distinguishes the two. Recalibrated
+  the rule to **block on warmth alone** (drop the busy requirement):
+  `warmThreshold 0.04`, `lumTrust 0.12`. Now ~92% of plane/sky frames pass and
+  ~67% of interiors block, including smooth/blank warm ceilings. Cost: warm/golden
+  skies can false-block (recoverable via "Catch anyway"); **cool-lit interiors
+  still slip through** — added a backlog item (PLAN §9 #11) for a learned
+  indoor/outdoor classifier as the real fix, gated on the real-user override rate.
+  New regression test `smoothWarmCeilingIsNotSky` pins the field case.
+
+Decision: ship it enforcing and learn from real users (the override rate) rather
+than gate the rollout on a formal field test. Full `TailspotTests` suite green;
+Release device build clean. **Shipped to `main` 2026-06-25 via PR #70** (rebased
+onto the emitter-category work from PRs #69/#71); TestFlight build remains Noah's
+call.
+
+## 2026-06-24 — Bet A: make the catch real (telemetry + v1 authenticity gate) — branch `feat/bet-a-real-catch-trust`
+
+Executed the Bet A plan (`docs/plans/2026-06-24-001-feat-bet-a-real-catch-trust-plan.md`).
+Research reframed the track: the regression bench (#2) and the visual-confirmation
+pipeline (#3) were already built, so the round focused on the genuinely-new work —
+catch-confirmation telemetry and the v1 "are you outdoors?" gate. Continued and
+shipped 2026-06-25 (see the entry above; PR #70).
+
+- **Catch-confirmation telemetry (U1–U2).** `catch_performed` (+ `is_duplicate`)
+  and `catch_deleted` events, plus a subtle reveal-moment "is this right?"
+  confirm/deny → `catch_confirmed` / `catch_denied` and an additive
+  `Catch.confirmed` flag. The north-star (catch-confirmation-rate) is now a real
+  PostHog funnel — it previously had no delete/mis-ID signal. Pure `CatchTelemetry`
+  helper. Single-catch confirm only (multi-catch deferred).
+- **v1 authenticity gate (U4–U7) — the indoor-catch fix.** New `SkyCheck` answers
+  "pointed at open sky?" from frame structure + colour (night-aware — never
+  brightness, so a dark night sky still reads as sky); the camera is decisive and
+  **fails open** (only a confident warm-lit-interior `notSky` blocks; GPS accuracy
+  is logged but never blocks on its own). Ships **shadow-mode first**
+  (`outdoor_gate_shadow`, never blocks); enforcement (`catch_blocked_outdoors` + a
+  friendly "head outside" nudge) is flag-gated, default **off** until validated. A
+  debug-overlay "Sky gate" row flips shadow↔enforce on device. Offline validator +
+  field protocol in `tools/authenticity-gate/`.
+- **Visual confirmation (U8).** Kept dev-only (debug-overlay toggle) for now —
+  no user-facing Settings toggle until the field gate validates it.
+- **Privacy (U3).** Manifest finalized; new events ride the existing Product
+  Interaction declaration (no new data type). ASC nutrition-label sync is Noah's
+  manual step.
+- **#2 documented shipped.** `os_log` capture is session-scoped via `LogCapture`
+  (from `OSLogStore` at recording-stop); decided **not** to add an always-on log.
+- **Model licensing (U10).** Bundled detector is stock YOLOX-S COCO (Apache-2.0,
+  via `pixeltable-yolox`) — permissive, no AGPL issue; provenance + Apache-2.0
+  compliance checklist recorded in `tools/visual-confirmation/MODEL-LICENSE.md`.
+- **Remaining (Noah, on device):** run the two field gates (visual-confirmation
+  ≥2× error reduction; authenticity-gate false-block check) then flip the Release
+  defaults; bundle the YOLOX `LICENSE`/NOTICE + Attributions-page credit.
+
 ## 2026-06-24 — Onboarding: suggested handles are always free (PR #67)
 
 First-run bug: the handle step offered the same four HARDCODED chips

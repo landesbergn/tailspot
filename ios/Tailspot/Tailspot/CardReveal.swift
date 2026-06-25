@@ -42,7 +42,6 @@ struct CardReveal: View {
     /// Rendered share-card image, prepared once on appear (ImageRenderer is
     /// synchronous and this view animates — never render it on the body path).
     @State private var shareImage: Image?
-
     var body: some View {
         ZStack {
             // Backdrop — rarity-tinted radial bloom with subtle light
@@ -296,6 +295,7 @@ struct CardReveal: View {
         }
         .frame(maxWidth: 360)
     }
+
 }
 
 // MARK: - Card back

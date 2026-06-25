@@ -138,6 +138,20 @@ struct ContentView: View {
     /// the multi-button chrome. T8 will re-wire inside the new merged
     /// `performCatch(mode:)`. Reveal-dismiss callbacks still clear it.
     @State private var captureInFlight = false
+    /// Transient "head outside" nudge shown when the gate blocks an
+    /// indoor catch.
+    @State private var showIndoorNudge = false
+    /// The blocked catch's "Catch anyway" override — set when the gate
+    /// blocks, run if the user taps through the nudge.
+    @State private var overrideCatch: (() -> Void)?
+    /// Bumped on each enforced block so the nudge's auto-dismiss timer
+    /// re-arms (`.task(id:)`) on a rapid second block within the window.
+    @State private var nudgeToken = 0
+    /// Ambient "you're indoors" hint, shown proactively when the camera
+    /// has read a confident not-sky frame for a sustained spell (so a
+    /// brief misread doesn't nag). Auto-clears the moment it sees sky.
+    @State private var pointedIndoors = false
+    @State private var indoorStreak = 0
     /// Latched compass warning. Set true after `compassBadDebounce`
     /// seconds of continuously-bad readings; cleared when accuracy
     /// crosses back under `compassGoodThreshold`. Drives the
@@ -606,6 +620,8 @@ struct ContentView: View {
         }
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
+        .overlay(alignment: .bottom) { indoorNudgeBanner }
+        .overlay(alignment: .top) { indoorHintBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -670,6 +686,21 @@ struct ContentView: View {
                 visualConfirm?.ingestFrame(buffer)
             }
         }
+        // Ambient indoor hint: poll the gate verdict ~1 Hz off the
+        // already-computed sky features (no extra camera work) and
+        // debounce a sustained not-sky read into `pointedIndoors`.
+        .task {
+            while !Task.isCancelled {
+                let verdict = computeOutdoorVerdict(
+                    features: visualConfirm.latestSkyFeatures,
+                    gps: location.horizontalAccuracy
+                )
+                indoorStreak = verdict == .notSky ? indoorStreak + 1 : 0
+                let indoors = indoorStreak >= 3   // ~3 s sustained
+                if indoors != pointedIndoors { withAnimation { pointedIndoors = indoors } }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
         .sheet(isPresented: Binding(
             get: { replayURL != nil },
             set: { if !$0 { replayURL = nil } }
@@ -731,6 +762,77 @@ struct ContentView: View {
     /// Tap opens `CompassCalibrationSheet` for the figure-8
     /// instructions. Surfaces only after `compassBadDebounce` seconds
     /// of consistently-bad readings (see `updateCompassWarning`).
+    /// Transient "you're indoors" nudge shown when the authenticity gate
+    /// blocks a catch (enforcing + not-sky). Auto-dismisses; tone is
+    /// light, not scolding.
+    /// Proactive ambient hint while the phone is pointed indoors — so the
+    /// user knows to head outside before they even try to catch. Driven by
+    /// the debounced `pointedIndoors`; auto-clears when aimed at sky.
+    @ViewBuilder
+    private var indoorHintBanner: some View {
+        if pointedIndoors {
+            Text("Maybe try looking outside 😉")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+            .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+            .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+            .padding(.top, 60)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder
+    private var indoorNudgeBanner: some View {
+        if showIndoorNudge {
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "airplane")
+                        .foregroundStyle(Brand.Color.cyan)
+                        .accessibilityHidden(true)
+                    Text("Looks like you're indoors — head outside to catch a plane!")
+                        .font(Brand.Font.mono(size: 12, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                }
+                // Escape hatch: a rare false-block (e.g. a dramatic warm
+                // sunset sky) is never a dead end. The tap-rate is our
+                // calibration signal (catch_gate_override).
+                Button {
+                    withAnimation { showIndoorNudge = false }
+                    let go = overrideCatch
+                    overrideCatch = nil
+                    go?()
+                } label: {
+                    Text("Catch anyway")
+                        .font(Brand.Font.mono(size: 12, weight: .bold))
+                        .foregroundStyle(Brand.Color.cyan)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Brand.Color.cyan.opacity(0.12), in: .capsule)
+                        .overlay(Capsule().strokeBorder(Brand.Color.cyan.opacity(0.4), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Brand.Color.bgElevated.opacity(0.95), in: .rect(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Brand.Color.alertCaution.opacity(0.5), lineWidth: 1)
+            )
+            .padding(.horizontal, 32)
+            .padding(.bottom, 130)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .task(id: nudgeToken) {
+                try? await Task.sleep(for: .seconds(4.5))
+                withAnimation { showIndoorNudge = false }
+                overrideCatch = nil
+            }
+        }
+    }
+
     @ViewBuilder
     private var cautionBadge: some View {
         if isHeadingAccuracyBad {
@@ -883,6 +985,49 @@ struct ContentView: View {
         }
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
+        // v1 authenticity gate. Evaluate the frame the user tapped: a
+        // confident "not sky" (indoors) blocks the catch and shows a
+        // nudge with a one-tap "Catch anyway" override. Everything else
+        // (sky / uncertain / no signal) proceeds — fail open.
+        let skyFeatures = visualConfirm.latestSkyFeatures
+        let gpsAccuracy = location.horizontalAccuracy
+        if computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy) == .notSky {
+            CatchTelemetry.fireBlockedOutdoors(
+                verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+            )
+            // Stash the override so the nudge's "Catch anyway" runs the
+            // catch unguarded — a rare false-block is never a dead end.
+            // How often it's tapped is our calibration signal.
+            overrideCatch = {
+                CatchTelemetry.fireGateOverride(
+                    verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+                )
+                runCatch(mode: mode, screenSize: screenSize, positions: positions)
+            }
+            nudgeToken &+= 1
+            withAnimation { showIndoorNudge = true }
+            return
+        }
+        runCatch(mode: mode, screenSize: screenSize, positions: positions)
+    }
+
+    /// The actual catch — capture the JPEG, build + save the rows, fire
+    /// `catch_performed`, present the reveal. Bypasses the authenticity
+    /// gate (the gate decision lives in `performCatch`; the nudge's
+    /// "Catch anyway" calls this directly).
+    private func runCatch(
+        mode: CaptureMode,
+        screenSize: CGSize,
+        positions: [String: CGPoint]
+    ) {
+        let icaos: [String]
+        switch mode {
+        case .disabled:         return
+        case .single(let icao): icaos = [icao]
+        case .multi(let list):  icaos = list
+        }
+        guard !icaos.isEmpty else { return }
+        guard !captureInFlight else { return }
         captureInFlight = true
 
         // Snapshot observer pose + visible-aircraft map up front. The
@@ -900,6 +1045,13 @@ struct ContentView: View {
         )
 
         Task { @MainActor in
+            // Backstop: the latch is normally cleared by the reveal's
+            // dismiss callbacks, but if this task exits before a reveal
+            // is presented (e.g. an error/cancellation at an await) the
+            // catch button would soft-lock. Clear it unless a sheet
+            // actually went up.
+            var revealPresented = false
+            defer { if !revealPresented { captureInFlight = false } }
             // One JPEG, reused for every new row in this catch. If the
             // camera isn't ready (auth denied, session not running),
             // `captureJPEG` returns nil — Catches are still valid
@@ -1019,9 +1171,25 @@ struct ContentView: View {
                 Log.adsb.notice("Catch: all \(duplicates.count, privacy: .public) target(s) already in Hangar")
             }
 
+            // Catch-confirmation telemetry (north-star). One event per
+            // processed target: new catches carry rarity/type/slant,
+            // duplicates record the dedup hit. Fire-and-forget.
+            for row in newCatches { CatchTelemetry.firePerformed(row) }
+            for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
+
             presentReveal(newCatches: newCatches, duplicates: duplicates,
                           visibleByIcao: visibleByIcao)
+            revealPresented = (pendingReveal != nil || pendingMultiReveal != nil)
         }
+    }
+
+    /// v1 authenticity gate decision. Pure: maps the latest camera-frame
+    /// sky features + GPS accuracy to the "pointed at open sky?" verdict.
+    /// Missing features (camera not warmed up) → `.uncertain`, which
+    /// always allows (fail open). Telemetry + the enforce/block decision
+    /// live at the call site (`performCatch`).
+    private func computeOutdoorVerdict(features: SkyFeatures?, gps: Double?) -> SkyVerdict {
+        features.map { SkyCheck().verdict(features: $0, gpsAccuracyMeters: gps) } ?? .uncertain
     }
 
     /// Picks the right reveal payload based on what landed.
@@ -1380,6 +1548,7 @@ struct ContentView: View {
                 recordingRow
                 analyzeRow
                 visualConfirmRow
+                gateDebugRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1617,6 +1786,28 @@ struct ContentView: View {
         .onTapGesture {
             guard visualConfirm.isAvailable else { return }
             visualConfirm.enabled.toggle()
+        }
+    }
+
+    /// Live gate readout (debug): the current SkyCheck verdict + raw
+    /// features off the latest camera frame, so the gate can be eyeballed
+    /// in the field. "(no frame)" means the frame tap isn't delivering.
+    private var gateDebugRow: some View {
+        let f = visualConfirm.latestSkyFeatures
+        let v = computeOutdoorVerdict(features: f, gps: location.horizontalAccuracy)
+        return HStack(spacing: 8) {
+            Text("Gate:")
+            Text(v.rawValue)
+                .foregroundStyle(v == .notSky ? Brand.Color.alertCaution : Brand.Color.textTertiary)
+                .bold()
+            if let f {
+                Text(String(format: "e%.2f v%.3f w%+.2f l%.2f",
+                            f.edgeDensity, f.tileVariance, f.warmth, f.meanLuminance))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            } else {
+                Text("(no frame)").foregroundStyle(Brand.Color.alertWarning).bold()
+            }
+            Spacer()
         }
     }
 
