@@ -43,15 +43,18 @@ Product calls from Noah after reviewing the rendered screens:
   New regression test `smoothWarmCeilingIsNotSky` pins the field case.
 
 Decision: ship it enforcing and learn from real users (the override rate) rather
-than gate the rollout on a formal field test. Full `TailspotTests` suite green.
+than gate the rollout on a formal field test. Full `TailspotTests` suite green;
+Release device build clean. **Shipped to `main` 2026-06-25 via PR #70** (rebased
+onto the emitter-category work from PRs #69/#71); TestFlight build remains Noah's
+call.
 
 ## 2026-06-24 — Bet A: make the catch real (telemetry + v1 authenticity gate) — branch `feat/bet-a-real-catch-trust`
 
 Executed the Bet A plan (`docs/plans/2026-06-24-001-feat-bet-a-real-catch-trust-plan.md`).
 Research reframed the track: the regression bench (#2) and the visual-confirmation
 pipeline (#3) were already built, so the round focused on the genuinely-new work —
-catch-confirmation telemetry and the v1 "are you outdoors?" gate. On branch,
-full `TailspotTests` green; awaiting device review + PR.
+catch-confirmation telemetry and the v1 "are you outdoors?" gate. Continued and
+shipped 2026-06-25 (see the entry above; PR #70).
 
 - **Catch-confirmation telemetry (U1–U2).** `catch_performed` (+ `is_duplicate`)
   and `catch_deleted` events, plus a subtle reveal-moment "is this right?"
