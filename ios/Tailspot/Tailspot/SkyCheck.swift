@@ -59,21 +59,23 @@ nonisolated struct SkyCheck {
     /// Tuning constants — calibrated 2026-06-25 against a 48-image labeled
     /// corpus (24 plane/sky PASS + 24 interior BLOCK; see
     /// tools/authenticity-gate). Balanced point favouring fail-open:
-    /// ~96% of plane/sky frames pass, ~63% of interiors blocked (vs 12%
-    /// before). `warmThreshold` is the trade-off knob — lower blocks more
-    /// interiors but false-blocks more warm/cluttered skies; raise it to
-    /// be more permissive. Retune only against new labeled images.
+    /// ~92% of plane/sky frames pass, ~67% of interiors blocked (incl.
+    /// smooth/blank warm ceilings). Recalibrated 2026-06-25 after a field
+    /// test: block on WARM light rather than clutter, because a blank
+    /// ceiling is as smooth as the sky — structure can't separate them,
+    /// but the room's warm light can. Cost: warm/golden skies can
+    /// false-block (recoverable via "Catch anyway"); cool-lit interiors
+    /// still slip through — a learned classifier is the real fix (PLAN §9).
+    /// `warmThreshold` is the dial. Retune only against new labeled images.
     struct Thresholds: Sendable, Equatable {
-        /// At/above either of these the frame is "busy" (structured).
-        var edgeBusy: Double = 0.08
-        var varianceBusy: Double = 0.0275
-        /// At/below BOTH of these the frame is "smooth" (sky-like).
+        /// At/below BOTH of these the frame is "smooth" (sky-like, no
+        /// clutter) — used to tell confident sky from an ambiguous frame.
         var edgeSmooth: Double = 0.06
         var varianceSmooth: Double = 0.02
         /// Warm artificial light, only trusted when there's enough light
-        /// to believe the white balance. Sky is blue/cool (warmth < this)
-        /// so it never blocks, even when cloudy/busy.
-        var warmThreshold: Double = 0.02
+        /// to believe the white balance. Sky is blue/cool (warmth < this),
+        /// so it never blocks; warm-lit frames (interiors, sunsets) do.
+        var warmThreshold: Double = 0.04
         var luminanceForColorTrust: Double = 0.12
 
         static let `default` = Thresholds()
@@ -89,31 +91,25 @@ nonisolated struct SkyCheck {
     ///   — see the body. Kept in the signature for that telemetry and for
     ///   future tuning.
     func verdict(features f: SkyFeatures, gpsAccuracyMeters: Double?) -> SkyVerdict {
-        // Primary signal: structure.
-        let busy = f.edgeDensity >= thresholds.edgeBusy
-            || f.tileVariance >= thresholds.varianceBusy
-        let smooth = f.edgeDensity <= thresholds.edgeSmooth
-            && f.tileVariance <= thresholds.varianceSmooth
-
-        // Warmth only counts when there's enough light to trust color —
-        // this is what keeps a DARK (but smooth, neutral) night sky from
-        // ever reading as warm/interior.
+        // Warm artificial light is the decisive indoor signal: a blank
+        // ceiling is as SMOOTH as the sky, so structure alone can't tell
+        // them apart — the room's warm light can. Warmth is only trusted
+        // with enough light to believe the white balance, which keeps a
+        // DARK (smooth, neutral) night sky from ever reading as warm.
         let colorTrustworthy = f.meanLuminance >= thresholds.luminanceForColorTrust
         let warm = colorTrustworthy && f.warmth >= thresholds.warmThreshold
 
-        // The CAMERA is decisive. Block only on a busy frame lit by warm
-        // artificial light — the signature of an interior. GPS accuracy is
-        // recorded in telemetry but is deliberately NOT a blocking signal:
-        // a degraded fix is common outdoors (urban canyon, cold start,
-        // tree cover) and must never, on its own, strand a real catch
-        // (review 2026-06-24). Cost: a cool-lit or dark interior may not
-        // block — acceptable, since missing a cheat beats false-blocking a
-        // genuine catch (fail open).
-        if busy && warm { return .notSky }
+        // Warm-lit → interior (or a warm/golden sky, which "Catch anyway"
+        // recovers). GPS is recorded in telemetry but never blocks — a
+        // degraded fix is common outdoors and must not strand a real catch.
+        if warm { return .notSky }
 
-        // Confident sky: smooth and not warm (day OR night).
-        if smooth && !warm { return .sky }
+        // Smooth + cool → confident open sky (day, night, overcast, blue).
+        let smooth = f.edgeDensity <= thresholds.edgeSmooth
+            && f.tileVariance <= thresholds.varianceSmooth
+        if smooth { return .sky }
 
+        // Busy + cool → ambiguous (outdoor clutter); allow — fail open.
         return .uncertain
     }
 }

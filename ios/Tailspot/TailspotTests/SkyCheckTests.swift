@@ -50,6 +50,15 @@ struct SkyCheckVerdictTests {
         #expect(gate.verdict(features: interior(warmth: 0.30), gpsAccuracyMeters: 8) == .notSky)
     }
 
+    @Test func smoothWarmCeilingIsNotSky() {
+        // Field case (2026-06-25): a blank ceiling reads SMOOTH (e0.02),
+        // identical to sky in structure — only the room's warm light tells
+        // them apart. Blocking on warmth catches it. (warmth 0.13 ≥ 0.04,
+        // lum 0.20 ≥ 0.12 → warm → notSky.)
+        let ceiling = SkyFeatures(edgeDensity: 0.02, tileVariance: 0.01, warmth: 0.13, meanLuminance: 0.20)
+        #expect(gate.verdict(features: ceiling, gpsAccuracyMeters: 19) == .notSky)
+    }
+
     @Test func warmIndoorBlocksRegardlessOfGps() {
         // A busy, warm-lit interior blocks on the camera signal alone —
         // GPS state (sharp / degraded / no fix) is irrelevant.

@@ -40,6 +40,17 @@ Heuristic ceiling is ~85% balanced on this set. Intrinsic misses:
 on-device indoor/outdoor (or sky-segmentation) classifier is the path —
 revisit if the real-user override rate is high.
 
+## Update — field test (2026-06-25)
+
+On device, a plain **warm-lit ceiling** read `edge 0.02` (as smooth as the
+sky), so the "busy AND warm" rule never fired — a blank ceiling has no
+clutter to detect. Recalibrated to block on **warmth alone** (drop the
+busy requirement): `warmThreshold 0.04`, `lumTrust 0.12`. Now ~92% of
+plane/sky frames pass and ~67% of interiors block, including smooth warm
+ceilings. Cost: warm/golden skies can false-block (recoverable via "Catch
+anyway"); **cool-lit interiors still slip through** — the learned
+classifier (backlogged) is the real fix.
+
 ## Re-tune
 
 `python3 tune.py <dir-of-pass-*.jpg-and-block-*.jpg>` → operating points;

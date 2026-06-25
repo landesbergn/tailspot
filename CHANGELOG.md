@@ -26,9 +26,21 @@ Product calls from Noah after reviewing the rendered screens:
   plane/sky frames and blocks ~63% of interiors. Heuristic ceiling ~85% balanced
   on the set; a learned indoor/outdoor classifier is the path beyond that.
 - **Proactive indoor hint.** The gate signal runs every camera frame, so a
-  sustained not-sky read now surfaces an ambient "head outside" banner
-  (debounced ~3s, auto-clears on sky) — warning before a catch is attempted,
-  complementing the catch-time block.
+  sustained not-sky read now surfaces an ambient "Maybe try looking outside 😉"
+  banner (debounced ~3s, auto-clears on sky) — warning before a catch is
+  attempted, complementing the catch-time block.
+- **Field-test recalibration → block on warm light alone.** First on-device test:
+  pointed at a plain warm-lit ceiling, no warning fired. The ceiling read
+  `edge 0.02` — as *smooth as the sky* — so the "busy AND warm" rule never
+  triggered (a featureless ceiling has no clutter to detect; structure can't
+  separate it from sky). Only its warm light distinguishes the two. Recalibrated
+  the rule to **block on warmth alone** (drop the busy requirement):
+  `warmThreshold 0.04`, `lumTrust 0.12`. Now ~92% of plane/sky frames pass and
+  ~67% of interiors block, including smooth/blank warm ceilings. Cost: warm/golden
+  skies can false-block (recoverable via "Catch anyway"); **cool-lit interiors
+  still slip through** — added a backlog item (PLAN §9 #11) for a learned
+  indoor/outdoor classifier as the real fix, gated on the real-user override rate.
+  New regression test `smoothWarmCeilingIsNotSky` pins the field case.
 
 Decision: ship it enforcing and learn from real users (the override rate) rather
 than gate the rollout on a formal field test. Full `TailspotTests` suite green.
