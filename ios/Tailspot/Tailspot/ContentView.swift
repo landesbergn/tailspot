@@ -771,16 +771,11 @@ struct ContentView: View {
     @ViewBuilder
     private var indoorHintBanner: some View {
         if pointedIndoors {
-            HStack(spacing: 7) {
-                Image(systemName: "sun.max")
-                    .foregroundStyle(Brand.Color.cyan)
-                    .accessibilityHidden(true)
-                Text("Head outside — Tailspot catches planes in the sky")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            Text("Maybe try looking outside 😉")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
             .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
             .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
             .padding(.top, 60)
