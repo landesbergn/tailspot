@@ -1128,6 +1128,9 @@ struct ContentView: View {
                         feed: observed?.aircraft.registration, metadata: metadata?.registration),
                     typecode: Catch.preferredAirframeField(
                         feed: observed?.aircraft.typecode, metadata: metadata?.typecode),
+                    // Emitter category is feed-only (the metadata endpoint has no
+                    // such field), so record the live value as-observed.
+                    category: observed?.aircraft.category,
                     altitudeMeters: observed?.aircraft.altitudeMeters,
                     velocityMps: observed?.aircraft.velocityMps
                 )

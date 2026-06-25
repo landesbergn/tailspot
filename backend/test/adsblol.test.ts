@@ -93,6 +93,63 @@ describe("normalizeAdsbLol", () => {
     expect(dlh.registration).toBe("D-AIHK");
   });
 
+  it("passes the emitter category through (heavy A5 on the in-bbox rows)", () => {
+    expect(mustGet(byHex, "a92d6d").category).toBe("A5");
+    expect(mustGet(byHex, "3c6444").category).toBe("A5");
+  });
+
+  it("normalizes the emitter category: A7 rotorcraft passes through, missing/blank omit, lowercase upcased", () => {
+    const resp: AdsbLolResponse = {
+      now: FIXTURE.now,
+      ac: [
+        // A medevac rotorcraft — A7 is the authoritative "helicopter" signal.
+        {
+          hex: "a1b2c3",
+          flight: "REH1",
+          lat: 37.5,
+          lon: -122.5,
+          alt_baro: 1200,
+          seen_pos: 1.0,
+          category: "A7",
+        },
+        // No category at all → key omitted (undefined on the wire).
+        {
+          hex: "d4e5f6",
+          flight: "NOCAT",
+          lat: 37.55,
+          lon: -122.45,
+          alt_baro: 30000,
+          seen_pos: 1.0,
+        },
+        // Blank category → trimmed away to undefined, never "" on the wire.
+        {
+          hex: "070809",
+          flight: "BLANK",
+          lat: 37.6,
+          lon: -122.4,
+          alt_baro: 30000,
+          seen_pos: 1.0,
+          category: "  ",
+        },
+        // Lowercase from a sloppy feed → upcased to the canonical code.
+        {
+          hex: "0a0b0c",
+          flight: "LOWER",
+          lat: 37.65,
+          lon: -122.35,
+          alt_baro: 8000,
+          seen_pos: 1.0,
+          category: "a7",
+        },
+      ],
+    };
+    const m = new Map(normalizeAdsbLol(resp, FETCHED_AT, SF_BBOX).map((a) => [a.icao24, a]));
+    expect(mustGet(m, "a1b2c3").category).toBe("A7");
+    expect(mustGet(m, "d4e5f6").category).toBeUndefined();
+    expect(mustGet(m, "070809").category).toBeUndefined();
+    expect(mustGet(m, "0a0b0c").category).toBe("A7");
+  });
+
   it("omits typecode/registration when the upstream row lacks them or they're blank", () => {
     const resp: AdsbLolResponse = {
       now: FIXTURE.now,

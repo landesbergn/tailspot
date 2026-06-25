@@ -50,6 +50,10 @@ nonisolated struct BackendAircraft: Decodable {
     let typecode: String?
     /// Registration / tail (e.g. "9V-SMH") from adsb.lol's `r` field; nil if none.
     let registration: String?
+    /// ADS-B emitter category (e.g. "A5" heavy, "A7" rotorcraft), uppercased by
+    /// the backend; nil when the feed didn't carry one. Same optional/back-compat
+    /// semantics as `typecode`. Drives authoritative rotorcraft tagging.
+    let category: String?
 
     /// Map onto the app's core `Aircraft` value. `originCountry` is
     /// non-optional there (OpenSky always sent it); the backend derives it
@@ -68,7 +72,8 @@ nonisolated struct BackendAircraft: Decodable {
             onGround: onGround,
             positionTimestamp: positionTimestamp.map { Date(timeIntervalSince1970: $0) },
             typecode: typecode,
-            registration: registration
+            registration: registration,
+            category: category
         )
     }
 }
