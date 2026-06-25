@@ -1545,6 +1545,7 @@ struct ContentView: View {
                 recordingRow
                 analyzeRow
                 visualConfirmRow
+                gateDebugRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1782,6 +1783,28 @@ struct ContentView: View {
         .onTapGesture {
             guard visualConfirm.isAvailable else { return }
             visualConfirm.enabled.toggle()
+        }
+    }
+
+    /// Live gate readout (debug): the current SkyCheck verdict + raw
+    /// features off the latest camera frame, so the gate can be eyeballed
+    /// in the field. "(no frame)" means the frame tap isn't delivering.
+    private var gateDebugRow: some View {
+        let f = visualConfirm.latestSkyFeatures
+        let v = computeOutdoorVerdict(features: f, gps: location.horizontalAccuracy)
+        return HStack(spacing: 8) {
+            Text("Gate:")
+            Text(v.rawValue)
+                .foregroundStyle(v == .notSky ? Brand.Color.alertCaution : Brand.Color.textTertiary)
+                .bold()
+            if let f {
+                Text(String(format: "e%.2f v%.3f w%+.2f l%.2f",
+                            f.edgeDensity, f.tileVariance, f.warmth, f.meanLuminance))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            } else {
+                Text("(no frame)").foregroundStyle(Brand.Color.alertWarning).bold()
+            }
+            Spacer()
         }
     }
 
