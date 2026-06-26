@@ -5,6 +5,37 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-26 — Analytics integrity: identity dedup + aircraft detail on `catch_uploaded` — PRs #75, #76
+
+Two analytics-quality fixes plus a one-time PostHog data cleanup. The PRs touch
+disjoint files (#76 deliberately left `Analytics.swift` to #75), so they landed
+independently.
+
+- **Aircraft detail on `catch_uploaded` (PR #75).** The event sent only
+  `rarity`/`points`/`duplicate`, so PostHog couldn't say *which* plane was caught.
+  Added `icao24`, `registration` (tail), `typecode`, `manufacturer`, `model`,
+  `operator_name`, `aircraft_type`, `category`, `callsign`, `place_name` — built in
+  the existing pure `CatchTelemetry.uploadedProperties(...)` (off-MainActor, unit-
+  tested) rather than inlined at the callsite. Nil/blank fields omitted (trimmed,
+  blank-is-absent); no coordinates or user PII; rarity still prefers the server value.
+  4 new tests.
+- **Pre-identification identity split (PR #76).** Root cause: on a fresh install the
+  PostHog SDK `identify()`'d with a throwaway *local* UUID before the server device-id
+  existed, then `ensureRegistered()` overwrote the device-id with the server's — so SDK
+  events (handle) and REST events (`catch_uploaded`) split across two person profiles.
+  Fix: identify only once the server id exists (`DeviceID.currentIfPresent()`, never
+  mints), identify right after a handle is claimed, and fire `app_opened` after
+  registration. New pure `AnalyticsIdentity` decision helpers (`launchIdentity` /
+  `isClaimedHandle`) + tests. Prevents all future fragmentation.
+- **One-time dedup (data, not code).** Merged 6 high-confidence pre-identification
+  duplicate person pairs in PostHog via `$merge_dangerously` (incl. the reported
+  `purple_hour`/anonymous pair) — each verified against production by distinct_id↔person
+  mapping + same-second app-open device coincidence before writing. 11 lower-confidence
+  pairs (mostly iCloud Private Relay / Cupertino, no coincidence proof) left for manual
+  review.
+
+`TailspotTests` green in CI on both PRs.
+
 ## 2026-06-26 — Clear two Xcode Cloud build warnings — branch `fix/build-warnings`
 
 Surfaced by the first Xcode Cloud (TestFlight) build after the portrait + visual-
