@@ -36,12 +36,12 @@
 		hard-pinned to upright portrait: LocationManager.headingOrientation is
 		.portrait and camera elevation derives from pitch assuming a portrait
 		hold (CLAUDE.md), so landscape — and upside-down — would break the
-		heading/elevation math the identify engine relies on. Locking the
-		supported set here is the robust app-wide way to stop iOS rotating the UI.
-		UIRequiresFullScreen=YES is the required companion on a universal
-		(iPad-supporting) target: an app that doesn't support all interface
-		orientations must opt out of iPad multitasking, or App Store validation
-		rejects the build.
+		heading/elevation math the identify engine relies on. Restricting the
+		supported-orientation set is the robust, app-wide way to stop iOS
+		rotating the UI on both iPhone and iPad.
+		(No UIRequiresFullScreen: deprecated as of iOS 26 and ignored — this
+		target's deployment floor is iOS 26.2 — so it only emitted a build
+		warning; the orientation lists above are what actually pin the UI.)
 	-->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
@@ -51,8 +51,6 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<key>UIRequiresFullScreen</key>
-	<true/>
 
 	<!--
 		Generated launch screen + scene manifest — match the

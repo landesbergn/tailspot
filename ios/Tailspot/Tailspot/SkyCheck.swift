@@ -116,7 +116,12 @@ nonisolated struct SkyCheck {
 
 // MARK: - Frame extraction
 
-extension SkyFeatures {
+// `nonisolated`: extensions don't inherit the host type's isolation, so under
+// SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor this extension would be implicitly
+// MainActor-isolated. `extract` is pure pixel math run on the camera video
+// queue (VisualConfirmationPipeline.ingestFrame, a nonisolated sync context),
+// so it must be nonisolated to be callable there without crossing actors.
+nonisolated extension SkyFeatures {
 
     /// Sample a `grid`×`grid` lattice from a 32BGRA pixel buffer and
     /// compute the scene signals. Returns nil for an unsupported format

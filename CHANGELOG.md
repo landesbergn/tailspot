@@ -5,6 +5,25 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-26 — Clear two Xcode Cloud build warnings — branch `fix/build-warnings`
+
+Surfaced by the first Xcode Cloud (TestFlight) build after the portrait + visual-
+confirmation rounds:
+
+- **Dropped `UIRequiresFullScreen` from `Info.plist`.** Added in the portrait-lock
+  round as the (then-)required companion for a portrait-only universal app; Apple
+  deprecated it in iOS 26 and ignores it (deployment floor is 26.2), so it only
+  emitted a warning. The portrait lock is unaffected — `UISupportedInterfaceOrientations`
+  is what actually pins the UI.
+- **Marked `extension SkyFeatures` (frame extraction) `nonisolated`.** Under
+  `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` the extension was implicitly MainActor-
+  isolated, so calling `SkyFeatures.extract` from the nonisolated camera-queue path
+  (`VisualConfirmationPipeline.ingestFrame`) warned about a cross-actor call. `extract`
+  is pure pixel math — `nonisolated` is correct. (The CLAUDE.md "extensions don't
+  inherit isolation" trap, in the wild.)
+
+No behavior change; `TailspotTests` green, Release device build clean.
+
 ## 2026-06-26 — Visual confirmation go-live — branch `feat/visual-confirmation-golive`
 
 Turned on the on-device airplane detector (YOLOX) that snaps the AR aiming
