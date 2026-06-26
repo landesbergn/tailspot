@@ -117,7 +117,13 @@ enum PostHogSessionReplay {
         let hasHandle = AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
         if let id = AnalyticsIdentity.launchIdentity(deviceId: DeviceID.currentIfPresent(),
                                                      hasClaimedHandle: hasHandle) {
-            PostHogSDK.shared.identify(id)
+            // Re-affiliate the on-device handle with the canonical person on every
+            // launch. `identify(_:userProperties:)` `$set`s the handle even when the
+            // distinct_id is unchanged, and posthog-ios dedupes an identical repeat
+            // (so this is idempotent, not event spam). Self-heals a person profile
+            // that's missing the handle. `$set` overwrites existing values.
+            PostHogSDK.shared.identify(id, userProperties: AnalyticsIdentity.launchUserProperties(
+                handle: handle, placeholder: SpotterHandle.defaultPlaceholder))
         }
         Log.analytics.notice("PostHog session replay: enabled")
     }
