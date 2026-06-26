@@ -5,6 +5,35 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-26 — Visual confirmation go-live — branch `feat/visual-confirmation-golive`
+
+Turned on the on-device airplane detector (YOLOX) that snaps the AR aiming
+reticle onto the real plane in the camera, correcting compass wobble. It was
+fully built and running in DEBUG; this ships it to testers. **Ship-and-learn,
+not gate-and-wait** (Noah's call) — same posture as the authenticity gate.
+
+- **Flipped the Release default ON.** `VisualConfirmationPipeline.defaultEnabled`
+  was `#if DEBUG true #else false`; now unconditionally `true`. The debug overlay
+  can still toggle it off on a dev build; production has no user-facing toggle.
+- **Catch-time telemetry** so the rollout is measurable, not vibes: `catch_performed`
+  now carries `visual_confirm_enabled`, `visual_fix_active`, and `visual_fix_confidence`
+  — i.e. of catches, how often the detector was actually locked on, and how
+  confidently. This is the wild "is it helping?" signal (parallel to the gate's
+  `catch_gate_override`).
+- **YOLOX Apache-2.0 attribution** added to the Attributions page
+  (`web/public/attributions.html` + `docs/legal/attributions.md`); also dropped the
+  now-stale OpenSky entry (removed in the 2026-06-21 cutover). **The web deploy is
+  a separate Fly step — Noah's call.**
+- **Why it's safe to just flip:** worst case the detector finds nothing and the
+  bracket falls back to the geometric prediction — it never blocks or alters a
+  catch. Evidence: ran the shipped model on the curated test set + real field
+  crops — reliable (0.76–0.94) on planes large-in-frame, no-ops on distant specks
+  (the documented size cliff). The native-res crop around the predicted spot is the
+  mitigation that keeps closer planes in the model's reliable range.
+
+Full `TailspotTests` green; Release device build clean. Rides the next TestFlight
+build alongside Bet A + the portrait lock.
+
 ## 2026-06-26 — Lock the app to portrait only — branch `feat/portrait-only`
 
 Small, surgical change bundled into the next TestFlight build. `Info.plist`

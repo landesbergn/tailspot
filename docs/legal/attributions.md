@@ -41,17 +41,6 @@ Aircraft type identification uses type designators from **ICAO Document 8643 —
 
 ---
 
-## Aircraft position data (fallback) — OpenSky Network
-
-During the current development phase, aircraft position data may also be sourced from the **OpenSky Network** as a fallback data source.
-
-**Source:** https://opensky-network.org
-**Credit note:** The OpenSky Network, "Bringing up OpenSky: A large-scale ADS-B sensor network for research," IPSN 2014.
-
-> REVIEW: OpenSky's terms restrict operational use of their data to non-profit research and education (see terms-of-service.md §1 and the research document at docs/superpowers/research/2026-06-07-adsb-metadata-sources.md). OpenSky use as a live backend data source requires review or a written agreement with OpenSky. This attribution is included for completeness during the development phase; it should be updated or removed once the backend switches to adsb.lol as primary and OpenSky is no longer used operationally.
-
----
-
 ## Aircraft photos — Planespotters.net
 
 Aircraft photographs shown in the app are provided by **Planespotters.net** via their API. Each photograph is credited to its individual photographer as returned by the API.
@@ -60,6 +49,17 @@ Aircraft photographs shown in the app are provided by **Planespotters.net** via 
 **Per-photo attribution:** Photographer name and link are displayed alongside each photo in the app, as required by Planespotters.net's terms of use.
 
 > REVIEW: Review Planespotters.net's API terms before public beta and App Store launch to confirm that the photographer attribution displayed in the app satisfies their requirements. Their terms may specify minimum attribution display size or link requirements; confirm the in-app display meets the bar.
+
+---
+
+## On-device airplane detection — YOLOX
+
+Tailspot's visual-confirmation feature — which snaps the aiming reticle onto the detected aircraft — uses an on-device CoreML model derived from **YOLOX-Small**, pre-trained on the COCO dataset.
+
+**License:** Apache License 2.0
+**License text:** https://www.apache.org/licenses/LICENSE-2.0
+**Source:** https://github.com/Megvii-BaseDetection/YOLOX (Megvii BaseDetection)
+**Note:** The bundled model is a weight-quantized (INT8) CoreML conversion of the stock YOLOX-S COCO checkpoint, distributed under Apache-2.0 via the pixeltable-yolox project. Weights are unmodified beyond quantization.
 
 ---
 
@@ -76,4 +76,4 @@ The OFL permits use, distribution, and modification of the font, provided the fo
 
 ---
 
-*Last updated: 2026-06-11*
+*Last updated: 2026-06-26*

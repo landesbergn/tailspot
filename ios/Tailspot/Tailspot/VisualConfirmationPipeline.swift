@@ -38,8 +38,11 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// TimelineView body can read it like any other observable state.
     @Published private(set) var fixes: [String: VisualFix] = [:]
 
-    /// Kill switch (debug-overlay toggle). Default ON in Debug builds,
-    /// OFF in Release until the field gate passes.
+    /// Kill switch. Ships ON by default (2026-06-26 go-live — previously
+    /// Release-OFF pending a formal field gate; enabled to learn from real
+    /// users instead, since worst case it no-ops to the geometric prediction).
+    /// The debug overlay can still toggle it off on a dev build; production
+    /// has no user-facing toggle by design.
     var enabled: Bool {
         get { UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? Self.defaultEnabled }
         set {
@@ -50,11 +53,7 @@ final class VisualConfirmationPipeline: ObservableObject {
         }
     }
     static let enabledKey = "tailspot.debug.visualConfirm"
-    #if DEBUG
     private static let defaultEnabled = true
-    #else
-    private static let defaultEnabled = false
-    #endif
 
     /// What the detector should look for, refreshed every render frame.
     nonisolated struct Target: Sendable {
