@@ -5,6 +5,25 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-26 — Lock the app to portrait only — branch `feat/portrait-only`
+
+Small, surgical change bundled into the next TestFlight build. `Info.plist`
+`UISupportedInterfaceOrientations` (and `~ipad`) are now **Portrait only**, plus
+`UIRequiresFullScreen = YES`. No upside-down: the identify engine assumes an
+upright portrait hold (`LocationManager.headingOrientation = .portrait`; camera
+elevation = `90° − pitch`), so landscape/upside-down would break heading + elevation.
+
+- **Why the plist, not code:** locking the supported-orientation set is the robust,
+  app-wide way to stop iOS rotating the UI — no per-view orientation handling needed.
+  A source grep found **no** orientation-adaptive UI code to remove (the only
+  `landscape` hit is `CameraPreview.swift`'s note about the *sensor's* native buffer
+  orientation, which is unrelated to UI rotation and untouched).
+- **`UIRequiresFullScreen`:** required on this universal target (`TARGETED_DEVICE_FAMILY
+  = "1,2"`) — an app that doesn't support all interface orientations must opt out of
+  iPad multitasking or App Store validation rejects the build.
+- Resolves PLAN §9 #16 (was "Deferred") as **not doing landscape** — now enforced,
+  not just de-facto. Full `TailspotTests` green; Release device build clean.
+
 ## 2026-06-25 — Bet A pivot: all eggs into the indoor gate — branch `feat/bet-a-real-catch-trust`
 
 Product calls from Noah after reviewing the rendered screens:
