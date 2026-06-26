@@ -52,6 +52,89 @@ struct CatchTelemetryTests {
         #expect(p["slant_km"] == nil)
     }
 
+    // MARK: - catch_uploaded (aircraft identity)
+
+    @Test func uploadedCarriesFullAircraftIdentity() {
+        let p = CatchTelemetry.uploadedProperties(
+            icao24: "ac5c1f",
+            rarity: "epic",
+            points: 250,
+            duplicate: false,
+            registration: "N628TS",
+            typecode: "B77W",
+            manufacturer: "Boeing",
+            model: "777-300ER",
+            operatorName: "United Airlines",
+            aircraftType: "wide",
+            category: "A5",
+            callsign: "UAL1",
+            placeName: "Berkeley, CA"
+        )
+        // Server-authoritative fields.
+        #expect(p["icao24"]?.jsonValue as? String == "ac5c1f")
+        #expect(p["rarity"]?.jsonValue as? String == "epic")
+        #expect(p["points"]?.jsonValue as? Int == 250)
+        #expect(p["duplicate"]?.jsonValue as? Bool == false)
+        // Aircraft identity off the Catch.
+        #expect(p["registration"]?.jsonValue as? String == "N628TS")
+        #expect(p["typecode"]?.jsonValue as? String == "B77W")
+        #expect(p["manufacturer"]?.jsonValue as? String == "Boeing")
+        #expect(p["model"]?.jsonValue as? String == "777-300ER")
+        #expect(p["operator_name"]?.jsonValue as? String == "United Airlines")
+        #expect(p["aircraft_type"]?.jsonValue as? String == "wide")
+        #expect(p["category"]?.jsonValue as? String == "A5")
+        #expect(p["callsign"]?.jsonValue as? String == "UAL1")
+        #expect(p["place_name"]?.jsonValue as? String == "Berkeley, CA")
+    }
+
+    @Test func uploadedOmitsNilAndBlankAirframeFields() {
+        let p = CatchTelemetry.uploadedProperties(
+            icao24: "abc123",
+            rarity: "common",
+            points: 10,
+            duplicate: true,
+            registration: nil,
+            typecode: nil,
+            manufacturer: nil,
+            model: nil,
+            operatorName: "",          // blank → treated as absent
+            aircraftType: "narrow",
+            category: nil,
+            callsign: "   ",           // whitespace-only → treated as absent
+            placeName: nil
+        )
+        // Required keys always present.
+        #expect(p["icao24"]?.jsonValue as? String == "abc123")
+        #expect(p["rarity"]?.jsonValue as? String == "common")
+        #expect(p["points"]?.jsonValue as? Int == 10)
+        #expect(p["duplicate"]?.jsonValue as? Bool == true)
+        #expect(p["aircraft_type"]?.jsonValue as? String == "narrow")
+        // Nil/blank fields are OMITTED, never sent as "" or null.
+        #expect(p["registration"] == nil)
+        #expect(p["typecode"] == nil)
+        #expect(p["manufacturer"] == nil)
+        #expect(p["model"] == nil)
+        #expect(p["operator_name"] == nil)
+        #expect(p["category"] == nil)
+        #expect(p["callsign"] == nil)
+        #expect(p["place_name"] == nil)
+    }
+
+    @Test func uploadedTrimsWhitespaceFromValues() {
+        let p = CatchTelemetry.uploadedProperties(
+            icao24: "abc123", rarity: "rare", points: 50, duplicate: false,
+            registration: "  N123AB  ", typecode: nil, manufacturer: nil,
+            model: nil, operatorName: nil, aircraftType: "wide",
+            category: nil, callsign: " SWA42 ", placeName: nil
+        )
+        #expect(p["registration"]?.jsonValue as? String == "N123AB")
+        #expect(p["callsign"]?.jsonValue as? String == "SWA42")
+    }
+
+    @Test func uploadedEventNameIsStable() {
+        #expect(CatchTelemetry.uploadedEvent == "catch_uploaded")
+    }
+
     @Test func deletedCarriesCountAndRarity() {
         let p = CatchTelemetry.deletedProperties(icao24: "ac5c1f", count: 3, rarity: "epic")
         #expect(p["icao24"]?.jsonValue as? String == "ac5c1f")

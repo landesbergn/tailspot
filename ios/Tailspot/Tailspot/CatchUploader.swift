@@ -104,16 +104,13 @@ class CatchUploader {
                     Log.ui.info(
                         "CatchUploader: uploaded \(catchRow.icao24, privacy: .public) pts=\(response.points, privacy: .public) dup=\(response.duplicate, privacy: .public)"
                     )
-                    // Analytics: record the successful upload. Rarity comes from
-                    // the server response when present (authoritative); falls back
-                    // to the local resolved value. No location — only aggregate
-                    // gameplay data.
-                    let rarityString = response.rarity ?? catchRow.resolvedRarity.rawValue
-                    Analytics.capture("catch_uploaded", [
-                        "rarity":    .string(rarityString),
-                        "points":    .int(response.points),
-                        "duplicate": .bool(response.duplicate),
-                    ])
+                    // Analytics: record the successful upload with the aircraft
+                    // identity from the Catch (tail/type/operator/etc.) so PostHog
+                    // can show *which* plane was caught. Rarity/points/duplicate
+                    // come from the authoritative server response. Airframe
+                    // attributes only — no precise coordinates, just coarse
+                    // place_name. (See CatchTelemetry.uploadedProperties.)
+                    CatchTelemetry.fireUploaded(catchRow, response: response)
                     break   // success → move to the next catch
                 } catch AccountError.http(let status) where status == 429 {
                     // Rate limited. Wait for the bucket to refill (~1 token/sec
