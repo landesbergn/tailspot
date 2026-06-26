@@ -40,6 +40,11 @@ nonisolated enum CatchTelemetry {
     static let deletedEvent = "catch_deleted"
     static let blockedOutdoorsEvent = "catch_blocked_outdoors"
     static let gateOverrideEvent = "catch_gate_override"
+    // Lever 3 (angular-size floor) block + override. A parallel stream to the
+    // indoor gate's, kept as distinct events so the two block reasons break
+    // out cleanly in PostHog without disturbing the existing indoor history.
+    static let blockedSizeEvent = "catch_blocked_size"
+    static let sizeOverrideEvent = "catch_size_override"
 
     // MARK: - Pure property builders (unit-tested)
 
@@ -50,7 +55,9 @@ nonisolated enum CatchTelemetry {
         aircraftType: String,
         slantKm: Double,
         visualConfirmEnabled: Bool,
-        visualFixConfidence: Float?
+        visualFixConfidence: Float?,
+        multiN: Int = 1,
+        angularSizeArcmin: Double? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -63,8 +70,14 @@ nonisolated enum CatchTelemetry {
             // time + how confident. The wild "is it actually helping?" signal.
             "visual_confirm_enabled": .bool(visualConfirmEnabled),
             "visual_fix_active": .bool(visualFixConfidence != nil),
+            // Anti-cheat (PR1): how many planes this one tap caught (L1 should
+            // drive it toward 1 — the spray firehose is gone), and the caught
+            // plane's apparent angular size (L3 — catches should trend bigger /
+            // closer). Together they watch the fix without a new dashboard.
+            "multi_n": .int(multiN),
         ]
         if let c = visualFixConfidence { props["visual_fix_confidence"] = .double(Double(c)) }
+        if let a = angularSizeArcmin { props["angular_size_arcmin"] = .double(a) }
         return props
     }
 
@@ -169,12 +182,28 @@ nonisolated enum CatchTelemetry {
         return props
     }
 
+    /// Properties for the angular-size-floor events (Lever 3 block + override):
+    /// the blocked target's apparent size + slant, so the floor can be tuned
+    /// from real blocks and the override (false-block) rate watched.
+    static func sizeGateProperties(
+        arcmin: Double, slantKm: Double, blockedCount: Int = 1
+    ) -> [String: AnalyticsValue] {
+        [
+            "angular_size_arcmin": .double(arcmin),
+            "slant_km": .double(slantKm),
+            "blocked_count": .int(blockedCount),
+            "floor_arcmin": .double(ObservedAircraft.catchSizeFloorArcminutes),
+        ]
+    }
+
     // MARK: - Fire wrappers (read MainActor-isolated `Catch`, then capture)
 
     @MainActor static func firePerformed(
         _ row: Catch,
         visualConfirmEnabled: Bool,
-        visualFixConfidence: Float?
+        visualFixConfidence: Float?,
+        multiN: Int = 1,
+        angularSizeArcmin: Double? = nil
     ) {
         Analytics.capture(performedEvent, performedProperties(
             icao24: row.icao24,
@@ -182,7 +211,9 @@ nonisolated enum CatchTelemetry {
             aircraftType: row.resolvedType.rawValue,
             slantKm: row.slantDistanceMeters / 1000,
             visualConfirmEnabled: visualConfirmEnabled,
-            visualFixConfidence: visualFixConfidence
+            visualFixConfidence: visualFixConfidence,
+            multiN: multiN,
+            angularSizeArcmin: angularSizeArcmin
         ))
     }
 
@@ -235,6 +266,23 @@ nonisolated enum CatchTelemetry {
     ) {
         Analytics.capture(gateOverrideEvent, outdoorGateProperties(
             verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
+        ))
+    }
+
+    /// Fired when the angular-size floor blocks a catch (target too small-and-
+    /// distant to resolve). `blockedCount` ≥ 1 — on a multi-tap it's how many
+    /// targets the floor dropped (1 when the whole tap is blocked).
+    static func fireBlockedSize(arcmin: Double, slantKm: Double, blockedCount: Int = 1) {
+        Analytics.capture(blockedSizeEvent, sizeGateProperties(
+            arcmin: arcmin, slantKm: slantKm, blockedCount: blockedCount
+        ))
+    }
+
+    /// Fired when the user taps "Catch anyway" through a size block — the
+    /// false-block / floor-too-high calibration signal.
+    static func fireSizeOverride(arcmin: Double, slantKm: Double) {
+        Analytics.capture(sizeOverrideEvent, sizeGateProperties(
+            arcmin: arcmin, slantKm: slantKm
         ))
     }
 }
