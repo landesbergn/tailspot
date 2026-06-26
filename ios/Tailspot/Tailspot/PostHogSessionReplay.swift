@@ -36,6 +36,20 @@ enum PostHogSessionReplay {
         PostHogSDK.shared.capture(event, properties: [:], userProperties: userProperties)
     }
 
+    /// Tie the SDK (session replay + SDK-captured events) to `distinctId` — the
+    /// canonical, server-minted device id. No-op when the PostHog key is absent.
+    ///
+    /// PostHog's `identify()` is meant to be called once; once the SDK has an
+    /// identified distinct_id it will NOT switch to a different one. The goal is
+    /// therefore to make the SDK's *first* identify use the canonical server id —
+    /// either at launch for an already-registered user (`start()`), or right
+    /// after the handle is claimed for a first-time user (registration is awaited
+    /// there). Calling it again later with the same id is a harmless no-op.
+    static func identify(_ distinctId: String) {
+        guard Analytics.apiKey?.isEmpty == false, !distinctId.isEmpty else { return }
+        PostHogSDK.shared.identify(distinctId)
+    }
+
     static func start() {
         guard let key = Analytics.apiKey, !key.isEmpty else {
             Log.analytics.notice("PostHog session replay: no PostHogAPIKey — disabled")
@@ -90,8 +104,21 @@ enum PostHogSessionReplay {
         #endif
 
         PostHogSDK.shared.setup(config)
-        // Tie recordings to the same anonymous device id as the REST events.
-        PostHogSDK.shared.identify(Analytics.distinctId())
+        // Identify ONLY a returning, registered user — one who already has a
+        // canonical (server-minted, keychain-backed) device id AND a claimed
+        // handle. We read the id with `DeviceID.currentIfPresent()` (NEVER
+        // mints), so a first launch no longer pins the SDK to a throwaway local
+        // id that registration immediately replaces — the bug that fragmented
+        // one device into two persons (an identified SDK profile + an anonymous
+        // REST profile). A first-time user is identified after the handle is
+        // claimed (where registration is awaited), so the SDK's first identify
+        // still lands on the server id. See AnalyticsIdentity.
+        let handle = UserDefaults.standard.string(forKey: SpotterHandle.storageKey)
+        let hasHandle = AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
+        if let id = AnalyticsIdentity.launchIdentity(deviceId: DeviceID.currentIfPresent(),
+                                                     hasClaimedHandle: hasHandle) {
+            PostHogSDK.shared.identify(id)
+        }
         Log.analytics.notice("PostHog session replay: enabled")
     }
 }

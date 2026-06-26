@@ -180,6 +180,11 @@ struct SettingsScreen: View {
             UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
             handleTakenError = nil
             savedHandleSuccess = "@\(trimmed) claimed"
+            // Identify the SDK with the canonical server-minted device id now
+            // that `ensureRegistered()` has established it, so SDK events and the
+            // handle $set below resolve to the same person as the REST pipeline
+            // (the duplicate-person fix). See AnalyticsIdentity.
+            PostHogSessionReplay.identify(Analytics.distinctId())
             Analytics.capture("handle_claimed", ["result": .string("success")])
             // Set the claimed handle as a PostHog person property (SDK $set).
             PostHogSessionReplay.capture("handle claimed", userProperties: ["handle": trimmed])

@@ -497,6 +497,12 @@ struct OnboardingFlow: View {
             handle = trimmed
             UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
             handleTakenError = nil
+            // Identify the SDK with the canonical server-minted device id now
+            // that `ensureRegistered()` has established it. For a first-time user
+            // this is the SDK's FIRST identify, so it (and the handle $set below)
+            // land on the server id rather than a pre-registration local id —
+            // the fix for the duplicate-person bug. See AnalyticsIdentity.
+            PostHogSessionReplay.identify(Analytics.distinctId())
             Analytics.capture("handle_claimed", ["result": .string("success")])
             // Set the claimed handle as a PostHog person property (SDK $set).
             PostHogSessionReplay.capture("handle claimed", userProperties: ["handle": trimmed])

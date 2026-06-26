@@ -69,6 +69,9 @@ struct TailspotApp: App {
                 // idempotent and non-throwing; per-item failures are logged
                 // and retried on the next foreground transition.
                 let ctx = container.mainContext
+                // Version + build let us correlate events to the exact binary.
+                let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+                let build   = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
                 Task {
                     // Register ONCE up front so the handle sync and catch
                     // upload below can't race two POST /v1/devices calls on a
@@ -76,21 +79,22 @@ struct TailspotApp: App {
                     // stored token thereafter). Errors here are non-fatal —
                     // each step re-attempts registration and aborts cleanly.
                     _ = try? await TailspotAccountClient().ensureRegistered()
+                    // app_opened fires AFTER registration so it always resolves
+                    // to the canonical server-minted device id. On a first launch
+                    // the device id doesn't exist until registration; firing
+                    // app_opened before it would mint a throwaway local id and
+                    // orphan the event on a second, anonymous person (the
+                    // duplicate-person bug). On later launches ensureRegistered
+                    // short-circuits instantly, so this still fires promptly.
+                    Analytics.capture("app_opened", [
+                        "app_version": .string(version),
+                        "app_build":   .string(build),
+                    ])
                     // Handle first: cheap, and it unblocks leaderboard
                     // visibility without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
                 }
-
-                // app_opened fires on every foreground activation (cold launch
-                // and background→foreground). Version + build let us correlate
-                // events to the exact binary.
-                let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
-                let build   = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
-                Analytics.capture("app_opened", [
-                    "app_version": .string(version),
-                    "app_build":   .string(build),
-                ])
             }
         }
     }
