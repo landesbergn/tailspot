@@ -14,6 +14,15 @@
 //                         Successful catches carry rarity/type/slant;
 //                         duplicates (already in the Hangar, no new row)
 //                         carry only icao24 + is_duplicate=true.
+//    - catch_uploaded   — fires once per catch the backend accepts. Carries
+//                         the aircraft IDENTITY snapshotted on the Catch
+//                         (tail number, typecode, manufacturer, model,
+//                         operator, type, ADS-B category, callsign) plus the
+//                         authoritative rarity/points/duplicate from the
+//                         server response — so PostHog can show *which* plane
+//                         was caught. Airframe attributes, not user PII; the
+//                         only location is the coarse reverse-geocoded
+//                         place_name (no precise coordinates).
 //    - catch_deleted    — fires once per delete action (a HangarRow may
 //                         group N icao rows; `count` records how many).
 //
@@ -27,6 +36,7 @@ import Foundation
 nonisolated enum CatchTelemetry {
 
     static let performedEvent = "catch_performed"
+    static let uploadedEvent = "catch_uploaded"
     static let deletedEvent = "catch_deleted"
     static let blockedOutdoorsEvent = "catch_blocked_outdoors"
     static let gateOverrideEvent = "catch_gate_override"
@@ -67,6 +77,59 @@ nonisolated enum CatchTelemetry {
             "icao24": .string(icao24),
             "is_duplicate": .bool(true),
         ]
+    }
+
+    /// Properties for a server-confirmed catch upload (`catch_uploaded`).
+    ///
+    /// Carries the aircraft IDENTITY captured on the `Catch` so PostHog can
+    /// answer "which specific plane was caught" — tail number, typecode,
+    /// manufacturer, model, operator, derived type, ADS-B emitter category,
+    /// and callsign. `rarity`/`points`/`duplicate` come from the authoritative
+    /// server response (rarity falls back to the local resolved value when the
+    /// server omits it). These are airframe attributes, NOT user PII — the only
+    /// location is the coarse reverse-geocoded `place_name` (no coordinates).
+    ///
+    /// Nil/blank string fields are OMITTED (matching `deletedProperties` and
+    /// `Catch.preferredAirframeField`'s blank-is-absent rule) — never sent as
+    /// null or a placeholder, so PostHog only sees keys we actually know.
+    static func uploadedProperties(
+        icao24: String,
+        rarity: String,
+        points: Int,
+        duplicate: Bool,
+        registration: String?,
+        typecode: String?,
+        manufacturer: String?,
+        model: String?,
+        operatorName: String?,
+        aircraftType: String?,
+        category: String?,
+        callsign: String?,
+        placeName: String?
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
+            "icao24": .string(icao24),
+            "rarity": .string(rarity),
+            "points": .int(points),
+            "duplicate": .bool(duplicate),
+        ]
+        // Insert only when the value is non-nil and non-blank — a missing
+        // airframe field should be an absent key, not "" or null.
+        func add(_ key: String, _ value: String?) {
+            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !trimmed.isEmpty else { return }
+            props[key] = .string(trimmed)
+        }
+        add("registration", registration)
+        add("typecode", typecode)
+        add("manufacturer", manufacturer)
+        add("model", model)
+        add("operator_name", operatorName)
+        add("aircraft_type", aircraftType)
+        add("category", category)
+        add("callsign", callsign)
+        add("place_name", placeName)
+        return props
     }
 
     /// Properties for a delete. `count` is the number of underlying `Catch`
@@ -125,6 +188,29 @@ nonisolated enum CatchTelemetry {
 
     @MainActor static func fireDuplicate(icao24: String) {
         Analytics.capture(performedEvent, duplicateProperties(icao24: icao24))
+    }
+
+    /// Fire `catch_uploaded` after the backend accepts a catch. Reads the
+    /// aircraft identity off the `Catch` (MainActor-isolated SwiftData row)
+    /// and the rarity/points/duplicate off the server response. Rarity prefers
+    /// the server value (authoritative re-tiering) and falls back to the
+    /// locally resolved tier when the response omits it.
+    @MainActor static func fireUploaded(_ row: Catch, response: UploadCatchResponse) {
+        Analytics.capture(uploadedEvent, uploadedProperties(
+            icao24: row.icao24,
+            rarity: response.rarity ?? row.resolvedRarity.rawValue,
+            points: response.points,
+            duplicate: response.duplicate,
+            registration: row.registration,
+            typecode: row.typecode,
+            manufacturer: row.manufacturer,
+            model: row.model,
+            operatorName: row.operatorName,
+            aircraftType: row.resolvedType.rawValue,
+            category: row.category,
+            callsign: row.callsign,
+            placeName: row.placeName
+        ))
     }
 
     @MainActor static func fireDeleted(icao24: String, count: Int, rarity: String?) {
