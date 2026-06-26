@@ -38,15 +38,24 @@ nonisolated enum CatchTelemetry {
         icao24: String,
         rarity: String,
         aircraftType: String,
-        slantKm: Double
+        slantKm: Double,
+        visualConfirmEnabled: Bool,
+        visualFixConfidence: Float?
     ) -> [String: AnalyticsValue] {
-        [
+        var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
             "rarity": .string(rarity),
             "aircraft_type": .string(aircraftType),
             "slant_km": .double(slantKm),
             "is_duplicate": .bool(false),
+            // Visual-confirmation context (2026-06-26 go-live): is the feature
+            // on, and did the caught plane have a live detector fix at catch
+            // time + how confident. The wild "is it actually helping?" signal.
+            "visual_confirm_enabled": .bool(visualConfirmEnabled),
+            "visual_fix_active": .bool(visualFixConfidence != nil),
         ]
+        if let c = visualFixConfidence { props["visual_fix_confidence"] = .double(Double(c)) }
+        return props
     }
 
     /// Properties for a duplicate-catch tap — the target is already in the
@@ -99,12 +108,18 @@ nonisolated enum CatchTelemetry {
 
     // MARK: - Fire wrappers (read MainActor-isolated `Catch`, then capture)
 
-    @MainActor static func firePerformed(_ row: Catch) {
+    @MainActor static func firePerformed(
+        _ row: Catch,
+        visualConfirmEnabled: Bool,
+        visualFixConfidence: Float?
+    ) {
         Analytics.capture(performedEvent, performedProperties(
             icao24: row.icao24,
             rarity: row.resolvedRarity.rawValue,
             aircraftType: row.resolvedType.rawValue,
-            slantKm: row.slantDistanceMeters / 1000
+            slantKm: row.slantDistanceMeters / 1000,
+            visualConfirmEnabled: visualConfirmEnabled,
+            visualFixConfidence: visualFixConfidence
         ))
     }
 

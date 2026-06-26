@@ -18,13 +18,28 @@ struct CatchTelemetryTests {
 
     @Test func performedCarriesRarityTypeSlantAndNotDuplicate() {
         let p = CatchTelemetry.performedProperties(
-            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5
+            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: false, visualFixConfidence: nil
         )
         #expect(p["icao24"]?.jsonValue as? String == "ac5c1f")
         #expect(p["rarity"]?.jsonValue as? String == "rare")
         #expect(p["aircraft_type"]?.jsonValue as? String == "wide")
         #expect((p["slant_km"]?.jsonValue as? Double) == 7.5)
         #expect(p["is_duplicate"]?.jsonValue as? Bool == false)
+        // Visual confirmation off + no fix → flags present, confidence absent.
+        #expect(p["visual_confirm_enabled"]?.jsonValue as? Bool == false)
+        #expect(p["visual_fix_active"]?.jsonValue as? Bool == false)
+        #expect(p["visual_fix_confidence"] == nil)
+    }
+
+    @Test func performedCarriesVisualFixWhenLockedOn() {
+        let p = CatchTelemetry.performedProperties(
+            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: true, visualFixConfidence: 0.5
+        )
+        #expect(p["visual_confirm_enabled"]?.jsonValue as? Bool == true)
+        #expect(p["visual_fix_active"]?.jsonValue as? Bool == true)
+        #expect((p["visual_fix_confidence"]?.jsonValue as? Double) == 0.5)
     }
 
     @Test func duplicateFlagsDuplicateAndOmitsAirframeProps() {

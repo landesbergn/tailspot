@@ -1174,7 +1174,13 @@ struct ContentView: View {
             // Catch-confirmation telemetry (north-star). One event per
             // processed target: new catches carry rarity/type/slant,
             // duplicates record the dedup hit. Fire-and-forget.
-            for row in newCatches { CatchTelemetry.firePerformed(row) }
+            for row in newCatches {
+                CatchTelemetry.firePerformed(
+                    row,
+                    visualConfirmEnabled: visualConfirm.enabled,
+                    visualFixConfidence: visualConfirm.fixes[row.icao24]?.confidence
+                )
+            }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
 
             presentReveal(newCatches: newCatches, duplicates: duplicates,

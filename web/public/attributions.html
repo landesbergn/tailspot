@@ -17,7 +17,7 @@
 
   <h1>Attributions</h1>
   <div class="meta">
-    <p><strong>Last updated:</strong> June 11, 2026</p>
+    <p><strong>Last updated:</strong> June 26, 2026</p>
   </div>
 
   <p>Tailspot is built on the work of several open data projects, public-domain government databases, and open-source contributors. This page is the canonical credits list.</p>
@@ -64,17 +64,6 @@
 
   <hr class="rule">
 
-  <h2>Aircraft position data (fallback) — OpenSky Network</h2>
-
-  <p>During the current development phase, aircraft position data may also be sourced from the <strong>OpenSky Network</strong> as a fallback data source.</p>
-
-  <ul>
-    <li><strong>Source:</strong> <a href="https://opensky-network.org" rel="noopener">opensky-network.org</a></li>
-    <li><strong>Credit note:</strong> The OpenSky Network, "Bringing up OpenSky: A large-scale ADS-B sensor network for research," IPSN 2014.</li>
-  </ul>
-
-  <hr class="rule">
-
   <h2>Aircraft photos — Planespotters.net</h2>
 
   <p>Aircraft photographs shown in the app are provided by <strong>Planespotters.net</strong> via their API. Each photograph is credited to its individual photographer as returned by the API.</p>
@@ -82,6 +71,19 @@
   <ul>
     <li><strong>Source:</strong> <a href="https://www.planespotters.net" rel="noopener">planespotters.net</a></li>
     <li><strong>Per-photo attribution:</strong> Photographer name and link are displayed alongside each photo in the app, as required by Planespotters.net's terms of use.</li>
+  </ul>
+
+  <hr class="rule">
+
+  <h2>On-device airplane detection — YOLOX</h2>
+
+  <p>Tailspot's visual-confirmation feature — which snaps the aiming reticle onto the detected aircraft — uses an on-device CoreML model derived from <strong>YOLOX-Small</strong>, pre-trained on the COCO dataset.</p>
+
+  <ul>
+    <li><strong>License:</strong> Apache License 2.0</li>
+    <li><strong>License text:</strong> <a href="https://www.apache.org/licenses/LICENSE-2.0" rel="noopener">apache.org/licenses/LICENSE-2.0</a></li>
+    <li><strong>Source:</strong> <a href="https://github.com/Megvii-BaseDetection/YOLOX" rel="noopener">YOLOX — Megvii BaseDetection</a></li>
+    <li><strong>Note:</strong> The bundled model is a weight-quantized (INT8) CoreML conversion of the stock YOLOX-S COCO checkpoint, distributed under Apache-2.0 via the pixeltable-yolox project. Weights are unmodified beyond quantization.</li>
   </ul>
 
   <hr class="rule">
