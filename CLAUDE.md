@@ -165,8 +165,13 @@ source + each one's focused test file — they're not restated here.
   upright in portrait. Camera elevation above the horizon = `90° − pitch`, wrapped
   in `MotionManager.cameraElevationDeg`. **Never pass raw `motion.pitch` into
   projection math** — the projection helpers take `cameraElevationDeg`.
-- **`LocationManager.headingOrientation` is pinned to `.portrait`** so true-north
-  heading has a stable reference even if iOS rotates the UI. Don't remove it.
+- **The app is locked to portrait.** `Info.plist`
+  `UISupportedInterfaceOrientations`(`~ipad`) is **Portrait-only** + `UIRequiresFullScreen`
+  (the latter is required on this universal target so App Store validation accepts a
+  non-all-orientations app). On top of that, **`LocationManager.headingOrientation` is
+  pinned to `.portrait`** as a belt-and-suspenders stable true-north reference. The
+  identify math (heading + `90° − pitch` elevation) assumes an upright portrait hold —
+  don't add landscape UI, and don't remove either pin.
 - **Visibility filter.** `ObservedAircraft.isLikelyVisibleToObserver` gates **both**
   the AR overlay and the on-screen list: above the horizon and within an
   **elevation-dependent distance band** (a near→full→contrail curve — see the field

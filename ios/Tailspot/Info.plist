@@ -31,20 +31,28 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Tailspot uses your location to identify aircraft you're pointing at by matching your viewing angle against live flight positions.</string>
 
-	<!-- Supported orientations. -->
+	<!--
+		Supported orientations — PORTRAIT ONLY (2026-06-26). The app is
+		hard-pinned to upright portrait: LocationManager.headingOrientation is
+		.portrait and camera elevation derives from pitch assuming a portrait
+		hold (CLAUDE.md), so landscape — and upside-down — would break the
+		heading/elevation math the identify engine relies on. Locking the
+		supported set here is the robust app-wide way to stop iOS rotating the UI.
+		UIRequiresFullScreen=YES is the required companion on a universal
+		(iPad-supporting) target: an app that doesn't support all interface
+		orientations must opt out of iPad multitasking, or App Store validation
+		rejects the build.
+	-->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 
 	<!--
 		Generated launch screen + scene manifest — match the

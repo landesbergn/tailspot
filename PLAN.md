@@ -376,7 +376,7 @@ Planned but not yet created:
 | 13 | Surface catch-sharing remaining | Bet C · Social | ~hrs | **Mostly shipped** (share-card image #38 + surfacing largely done); low-priority remaining polish. |
 | 14 | Sets sync (cross-device) | Bet D · Backend | backend | Enabler, not urgent in the single-device tester phase; extend the account/upload pipeline to Sets. |
 | 15 | ICAO DOC 8643 terms / attribution re-check | Housekeeping · legal | ~30 min | Confirm the bundled `AircraftTypes.json` source terms + attribution before wider App Store distribution. Survivor of the old #8 — **OpenSky secret rotation dropped** (OpenSky removed in the 2026-06-21 cutover). |
-| 16 | Landscape / horizontal orientation | Deferred | — | Explicitly not now (Noah). Portrait-pinned today (`LocationManager.headingOrientation = .portrait`; elevation math assumes portrait hold); pinhole handles roll, but heading ref + elevation derivation + UI need rework. Low ROI now. |
+| 16 | ~~Landscape / horizontal orientation~~ | Not doing | — | **Portrait lock SHIPPED 2026-06-26** (PR pending): `Info.plist` is now Portrait-only (`UISupportedInterfaceOrientations`/`~ipad`) + `UIRequiresFullScreen`. Landscape was never truly supported (heading ref + `90°−pitch` elevation assume an upright portrait hold); supporting it would need heading-ref + elevation-derivation + UI rework — low ROI, firmly out of scope. |
 
 **Open decisions (gate the above):**
 - **Card-art medium** — illustrated cards vs real photos vs alternatives (§6.3 / §1.4); decide before the #7 cards build / any commissioning pipeline.
