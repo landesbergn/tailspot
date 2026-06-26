@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-26 — Sync the claimed handle to the canonical person on launch — branch `fix/posthog-handle-launch-sync`
+
+Follow-up to #76. That fix re-aligned the person *id* on launch but not the
+`handle` person property — which is only `$set` at claim time (OnboardingFlow /
+SettingsScreen). So a canonical person missing the handle (claimed on a
+since-merged anonymous profile, or an older build) never re-acquired it just by
+reopening the app.
+
+- **`PostHogSessionReplay.start()`** now passes the on-device handle into the launch
+  `identify(_:userProperties:)` for a returning, claimed-handle user, so the handle
+  re-attaches to the canonical person every run. posthog-ios (3.60.1) `$set`s the
+  property even when the distinct_id is unchanged and **dedupes an identical repeat**,
+  so this is idempotent self-heal, not event spam. New pure
+  `AnalyticsIdentity.launchUserProperties(handle:placeholder:)` (same claimed-handle
+  gate as `launchIdentity`) + 3 tests.
+
+`TailspotTests` green.
+
 ## 2026-06-26 — Analytics integrity: identity dedup + aircraft detail on `catch_uploaded` — PRs #75, #76
 
 Two analytics-quality fixes plus a one-time PostHog data cleanup. The PRs touch
