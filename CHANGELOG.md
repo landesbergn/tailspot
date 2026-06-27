@@ -39,9 +39,15 @@ device = a `mach_6415` person + an unnamed `e28e8d13…` person).
 
 Already-split persons are **not** fixed by the code (the SDK's call-once
 identify won't move a live identity) — those are cleaned up separately via
-`$merge_dangerously` (see PLAN §9). Application-lifecycle events (`Application
-Opened/Backgrounded`) still fire alongside `app_opened` — kept ON because
-session replay needs them to flush reliably; distinct names, no funnel impact.
+`$merge_dangerously` (see PLAN §9).
+
+The custom **`app_opened` event was dropped** in favor of the SDK's lifecycle
+`Application Opened` (kept ON for session-replay flush; carries `$app_version` /
+`$app_build` automatically), so there's now exactly one app-open event instead
+of two. Five saved insights were repointed `app_opened → Application Opened`:
+*Daily active users*, *Weekly user retention*, *User lifecycle (growth
+accounting)*, *Key engagement events*, and *App opens by version* (its breakdown
+moved from our `app_version` prop to the SDK's `$app_version`).
 
 ## 2026-06-27 — Leaderboard under-scoring fix + re-scoring foundation — branch `feat/catch-rescore`
 

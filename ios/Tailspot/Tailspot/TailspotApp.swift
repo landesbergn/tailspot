@@ -69,29 +69,21 @@ struct TailspotApp: App {
                 // idempotent and non-throwing; per-item failures are logged
                 // and retried on the next foreground transition.
                 let ctx = container.mainContext
-                // Version + build let us correlate events to the exact binary.
-                let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
-                let build   = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
                 Task {
-                    // Register ONCE up front so the handle sync and catch
-                    // upload below can't race two POST /v1/devices calls on a
-                    // fresh install (ensureRegistered short-circuits on the
-                    // stored token thereafter). Errors here are non-fatal —
-                    // each step re-attempts registration and aborts cleanly.
+                    // Register ONCE up front so the handle sync and catch upload
+                    // below can't race two POST /v1/devices calls on a fresh
+                    // install (ensureRegistered short-circuits on the stored token
+                    // thereafter). It also fires the one-time
+                    // `Analytics.identify(serverId)` that ties this install to its
+                    // canonical PostHog person. Errors here are non-fatal — each
+                    // step re-attempts registration and aborts cleanly.
                     _ = try? await TailspotAccountClient().ensureRegistered()
-                    // Identity no longer depends on this ordering: the PostHog SDK
-                    // owns the distinct_id, and `ensureRegistered` calls
-                    // `Analytics.identify(serverId)` once, so even an app_opened
-                    // captured before registration lands on the SDK's anonymous id
-                    // and is aliased into the server-id person — no orphaning. We
-                    // still register first because the handle sync + catch upload
-                    // below need it (and it short-circuits instantly thereafter).
-                    Analytics.capture("app_opened", [
-                        "app_version": .string(version),
-                        "app_build":   .string(build),
-                    ])
-                    // Handle first: cheap, and it unblocks leaderboard
-                    // visibility without waiting behind a catch backlog.
+                    // App-open analytics come from the PostHog SDK's lifecycle
+                    // autocapture ("Application Opened", with $app_version /
+                    // $app_build auto-attached) — we no longer fire a custom
+                    // app_opened, so there's exactly one app-open event per open.
+                    // Handle first: cheap, and it unblocks leaderboard visibility
+                    // without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
                 }
