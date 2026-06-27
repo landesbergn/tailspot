@@ -18,7 +18,6 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { pointsForRarity } from "../catches/points.js";
 import {
   type AircraftPosition,
   type ObserverPose,
@@ -153,9 +152,10 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       };
     }
 
-    // ── Server-side resolution (typecode → rarity → points) ─────────────────
-    const { typecode, rarity } = await catchStore.resolveRarity(icao24);
-    const points = pointsForRarity(rarity);
+    // ── Server-side scoring (typecode → rarity → points, regime-stamped) ────
+    // The ONE canonical scorer; the re-score job (catches/rescore.ts) calls the
+    // same `scoreCatch`, so an upload and a later re-score agree by construction.
+    const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24);
 
     // ── Instrumented anti-cheat (stored, never enforced) ────────────────────
     const observer: ObserverPose = {
@@ -182,6 +182,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       typecode,
       rarity,
       points,
+      scoringVersion,
       caughtAt: new Date(caughtAt * 1000),
       observerLat: obsLat,
       observerLon: obsLon,

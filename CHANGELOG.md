@@ -5,6 +5,43 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-27 — Leaderboard under-scoring fix + re-scoring foundation — branch `feat/catch-rescore`
+
+Triage of a real bug — `@noah`'s profile showed **2715** points, the leaderboard
+**940** — that turned into the foundation for the #4 / #10 scoring rework.
+
+- **Root cause (prod-confirmed):** the backend freezes `catches.points` at upload
+  (`resolveRarity`: `icao24 → registry → typecode → typecodes → rarity`). The
+  registry was FAA **US-tails-only** when most catches were uploaded, so every
+  *foreign* airliner resolved to unknown → the **10-pt floor** and stayed frozen
+  there (21 of `@noah`'s 67 catches, including **three A380s**). The iOS profile
+  recomputes rarity *live* from the bundled `AircraftTypes.json`, so it already
+  showed the right number. Re-resolving against today's (now-grown) registry:
+  **940 → ~2755 ≈ the profile's 2715** — the profile was right; the board
+  under-counted. Not a device split (one device) and not the board re-tiering
+  itself (its frozen sum == its live recompute).
+- **Fix — points are a re-derivable PROJECTION, not a frozen fact (option A):**
+  - `catches.scoring_version` column (migration `0004_useful_chimera`) stamps the
+    scoring regime; `CURRENT_SCORING_VERSION` in `catches/points.ts` (bump on any
+    scoring-logic change).
+  - ONE canonical scorer `CatchStore.scoreCatch` — upload AND re-score both call
+    it, so they can never drift. The upload route stops resolving + scoring inline.
+  - Idempotent, dry-runnable `rescoreCatches` (`catches/rescore.ts`,
+    `npm run rescore -- [--all] [--dry-run]`): re-scores the *stale* set (rarity
+    still null OR `scoring_version < CURRENT`), one resolve per airframe, in a
+    single transaction, printing a before→after delta + rarity transitions so a
+    public-board move is reviewable before it lands. 6 new tests.
+  - **iOS:** the Profile headline now reads the server's authoritative standing
+    (`/v1/leaderboard` `me` → total points **and** the previously-placeholder
+    global rank), falling back to the local Hangar total when offline — so profile
+    and leaderboard agree by construction.
+- **Pending (Noah's go-ahead):** apply migration `0004` to prod (manual — no
+  `release_command`), `rescore --dry-run` to review the delta, then `rescore` to
+  land 940 → ~2755 for everyone (foreign widebodies corrected; up-only, nobody
+  loses points).
+
+Backend: typecheck + 28 tests + lint green. `TailspotTests` green.
+
 ## 2026-06-26 — Sync the claimed handle to the canonical person on launch — branch `fix/posthog-handle-launch-sync`
 
 Follow-up to #76. That fix re-aligned the person *id* on launch but not the
