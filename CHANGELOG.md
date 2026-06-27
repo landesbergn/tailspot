@@ -5,6 +5,26 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-27 — Fix Profile panel open/close freeze — branch `fix/profile-open-close-freeze`
+
+The Profile sheet froze for a beat on both open and close ("frozen, then jumps").
+Root cause was a synchronous main-thread block while building `ProfileScreen`, not
+anything in the AR/camera/replay path: `stats` and `inputs` were **computed
+properties** (`{ ProfileStats(catches:) }` / `{ Trophies.inputs(from:) }`) that
+re-ran on every access, and the body accessed them many times over — `statsRow`
+filtered the whole trophy roster, re-deriving `inputs` across all catches once *per
+trophy*, and `rarityStrip` read `stats` inside two per-tier loops. On a 50–200 catch
+Hangar that was thousands of `resolvedRarity` + `Calendar` passes each time the sheet
+built or tore down.
+
+- **`ProfileScreen`** now computes `stats` and `inputs` **once** at the top of `body`
+  and threads them into `identityHeader` / `statsRow` / `rarityStrip` (converted from
+  computed-property sections to functions taking the precomputed values). Behaviour is
+  identical — same numbers, one O(n) pass instead of O(n × roster). No data/schema
+  change. Field-confirmed snappy on device.
+
+`TailspotTests` green.
+
 ## 2026-06-27 — Analytics consolidated onto the PostHog SDK (one pipeline, one identity) — branch `fix/analytics-sdk-consolidation`
 
 Killed the dual analytics pipeline that fragmented one device into multiple
