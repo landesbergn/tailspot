@@ -27,7 +27,7 @@
  */
 
 import { eq, inArray, isNull, lt, or } from "drizzle-orm";
-import { type Database, getDb } from "../db/client.js";
+import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
 import { DrizzleCatchStore, type ScoredCatch } from "../identity/store.js";
 import { CURRENT_SCORING_VERSION } from "./points.js";
@@ -218,8 +218,13 @@ async function main(): Promise<void> {
     dryRun: args.includes("--dry-run"),
   };
   const db = getDb();
-  const report = await rescoreCatches(db, opts);
-  console.log(formatReport(report, opts));
+  try {
+    const report = await rescoreCatches(db, opts);
+    console.log(formatReport(report, opts));
+  } finally {
+    // Close the pool so the process exits on its own (no dangling event loop).
+    await closeDb();
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
