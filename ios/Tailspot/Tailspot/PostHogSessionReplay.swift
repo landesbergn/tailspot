@@ -2,19 +2,16 @@
 //  PostHogSessionReplay.swift
 //  Tailspot
 //
-//  Sets up the PostHog iOS SDK. Its original and primary job is **session
-//  replay** (screen recordings have no REST path). Most product events still
-//  flow through our own SDK-free REST pipeline (Analytics.swift), but we now
-//  also call PostHogSDK.capture directly for things the REST path can't express
-//  today — notably person-property `$set` (e.g. the claimed handle, via
-//  `capture(_:userProperties:)`). The SDK's autocapture (lifecycle + screen
-//  views) stays disabled so it never double-counts the REST funnels, and the
-//  SDK's distinct_id is aligned to the same anonymous device id the REST events
-//  use, so recordings, REST events, and SDK events resolve to one person.
+//  Configures the PostHog iOS SDK — `setup()` plus the launch-time identify.
+//  The SDK is now the SINGLE analytics pipeline: session replay AND every
+//  product event/identify go through it (capture/identify live in
+//  Analytics.swift; this file owns one-time SDK configuration). Screen-view
+//  autocapture stays off; application-lifecycle events stay ON because session
+//  replay needs app-state awareness to flush reliably.
 //
 //  Called once from TailspotApp.init (skipped under unit tests). No-op when
 //  the PostHog key is absent — same key + key-name (PostHogAPIKey, Info.plist)
-//  as the REST pipeline.
+//  as the rest of the analytics facade.
 //
 
 import Foundation
@@ -24,31 +21,6 @@ import PostHog
 enum PostHogSessionReplay {
     /// PostHog US ingestion host — matches the REST endpoint in Analytics.swift.
     private static let host = "https://us.i.posthog.com"
-
-    /// Capture a product event through the SDK and optionally `$set` person
-    /// properties on the profile. Used sparingly — most product events go via
-    /// the SDK-free REST pipeline (Analytics.swift); this is for what the REST
-    /// path can't express today, like setting the claimed handle as a person
-    /// property. No-op when the PostHog key is absent (same guard as `start()`),
-    /// so keyless / CI / unit-test builds never touch the SDK.
-    static func capture(_ event: String, userProperties: [String: String] = [:]) {
-        guard Analytics.apiKey?.isEmpty == false else { return }
-        PostHogSDK.shared.capture(event, properties: [:], userProperties: userProperties)
-    }
-
-    /// Tie the SDK (session replay + SDK-captured events) to `distinctId` — the
-    /// canonical, server-minted device id. No-op when the PostHog key is absent.
-    ///
-    /// PostHog's `identify()` is meant to be called once; once the SDK has an
-    /// identified distinct_id it will NOT switch to a different one. The goal is
-    /// therefore to make the SDK's *first* identify use the canonical server id —
-    /// either at launch for an already-registered user (`start()`), or right
-    /// after the handle is claimed for a first-time user (registration is awaited
-    /// there). Calling it again later with the same id is a harmless no-op.
-    static func identify(_ distinctId: String) {
-        guard Analytics.apiKey?.isEmpty == false, !distinctId.isEmpty else { return }
-        PostHogSDK.shared.identify(distinctId)
-    }
 
     static func start() {
         guard let key = Analytics.apiKey, !key.isEmpty else {
@@ -104,26 +76,20 @@ enum PostHogSessionReplay {
         #endif
 
         PostHogSDK.shared.setup(config)
-        // Identify ONLY a returning, registered user — one who already has a
-        // canonical (server-minted, keychain-backed) device id AND a claimed
-        // handle. We read the id with `DeviceID.currentIfPresent()` (NEVER
-        // mints), so a first launch no longer pins the SDK to a throwaway local
-        // id that registration immediately replaces — the bug that fragmented
-        // one device into two persons (an identified SDK profile + an anonymous
-        // REST profile). A first-time user is identified after the handle is
-        // claimed (where registration is awaited), so the SDK's first identify
-        // still lands on the server id. See AnalyticsIdentity.
+        // Launch-time identify (self-heal): re-affiliate a returning, registered
+        // user with their canonical person. The real first identify happens at
+        // registration (TailspotAccountClient.ensureRegistered) and handle claim;
+        // this only re-asserts the server id + re-`$set`s the handle on launch so
+        // a profile missing the handle self-heals. We read the id with
+        // `DeviceID.currentIfPresent()` (NEVER mints) and gate on a claimed
+        // handle, so a genuine first launch doesn't identify before registration
+        // establishes the canonical id. `identify` is idempotent (posthog-ios
+        // dedupes an identical repeat). See AnalyticsIdentity.
         let handle = UserDefaults.standard.string(forKey: SpotterHandle.storageKey)
         let hasHandle = AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
         if let id = AnalyticsIdentity.launchIdentity(deviceId: DeviceID.currentIfPresent(),
                                                      hasClaimedHandle: hasHandle) {
-            // Re-affiliate the on-device handle with the canonical person on every
-            // launch. `identify(_:userProperties:)` `$set`s the handle even when the
-            // distinct_id is unchanged, and posthog-ios dedupes an identical repeat
-            // (so this is idempotent, not event spam). Self-heals a person profile
-            // that's missing the handle. `$set` overwrites existing values.
-            PostHogSDK.shared.identify(id, userProperties: AnalyticsIdentity.launchUserProperties(
-                handle: handle, placeholder: SpotterHandle.defaultPlaceholder))
+            Analytics.identify(id, handle: hasHandle ? handle : nil)
         }
         Log.analytics.notice("PostHog session replay: enabled")
     }

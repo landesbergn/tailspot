@@ -490,22 +490,20 @@ struct OnboardingFlow: View {
     /// on the handle step.
     private func claimHandleIfNeeded(_ trimmed: String) async {
         do {
-            try await accountClient.ensureRegistered()
+            let deviceId = try await accountClient.ensureRegistered()
             try await accountClient.claimHandle(trimmed)
             // Success — persist locally and record the backend confirmation so
             // HandleSyncer knows this handle is already on the server.
             handle = trimmed
             UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
             handleTakenError = nil
-            // Identify the SDK with the canonical server-minted device id now
-            // that `ensureRegistered()` has established it. For a first-time user
-            // this is the SDK's FIRST identify, so it (and the handle $set below)
-            // land on the server id rather than a pre-registration local id —
-            // the fix for the duplicate-person bug. See AnalyticsIdentity.
-            PostHogSessionReplay.identify(Analytics.distinctId())
+            // Identify to the canonical server device id (established by
+            // `ensureRegistered()` above) and `$set` the handle in ONE call. For
+            // a first-time user this is the SDK's first identify, so PostHog
+            // aliases the prior anonymous activity into the server-id person —
+            // one person, handle attached. See AnalyticsIdentity.
+            Analytics.identify(deviceId, handle: trimmed)
             Analytics.capture("handle_claimed", ["result": .string("success")])
-            // Set the claimed handle as a PostHog person property (SDK $set).
-            PostHogSessionReplay.capture("handle claimed", userProperties: ["handle": trimmed])
             onFinish()
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken. Try a different handle."

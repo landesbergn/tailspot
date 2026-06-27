@@ -5,6 +5,50 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-27 — Analytics consolidated onto the PostHog SDK (one pipeline, one identity) — branch `fix/analytics-sdk-consolidation`
+
+Killed the dual analytics pipeline that fragmented one device into multiple
+PostHog persons. The app had been running TWO pipelines: a hand-rolled SDK-free
+REST pipeline (`Analytics.swift`, `$lib=tailspot-ios`) for product events, AND
+the PostHog SDK (`$lib=posthog-ios`) for session replay — each with its OWN
+identity. The REST path minted a *local* device id and let registration swap it
+to the server id with nothing aliasing the two, while the SDK's call-once
+`identify()` could pin to that pre-registration local id. Result: `app_opened` /
+`handle_claimed` / `leaderboard_viewed` landed on a server-id person while
+session replay + the handle landed on a *separate* local-id person (e.g. one
+device = a `mach_6415` person + an unnamed `e28e8d13…` person).
+
+- **`Analytics.swift` is now a thin facade over `PostHogSDK.shared`** behind an
+  `AnalyticsSink` seam (tests inject a recording fake). The REST queue /
+  transport / batch encoder / `distinctId` are gone. Same `capture(_:_:)` call
+  shape and event names, so funnels are unaffected (events just move from
+  `$lib=tailspot-ios` to `posthog-ios`).
+- **One identity, never swapped.** The SDK owns the anonymous distinct_id from
+  first launch; `TailspotAccountClient.ensureRegistered` calls
+  `Analytics.identify(serverDeviceId)` once, so PostHog natively aliases the
+  prior anonymous activity into the server-id person. `DeviceID` stays the
+  backend device id (the value we identify to); its local-minting `current()`
+  now has **zero production callers** — the app never invents a local id.
+- **Handle-claim de-duped.** The old two-event dance (`handle_claimed` REST +
+  `handle claimed` SDK to `$set` the handle) is now one
+  `Analytics.identify(id, handle:)` + one `handle_claimed` event.
+- `PostHogSessionReplay.start()` (SDK + replay config) is unchanged; it just
+  routes its launch self-heal identify through `Analytics.identify`.
+- Tests: `AnalyticsTests` rewritten for the facade; `AnalyticsIdentity` /
+  `DeviceID` / `CatchTelemetry` suites unchanged. Full `TailspotTests` green.
+
+Already-split persons are **not** fixed by the code (the SDK's call-once
+identify won't move a live identity) — those are cleaned up separately via
+`$merge_dangerously` (see PLAN §9).
+
+The custom **`app_opened` event was dropped** in favor of the SDK's lifecycle
+`Application Opened` (kept ON for session-replay flush; carries `$app_version` /
+`$app_build` automatically), so there's now exactly one app-open event instead
+of two. Five saved insights were repointed `app_opened → Application Opened`:
+*Daily active users*, *Weekly user retention*, *User lifecycle (growth
+accounting)*, *Key engagement events*, and *App opens by version* (its breakdown
+moved from our `app_version` prop to the SDK's `$app_version`).
+
 ## 2026-06-27 — Leaderboard under-scoring fix + re-scoring foundation — PRs #79, #81
 
 Triage of a real bug — `@noah`'s profile showed **2715** points, the leaderboard

@@ -2,20 +2,24 @@
 //  DeviceID.swift
 //  Tailspot
 //
-//  Single source of the anonymous device identifier shared by the PostHog
-//  analytics distinct_id (Analytics.distinctId) and the backend device id
-//  (TailspotAccountClient). Stored in the Keychain so it survives app
+//  The canonical backend device identifier (TailspotAccountClient). It is also
+//  the value we `identify()` the PostHog SDK to (Analytics.identify), so the
+//  analytics person resolves to the same id as the backend device — but the SDK
+//  itself owns the live analytics distinct_id; this type is no longer read as
+//  the distinct_id directly. Stored in the Keychain so it survives app
 //  delete/reinstall — UserDefaults is wiped on uninstall, which minted a new
 //  id on every reinstall and fragmented one device into many PostHog persons.
 //
 //  A UserDefaults "mirror" is kept as the always-available fast read; the
 //  Keychain is the survives-reinstall source of truth. Resolution order:
-//  mirror → Keychain → generate. The id's value and precedence are unchanged
-//  from before (ensureRegistered still writes the server id through `set`) —
-//  only its storage and persistence changed.
+//  mirror → Keychain → generate. In production the id now originates ONLY from
+//  the server (ensureRegistered writes it through `set`); the minting fallback
+//  in `current()` is retained for completeness/tests but no production path
+//  calls it, so the app never invents a local id that registration must swap.
 //
 //  nonisolated to match KeychainStore / TailspotAccountClient; the read API is
-//  synchronous and non-throwing to preserve Analytics.distinctId()'s shape.
+//  synchronous and non-throwing (a plain string read for the registration and
+//  identify call sites).
 //
 
 import Foundation
@@ -94,7 +98,8 @@ nonisolated enum DeviceID {
     }
 
     /// The device id, generating and persisting one if none exists. Synchronous,
-    /// non-throwing. Used by `Analytics.distinctId`.
+    /// non-throwing. No production caller today (the id comes from the server via
+    /// `set`); retained for completeness and exercised by DeviceIDTests.
     static func current(mirror: UserDefaults = .standard,
                         durable: DeviceIDDurableStore = KeychainDeviceIDStore()) -> String {
         switch resolve(mirror: mirror, durable: durable) {

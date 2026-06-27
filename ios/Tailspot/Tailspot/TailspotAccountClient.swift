@@ -305,10 +305,17 @@ nonisolated struct TailspotAccountClient {
         }
 
         // Persist: token → Keychain (secret); id → DeviceID (Keychain source of
-        // truth + UserDefaults mirror) so it survives reinstall and stays equal
-        // to the analytics distinct_id.
+        // truth + UserDefaults mirror) so it survives reinstall.
         KeychainStore.save(secret: response.deviceToken, account: deviceTokenKeychainAccount)
         DeviceID.set(response.deviceId)
+        // Bridge analytics identity to the canonical server device id the instant
+        // it first exists. The PostHog SDK has been capturing under its own
+        // anonymous id; this single identify() aliases that anonymous activity
+        // into the server-id person (one person, canonical id == backend device
+        // id == catches/leaderboard). FIRST registration only — subsequent calls
+        // short-circuit above, and identify is call-once, so this never swaps a
+        // live identity. The handle is `$set` later at claim / launch self-heal.
+        Analytics.identify(response.deviceId)
 
         return response.deviceId
     }
