@@ -63,4 +63,22 @@ nonisolated enum AnalyticsIdentity {
               handle != placeholder else { return false }
         return true
     }
+
+    /// Person properties to `$set` alongside the launch `identify()`, or `nil`
+    /// when there's nothing to sync.
+    ///
+    /// Identifying at launch fixes the *person id* (events stop fragmenting) but
+    /// does not, on its own, attach the `handle` person property — that is only
+    /// `$set` at claim time (OnboardingFlow / SettingsScreen). So a canonical
+    /// person that's missing the handle (claimed on a since-merged anonymous
+    /// profile, or on an older build) would never re-acquire it just by
+    /// reopening the app. Returning the on-device handle here lets the launch
+    /// `identify(_:userProperties:)` re-affiliate it every run; posthog-ios
+    /// dedupes an identical repeat `$set`, so doing it each launch is cheap and
+    /// idempotent. Mirrors `launchIdentity`'s gate: only a real, claimed handle.
+    static func launchUserProperties(handle: String?, placeholder: String) -> [String: Any]? {
+        guard isClaimedHandle(handle, placeholder: placeholder),
+              let handle = handle?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        return ["handle": handle]
+    }
 }

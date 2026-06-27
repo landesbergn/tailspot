@@ -84,4 +84,26 @@ struct AnalyticsIdentityTests {
         let claimed = AnalyticsIdentity.isClaimedHandle(placeholder, placeholder: placeholder)
         #expect(AnalyticsIdentity.launchIdentity(deviceId: nil, hasClaimedHandle: claimed) == nil)
     }
+
+    // MARK: - launchUserProperties (handle self-heal on launch)
+
+    @Test func launchSetsHandleForClaimedUser() {
+        // A returning user with a real handle re-attaches it to the canonical
+        // person on launch, so a profile missing the handle self-heals.
+        let props = AnalyticsIdentity.launchUserProperties(handle: "purple_hour", placeholder: placeholder)
+        #expect(props?["handle"] as? String == "purple_hour")
+    }
+
+    @Test func launchTrimsHandleWhitespace() {
+        let props = AnalyticsIdentity.launchUserProperties(handle: "  purple_hour  ", placeholder: placeholder)
+        #expect(props?["handle"] as? String == "purple_hour")
+    }
+
+    @Test func launchSetsNothingWithoutClaimedHandle() {
+        // Placeholder / nil / empty / whitespace → no $set (nothing to sync).
+        #expect(AnalyticsIdentity.launchUserProperties(handle: placeholder, placeholder: placeholder) == nil)
+        #expect(AnalyticsIdentity.launchUserProperties(handle: nil, placeholder: placeholder) == nil)
+        #expect(AnalyticsIdentity.launchUserProperties(handle: "", placeholder: placeholder) == nil)
+        #expect(AnalyticsIdentity.launchUserProperties(handle: "   ", placeholder: placeholder) == nil)
+    }
 }
