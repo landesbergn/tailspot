@@ -37,16 +37,25 @@ struct ProfileScreen: View {
     @AppStorage("tailspot.standing.rank") private var cachedServerRank: Int = 0
     private let accountClient = TailspotAccountClient()
 
-    private var stats: ProfileStats { ProfileStats(catches: catches) }
-    private var inputs: TrophyProgressInputs { Trophies.inputs(from: catches) }
-
     var body: some View {
-        NavigationStack {
+        // Aggregate the Hangar ONCE per render. `stats` and `inputs` used to be
+        // computed properties (`{ ProfileStats(catches:) }` / `{ Trophies.inputs(
+        // from:) }`) that re-ran on EVERY access — and the body accessed them many
+        // times over: `statsRow` filtered the whole trophy roster, re-deriving
+        // `inputs` across all catches once PER trophy, and `rarityStrip` read
+        // `stats` inside two per-tier loops. On a 50–200 catch Hangar that was
+        // thousands of resolvedRarity + Calendar passes on the main thread every
+        // time the sheet built or tore down — the synchronous "freeze, then jump"
+        // on open/close. Computing each once collapses it to a single O(n) pass,
+        // then we thread the values down to the sections.
+        let stats = ProfileStats(catches: catches)
+        let inputs = Trophies.inputs(from: catches)
+        return NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    identityHeader
-                    statsRow
-                    rarityStrip
+                    identityHeader(stats: stats)
+                    statsRow(stats: stats, inputs: inputs)
+                    rarityStrip(stats: stats)
                     quickLinks
                     sectionLinks
                 }
@@ -126,7 +135,7 @@ struct ProfileScreen: View {
         return "joined " + fmt.string(from: oldest)
     }
 
-    private var identityHeader: some View {
+    private func identityHeader(stats: ProfileStats) -> some View {
         // Cached server standing (instant, no flash); local Hangar total / "—"
         // only until the very first fetch ever lands.
         let displayPoints = cachedServerPoints >= 0 ? cachedServerPoints : stats.totalPoints
@@ -201,7 +210,9 @@ struct ProfileScreen: View {
 
     // MARK: - Stats grid
 
-    private var statsRow: some View {
+    private func statsRow(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
+        // `inputs` is the precomputed value passed in — the filter closure now
+        // reads that single snapshot instead of re-deriving it per trophy.
         let earnedMedals = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
         return HStack(spacing: 8) {
             statTile(value: stats.totalCatches, label: "Catches")
@@ -229,7 +240,7 @@ struct ProfileScreen: View {
 
     // MARK: - Rarity strip
 
-    private var rarityStrip: some View {
+    private func rarityStrip(stats: ProfileStats) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("BREAKDOWN BY RARITY")
                 .font(Brand.Font.mono(size: 9, weight: .semibold))
