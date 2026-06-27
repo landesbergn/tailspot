@@ -190,8 +190,8 @@ source + each one's focused test file — they're not restated here.
   Camera `AVCaptureSession` config + `startRunning` run on a dedicated serial
   queue, never main.
 - **Logging through `Log.swift`, never `print(...)`.** `os.Logger` instances by
-  category (`adsb`, `location`, `motion`, `ui`, `analytics`, `metrics`, plus a
-  now-vestigial `openSky`); subsystem `com.landesberg.tailspot`. Use
+  category (`adsb`, `location`, `motion`, `ui`, `analytics`, `metrics`); subsystem
+  `com.landesberg.tailspot`. Use
   `privacy: .public` on interpolations you actually want to read (Apple redacts by
   default). `print` won't appear in the deploy-loop logs.
 - **Analytics is ONE pipeline: the PostHog SDK.** `Analytics.swift` is a thin
