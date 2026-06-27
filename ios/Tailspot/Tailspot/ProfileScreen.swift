@@ -28,10 +28,13 @@ struct ProfileScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
     @State private var showingShare = false
 
-    /// The caller's server-authoritative standing (rank + total points), fetched
-    /// from the leaderboard `me` field. Nil until the fetch lands or when offline
-    /// — the headline falls back to the local Hangar total in that case.
-    @State private var standing: MyStanding?
+    /// Last server-authoritative standing, CACHED in app storage so the headline
+    /// shows the known server points + rank INSTANTLY on every open (no flash from
+    /// the local fallback), then refreshes silently in the background. Sentinels:
+    /// points `-1` / rank `0` = "never fetched" → the first-ever open shows the
+    /// local Hangar total + "—" until the first fetch lands.
+    @AppStorage("tailspot.standing.points") private var cachedServerPoints: Int = -1
+    @AppStorage("tailspot.standing.rank") private var cachedServerRank: Int = 0
     private let accountClient = TailspotAccountClient()
 
     private var stats: ProfileStats { ProfileStats(catches: catches) }
@@ -82,10 +85,26 @@ struct ProfileScreen: View {
     private func loadStanding() async {
         do {
             let response = try await accountClient.leaderboard(limit: 1)
-            if let me = response.me { standing = me }
+            if let me = response.me {
+                cachedServerPoints = me.points
+                cachedServerRank = me.rank
+            }
         } catch {
             Log.ui.debug("ProfileScreen: standing fetch failed (keeping local fallback): \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Locale-aware ordinal for the rank display: 1 → "1st", 2 → "2nd", 3 → "3rd",
+    /// 11 → "11th", 21 → "21st". The formatter is cached (creating one per render
+    /// is needless work).
+    private static let ordinalFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .ordinal
+        return f
+    }()
+
+    private static func ordinalRank(_ n: Int) -> String {
+        ordinalFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
     }
 
     // MARK: - Identity
@@ -108,9 +127,10 @@ struct ProfileScreen: View {
     }
 
     private var identityHeader: some View {
-        // Server standing when loaded; local Hangar total as the offline fallback.
-        let displayPoints = standing?.points ?? stats.totalPoints
-        let rankLabel = standing.map { "#\($0.rank)" } ?? "—"
+        // Cached server standing (instant, no flash); local Hangar total / "—"
+        // only until the very first fetch ever lands.
+        let displayPoints = cachedServerPoints >= 0 ? cachedServerPoints : stats.totalPoints
+        let rankLabel = cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : "—"
         return VStack(spacing: 14) {
             HStack(spacing: 14) {
                 ZStack {

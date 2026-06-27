@@ -49,10 +49,11 @@ of two. Five saved insights were repointed `app_opened → Application Opened`:
 accounting)*, *Key engagement events*, and *App opens by version* (its breakdown
 moved from our `app_version` prop to the SDK's `$app_version`).
 
-## 2026-06-27 — Leaderboard under-scoring fix + re-scoring foundation — branch `feat/catch-rescore`
+## 2026-06-27 — Leaderboard under-scoring fix + re-scoring foundation — PRs #79, #81
 
 Triage of a real bug — `@noah`'s profile showed **2715** points, the leaderboard
-**940** — that turned into the foundation for the #4 / #10 scoring rework.
+**940** — that turned into the foundation for the #4 / #10 scoring rework. Shipped
+to `main` and the backfill applied to prod the same day.
 
 - **Root cause (prod-confirmed):** the backend freezes `catches.points` at upload
   (`resolveRarity`: `icao24 → registry → typecode → typecodes → rarity`). The
@@ -79,10 +80,15 @@ Triage of a real bug — `@noah`'s profile showed **2715** points, the leaderboa
     (`/v1/leaderboard` `me` → total points **and** the previously-placeholder
     global rank), falling back to the local Hangar total when offline — so profile
     and leaderboard agree by construction.
-- **Pending (Noah's go-ahead):** apply migration `0004` to prod (manual — no
-  `release_command`), `rescore --dry-run` to review the delta, then `rescore` to
-  land 940 → ~2755 for everyone (foreign widebodies corrected; up-only, nobody
-  loses points).
+- **Applied to prod (2026-06-27):** migration `0004` applied manually (+ repaired a
+  pre-existing journal drift — `0003` had never been recorded in
+  `drizzle.__drizzle_migrations`; the journal now lists all 5). Backend deployed,
+  then `rescore` corrected **24 of 29 stale catches** board-wide: **`@noah` 940 →
+  2755** (now == his profile), the 3 A380s → epic, other testers' foreign widebodies
+  fixed; up-only, nobody lost points; 5 unresolvable airframes stay at 10.
+- **Follow-up (PR #81):** the `rescore` CLI lingered after printing (the pg pool kept
+  the event loop alive); added `closeDb()` so the one-shot script exits cleanly. The
+  iOS profile change is on `main` but reaches testers only on the next TestFlight build.
 
 Backend: typecheck + 28 tests + lint green. `TailspotTests` green.
 
