@@ -116,6 +116,33 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         guard let cs = callsign, cs.count >= 2 else { return false }
         return cs.first == "N" && cs[cs.index(after: cs.startIndex)].isNumber
     }
+
+    /// Rough wingspan (meters) inferred from the ADS-B emitter category,
+    /// falling back to the GA registration heuristic, then a neutral
+    /// medium-large default. Used ONLY by the catch-time angular-size floor
+    /// (`ObservedAircraft.apparentSizeArcminutes` → `clearsCatchSizeFloor`)
+    /// to reject targets too small-and-distant to resolve by eye — never by
+    /// the label/visibility path. Deliberately conservative: when the class
+    /// is unknown we assume a LARGE airframe so the floor fails OPEN (it must
+    /// never block a catch we can't confidently size). Class numbers are
+    /// representative spans, not exact per-type values.
+    var estimatedWingspanMeters: Double {
+        switch emitterCategory {
+        case .heavy:            return 60   // widebody (777 / A350)
+        case .highVortexLarge:  return 38   // B757-class
+        case .large:            return 34   // narrowbody (737 / A320)
+        case .small:            return 16   // regional jet / bizjet / turboprop
+        case .light:            return 11   // GA single / light twin
+        case .highPerformance:  return 13   // fast bizjet / military
+        case .rotorcraft:       return 14   // main-rotor diameter
+        case .glider:           return 15
+        case .uav:              return 5
+        case .noInfo, .lighterThanAir, .other, .none:
+            // No authoritative size. Use the GA callsign heuristic, else
+            // assume a medium-large airframe so the floor fails open.
+            return isLikelySmallAirframe ? 12 : 40
+        }
+    }
 }
 
 extension Aircraft {
