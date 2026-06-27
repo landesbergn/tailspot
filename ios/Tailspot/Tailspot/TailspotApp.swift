@@ -79,13 +79,13 @@ struct TailspotApp: App {
                     // stored token thereafter). Errors here are non-fatal —
                     // each step re-attempts registration and aborts cleanly.
                     _ = try? await TailspotAccountClient().ensureRegistered()
-                    // app_opened fires AFTER registration so it always resolves
-                    // to the canonical server-minted device id. On a first launch
-                    // the device id doesn't exist until registration; firing
-                    // app_opened before it would mint a throwaway local id and
-                    // orphan the event on a second, anonymous person (the
-                    // duplicate-person bug). On later launches ensureRegistered
-                    // short-circuits instantly, so this still fires promptly.
+                    // Identity no longer depends on this ordering: the PostHog SDK
+                    // owns the distinct_id, and `ensureRegistered` calls
+                    // `Analytics.identify(serverId)` once, so even an app_opened
+                    // captured before registration lands on the SDK's anonymous id
+                    // and is aliased into the server-id person — no orphaning. We
+                    // still register first because the handle sync + catch upload
+                    // below need it (and it short-circuits instantly thereafter).
                     Analytics.capture("app_opened", [
                         "app_version": .string(version),
                         "app_build":   .string(build),

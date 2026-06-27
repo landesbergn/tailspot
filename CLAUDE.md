@@ -194,6 +194,17 @@ source + each one's focused test file — they're not restated here.
   now-vestigial `openSky`); subsystem `com.landesberg.tailspot`. Use
   `privacy: .public` on interpolations you actually want to read (Apple redacts by
   default). `print` won't appear in the deploy-loop logs.
+- **Analytics is ONE pipeline: the PostHog SDK.** `Analytics.swift` is a thin
+  facade over `PostHogSDK.shared` behind the `AnalyticsSink` seam (tests inject a
+  fake via `Analytics._testSink`); `PostHogSessionReplay.swift` owns one-time SDK
+  setup + the launch self-heal identify. **Identity rule (load-bearing — this was
+  a real bug):** never swap the distinct_id under the SDK. The SDK owns the
+  anonymous id from first launch; `TailspotAccountClient.ensureRegistered` calls
+  `Analytics.identify(serverDeviceId)` exactly once and PostHog aliases the prior
+  anonymous activity in — so the analytics person == the backend device id
+  (catches/leaderboard). `DeviceID` is the backend id only; don't reintroduce a
+  second analytics id or a REST capture path (the dual pipeline fragmented one
+  device into multiple persons — CHANGELOG 2026-06-27).
 - **`ADSBSourceError`** (in `ADSBSource.swift`) is the source-neutral
   transport-error enum (`badURL`/`rateLimited`/`http(status:)`/`decoding`);
   `ADSBManager.refresh` matches `.rateLimited` to drive the 429 backoff.

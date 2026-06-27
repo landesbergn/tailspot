@@ -2,58 +2,40 @@
 //  Analytics.swift
 //  Tailspot
 //
-//  Anonymous product analytics via PostHog's REST capture API.
-//  No third-party SDK — pure URLSession against the PostHog batch
-//  capture endpoint. Design is deliberately minimal and privacy-first.
+//  Product analytics — a thin facade over the PostHog iOS SDK. There is now a
+//  SINGLE analytics pipeline: every product event, person-property `$set`, and
+//  identify goes through `PostHogSDK.shared`.
 //
-//  Privacy posture (frozen):
-//    - distinct_id = the SAME anonymous device UUID stored under the
-//      "tailspot.account.deviceId" UserDefaults key that TailspotAccountClient
-//      uses. If absent, the same generate-and-store logic is used so the
-//      analytics ID is always the same as the account ID. No names, emails,
-//      precise location, or anything ATT-triggering.
-//    - Coarse region (bbox centre rounded to 1°) is acceptable in
-//      aircraft-fetch events; other events carry no location at all.
+//  History (why this used to be two pipelines): this file was originally a
+//  hand-rolled, SDK-free REST pipeline (URLSession → PostHog /batch/), written
+//  during the no-third-party-deps phase. The PostHog SDK was later added ONLY
+//  for session replay (#41), which has no REST path — so the app ran the SDK
+//  AND this REST pipeline side by side, each with its own independent identity.
+//  That fragmented one device into multiple PostHog persons (the SDK's anon id
+//  + a locally-minted REST id that registration then swapped to the server id,
+//  with nothing aliasing the two). The dependency that justified the REST path
+//  was already paid the moment the SDK shipped, so consolidating onto the SDK
+//  removes the duplicate events and the whole identity-fragmentation bug class.
+//  See PLAN §9 / CHANGELOG (2026-06-27).
 //
-//  No-op when key is absent:
-//    - POSTHOG_API_KEY baked into Info.plist via xcconfig substitution
-//      (mirrors OPENSKY_CLIENT_ID exactly). When the key is absent or
-//      empty, every capture() call is a no-op: zero network, zero queue.
+//  Identity — the rule that was being broken: NEVER swap the distinct_id under
+//  the SDK. The SDK owns an anonymous distinct_id from first launch; the moment
+//  the device registers with the backend we call `identify(serverDeviceId)`
+//  exactly once (TailspotAccountClient.ensureRegistered, and the handle-claim
+//  sites), and PostHog natively aliases the prior anonymous activity into the
+//  server-id person. The server device id stays the canonical person id, so
+//  PostHog persons line up 1:1 with backend devices (and catches/leaderboard).
+//  The backend device id itself still lives in `DeviceID` (Keychain) for the
+//  catches API — it is the value we identify() to, not a separate analytics id.
 //
-//  Queue / flush semantics:
-//    - In-memory queue, capped at 500 events (drop-oldest on overflow).
-//    - Auto-flush when: queue depth ≥ 10 events, OR 30-second timer fires.
-//    - willResignActive flush via NotificationCenter observer.
-//    - Flush: POST /batch/ with the PostHog batch envelope, fire-and-forget.
-//    - One retry on transport failure; batch dropped on the second failure.
-//      Analytics MUST never queue unboundedly or block main.
-//
-//  Capture endpoint shape (PostHog batch):
-//    POST https://us.i.posthog.com/batch/
-//    Content-Type: application/json
-//    {
-//      "api_key": "<key>",
-//      "batch": [
-//        {
-//          "event": "<name>",
-//          "distinct_id": "<deviceId>",
-//          "timestamp": "2026-06-11T12:34:56.000Z",
-//          "properties": { "$lib": "tailspot-ios", ... }
-//        }
-//      ]
-//    }
-//
-//  DEFERRED events (need ContentView — unmerged branch owns it):
-//    - ar_session_started  (ContentView scenePhase active, AR running)
-//    - lock_acquired       (LockOnEngine .locked transition, icao24/rarity)
-//    - catch_performed     (catch button tapped, before CatchUploader —
-//                           rarity/type/slant at the moment of capture)
-//    Instrument these once the ContentView branch merges.
+//  No-op when the PostHog key is absent (keyless / CI / unit-test builds): the
+//  production sink is nil, so every call is a silent no-op with zero network.
+//  Tests inject a recording `AnalyticsSink` via `_testSink`.
 //
 
 import Foundation
-import UIKit
 import os
+import PostHog
 
 // MARK: - AnalyticsValue
 
@@ -66,7 +48,7 @@ nonisolated enum AnalyticsValue: Sendable {
     case double(Double)
     case bool(Bool)
 
-    /// The underlying value as Any, for use in JSON serialisation.
+    /// The underlying value as Any, for the SDK's `[String: Any]` properties.
     var jsonValue: Any {
         switch self {
         case .string(let s): return s
@@ -77,256 +59,92 @@ nonisolated enum AnalyticsValue: Sendable {
     }
 }
 
-// MARK: - AnalyticsTransport (seam for testing)
+// MARK: - AnalyticsSink (seam for testing)
 
-/// Minimal transport seam: takes the batch-body Data and sends it.
-/// Production uses URLSession; tests inject a capture-and-succeed stub.
-nonisolated protocol AnalyticsTransport: Sendable {
-    func send(_ data: Data) async throws
+/// The capture/identify surface, abstracted so unit tests can substitute a
+/// recording fake. The PostHog SDK is process-global and not injectable, so the
+/// seam lives here (around our calls) rather than around `PostHogSDK.shared`.
+nonisolated protocol AnalyticsSink: Sendable {
+    func capture(_ event: String, _ properties: [String: AnalyticsValue])
+    func identify(_ distinctId: String, handle: String?)
+    func flush()
 }
 
-/// Default production transport — POSTs to the PostHog batch endpoint.
-nonisolated private struct PostHogTransport: AnalyticsTransport {
-    private let endpoint = URL(string: "https://us.i.posthog.com/batch/")!
-    private let session: URLSession
-
-    init(session: URLSession = .shared) {
-        self.session = session
+/// Production sink — forwards straight to the PostHog SDK. Built only when an
+/// API key is present (see `Analytics._sdkSink`), so a keyless build never
+/// touches the SDK.
+nonisolated private struct PostHogAnalyticsSink: AnalyticsSink {
+    func capture(_ event: String, _ properties: [String: AnalyticsValue]) {
+        PostHogSDK.shared.capture(event, properties: properties.mapValues { $0.jsonValue })
     }
 
-    func send(_ data: Data) async throws {
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = data
-        // We don't inspect the response body — only surface hard errors upward
-        // so the caller can decide to retry once.
-        let (_, response) = try await session.data(for: request)
-        if let http = response as? HTTPURLResponse, http.statusCode >= 500 {
-            throw URLError(.badServerResponse)
+    func identify(_ distinctId: String, handle: String?) {
+        guard !distinctId.isEmpty else { return }
+        if let handle, !handle.isEmpty {
+            // `identify(_:userProperties:)` `$set`s the handle alongside the
+            // identify. posthog-ios dedupes an identical repeat, and an already-
+            // identified SDK ignores a *different* id (identify is call-once),
+            // so re-calling on launch self-heals a profile missing the handle.
+            PostHogSDK.shared.identify(distinctId, userProperties: ["handle": handle])
+        } else {
+            PostHogSDK.shared.identify(distinctId)
         }
+    }
+
+    func flush() {
+        PostHogSDK.shared.flush()
     }
 }
 
 // MARK: - Analytics
 
-/// Singleton analytics client. `nonisolated` so `capture(...)` can be called
-/// from any isolation context — the queue is protected by an actor underneath.
-///
-/// Usage:
-///   Analytics.capture("app_opened", ["version": .string("1.0"), "build": .int(42)])
-///
-/// When the PostHog API key is absent or empty, every call is a silent no-op.
 nonisolated enum Analytics {
 
-    // MARK: - Internals
+    /// Test-only recording sink. When non-nil it wins over the production sink
+    /// (including in keyless builds). Set in setUp, nil in tearDown.
+    nonisolated(unsafe) static var _testSink: AnalyticsSink?
 
-    /// Actor-isolated state: queue + flush bookkeeping.
-    actor Queue {
-        struct QueuedEvent: Sendable {
-            let event: String
-            let distinctId: String
-            let timestamp: Date
-            let properties: [String: AnalyticsValue]
-        }
-
-        static let maxDepth = 500
-        static let flushThreshold = 10
-
-        private var events: [QueuedEvent] = []
-        private var flushTask: Task<Void, Never>?
-
-        let apiKey: String
-        let transport: any AnalyticsTransport
-
-        init(apiKey: String, transport: any AnalyticsTransport) {
-            self.apiKey = apiKey
-            self.transport = transport
-        }
-
-        // MARK: Enqueue
-
-        func enqueue(event: String, distinctId: String, properties: [String: AnalyticsValue]) {
-            let e = QueuedEvent(
-                event: event,
-                distinctId: distinctId,
-                timestamp: Date(),
-                properties: properties
-            )
-            // Cap at maxDepth — drop oldest.
-            if events.count >= Self.maxDepth {
-                events.removeFirst()
-            }
-            events.append(e)
-
-            if events.count >= Self.flushThreshold {
-                startFlushTimer(after: 0) // immediate
-            } else {
-                startFlushTimerIfNeeded()
-            }
-        }
-
-        // MARK: Flush
-
-        func flush() async {
-            guard !events.isEmpty else { return }
-            let batch = events
-            events = []
-            await sendBatch(batch, retrying: true)
-        }
-
-        // MARK: Timer
-
-        private func startFlushTimerIfNeeded() {
-            guard flushTask == nil else { return }
-            startFlushTimer(after: 30)
-        }
-
-        private func startFlushTimer(after seconds: TimeInterval) {
-            flushTask?.cancel()
-            flushTask = Task { [weak self] in
-                if seconds > 0 {
-                    try? await Task.sleep(for: .seconds(seconds))
-                }
-                guard !Task.isCancelled else { return }
-                await self?.timerFired()
-            }
-        }
-
-        private func timerFired() async {
-            flushTask = nil
-            await flush()
-        }
-
-        // MARK: Network
-
-        private func sendBatch(_ batch: [QueuedEvent], retrying: Bool) async {
-            guard let data = encodeBatch(batch) else {
-                Log.analytics.error("Analytics: failed to encode batch of \(batch.count, privacy: .public) events")
-                return
-            }
-            do {
-                try await transport.send(data)
-                Log.analytics.info("Analytics: flushed \(batch.count, privacy: .public) event(s)")
-            } catch {
-                if retrying {
-                    Log.analytics.notice("Analytics: flush failed, retrying once — \(error.localizedDescription, privacy: .public)")
-                    await sendBatch(batch, retrying: false)
-                } else {
-                    Log.analytics.error("Analytics: dropping batch of \(batch.count, privacy: .public) events after retry — \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        }
-
-        // MARK: JSON encoding
-
-        private func encodeBatch(_ batch: [QueuedEvent]) -> Data? {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-            let events: [[String: Any]] = batch.map { e in
-                var props: [String: Any] = [
-                    "$lib": "tailspot-ios",
-                ]
-                for (k, v) in e.properties {
-                    props[k] = v.jsonValue
-                }
-                return [
-                    "event": e.event,
-                    "distinct_id": e.distinctId,
-                    "timestamp": formatter.string(from: e.timestamp),
-                    "properties": props,
-                ]
-            }
-
-            let payload: [String: Any] = [
-                "api_key": apiKey,
-                "batch": events,
-            ]
-
-            return try? JSONSerialization.data(withJSONObject: payload)
-        }
-    }
-
-    // MARK: - Singleton queue
-
-    /// Lazily-initialised backing queue. Nil when the API key is absent.
-    private static let _queue: Queue? = {
+    /// Production sink — nil when the PostHog API key is absent (keyless no-op).
+    private static let _sdkSink: AnalyticsSink? = {
         guard let key = apiKeyFromBundle(), !key.isEmpty else {
             Log.analytics.notice("Analytics: POSTHOG_API_KEY absent — analytics disabled (no-op mode)")
             return nil
         }
-        let q = Queue(apiKey: key, transport: PostHogTransport())
-        // Flush on willResignActive so batches aren't lost when the user
-        // backgrounds the app mid-session.
-        NotificationCenter.default.addObserver(
-            forName: UIApplication.willResignActiveNotification,
-            object: nil, queue: nil
-        ) { _ in
-            Task { await q.flush() }
-        }
-        return q
+        return PostHogAnalyticsSink()
     }()
 
-    /// Overridable queue for tests — set before calling capture().
-    /// When non-nil, this wins over _queue (including when _queue would be nil).
-    nonisolated(unsafe) static var _testQueue: Queue? = nil
-
-    private static var activeQueue: Queue? { _testQueue ?? _queue }
+    private static var sink: AnalyticsSink? { _testSink ?? _sdkSink }
 
     // MARK: - Public API
 
     /// Capture a named event with structured properties. Fire-and-forget —
-    /// never throws, never blocks the caller. Safe to call from any actor.
-    ///
-    /// When the API key is absent: this is a silent no-op.
+    /// never throws, never blocks. No-op when the API key is absent.
     static func capture(_ event: String, _ properties: [String: AnalyticsValue] = [:]) {
-        guard let q = activeQueue else { return }
-        let id = distinctId()
-        Task {
-            await q.enqueue(event: event, distinctId: id, properties: properties)
-        }
+        sink?.capture(event, properties)
     }
 
-    /// Force-flush all queued events immediately. Used by test code and the
-    /// willResignActive observer to ensure nothing is dropped.
-    static func flush() async {
-        await activeQueue?.flush()
+    /// Identify the current install as `distinctId` (the canonical server-minted
+    /// device id), optionally `$set`ting the claimed `handle`. Call once the
+    /// backend device id exists (registration / handle claim); PostHog aliases
+    /// the prior anonymous activity into this person. No-op when keyless.
+    static func identify(_ distinctId: String, handle: String? = nil) {
+        sink?.identify(distinctId, handle: handle)
     }
 
-    // MARK: - DeviceID
-
-    /// The anonymous device identifier, shared with TailspotAccountClient and
-    /// reported to PostHog as `distinct_id`. Backed by `DeviceID` (Keychain
-    /// source of truth + UserDefaults mirror) so it survives app reinstall —
-    /// before, a UserDefaults-only id reset on every reinstall and fragmented
-    /// one device into many PostHog persons.
-    /// `defaults`/`durable` are injectable so tests use an isolated UserDefaults
-    /// suite and an in-memory store: Swift Testing runs suites in PARALLEL, and
-    /// the real Keychain is process-global and can't be isolated per suite.
-    static func distinctId(defaults: UserDefaults = .standard,
-                           durable: DeviceIDDurableStore = KeychainDeviceIDStore()) -> String {
-        DeviceID.current(mirror: defaults, durable: durable)
+    /// Force-flush queued events. The SDK flushes eagerly (flushAt = 1), so this
+    /// is rarely needed; retained for symmetry and tests.
+    static func flush() {
+        sink?.flush()
     }
 
     // MARK: - Bundle key resolution
 
-    /// The PostHog project API key from Info.plist (xcconfig-substituted),
-    /// or nil/empty when unset. Exposed so the session-replay SDK setup uses
-    /// the exact same key + key-name as this REST analytics pipeline.
+    /// The PostHog project API key from Info.plist (xcconfig-substituted), or
+    /// nil/empty when unset. Shared with `PostHogSessionReplay.start()` so the
+    /// SDK setup and this facade use the exact same key + key-name.
     static var apiKey: String? { apiKeyFromBundle() }
 
     private static func apiKeyFromBundle() -> String? {
         Bundle.main.object(forInfoDictionaryKey: "PostHogAPIKey") as? String
-    }
-}
-
-// MARK: - Queue factory for testing
-
-extension Analytics {
-    /// Create a fresh test queue with an injected transport. Assign to
-    /// `Analytics._testQueue` in setUp and nil it in tearDown.
-    static func makeTestQueue(transport: any AnalyticsTransport) -> Queue {
-        Queue(apiKey: "test-key", transport: transport)
     }
 }

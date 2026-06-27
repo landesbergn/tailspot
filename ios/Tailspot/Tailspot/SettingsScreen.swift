@@ -172,7 +172,7 @@ struct SettingsScreen: View {
         isSavingHandle = true
         defer { isSavingHandle = false }
         do {
-            try await accountClient.ensureRegistered()
+            let deviceId = try await accountClient.ensureRegistered()
             try await accountClient.claimHandle(trimmed)
             handle = trimmed
             // Record the backend confirmation so HandleSyncer treats this
@@ -180,14 +180,12 @@ struct SettingsScreen: View {
             UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
             handleTakenError = nil
             savedHandleSuccess = "@\(trimmed) claimed"
-            // Identify the SDK with the canonical server-minted device id now
-            // that `ensureRegistered()` has established it, so SDK events and the
-            // handle $set below resolve to the same person as the REST pipeline
-            // (the duplicate-person fix). See AnalyticsIdentity.
-            PostHogSessionReplay.identify(Analytics.distinctId())
+            // Identify to the canonical server device id (established by
+            // `ensureRegistered()` above) and `$set` the handle in ONE call, so
+            // SDK events, session replay, and the handle all resolve to a single
+            // canonical person. See AnalyticsIdentity.
+            Analytics.identify(deviceId, handle: trimmed)
             Analytics.capture("handle_claimed", ["result": .string("success")])
-            // Set the claimed handle as a PostHog person property (SDK $set).
-            PostHogSessionReplay.capture("handle claimed", userProperties: ["handle": trimmed])
             // Stop the spinner BEFORE the auto-clear sleep — the deferred
             // reset only fires at function exit, which would otherwise keep
             // the Save button spinning/disabled for the whole 3 s.
