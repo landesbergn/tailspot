@@ -55,6 +55,20 @@ final class VisualConfirmationPipeline: ObservableObject {
     static let enabledKey = "tailspot.debug.visualConfirm"
     private static let defaultEnabled = true
 
+    /// L2 localized sky gate ENFORCEMENT. Ships OFF (shadow mode): the gate
+    /// computes its verdict and fires `catch_local_gate` telemetry on every
+    /// catch, but does NOT block until this is flipped on — after the on-device
+    /// texture threshold is calibrated from the shadow data. Debug-overlay
+    /// toggle only; production has no user-facing control by design.
+    var localGateEnforcing: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.localGateKey) }
+        set {
+            objectWillChange.send()   // not @Published (UserDefaults-backed)
+            UserDefaults.standard.set(newValue, forKey: Self.localGateKey)
+        }
+    }
+    static let localGateKey = "tailspot.debug.localGateEnforcing"
+
     /// What the detector should look for, refreshed every render frame.
     nonisolated struct Target: Sendable {
         let icao24: String
@@ -81,6 +95,10 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// the camera queue every frame (independent of the detector toggle),
     /// read at catch time. nil until the first frame arrives.
     private let skyFeaturesSnapshot = OSAllocatedUnfairLock<SkyFeatures?>(initialState: nil)
+    /// Latest per-tile scene grid for the L2 localized sky gate. Written on the
+    /// camera queue every frame (independent of the detector toggle), read at
+    /// catch time to judge the patch under each target's bracket.
+    private let localGridSnapshot = OSAllocatedUnfairLock<LocalSkyGrid?>(initialState: nil)
 
     private var tracker = VisualFixTracker(gateRadius: 150)
     // `nonisolated`: CropFrameSaver is itself a nonisolated class (it uses
@@ -102,6 +120,10 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// Snapshot of the most recent frame's sky features (v1 authenticity
     /// gate). nil before the first frame arrives.
     nonisolated var latestSkyFeatures: SkyFeatures? { skyFeaturesSnapshot.withLock { $0 } }
+
+    /// Snapshot of the most recent frame's per-tile grid (L2 localized gate).
+    /// nil before the first frame arrives.
+    nonisolated var latestLocalGrid: LocalSkyGrid? { localGridSnapshot.withLock { $0 } }
 
     /// Called from the render loop every frame with the single plane worth
     /// confirming (lock target or pin), or nil when there isn't one.
@@ -129,6 +151,10 @@ final class VisualConfirmationPipeline: ObservableObject {
         // at catch time.
         if let sky = SkyFeatures.extract(from: pixelBuffer) {
             skyFeaturesSnapshot.withLock { $0 = sky }
+        }
+        // L2 localized gate grid — also every frame, also toggle-independent.
+        if let grid = LocalSkyGrid.extract(from: pixelBuffer) {
+            localGridSnapshot.withLock { $0 = grid }
         }
         guard enabledSnapshot.withLock({ $0 }),
               let target = targetSnapshot.withLock({ $0 }),

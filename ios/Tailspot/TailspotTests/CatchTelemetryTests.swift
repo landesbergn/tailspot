@@ -177,4 +177,59 @@ struct CatchTelemetryTests {
         #expect(CatchTelemetry.blockedOutdoorsEvent == "catch_blocked_outdoors")
         #expect(CatchTelemetry.gateOverrideEvent == "catch_gate_override")
     }
+
+    // MARK: - Anti-cheat telemetry (PR1: aim + size floor)
+
+    @Test func performedDefaultsToMultiNOneAndOmitsAngularSize() {
+        // Existing callers (and duplicates) get multi_n=1 and no size key.
+        let p = CatchTelemetry.performedProperties(
+            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: false, visualFixConfidence: nil
+        )
+        #expect(p["multi_n"]?.jsonValue as? Int == 1)
+        #expect(p["angular_size_arcmin"] == nil)
+    }
+
+    @Test func performedCarriesMultiNAndAngularSizeWhenProvided() {
+        let p = CatchTelemetry.performedProperties(
+            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: false, visualFixConfidence: nil,
+            multiN: 3, angularSizeArcmin: 8.4
+        )
+        #expect(p["multi_n"]?.jsonValue as? Int == 3)
+        #expect((p["angular_size_arcmin"]?.jsonValue as? Double) == 8.4)
+    }
+
+    @Test func sizeGatePropertiesCarrySizeSlantAndFloor() {
+        let p = CatchTelemetry.sizeGateProperties(arcmin: 1.9, slantKm: 28.7, blockedCount: 2)
+        #expect((p["angular_size_arcmin"]?.jsonValue as? Double) == 1.9)
+        #expect((p["slant_km"]?.jsonValue as? Double) == 28.7)
+        #expect(p["blocked_count"]?.jsonValue as? Int == 2)
+        #expect((p["floor_arcmin"]?.jsonValue as? Double) == ObservedAircraft.catchSizeFloorArcminutes)
+    }
+
+    @Test func sizeEventNamesAreStable() {
+        #expect(CatchTelemetry.blockedSizeEvent == "catch_blocked_size")
+        #expect(CatchTelemetry.sizeOverrideEvent == "catch_size_override")
+    }
+
+    // MARK: - Localized sky gate (L2)
+
+    @Test func localGatePropertiesCarryVerdictFeaturesAndMode() {
+        let f = LocalSkyFeatures(patchTexture: 0.05, patchWarmth: 0.12,
+                                 patchLum: 0.4, skyFraction: 0.3)
+        let p = CatchTelemetry.localGateProperties(
+            verdict: .notSky, features: f, wouldBlock: true, enforcing: false)
+        #expect(p["verdict"]?.jsonValue as? String == "notSky")
+        #expect((p["patch_texture"]?.jsonValue as? Double) == 0.05)
+        #expect((p["patch_warmth"]?.jsonValue as? Double) == 0.12)
+        #expect((p["sky_fraction"]?.jsonValue as? Double) == 0.3)
+        #expect(p["would_block"]?.jsonValue as? Bool == true)
+        #expect(p["enforcing"]?.jsonValue as? Bool == false)
+    }
+
+    @Test func localGateEventNamesAreStable() {
+        #expect(CatchTelemetry.localGateEvent == "catch_local_gate")
+        #expect(CatchTelemetry.occludedOverrideEvent == "catch_occluded_override")
+    }
 }

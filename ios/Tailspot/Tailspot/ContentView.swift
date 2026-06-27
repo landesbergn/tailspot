@@ -138,14 +138,16 @@ struct ContentView: View {
     /// the multi-button chrome. T8 will re-wire inside the new merged
     /// `performCatch(mode:)`. Reveal-dismiss callbacks still clear it.
     @State private var captureInFlight = false
-    /// Transient "head outside" nudge shown when the gate blocks an
-    /// indoor catch.
-    @State private var showIndoorNudge = false
-    /// The blocked catch's "Catch anyway" override — set when the gate
-    /// blocks, run if the user taps through the nudge.
+    /// Transient "catch blocked" nudge — shown when a catch gate (indoor, or
+    /// too-far) stops a catch, with a one-tap "Catch anyway" override.
+    @State private var showCatchBlockedNudge = false
+    /// Copy for the active block nudge — keyed to the block reason.
+    @State private var catchBlockMessage = ""
+    /// The blocked catch's "Catch anyway" override — set when a gate blocks,
+    /// run if the user taps through the nudge.
     @State private var overrideCatch: (() -> Void)?
-    /// Bumped on each enforced block so the nudge's auto-dismiss timer
-    /// re-arms (`.task(id:)`) on a rapid second block within the window.
+    /// Bumped on each block so the nudge's auto-dismiss timer re-arms
+    /// (`.task(id:)`) on a rapid second block within the window.
     @State private var nudgeToken = 0
     /// Ambient "you're indoors" hint, shown proactively when the camera
     /// has read a confident not-sky frame for a sustained spell (so a
@@ -440,19 +442,39 @@ struct ContentView: View {
                                     }
                                 }
                             )
+                            // Anti-cheat L1 — aim, don't spray. The catch set is
+                            // the planes inside a TIGHT central zone around the
+                            // reticle, not the whole frame: you have to point AT
+                            // a plane to catch it, which kills the dense-airspace
+                            // "tap anywhere, bag a fistful" exploit. `onScreen*`
+                            // above still spans the full frame for bracket
+                            // rendering; only catchability narrows here.
+                            let catchableIcaos = icaosInZone(
+                                in: visible,
+                                phoneHeadingDeg: heading,
+                                cameraElevationDeg: camEl,
+                                rollDeg: roll,
+                                screenSize: geo.size,
+                                hfovDeg: effectiveHfov,
+                                vfovDeg: effectiveVfov,
+                                zoneRadius: Self.catchZoneRadius
+                            )
                             let pinForCapture = lockOn.state.targetIcao24
                             let mode: CaptureMode = {
+                                // An explicit tap-pin is a deliberate choice — it
+                                // stays catchable while on screen even if the user
+                                // has drifted slightly off it.
                                 if let pin = pinForCapture,
                                    onScreenIcaos.contains(pin) {
                                     return .single(pin)
                                 }
-                                if onScreenIcaos.isEmpty {
+                                if catchableIcaos.isEmpty {
                                     return .disabled
                                 }
-                                if onScreenIcaos.count == 1 {
-                                    return .single(onScreenIcaos[0])
+                                if catchableIcaos.count == 1 {
+                                    return .single(catchableIcaos[0])
                                 }
-                                return .multi(onScreenIcaos)
+                                return .multi(catchableIcaos)
                             }()
                             VStack {
                                 Spacer()
@@ -620,7 +642,7 @@ struct ContentView: View {
         }
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
-        .overlay(alignment: .bottom) { indoorNudgeBanner }
+        .overlay(alignment: .bottom) { catchBlockedNudge }
         .overlay(alignment: .top) { indoorHintBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
@@ -784,23 +806,23 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private var indoorNudgeBanner: some View {
-        if showIndoorNudge {
+    private var catchBlockedNudge: some View {
+        if showCatchBlockedNudge {
             VStack(spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "airplane")
                         .foregroundStyle(Brand.Color.cyan)
                         .accessibilityHidden(true)
-                    Text("Looks like you're indoors — head outside to catch a plane!")
+                    Text(catchBlockMessage)
                         .font(Brand.Font.mono(size: 12, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(Brand.Color.textPrimary)
                 }
-                // Escape hatch: a rare false-block (e.g. a dramatic warm
-                // sunset sky) is never a dead end. The tap-rate is our
-                // calibration signal (catch_gate_override).
+                // Escape hatch: a rare false-block (a dramatic warm sunset sky,
+                // a mis-sized airframe) is never a dead end. The tap-rate is our
+                // calibration signal (catch_gate_override / catch_size_override).
                 Button {
-                    withAnimation { showIndoorNudge = false }
+                    withAnimation { showCatchBlockedNudge = false }
                     let go = overrideCatch
                     overrideCatch = nil
                     go?()
@@ -827,7 +849,7 @@ struct ContentView: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .task(id: nudgeToken) {
                 try? await Task.sleep(for: .seconds(4.5))
-                withAnimation { showIndoorNudge = false }
+                withAnimation { showCatchBlockedNudge = false }
                 overrideCatch = nil
             }
         }
@@ -937,6 +959,43 @@ struct ContentView: View {
         case disabled
         case single(String)        // icao24
         case multi([String])       // icao24 list
+
+        /// The target icao24 list this mode resolves to (empty when disabled).
+        var icaos: [String] {
+            switch self {
+            case .disabled:        return []
+            case .single(let i):   return [i]
+            case .multi(let list): return list
+            }
+        }
+    }
+
+    /// Anti-cheat L1 — radius (screen points) of the central catch zone the
+    /// capture button draws its targets from. Tighter than the old whole-frame
+    /// behaviour so a catch means "I aimed at this plane." In points (not
+    /// degrees) so it scales with zoom — at higher zoom the same radius covers
+    /// a narrower angular wedge, exactly right for disambiguating spread-apart
+    /// planes. The lock zone is 80; this starts a touch wider so a centred
+    /// plane with mild compass drift still qualifies. Tunable in field test.
+    private static let catchZoneRadius: CGFloat = 100
+
+    /// Why a catch was blocked — drives the nudge copy. Every reason fails OPEN
+    /// with a "Catch anyway" override; the per-reason override rate is the
+    /// tuning signal (a reason testers override constantly is mis-calibrated).
+    private enum CatchBlock {
+        case indoor
+        case tooFar
+        case occluded
+        var message: String {
+            switch self {
+            case .indoor:
+                return "Looks like you're indoors — head outside to catch a plane!"
+            case .tooFar:
+                return "That one's too far to make out — find a closer plane to catch!"
+            case .occluded:
+                return "Point at the plane — it looks like there's something in the way."
+            }
+        }
     }
 
     /// Bottom capture bar — hangar (left), big central capture
@@ -977,38 +1036,117 @@ struct ContentView: View {
         screenSize: CGSize,
         positions: [String: CGPoint]
     ) {
-        let icaos: [String]
-        switch mode {
-        case .disabled:         return
-        case .single(let icao): icaos = [icao]
-        case .multi(let list):  icaos = list
-        }
+        let icaos = mode.icaos
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
-        // v1 authenticity gate. Evaluate the frame the user tapped: a
-        // confident "not sky" (indoors) blocks the catch and shows a
-        // nudge with a one-tap "Catch anyway" override. Everything else
-        // (sky / uncertain / no signal) proceeds — fail open.
+
+        // Gate 1 — indoor (v1 whole-frame authenticity gate). A confident
+        // "not sky" blocks the whole tap; everything else proceeds (fail open).
         let skyFeatures = visualConfirm.latestSkyFeatures
         let gpsAccuracy = location.horizontalAccuracy
         if computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy) == .notSky {
             CatchTelemetry.fireBlockedOutdoors(
                 verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
             )
-            // Stash the override so the nudge's "Catch anyway" runs the
-            // catch unguarded — a rare false-block is never a dead end.
-            // How often it's tapped is our calibration signal.
-            overrideCatch = {
+            // A rare false-block (a dramatic warm sunset) is never a dead end;
+            // the override tap-rate is our calibration signal.
+            blockCatch(message: CatchBlock.indoor.message) {
                 CatchTelemetry.fireGateOverride(
                     verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
                 )
-                runCatch(mode: mode, screenSize: screenSize, positions: positions)
+                runCatch(icaos: icaos, screenSize: screenSize, positions: positions)
             }
-            nudgeToken &+= 1
-            withAnimation { showIndoorNudge = true }
             return
         }
-        runCatch(mode: mode, screenSize: screenSize, positions: positions)
+
+        // Gate 2 — angular-size floor (L3). A plane too small-and-distant to
+        // resolve by eye isn't a real catch (independent of occlusion, which the
+        // localized sky gate will own). If the WHOLE tap is too far, block with a
+        // one-tap override; if only some targets are, catch the resolvable ones
+        // and drop the specks (telemetry only — a partial block shouldn't
+        // interrupt an otherwise-good multi-catch).
+        let observedByIcao = Dictionary(
+            adsb.observed.map { ($0.aircraft.icao24, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var resolvable: [String] = []
+        var tooFar: [ObservedAircraft] = []
+        for icao in icaos {
+            // No observation (shouldn't happen — it was on screen) → fail open.
+            if observedByIcao[icao]?.clearsCatchSizeFloor ?? true {
+                resolvable.append(icao)
+            } else if let obs = observedByIcao[icao] {
+                tooFar.append(obs)
+            }
+        }
+
+        if resolvable.isEmpty,
+           let worst = tooFar.min(by: { $0.apparentSizeArcminutes < $1.apparentSizeArcminutes }) {
+            CatchTelemetry.fireBlockedSize(
+                arcmin: worst.apparentSizeArcminutes,
+                slantKm: worst.slantDistanceMeters / 1000,
+                blockedCount: tooFar.count
+            )
+            blockCatch(message: CatchBlock.tooFar.message) {
+                CatchTelemetry.fireSizeOverride(
+                    arcmin: worst.apparentSizeArcminutes,
+                    slantKm: worst.slantDistanceMeters / 1000
+                )
+                runCatch(icaos: icaos, screenSize: screenSize, positions: positions)
+            }
+            return
+        }
+        // Some passed: record the dropped specks (no nudge — don't interrupt).
+        for obs in tooFar {
+            CatchTelemetry.fireBlockedSize(
+                arcmin: obs.apparentSizeArcminutes,
+                slantKm: obs.slantDistanceMeters / 1000
+            )
+        }
+
+        // Gate 3 — localized sky gate (L2). Judge the patch under each
+        // resolvable target's bracket. SHADOW MODE by default: fire telemetry
+        // for what it WOULD do (the calibration stream) but don't block. When
+        // enforcing, a confidently-occluded target (bracket on a building/tree)
+        // blocks — whole tap → nudge + override; partial → drop the occluded.
+        let enforcing = visualConfirm.localGateEnforcing
+        if let grid = visualConfirm.latestLocalGrid {
+            let gate = LocalSkyGate()
+            var occluded: [(icao: String, features: LocalSkyFeatures)] = []
+            for icao in resolvable {
+                guard let pos = positions[icao] else { continue }
+                let f = grid.features(atScreenPoint: pos, screenSize: screenSize)
+                let v = gate.verdict(f)
+                let wouldBlock = (v == .notSky)
+                CatchTelemetry.fireLocalGate(
+                    verdict: v, features: f, wouldBlock: wouldBlock, enforcing: enforcing
+                )
+                if wouldBlock { occluded.append((icao, f)) }
+            }
+            if enforcing, !occluded.isEmpty {
+                let blockedSet = Set(occluded.map(\.icao))
+                let clear = resolvable.filter { !blockedSet.contains($0) }
+                if clear.isEmpty, let worst = occluded.first {
+                    blockCatch(message: CatchBlock.occluded.message) {
+                        CatchTelemetry.fireOccludedOverride(features: worst.features)
+                        runCatch(icaos: resolvable, screenSize: screenSize, positions: positions)
+                    }
+                    return
+                }
+                runCatch(icaos: clear, screenSize: screenSize, positions: positions)
+                return
+            }
+        }
+        runCatch(icaos: resolvable, screenSize: screenSize, positions: positions)
+    }
+
+    /// Show the "catch blocked" nudge with a reason message and stash the
+    /// "Catch anyway" override. Shared by every catch gate (indoor, too-far).
+    private func blockCatch(message: String, override: @escaping () -> Void) {
+        catchBlockMessage = message
+        overrideCatch = override
+        nudgeToken &+= 1
+        withAnimation { showCatchBlockedNudge = true }
     }
 
     /// The actual catch — capture the JPEG, build + save the rows, fire
@@ -1016,16 +1154,10 @@ struct ContentView: View {
     /// gate (the gate decision lives in `performCatch`; the nudge's
     /// "Catch anyway" calls this directly).
     private func runCatch(
-        mode: CaptureMode,
+        icaos: [String],
         screenSize: CGSize,
         positions: [String: CGPoint]
     ) {
-        let icaos: [String]
-        switch mode {
-        case .disabled:         return
-        case .single(let icao): icaos = [icao]
-        case .multi(let list):  icaos = list
-        }
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
         captureInFlight = true
@@ -1178,7 +1310,11 @@ struct ContentView: View {
                 CatchTelemetry.firePerformed(
                     row,
                     visualConfirmEnabled: visualConfirm.enabled,
-                    visualFixConfidence: visualConfirm.fixes[row.icao24]?.confidence
+                    visualFixConfidence: visualConfirm.fixes[row.icao24]?.confidence,
+                    // Anti-cheat signals: how many this tap caught (L1 → ~1) and
+                    // the caught plane's apparent size (L3 → trending bigger).
+                    multiN: newCatches.count,
+                    angularSizeArcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
@@ -1555,6 +1691,7 @@ struct ContentView: View {
                 analyzeRow
                 visualConfirmRow
                 gateDebugRow
+                localGateRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1815,6 +1952,24 @@ struct ContentView: View {
             }
             Spacer()
         }
+    }
+
+    /// Tap-to-toggle row for the L2 localized sky gate (debug). SHADOW
+    /// (telemetry only, ships this way) ↔ ENFORCE (blocks a bracket aimed at
+    /// a building/tree). Lets a field session flip enforcement on to feel the
+    /// occlusion nudge before the on-device threshold is calibrated.
+    private var localGateRow: some View {
+        HStack(spacing: 8) {
+            Text("L2 gate:")
+            Text(visualConfirm.localGateEnforcing ? "[ENFORCE]" : "[SHADOW]")
+                .foregroundStyle(visualConfirm.localGateEnforcing
+                                 ? Brand.Color.alertCaution
+                                 : Brand.Color.textTertiary)
+                .bold()
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture { visualConfirm.localGateEnforcing.toggle() }
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record

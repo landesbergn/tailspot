@@ -40,6 +40,40 @@ struct ObservedAircraft: Identifiable, Sendable {
     var id: String { aircraft.icao24 }
 }
 
+// MARK: - Catch-time angular-size floor (Lever 3)
+
+extension ObservedAircraft {
+    /// The aircraft's apparent angular size (arc-minutes) — its wingspan
+    /// subtended at the observer's eye at the current slant distance. The
+    /// naked eye resolves ~1′; making out (and aiming at) a plane needs
+    /// several. Drives the catch-time size floor below.
+    var apparentSizeArcminutes: Double {
+        guard slantDistanceMeters > 0 else { return .infinity }
+        return aircraft.estimatedWingspanMeters / slantDistanceMeters
+            * (180 / .pi) * 60
+    }
+
+    /// Whether this aircraft is big/close enough to plausibly resolve by eye
+    /// — the catch-time angular-size floor (Lever 3). A small airframe 25 km
+    /// out is a sub-resolution speck nobody can identify, so it isn't a real
+    /// catch *regardless of occlusion* (which the localized sky gate owns).
+    ///
+    /// Deliberately DECOUPLED from `isLikelyVisibleToObserver`: labels stay
+    /// as generous as ever (a far contrail still shows) — only *catching* a
+    /// speck is gated, with a "Catch anyway" override on the block.
+    var clearsCatchSizeFloor: Bool {
+        apparentSizeArcminutes >= ObservedAircraft.catchSizeFloorArcminutes
+    }
+
+    /// Minimum apparent size (arc-minutes) to allow a catch. 2.5′ blocks only
+    /// the physically-unresolvable — a ~16 m bizjet beyond ~22 km (John's
+    /// 28.7 km Citation reads 1.9′) — while clearing every confirmed field
+    /// sighting (the marginal SKW5480 regional at 18 km ≈ 5′, the ANA179
+    /// widebody contrail at 19 km ≈ 11′). The far end is owned by the
+    /// localized sky gate, not this floor. Tunable; calibrate from telemetry.
+    static let catchSizeFloorArcminutes: Double = 2.5
+}
+
 /// Apply visibility hysteresis to a freshly-annotated frame: stamp each
 /// aircraft's `wasShownLastFrame` from the prior shown set, then return the
 /// new shown set (the icao24s now passing the hysteretic visibility gate).
