@@ -985,12 +985,15 @@ struct ContentView: View {
     private enum CatchBlock {
         case indoor
         case tooFar
+        case occluded
         var message: String {
             switch self {
             case .indoor:
                 return "Looks like you're indoors — head outside to catch a plane!"
             case .tooFar:
                 return "That one's too far to make out — find a closer plane to catch!"
+            case .occluded:
+                return "Point at the plane — it looks like there's something in the way."
             }
         }
     }
@@ -1099,6 +1102,40 @@ struct ContentView: View {
                 arcmin: obs.apparentSizeArcminutes,
                 slantKm: obs.slantDistanceMeters / 1000
             )
+        }
+
+        // Gate 3 — localized sky gate (L2). Judge the patch under each
+        // resolvable target's bracket. SHADOW MODE by default: fire telemetry
+        // for what it WOULD do (the calibration stream) but don't block. When
+        // enforcing, a confidently-occluded target (bracket on a building/tree)
+        // blocks — whole tap → nudge + override; partial → drop the occluded.
+        let enforcing = visualConfirm.localGateEnforcing
+        if let grid = visualConfirm.latestLocalGrid {
+            let gate = LocalSkyGate()
+            var occluded: [(icao: String, features: LocalSkyFeatures)] = []
+            for icao in resolvable {
+                guard let pos = positions[icao] else { continue }
+                let f = grid.features(atScreenPoint: pos, screenSize: screenSize)
+                let v = gate.verdict(f)
+                let wouldBlock = (v == .notSky)
+                CatchTelemetry.fireLocalGate(
+                    verdict: v, features: f, wouldBlock: wouldBlock, enforcing: enforcing
+                )
+                if wouldBlock { occluded.append((icao, f)) }
+            }
+            if enforcing, !occluded.isEmpty {
+                let blockedSet = Set(occluded.map(\.icao))
+                let clear = resolvable.filter { !blockedSet.contains($0) }
+                if clear.isEmpty, let worst = occluded.first {
+                    blockCatch(message: CatchBlock.occluded.message) {
+                        CatchTelemetry.fireOccludedOverride(features: worst.features)
+                        runCatch(icaos: resolvable, screenSize: screenSize, positions: positions)
+                    }
+                    return
+                }
+                runCatch(icaos: clear, screenSize: screenSize, positions: positions)
+                return
+            }
         }
         runCatch(icaos: resolvable, screenSize: screenSize, positions: positions)
     }
@@ -1654,6 +1691,7 @@ struct ContentView: View {
                 analyzeRow
                 visualConfirmRow
                 gateDebugRow
+                localGateRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1914,6 +1952,24 @@ struct ContentView: View {
             }
             Spacer()
         }
+    }
+
+    /// Tap-to-toggle row for the L2 localized sky gate (debug). SHADOW
+    /// (telemetry only, ships this way) ↔ ENFORCE (blocks a bracket aimed at
+    /// a building/tree). Lets a field session flip enforcement on to feel the
+    /// occlusion nudge before the on-device threshold is calibrated.
+    private var localGateRow: some View {
+        HStack(spacing: 8) {
+            Text("L2 gate:")
+            Text(visualConfirm.localGateEnforcing ? "[ENFORCE]" : "[SHADOW]")
+                .foregroundStyle(visualConfirm.localGateEnforcing
+                                 ? Brand.Color.alertCaution
+                                 : Brand.Color.textTertiary)
+                .bold()
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture { visualConfirm.localGateEnforcing.toggle() }
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record

@@ -212,4 +212,24 @@ struct CatchTelemetryTests {
         #expect(CatchTelemetry.blockedSizeEvent == "catch_blocked_size")
         #expect(CatchTelemetry.sizeOverrideEvent == "catch_size_override")
     }
+
+    // MARK: - Localized sky gate (L2)
+
+    @Test func localGatePropertiesCarryVerdictFeaturesAndMode() {
+        let f = LocalSkyFeatures(patchTexture: 0.05, patchWarmth: 0.12,
+                                 patchLum: 0.4, skyFraction: 0.3)
+        let p = CatchTelemetry.localGateProperties(
+            verdict: .notSky, features: f, wouldBlock: true, enforcing: false)
+        #expect(p["verdict"]?.jsonValue as? String == "notSky")
+        #expect((p["patch_texture"]?.jsonValue as? Double) == 0.05)
+        #expect((p["patch_warmth"]?.jsonValue as? Double) == 0.12)
+        #expect((p["sky_fraction"]?.jsonValue as? Double) == 0.3)
+        #expect(p["would_block"]?.jsonValue as? Bool == true)
+        #expect(p["enforcing"]?.jsonValue as? Bool == false)
+    }
+
+    @Test func localGateEventNamesAreStable() {
+        #expect(CatchTelemetry.localGateEvent == "catch_local_gate")
+        #expect(CatchTelemetry.occludedOverrideEvent == "catch_occluded_override")
+    }
 }

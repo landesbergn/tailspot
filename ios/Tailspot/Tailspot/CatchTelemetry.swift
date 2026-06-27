@@ -45,6 +45,13 @@ nonisolated enum CatchTelemetry {
     // out cleanly in PostHog without disturbing the existing indoor history.
     static let blockedSizeEvent = "catch_blocked_size"
     static let sizeOverrideEvent = "catch_size_override"
+    // Lever 2 (localized sky gate). `catch_local_gate` fires on EVERY catch
+    // (shadow + enforce) with the per-target verdict + features — the
+    // calibration stream that tunes the on-device texture threshold before
+    // enforcement. `catch_occluded_override` fires on a "Catch anyway" through
+    // an enforced occlusion block.
+    static let localGateEvent = "catch_local_gate"
+    static let occludedOverrideEvent = "catch_occluded_override"
 
     // MARK: - Pure property builders (unit-tested)
 
@@ -283,6 +290,43 @@ nonisolated enum CatchTelemetry {
     static func fireSizeOverride(arcmin: Double, slantKm: Double) {
         Analytics.capture(sizeOverrideEvent, sizeGateProperties(
             arcmin: arcmin, slantKm: slantKm
+        ))
+    }
+
+    /// Properties for the localized-sky-gate events (L2): the verdict + the
+    /// patch features + whether it would block and whether enforcement is on,
+    /// so the on-device texture threshold can be calibrated from real catches.
+    static func localGateProperties(
+        verdict: SkyVerdict, features: LocalSkyFeatures,
+        wouldBlock: Bool, enforcing: Bool
+    ) -> [String: AnalyticsValue] {
+        [
+            "verdict": .string(verdict.rawValue),
+            "patch_texture": .double(features.patchTexture),
+            "patch_warmth": .double(features.patchWarmth),
+            "patch_lum": .double(features.patchLum),
+            "sky_fraction": .double(features.skyFraction),
+            "would_block": .bool(wouldBlock),
+            "enforcing": .bool(enforcing),
+        ]
+    }
+
+    /// Fired once per catch target with the L2 verdict — on every catch, in
+    /// shadow and enforce mode. The calibration stream for the texture floor.
+    static func fireLocalGate(
+        verdict: SkyVerdict, features: LocalSkyFeatures,
+        wouldBlock: Bool, enforcing: Bool
+    ) {
+        Analytics.capture(localGateEvent, localGateProperties(
+            verdict: verdict, features: features, wouldBlock: wouldBlock, enforcing: enforcing
+        ))
+    }
+
+    /// Fired when the user taps "Catch anyway" through an enforced occlusion
+    /// block — the false-block calibration signal for the localized gate.
+    static func fireOccludedOverride(features: LocalSkyFeatures) {
+        Analytics.capture(occludedOverrideEvent, localGateProperties(
+            verdict: .notSky, features: features, wouldBlock: true, enforcing: true
         ))
     }
 }
