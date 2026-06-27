@@ -33,7 +33,7 @@ struct HangarRecentView: View {
                 LazyVStack(spacing: 10) {
                     ForEach(rows) { row in
                         NavigationLink(value: row) {
-                            TailCard(row: row)
+                            TailCard(row: row, showPoints: true)
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
