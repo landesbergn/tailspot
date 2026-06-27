@@ -88,6 +88,19 @@ struct ProfileScreen: View {
         }
     }
 
+    /// Locale-aware ordinal for the rank display: 1 → "1st", 2 → "2nd", 3 → "3rd",
+    /// 11 → "11th", 21 → "21st". The formatter is cached (creating one per render
+    /// is needless work).
+    private static let ordinalFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .ordinal
+        return f
+    }()
+
+    private static func ordinalRank(_ n: Int) -> String {
+        ordinalFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
+
     // MARK: - Identity
 
     /// First-letter initials for the avatar disc. Uses the first two
@@ -110,7 +123,7 @@ struct ProfileScreen: View {
     private var identityHeader: some View {
         // Server standing when loaded; local Hangar total as the offline fallback.
         let displayPoints = standing?.points ?? stats.totalPoints
-        let rankLabel = standing.map { "#\($0.rank)" } ?? "—"
+        let rankLabel = standing.map { Self.ordinalRank($0.rank) } ?? "—"
         return VStack(spacing: 14) {
             HStack(spacing: 14) {
                 ZStack {
