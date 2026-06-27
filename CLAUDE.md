@@ -165,14 +165,19 @@ source + each one's focused test file — they're not restated here.
   upright in portrait. Camera elevation above the horizon = `90° − pitch`, wrapped
   in `MotionManager.cameraElevationDeg`. **Never pass raw `motion.pitch` into
   projection math** — the projection helpers take `cameraElevationDeg`.
-- **The app is locked to portrait.** `Info.plist`
-  `UISupportedInterfaceOrientations`(`~ipad`) is **Portrait-only** — that orientation
-  list is what pins the UI. (No `UIRequiresFullScreen`: it's deprecated/ignored as of
-  iOS 26 and the deployment floor is 26.2, so it only emitted a build warning.) On top
-  of that, **`LocationManager.headingOrientation` is pinned to `.portrait`** as a
-  belt-and-suspenders stable true-north reference. The identify math (heading +
-  `90° − pitch` elevation) assumes an upright portrait hold — don't add landscape UI,
-  and don't remove either pin.
+- **The app is locked to portrait AND iPhone-only.** `Info.plist`
+  `UISupportedInterfaceOrientations` is **Portrait-only** — that list is what pins the
+  UI. The target is **`TARGETED_DEVICE_FAMILY = 1` (iPhone-only)**, set 2026-06-28.
+  **Why iPhone-only, not just portrait:** a portrait-only build that *also* targets iPad
+  (`"1,2"`) without `UIRequiresFullScreen=YES` builds + runs on a device fine but **fails
+  App Store Connect validation** — it shows up only at the Xcode Cloud "Preparing build
+  for App Store Connect" step (the iPad multitasking rule demands all orientations or
+  full-screen), and GitHub Actions unit-test CI never catches it. iPhone-only sidesteps
+  the rule; `UIRequiresFullScreen` is deprecated/ignored on the 26.2 floor anyway, so
+  don't reach for it. On top of this, **`LocationManager.headingOrientation` is pinned
+  to `.portrait`** as a belt-and-suspenders stable true-north reference. The identify
+  math (heading + `90° − pitch` elevation) assumes an upright portrait hold — don't add
+  landscape UI, don't re-add iPad (family `2`), and don't remove either pin.
 - **Visibility filter.** `ObservedAircraft.isLikelyVisibleToObserver` gates **both**
   the AR overlay and the on-screen list: above the horizon and within an
   **elevation-dependent distance band** (a near→full→contrail curve — see the field
