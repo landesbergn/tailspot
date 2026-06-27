@@ -175,6 +175,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
   const catchesStore: CatchStore = {
     resolveRarity: (icao) => getCatchStore().resolveRarity(icao),
+    scoreCatch: (icao) => getCatchStore().scoreCatch(icao),
     insertOrGet: (c) => getCatchStore().insertOrGet(c),
     leaderboard: (n) => getCatchStore().leaderboard(n),
     myStanding: (id) => getCatchStore().myStanding(id),

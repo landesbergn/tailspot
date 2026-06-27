@@ -9,18 +9,30 @@
 //  Hangar's Trophies segment (Spec § 4.2, § 7) and no longer have
 //  an entry on this screen.
 //
-//  Stats derived entirely from the on-device Hangar — no server
-//  required for v1.
+//  The HEADLINE total-points + global-rank read the server's authoritative
+//  standing (GET /v1/leaderboard `me`) so the profile and the public
+//  leaderboard always show the SAME number — points are scored server-side and
+//  re-derivable (see backend catches/rescore.ts), not a local recompute that
+//  can drift. They fall back to the on-device Hangar total when offline / before
+//  the fetch lands. The rest of the stats (counts, rarity breakdown, medals)
+//  stay local — they're collection visuals, not the competitive score.
 //
 
 import SwiftUI
 import SwiftData
+import os
 
 struct ProfileScreen: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
     @State private var showingShare = false
+
+    /// The caller's server-authoritative standing (rank + total points), fetched
+    /// from the leaderboard `me` field. Nil until the fetch lands or when offline
+    /// — the headline falls back to the local Hangar total in that case.
+    @State private var standing: MyStanding?
+    private let accountClient = TailspotAccountClient()
 
     private var stats: ProfileStats { ProfileStats(catches: catches) }
     private var inputs: TrophyProgressInputs { Trophies.inputs(from: catches) }
@@ -42,6 +54,7 @@ struct ProfileScreen: View {
             .background(Brand.Color.bgPrimary.ignoresSafeArea())
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
+            .task { await loadStanding() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
@@ -57,6 +70,21 @@ struct ProfileScreen: View {
             .sheet(isPresented: $showingShare) {
                 ShareCardSheet(stats: stats, handle: handle)
             }
+        }
+    }
+
+    // MARK: - Standing fetch
+
+    /// Pull the server-authoritative standing (rank + total points). We only
+    /// need `me`, so request the smallest possible board (limit 1). On any
+    /// failure (offline, not yet registered) we keep the local Hangar fallback —
+    /// this is best-effort, never an error state on the profile.
+    private func loadStanding() async {
+        do {
+            let response = try await accountClient.leaderboard(limit: 1)
+            if let me = response.me { standing = me }
+        } catch {
+            Log.ui.debug("ProfileScreen: standing fetch failed (keeping local fallback): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -80,7 +108,10 @@ struct ProfileScreen: View {
     }
 
     private var identityHeader: some View {
-        VStack(spacing: 14) {
+        // Server standing when loaded; local Hangar total as the offline fallback.
+        let displayPoints = standing?.points ?? stats.totalPoints
+        let rankLabel = standing.map { "#\($0.rank)" } ?? "—"
+        return VStack(spacing: 14) {
             HStack(spacing: 14) {
                 ZStack {
                     Circle()
@@ -119,7 +150,7 @@ struct ProfileScreen: View {
             }
             HStack(spacing: 16) {
                 VStack(spacing: 2) {
-                    Text(stats.totalPoints.formatted(.number))
+                    Text(displayPoints.formatted(.number))
                         .font(Brand.Font.mono(size: 32, weight: .heavy))
                         .foregroundStyle(Brand.Color.cyan)
                         .monospacedDigit()
@@ -132,9 +163,10 @@ struct ProfileScreen: View {
                     .fill(Brand.Color.bgPrimary.opacity(0.55))
                     .frame(width: 1, height: 40)
                 VStack(spacing: 2) {
-                    Text("—")
+                    Text(rankLabel)
                         .font(Brand.Font.mono(size: 32, weight: .heavy))
                         .foregroundStyle(Brand.Color.textPrimary)
+                        .monospacedDigit()
                     Text("GLOBAL RANK")
                         .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .tracking(1.2)

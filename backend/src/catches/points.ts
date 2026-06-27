@@ -24,6 +24,21 @@ const POINTS: Record<Rarity, number> = {
 /** The baseline awarded for an unknown/unresolved rarity. */
 export const UNKNOWN_RARITY_POINTS = 10;
 
+/**
+ * The current scoring REGIME. Stamped onto every catch as `scoringVersion` so a
+ * re-score can find rows scored under an older regime and re-derive them.
+ *
+ * BUMP THIS when the scoring LOGIC changes — the `POINTS` ladder below, the
+ * `UNKNOWN_RARITY_POINTS` floor, or the icao24→typecode→rarity resolution chain
+ * (`DrizzleCatchStore.resolveRarity`). After bumping, run `npm run rescore`
+ * (see catches/rescore.ts) to bring every older-regime catch up to the new one.
+ *
+ * Do NOT bump for reference-DATA growth (the registry learning a new airframe):
+ * those catches are still version-current, just resolved against better data —
+ * `rescore` picks them up via their still-null `rarity`, not their version.
+ */
+export const CURRENT_SCORING_VERSION = 1;
+
 /** Type guard for a known rarity tier string. */
 export function isRarity(value: string | null | undefined): value is Rarity {
   return (

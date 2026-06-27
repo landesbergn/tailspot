@@ -13,6 +13,7 @@
  */
 
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { CURRENT_SCORING_VERSION, pointsForRarity } from "../catches/points.js";
 import type { Database } from "../db/client.js";
 import { catches, devices, registry, typecodes } from "../db/schema.js";
 
@@ -100,6 +101,19 @@ export interface RarityResolution {
   rarity: string | null;
 }
 
+/**
+ * A fully-scored catch: resolved airframe identity, its rarity tier, the awarded
+ * points, and the scoring regime that produced them. The output of the ONE
+ * canonical scorer (`CatchStore.scoreCatch`) — the upload path and the re-score
+ * job both consume this, so they can never drift.
+ */
+export interface ScoredCatch {
+  typecode: string | null;
+  rarity: string | null;
+  points: number;
+  scoringVersion: number;
+}
+
 /** The fields the route hands the store to persist a new catch. */
 export interface NewCatch {
   catchUuid: string;
@@ -109,6 +123,8 @@ export interface NewCatch {
   typecode: string | null;
   rarity: string | null;
   points: number;
+  /** The scoring regime that produced points/rarity (CURRENT_SCORING_VERSION at upload). */
+  scoringVersion: number;
   caughtAt: Date;
   observerLat: number;
   observerLon: number;
@@ -153,6 +169,14 @@ export interface CatchStore {
    */
   resolveRarity(icao24: string): Promise<RarityResolution>;
   /**
+   * The single canonical scorer: resolve an icao24's airframe and award points
+   * under the CURRENT scoring regime. Both the catch-upload path AND the
+   * re-score job call THIS (never `resolveRarity` + `pointsForRarity` inline),
+   * so scoring lives in exactly one place and a re-score reproduces an upload's
+   * result identically.
+   */
+  scoreCatch(icao24: string): Promise<ScoredCatch>;
+  /**
    * Insert a catch, or — if THIS DEVICE already ingested `catchUuid` — return
    * the ORIGINAL stored result (idempotent replay). The boolean says which
    * happened. Idempotency is scoped per device: another device submitting the
@@ -190,6 +214,16 @@ export class DrizzleCatchStore implements CatchStore {
     return { typecode, rarity: tcRows[0]?.rarity ?? null };
   }
 
+  async scoreCatch(icao24: string): Promise<ScoredCatch> {
+    const { typecode, rarity } = await this.resolveRarity(icao24);
+    return {
+      typecode,
+      rarity,
+      points: pointsForRarity(rarity),
+      scoringVersion: CURRENT_SCORING_VERSION,
+    };
+  }
+
   async insertOrGet(c: NewCatch): Promise<{ result: StoredCatchResult; duplicate: boolean }> {
     // Idempotency: the catch_uuid unique constraint makes ON CONFLICT DO NOTHING
     // a no-op for a replay; an empty `returning` then signals "already existed",
@@ -205,6 +239,7 @@ export class DrizzleCatchStore implements CatchStore {
         typecode: c.typecode,
         rarity: c.rarity,
         points: c.points,
+        scoringVersion: c.scoringVersion,
         caughtAt: c.caughtAt,
         observerLat: c.observerLat,
         observerLon: c.observerLon,

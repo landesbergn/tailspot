@@ -157,6 +157,18 @@ export const catches = pgTable(
     rarity: text("rarity"),
     /** Server-computed points (rarity→points; default 10 for unknown). NEVER client-supplied. */
     points: integer("points").notNull(),
+    /**
+     * Which scoring REGIME produced the current `typecode`/`rarity`/`points`.
+     * `points` is a re-derivable PROJECTION of (icao24 → reference tables →
+     * scoring ladder), not an immutable fact — so we stamp the regime that
+     * scored it. Bump `CURRENT_SCORING_VERSION` (catches/points.ts) whenever the
+     * scoring LOGIC changes (the rarity→points ladder, the resolution chain, the
+     * unknown floor); a `rescore` then finds every row scored under an older
+     * regime and re-derives it. Reference-DATA growth (the registry learning a
+     * new airframe) does NOT bump the version — those rows are found by their
+     * still-null `rarity` instead. Existing rows default to 1 (the launch regime).
+     */
+    scoringVersion: integer("scoring_version").notNull().default(1),
     /** When the client says it was caught. */
     caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
     observerLat: doublePrecision("observer_lat").notNull(),

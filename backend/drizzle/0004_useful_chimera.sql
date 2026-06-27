@@ -1,0 +1,1 @@
+ALTER TABLE "catches" ADD COLUMN "scoring_version" integer DEFAULT 1 NOT NULL;
