@@ -16,7 +16,9 @@ const NOW = 1_700_000_000;
 const OBS = { lat: 37.8, lon: -122.27 };
 const AC = { lat: 37.9, lon: -122.27, altitudeMeters: 3000 };
 
-// Three icao24s (valid 6-hex) mapped to common(10) / rare(100) / legendary(2000).
+// Three icao24s (valid 6-hex) mapped to common / rare / legendary (base 10 / 50
+// / 500). Each device here catches a given type at most once, so every catch is
+// FIRST-of-type and earns the +50%-of-base bonus → effective 15 / 75 / 750.
 const COMMON = "c0c0c0";
 const RARE = "a4a4a4";
 const LEGEND = "1e6e7d";
@@ -124,7 +126,7 @@ describe("GET /v1/leaderboard", () => {
     await claim(alice, "Alice");
     await claim(bob, "Bob");
 
-    // Alice: legendary (500). Bob: rare + common (60).
+    // Alice: legendary first-of-type (750). Bob: rare (75) + common (15) = 90.
     await postCatch(alice, LEGEND);
     await postCatch(bob, RARE);
     await postCatch(bob, COMMON);
@@ -133,8 +135,8 @@ describe("GET /v1/leaderboard", () => {
     expect(res.statusCode).toBe(200);
     const { entries } = res.json();
     expect(entries).toEqual([
-      { rank: 1, handle: "Alice", points: 500, catches: 1 },
-      { rank: 2, handle: "Bob", points: 60, catches: 2 },
+      { rank: 1, handle: "Alice", points: 750, catches: 1 },
+      { rank: 2, handle: "Bob", points: 90, catches: 2 },
     ]);
   });
 
@@ -143,8 +145,8 @@ describe("GET /v1/leaderboard", () => {
     const named = await register();
     await claim(named, "Named");
 
-    await postCatch(ghost, LEGEND); // 500, invisible
-    await postCatch(named, RARE); // 50, visible
+    await postCatch(ghost, LEGEND); // 750 (first-of-type legendary), invisible
+    await postCatch(named, RARE); // 75 (first-of-type rare), visible
 
     const res = await app.inject({
       method: "GET",
@@ -153,22 +155,22 @@ describe("GET /v1/leaderboard", () => {
     });
     const body = res.json();
     // Only the named device appears in entries…
-    expect(body.entries).toEqual([{ rank: 1, handle: "Named", points: 50, catches: 1 }]);
-    // …but `me` reflects the TRUE rank: the ghost (500 pts) outranks Named, so
+    expect(body.entries).toEqual([{ rank: 1, handle: "Named", points: 75, catches: 1 }]);
+    // …but `me` reflects the TRUE rank: the ghost (750 pts) outranks Named, so
     // Named is rank 2 overall even though the ghost is hidden from entries.
-    expect(body.me).toEqual({ rank: 2, points: 50 });
+    expect(body.me).toEqual({ rank: 2, points: 75 });
   });
 
   it("`me` is present for a valid token even without a handle; null without a token", async () => {
     const anon = await register(); // no handle
-    await postCatch(anon, COMMON); // 10 points
+    await postCatch(anon, COMMON); // 15 points (first-of-type common: 10 + 5)
 
     const withToken = await app.inject({
       method: "GET",
       url: "/v1/leaderboard",
       headers: { authorization: `Bearer ${anon}` },
     });
-    expect(withToken.json().me).toEqual({ rank: 1, points: 10 });
+    expect(withToken.json().me).toEqual({ rank: 1, points: 15 });
     // The anon device is NOT in entries (no handle).
     expect(withToken.json().entries).toEqual([]);
 
@@ -177,7 +179,8 @@ describe("GET /v1/leaderboard", () => {
   });
 
   it("breaks point ties deterministically by registration time (earlier device wins)", async () => {
-    // Register early FIRST so its createdAt is earlier; both reach 100 points.
+    // Register early FIRST so its createdAt is earlier; both reach 75 points
+    // (each device's first-of-type rare).
     const early = await register();
     const late = await register();
     await claim(early, "Early");

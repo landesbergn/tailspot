@@ -59,3 +59,16 @@ export function isRarity(value: string | null | undefined): value is Rarity {
 export function pointsForRarity(rarity: string | null | undefined): number {
   return isRarity(rarity) ? POINTS[rarity] : UNKNOWN_RARITY_POINTS;
 }
+
+/**
+ * The first-of-type BONUS for a given base: +50% of the base, rounded (R3, AE2).
+ * A device's FIRST-ever catch of a typecode earns this on top of the base; a
+ * later catch of the same type does not. Defined ONCE and used only by the
+ * canonical scorer (`DrizzleCatchStore.scoreCatch`), so the upload path and the
+ * re-score job add the same bonus and can't drift. The bonus floats with the
+ * base — a first-of-type epic (100) earns 50, but if re-tiered to rare (50) it
+ * earns 25.
+ */
+export function firstOfTypeBonus(base: number): number {
+  return Math.round(base * 0.5);
+}

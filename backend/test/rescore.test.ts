@@ -33,6 +33,7 @@ describe("rescoreCatches", () => {
     rarity?: string | null;
     points: number;
     scoringVersion?: number;
+    firstOfType?: boolean;
   }): Promise<string> {
     const rows = await db
       .insert(catches)
@@ -44,6 +45,9 @@ describe("rescoreCatches", () => {
         rarity: opts.rarity ?? null,
         points: opts.points,
         scoringVersion: opts.scoringVersion ?? CURRENT_SCORING_VERSION,
+        // Default false: these are FROZEN historical rows, not first-of-type
+        // (the column default + the "no historical bonus" semantics).
+        firstOfType: opts.firstOfType ?? false,
         caughtAt: new Date("2026-06-11T00:00:00Z"),
         observerLat: 37.8,
         observerLon: -122.3,
@@ -94,6 +98,27 @@ describe("rescoreCatches", () => {
     expect(after[0].points).toBe(100);
     expect(after[0].rarity).toBe("epic");
     expect(after[0].typecode).toBe("A388");
+    expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
+  });
+
+  it("re-scores a STORED first-of-type catch to base + 50% (the bonus floats with the re-derived base)", async () => {
+    // A first-of-type catch frozen at the unknown floor. Re-score resolves it to
+    // epic (base 100) and adds the +50% first-of-type bonus → 150. The stored
+    // flag is READ off the row, never recomputed from history.
+    const id = await insertCatch({
+      icao24: FOREIGN,
+      rarity: null,
+      typecode: null,
+      points: 10,
+      firstOfType: true,
+    });
+    const applied = await rescoreCatches(db, {});
+    expect(applied.changed).toBe(1);
+    expect(applied.pointsAfter).toBe(150); // 100 base + round(100*0.5) bonus
+    const after = await db.select().from(catches).where(eq(catches.id, id));
+    expect(after[0].points).toBe(150);
+    expect(after[0].rarity).toBe("epic");
+    expect(after[0].firstOfType).toBe(true); // flag preserved, not recomputed
     expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
   });
 
