@@ -35,7 +35,7 @@ struct RarityResolutionTests {
         ("EC35", .uncommon),         // Airbus H135 — rotorcraft
         ("B744", .rare),             // 747-400 — scarce-in-the-air widebody
         ("GLF6", .rare),             // Gulfstream G650 — heavy bizjet
-        ("C17",  .rare),             // C-17 — workhorse military
+        ("C17",  .epic),             // C-17 — military workhorse → epic
         ("A388", .rare),             // A380 — ~200 fly, hub-concentrated
         ("B2",   .legendary),        // B-2 Spirit — icon
     ])

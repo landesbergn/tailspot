@@ -164,10 +164,10 @@ struct SetsRarityConsistencyTests {
         ("b-g650",     "GLF6", Rarity.rare),        // was .uncommon
         ("b-global",   "GL7T", Rarity.rare),        // was .uncommon
         // Mil
-        ("m-c130",     "C130", Rarity.rare),
-        ("m-c17",      "C17",  Rarity.rare),
-        ("m-kc135",    "K35E", Rarity.rare),       // KC-135 tanker → mil → rare
-        ("m-b52",      "B52",  Rarity.epic),        // was .rare
+        ("m-c130",     "C130", Rarity.epic),       // military workhorse → epic
+        ("m-c17",      "C17",  Rarity.epic),       // military workhorse → epic
+        ("m-kc135",    "K35E", Rarity.epic),       // KC-135 tanker → mil → epic
+        ("m-b52",      "B52",  Rarity.legendary),  // strategic bomber → legendary
         // GA
         ("ga-c172",    "C172", Rarity.common),
         ("ga-c182",    "C182", Rarity.common),

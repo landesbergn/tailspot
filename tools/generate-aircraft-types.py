@@ -827,14 +827,35 @@ RARITY_OVERRIDES = {
     "IL62": "legendary",  # Il-62 (Air Koryo only)
     "B29":  "legendary",  # B-29 (1 airworthy worldwide)
     "LANC": "legendary",  # Avro Lancaster (2 airworthy)
-    # ── epic — strategic/combat military · super-rare airliners · scarce warbirds ──
+    # ── legendary — military combat & strategic (mostly no ADS-B → aspirational grails) ──
+    "B52":  "legendary",  # B-52 Stratofortress
+    "B1":   "legendary",  # B-1 Lancer
+    "E3TF": "legendary", "E3CF": "legendary",  # E-3 Sentry (AWACS)
+    "E6":   "legendary",  # E-6 Mercury (TACAMO command)
+    "F15":  "legendary", "F16": "legendary", "F18": "legendary",
+    "F22":  "legendary", "F35": "legendary",   # US fighters
+    "A10":  "legendary",  # A-10 Thunderbolt II
+    "A4":   "legendary",  # A-4 Skyhawk
+    "F4":   "legendary",  # F-4 Phantom II
+    "F5":   "legendary",  # F-5 Tiger II
+    "F117": "legendary",  # F-117 Nighthawk
+    "HAR":  "legendary",  # AV-8 Harrier
+    "EUFI": "legendary",  # Eurofighter Typhoon
+    "RFAL": "legendary",  # Dassault Rafale
+    "TOR":  "legendary",  # Panavia Tornado
+    "MG29": "legendary", "MG31": "legendary",   # MiG-29 / MiG-31
+    "SU25": "legendary", "SU27": "legendary", "SU30": "legendary",
+    "SU34": "legendary", "SU57": "legendary",   # Sukhoi
+    "J10":  "legendary", "J11": "legendary", "J20": "legendary",   # Chinese fighters
+    # ── epic — super-rare airliners · scarce warbirds · military workhorses ──
     "B748": "epic",       # 747-8 (super-heavy, scarce pax)
-    "C5M":  "epic",       # C-5M Super Galaxy
+    "C5M":  "epic",       # C-5M Super Galaxy (strategic airlift workhorse)
     "A124": "epic",       # An-124 (15 commercial)
-    "B52":  "epic",       # B-52
-    "B1":   "epic",       # B-1 Lancer
-    "E3TF": "epic", "E3CF": "epic",   # E-3 Sentry (AWACS)
-    "F15":  "epic", "F16": "epic", "F18": "epic", "F22": "epic", "F35": "epic",  # fighters (combat config rarely broadcasts)
+    # military helis / tiltrotor → epic (override the rotorcraft→uncommon default)
+    "H60":  "epic", "H64": "epic", "H47": "epic", "H53": "epic", "H46": "epic",
+    "UH1":  "epic", "V22": "epic", "NH90": "epic", "A129": "epic",
+    # military jet trainers → epic
+    "T38":  "epic", "PC21": "epic",
     "A318": "epic",       # A318 "Baby Bus" (4 left, Air France, retiring 2026)
     "A342": "epic",       # A340-200 (3 total)
     "B732": "epic",       # 737-200 (~9 pax left)
@@ -904,11 +925,12 @@ def aircraft_rarity(tc, info, type_str):
     # jets overridden to rare.
     if type_str == "biz":
         return "uncommon"
-    # Military default → rare (the catchable transports). Strategic/combat
-    # (bombers, AWACS, fighters) overridden to epic; icons (B-2, U-2, VC-25)
-    # to legendary.
+    # Military default → epic — every military catch should feel like a big one.
+    # The catchable workhorses (transports, tankers, maritime patrol, trainers,
+    # helis) sit at epic; combat jets + strategic/command + icons are pinned up
+    # to legendary in RARITY_OVERRIDES.
     if type_str == "mil":
-        return "rare"
+        return "epic"
     # narrow / regional / ga — the high-movement long tail. Vanishing airliners,
     # rare narrowbodies, and warbirds are overridden up.
     return "common"
