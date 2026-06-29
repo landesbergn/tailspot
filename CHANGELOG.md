@@ -5,6 +5,18 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-29 — Collection economy re-balance + route data (Bet B #4/#6/#7, Phase 1) — branch `feat/collection-economy-reveal`
+
+Phase 1 of the Collection-economy redesign (design walk-through in `docs/plans/2026-06-28-002…004`; plan `2026-06-29-002`). 7 implementation units, all green on iOS + backend, committed. **Decision 3 — the trophy/medal rework + the full guess-the-type mechanic — is deferred.** The leaderboard-moving prod re-score is gated on Noah.
+
+- **Re-tier (U1):** rewrote `tools/generate-aircraft-types.py` to a 2025-26 fleet-grounded tier list — military split (transport rare / strategic+fighters epic / icons legendary), vanishing airliners + rare narrowbodies (A318·737-200 epic, 727 legendary, A340·717·MD-80·Fokker·BAe146 rare), a warbird/vintage layer, workhorse widebodies → common, A380 → rare, plus pin corrections (727/717/MD-80/90/MD-11/E-4/P-51). Regenerated `AircraftTypes.json` (96 rarity + 1 type change, no name/dim drift).
+- **Re-balance (U2):** points `10/25/100/500/2000` → **`10/20/50/100/500`** (flatter — Common→Epic 10× not 50×; Legendary still towers). The generator writes `scoring-points.json` as the single source; iOS `Rarity.basePoints` and backend `POINTS` are each pinned to it by a parity test (`ScoringPointsParityTests` + `points.parity.test.ts`), so the profile-vs-leaderboard drift class can't recur. `CURRENT_SCORING_VERSION` → 2.
+- **Consolidation (U3, U4):** the no-typecode rarity fallback resolves to a flat `.common` — the string classifier no longer carries a divergent rarity ladder (TYPE only); `CardSetEntry.rarity` derives from the table for typecoded entries (drift-proof).
+- **First-of-type (U5):** a device's first-ever catch of a typecode earns +50% of base, server-authoritative (frozen `first_of_type` flag, migration `0005`), echoed as `firstOfType` in the catch response.
+- **Route (U6, U7):** adsb.lol route via the `routeset` endpoint → additive `route?:{originIcao,destIcao}` on `/v1/aircraft` (resilient, non-blocking, cached); iOS decodes it and freezes `originIcao`/`destIcao` on the `Catch`.
+
+**Gated on Noah, in order:** apply migrations `0004`+`0005` to prod → re-ingest the regenerated `AircraftTypes.json` into `typecodes` (so prod tiers match) → deploy backend to Fly → `npm run rescore -- --dry-run` (review the leaderboard delta) → `rescore`. iOS reaches testers via the next TestFlight build. Phase 2 (the reveal + the route-guess bonus round) is next.
+
 ## 2026-06-27 — Fix Profile panel open/close freeze — branch `fix/profile-open-close-freeze`
 
 The Profile sheet froze for a beat on both open and close ("frozen, then jumps").
