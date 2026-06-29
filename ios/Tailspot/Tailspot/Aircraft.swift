@@ -55,6 +55,16 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     /// replay path leave it nil. Unlike the manufacturer string, this is an
     /// authoritative rotorcraft signal — see `emitterCategory` / `isRotorcraft`.
     let category: String?
+    /// ICAO airport code (4-letter, e.g. "KSFO") of the flight's ORIGIN, or nil
+    /// when the feed didn't carry a route. `TailspotBackendClient` populates this
+    /// from the backend's additive `route.originIcao`; the legacy OpenSky
+    /// positional decoder and the replay path leave it nil. Frozen onto a `Catch`
+    /// at catch time like the other airframe facts — most GA/military/routeless
+    /// flights have no route, which is normal.
+    let originIcao: String?
+    /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION, or
+    /// nil. Same source/semantics as `originIcao`.
+    let destIcao: String?
 
     var id: String { icao24 }
 
@@ -87,7 +97,9 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         positionTimestamp: Date?,
         typecode: String? = nil,
         registration: String? = nil,
-        category: String? = nil
+        category: String? = nil,
+        originIcao: String? = nil,
+        destIcao: String? = nil
     ) {
         self.icao24 = icao24
         self.callsign = callsign
@@ -102,6 +114,8 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         self.typecode = typecode
         self.registration = registration
         self.category = category
+        self.originIcao = originIcao
+        self.destIcao = destIcao
     }
 
     /// Heuristic: is this a small (GA-sized) airframe? US general-aviation
@@ -245,12 +259,14 @@ nonisolated extension Aircraft: Decodable {
 
         self.altitudeMeters = geo ?? baro ?? 0
 
-        // OpenSky's positional state vector carries no type/registration/category
-        // in the slots we read — the backend feed (BackendAircraft) is the only
-        // source that supplies them.
+        // OpenSky's positional state vector carries no type/registration/category/
+        // route in the slots we read — the backend feed (BackendAircraft) is the
+        // only source that supplies them.
         self.typecode = nil
         self.registration = nil
         self.category = nil
+        self.originIcao = nil
+        self.destIcao = nil
 
         // 14 squawk, 15 spi, 16 position_source, 17 category — all skipped
     }

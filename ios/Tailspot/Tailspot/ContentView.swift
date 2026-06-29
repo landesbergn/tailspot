@@ -1264,7 +1264,12 @@ struct ContentView: View {
                     // such field), so record the live value as-observed.
                     category: observed?.aircraft.category,
                     altitudeMeters: observed?.aircraft.altitudeMeters,
-                    velocityMps: observed?.aircraft.velocityMps
+                    velocityMps: observed?.aircraft.velocityMps,
+                    // Route (origin → destination) is feed-only and a frozen
+                    // catch-moment fact — record as-observed; nil for routeless
+                    // flights. No metadata-endpoint fallback / later backfill.
+                    originIcao: observed?.aircraft.originIcao,
+                    destIcao: observed?.aircraft.destIcao
                 )
                 modelContext.insert(row)
                 newCatches.append(row)

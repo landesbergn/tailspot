@@ -81,6 +81,16 @@ final class Catch {
     /// Aircraft ground speed (m/s) at the catch moment. Same rules as
     /// `altitudeMeters`.
     var velocityMps: Double?
+    /// ICAO airport code (4-letter, e.g. "KSFO") of the flight's ORIGIN at the
+    /// catch moment, when the live feed carried a route. A frozen-at-catch
+    /// airframe/flight fact like altitude/velocity — NEVER backfilled (the route
+    /// of a past flight is unrecoverable). nil for the many routeless catches
+    /// (GA/military) and for rows written before this field existed. Added
+    /// 2026-06 — optional + nil-default for SwiftData lightweight migration.
+    var originIcao: String?
+    /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION at
+    /// the catch moment. Same source/semantics/migration as `originIcao`.
+    var destIcao: String?
     /// Reverse-geocoded observer place, e.g. "Berkeley, CA". Filled
     /// post-save at catch time (never blocks the catch) or by the
     /// detail-view backfill.
@@ -123,6 +133,8 @@ final class Catch {
         category: String? = nil,
         altitudeMeters: Double? = nil,
         velocityMps: Double? = nil,
+        originIcao: String? = nil,
+        destIcao: String? = nil,
         placeName: String? = nil,
         country: String? = nil,
         rarity: Rarity? = nil,
@@ -143,6 +155,8 @@ final class Catch {
         self.category = category
         self.altitudeMeters = altitudeMeters
         self.velocityMps = velocityMps
+        self.originIcao = originIcao
+        self.destIcao = destIcao
         self.placeName = placeName
         self.country = country
         // If the caller didn't explicitly classify, run the classifier

@@ -279,6 +279,50 @@ struct CatchTests {
         #expect(fetched?.placeName == nil)
     }
 
+    @Test func routePersistsWhenSet() throws {
+        // Route (origin → destination) is a frozen catch-moment fact, stored
+        // when the live feed carried one. Round-trips through SwiftData.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a1b2c3", callsign: "UAL901",
+            model: "787-9", manufacturer: "BOEING",
+            caughtAt: Date(), observerLat: 0, observerLon: 0,
+            slantDistanceMeters: 0,
+            originIcao: "KSFO",
+            destIcao: "EGLL"
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>()).first
+        #expect(fetched?.originIcao == "KSFO")
+        #expect(fetched?.destIcao == "EGLL")
+    }
+
+    @Test func routeDefaultsToNilWhenOmitted() throws {
+        // `originIcao`/`destIcao` were added 2026-06. Existing call sites omit
+        // them (default nil); pre-field rows decode as nil under SwiftData
+        // lightweight migration. Most catches (routeless GA/military) are nil
+        // here too. Pin the default + migration shape.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a3b15e",
+            callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>()).first
+        #expect(fetched?.originIcao == nil)
+        #expect(fetched?.destIcao == nil)
+    }
+
     // MARK: - CardPlane from a stored Catch
 
     @Test func cardPlaneFormatsStoredAltAndSpeed() {
