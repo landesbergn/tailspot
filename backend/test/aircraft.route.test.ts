@@ -91,6 +91,41 @@ describe("GET /v1/aircraft", () => {
     // typecode/registration travel through the cache + route untouched.
     expect(ac.typecode).toBe("B772");
     expect(ac.registration).toBe("N69020");
+    // No routeEnricher wired → the additive `route` key is absent on the wire,
+    // so an old Decodable client decodes the row exactly as before (compat).
+    expect("route" in (ac as Record<string, unknown>)).toBe(false);
+  });
+
+  it("surfaces `route` on the wire when the enricher attaches one (additive key)", async () => {
+    const provider = new StubProvider();
+    app = await buildApp({
+      provider,
+      cacheConfig: { ttlSeconds: 10, staleMaxSeconds: 60, tileSizeDeg: 0.25 },
+      routeEnricher: {
+        enrich(aircraft) {
+          for (const a of aircraft) {
+            if (a.icao24 === "abc123") a.route = { originIcao: "KSFO", destIcao: "EGLL" };
+          }
+        },
+      },
+    });
+    const res = await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    expect(res.statusCode).toBe(200);
+    const ac = res.json<ProviderSnapshot>().aircraft[0];
+    expect(ac.route).toEqual({ originIcao: "KSFO", destIcao: "EGLL" });
+  });
+
+  it("omits `route` for aircraft the enricher leaves untouched (no null-bloat)", async () => {
+    const provider = new StubProvider();
+    app = await buildApp({
+      provider,
+      cacheConfig: { ttlSeconds: 10, staleMaxSeconds: 60, tileSizeDeg: 0.25 },
+      // Enricher that matches nothing → no aircraft gets a route.
+      routeEnricher: { enrich: () => {} },
+    });
+    const res = await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    const ac = res.json<ProviderSnapshot>().aircraft[0] as Record<string, unknown>;
+    expect("route" in ac).toBe(false);
   });
 
   it("serves a cache hit within TTL (one upstream call for two requests)", async () => {

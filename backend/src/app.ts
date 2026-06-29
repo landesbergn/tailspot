@@ -12,6 +12,7 @@ import {
 } from "./identity/store.js";
 import { makeRegistryEnrichSink } from "./ingest/feedEnrich.js";
 import { DrizzleMetadataStore, type MetadataStore } from "./metadata/store.js";
+import { AdsbLolRouteService, type RouteEnricher } from "./providers/adsblolRoutes.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
@@ -53,6 +54,12 @@ export interface BuildAppOptions {
    * DB-less route tests so they never touch Postgres.
    */
   onFreshSnapshot?: Parameters<typeof registerAircraftRoute>[1]["onFreshSnapshot"];
+  /**
+   * Origin → destination route enricher (tests inject a fake or omit). Production
+   * defaults to the adsb.lol routeset lookup when the adsb.lol provider is
+   * active; left undefined in tests so they never hit the network.
+   */
+  routeEnricher?: RouteEnricher;
   /**
    * Metadata store override (tests inject a PGlite-backed or in-memory store
    * here). Production passes nothing and we lazily build a Drizzle store over
@@ -124,11 +131,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           app.log.warn({ err }, "opportunistic registry enrich failed"),
         )
       : undefined);
+  // Opportunistic origin → destination enrichment: adsb.lol carries route only
+  // via a separate routeset POST, so each served snapshot is passed through a
+  // per-callsign-cached lookup that attaches `route` without blocking the
+  // position response (see AdsbLolRouteService). Enabled only with the adsb.lol
+  // provider and outside tests (so the route suite never hits the network); an
+  // injected override (tests) always wins.
+  const routeEnricher =
+    options.routeEnricher ??
+    (process.env.NODE_ENV !== "test" && provider.name === "adsblol"
+      ? new AdsbLolRouteService({
+          onError: (err) => app.log.warn({ err }, "route lookup failed"),
+        })
+      : undefined);
   registerAircraftRoute(app, {
     provider,
     cacheConfig,
     now: options.now,
     onFreshSnapshot,
+    routeEnricher,
   });
 
   // GET /v1/metadata/{icao24} — FAA + DOC 8643 merged lookup (WP 1.4).

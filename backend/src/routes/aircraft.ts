@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { RouteEnricher } from "../providers/adsblolRoutes.js";
 import { validateBbox } from "../providers/geo.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/types.js";
 import { NoFreshDataError, TileCache, type TileCacheConfig } from "./tileCache.js";
@@ -27,6 +28,14 @@ export interface AircraftRouteOptions {
    * type/registration. Omitted (e.g. DB-less tests) → no enrichment.
    */
   onFreshSnapshot?: (snapshot: ProviderSnapshot) => void;
+  /**
+   * Opportunistic origin → destination enricher. When supplied, every served
+   * snapshot is passed through it so each aircraft with a *cached* route gets a
+   * `route` field on `/v1/aircraft` (additive — old clients ignore it). It never
+   * blocks: cache misses trigger a background routeset lookup that surfaces on a
+   * later poll. Omitted (route tests, non-adsblol provider) → no `route` field.
+   */
+  routeEnricher?: RouteEnricher;
 }
 
 /** Parse a query value to a finite number, or undefined if absent/non-numeric. */
@@ -58,6 +67,10 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
 
     try {
       const { snapshot } = await cache.get(bbox as Bbox);
+      // Attach known routes from the cache (sync, never blocking) and kick a
+      // background lookup for the rest. Mutates the snapshot's aircraft in place
+      // so a tile-cache hit also carries routes once the route cache is warm.
+      opts.routeEnricher?.enrich(snapshot.aircraft);
       // fetchedAt is the upstream snapshot time (possibly stale on fallback) —
       // never the serve time. Clients reason about freshness from it.
       return reply.code(200).send({
