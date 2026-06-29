@@ -146,11 +146,12 @@ struct CatchTests {
 
     @Test func insertRunsClassifierAndSnapshotsRarityAndType() throws {
         // New rows still snapshot rarity + type from the classifier at
-        // insert time (stored as audit values). Note: post-2026-06-08
-        // resolvedRarity DERIVES live from the typecode/classifier rather
-        // than reading the stored rarity — with no typecode here both
-        // equal the classifier verdict (787 is a workhorse widebody →
-        // uncommon under the activity model).
+        // insert time (stored as audit values). Post-2026-06-08
+        // resolvedRarity DERIVES live, and under the single-source rule
+        // (U3) a row with NO typecode resolves to the conservative .common
+        // default — so the stored audit rarity (classifier verdict: 787 →
+        // .uncommon) and the resolved rarity deliberately DIVERGE here.
+        // resolvedType still falls out of the classifier (787 → .wide).
         let container = try makeContainer()
         let context = ModelContext(container)
 
@@ -167,17 +168,20 @@ struct CatchTests {
         try context.save()
 
         let fetched = try #require(try context.fetch(FetchDescriptor<Catch>()).first)
-        #expect(fetched.rarity == Rarity.uncommon.rawValue)
+        #expect(fetched.rarity == Rarity.uncommon.rawValue)   // stored audit = classifier verdict
         #expect(fetched.aircraftType == AircraftType.wide.rawValue)
-        #expect(fetched.resolvedRarity == .uncommon)
+        #expect(fetched.resolvedRarity == .common)            // no typecode → conservative default
         #expect(fetched.resolvedType == .wide)
     }
 
-    @Test func resolvedRarityBackfillsFromClassifierWhenNil() {
-        // Legacy rows written before the rarity/type fields existed
-        // come back with nil. resolvedRarity must reproduce the
-        // classifier's verdict so the Hangar / Detail views don't
-        // render them all as Common.
+    @Test func resolvedTypeBackfillsFromClassifierWhenNil_rarityDefaultsCommon() {
+        // Legacy rows written before the rarity/type fields existed come
+        // back with nil. resolvedType still reproduces the classifier's
+        // verdict so the Hangar / Detail views don't render them all as one
+        // type. resolvedRarity, under the single-source rule (U3), no longer
+        // reads the classifier ladder: with NO typecode it resolves to the
+        // conservative .common default. (A typecoded legacy row would still
+        // re-tier correctly via the authoritative table.)
         let c = Catch(
             icao24: "x",
             callsign: nil,
@@ -191,8 +195,8 @@ struct CatchTests {
         // the migration would have left empty.
         c.rarity = nil
         c.aircraftType = nil
-        #expect(c.resolvedRarity == .epic)
-        #expect(c.resolvedType == .wide)
+        #expect(c.resolvedRarity == .common)   // no typecode → conservative default
+        #expect(c.resolvedType == .wide)       // type still backfills from the classifier
     }
 
     @Test func explicitRarityStoredButResolvedRarityDerives() {

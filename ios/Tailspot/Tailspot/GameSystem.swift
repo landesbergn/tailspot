@@ -19,10 +19,15 @@
 //  global presence, not local hub frequency, so a 747 stays special even at
 //  a hub. See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
 //
-//  AUTHORITATIVE PATH: rarity resolves from the ICAO typecode via
+//  SINGLE RARITY SOURCE: rarity resolves ONLY from the ICAO typecode via
 //  `AircraftNaming.rarity(forTypecode:)` (the generated AircraftTypes.json
-//  carries a per-typecode `rarity`). The string table below is now only the
-//  NO-TYPECODE FALLBACK — kept re-tiered to match the activity model.
+//  carries a per-typecode `rarity`). When there is NO typecode, rarity
+//  resolves to a single conservative default (`.common`) — the string table
+//  below is NOT a second rarity source. The classifier survives only as the
+//  no-typecode TYPE source (narrow/wide/biz/mil/ga/…); the `rarity` on each
+//  rule is vestigial for resolution (it no longer feeds any tier). This kills
+//  the divergence where a curated string ladder could disagree with the
+//  activity table for the same airframe.
 //
 
 import Foundation
@@ -222,7 +227,13 @@ nonisolated struct AircraftClassifier: Sendable {
 
     /// Classify an aircraft. Manufacturer/model/operatorName may be
     /// nil or empty — empty strings collapse to the default fallback
-    /// (`.common, .narrow`).
+    /// (`.common, .ga`).
+    ///
+    /// Only the `type` of the returned pair is consumed in production (the
+    /// no-typecode TYPE fallback). The `rarity` is NO LONGER a rarity source —
+    /// rarity resolution reads the typecode table or defaults to `.common`
+    /// (see the single-source rule in the file header). The `rarity` here is
+    /// retained for the classifier's own pinned unit tests only.
     static func classify(
         manufacturer: String?,
         model: String?,

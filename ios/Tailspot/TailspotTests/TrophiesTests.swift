@@ -21,12 +21,15 @@ struct TrophiesTests {
 
     // MARK: - Catch builder
 
-    /// Compact helper for terse tests. Resolved rarity / type fall
-    /// out of the classifier when not specified.
+    /// Compact helper for terse tests. Resolved type falls out of the
+    /// classifier (or the typecode table) when not specified. Resolved
+    /// RARITY comes only from the typecode table or defaults to `.common`
+    /// (single-source rule, U3) — pass `typecode:` to land a specific tier.
     private func mk(
         model: String? = nil,
         manufacturer: String? = nil,
         operatorName: String? = nil,
+        typecode: String? = nil,
         slantKm: Double = 1.0,
         caughtAt: Date = Date(timeIntervalSince1970: 1_716_000_000)
     ) -> Catch {
@@ -39,7 +42,8 @@ struct TrophiesTests {
             caughtAt: caughtAt,
             observerLat: 37.87,
             observerLon: -122.27,
-            slantDistanceMeters: slantKm * 1000
+            slantDistanceMeters: slantKm * 1000,
+            typecode: typecode
         )
     }
 
@@ -80,11 +84,14 @@ struct TrophiesTests {
     }
 
     @Test func inputsCountTierCatchesSeparately() {
+        // Tier now resolves ONLY from the typecode table (single-source rule, U3),
+        // so each tier-bearing catch carries a real typecode rather than relying
+        // on the removed string-classifier rarity ladder.
         let catches: [Catch] = [
-            mk(model: "A380-800",  manufacturer: "AIRBUS"),   // epic
-            mk(model: "747-400",   manufacturer: "BOEING"),   // rare (scarce widebody)
-            mk(model: "VC-25",     manufacturer: "BOEING", operatorName: "USAF"), // legendary
-            mk(model: "737-800",   manufacturer: "BOEING"),   // common
+            mk(model: "747-8",   manufacturer: "BOEING",   typecode: "B748"), // epic
+            mk(model: "747-400", manufacturer: "BOEING",   typecode: "B744"), // rare (scarce widebody)
+            mk(model: "B-2",     manufacturer: "NORTHROP", typecode: "B2"),   // legendary
+            mk(model: "737-800", manufacturer: "BOEING",   typecode: "B738"), // common
         ]
         let inputs = Trophies.inputs(from: catches)
         #expect(inputs.rareTierCatches == 1)
@@ -134,7 +141,9 @@ struct TrophiesTests {
     @Test func legendaryEarnsAtOneLegendaryCatch() {
         let legendary = Trophies.roster.first { $0.id == "legendary" }!
         #expect(legendary.isEarned(inputs: .zero) == false)
-        let one = Trophies.inputs(from: [mk(model: "VC-25", manufacturer: "BOEING", operatorName: "USAF")])
+        // A legendary-tier catch now resolves via the typecode table (B2 →
+        // .legendary), not the removed string-classifier rarity ladder.
+        let one = Trophies.inputs(from: [mk(model: "B-2", manufacturer: "NORTHROP", typecode: "B2")])
         #expect(legendary.isEarned(inputs: one))
     }
 

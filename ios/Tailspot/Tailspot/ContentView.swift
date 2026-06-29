@@ -2321,14 +2321,21 @@ struct ContentView: View {
 
 // MARK: - AR-overlay rarity resolution
 
-/// Resolves the rarity tier for a live AR-overlay label using the same
-/// typecode-first precedence as `Catch.resolvedRarity`:
+/// Resolves the rarity tier for a live AR-overlay label, matching the
+/// single-source precedence of `Catch.resolvedRarity`:
 ///
 ///   1. Typecode → `AircraftNaming.rarity(forTypecode:)` from the
-///      activity-based AircraftTypes.json table.  This matches the
+///      activity-based AircraftTypes.json table. This matches the
 ///      post-catch tier so the HUD and the Hangar agree.
-///   2. String classifier fallback when no typecode is available yet
-///      (metadata not loaded, or OpenSky returned no `typecode` field).
+///   2. No typecode → a single conservative default (`.common`).
+///
+/// SINGLE-SOURCE RULE: rarity comes only from the typecode table. The
+/// string classifier (still the no-typecode TYPE source) no longer supplies
+/// a rarity — its curated ladder diverged from the activity model, so the
+/// no-typecode path is a flat `.common`, not a second tier ladder. The
+/// `manufacturer`/`model`/`operatorName` params are retained on the
+/// signature for the stable test/caller API even though rarity no longer
+/// reads them.
 ///
 /// Extracted as a free function so it can be unit-tested without
 /// instantiating a SwiftUI view (divergence-a fix, 2026-06-11).
@@ -2338,12 +2345,7 @@ nonisolated func resolveAROverlayRarity(
     model: String?,
     operatorName: String?
 ) -> Rarity {
-    if let r = AircraftNaming.rarity(forTypecode: typecode) { return r }
-    return AircraftClassifier.classify(
-        manufacturer: manufacturer,
-        model: model,
-        operatorName: operatorName
-    ).rarity
+    AircraftNaming.rarity(forTypecode: typecode) ?? .common
 }
 
 // MARK: - Per-plane ambient label

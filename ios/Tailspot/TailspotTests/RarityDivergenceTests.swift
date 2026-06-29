@@ -68,21 +68,24 @@ struct AROverlayRarityTests {
                 "GLF6 typecode must resolve to .rare")
     }
 
-    // Without a typecode the string classifier is the fallback.
-    // A known-legendary model (SR-71) still resolves correctly via the
-    // string classifier when no typecode is present.
-    @Test func sr71_noTypecode_fallsBackToStringClassifier() {
+    // Single-source rule: without a typecode there is NO rarity ladder to
+    // fall back to — rarity resolves to the conservative default `.common`.
+    // Even a known-"legendary" model string (SR-71) gets `.common` when it
+    // carries no typecode, because the string classifier's curated rarity
+    // ladder is no longer a rarity source (it diverged from the activity
+    // table). The classifier still supplies TYPE, just not rarity.
+    @Test func sr71_noTypecode_resolvesToCommonDefault() {
         let rarity = resolveAROverlayRarity(
             typecode: nil,
             manufacturer: "Lockheed",
             model: "SR-71",
             operatorName: nil
         )
-        #expect(rarity == .legendary,
-                "SR-71 without typecode must fall back to string classifier → .legendary")
+        #expect(rarity == .common,
+                "SR-71 without a typecode resolves to the conservative .common default — the string classifier no longer supplies rarity")
     }
 
-    // No metadata at all → common (classifier's catch-all default).
+    // No typecode at all → common (the single conservative no-typecode default).
     @Test func nilEverything_returnsCommon() {
         let rarity = resolveAROverlayRarity(
             typecode: nil,

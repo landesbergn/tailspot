@@ -159,21 +159,25 @@ final class Catch {
     }
 
     /// The rarity tier for this airframe. Resolved live from the
-    /// typecode (authoritative, like `resolvedType`); falls back to the
-    /// string classifier for pre-typecode rows.
+    /// typecode (authoritative, like `resolvedType`); when there is NO
+    /// typecode it resolves to a single conservative default (`.common`).
+    ///
+    /// SINGLE-SOURCE RULE: rarity has exactly ONE source — the per-typecode
+    /// `rarity` in AircraftTypes.json (`AircraftNaming.rarity(forTypecode:)`).
+    /// The string classifier no longer supplies a rarity here: its curated
+    /// ladder diverged from the activity table, so the no-typecode path is a
+    /// flat `.common` rather than a second tier ladder. (The classifier still
+    /// provides the no-typecode TYPE — see `resolvedType`; only its rarity
+    /// output stopped being a rarity source.)
     ///
     /// NOTE: unlike `resolvedType`, this does NOT read the stored
-    /// `rarity` snapshot. Rarity now floats with the activity table so
+    /// `rarity` snapshot. Rarity floats with the activity table so
     /// re-tiering corrects prior catches on read (spec 2026-06-08) —
     /// the deliberate exception to the frozen-moment rule. The stored
     /// `rarity` string is kept only as an as-caught audit value.
     var resolvedRarity: Rarity {
         if let r = AircraftNaming.rarity(forTypecode: typecode) { return r }
-        return AircraftClassifier.classify(
-            manufacturer: manufacturer,
-            model: model,
-            operatorName: operatorName
-        ).rarity
+        return .common
     }
 
     /// The aircraft type for this airframe.

@@ -59,8 +59,9 @@ struct RarityResolutionTests {
     }
 
     @Test func unknownTypecode_returnsNil() {
-        // Unknown / nil typecode falls through to nil; callers then use
-        // the string classifier fallback.
+        // Unknown / nil typecode falls through to nil; callers then resolve
+        // to the conservative `.common` default (the single-source rule —
+        // the string classifier's rarity ladder is no longer a fallback).
         #expect(AircraftNaming.rarity(forTypecode: "ZZZZ") == nil)
         #expect(AircraftNaming.rarity(forTypecode: nil) == nil)
     }
