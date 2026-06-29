@@ -58,6 +58,10 @@ struct ContentView: View {
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
     @State private var showDebug = false
+    #if DEBUG
+    /// Cycles the debug "Simulate catch" preset (tier) on each tap.
+    @State private var simCatchIndex = 0
+    #endif
     /// DEBUG-only: presents the trophy-icon gallery for visual review.
     @State private var showIconGallery = false
     /// Drives the Hangar sheet (collection of past catches). Opened
@@ -519,6 +523,7 @@ struct ContentView: View {
                         // haptic / a11y / hidden-reveal path can be eyeballed
                         // on-device without waiting for an organic crossing.
                         HStack(spacing: 8) {
+                            Button("✦ Catch") { simulateCatch() }
                             Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
                             Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
                             Button("⚑ Icons") { showIconGallery = true }
@@ -1351,6 +1356,52 @@ struct ContentView: View {
     /// Duplicate-only case (single dup): synthesizes a `CardPlane`
     /// from the already-stored row + (when available) the current
     /// live observation for fresh alt/speed/distance.
+    #if DEBUG
+    /// Debug-only: fabricate a catch at a cycling tier and fire the reveal,
+    /// so the catch / reveal / economy can be eyeballed on-device without a
+    /// real plane (the synthetic ADS-B source was removed). Non-persisting —
+    /// shows the reveal card without writing to the Hangar.
+    private func simulateCatch() {
+        struct Sim {
+            let icao, callsign, model, mfr, op, typecode: String
+            let alt, vel, dist: Double
+            let origin, dest: String?
+        }
+        let presets: [Sim] = [
+            Sim(icao: "5101c7", callsign: "RCH872", model: "Boeing C-17 Globemaster III",
+                mfr: "Boeing", op: "U.S. Air Force", typecode: "C17",
+                alt: 8500, vel: 215, dist: 9200, origin: "KSUU", dest: "PHIK"),
+            Sim(icao: "a4e172", callsign: "N4521C", model: "Cessna 172",
+                mfr: "Cessna", op: "Private", typecode: "C172",
+                alt: 1100, vel: 52, dist: 3800, origin: nil, dest: nil),
+            Sim(icao: "a9bc53", callsign: "JBU613", model: "Airbus A220-300",
+                mfr: "Airbus", op: "JetBlue", typecode: "BCS3",
+                alt: 10800, vel: 232, dist: 14500, origin: "KBOS", dest: "KSFO"),
+            Sim(icao: "3b7440", callsign: "GEC8160", model: "Boeing 747-400",
+                mfr: "Boeing", op: "Lufthansa Cargo", typecode: "B744",
+                alt: 11200, vel: 251, dist: 22000, origin: "RJAA", dest: "KSFO"),
+            Sim(icao: "ae0b52", callsign: "DOOM11", model: "Boeing B-52 Stratofortress",
+                mfr: "Boeing", op: "U.S. Air Force", typecode: "B52",
+                alt: 12200, vel: 244, dist: 31000, origin: "KBAD", dest: nil),
+        ]
+        let s = presets[simCatchIndex % presets.count]
+        simCatchIndex += 1
+        let c = Catch(
+            icao24: s.icao, callsign: s.callsign, model: s.model, manufacturer: s.mfr,
+            operatorName: s.op, caughtAt: Date(),
+            observerLat: 37.8, observerLon: -122.27,  // fabricated — observer coords irrelevant to the reveal
+            slantDistanceMeters: s.dist, typecode: s.typecode,
+            altitudeMeters: s.alt, velocityMps: s.vel,
+            originIcao: s.origin, destIcao: s.dest
+        )
+        pendingReveal = PendingReveal(
+            plane: cardPlane(from: c, observed: nil),
+            entryNumber: Set(catches.map(\.icao24)).count + 1,
+            isDuplicate: false
+        )
+    }
+    #endif
+
     private func presentReveal(
         newCatches: [Catch],
         duplicates: [String],
