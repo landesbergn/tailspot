@@ -56,6 +56,13 @@ from pathlib import Path
 
 URL = "https://doc8643.icao.int/external/aircrafttypes"
 OUT = Path(__file__).resolve().parent.parent / "ios/Tailspot/Tailspot/AircraftTypes.json"
+POINTS_OUT = OUT.parent / "scoring-points.json"
+
+# Canonical rarity → points: the SINGLE SOURCE both platforms are checked
+# against (iOS Rarity.basePoints + backend POINTS) by parity tests. Edit here,
+# regenerate, then bump CURRENT_SCORING_VERSION and re-score. Flatter than the
+# old 10/25/100/500/2000 curve — Common→Epic is 10x (was 50x), Legendary towers.
+RARITY_POINTS = {"common": 10, "uncommon": 20, "rare": 50, "epic": 100, "legendary": 500}
 FAA_XLSX = Path(__file__).resolve().parent / "data/faa_aircraft_characteristics.xlsx"
 
 # ---------------------------------------------------------------------------
@@ -1043,6 +1050,10 @@ def main():
 
     with open(OUT, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=1, sort_keys=True)
+        fh.write("\n")
+
+    with open(POINTS_OUT, "w", encoding="utf-8") as fh:
+        json.dump(RARITY_POINTS, fh, indent=1, sort_keys=True)
         fh.write("\n")
 
     print(f"rows in: {len(rows)}  designators out: {len(out)}  -> {OUT}")

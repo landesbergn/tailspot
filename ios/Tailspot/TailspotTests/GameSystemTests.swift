@@ -415,10 +415,10 @@ struct GameSystemEnumTests {
 
     @Test func basePointsLadder() {
         #expect(Rarity.common.basePoints    == 10)
-        #expect(Rarity.uncommon.basePoints  == 25)
-        #expect(Rarity.rare.basePoints      == 100)
-        #expect(Rarity.epic.basePoints      == 500)
-        #expect(Rarity.legendary.basePoints == 2000)
+        #expect(Rarity.uncommon.basePoints  == 20)
+        #expect(Rarity.rare.basePoints      == 50)
+        #expect(Rarity.epic.basePoints      == 100)
+        #expect(Rarity.legendary.basePoints == 500)
     }
 
     @Test func ordinalsAreMonotonic() {

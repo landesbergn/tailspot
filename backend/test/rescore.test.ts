@@ -78,10 +78,10 @@ describe("rescoreCatches", () => {
     expect(dry.scanned).toBe(1);
     expect(dry.changed).toBe(1);
     expect(dry.pointsBefore).toBe(10);
-    expect(dry.pointsAfter).toBe(500);
+    expect(dry.pointsAfter).toBe(100);
     expect(dry.applied).toBe(false);
     expect(dry.transitions).toEqual([
-      { from: "unknown", to: "epic", catches: 1, pointsDelta: 490 },
+      { from: "unknown", to: "epic", catches: 1, pointsDelta: 90 },
     ]);
     const untouched = await db.select().from(catches).where(eq(catches.id, id));
     expect(untouched[0].points).toBe(10);
@@ -93,7 +93,7 @@ describe("rescoreCatches", () => {
     expect(applied.written).toBe(1);
     expect(applied.applied).toBe(true);
     const after = await db.select().from(catches).where(eq(catches.id, id));
-    expect(after[0].points).toBe(500);
+    expect(after[0].points).toBe(100);
     expect(after[0].rarity).toBe("epic");
     expect(after[0].typecode).toBe("A388");
     expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
@@ -148,12 +148,12 @@ describe("rescoreCatches", () => {
     expect(report.scanned).toBe(2);
     expect(report.distinctIcaos).toBe(1);
     expect(report.changed).toBe(2);
-    expect(report.pointsAfter).toBe(1000);
+    expect(report.pointsAfter).toBe(200);
     expect(report.transitions[0]).toEqual({
       from: "unknown",
       to: "epic",
       catches: 2,
-      pointsDelta: 980,
+      pointsDelta: 180,
     });
   });
 });

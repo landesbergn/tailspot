@@ -56,7 +56,7 @@ describe("POST /v1/catches", () => {
       manufacturer: "Boeing",
       model: "737-800",
       type: "narrow",
-      rarity: "rare", // rare → 100 points, distinct from the unknown floor (10)
+      rarity: "rare", // rare → 50 points, distinct from the unknown floor (10)
     });
     await db.insert(registry).values({
       icao24: "aaaaaa",
@@ -96,7 +96,7 @@ describe("POST /v1/catches", () => {
     expect(res.statusCode).toBe(201);
     expect(res.json()).toEqual({
       catchId: expect.stringMatching(/^[0-9a-f-]{36}$/),
-      points: 100, // rare
+      points: 50, // rare
       rarity: "rare",
       typecode: "B738",
       duplicate: false,
@@ -126,14 +126,14 @@ describe("POST /v1/catches", () => {
     const replayBody = replay.json();
     expect(replayBody.duplicate).toBe(true);
     expect(replayBody.catchId).toBe(firstBody.catchId);
-    expect(replayBody.points).toBe(firstBody.points); // 100, not the unknown 10
+    expect(replayBody.points).toBe(firstBody.points); // 50, not the unknown 10
     expect(replayBody.rarity).toBe("rare");
     expect(replayBody.typecode).toBe("B738");
   });
 
   it("null aircraft: accepted, scored normally, verdict unverifiable (backfill path)", async () => {
     // A pre-WP-1.7 iOS catch that never recorded the aircraft's position sends
-    // aircraft:null. It must succeed, score from its icao24 (B738 → rare → 100),
+    // aircraft:null. It must succeed, score from its icao24 (B738 → rare → 50),
     // and store an "unverifiable" verdict (no position to validate against).
     const body = catchBody("aaaaaa", "99999999-9999-4999-8999-999999999999");
     const nullAircraft = { ...body, aircraft: null };
@@ -141,7 +141,7 @@ describe("POST /v1/catches", () => {
     expect(res.statusCode).toBe(201);
     expect(res.json()).toEqual({
       catchId: expect.stringMatching(/^[0-9a-f-]{36}$/),
-      points: 100, // rare — scored from icao24, not the (absent) position
+      points: 50, // rare — scored from icao24, not the (absent) position
       rarity: "rare",
       typecode: "B738",
       duplicate: false,

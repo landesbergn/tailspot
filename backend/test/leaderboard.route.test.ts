@@ -124,7 +124,7 @@ describe("GET /v1/leaderboard", () => {
     await claim(alice, "Alice");
     await claim(bob, "Bob");
 
-    // Alice: legendary (2000). Bob: rare + common (110).
+    // Alice: legendary (500). Bob: rare + common (60).
     await postCatch(alice, LEGEND);
     await postCatch(bob, RARE);
     await postCatch(bob, COMMON);
@@ -133,8 +133,8 @@ describe("GET /v1/leaderboard", () => {
     expect(res.statusCode).toBe(200);
     const { entries } = res.json();
     expect(entries).toEqual([
-      { rank: 1, handle: "Alice", points: 2000, catches: 1 },
-      { rank: 2, handle: "Bob", points: 110, catches: 2 },
+      { rank: 1, handle: "Alice", points: 500, catches: 1 },
+      { rank: 2, handle: "Bob", points: 60, catches: 2 },
     ]);
   });
 
@@ -143,8 +143,8 @@ describe("GET /v1/leaderboard", () => {
     const named = await register();
     await claim(named, "Named");
 
-    await postCatch(ghost, LEGEND); // 2000, invisible
-    await postCatch(named, RARE); // 100, visible
+    await postCatch(ghost, LEGEND); // 500, invisible
+    await postCatch(named, RARE); // 50, visible
 
     const res = await app.inject({
       method: "GET",
@@ -153,10 +153,10 @@ describe("GET /v1/leaderboard", () => {
     });
     const body = res.json();
     // Only the named device appears in entries…
-    expect(body.entries).toEqual([{ rank: 1, handle: "Named", points: 100, catches: 1 }]);
-    // …but `me` reflects the TRUE rank: the ghost (2000 pts) outranks Named, so
+    expect(body.entries).toEqual([{ rank: 1, handle: "Named", points: 50, catches: 1 }]);
+    // …but `me` reflects the TRUE rank: the ghost (500 pts) outranks Named, so
     // Named is rank 2 overall even though the ghost is hidden from entries.
-    expect(body.me).toEqual({ rank: 2, points: 100 });
+    expect(body.me).toEqual({ rank: 2, points: 50 });
   });
 
   it("`me` is present for a valid token even without a handle; null without a token", async () => {
