@@ -727,7 +727,7 @@ BIZ = {
     'MU30','SJ30','HF20','S601','JCOM','SBR1','SBR2','L29A','L29B','WW23',  # other production / classic
 }
 MIL = {
-    'C130','C30J','C17','C5M','C5','KC135','KC10','KC46','K35R',
+    'C130','C30J','C17','C5M','C5','KC135','KC10','KC46','K35R','K35E',
     'B52','C27J','C295','A400','P3','P8','E3CF','E3TF','E6',
     'C12','C12J','U28','RC12','C160','AN12','IL76','A124','C141',
     'VC25','E4','C32','C40','B1','B2','C2','E2',
@@ -804,41 +804,66 @@ def aircraft_type(tc, info):
 # designator; absent designators simply never match (harmless).
 # See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
 RARITY_OVERRIDES = {
-    # ── legendary — icons / one-offs / barely-flying ──
+    # ── legendary — icons / extinct / sole-example / no civil signal ──
+    # (grounded in 2025-26 fleet data — see docs/plans/2026-06-29-002 plan §R1)
     "VC25": "legendary",  # Air Force One (VC-25A)
-    "B2":   "legendary",  # B-2 Spirit
-    "U2":   "legendary",  # U-2 Dragon Lady
-    "SR71": "legendary",  # SR-71 (absent from active DOC 8643; future-proof)
-    "CONC": "legendary",  # Concorde (absent; future-proof)
-    # ── epic — super-heavy / strategic ──
-    "A388": "epic",       # A380-800
-    "B748": "epic",       # 747-8
+    "B2":   "legendary",  # B-2 Spirit (no ADS-B — aspirational)
+    "U2":   "legendary",  # U-2 Dragon Lady (no ADS-B)
+    "SR71": "legendary",  # SR-71 (retired / museum)
+    "CONC": "legendary",  # Concorde (extinct 2003)
+    "F14":  "legendary",  # F-14 (Iranian only, no civil signal)
+    "E4":   "legendary",  # E-4B Nightwatch (4 airframes) — was epic
+    "A225": "legendary",  # An-225 (destroyed 2022; historical marker)
+    "L101": "legendary",  # L-1011 TriStar (no airworthy commercial)
+    "B721": "legendary", "B722": "legendary",   # 727 — extinct from pax (was uncommon)
+    "T154": "legendary",  # Tu-154 (government only)
+    "IL62": "legendary",  # Il-62 (Air Koryo only)
+    "B29":  "legendary",  # B-29 (1 airworthy worldwide)
+    "LANC": "legendary",  # Avro Lancaster (2 airworthy)
+    # ── epic — strategic/combat military · super-rare airliners · scarce warbirds ──
+    "B748": "epic",       # 747-8 (super-heavy, scarce pax)
     "C5M":  "epic",       # C-5M Super Galaxy
-    "A124": "epic",       # An-124
+    "A124": "epic",       # An-124 (15 commercial)
     "B52":  "epic",       # B-52
     "B1":   "epic",       # B-1 Lancer
     "E3TF": "epic", "E3CF": "epic",   # E-3 Sentry (AWACS)
-    "E4":   "epic",       # E-4B Nightwatch
-    # ── rare — scarce-in-the-air widebodies ──
+    "F15":  "epic", "F16": "epic", "F18": "epic", "F22": "epic", "F35": "epic",  # fighters (combat config rarely broadcasts)
+    "A318": "epic",       # A318 "Baby Bus" (4 left, Air France, retiring 2026)
+    "A342": "epic",       # A340-200 (3 total)
+    "B732": "epic",       # 737-200 (~9 pax left)
+    "MD90": "epic",       # MD-90 (very scarce) — was uncommon
+    "DC91": "epic", "DC92": "epic", "DC93": "epic", "DC94": "epic", "DC95": "epic",  # DC-9 (30 total, 1 pax)
+    "DC10": "epic",       # DC-10 (cargo / tanker / Orbis)
+    "MD11": "epic",       # MD-11 (all cargo, scarce) — was rare
+    "A310": "epic",       # A310 (~10, Iranian)
+    "A30B": "epic", "A306": "epic",   # A300 (~13)
+    "IL96": "epic",       # Il-96 (Cubana only)
+    "SPIT": "epic",       # Spitfire (airshow catch)
+    "B17":  "epic",       # B-17 Flying Fortress
+    # ── rare — scarce widebodies · vanishing airliners · heavy bizjets · warbirds ──
+    "A388": "rare",       # A380 (~200 fly, hub-concentrated) — was epic
     "B742": "rare", "B744": "rare", "B74S": "rare",   # 747 classic / -400 / SP
-    "A342": "rare", "A343": "rare", "A345": "rare", "A346": "rare",  # A340
-    "MD11": "rare",
-    # ── rare — heavy / ULR business jets ──
+    "A343": "rare", "A345": "rare", "A346": "rare",   # A340-300 / -500 / -600
+    "B753": "rare",       # 757-300 (32 left)
+    "B752": "uncommon",   # 757-200 (~130 still flying — a notch, not rare)
+    "B712": "rare",       # 717 (Delta/Hawaiian only) — was uncommon
+    "MD81": "rare", "MD82": "rare", "MD83": "rare", "MD87": "rare", "MD88": "rare",  # MD-80 (~100 left) — were uncommon
+    "F70":  "rare", "F100": "rare",   # Fokker 70 / 100 (retiring)
+    "B461": "rare", "B462": "rare", "B463": "rare", "RJ1H": "rare", "RJ85": "rare",  # BAe 146 / Avro RJ
     "GLF6": "rare",       # Gulfstream G650
-    "GA6C": "rare",       # Gulfstream G600 (ULR flagship — added 2026-06-09)
+    "GA6C": "rare",       # Gulfstream G600
     "GA7C": "rare",       # Gulfstream G700
     "GA8C": "rare",       # Gulfstream G800
     "GL7T": "rare",       # Bombardier Global 7500
     "GL5T": "rare",       # Bombardier Global 5000
     "GLEX": "rare",       # Bombardier Global Express / 6000
+    "P51":  "rare", "T6": "rare", "AT6": "rare",   # P-51 Mustang, T-6 Texan (100+ fly — abundant for warbirds)
+    "B25":  "rare",       # B-25 Mitchell
+    "DC3":  "rare", "JU52": "rare", "AN2": "rare", "BE18": "rare",   # vintage classics
     # ── uncommon — newer / smaller narrowbody ──
     "BCS1": "uncommon", "BCS3": "uncommon",           # A220
     "E190": "uncommon", "E195": "uncommon",           # E190 / E195
     "E290": "uncommon", "E295": "uncommon",           # E190-E2 / E195-E2
-    "B712": "uncommon",                               # 717
-    "MD82": "uncommon", "MD83": "uncommon",
-    "MD88": "uncommon", "MD90": "uncommon",
-    "B721": "uncommon", "B722": "uncommon",           # 727
     # ── uncommon — GA turboprops (single / twin utility) ──
     "PC12": "uncommon",
     "TBM7": "uncommon", "TBM8": "uncommon", "TBM9": "uncommon",
@@ -858,28 +883,27 @@ def aircraft_rarity(tc, info, type_str):
     if tc in RARITY_OVERRIDES:
         return RARITY_OVERRIDES[tc]
     desc = info.get("AircraftDescription", "")
-    wtc  = info.get("WTC", "")
     # Rotorcraft / tilt-rotor: localized, lower numbers than the airliner and
     # GA-piston long tail → uncommon.
     if desc in ("Helicopter", "Gyrocopter", "Tiltrotor"):
         return "uncommon"
-    # Super-heavy (A380-class) → epic (named ones are overridden anyway).
-    if wtc == "J":
-        return "epic"
-    # Workhorse widebodies: lots airborne, but a clear step below the
-    # narrowbody wall → uncommon. Scarce widebodies overridden to rare/epic.
+    # Workhorse widebodies are common over hubs — a daily 787/777/A350 is no
+    # rarer than a 737. Genuinely scarce widebodies (747, A340, A310, A300,
+    # MD-11, DC-10) and super-heavies (A380, An-225) are pinned up in
+    # RARITY_OVERRIDES.
     if type_str == "wide":
-        return "uncommon"
+        return "common"
     # Business jets: low utilization, parked most days → uncommon. Heavy/ULR
     # jets overridden to rare.
     if type_str == "biz":
         return "uncommon"
-    # Military: occasional → rare. Bombers/AWACS/outsized overridden to epic;
-    # icons (B-2, VC-25) to legendary.
+    # Military default → rare (the catchable transports). Strategic/combat
+    # (bombers, AWACS, fighters) overridden to epic; icons (B-2, U-2, VC-25)
+    # to legendary.
     if type_str == "mil":
         return "rare"
-    # narrow / regional / ga — the high-movement long tail. Newer/smaller
-    # narrowbodies and scarce GA turboprops are overridden to uncommon.
+    # narrow / regional / ga — the high-movement long tail. Vanishing airliners,
+    # rare narrowbodies, and warbirds are overridden up.
     return "common"
 
 

@@ -138,16 +138,16 @@ struct SetsRarityConsistencyTests {
         ("n-737-max",  "B38M", Rarity.common),    // was .uncommon — key re-tier
         ("n-a320neo",  "A20N", Rarity.common),
         ("n-a220",     "BCS3", Rarity.uncommon),
-        ("n-757",      "B752", Rarity.common),     // was .rare
+        ("n-757",      "B752", Rarity.uncommon),   // 757-200 ~130 still flying
         ("n-e190",     "E190", Rarity.uncommon),   // was .common
         // Wide
-        ("w-777",      "B77W", Rarity.uncommon),   // was .rare
-        ("w-787",      "B788", Rarity.uncommon),   // was .rare
-        ("w-a350",     "A35K", Rarity.uncommon),   // was .rare
-        ("w-a330",     "A332", Rarity.uncommon),
-        ("w-767",      "B763", Rarity.uncommon),
-        ("w-747",      "B744", Rarity.rare),
-        ("w-a380",     "A388", Rarity.epic),
+        ("w-777",      "B77W", Rarity.common),     // workhorse widebody → common
+        ("w-787",      "B788", Rarity.common),     // workhorse widebody → common
+        ("w-a350",     "A35K", Rarity.common),     // workhorse widebody → common
+        ("w-a330",     "A332", Rarity.common),     // workhorse widebody → common
+        ("w-767",      "B763", Rarity.common),     // workhorse widebody → common
+        ("w-747",      "B744", Rarity.rare),        // scarce-in-the-air widebody
+        ("w-a380",     "A388", Rarity.rare),       // ~200 fly, hub-concentrated
         ("w-747-8",    "B748", Rarity.epic),
         // Regional
         ("r-e175",     "E75L", Rarity.common),
@@ -163,7 +163,7 @@ struct SetsRarityConsistencyTests {
         // Mil
         ("m-c130",     "C130", Rarity.rare),
         ("m-c17",      "C17",  Rarity.rare),
-        ("m-kc135",    "K35E", Rarity.uncommon),   // was .rare
+        ("m-kc135",    "K35E", Rarity.rare),       // KC-135 tanker → mil → rare
         ("m-b52",      "B52",  Rarity.epic),        // was .rare
         // GA
         ("ga-c172",    "C172", Rarity.common),
@@ -178,7 +178,7 @@ struct SetsRarityConsistencyTests {
         ("ga-da42",    "DA42", Rarity.common),      // was .rare
         ("ga-r44",     "R44",  Rarity.uncommon),    // was .rare
         // Heritage (typecoded)
-        ("h-dc3",      "DC3",  Rarity.common),      // was .legendary
+        ("h-dc3",      "DC3",  Rarity.rare),         // vintage classic → rare
         ("h-sofia",    "B74S", Rarity.rare),         // was .legendary
     ] as [(String, String, Rarity)])
     func setEntry_rarityMatchesTable(_ entryID: String, _ typecode: String, _ expected: Rarity) {

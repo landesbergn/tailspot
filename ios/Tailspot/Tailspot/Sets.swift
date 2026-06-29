@@ -20,7 +20,11 @@ import Foundation
 nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
     let id: String                  // dedupe key
     let canonicalName: String       // how the slot reads in the grid
-    let rarity: Rarity              // colors the locked silhouette
+    /// Curated fallback tier — used only for entries with no resolvable
+    /// typecode. Typecoded entries derive rarity from the activity table
+    /// (see `rarity`), so a re-tier in generate-aircraft-types.py can
+    /// never drift from Sets.swift.
+    let curatedRarity: Rarity
     let modelTokens: [String]       // case-insensitive substring match
     let summary: String             // tap-to-reveal blurb
     /// A representative ICAO typecode for this entry — the one used
@@ -29,12 +33,23 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
     /// resolvable typecode (homebuilts, retired types not in DOC 8643).
     let representativeTypecode: String?
 
+    /// Tier that colors the locked silhouette. Derives from the single
+    /// source of truth (the activity table) when a typecode resolves;
+    /// falls back to the curated tier only for typecode-less entries.
+    var rarity: Rarity {
+        if let tc = representativeTypecode,
+           let derived = AircraftNaming.rarity(forTypecode: tc) {
+            return derived
+        }
+        return curatedRarity
+    }
+
     init(id: String, canonicalName: String, rarity: Rarity,
          modelTokens: [String], summary: String,
          representativeTypecode: String? = nil) {
         self.id = id
         self.canonicalName = canonicalName
-        self.rarity = rarity
+        self.curatedRarity = rarity
         self.modelTokens = modelTokens
         self.summary = summary
         self.representativeTypecode = representativeTypecode

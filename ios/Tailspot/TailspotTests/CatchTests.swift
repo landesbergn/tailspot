@@ -334,8 +334,9 @@ struct CatchTests {
         // The SIA248 case: a foreign airframe the FAA-only /v1/metadata endpoint
         // can't resolve, so model/manufacturer are nil — but the feed supplied
         // the typecode. Storing it alone must produce a real name + correct
-        // type/tier: no "Unknown aircraft", no GA/common fallback. The airline
-        // (callsign-derived) keeps showing as before.
+        // type: no "Unknown aircraft", no GA-default fallback (the .wide type and
+        // the resolved model prove it). The airline (callsign-derived) keeps
+        // showing as before.
         let c = Catch(
             icao24: "76cdb5", callsign: "SIA248",
             model: nil, manufacturer: nil,
@@ -348,7 +349,7 @@ struct CatchTests {
         #expect(plane.model == "Airbus A350-900")
         #expect(plane.model != "Unknown aircraft")
         #expect(plane.type == .wide)            // not the .ga unknown-airframe default
-        #expect(c.resolvedRarity == .uncommon)  // not the .common default
+        #expect(c.resolvedRarity == .common)    // A350 is a workhorse widebody → common
         #expect(plane.carrier == "Singapore Airlines")
     }
 
