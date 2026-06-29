@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collection Economy — Design Options</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#121a22; --panel2:#0e151c; --raise:#16202b;
+    --ink:#e7eef5; --muted:#8da0b2; --faint:#5f7284; --line:#21303f;
+    --cyan:#2fd4e6; --cyan-dim:#1c7d89;
+    --common:#9aa7b4; --uncommon:#52d486; --rare:#3eb6f6; --epic:#bd83fb; --legend:#fbbf24;
+    --good:#52d486; --warn:#fbbf24; --bad:#f1737d;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1020px;margin-inline:auto;padding:32px 22px 80px;}
+  a{color:var(--cyan);text-decoration:none}
+  a:hover{text-decoration:underline}
+  h1{font-size:30px;line-height:1.15;margin:0 0 6px;letter-spacing:-.4px}
+  h2{font-size:21px;margin:46px 0 4px;letter-spacing:-.2px}
+  h3{font-size:16px;margin:26px 0 8px;color:var(--ink)}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-dim)}
+  p{margin:8px 0;max-width:72ch;color:#d4dde6}
+  .muted{color:var(--muted)}
+  .faint{color:var(--faint)}
+  code{font-family:var(--mono);font-size:.88em;background:#0c141c;border:1px solid var(--line);
+    padding:1px 5px;border-radius:5px;color:#cfe7ee}
+  hr{border:0;border-top:1px solid var(--line);margin:38px 0}
+  .lede{font-size:16.5px;color:#c3d0db;max-width:74ch}
+  .metastrip{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+  .chip{font:600 11px/1 var(--mono);letter-spacing:.04em;padding:6px 10px;border-radius:999px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--muted)}
+  .chip.on{color:var(--cyan);border-color:var(--cyan-dim)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 6px;padding:14px 16px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  nav.toc a{font:600 12.5px/1 var(--mono);color:var(--muted);padding:5px 9px;border-radius:7px}
+  nav.toc a:hover{background:var(--raise);color:var(--cyan);text-decoration:none}
+  .callout{background:linear-gradient(180deg,#10212a,#0e1820);border:1px solid #1d3a44;
+    border-left:none;border-radius:12px;padding:16px 18px;margin:18px 0}
+  .callout.warn{background:#1c1812;border-color:#4a3b18}
+  .callout .k{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--cyan)}
+  .callout.warn .k{color:var(--warn)}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:760px){.g3,.g2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 17px}
+  .card h4{margin:2px 0 6px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .card.rec{border-color:var(--cyan-dim);box-shadow:0 0 0 1px rgba(47,212,230,.12) inset}
+  .tag{font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+    padding:4px 7px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+  .tag.rec{color:var(--cyan);border-color:var(--cyan-dim);background:#0d1d22}
+  .rateline{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 2px;font:600 11px/1 var(--mono)}
+  .rate{display:flex;align-items:center;gap:6px;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .d-hi{background:var(--good)} .d-mid{background:var(--warn)} .d-lo{background:var(--bad)}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  td.num{font-family:var(--mono);text-align:right}
+  .tier{font:600 11px/1 var(--mono);letter-spacing:.06em;padding:3px 7px;border-radius:5px;display:inline-block}
+  .t-common{color:var(--common);border:1px solid #36424e}
+  .t-uncommon{color:var(--uncommon);border:1px solid #245c3c}
+  .t-rare{color:var(--rare);border:1px solid #1f5274}
+  .t-epic{color:var(--epic);border:1px solid #4a3168}
+  .t-legend{color:var(--legend);border:1px solid #5b4715}
+  figure{margin:18px 0}
+  figure svg{display:block;width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:14px}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:7px;font-style:italic}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font:600 11px/1 var(--mono)}
+  .legend span{display:flex;align-items:center;gap:6px;color:var(--muted)}
+  ul.tight{margin:8px 0;padding-left:18px}
+  ul.tight li{margin:5px 0;color:#d4dde6}
+  .q{color:var(--cyan);font-weight:600}
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .opt{font:600 11px/1 var(--mono);padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--line);
+    font:500 12px/1.5 var(--mono);color:var(--faint)}
+  .num-strong{font-family:var(--mono);color:var(--cyan)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Tailspot · Bet B — Collection &amp; Progression</div>
+    <h1>The Collection Economy — Design Options</h1>
+    <p class="lede">A reviewable design exploration for backlog&nbsp;#4: re-balancing the points / rarity / medal
+    economy into something <strong>clear, accurate, consistent, and scalable</strong>, plus the catch-reveal moment
+    where it all shows up. Pick or refine a direction on each decision — the locked choices become the implementation plan.</p>
+    <div class="metastrip">
+      <span class="chip on">Status · design review</span>
+      <span class="chip">Date · 2026-06-28</span>
+      <span class="chip">Scope · #4 economy + #7 reveal</span>
+      <span class="chip">Decides · 3 forks + 1 sub-fork</span>
+    </div>
+    <nav class="toc">
+      <a href="#rubric">01 · Engagement rubric</a>
+      <a href="#d1">02 · Scoring model</a>
+      <a href="#d2">03 · The reveal</a>
+      <a href="#d3">04 · Trophies + bonus + unlock</a>
+      <a href="#log">05 · Decision log</a>
+    </nav>
+  </header>
+
+  <div class="callout">
+    <div class="k">Read this first — what the research changed</div>
+    <p style="margin-top:8px">Three things the backlog got wrong, now corrected:</p>
+    <ul class="tight">
+      <li><strong>Points already surface</strong> at the AR label, Hangar card, detail view, and the reveal card back; the
+      profile already reads <em>server-authoritative</em> standing. So the “make points legible / show standing” goals are
+      largely <strong>done</strong> — the real work is the <em>model</em> and the <em>moment</em>.</li>
+      <li><strong>The “ContentView still uses a string classifier” divergence is already fixed</strong> (the live AR tier is
+      typecode-first, pinned by tests). The remaining divergence is <code>Sets.swift</code> nil-typecode entries.</li>
+      <li><strong>The bronze→platinum medals are gone.</strong> PR&nbsp;#56 shipped a binary/chain trophy system. So
+      “review the medal tiers” is a fresh fork, not a tune-up — and it’s where your new “bonus points for trophies” idea lands.</li>
+    </ul>
+    <p class="muted" style="margin-bottom:0">One structural fact drives the whole plan: <strong>tiers come from a single
+    source</strong> (<code>tools/generate-aircraft-types.py</code> → <code>AircraftTypes.json</code>, bundled by iOS and
+    ingested by the backend), and a <strong>proven re-score lever</strong> (<code>scoring_version</code> + <code>npm run rescore</code>)
+    re-prices every existing catch on command. Re-balancing is safe and reversible.</p>
+  </div>
+
+  <!-- ============================================ 01 RUBRIC ============================================ -->
+  <h2 id="rubric">01 · The engagement rubric</h2>
+  <p>You asked me to weigh the options by what makes the economy <em>work</em> as a game, not just what’s accurate.
+  Here’s the lens I’m grading every option against — six dynamics a collection economy has to serve.</p>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h4>① Every catch pays</h4><p class="muted" style="font-size:13.5px;margin:0">A common still feels
+    like progress — no “that was worthless” catch. The motivation killer is a zero. Diminishing returns on duplicates, never nothing.</p></div>
+    <div class="card"><h4>② The chase is legible</h4><p class="muted" style="font-size:13.5px;margin:0">Points track <em>real</em>
+    rarity and the reveal says <em>why</em>. The player trusts the number — which is the north-star (“is the catch real?”) felt at the economy layer.</p></div>
+    <div class="card"><h4>③ Variety &gt; grind</h4><p class="muted" style="font-size:13.5px;margin:0">First-of-type and set
+    bonuses reward breadth, so you can’t just farm the same Cessna. Collection depth is the metric that should climb.</p></div>
+    <div class="card"><h4>④ Fair anywhere</h4><p class="muted" style="font-size:13.5px;margin:0">Berkeley and Bali both
+    offer a satisfying chase. Rarity is relative to a sane baseline — not whatever happens to fly over SFO.</p></div>
+    <div class="card"><h4>⑤ Consistent &amp; anti-inflation</h4><p class="muted" style="font-size:13.5px;margin:0">Adding
+    planes or re-tiering never silently re-prices the board. Versioned, transparent, one-command re-score.</p></div>
+    <div class="card"><h4>⑥ Milestones burst</h4><p class="muted" style="font-size:13.5px;margin:0">On top of the steady
+    drip, trophies and sets deliver punctuated spikes — unlock moments (and maybe a points payout) that mark real progress.</p></div>
+  </div>
+  <p class="faint" style="margin-top:14px">Decision 1 (model) serves ①②④⑤ · the bonus layer serves ③⑥ · Decision 2 (reveal)
+  serves ②⑥ · Decision 3 (trophies) serves ③⑥.</p>
+
+  <hr>
+
+  <!-- ============================================ 02 SCORING MODEL ============================================ -->
+  <h2 id="d1">02 · Decision 1 — The scoring model</h2>
+  <p class="lede">How is a plane’s tier decided, how do tiers become points, and how does the whole thing scale as the
+  catalog and the sky grow? Three approaches, graded on the rubric.</p>
+
+  <div class="rateline" style="margin-top:14px">
+    <span class="rate"><span class="dot d-hi"></span>strong</span>
+    <span class="rate"><span class="dot d-mid"></span>partial</span>
+    <span class="rate"><span class="dot d-lo"></span>weak</span>
+    <span class="faint">— graded on Accuracy · Scalability · Engagement · Build cost</span>
+  </div>
+
+  <div class="grid g3" style="margin-top:14px">
+
+    <div class="card">
+      <h4>A · Refined curated <span class="tag">simplest</span></h4>
+      <p style="font-size:13.5px;margin:6px 0">Keep the hand-authored tier table (clean up buckets + overrides), one
+      re-balanced flat value per tier. No frequency input.</p>
+      <div class="rateline">
+        <span class="rate"><span class="dot d-lo"></span>Accuracy</span>
+        <span class="rate"><span class="dot d-lo"></span>Scale</span>
+        <span class="rate"><span class="dot d-mid"></span>Engage</span>
+        <span class="rate"><span class="dot d-hi"></span>Build</span>
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:8px"><strong>Engagement read:</strong> designer controls the “fun”
+      tiers, but with no ground truth it can feel <em>arbitrary</em> (dents ② trust) and unfair across regions unless
+      hand-managed. Scales only by someone editing the table per plane.</p>
+    </div>
+
+    <div class="card rec">
+      <h4>C · Hybrid <span class="tag rec">recommended</span></h4>
+      <p style="font-size:13.5px;margin:6px 0">Curated table is the floor; an offline ADS-B frequency signal <em>nudges</em>
+      tiers where data is solid; editorial override always wins. Points = tier <strong>bands</strong> + a bonus layer.</p>
+      <div class="rateline">
+        <span class="rate"><span class="dot d-hi"></span>Accuracy</span>
+        <span class="rate"><span class="dot d-mid"></span>Scale</span>
+        <span class="rate"><span class="dot d-hi"></span>Engage</span>
+        <span class="rate"><span class="dot d-mid"></span>Build</span>
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:8px"><strong>Engagement read:</strong> designer sets the <em>felt</em>
+      tiers (a beloved-but-common warbird can still be made special), data keeps them <em>honest</em> and fair. Self-scales
+      through the proven re-score lever — no new realtime pipeline. Best balance of trust, control, and cost.</p>
+    </div>
+
+    <div class="card">
+      <h4>B · Data-derived <span class="tag">most accurate</span></h4>
+      <p style="font-size:13.5px;margin:6px 0">Tier = percentile of real ADS-B sighting frequency + editorial override.
+      Points via log-inverse-frequency snapped to bands.</p>
+      <div class="rateline">
+        <span class="rate"><span class="dot d-hi"></span>Accuracy</span>
+        <span class="rate"><span class="dot d-hi"></span>Scale</span>
+        <span class="rate"><span class="dot d-mid"></span>Engage</span>
+        <span class="rate"><span class="dot d-lo"></span>Build</span>
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:8px"><strong>Engagement read:</strong> maximally <em>fair</em> and
+      self-balancing — but <em>cold</em>: a plane people love but that’s objectively common scores nothing, and regional
+      skew can produce odd spikes. Needs a new backend frequency pipeline with regional baselines. Biggest bet.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="k">Why hybrid wins on engagement</div>
+    <p style="margin:8px 0 0">Pure data (B) is the “accurate” instinct, but accuracy isn’t the same as <em>fun</em> — a
+    spotting game wants a designer’s thumb on the scale so an A380 or a military jet feels like an event even if a frequency
+    table would shrug. Pure curation (A) loses the trust that makes the chase feel earned. <strong>Hybrid keeps the felt
+    drama and grounds it in real frequency</strong>, and crucially it reuses the re-score machinery you already have — so it
+    ships without building a live analytics pipeline first. You can start it 95% curated and turn up the data influence later.</p>
+  </div>
+
+  <h3>The tier → points shape (all models share this skeleton)</h3>
+  <p>Whatever the source, points <strong>snap to tier bands</strong> — the tier sets a floor/ceiling, and a small
+  within-band bump (flat in A, frequency-driven in B/C) places you inside it. Band-snapping is what delivers rubric&nbsp;⑤:
+  adding aircraft only ever changes a plane’s <em>tier assignment</em>, never silently re-prices everything else.</p>
+
+  <figure>
+    <svg viewBox="0 0 980 300" role="img" aria-label="Points bands by rarity tier, today versus proposed">
+      <text x="20" y="28" fill="#e7eef5" font-family="var(--mono)" font-size="13" font-weight="700">POINTS BY TIER — today’s flat ladder vs proposed bands</text>
+      <!-- axis -->
+      <line x1="120" y1="250" x2="940" y2="250" stroke="#21303f" stroke-width="1"/>
+      <text x="120" y="272" fill="#5f7284" font-family="var(--mono)" font-size="10">Common</text>
+      <text x="290" y="272" fill="#5f7284" font-family="var(--mono)" font-size="10">Uncommon</text>
+      <text x="470" y="272" fill="#5f7284" font-family="var(--mono)" font-size="10">Rare</text>
+      <text x="660" y="272" fill="#5f7284" font-family="var(--mono)" font-size="10">Epic</text>
+      <text x="830" y="272" fill="#5f7284" font-family="var(--mono)" font-size="10">Legendary</text>
+      <!-- today flat markers (log-ish positions) -->
+      <g font-family="var(--mono)" font-size="10">
+        <!-- today dots -->
+        <circle cx="150" cy="232" r="4" fill="#5f7284"/><text x="160" y="236" fill="#8da0b2">10</text>
+        <circle cx="320" cy="222" r="4" fill="#5f7284"/><text x="330" y="226" fill="#8da0b2">25</text>
+        <circle cx="500" cy="196" r="4" fill="#5f7284"/><text x="510" y="200" fill="#8da0b2">100</text>
+        <circle cx="690" cy="150" r="4" fill="#5f7284"/><text x="700" y="154" fill="#8da0b2">500</text>
+        <circle cx="860" cy="86" r="4" fill="#5f7284"/><text x="828" y="78" fill="#8da0b2">2000</text>
+      </g>
+      <!-- proposed bands -->
+      <g opacity="0.95">
+        <rect x="135" y="226" width="48" height="18" rx="4" fill="#9aa7b4" opacity=".22" stroke="#36424e"/>
+        <text x="159" y="220" fill="#9aa7b4" font-family="var(--mono)" font-size="9" text-anchor="middle">5–15</text>
+        <rect x="305" y="208" width="48" height="30" rx="4" fill="#52d486" opacity=".20" stroke="#245c3c"/>
+        <text x="329" y="202" fill="#52d486" font-family="var(--mono)" font-size="9" text-anchor="middle">25–55</text>
+        <rect x="485" y="176" width="48" height="44" rx="4" fill="#3eb6f6" opacity=".20" stroke="#1f5274"/>
+        <text x="509" y="170" fill="#3eb6f6" font-family="var(--mono)" font-size="9" text-anchor="middle">80–160</text>
+        <rect x="675" y="120" width="48" height="60" rx="4" fill="#bd83fb" opacity=".20" stroke="#4a3168"/>
+        <text x="699" y="114" fill="#bd83fb" font-family="var(--mono)" font-size="9" text-anchor="middle">300–550</text>
+        <rect x="845" y="64" width="48" height="92" rx="4" fill="#fbbf24" opacity=".20" stroke="#5b4715"/>
+        <text x="869" y="58" fill="#fbbf24" font-family="var(--mono)" font-size="9" text-anchor="middle">1000–2500</text>
+      </g>
+      <text x="120" y="296" fill="#5f7284" font-family="var(--mono)" font-size="10">●  today (single value)        ▭  proposed band (tier floor → ceiling; you land inside by frequency)</text>
+    </svg>
+    <figcaption>Directional only — exact band edges get finalized in the plan. The point is the <em>shape</em>: bands, not points,
+    so the catalog can grow without re-pricing.</figcaption>
+  </figure>
+
+  <h3>The bonus layer — where most of the engagement lives</h3>
+  <p>Base tier points are the steady drip (rubric ①②). The <em>bonuses</em> are what reward the behaviors we want — breadth,
+  completion, habit, milestones (③⑥). Proposed layers, each a separate toggle so we can tune independently:</p>
+  <table>
+    <thead><tr><th>Bonus</th><th>Rewards (rubric)</th><th>Shape</th><th>Default</th></tr></thead>
+    <tbody>
+      <tr><td><strong>First-of-type</strong></td><td>Exploration / variety ③</td><td>+50% of base, once per typecode ever</td><td class="num q">In</td></tr>
+      <tr><td><strong>Duplicate decay</strong></td><td>Anti-grind ③</td><td>Nth catch of a type: 100% → 50% → 25% → floor</td><td class="num q">In</td></tr>
+      <tr><td><strong>Set completion</strong></td><td>Collection ⑥</td><td>Flat bonus when a Set’s last card lands</td><td class="num q">In</td></tr>
+      <tr><td><strong>Trophy payout</strong></td><td>Milestones ⑥</td><td>Points on unlock — <em>your new idea; see Decision 3</em></td><td class="num">fork</td></tr>
+      <tr><td><strong>Daily-first / streak</strong></td><td>Habit (DAU/WAU)</td><td>Small bonus on first catch of the day</td><td class="num faint">later</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <div class="k">Open sub-decision — duplicate decay</div>
+    <p style="margin:8px 0 0">This is the biggest <em>feel</em> change and worth your read: today a 50th Cessna is worth the
+    same as the first, so the leaderboard rewards grinding one spot under a flight path. Decay fixes ③ but it’s a visible
+    nerf for high-volume spotters. Options: <span class="q">(a)</span> decay to a small floor (recommended — every catch still
+    pays), <span class="q">(b)</span> decay only above a daily cap, <span class="q">(c)</span> no decay, lean on first-of-type
+    alone. <strong>Which feels right?</strong></p>
+  </div>
+
+  <h3>Worked example — the same six catches, three models</h3>
+  <table>
+    <thead><tr><th>Aircraft</th><th>Tier</th><th class="num">A · curated</th><th class="num">C · hybrid</th><th class="num">B · data</th></tr></thead>
+    <tbody>
+      <tr><td>Cessna 172</td><td><span class="tier t-common">common</span></td><td class="num">10</td><td class="num">8</td><td class="num">6</td></tr>
+      <tr><td>A320 (everywhere)</td><td><span class="tier t-common">common</span></td><td class="num">10</td><td class="num">12</td><td class="num">9</td></tr>
+      <tr><td>A350-900</td><td><span class="tier t-uncommon">uncommon</span></td><td class="num">30</td><td class="num">40</td><td class="num">90 ▲</td></tr>
+      <tr><td>Boeing 757</td><td><span class="tier t-rare">rare</span></td><td class="num">100</td><td class="num">120</td><td class="num">110</td></tr>
+      <tr><td>A380</td><td><span class="tier t-epic">epic</span></td><td class="num">450</td><td class="num">450</td><td class="num">380</td></tr>
+      <tr><td>An-225 <span class="faint">(editorial)</span></td><td><span class="tier t-legend">legendary</span></td><td class="num">2000</td><td class="num">2000</td><td class="num">2000</td></tr>
+    </tbody>
+  </table>
+  <p class="faint">Illustrative. Note the A350 under pure-data (▲): empirically rarer than its “uncommon” feel, so it spikes —
+  exactly the kind of cold surprise hybrid smooths by keeping a designer tier with a data nudge.</p>
+
+  <hr>
+
+  <!-- ============================================ 03 THE REVEAL ============================================ -->
+  <h2 id="d2">03 · Decision 2 — The catch reveal</h2>
+  <p class="lede">The high-design moment where the economy shows up. You asked to keep the <strong>receipt breakdown
+  available too</strong> — so my recommendation isn’t either/or: an <strong>anticipation reveal that flips to a receipt</strong>.
+  Mockups of all three treatments + the animation storyboard below.</p>
+
+  <h3>Recommended flow — anticipation front, receipt back</h3>
+  <figure>
+    <svg viewBox="0 0 980 360" role="img" aria-label="Catch reveal animation storyboard, five frames">
+      <defs>
+        <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#3eb6f6" stop-opacity=".35"/><stop offset="1" stop-color="#3eb6f6" stop-opacity="0"/>
+        </linearGradient>
+        <radialGradient id="bloom" cx="50%" cy="42%" r="60%">
+          <stop offset="0" stop-color="#3eb6f6" stop-opacity=".55"/><stop offset="1" stop-color="#3eb6f6" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <text x="20" y="26" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">REVEAL STORYBOARD — single catch (Boeing 757 · RARE)</text>
+      <!-- frame helper: 5 phones across -->
+      <!-- F1 -->
+      <g transform="translate(20,46)">
+        <rect width="160" height="280" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="132" height="248" rx="12" fill="#06090d"/>
+        <text x="80" y="140" fill="#3a4a59" font-family="var(--mono)" font-size="11" text-anchor="middle">shutter</text>
+        <text x="80" y="155" fill="#3a4a59" font-family="var(--mono)" font-size="11" text-anchor="middle">· · ·</text>
+        <text x="80" y="300" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">0.0s</text>
+      </g>
+      <!-- F2 -->
+      <g transform="translate(200,46)">
+        <rect width="160" height="280" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="132" height="248" rx="12" fill="#06090d"/>
+        <circle cx="80" cy="120" r="70" fill="url(#bloom)"/>
+        <g stroke="#3eb6f6" stroke-width="1.4" opacity=".5">
+          <line x1="80" y1="120" x2="80" y2="40"/><line x1="80" y1="120" x2="150" y2="80"/>
+          <line x1="80" y1="120" x2="150" y2="160"/><line x1="80" y1="120" x2="80" y2="200"/>
+          <line x1="80" y1="120" x2="14" y2="160"/><line x1="80" y1="120" x2="14" y2="80"/>
+        </g>
+        <text x="80" y="300" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">1.5s · rays gather</text>
+      </g>
+      <!-- F3 -->
+      <g transform="translate(380,46)">
+        <rect width="160" height="280" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="132" height="248" rx="12" fill="#06090d"/>
+        <circle cx="80" cy="110" r="60" fill="url(#bloom)" opacity=".7"/>
+        <rect x="34" y="92" width="92" height="22" rx="6" fill="#0d1d28" stroke="#1f5274"/>
+        <text x="80" y="107" fill="#3eb6f6" font-family="var(--mono)" font-size="11" font-weight="700" text-anchor="middle">RARE ◆◆◆</text>
+        <text x="80" y="150" fill="#cfe7ee" font-family="var(--mono)" font-size="11" text-anchor="middle">Boeing 757</text>
+        <text x="80" y="186" fill="#3eb6f6" font-family="var(--mono)" font-size="20" font-weight="700" text-anchor="middle">+120</text>
+        <text x="80" y="300" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">2.5s · slam + count-up</text>
+      </g>
+      <!-- F4 -->
+      <g transform="translate(560,46)">
+        <rect width="160" height="280" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="132" height="248" rx="12" fill="#06090d"/>
+        <rect x="34" y="70" width="92" height="20" rx="6" fill="#0d1d28" stroke="#1f5274"/>
+        <text x="80" y="84" fill="#3eb6f6" font-family="var(--mono)" font-size="10" font-weight="700" text-anchor="middle">RARE</text>
+        <text x="80" y="112" fill="#cfe7ee" font-family="var(--mono)" font-size="11" text-anchor="middle">Boeing 757</text>
+        <text x="80" y="132" fill="#3eb6f6" font-family="var(--mono)" font-size="16" font-weight="700" text-anchor="middle">+120</text>
+        <text x="80" y="162" fill="#8da0b2" font-family="var(--mono)" font-size="9" text-anchor="middle">Only 0.4% of</text>
+        <text x="80" y="174" fill="#8da0b2" font-family="var(--mono)" font-size="9" text-anchor="middle">catches are 757s</text>
+        <rect x="28" y="190" width="104" height="20" rx="10" fill="#1c1812" stroke="#5b4715"/>
+        <text x="80" y="204" fill="#fbbf24" font-family="var(--mono)" font-size="9" font-weight="700" text-anchor="middle">✦ FIRST 757 +60</text>
+        <text x="80" y="300" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">3.5s · why + bonus</text>
+      </g>
+      <!-- F5 flip -->
+      <g transform="translate(740,46)">
+        <rect width="160" height="280" rx="20" fill="#0a0e13" stroke="#2fd4e6" stroke-opacity=".4"/>
+        <rect x="14" y="16" width="132" height="248" rx="12" fill="#0a141b"/>
+        <text x="80" y="40" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">— tap to flip —</text>
+        <line x1="26" y1="52" x2="134" y2="52" stroke="#21303f"/>
+        <text x="26" y="78" fill="#8da0b2" font-family="var(--mono)" font-size="10">Base (Rare)</text><text x="134" y="78" fill="#cfe7ee" font-family="var(--mono)" font-size="10" text-anchor="end">100</text>
+        <text x="26" y="100" fill="#8da0b2" font-family="var(--mono)" font-size="10">First-of-type</text><text x="134" y="100" fill="#fbbf24" font-family="var(--mono)" font-size="10" text-anchor="end">+60</text>
+        <text x="26" y="122" fill="#8da0b2" font-family="var(--mono)" font-size="10">Set: Jets</text><text x="134" y="122" fill="#52d486" font-family="var(--mono)" font-size="10" text-anchor="end">+10</text>
+        <line x1="26" y1="134" x2="134" y2="134" stroke="#21303f"/>
+        <text x="26" y="158" fill="#e7eef5" font-family="var(--mono)" font-size="11" font-weight="700">TOTAL</text><text x="134" y="158" fill="#2fd4e6" font-family="var(--mono)" font-size="13" font-weight="700" text-anchor="end">+170</text>
+        <text x="80" y="196" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">tail · route · set</text>
+        <text x="80" y="300" fill="#2fd4e6" font-family="var(--mono)" font-size="10" text-anchor="middle">receipt (flip side)</text>
+      </g>
+    </svg>
+    <figcaption>The recommended flow: anticipation builds (frames 1–2), the tier badge slams in and points count up (3),
+    the “why” line + first-of-type bonus settle (4), and a tap flips to the itemized receipt (5). Dopamine sits on the build, not the number.</figcaption>
+  </figure>
+
+  <h3>The three treatments, side by side</h3>
+  <div class="grid g3">
+    <div class="card rec">
+      <h4>Anticipation <span class="tag rec">rec · front</span></h4>
+      <p style="font-size:13px;margin:6px 0" class="muted">Build-up → slam → count-up → why + bonus. The storyboard above.
+      Most exciting; the moment a rare lands feels like an event. Most animation work.</p>
+    </div>
+    <div class="card">
+      <h4>Receipt <span class="tag">rec · back</span></h4>
+      <p style="font-size:13px;margin:6px 0" class="muted">Itemized tally (base + bonuses → total). Fully transparent —
+      teaches the economy. As the <em>flip side</em> of anticipation it’s the best of both: drama up front, honesty on tap.</p>
+    </div>
+    <div class="card">
+      <h4>Refined current <span class="tag">fallback</span></h4>
+      <p style="font-size:13px;margin:6px 0" class="muted">Today’s shipped flip card + a “why” line + bonus chip, no new
+      animation. The low-risk fallback if the anticipation sequence proves fiddly on-device.</p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="k">To mock next, on your nod</div>
+    <p style="margin:8px 0 0">You wanted full card + animation mocks for review. The storyboard above is the single-catch flow;
+    I’ll also mock <span class="q">(a)</span> the <strong>multi-catch reveal</strong> (when one tap bags several — today’s
+    <code>MultiCatchReveal</code>), and <span class="q">(b)</span> a <strong>legendary-tier</strong> variant (heavier rays /
+    distinct treatment) so the top tier reads as special. Want those in this doc before we lock, or in the plan?</p>
+  </div>
+
+  <hr>
+
+  <!-- ============================================ 04 TROPHIES ============================================ -->
+  <h2 id="d3">04 · Decision 3 — Trophies: architecture + bonus points + the unlock moment</h2>
+  <p class="lede">Three coupled choices: the progression <strong>architecture</strong>, whether trophies <strong>pay out
+  points</strong> (your new idea), and the <strong>unlock moment</strong> when one fires.</p>
+
+  <h3>3a · Architecture — binary vs tiered climb</h3>
+  <div class="grid g2">
+    <div class="card rec">
+      <h4>Keep binary + progress <span class="tag rec">recommended</span></h4>
+      <figure style="margin:8px 0">
+        <svg viewBox="0 0 420 210" role="img" aria-label="Binary trophy shelf with progress bars">
+          <rect x="0" y="0" width="420" height="210" fill="none"/>
+          <!-- rows -->
+          <g font-family="var(--mono)" font-size="12">
+            <text x="44" y="34" fill="#2fd4e6">◆ Frequent Flyer</text>
+            <rect x="250" y="22" width="150" height="14" rx="7" fill="#0d1d22" stroke="#1c7d89"/>
+            <rect x="250" y="22" width="150" height="14" rx="7" fill="#2fd4e6" opacity=".5"/>
+            <text x="408" y="33" fill="#2fd4e6" text-anchor="end" font-size="10">EARNED</text>
+
+            <text x="44" y="74" fill="#cfe7ee">◆ Globetrotter</text>
+            <rect x="250" y="62" width="150" height="14" rx="7" fill="#0d1d22" stroke="#21303f"/>
+            <rect x="250" y="62" width="141" height="14" rx="7" fill="#52d486" opacity=".55"/>
+            <text x="408" y="73" fill="#8da0b2" text-anchor="end" font-size="10">47/50</text>
+
+            <text x="44" y="114" fill="#cfe7ee">◇ Rare Bird</text>
+            <rect x="250" y="102" width="150" height="14" rx="7" fill="#0d1d22" stroke="#21303f"/>
+            <rect x="250" y="102" width="22" height="14" rx="7" fill="#3eb6f6" opacity=".55"/>
+            <text x="408" y="113" fill="#8da0b2" text-anchor="end" font-size="10">3/20</text>
+
+            <text x="44" y="154" fill="#cfe7ee">◇ Set: Widebodies</text>
+            <rect x="250" y="142" width="150" height="14" rx="7" fill="#0d1d22" stroke="#21303f"/>
+            <rect x="250" y="142" width="66" height="14" rx="7" fill="#bd83fb" opacity=".55"/>
+            <text x="408" y="153" fill="#8da0b2" text-anchor="end" font-size="10">4/9</text>
+          </g>
+          <text x="20" y="194" fill="#5f7284" font-family="var(--mono)" font-size="10">every trophy one-shot · visible progress · new awards = badges</text>
+        </svg>
+      </figure>
+      <p style="font-size:13px;margin:0" class="muted">Matches what shipped (PR #56) + your “hard/rare is right” taste.
+      Add a progress bar to every locked trophy, calibrate thresholds from real catch data, ship new awards as badges. Smallest risk, no migration.</p>
+    </div>
+
+    <div class="card">
+      <h4>Restore tiered climb <span class="tag">richer · costlier</span></h4>
+      <figure style="margin:8px 0">
+        <svg viewBox="0 0 420 210" role="img" aria-label="Tiered trophy climb bronze to platinum">
+          <g font-family="var(--mono)" font-size="12">
+            <text x="20" y="30" fill="#fbbf24">✦ Globetrotter</text>
+            <text x="44" y="62" fill="#b08d57">Bronze  10</text><text x="160" y="62" fill="#52d486">✓</text>
+            <text x="44" y="92" fill="#cdd7e1">Silver  50</text>
+            <rect x="180" y="80" width="170" height="13" rx="6" fill="#0d1d22" stroke="#21303f"/>
+            <rect x="180" y="80" width="160" height="13" rx="6" fill="#52d486" opacity=".5"/>
+            <text x="360" y="91" fill="#8da0b2" font-size="10">47/50</text>
+            <text x="44" y="122" fill="#e7c75a">Gold   250</text>
+            <rect x="180" y="110" width="170" height="13" rx="6" fill="#0d1d22" stroke="#21303f"/>
+            <text x="44" y="152" fill="#9fb6c6">Plat  1000</text>
+            <rect x="180" y="140" width="170" height="13" rx="6" fill="#0d1d22" stroke="#21303f"/>
+          </g>
+          <text x="20" y="194" fill="#5f7284" font-family="var(--mono)" font-size="10">a ladder per family · bigger iOS change + SwiftData migration</text>
+        </svg>
+      </figure>
+      <p style="font-size:13px;margin:0" class="muted">Each family is a ladder you climb — richer long-game. But it re-introduces
+      the medal system PR&nbsp;#56 removed, needs a migration, and risks the “too many tiers” trap (Yu-Gi-Oh’s 12 rarities are a known failure). Bigger bet for unclear payoff right now.</p>
+    </div>
+  </div>
+
+  <h3>3b · Bonus points for trophies — your new idea</h3>
+  <p>Today trophy thresholds read off catch <em>counts</em> but trophies pay <strong>nothing</strong> — they’re pure status.
+  Making them pay couples milestones to the economy (rubric ⑥) and gives the unlock moment real weight. The catch is
+  <em>where</em> the points go — get this wrong and the leaderboard becomes about grinding trophies, not catching planes.</p>
+  <div class="grid g3">
+    <div class="card rec">
+      <h4>① Into total + board <span class="tag rec">recommended</span></h4>
+      <p style="font-size:13px;margin:6px 0" class="muted">Trophy bonuses add to your one points total and the leaderboard.
+      Simple, one number, milestone spikes are visible to everyone. Risk: a big back-catalog of trophies could lurch the board
+      on first release — handled by the same dry-run re-score + “your score changed” note.</p>
+    </div>
+    <div class="card">
+      <h4>② Separate prestige track</h4>
+      <p style="font-size:13px;margin:6px 0" class="muted">Trophy points feed a second “prestige / spotter level” distinct
+      from the catch leaderboard. Keeps the board purely about catching; adds a progression axis. More UI, two numbers to explain.</p>
+    </div>
+    <div class="card">
+      <h4>③ No points — moment only</h4>
+      <p style="font-size:13px;margin:6px 0" class="muted">Trophies stay status; the reward is the unlock animation, not points.
+      Cleanest economy, but leaves your “bonus points” instinct on the table.</p>
+    </div>
+  </div>
+  <p class="faint">My lean: ① with modest, hand-set payouts scaled to difficulty (e.g. a “100 catches” trophy pays less than a
+  “catch a legendary” trophy), so it rewards <em>achievement</em> without out-earning the catching itself.</p>
+
+  <h3>3c · The trophy unlock moment</h3>
+  <figure>
+    <svg viewBox="0 0 980 250" role="img" aria-label="Trophy unlock moment storyboard, three frames">
+      <text x="20" y="26" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">TROPHY UNLOCK — fires after a qualifying catch (builds on today’s TrophyUnlockCenter)</text>
+      <defs>
+        <radialGradient id="tbloom" cx="50%" cy="45%" r="60%">
+          <stop offset="0" stop-color="#fbbf24" stop-opacity=".5"/><stop offset="1" stop-color="#fbbf24" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <!-- F1 small toast rising -->
+      <g transform="translate(40,44)">
+        <rect width="200" height="180" rx="18" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="16" y="120" width="168" height="44" rx="10" fill="#101820" stroke="#21303f"/>
+        <polygon points="38,142 50,130 62,142 50,154" fill="#2fd4e6" opacity=".5"/>
+        <text x="74" y="139" fill="#cfe7ee" font-family="var(--mono)" font-size="10">Trophy unlocked</text>
+        <text x="74" y="153" fill="#8da0b2" font-family="var(--mono)" font-size="9">tap to open</text>
+        <text x="100" y="208" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">0.0s · toast rises</text>
+      </g>
+      <!-- F2 hex zoom -->
+      <g transform="translate(260,44)">
+        <rect width="200" height="180" rx="18" fill="#0a0e13" stroke="#21303f"/>
+        <circle cx="100" cy="78" r="70" fill="url(#tbloom)"/>
+        <polygon points="100,38 132,57 132,95 100,114 68,95 68,57" fill="#1c1812" stroke="#fbbf24" stroke-width="2"/>
+        <text x="100" y="84" fill="#fbbf24" font-family="var(--mono)" font-size="18" text-anchor="middle">✈</text>
+        <text x="100" y="150" fill="#e7eef5" font-family="var(--mono)" font-size="11" font-weight="700" text-anchor="middle">GLOBETROTTER</text>
+        <text x="100" y="208" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">1.0s · hex zooms + spins</text>
+      </g>
+      <!-- F3 payout -->
+      <g transform="translate(480,44)">
+        <rect width="200" height="180" rx="18" fill="#0a0e13" stroke="#fbbf24" stroke-opacity=".35"/>
+        <polygon points="100,34 128,50 128,82 100,98 72,82 72,50" fill="#1c1812" stroke="#fbbf24" stroke-width="2"/>
+        <text x="100" y="72" fill="#fbbf24" font-family="var(--mono)" font-size="14" text-anchor="middle">✈</text>
+        <text x="100" y="116" fill="#e7eef5" font-family="var(--mono)" font-size="11" font-weight="700" text-anchor="middle">GLOBETROTTER</text>
+        <text x="100" y="132" fill="#8da0b2" font-family="var(--mono)" font-size="9" text-anchor="middle">50 countries</text>
+        <rect x="56" y="144" width="88" height="22" rx="11" fill="#0d1d22" stroke="#1c7d89"/>
+        <text x="100" y="159" fill="#2fd4e6" font-family="var(--mono)" font-size="11" font-weight="700" text-anchor="middle">+250 pts</text>
+        <text x="100" y="208" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">1.8s · payout (if 3b ①)</text>
+      </g>
+      <!-- F4 ledger note -->
+      <g transform="translate(700,44)">
+        <rect width="240" height="180" rx="18" fill="#0a0e13" stroke="#21303f"/>
+        <text x="20" y="34" fill="#8da0b2" font-family="var(--mono)" font-size="10">On app update, a one-time</text>
+        <text x="20" y="50" fill="#8da0b2" font-family="var(--mono)" font-size="10">“trophy case” recap shows</text>
+        <text x="20" y="66" fill="#8da0b2" font-family="var(--mono)" font-size="10">everything earned at once —</text>
+        <text x="20" y="82" fill="#8da0b2" font-family="var(--mono)" font-size="10">reuses TrophyUnlockCenter’s</text>
+        <text x="20" y="98" fill="#8da0b2" font-family="var(--mono)" font-size="10">recap machinery (already live).</text>
+        <line x1="20" y1="112" x2="220" y2="112" stroke="#21303f"/>
+        <text x="20" y="136" fill="#cfe7ee" font-family="var(--mono)" font-size="10">retroactive trophies from this</text>
+        <text x="20" y="152" fill="#cfe7ee" font-family="var(--mono)" font-size="10">round ride that same path.</text>
+        <text x="120" y="208" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">update recap</text>
+      </g>
+    </svg>
+    <figcaption>The unlock moment extends the existing <code>TrophyUnlockCenter</code> — a toast that opens into a hex zoom and,
+    if trophies pay out (3b ①), a points payout chip. The one-time update recap is machinery you already ship.</figcaption>
+  </figure>
+
+  <hr>
+
+  <!-- ============================================ 05 DECISION LOG ============================================ -->
+  <h2 id="log">05 · Decision log — what I need from you</h2>
+  <p>React to each row (confirm my lean, pick another, or refine). Locked rows become the plan’s design section; the plan
+  then carries these exact mockups.</p>
+  <table>
+    <thead><tr><th>#</th><th>Decision</th><th>My lean</th><th>Your call</th></tr></thead>
+    <tbody>
+      <tr><td>D1</td><td>Scoring model</td><td><strong>C · Hybrid</strong> — curated felt-tiers + data nudge, band-snapped points</td><td class="q">?</td></tr>
+      <tr><td>D1b</td><td>Duplicate decay</td><td>Decay to a small floor (every catch still pays)</td><td class="q">?</td></tr>
+      <tr><td>D2</td><td>Reveal treatment</td><td><strong>Anticipation front + receipt on flip</strong> (both, not either/or)</td><td class="q">?</td></tr>
+      <tr><td>D2b</td><td>Also mock multi-catch + legendary variants?</td><td>Yes — in this doc before we lock</td><td class="q">?</td></tr>
+      <tr><td>D3a</td><td>Trophy architecture</td><td><strong>Keep binary + progress bars + calibrate</strong></td><td class="q">?</td></tr>
+      <tr><td>D3b</td><td>Bonus points for trophies</td><td><strong>① Into total + board</strong>, payouts scaled to difficulty</td><td class="q">?</td></tr>
+      <tr><td>D3c</td><td>Unlock moment</td><td>Extend <code>TrophyUnlockCenter</code> toast → hex zoom → payout chip</td><td class="q">?</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="k">Next step</div>
+    <p style="margin:8px 0 0">Tell me which rows to lock and what to refine. I’ll fold the chosen designs (and any extra mocks
+    you want — multi-catch, legendary, the receipt back) into the <strong>implementation plan</strong> (also HTML), with these
+    mockups carried in as the design section, then the implementation units that build them.</p>
+  </div>
+
+  <footer>
+    Composed 2026-06-28 by ce-plan · Tailspot Collection economy design options · source: in-session design exploration
+    (backlog #4 + #7), grounded in repo research (GameSystem.swift, Trophies.swift, CardReveal.swift, backend/catches),
+    institutional learnings, and external collection-game scoring prior art. Mockups are directional — exact colors, copy,
+    spacing, and point values are placeholders for review, not final spec.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decision 1 — The Scoring Model</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#121a22; --panel2:#0e151c; --raise:#16202b;
+    --ink:#e7eef5; --muted:#8da0b2; --faint:#5f7284; --line:#21303f;
+    --cyan:#2fd4e6; --cyan-dim:#1c7d89;
+    --common:#9aa7b4; --uncommon:#52d486; --rare:#3eb6f6; --epic:#bd83fb; --legend:#fbbf24;
+    --good:#52d486; --warn:#fbbf24; --bad:#f1737d;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.58;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin-inline:auto;padding:32px 22px 80px}
+  a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
+  h1{font-size:29px;line-height:1.15;margin:0 0 6px;letter-spacing:-.4px}
+  h2{font-size:20px;margin:44px 0 4px;letter-spacing:-.2px}
+  h3{font-size:15.5px;margin:22px 0 6px}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-dim)}
+  p{margin:8px 0;max-width:74ch;color:#d7e0e8}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  code{font-family:var(--mono);font-size:.88em;background:#0c141c;border:1px solid var(--line);padding:1px 5px;border-radius:5px;color:#cfe7ee}
+  hr{border:0;border-top:1px solid var(--line);margin:36px 0}
+  .lede{font-size:16px;color:#c3d0db;max-width:76ch}
+  .metastrip{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+  .chip{font:600 11px/1 var(--mono);padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)}
+  .chip.on{color:var(--cyan);border-color:var(--cyan-dim)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 6px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  nav.toc a{font:600 12.5px/1 var(--mono);color:var(--muted);padding:5px 9px;border-radius:7px}
+  nav.toc a:hover{background:var(--raise);color:var(--cyan);text-decoration:none}
+  .callout{background:#0e1820;border:1px solid #1d3a44;border-radius:12px;padding:14px 16px;margin:16px 0}
+  .callout.rec{background:#0c1f1a;border-color:#1c5346}
+  .callout .k{font:600 11px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--cyan)}
+  .callout.rec .k{color:var(--good)}
+  .grid{display:grid;gap:14px}
+  .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:720px){.g3,.g2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 16px}
+  .card h4{margin:0 0 6px;font-size:14.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card.rec{border-color:var(--cyan-dim);box-shadow:0 0 0 1px rgba(47,212,230,.1) inset}
+  .card p{font-size:13.5px;margin:4px 0 0}
+  .tag{font:600 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+  .tag.rec{color:var(--cyan);border-color:var(--cyan-dim);background:#0d1d22}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  td.num,th.num{font-family:var(--mono);text-align:right}
+  .tier{font:600 11px/1 var(--mono);padding:3px 7px;border-radius:5px;display:inline-block;white-space:nowrap}
+  .t-common{color:var(--common);border:1px solid #36424e}
+  .t-uncommon{color:var(--uncommon);border:1px solid #245c3c}
+  .t-rare{color:var(--rare);border:1px solid #1f5274}
+  .t-epic{color:var(--epic);border:1px solid #4a3168}
+  .t-legend{color:var(--legend);border:1px solid #5b4715}
+  figure{margin:16px 0}
+  figure svg{display:block;width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:13px}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:6px}
+  ul.tight{margin:6px 0;padding-left:18px} ul.tight li{margin:4px 0;color:#d7e0e8}
+  .q{color:var(--cyan);font-weight:600}
+  .lean{font:600 12px/1 var(--mono);color:var(--good)}
+  .fork{display:inline-block;font:600 11px/1 var(--mono);color:var(--cyan);background:#0d1d22;border:1px solid var(--cyan-dim);padding:4px 8px;border-radius:6px;margin-right:6px}
+  footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font:500 12px/1.5 var(--mono);color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Tailspot · Bet B · Walk-through 1 of 3</div>
+    <h1>Decision 1 — The Scoring Model</h1>
+    <p class="lede">How a plane’s rarity becomes points. Decisions 2 (the reveal) and 3 (trophies) both pay out of this,
+    so it goes first. The whole model: <strong>a plane has a rarity tier; the tier is worth a fixed number of points.</strong>
+    Everything below is in service of keeping it that simple.</p>
+    <div class="metastrip">
+      <span class="chip on">Decision 1 / 3</span>
+      <span class="chip">Decision 1 · LOCKED ✓</span>
+      <span class="chip">Date · 2026-06-28</span>
+    </div>
+    <nav class="toc">
+      <a href="#principles">Principles</a>
+      <a href="#today">What’s wrong today</a>
+      <a href="#f1">Fork 1 · Tiering</a>
+      <a href="#f2">Fork 2 · Points</a>
+      <a href="#f3">Fork 3 · First-of-type</a>
+      <a href="#f4">Fork 4 · Regional</a>
+      <a href="#path">One code path</a>
+      <a href="#log">Decision log</a>
+    </nav>
+  </header>
+
+  <!-- PRINCIPLES -->
+  <h2 id="principles">Principles</h2>
+  <p>Three, in priority order. They decide every fork below.</p>
+  <div class="grid g3" style="margin-top:12px">
+    <div class="card">
+      <h4>1 · Simple</h4>
+      <p class="muted">The model fits in one sentence: tier → points. No bands, no decay, no per-region math. If a rule
+      needs a diagram to explain, it’s too complex for this game.</p>
+    </div>
+    <div class="card">
+      <h4>2 · One source of truth, tested</h4>
+      <p class="muted">Tier and points live in one place, shared by the app and the backend, covered by tests. Adding a
+      plane is one edit. The framework grows without rework.</p>
+    </div>
+    <div class="card">
+      <h4>3 · Rarity feels earned</h4>
+      <p class="muted">Points map straight to the tier, so a rare catch is plainly a bigger prize than a common — and the
+      player can see why. Rare should feel rare.</p>
+    </div>
+  </div>
+  <p class="faint" style="margin-top:12px">These map to the strategy: simplicity and a clean code path (your steer), and a
+  collection game where rarity feels earned (Bet B — catching stays compulsive; trust is the north-star). Not principles:
+  anti-grind and forcing variety — catching a lot of one plane is fine; it may be all that’s overhead.</p>
+
+  <!-- TODAY -->
+  <h2 id="today">What’s wrong today</h2>
+  <p>Three real problems. Note what is <em>not</em> here: flat points-per-tier is fine, and there’s no grind to fix.</p>
+  <table>
+    <thead><tr><th style="width:30px">#</th><th>Problem</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>Three rarity paths, two copied point ladders.</strong> Tier resolves three ways (live AR, <code>Catch.resolvedRarity</code>, backend); point values are separate literals in <code>GameSystem.swift</code> and <code>backend/catches/points.ts</code>.</td><td>Edit one, forget another → app total ≠ leaderboard total. Drift, untested.</td></tr>
+      <tr><td>2</td><td><strong>Sets carry hand-set rarities.</strong> <code>Sets.swift</code> nil-typecode entries aren’t pinned to the table.</td><td>The one real divergence left after the June fixes.</td></tr>
+      <tr><td>3</td><td><strong>Tier assignment is coarse and values are arbitrary.</strong> e.g. every widebody → uncommon, regardless of how often it actually flies.</td><td>Rarity doesn’t always feel right — a daily A330 and a monthly 777F are lumped together.</td></tr>
+    </tbody>
+  </table>
+  <p class="faint">Already good (keep): one tier table feeds both platforms (<code>AircraftTypes.json</code>), <code>Catch.resolvedRarity</code>
+  re-derives live so re-tiers fix old catches on read, and the versioned <code>rescore</code> job re-prices the board on command.</p>
+
+  <hr>
+
+  <!-- FORK 1 -->
+  <h2 id="f1">Fork 1 — where does a tier come from?</h2>
+  <p>One hand-authored table, or grounded in real flight frequency? Under the simplicity principle, the answer flips from
+  my earlier draft.</p>
+  <div class="grid g3">
+    <div class="card rec">
+      <h4>Curated table <span class="tag rec">recommend</span></h4>
+      <p class="muted">One table, 5 tiers, authored by judgment. Adding a plane is one row. Simplest, one tested path,
+      trivial to extend. You can <em>look at</em> real frequency when deciding a tier — but the system stays a table.</p>
+    </div>
+    <div class="card">
+      <h4>Hybrid <span class="tag">deferred</span></h4>
+      <p class="muted">A frequency signal nudges tiers automatically. More accurate, but a second moving part to build and
+      keep running. Against principle 1. The framework can add it later with no rework (principle 2) — so not now.</p>
+    </div>
+    <div class="card">
+      <h4>Data-derived <span class="tag">no</span></h4>
+      <p class="muted">Tiers computed from frequency percentiles. Most accurate, least simple, needs a live pipeline and
+      regional baselines. Wrong fit for this game today.</p>
+    </div>
+  </div>
+  <p><span class="fork">Fork 1</span> <span class="lean">Locked: curated; tiers grounded in research.</span> It’s the simplest
+  thing that fixes problem 3: re-tier the coarse buckets by hand (you decide a 777F outranks an A330), all in the one
+  generator that feeds both platforms. Frequency stays a tool you consult, not a system to maintain. Door open to automate
+  later. The current tier rules + override list are laid out for your review in the companion <strong>Tiering Review</strong> doc.</p>
+
+  <hr>
+
+  <!-- FORK 2 -->
+  <h2 id="f2">Fork 2 — tiers and points</h2>
+  <p>Keep <strong>5 tiers</strong> and <strong>one flat point value each</strong> — the simplest shape, and it’s what ships
+  today. Two settled, one open:</p>
+  <ul class="tight">
+    <li><strong>5 tiers</strong> — Common · Uncommon · Rare · Epic · Legendary. Five is the legible ceiling; one-of-a-kind airframes (An-225, Air Force One) sit at the top of Legendary, not in a 6th tier.</li>
+    <li><strong>Flat per tier</strong> — every Rare is worth the same. Simple and predictable. (No bands.)</li>
+    <li><strong>The five numbers</strong> — the one open call, and it’s taste.</li>
+  </ul>
+  <p>Today’s values are <code>10 / 25 / 100 / 500 / 2000</code> — a <strong>50×</strong> jump from Common to Epic. You want
+  that flatter: gentle through the middle, the very rarest still worth a lot. Proposed:
+  <strong><code>10 / 20 / 50 / 100 / 500</code></strong>. Common→Epic drops from 50× to <strong>10×</strong>; Legendary keeps
+  a deliberate <strong>5×</strong> jump over Epic, so the grail still towers.</p>
+  <figure>
+    <svg viewBox="0 0 860 220" role="img" aria-label="Flat points per tier, proposed flatter curve">
+      <text x="20" y="26" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">POINTS PER TIER — flatter middle, Legendary towers</text>
+      <line x1="60" y1="180" x2="820" y2="180" stroke="#21303f"/>
+      <!-- heights proportional to sqrt(points) so the Legendary jump reads -->
+      <g font-family="var(--mono)" font-size="11">
+        <rect x="90" y="161" width="80" height="19" rx="3" fill="#9aa7b4" opacity=".5"/>
+        <text x="130" y="153" fill="#9aa7b4" text-anchor="middle">10</text>
+        <text x="130" y="200" fill="#5f7284" text-anchor="middle" font-size="10">Common</text>
+
+        <rect x="240" y="153" width="80" height="27" rx="3" fill="#52d486" opacity=".5"/>
+        <text x="280" y="145" fill="#52d486" text-anchor="middle">20</text>
+        <text x="280" y="200" fill="#5f7284" text-anchor="middle" font-size="10">Uncommon</text>
+
+        <rect x="390" y="138" width="80" height="42" rx="3" fill="#3eb6f6" opacity=".5"/>
+        <text x="430" y="130" fill="#3eb6f6" text-anchor="middle">50</text>
+        <text x="430" y="200" fill="#5f7284" text-anchor="middle" font-size="10">Rare</text>
+
+        <rect x="540" y="120" width="80" height="60" rx="3" fill="#bd83fb" opacity=".5"/>
+        <text x="580" y="112" fill="#bd83fb" text-anchor="middle">100</text>
+        <text x="580" y="200" fill="#5f7284" text-anchor="middle" font-size="10">Epic</text>
+
+        <rect x="690" y="46" width="80" height="134" rx="3" fill="#fbbf24" opacity=".5"/>
+        <text x="730" y="38" fill="#fbbf24" text-anchor="middle">500</text>
+        <text x="730" y="200" fill="#5f7284" text-anchor="middle" font-size="10">Legendary</text>
+      </g>
+    </svg>
+    <figcaption>Flatter through Common→Epic (10×, was 50×); Legendary towers with a 5× jump. Heights ∝ √points. All five numbers tune via re-score.</figcaption>
+  </figure>
+  <p><span class="fork">Fork 2</span> <span class="lean">Locked: 5 tiers, flat values, 10 / 20 / 50 / 100 / 500.</span>
+  Legendary is the easy dial — say the word to push the grail higher (750–1000) or lower.</p>
+
+  <hr>
+
+  <!-- FORK 3 -->
+  <h2 id="f3">Fork 3 — one optional bonus: first-of-type</h2>
+  <p>The core is just tier → points. There’s exactly one bonus worth considering, and it earns its complexity only if you
+  want it: a one-time bonus the first time you ever catch a type.</p>
+  <div class="grid g2">
+    <div class="card">
+      <h4>Add first-of-type</h4>
+      <p class="muted">First catch of a new type pays extra (say +50%). Rewards <em>collecting</em> — the point of Bet B —
+      without penalizing anyone for catching many of one plane. One rule, easy to build (we already know your caught types).</p>
+    </div>
+    <div class="card">
+      <h4>Skip it — tier → points only</h4>
+      <p class="muted">The strictest reading of “simple”. A new rare already pays more than a common; the Hangar already
+      marks new types. No extra rule in the economy at all.</p>
+    </div>
+  </div>
+  <p><span class="fork">Fork 3</span> <span class="lean">Locked: add it</span> — first catch of a type pays +50%. The one
+  bonus that directly serves the collection game, and it stays one sentence.</p>
+
+  <hr>
+
+  <!-- FORK 4 -->
+  <h2 id="f4">Fork 4 — global or regional rarity?</h2>
+  <p>An A320 is common worldwide. Should it be worth less in a city where it’s everywhere, and more somewhere it’s rare?</p>
+  <div class="grid g2">
+    <div class="card rec">
+      <h4>Global <span class="tag rec">recommend</span></h4>
+      <p class="muted">One tier per plane, everywhere. Simple and legible — the same catch is always worth the same. Where
+      you are doesn’t silently change the math.</p>
+    </div>
+    <div class="card">
+      <h4>Regional <span class="tag">no</span></h4>
+      <p class="muted">Locally-rare planes pay more locally. “Fairer” for a quiet region, but the same A320 now scores
+      differently city to city, and it needs per-region data. Against principles 1 and 2.</p>
+    </div>
+  </div>
+  <p><span class="fork">Fork 4</span> <span class="lean">Locked: global.</span></p>
+
+  <hr>
+
+  <!-- ONE CODE PATH -->
+  <h2 id="path">One code path (principle 2, made concrete)</h2>
+  <p>This is the part you flagged as load-bearing: internal consistency, one clear path, tests. The fix for problem 1 — collapse
+  the three rarity resolvers and two point ladders into a single source the app and backend both read, with a parity test that
+  fails if they drift.</p>
+  <figure>
+    <svg viewBox="0 0 860 250" role="img" aria-label="Single source of truth for tier and points">
+      <text x="20" y="26" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">SINGLE SOURCE OF TRUTH</text>
+      <g font-family="var(--mono)" font-size="11">
+        <rect x="300" y="50" width="260" height="62" rx="10" fill="#0d1d28" stroke="#1f5274"/>
+        <text x="430" y="76" fill="#3eb6f6" text-anchor="middle" font-weight="700">tier table + point values</text>
+        <text x="430" y="96" fill="#8da0b2" text-anchor="middle" font-size="10">one generated file · one points function</text>
+
+        <rect x="90" y="160" width="200" height="58" rx="10" fill="#101a22" stroke="#21303f"/>
+        <text x="190" y="184" fill="#cfe7ee" text-anchor="middle">iOS app</text>
+        <text x="190" y="202" fill="#5f7284" text-anchor="middle" font-size="10">bundled table · Catch.resolvedRarity</text>
+
+        <rect x="330" y="160" width="200" height="58" rx="10" fill="#101a22" stroke="#21303f"/>
+        <text x="430" y="184" fill="#cfe7ee" text-anchor="middle">backend</text>
+        <text x="430" y="202" fill="#5f7284" text-anchor="middle" font-size="10">ingested table · scoreCatch</text>
+
+        <rect x="570" y="160" width="200" height="58" rx="10" fill="#0c1f1a" stroke="#1c5346"/>
+        <text x="670" y="184" fill="#52d486" text-anchor="middle">parity test</text>
+        <text x="670" y="202" fill="#5f7284" text-anchor="middle" font-size="10">fails if the two ever disagree</text>
+      </g>
+      <g stroke="#3a4a59" stroke-width="1.6" fill="none">
+        <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#3a4a59"/></marker></defs>
+        <line x1="380" y1="112" x2="220" y2="158" marker-end="url(#ah)"/>
+        <line x1="440" y1="112" x2="435" y2="158" marker-end="url(#ah)"/>
+        <line x1="500" y1="112" x2="650" y2="158" marker-end="url(#ah)"/>
+      </g>
+    </svg>
+    <figcaption>One table, one points mapping, read by both platforms; a test guards against drift. Adding a plane is one
+    edit upstream; the string-classifier fallback gets folded in or removed so there’s genuinely one path.</figcaption>
+  </figure>
+  <p>Rolling out any change stays the proven flow: edit the table/values → bump <code>scoring_version</code> →
+  <code>rescore --dry-run</code> → review the delta → run it. That’s what makes the framework safe to grow.</p>
+
+  <!-- DECISION LOG -->
+  <h2 id="log">Decision log — Decision 1</h2>
+  <table>
+    <thead><tr><th>Fork</th><th>Question</th><th>Decision</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Tiering source</td><td><strong>Curated table</strong> — re-tiered, grounded in research</td><td class="q">✓ locked</td></tr>
+      <tr><td>2</td><td>Tiers &amp; points</td><td><strong>5 tiers, flat, 10 / 20 / 50 / 100 / 500</strong> (flatter)</td><td class="q">✓ locked</td></tr>
+      <tr><td>3</td><td>First-of-type bonus</td><td><strong>Add it</strong> — +50% on first catch of a type</td><td class="q">✓ locked</td></tr>
+      <tr><td>4</td><td>Global or regional</td><td><strong>Global</strong></td><td class="q">✓ locked</td></tr>
+      <tr><td>—</td><td>One code path + tests</td><td>One source, parity test (the point, not a fork)</td><td class="q">✓</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <div class="k">Next</div>
+    <p style="margin:6px 0 0"><strong>Decision 1 is fully locked</strong> — model, curve, bonus, and the research-grounded
+    tier list. On to <strong>Decision 2 (the reveal)</strong>. The economy locked here is what Decisions 2 and 3 pay out of.</p>
+  </div>
+
+  <footer>
+    Composed 2026-06-28 by ce-plan · Tailspot Bet B · Decision 1 of 3 (scoring model) · grounded in repo research
+    (GameSystem.swift, generate-aircraft-types.py, backend/catches). Numbers are directional placeholders for review.
+  </footer>
+
+</div>
+</body>
+</html>
