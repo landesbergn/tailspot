@@ -9,21 +9,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  pointsForRarity,
-  UNKNOWN_RARITY_POINTS,
-  type Rarity,
-} from "../src/catches/points.js";
+import { type Rarity, UNKNOWN_RARITY_POINTS, pointsForRarity } from "../src/catches/points.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const canonicalPath = resolve(
-  here,
-  "../../ios/Tailspot/Tailspot/scoring-points.json",
-);
-const canonical = JSON.parse(readFileSync(canonicalPath, "utf8")) as Record<
-  Rarity,
-  number
->;
+const canonicalPath = resolve(here, "../../ios/Tailspot/Tailspot/scoring-points.json");
+const canonical = JSON.parse(readFileSync(canonicalPath, "utf8")) as Record<Rarity, number>;
 const tiers: Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
 
 describe("scoring points parity (backend ↔ canonical scoring-points.json)", () => {

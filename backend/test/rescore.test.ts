@@ -80,9 +80,7 @@ describe("rescoreCatches", () => {
     expect(dry.pointsBefore).toBe(10);
     expect(dry.pointsAfter).toBe(100);
     expect(dry.applied).toBe(false);
-    expect(dry.transitions).toEqual([
-      { from: "unknown", to: "epic", catches: 1, pointsDelta: 90 },
-    ]);
+    expect(dry.transitions).toEqual([{ from: "unknown", to: "epic", catches: 1, pointsDelta: 90 }]);
     const untouched = await db.select().from(catches).where(eq(catches.id, id));
     expect(untouched[0].points).toBe(10);
     expect(untouched[0].rarity).toBeNull();
