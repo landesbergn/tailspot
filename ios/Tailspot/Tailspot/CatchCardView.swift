@@ -51,6 +51,14 @@ struct CardPlane: Equatable {
     /// placeholder in the rarity tint (matches the design's
     /// PhotoPlaceholder when Planespotters hasn't returned).
     let photoURL: URL?
+    /// Origin → destination, already formatted (e.g. "KSFO → KLAX"),
+    /// when the catch carried route data. Shown in the reveal's data
+    /// row; nil falls back to slant distance.
+    let routeText: String?
+    /// Whether this is the observer's first catch of this typecode.
+    /// Drives the reveal's "FIRST OF TYPE" ledger line. Display-only —
+    /// the backend is authoritative for the awarded bonus.
+    let isFirstOfType: Bool
 
     init(
         callsign: String?,
@@ -61,7 +69,9 @@ struct CardPlane: Equatable {
         altText: String? = nil,
         speedText: String? = nil,
         distText: String? = nil,
-        photoURL: URL? = nil
+        photoURL: URL? = nil,
+        routeText: String? = nil,
+        isFirstOfType: Bool = false
     ) {
         self.callsign = callsign
         self.model = model
@@ -72,6 +82,8 @@ struct CardPlane: Equatable {
         self.speedText = speedText
         self.distText = distText
         self.photoURL = photoURL
+        self.routeText = routeText
+        self.isFirstOfType = isFirstOfType
     }
 }
 

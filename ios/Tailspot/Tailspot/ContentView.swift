@@ -655,7 +655,7 @@ struct ContentView: View {
         // the device. Dismiss path either closes the sheet (Keep
         // spotting) or closes + opens the Hangar (View in Hangar).
         .fullScreenCover(item: $pendingReveal) { reveal in
-            CardReveal(
+            CatchRevealView(
                 plane: reveal.plane,
                 entryNumber: reveal.entryNumber,
                 onDismiss: {
@@ -1492,6 +1492,23 @@ struct ContentView: View {
             model: row.model
         )
         let distMeters = observed?.slantDistanceMeters ?? row.slantDistanceMeters
+        // Route, when the catch captured one (adsb.lol doesn't carry it for
+        // every plane). origin/dest are ICAO idents — shown verbatim.
+        let origin = observed?.aircraft.originIcao ?? row.originIcao
+        let dest = observed?.aircraft.destIcao ?? row.destIcao
+        let routeText: String? = {
+            switch (origin, dest) {
+            case let (o?, d?): return "\(o) → \(d)"
+            case let (o?, nil): return "\(o) →"
+            case let (nil, d?): return "→ \(d)"
+            default: return nil
+            }
+        }()
+        // First-of-type: no *other* Hangar row shares this typecode. Display
+        // only — the reveal ledger mirrors what the backend awards.
+        let isFirstOfType = row.typecode.map { tc in
+            !catches.contains { $0 !== row && $0.typecode == tc }
+        } ?? false
         return CardPlane(
             callsign: row.callsign,
             model: canonical.displayName ?? row.model,
@@ -1501,7 +1518,9 @@ struct ContentView: View {
             altText: CardPlane.altText(fromMeters: observed?.aircraft.altitudeMeters ?? row.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
             distText: String(format: "%.1f km", distMeters / 1000),
-            photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+            photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
+            routeText: routeText,
+            isFirstOfType: isFirstOfType
         )
     }
 
