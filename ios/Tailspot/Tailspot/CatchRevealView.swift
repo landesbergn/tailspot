@@ -61,14 +61,20 @@ private struct FlapRow: View {
     let fs: CGFloat
     let cw: CGFloat
     var gap: CGFloat = 2.5
+    /// Global index of this row's first character, and the total character
+    /// count across all wrapped rows — so the split-flap settle flows
+    /// continuously across lines instead of restarting on each line.
+    var indexOffset: Int = 0
+    var totalCount: Int = 0
     let color: Color
 
     var body: some View {
         let chars = Array(text)
-        let n = max(1, chars.count - 1)
+        let total = totalCount > 0 ? totalCount : chars.count
+        let n = max(1, total - 1)
         HStack(spacing: gap) {
             ForEach(Array(chars.enumerated()), id: \.offset) { i, ch in
-                let isSettled = t >= startT + (Double(i) / Double(n)) * spanT
+                let isSettled = t >= startT + (Double(indexOffset + i) / Double(n)) * spanT
                 let shown: Character = ch == " "
                     ? " "
                     : (isSettled ? ch : flapPool[abs(Int(t * 42) + i * 5) % flapPool.count])
@@ -85,6 +91,37 @@ private struct FlapRow: View {
             }
         }
     }
+}
+
+/// One wrapped line of the split-flap name. `id` is the global character
+/// offset of the line's first character (unique across lines).
+private struct FlapLine: Identifiable { let id: Int; let text: String }
+
+/// Greedy word-wrap for the split-flap name: break on spaces; hard-break a
+/// single word longer than `perLine`. Keeps each line within the budget so
+/// cells stay legible (wrap) instead of shrinking to fit everything on one line.
+private func wrapName(_ s: String, perLine: Int) -> [String] {
+    let limit = max(1, perLine)
+    var lines: [String] = []
+    var cur = ""
+    for w in s.split(separator: " ").map(String.init) {
+        var word = w
+        while word.count > limit {                       // hard-break over-long words
+            if !cur.isEmpty { lines.append(cur); cur = "" }
+            let idx = word.index(word.startIndex, offsetBy: limit)
+            lines.append(String(word[..<idx]))
+            word = String(word[idx...])
+        }
+        if cur.isEmpty {
+            cur = word
+        } else if cur.count + 1 + word.count <= limit {
+            cur += " " + word
+        } else {
+            lines.append(cur); cur = word
+        }
+    }
+    if !cur.isEmpty { lines.append(cur) }
+    return lines.isEmpty ? [s] : lines
 }
 
 // MARK: - Photo hero (real catch photo, else the sky placeholder)
@@ -238,14 +275,28 @@ struct CatchRevealView: View {
         let line = ss(0.5, 0.7, t)
         let total = Int((Double(finalTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
 
-        // Split-flap sizing: shrink the cells to fit the model on one line.
+        // Split-flap sizing: keep cells legible. If the name won't fit on one
+        // line at the floor cell size, WRAP it across lines rather than shrink
+        // the flaps to dust.
         let model = (plane.model ?? "UNKNOWN AIRCRAFT").uppercased()
-        let chars = Array(model)
-        let weighted = chars.reduce(0.0) { $0 + ($1 == " " ? 0.45 : 1.0) }
         let flapGap = 2.5 * scale
-        let spacingTotal = Double(flapGap) * Double(max(0, chars.count - 1))
-        let cw = min(17.5 * scale, max(8.0 * scale, CGFloat((avail - spacingTotal) / max(weighted, 1))))
+        let maxCW = 17.5 * scale
+        let minCW = 12.0 * scale
+        // Most chars that fit on a line before cells would drop below the floor.
+        let perLine = max(6, Int((avail + Double(flapGap)) / Double(minCW + flapGap)))
+        let nameLines = model.count <= perLine ? [model] : wrapName(model, perLine: perLine)
+        let longestLine = nameLines.map(\.count).max() ?? model.count
+        // Largest uniform cell that fits the longest wrapped line.
+        let cwFit = CGFloat((avail - Double(flapGap) * Double(max(0, longestLine - 1))) / Double(max(1, longestLine)))
+        let cw = min(maxCW, max(minCW, cwFit))
         let fs = min(15 * scale, cw * 0.86)
+        let totalFlapChars = nameLines.reduce(0) { $0 + $1.count }
+        let flapLines: [FlapLine] = {
+            var acc = 0
+            return nameLines.map { line in
+                let l = FlapLine(id: acc, text: line); acc += line.count; return l
+            }
+        }()
 
         let routeOrDist = plane.routeText ?? plane.distText
         let routeLabel = plane.routeText != nil ? "ROUTE" : "DIST"
@@ -272,7 +323,13 @@ struct CatchRevealView: View {
                     .padding(18 * scale)
 
                 VStack(alignment: .leading, spacing: 11 * scale) {
-                    FlapRow(text: model, t: t, startT: 0.24, spanT: 0.36, fs: fs, cw: cw, gap: flapGap, color: RP.ink)
+                    VStack(alignment: .leading, spacing: 4 * scale) {
+                        ForEach(flapLines) { fl in
+                            FlapRow(text: fl.text, t: t, startT: 0.24, spanT: 0.36,
+                                    fs: fs, cw: cw, gap: flapGap,
+                                    indexOffset: fl.id, totalCount: totalFlapChars, color: RP.ink)
+                        }
+                    }
 
                     HStack(spacing: 7 * scale) {
                         Circle().fill(accent).frame(width: 6 * scale, height: 6 * scale)
