@@ -60,12 +60,13 @@ private struct FlapRow: View {
     let spanT: Double
     let fs: CGFloat
     let cw: CGFloat
+    var gap: CGFloat = 2.5
     let color: Color
 
     var body: some View {
         let chars = Array(text)
         let n = max(1, chars.count - 1)
-        HStack(spacing: 2.5) {
+        HStack(spacing: gap) {
             ForEach(Array(chars.enumerated()), id: \.offset) { i, ch in
                 let isSettled = t >= startT + (Double(i) / Double(n)) * spanT
                 let shown: Character = ch == " "
@@ -130,22 +131,23 @@ private struct SkyPlaceholder: View {
 
 // MARK: - Data + ledger cells
 
-private func dataCell(_ label: String, _ value: String) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-        Text(label).font(.system(size: 8.5, design: .monospaced)).tracking(1).foregroundColor(RP.faint)
-        Text(value).font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundColor(RP.ink)
+private func dataCell(_ label: String, _ value: String, scale: CGFloat) -> some View {
+    VStack(alignment: .leading, spacing: 2 * scale) {
+        Text(label).font(.system(size: 8.5 * scale, design: .monospaced)).tracking(1).foregroundColor(RP.faint)
+        Text(value).font(.system(size: 13 * scale, weight: .semibold, design: .monospaced)).foregroundColor(RP.ink)
+            .lineLimit(1).minimumScaleFactor(0.7)
     }
 }
 
-private func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Double, big: Bool = false) -> some View {
+private func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Double, scale: CGFloat, big: Bool = false) -> some View {
     HStack {
         Text(label)
-            .font(.system(size: big ? 12 : 11, weight: big ? .heavy : .regular, design: .monospaced))
+            .font(.system(size: (big ? 12 : 11) * scale, weight: big ? .heavy : .regular, design: .monospaced))
             .tracking(big ? 1.5 : 0)
             .foregroundColor(big ? RP.ink : RP.muted)
         Spacer()
         Text(amount)
-            .font(.system(size: big ? 24 : 13, weight: big ? .bold : .semibold, design: .monospaced))
+            .font(.system(size: (big ? 24 : 13) * scale, weight: big ? .bold : .semibold, design: .monospaced))
             .foregroundColor(color)
     }
     .opacity(opacity)
@@ -186,7 +188,7 @@ struct CatchRevealView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let width = min(geo.size.width - 36, 360)
+            let width = min(geo.size.width - 28, 420)
             ZStack {
                 RP.bg.ignoresSafeArea()
 
@@ -227,6 +229,12 @@ struct CatchRevealView: View {
     // The card itself, fully parameterized by the reveal clock `t`.
     private func card(t: Double, width: CGFloat) -> some View {
         let accent = plane.rarity.tint
+        // The prototype's absolute sizes were tuned for a 300pt-wide card.
+        // Scale every metric off the real card width so it reads full-size
+        // (and not vertically cramped) on a phone instead of postage-stamp.
+        let scale = width / 300
+        let hPad = 22 * scale
+        let avail = Double(width - 2 * hPad)
         let line = ss(0.5, 0.7, t)
         let total = Int((Double(finalTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
 
@@ -234,10 +242,10 @@ struct CatchRevealView: View {
         let model = (plane.model ?? "UNKNOWN AIRCRAFT").uppercased()
         let chars = Array(model)
         let weighted = chars.reduce(0.0) { $0 + ($1 == " " ? 0.45 : 1.0) }
-        let spacingTotal = 2.5 * Double(max(0, chars.count - 1))
-        let avail = Double(width) - 44   // 22pt horizontal padding each side
-        let cw = min(17.5, max(8.0, (avail - spacingTotal) / max(weighted, 1)))
-        let fs = min(15, cw * 0.86)
+        let flapGap = 2.5 * scale
+        let spacingTotal = Double(flapGap) * Double(max(0, chars.count - 1))
+        let cw = min(17.5 * scale, max(8.0 * scale, CGFloat((avail - spacingTotal) / max(weighted, 1))))
+        let fs = min(15 * scale, cw * 0.86)
 
         let routeOrDist = plane.routeText ?? plane.distText
         let routeLabel = plane.routeText != nil ? "ROUTE" : "DIST"
@@ -253,71 +261,71 @@ struct CatchRevealView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 RevealPhoto(url: plane.photoURL)
-                    .frame(height: 168)
+                    .frame(height: 168 * scale)
                     .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
                     )
                     .opacity(ss(0.0, 0.18, t))
-                    .padding(16)
+                    .padding(18 * scale)
 
-                VStack(alignment: .leading, spacing: 7) {
-                    FlapRow(text: model, t: t, startT: 0.24, spanT: 0.36, fs: fs, cw: cw, color: RP.ink)
+                VStack(alignment: .leading, spacing: 11 * scale) {
+                    FlapRow(text: model, t: t, startT: 0.24, spanT: 0.36, fs: fs, cw: cw, gap: flapGap, color: RP.ink)
 
-                    HStack(spacing: 7) {
-                        Circle().fill(accent).frame(width: 6, height: 6)
+                    HStack(spacing: 7 * scale) {
+                        Circle().fill(accent).frame(width: 6 * scale, height: 6 * scale)
                         Text(plane.rarity.label.uppercased())
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
                             .tracking(3).foregroundColor(accent)
                         if isDuplicate {
                             Text("· ALREADY CAUGHT")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
                                 .tracking(1).foregroundColor(Color(hex: 0xE0556B))
                         }
                     }
                     .opacity(ss(0.56, 0.7, t))
 
-                    Rectangle().fill(RP.rule).frame(width: (Double(width) - 44) * line, height: 1).padding(.vertical, 2)
+                    Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)
 
-                    HStack(spacing: 16) {
-                        dataCell("ALT", plane.altText ?? "—")
-                        dataCell("SPD", plane.speedText ?? "—")
-                        dataCell(routeLabel, routeOrDist ?? "—")
+                    HStack(spacing: 16 * scale) {
+                        dataCell("ALT", plane.altText ?? "—", scale: scale)
+                        dataCell("SPD", plane.speedText ?? "—", scale: scale)
+                        dataCell(routeLabel, routeOrDist ?? "—", scale: scale)
                     }
                     .opacity(ss(0.6, 0.78, t))
 
-                    VStack(spacing: 6) {
-                        Rectangle().fill(RP.rule).frame(height: 1).padding(.top, 6)
+                    VStack(spacing: 8 * scale) {
+                        Rectangle().fill(RP.rule).frame(height: 1).padding(.top, 4 * scale)
                         if isDuplicate {
-                            ledgerRow("ALREADY IN HANGAR", "", RP.muted, ss(0.78, 0.86, t))
+                            ledgerRow("ALREADY IN HANGAR", "", RP.muted, ss(0.78, 0.86, t), scale: scale)
                         } else {
-                            ledgerRow(plane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t))
+                            ledgerRow(plane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
                             if firstOfTypeBonus > 0 {
-                                ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t))
+                                ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
                             }
                         }
                         Rectangle().fill(RP.rule).frame(height: 1)
-                        ledgerRow("TOTAL", "+\(total)", accent, ss(0.84, 0.92, t), big: true)
+                        ledgerRow("TOTAL", "+\(total)", accent, ss(0.84, 0.92, t), scale: scale, big: true)
                     }
 
                     HStack {
                         Spacer()
                         Text("ENTRY #\(entryNumber)")
-                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
                             .tracking(1.5).foregroundColor(RP.faint)
                     }
                     .opacity(ss(0.9, 1.0, t))
-                    .padding(.top, 4)
+                    .padding(.top, 2 * scale)
                 }
-                .padding(.horizontal, 22)
-                .padding(.bottom, 20)
+                .padding(.horizontal, hPad)
+                .padding(.bottom, 22 * scale)
             }
             .background(RP.bg)
             .frame(width: width)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(RP.rule, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 26))
+            .overlay(RoundedRectangle(cornerRadius: 26).stroke(RP.rule, lineWidth: 1))
         }
     }
 
