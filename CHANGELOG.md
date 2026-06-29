@@ -5,6 +5,17 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-06-30 — Catch-reveal shipped: split-flap + photo + score ledger (Bet B #7, Phase 2 core) — branch `feat/collection-economy-reveal`
+
+The agreed Decision-2 reveal replaces the v0 holo-flip card for single catches. `CatchRevealView` renders the design we mocked in `RevealV3` / `docs/plans/2026-06-29-001`: a **photo hero** (the real catch photo, else a stylized sky placeholder), the make/model in a **split-flap** display that settles char-by-char, a tier line, an **ALT · SPD · ROUTE** data row, and a **score ledger that counts up** from the rarity base — adding a gold **FIRST OF TYPE** line when it's a new type for you. Every beat is a function of one normalized clock `t` through `ss()` smoothsteps (ported verbatim from the prototype); `TimelineView(.animation)` drives `t` live instead of hand-rendered frames. **Cadence + intensity scale by tier** — common settles quickly and quietly (~1.7 s); legendary takes ~3.2 s with a tinted radial bloom.
+
+- **`CatchRevealView.swift`** (new) — the reveal; tap to skip-then-dismiss, "View in Hangar" CTA once settled, success haptic on settle.
+- **`CardPlane`** gains `routeText` + `isFirstOfType` (display-only — the backend stays authoritative for the awarded bonus); `cardPlane(from:)` formats the route from the frozen origin/dest ICAO and derives first-of-type from the Hangar.
+- **Debug `✦ Catch`** button (wrench panel, DEBUG-only) fabricates a non-persisted catch per tier and fires the reveal — cycles C-17 (epic) → Cessna 172 (common) → A220 (uncommon) → 747-400 (rare) → B-52 (legendary), so the reveal/economy is testable without a real plane. Doesn't touch the Hangar.
+- `MultiCatchReveal` (N≥2) unchanged for now; the old `CardReveal` survives only behind its own previews.
+
+The **route-guess +10% bonus round** (the pre-reveal "where's it going?" step, wishlist #9) is the remaining Phase 2 piece — the ledger already reserves its line. `TailspotTests` green; deployed to device.
+
 ## 2026-06-29 — Collection economy re-balance + route data (Bet B #4/#6/#7, Phase 1) — branch `feat/collection-economy-reveal`
 
 Phase 1 of the Collection-economy redesign (design walk-through in `docs/plans/2026-06-28-002…004`; plan `2026-06-29-002`). 7 implementation units, all green on iOS + backend, committed. **Decision 3 — the trophy/medal rework + the full guess-the-type mechanic — is deferred.** The leaderboard-moving prod re-score is gated on Noah.
