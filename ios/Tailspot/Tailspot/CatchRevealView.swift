@@ -408,23 +408,27 @@ struct CatchRevealView: View {
     private func dataSection(t: Double, scale: CGFloat, accent: Color) -> some View {
         let hasRoute = (plane.originIcao ?? plane.destIcao) != nil
         VStack(alignment: .leading, spacing: 12 * scale) {
-            HStack(spacing: 0) {
+            // ALT / SPD — always two columns with a real gap so wide values
+            // (e.g. "35,433 ft") never butt against the next column.
+            HStack(spacing: 14 * scale) {
                 statCell("ALT", plane.altText, scale: scale, accent: accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 statCell("SPD", plane.speedText, scale: scale, accent: accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if !hasRoute {
-                    statCell("DIST", plane.distText, scale: scale, accent: accent)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
             }
             .opacity(ss(0.6, 0.76, t))
 
-            if hasRoute {
-                Rectangle().fill(RP.rule).frame(height: 1)
-                routeCell(scale: scale, accent: accent)
-                    .opacity(ss(0.66, 0.82, t))
+            // The third fact gets its own full-width row: ROUTE when we have
+            // it, otherwise DIST. Never a cramped third column.
+            Rectangle().fill(RP.rule).frame(height: 1)
+            Group {
+                if hasRoute {
+                    routeCell(scale: scale, accent: accent)
+                } else {
+                    statCell("DIST", plane.distText, scale: scale, accent: accent)
+                }
             }
+            .opacity(ss(0.66, 0.82, t))
         }
     }
 
