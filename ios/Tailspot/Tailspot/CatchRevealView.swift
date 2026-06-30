@@ -252,13 +252,27 @@ struct CatchRevealView: View {
             ZStack {
                 RP.bg.ignoresSafeArea()
 
+                // Full-screen dismiss / skip catcher, BELOW the card and CTA.
+                // The card sits above with hit-testing off so taps on it fall
+                // through to here; the CTA buttons sit above and capture their
+                // own taps. (Previously the tap gesture was on the enclosing
+                // container, so it swallowed the "View in Hangar" button.)
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceOrDismiss() }
+                    .ignoresSafeArea()
+
                 TimelineView(.animation) { context in
                     let t = start.map { revClamp(context.date.timeIntervalSince($0) / duration) } ?? 0
                     card(t: t, width: width)
                         .frame(maxHeight: .infinity)
                 }
+                .allowsHitTesting(false)
 
-                // Dismiss affordances — only once the reveal has settled.
+                // Dismiss affordances — only once the reveal has settled. The
+                // "View in Hangar" button captures its own tap (→ Hangar); the
+                // hint text isn't interactive, so taps on it fall through to
+                // the catcher (→ dismiss).
                 VStack {
                     Spacer()
                     ctaRow.opacity(settled ? 1 : 0)
@@ -267,16 +281,6 @@ struct CatchRevealView: View {
                 .allowsHitTesting(settled)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if settled {
-                    onDismiss()
-                } else {
-                    // Skip the animation to its final frame.
-                    start = Date().addingTimeInterval(-duration)
-                    withAnimation(.easeOut(duration: 0.25)) { settled = true }
-                }
-            }
             .onAppear { start = Date() }
             .task {
                 try? await Task.sleep(for: .seconds(duration))
@@ -285,6 +289,25 @@ struct CatchRevealView: View {
             .sensoryFeedback(.success, trigger: settled)
         }
     }
+
+    private func advanceOrDismiss() {
+        if settled {
+            onDismiss()
+        } else {
+            // Skip the animation straight to its final frame.
+            start = Date().addingTimeInterval(-duration)
+            withAnimation(.easeOut(duration: 0.25)) { settled = true }
+        }
+    }
+
+    #if DEBUG
+    /// Renders the card at a fixed clock value — used by the snapshot /
+    /// visual-pass test (`RevealSnapshotTests`) so layout can be eyeballed
+    /// off-device. DEBUG-only.
+    @MainActor func _snapshotCard(t: Double, width: CGFloat) -> some View {
+        card(t: t, width: width)
+    }
+    #endif
 
     // The card itself, fully parameterized by the reveal clock `t`.
     private func card(t: Double, width: CGFloat) -> some View {
@@ -433,28 +456,40 @@ struct CatchRevealView: View {
     }
 
     private func routeCell(scale: CGFloat, accent: Color) -> some View {
-        let hasNames = (plane.originName ?? plane.destName) != nil
+        // Only draw the arrow + second endpoint when BOTH exist — a one-sided
+        // route (origin known, destination not filed yet) shows just the one
+        // code, never a dangling "→ —".
+        let codeFont = Font.system(size: 21 * scale, weight: .semibold, design: .monospaced)
+        let arrowFont = Font.system(size: 16 * scale, weight: .semibold, design: .monospaced)
         return VStack(alignment: .leading, spacing: 3 * scale) {
             Text("ROUTE")
                 .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
                 .tracking(1.5).foregroundColor(RP.faint)
             HStack(alignment: .firstTextBaseline, spacing: 8 * scale) {
-                Text(plane.originIcao ?? "—")
-                    .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
-                    .foregroundColor(RP.ink)
-                Text("→")
-                    .font(.system(size: 16 * scale, weight: .semibold, design: .monospaced))
-                    .foregroundColor(accent)
-                Text(plane.destIcao ?? "—")
-                    .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
-                    .foregroundColor(RP.ink)
+                if let o = plane.originIcao {
+                    Text(o).font(codeFont).foregroundColor(RP.ink)
+                    if let d = plane.destIcao {
+                        Text("→").font(arrowFont).foregroundColor(accent)
+                        Text(d).font(codeFont).foregroundColor(RP.ink)
+                    }
+                } else if let d = plane.destIcao {
+                    Text("→").font(arrowFont).foregroundColor(accent)
+                    Text(d).font(codeFont).foregroundColor(RP.ink)
+                }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
-            if hasNames {
+            if plane.originName != nil || plane.destName != nil {
                 HStack(spacing: 5 * scale) {
-                    Text(plane.originName ?? plane.originIcao ?? "")
-                    Text("→").foregroundColor(RP.faint)
-                    Text(plane.destName ?? plane.destIcao ?? "")
+                    if let on = plane.originName {
+                        Text(on)
+                        if let dn = plane.destName {
+                            Text("→").foregroundColor(RP.faint)
+                            Text(dn)
+                        }
+                    } else if let dn = plane.destName {
+                        Text("→").foregroundColor(RP.faint)
+                        Text(dn)
+                    }
                 }
                 .font(.system(size: 12 * scale))
                 .foregroundColor(RP.muted)
@@ -468,6 +503,8 @@ struct CatchRevealView: View {
             Text("tap to continue")
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .tracking(1.2).foregroundColor(RP.faint)
+                .contentShape(Rectangle())
+                .onTapGesture { onDismiss() }
             Button(action: onViewInHangar) {
                 Text("View in Hangar ›")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
