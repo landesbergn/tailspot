@@ -168,11 +168,34 @@ private struct SkyPlaceholder: View {
 
 // MARK: - Data + ledger cells
 
-private func dataCell(_ label: String, _ value: String, scale: CGFloat) -> some View {
-    VStack(alignment: .leading, spacing: 2 * scale) {
-        Text(label).font(.system(size: 8.5 * scale, design: .monospaced)).tracking(1).foregroundColor(RP.faint)
-        Text(value).font(.system(size: 13 * scale, weight: .semibold, design: .monospaced)).foregroundColor(RP.ink)
-            .lineLimit(1).minimumScaleFactor(0.7)
+/// Splits a pre-formatted value like "36,745 ft" into ("36,745", "ft") so the
+/// unit can render smaller + tinted. Splits on the last space; no space → no unit.
+private func splitUnit(_ s: String?) -> (value: String, unit: String?) {
+    guard let s, !s.isEmpty else { return ("—", nil) }
+    if let r = s.range(of: " ", options: .backwards) {
+        return (String(s[..<r.lowerBound]), String(s[r.upperBound...]))
+    }
+    return (s, nil)
+}
+
+/// A labelled stat — big monospaced value with a smaller tinted unit suffix.
+private func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) -> some View {
+    let parts = splitUnit(raw)
+    return VStack(alignment: .leading, spacing: 3 * scale) {
+        Text(label)
+            .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+            .tracking(1.5).foregroundColor(RP.faint)
+        HStack(alignment: .firstTextBaseline, spacing: 4 * scale) {
+            Text(parts.value)
+                .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
+                .foregroundColor(RP.ink)
+            if let unit = parts.unit {
+                Text(unit)
+                    .font(.system(size: 12 * scale, weight: .medium, design: .monospaced))
+                    .foregroundColor(accent)
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.6)
     }
 }
 
@@ -298,9 +321,6 @@ struct CatchRevealView: View {
             }
         }()
 
-        let routeOrDist = plane.routeText ?? plane.distText
-        let routeLabel = plane.routeText != nil ? "ROUTE" : "DIST"
-
         return ZStack {
             // Tier bloom behind the card — modest for rare, cinematic for legendary.
             if plane.rarity.ordinal >= Rarity.epic.ordinal {
@@ -346,12 +366,7 @@ struct CatchRevealView: View {
 
                     Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)
 
-                    HStack(spacing: 16 * scale) {
-                        dataCell("ALT", plane.altText ?? "—", scale: scale)
-                        dataCell("SPD", plane.speedText ?? "—", scale: scale)
-                        dataCell(routeLabel, routeOrDist ?? "—", scale: scale)
-                    }
-                    .opacity(ss(0.6, 0.78, t))
+                    dataSection(t: t, scale: scale, accent: accent)
 
                     VStack(spacing: 8 * scale) {
                         Rectangle().fill(RP.rule).frame(height: 1).padding(.top, 4 * scale)
@@ -383,6 +398,64 @@ struct CatchRevealView: View {
             .frame(width: width)
             .clipShape(RoundedRectangle(cornerRadius: 26))
             .overlay(RoundedRectangle(cornerRadius: 26).stroke(RP.rule, lineWidth: 1))
+        }
+    }
+
+    // ALT / SPD as a two-column top row, then (when there's route data) a
+    // rule and a full-width ROUTE row: big ICAO codes with a tinted arrow and
+    // the human-readable city names underneath. No route → DIST joins row one.
+    @ViewBuilder
+    private func dataSection(t: Double, scale: CGFloat, accent: Color) -> some View {
+        let hasRoute = (plane.originIcao ?? plane.destIcao) != nil
+        VStack(alignment: .leading, spacing: 12 * scale) {
+            HStack(spacing: 0) {
+                statCell("ALT", plane.altText, scale: scale, accent: accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                statCell("SPD", plane.speedText, scale: scale, accent: accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !hasRoute {
+                    statCell("DIST", plane.distText, scale: scale, accent: accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .opacity(ss(0.6, 0.76, t))
+
+            if hasRoute {
+                Rectangle().fill(RP.rule).frame(height: 1)
+                routeCell(scale: scale, accent: accent)
+                    .opacity(ss(0.66, 0.82, t))
+            }
+        }
+    }
+
+    private func routeCell(scale: CGFloat, accent: Color) -> some View {
+        let hasNames = (plane.originName ?? plane.destName) != nil
+        return VStack(alignment: .leading, spacing: 3 * scale) {
+            Text("ROUTE")
+                .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+                .tracking(1.5).foregroundColor(RP.faint)
+            HStack(alignment: .firstTextBaseline, spacing: 8 * scale) {
+                Text(plane.originIcao ?? "—")
+                    .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
+                    .foregroundColor(RP.ink)
+                Text("→")
+                    .font(.system(size: 16 * scale, weight: .semibold, design: .monospaced))
+                    .foregroundColor(accent)
+                Text(plane.destIcao ?? "—")
+                    .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
+                    .foregroundColor(RP.ink)
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            if hasNames {
+                HStack(spacing: 5 * scale) {
+                    Text(plane.originName ?? plane.originIcao ?? "")
+                    Text("→").foregroundColor(RP.faint)
+                    Text(plane.destName ?? plane.destIcao ?? "")
+                }
+                .font(.system(size: 12 * scale))
+                .foregroundColor(RP.muted)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            }
         }
     }
 

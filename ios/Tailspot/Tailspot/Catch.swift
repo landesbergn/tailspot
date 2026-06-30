@@ -91,6 +91,12 @@ final class Catch {
     /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION at
     /// the catch moment. Same source/semantics/migration as `originIcao`.
     var destIcao: String?
+    /// Human-readable origin airport / city (e.g. "Tokyo Narita"), when the
+    /// route source provided it. Same optional/nil-default lightweight-migration
+    /// lifecycle as `originIcao`; shown under the ICAO code in the reveal.
+    var originName: String?
+    /// Human-readable destination airport / city (e.g. "San Francisco").
+    var destName: String?
     /// Reverse-geocoded observer place, e.g. "Berkeley, CA". Filled
     /// post-save at catch time (never blocks the catch) or by the
     /// detail-view backfill.
@@ -135,6 +141,8 @@ final class Catch {
         velocityMps: Double? = nil,
         originIcao: String? = nil,
         destIcao: String? = nil,
+        originName: String? = nil,
+        destName: String? = nil,
         placeName: String? = nil,
         country: String? = nil,
         rarity: Rarity? = nil,
@@ -157,6 +165,8 @@ final class Catch {
         self.velocityMps = velocityMps
         self.originIcao = originIcao
         self.destIcao = destIcao
+        self.originName = originName
+        self.destName = destName
         self.placeName = placeName
         self.country = country
         // If the caller didn't explicitly classify, run the classifier

@@ -1365,24 +1365,29 @@ struct ContentView: View {
         struct Sim {
             let icao, callsign, model, mfr, op, typecode: String
             let alt, vel, dist: Double
-            let origin, dest: String?
+            let origin, dest, originName, destName: String?
         }
         let presets: [Sim] = [
             Sim(icao: "5101c7", callsign: "RCH872", model: "Boeing C-17 Globemaster III",
                 mfr: "Boeing", op: "U.S. Air Force", typecode: "C17",
-                alt: 8500, vel: 215, dist: 9200, origin: "KSUU", dest: "PHIK"),
+                alt: 8500, vel: 215, dist: 9200, origin: "KSUU", dest: "PHIK",
+                originName: "Travis AFB", destName: "Honolulu"),
             Sim(icao: "a4e172", callsign: "N4521C", model: "Cessna 172",
                 mfr: "Cessna", op: "Private", typecode: "C172",
-                alt: 1100, vel: 52, dist: 3800, origin: nil, dest: nil),
+                alt: 1100, vel: 52, dist: 3800, origin: nil, dest: nil,
+                originName: nil, destName: nil),
             Sim(icao: "a9bc53", callsign: "JBU613", model: "Airbus A220-300",
                 mfr: "Airbus", op: "JetBlue", typecode: "BCS3",
-                alt: 10800, vel: 232, dist: 14500, origin: "KBOS", dest: "KSFO"),
+                alt: 10800, vel: 232, dist: 14500, origin: "KBOS", dest: "KSFO",
+                originName: "Boston Logan", destName: "San Francisco"),
             Sim(icao: "3b7440", callsign: "GEC8160", model: "Boeing 747-400",
                 mfr: "Boeing", op: "Lufthansa Cargo", typecode: "B744",
-                alt: 11200, vel: 251, dist: 22000, origin: "RJAA", dest: "KSFO"),
+                alt: 11200, vel: 251, dist: 22000, origin: "RJAA", dest: "KSFO",
+                originName: "Tokyo Narita", destName: "San Francisco"),
             Sim(icao: "ae0b52", callsign: "DOOM11", model: "Boeing B-52 Stratofortress",
                 mfr: "Boeing", op: "U.S. Air Force", typecode: "B52",
-                alt: 12200, vel: 244, dist: 31000, origin: "KBAD", dest: nil),
+                alt: 12200, vel: 244, dist: 31000, origin: "KBAD", dest: nil,
+                originName: "Barksdale AFB", destName: nil),
         ]
         let s = presets[simCatchIndex % presets.count]
         simCatchIndex += 1
@@ -1392,7 +1397,8 @@ struct ContentView: View {
             observerLat: 37.8, observerLon: -122.27,  // fabricated — observer coords irrelevant to the reveal
             slantDistanceMeters: s.dist, typecode: s.typecode,
             altitudeMeters: s.alt, velocityMps: s.vel,
-            originIcao: s.origin, destIcao: s.dest
+            originIcao: s.origin, destIcao: s.dest,
+            originName: s.originName, destName: s.destName
         )
         pendingReveal = PendingReveal(
             plane: cardPlane(from: c, observed: nil),
@@ -1493,17 +1499,10 @@ struct ContentView: View {
         )
         let distMeters = observed?.slantDistanceMeters ?? row.slantDistanceMeters
         // Route, when the catch captured one (adsb.lol doesn't carry it for
-        // every plane). origin/dest are ICAO idents — shown verbatim.
+        // every plane). origin/dest are ICAO idents; names are the optional
+        // human-readable airport/city labels (frozen on the Catch).
         let origin = observed?.aircraft.originIcao ?? row.originIcao
         let dest = observed?.aircraft.destIcao ?? row.destIcao
-        let routeText: String? = {
-            switch (origin, dest) {
-            case let (o?, d?): return "\(o) → \(d)"
-            case let (o?, nil): return "\(o) →"
-            case let (nil, d?): return "→ \(d)"
-            default: return nil
-            }
-        }()
         // First-of-type: no *other* Hangar row shares this typecode. Display
         // only — the reveal ledger mirrors what the backend awards.
         let isFirstOfType = row.typecode.map { tc in
@@ -1519,7 +1518,10 @@ struct ContentView: View {
             speedText: CardPlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
             distText: String(format: "%.1f km", distMeters / 1000),
             photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
-            routeText: routeText,
+            originIcao: origin,
+            destIcao: dest,
+            originName: row.originName,
+            destName: row.destName,
             isFirstOfType: isFirstOfType
         )
     }
