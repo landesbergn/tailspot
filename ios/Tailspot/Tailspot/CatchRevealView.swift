@@ -264,21 +264,8 @@ struct CatchRevealView: View {
 
                 TimelineView(.animation) { context in
                     let t = start.map { revClamp(context.date.timeIntervalSince($0) / duration) } ?? 0
-                    card(t: t, width: width)
-                        .frame(maxHeight: .infinity)
+                    layout(t: t, settled: settled, width: width)
                 }
-                .allowsHitTesting(false)
-
-                // Dismiss affordances — only once the reveal has settled. The
-                // "View in Hangar" button captures its own tap (→ Hangar); the
-                // hint text isn't interactive, so taps on it fall through to
-                // the catcher (→ dismiss).
-                VStack {
-                    Spacer()
-                    ctaRow.opacity(settled ? 1 : 0)
-                }
-                .padding(.bottom, 44)
-                .allowsHitTesting(settled)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear { start = Date() }
@@ -288,6 +275,29 @@ struct CatchRevealView: View {
             }
             .sensoryFeedback(.success, trigger: settled)
         }
+    }
+
+    /// Card stacked ABOVE the CTA so the "tap to continue / View in Hangar"
+    /// row is always a reserved strip below the card — never overlapped by a
+    /// tall (wrapped-name) card, which is what happened when the card was
+    /// free-centered in the full screen and the CTA was pinned to the bottom.
+    /// The card's frame fills the space above the CTA and centers its content;
+    /// card taps fall through (hit-testing off) to the dismiss catcher behind,
+    /// while the CTA captures its own taps.
+    @ViewBuilder
+    private func layout(t: Double, settled: Bool, width: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            card(t: t, width: width)
+                .allowsHitTesting(false)
+            Spacer(minLength: 0)
+            ctaRow
+                .opacity(settled ? 1 : 0)
+                .allowsHitTesting(settled)
+                .padding(.top, 14)
+                .padding(.bottom, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func advanceOrDismiss() {
@@ -301,11 +311,24 @@ struct CatchRevealView: View {
     }
 
     #if DEBUG
-    /// Renders the card at a fixed clock value — used by the snapshot /
-    /// visual-pass test (`RevealSnapshotTests`) so layout can be eyeballed
-    /// off-device. DEBUG-only.
-    @MainActor func _snapshotCard(t: Double, width: CGFloat) -> some View {
-        card(t: t, width: width)
+    /// Renders the FULL reveal (card + CTA over the background) at a fixed
+    /// final state and concrete screen size — used by the snapshot / visual-
+    /// pass test (`RevealSnapshotTests`). Renders the whole screen, not just
+    /// the card, so card↔CTA spacing/overlap is visible. Uses a CONCRETE
+    /// `.frame(width:height:)` (not the device `layout`'s greedy
+    /// `maxHeight: .infinity`) because ImageRenderer double-renders greedy
+    /// frames — a snapshot-only artifact, not a device behavior. DEBUG-only.
+    @MainActor func _snapshotScreen(width: CGFloat, size: CGSize) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            card(t: 1.0, width: width)
+            Spacer(minLength: 0)
+            ctaRow
+                .padding(.top, 14)
+                .padding(.bottom, 28)
+        }
+        .frame(width: size.width, height: size.height)
+        .background(RP.bg)
     }
     #endif
 

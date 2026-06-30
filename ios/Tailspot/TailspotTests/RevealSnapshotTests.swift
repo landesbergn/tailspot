@@ -48,12 +48,14 @@ struct RevealSnapshotTests {
                 originName: "Barksdale AFB", destName: nil)),
         ]
 
+        // Render the FULL screen (card + CTA) at iPhone size so card↔CTA
+        // spacing/overlap is visible — a card-only render hid the bottom-text
+        // collision.
+        let screen = CGSize(width: 393, height: 852)
         for (name, plane) in cases {
-            let card = CatchRevealView(plane: plane, entryNumber: 62, onDismiss: {}, onViewInHangar: {})
-                ._snapshotCard(t: 1.0, width: 360)
-                .frame(width: 360)
-                .background(Color.black)
-            let renderer = ImageRenderer(content: card)
+            let view = CatchRevealView(plane: plane, entryNumber: 62, onDismiss: {}, onViewInHangar: {})
+                ._snapshotScreen(width: min(screen.width - 28, 420), size: screen)
+            let renderer = ImageRenderer(content: view)
             renderer.scale = 3
             // Pure side-effect harness — never fail CI over a render/write hiccup.
             guard let img = renderer.uiImage, let data = img.pngData() else { continue }
