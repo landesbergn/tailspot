@@ -196,9 +196,10 @@ struct TailspotBackendClientTests {
     }
 
     @Test func decodesRouteWhenPresent() throws {
-        // The U6 backend addition: a scheduled airline flight carries a nested
-        // `route` object with origin → destination ICAO airport codes. Maps
-        // straight through to the core Aircraft so the catch can freeze it.
+        // The U6 backend addition + airport-name enrichment: a scheduled airline
+        // flight carries a nested `route` object with origin → destination ICAO
+        // codes AND human-readable city names. Maps straight through to the core
+        // Aircraft so the catch can freeze both.
         let json = """
         {
           "fetchedAt": 1781122007,
@@ -216,7 +217,7 @@ struct TailspotBackendClientTests {
               "positionTimestamp": 1781122007,
               "typecode": "B789",
               "registration": "N24976",
-              "route": { "originIcao": "KSFO", "destIcao": "EGLL" }
+              "route": { "originIcao": "KSFO", "destIcao": "EGLL", "originName": "San Francisco", "destName": "London" }
             }
           ]
         }
@@ -226,6 +227,8 @@ struct TailspotBackendClientTests {
             .aircraft[0].asAircraft()
         #expect(a.originIcao == "KSFO")
         #expect(a.destIcao == "EGLL")
+        #expect(a.originName == "San Francisco")
+        #expect(a.destName == "London")
     }
 
     @Test func partialRouteDecodes() throws {

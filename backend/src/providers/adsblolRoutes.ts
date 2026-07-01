@@ -35,11 +35,22 @@ const DEFAULT_NEGATIVE_TTL_MS = 10 * 60_000;
 /** adsb.lol rejects a routeset POST with > 100 planes (HTTP 400). */
 const ROUTESET_MAX_BATCH = 100;
 
+/** One airport in a routeset row's `_airports` array — only the fields we use.
+ *  `location` is the city/municipality ("San Francisco"); `name` the full
+ *  airport name ("San Francisco International Airport"). */
+interface RoutesetAirport {
+  icao?: string;
+  name?: string;
+  location?: string;
+}
+
 /** One row of the `/api/0/routeset` response — only the fields we consume. */
 interface RoutesetRow {
   callsign?: string;
   /** ICAO airport codes, "-"-joined (e.g. "KSFO-EGLL"); "unknown" if no route. */
   airport_codes?: string;
+  /** Per-airport detail (name/city/coords) for the codes in `airport_codes`. */
+  _airports?: RoutesetAirport[];
 }
 
 /** Cache entry: a resolved route, or `null` = "known to have no route"
@@ -166,7 +177,8 @@ export class AdsbLolRouteService implements RouteEnricher {
     const posExpiry = this.now() + this.ttlMs;
     const negExpiry = this.now() + this.negativeTtlMs;
     for (const p of batch) {
-      const route = parseRoute(byCallsign.get(p.callsign)?.airport_codes);
+      const row = byCallsign.get(p.callsign);
+      const route = parseRoute(row?.airport_codes, row?._airports);
       this.cache.set(
         p.callsign,
         route ? { route, expiresAt: posExpiry } : { route: null, expiresAt: negExpiry },
@@ -217,7 +229,10 @@ export class AdsbLolRouteService implements RouteEnricher {
  * fewer than two codes (no usable journey). Multi-leg routes collapse to
  * first → last. Exported for unit tests.
  */
-export function parseRoute(airportCodes: string | undefined): AircraftRoute | null {
+export function parseRoute(
+  airportCodes: string | undefined,
+  airports?: RoutesetAirport[],
+): AircraftRoute | null {
   if (typeof airportCodes !== "string") return null;
   const trimmed = airportCodes.trim();
   if (trimmed === "" || trimmed.toLowerCase() === "unknown") return null;
@@ -228,5 +243,24 @@ export function parseRoute(airportCodes: string | undefined): AircraftRoute | nu
   const origin = parts[0];
   const dest = parts[parts.length - 1];
   if (!origin || !dest || parts.length < 2) return null;
-  return { originIcao: origin, destIcao: dest };
+  const route: AircraftRoute = { originIcao: origin, destIcao: dest };
+  // Enrich with human-readable names when the routeset row carried `_airports`.
+  if (airports && airports.length > 0) {
+    const byIcao = new Map<string, RoutesetAirport>();
+    for (const a of airports) if (a.icao) byIcao.set(a.icao, a);
+    const originName = airportName(byIcao.get(origin));
+    const destName = airportName(byIcao.get(dest));
+    if (originName) route.originName = originName;
+    if (destName) route.destName = destName;
+  }
+  return route;
+}
+
+/** Prefer the city/municipality (short, clean — "San Francisco") over the full
+ *  airport name ("San Francisco International Airport") for the reveal subline. */
+function airportName(a: RoutesetAirport | undefined): string | undefined {
+  const loc = a?.location?.trim();
+  if (loc) return loc;
+  const name = a?.name?.trim();
+  return name && name.length > 0 ? name : undefined;
 }

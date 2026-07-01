@@ -19,7 +19,13 @@ function plane(icao: string, callsign: string | null): NormalizedAircraft {
 }
 
 /** A 200 routeset response carrying the given rows. */
-function routeset(rows: Array<{ callsign: string; airport_codes: string }>): Response {
+function routeset(
+  rows: Array<{
+    callsign: string;
+    airport_codes: string;
+    _airports?: Array<{ icao?: string; name?: string; location?: string }>;
+  }>,
+): Response {
   return new Response(JSON.stringify(rows), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -42,6 +48,42 @@ describe("parseRoute", () => {
     expect(parseRoute("   ")).toBeNull();
     expect(parseRoute("KSFO")).toBeNull(); // only one airport → no journey
     expect(parseRoute(undefined)).toBeNull();
+  });
+
+  it("enriches origin/dest with airport city names from _airports", () => {
+    expect(
+      parseRoute("KSFO-EGLL", [
+        { icao: "KSFO", name: "San Francisco International Airport", location: "San Francisco" },
+        { icao: "EGLL", name: "London Heathrow Airport", location: "London" },
+      ]),
+    ).toEqual({
+      originIcao: "KSFO",
+      destIcao: "EGLL",
+      originName: "San Francisco",
+      destName: "London",
+    });
+  });
+
+  it("prefers city (location), falling back to the airport name when location is blank", () => {
+    expect(
+      parseRoute("KSUU-PHIK", [
+        { icao: "KSUU", name: "Travis Air Force Base", location: "" },
+        { icao: "PHIK", name: "Hickam AFB", location: "Honolulu" },
+      ]),
+    ).toEqual({
+      originIcao: "KSUU",
+      destIcao: "PHIK",
+      originName: "Travis Air Force Base",
+      destName: "Honolulu",
+    });
+  });
+
+  it("omits names when _airports is absent or has no matching ICAO", () => {
+    expect(parseRoute("KSFO-EGLL")).toEqual({ originIcao: "KSFO", destIcao: "EGLL" });
+    expect(parseRoute("KSFO-EGLL", [{ icao: "KZZZ", location: "Nowhere" }])).toEqual({
+      originIcao: "KSFO",
+      destIcao: "EGLL",
+    });
   });
 });
 
@@ -73,6 +115,33 @@ describe("AdsbLolRouteService", () => {
     svc.enrich(ac);
 
     expect(ac[0].route).toEqual({ originIcao: "KSFO", destIcao: "EGLL" });
+  });
+
+  it("attaches human-readable city names when the routeset row carries _airports", async () => {
+    const fetchFn = vi.fn(async () =>
+      routeset([
+        {
+          callsign: "UAL875",
+          airport_codes: "KSFO-EGLL",
+          _airports: [
+            { icao: "KSFO", location: "San Francisco" },
+            { icao: "EGLL", location: "London" },
+          ],
+        },
+      ]),
+    ) as unknown as typeof fetch;
+    const svc = new AdsbLolRouteService({ baseUrl: "https://example.test", fetchFn });
+
+    await svc.prefetch([{ callsign: "UAL875", lat: 37.7, lng: -122.4 }]);
+    const ac = [plane("a92d6d", "UAL875")];
+    svc.enrich(ac);
+
+    expect(ac[0].route).toEqual({
+      originIcao: "KSFO",
+      destIcao: "EGLL",
+      originName: "San Francisco",
+      destName: "London",
+    });
   });
 
   it("enrich never blocks: cold cache attaches nothing but fires one deduped lookup", async () => {

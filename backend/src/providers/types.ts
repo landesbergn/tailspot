@@ -22,6 +22,11 @@ export interface AircraftRoute {
   originIcao?: string;
   /** Destination airport ICAO code (4-letter, e.g. "EGLL"), when known. */
   destIcao?: string;
+  /** Human-readable origin airport/city (e.g. "San Francisco"), when the
+   *  route DB carried it. Rendered under the ICAO code in the catch reveal. */
+  originName?: string;
+  /** Human-readable destination airport/city (e.g. "London"). */
+  destName?: string;
 }
 
 /** A geographic bounding box in decimal degrees. */

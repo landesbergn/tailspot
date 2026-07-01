@@ -1275,7 +1275,9 @@ struct ContentView: View {
                     // catch-moment fact — record as-observed; nil for routeless
                     // flights. No metadata-endpoint fallback / later backfill.
                     originIcao: observed?.aircraft.originIcao,
-                    destIcao: observed?.aircraft.destIcao
+                    destIcao: observed?.aircraft.destIcao,
+                    originName: observed?.aircraft.originName,
+                    destName: observed?.aircraft.destName
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -1521,8 +1523,8 @@ struct ContentView: View {
             photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
             originIcao: origin,
             destIcao: dest,
-            originName: row.originName,
-            destName: row.destName,
+            originName: observed?.aircraft.originName ?? row.originName,
+            destName: observed?.aircraft.destName ?? row.destName,
             isFirstOfType: isFirstOfType
         )
     }

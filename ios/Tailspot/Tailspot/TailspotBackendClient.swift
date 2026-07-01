@@ -66,6 +66,11 @@ nonisolated struct BackendAircraft: Decodable {
     nonisolated struct Route: Decodable {
         let originIcao: String?
         let destIcao: String?
+        /// Human-readable origin/destination airport/city ("San Francisco"),
+        /// when the backend's routeset enrichment carried it. Optional — an
+        /// older backend or code-only route decodes these as nil.
+        let originName: String?
+        let destName: String?
     }
 
     /// Map onto the app's core `Aircraft` value. `originCountry` is
@@ -88,7 +93,9 @@ nonisolated struct BackendAircraft: Decodable {
             registration: registration,
             category: category,
             originIcao: route?.originIcao,
-            destIcao: route?.destIcao
+            destIcao: route?.destIcao,
+            originName: route?.originName,
+            destName: route?.destName
         )
     }
 }
