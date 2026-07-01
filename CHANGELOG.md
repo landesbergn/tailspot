@@ -5,6 +5,30 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-01 — Airport city names + economy rolled out to prod — branch `feat/route-airport-names` (PR #89) + ops
+
+**Airport city names (PR #89):** real catches now get the reveal's city subline. adsb.lol's
+routeset response already carries per-airport detail (`_airports`); the backend now reads the
+origin/dest city (municipality, falling back to the airport name) and threads
+`originName`/`destName` through `AircraftRoute` → `/v1/aircraft` → iOS `Aircraft` → frozen on
+the `Catch`. Additive/optional throughout. Route enrichment is **opportunistic** — it surfaces
+on later polls once the routeset cache warms, and only for flights adsb.lol has route data for.
+
+**Economy rolled out to prod — the live leaderboard now reflects the re-balance** (runbook:
+`docs/runbooks/2026-07-01-economy-leaderboard-rollout.md`):
+
+- Migration `0005` (`first_of_type`) applied (`0004` was already live); drizzle journal at 6.
+- Backend deployed to Fly (v10): points `10/20/50/100/500`, `CURRENT_SCORING_VERSION` 2,
+  server-authoritative first-of-type, route + airport-name passthrough.
+- Regenerated `AircraftTypes.json` (2,612 types) re-ingested into prod `typecodes`
+  (A380→rare, C-17→epic, B-52→legendary; dist 2181 common / 315 uncommon / 35 rare / 46 epic / 35 legendary).
+- All 219 catches rescored (dry-run reviewed first): total **5310 → 3100** — board-wide
+  compression from the flatter ladder + tier moves (epic→rare ×3 −1350, uncommon→common ×30,
+  rare 100→50). Leaderboard: noah 1100 (68), skywatcher 770 (57), jdurovsik 620 (44).
+
+iOS reaches testers via the next TestFlight (Noah's call). Pre-`0005` catches keep
+`first_of_type=false`, so the rescore did not retroactively grant the +50% (correct — going-forward).
+
 ## 2026-07-01 — Reveal field-polish + indoor-gate tuning — branch `feat/collection-economy-reveal`
 
 On-device review of the reveal drove a polish pass (verified by rendering the real view to PNG via a new `RevealSnapshotTests` harness, not by eyeballing a green build):
