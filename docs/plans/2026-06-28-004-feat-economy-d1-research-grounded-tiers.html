@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research-Grounded Rarity Tiers — Decision 1 / Fork 1</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#121a22; --panel2:#0e151c; --raise:#16202b;
+    --ink:#e7eef5; --muted:#8da0b2; --faint:#5f7284; --line:#21303f;
+    --cyan:#2fd4e6; --cyan-dim:#1c7d89;
+    --common:#9aa7b4; --uncommon:#52d486; --rare:#3eb6f6; --epic:#bd83fb; --legend:#fbbf24;
+    --good:#52d486; --warn:#fbbf24; --bad:#f1737d;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin-inline:auto;padding:32px 22px 80px}
+  a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
+  h1{font-size:28px;line-height:1.15;margin:0 0 6px;letter-spacing:-.4px}
+  h2{font-size:20px;margin:42px 0 4px;letter-spacing:-.2px}
+  h3{font-size:15.5px;margin:22px 0 6px}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-dim)}
+  p{margin:8px 0;max-width:78ch;color:#d7e0e8}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  code{font-family:var(--mono);font-size:.86em;background:#0c141c;border:1px solid var(--line);padding:1px 5px;border-radius:5px;color:#cfe7ee}
+  hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+  .lede{font-size:16px;color:#c3d0db;max-width:80ch}
+  .metastrip{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+  .chip{font:600 11px/1 var(--mono);padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)}
+  .chip.on{color:var(--cyan);border-color:var(--cyan-dim)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 6px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  nav.toc a{font:600 12.5px/1 var(--mono);color:var(--muted);padding:5px 9px;border-radius:7px}
+  nav.toc a:hover{background:var(--raise);color:var(--cyan);text-decoration:none}
+  .callout{background:#0e1820;border:1px solid #1d3a44;border-radius:12px;padding:14px 16px;margin:16px 0}
+  .callout.warn{background:#1c1812;border-color:#4a3b18}
+  .callout .k{font:600 11px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--cyan)}
+  .callout.warn .k{color:var(--warn)}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  td.c{text-align:center;font-family:var(--mono)}
+  .mono{font-family:var(--mono)}
+  .tier{font:600 11px/1 var(--mono);padding:3px 7px;border-radius:5px;display:inline-block;white-space:nowrap}
+  .t-common{color:var(--common);border:1px solid #36424e}
+  .t-uncommon{color:var(--uncommon);border:1px solid #245c3c}
+  .t-rare{color:var(--rare);border:1px solid #1f5274}
+  .t-epic{color:var(--epic);border:1px solid #4a3168}
+  .t-legend{color:var(--legend);border:1px solid #5b4715}
+  .sec-rare{border-left:3px solid var(--rare)} .sec-epic{border-left:3px solid var(--epic)} .sec-legend{border-left:3px solid var(--legend)}
+  ul.tight{margin:6px 0;padding-left:18px} ul.tight li{margin:4px 0;color:#d7e0e8}
+  .q{color:var(--cyan);font-weight:600}
+  .lean{font:600 12px/1 var(--mono);color:var(--good)}
+  .yes{color:var(--good)} .may{color:var(--warn)} .no{color:var(--bad)}
+  .warnsoon{color:var(--warn);font-weight:600}
+  .legendrow{display:flex;gap:16px;flex-wrap:wrap;font:600 11px/1 var(--mono);color:var(--muted);margin:6px 0 0}
+  footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font:500 12px/1.5 var(--mono);color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Tailspot · Bet B · Decision 1 · Fork 1 · grounded in research</div>
+    <h1>Research-Grounded Rarity Tiers</h1>
+    <p class="lede">The tier assignments above “uncommon,” rebuilt on 2025–26 fleet data and spotter sources instead of my
+    category defaults. This is the concrete proposed override list — what gets written into the generator. Sky-presence axis:
+    how often is one actually overhead <em>today</em>.</p>
+    <div class="metastrip">
+      <span class="chip on">Decision 1 · LOCKED ✓</span>
+      <span class="chip">2025–26 fleet data</span>
+      <span class="chip">supersedes Q2 + narrowbody gap</span>
+      <span class="chip">Date · 2026-06-28</span>
+    </div>
+    <nav class="toc">
+      <a href="#changed">What research changed</a>
+      <a href="#catch">The catchability caveat</a>
+      <a href="#rare">Proposed · Rare</a>
+      <a href="#epic">Proposed · Epic</a>
+      <a href="#legend">Proposed · Legendary</a>
+      <a href="#fixes">Pins to correct</a>
+      <a href="#calls">Open calls</a>
+    </nav>
+  </header>
+
+  <!-- WHAT CHANGED -->
+  <h2 id="changed">What the research changed</h2>
+  <ul class="tight">
+    <li><strong>Military splits across three tiers</strong> — it was a flat “rare.” Routine transports you can actually catch
+    (C-130) are <span class="tier t-rare">rare</span>; strategic/combat (B-52, B-1, fighters, AWACS) are
+    <span class="tier t-epic">epic</span>; icons (B-2, U-2) <span class="tier t-legend">legendary</span>. Your “leans epic”
+    instinct is right for the <em>special</em> military — calibrated below.</li>
+    <li><strong>Vanishing narrowbodies are a real rare→legendary layer</strong> — they were all “common.” The A318 (4 left)
+    and 737-200 (~9 left) are <span class="tier t-epic">epic</span>; the 727 is effectively extinct →
+    <span class="tier t-legend">legendary</span>. Your A318 / 737-200 call, expanded with fleet numbers.</li>
+    <li><strong>Several current pins are wrong</strong> — the 727 is pinned <em>uncommon</em> but it’s extinct; the 717 and
+    MD-80s are pinned uncommon but are now rare; the MD-11 is pinned rare but it’s all-cargo and scarce → epic. See §fixes.</li>
+    <li><strong>P-51 is abundant for a warbird</strong> (100+ airworthy) → <span class="tier t-rare">rare</span>, not epic.</li>
+  </ul>
+
+  <!-- CATCHABILITY -->
+  <h2 id="catch">The catchability caveat — read this before the tables</h2>
+  <div class="callout warn">
+    <div class="k">Half the epic/legendary list can’t actually be caught</div>
+    <p style="margin:8px 0 0">Catches come from ADS-B + MLAT. Many of the rarest airframes <strong>broadcast no trackable
+    signal</strong> — combat aircraft in operational config (B-2, U-2, F-22, fighters), and extinct/grounded types
+    (An-225 destroyed, Concorde, SR-71). They will essentially <em>never</em> appear in catches today. So tiering them is
+    <strong>aspirational / historical / future visual-ID</strong>, not a live chase.</p>
+    <p class="muted" style="margin-bottom:0">Implication: the <em>realistically catchable</em> top of the game is the
+    <strong>vanishing airliners</strong> (A318, DC-9, MD-11, A340 — all broadcast ADS-B ✓) plus the occasional MLAT military
+    (C-130, B-52 near a base). That’s where the live engagement is — and it’s exactly what this research lets us tier well.</p>
+  </div>
+  <p>Each row below carries a catchability flag:</p>
+  <div class="legendrow">
+    <span><span class="yes">✓ ADS-B</span> — broadcasts, will appear</span>
+    <span><span class="may">~ MLAT only</span> — sometimes appears</span>
+    <span><span class="no">✗ no signal</span> — won’t appear via tracking (aspirational/visual-only)</span>
+  </div>
+
+  <!-- RARE -->
+  <h2 id="rare">Proposed · <span class="tier t-rare">Rare</span> (50 pts)</h2>
+  <p class="faint">Spot once every few weeks at a big hub, once a year regionally.</p>
+  <table class="sec-rare">
+    <thead><tr><th>ICAO</th><th>Aircraft</th><th>Why — grounded</th><th class="c">Catch?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">A343 · A346</td><td>A340-300 / -600</td><td>71 active, hub-concentrated (Lufthansa, Mahan); rare off those hubs, Edelweiss retiring Oct&nbsp;2025</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">A388</td><td>A380</td><td>~200 fly, Emirates daily at big hubs — rare by sky presence <span class="faint">(your call: rare over the “feels epic” read)</span></td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">B744 · B742 · B74S</td><td>747-400 / classic / SP</td><td>passenger jumbos now scarce off LH / cargo hubs</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">B753</td><td>757-300</td><td>only 32 left (Delta, Condor)</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">B712</td><td>717</td><td>Delta/Hawaiian only (~100); rare anywhere else <span class="faint">(was uncommon)</span></td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">MD81–88</td><td>MD-80 family</td><td>~100 survive, Mexican charter; rare at US pax hubs <span class="faint">(was uncommon)</span></td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">F100 · F70</td><td>Fokker 100 / 70</td><td>~50 / ~12, Australia + Iran; retiring 2026</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">B461–463 · RJ1H · RJ85</td><td>BAe 146 / Avro RJ</td><td>45 active, mostly cargo / firefighting / military</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">C130 · C17 · KC135 · P8 · A400</td><td>military transports</td><td>routine military you can actually catch — MLAT near bases</td><td class="c may">~</td></tr>
+      <tr><td class="mono">P51 · T6</td><td>P-51 Mustang, T-6</td><td>100+ Mustangs airworthy — abundant <em>for a warbird</em>; airshow catch</td><td class="c may">~</td></tr>
+      <tr><td class="mono">GLF6 · GA7C · GA8C · GL7T · GL5T · GLEX</td><td>heavy / ULR bizjets</td><td>G650/700/800, Global 5000/7500/Express — existing pins, kept</td><td class="c yes">✓</td></tr>
+    </tbody>
+  </table>
+
+  <!-- EPIC -->
+  <h2 id="epic">Proposed · <span class="tier t-epic">Epic</span> (100 pts)</h2>
+  <p class="faint">Chase for months, catch a handful a year.</p>
+  <table class="sec-epic">
+    <thead><tr><th>ICAO</th><th>Aircraft</th><th>Why — grounded</th><th class="c">Catch?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">A318</td><td>A318 “Baby Bus” <span class="warnsoon">⚠ retiring 2026</span></td><td><strong>4 left</strong>, Air France only; epic now, legendary once gone</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">B732</td><td>737-200</td><td>~9 pax left (Canadian Arctic, Africa, Venezuela)</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">A342</td><td>A340-200</td><td><strong>3 total</strong> (Conviasa, Mahan) — nearly legendary</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">DC91–95</td><td>DC-9</td><td>30 total, only 1 in scheduled pax service</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">DC10</td><td>DC-10</td><td>7 flying — cargo, firefighting tanker, Orbis</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">MD11</td><td>MD-11</td><td>all cargo (FedEx ~26); scarce <span class="faint">(was rare)</span></td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">MD90</td><td>MD-90</td><td>very scarce globally (Delta retired) <span class="faint">(was uncommon)</span></td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">A310</td><td>A310</td><td>~10 active, mostly Iranian</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">A30B · A306</td><td>A300</td><td>~13 active, Iranian + a few cargo</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">IL96</td><td>Il-96</td><td>Cubana only</td><td class="c may">~</td></tr>
+      <tr><td class="mono">A124</td><td>An-124</td><td>15 commercial (Antonov Airlines) — a sighting is an event</td><td class="c yes">✓</td></tr>
+      <tr><td class="mono">B748 · C5M</td><td>747-8, C-5M</td><td>super-heavy; scarce pax / strategic airlift</td><td class="c may">~</td></tr>
+      <tr><td class="mono">B52 · B1 · E3CF</td><td>B-52, B-1, E-3 AWACS</td><td>strategic — MLAT near bases (Minot, Barksdale)</td><td class="c may">~</td></tr>
+      <tr><td class="mono">F15 · F16 · F18 · F22 · F35</td><td>fighters</td><td>your epic instinct — but combat config usually emits nothing</td><td class="c no">✗</td></tr>
+      <tr><td class="mono">SPIT · B17 · L1049</td><td>Spitfire, B-17, Constellation</td><td>warbirds that fly but seldom — airshow / heritage catches</td><td class="c may">~</td></tr>
+    </tbody>
+  </table>
+
+  <!-- LEGENDARY -->
+  <h2 id="legend">Proposed · <span class="tier t-legend">Legendary</span> (500 pts)</h2>
+  <p class="faint">Sole / near-sole flying examples, extinct from the skies, or untrackable icons. Mostly aspirational.</p>
+  <table class="sec-legend">
+    <thead><tr><th>ICAO</th><th>Aircraft</th><th>Why — grounded</th><th class="c">Catch?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">B721 · B722</td><td>727</td><td>extinct from scheduled pax — govt/cargo specials only <span class="faint">(was uncommon!)</span></td><td class="c no">✗</td></tr>
+      <tr><td class="mono">A225</td><td>An-225 Mriya</td><td>destroyed Feb 2022 — extinct; historical marker only</td><td class="c no">✗</td></tr>
+      <tr><td class="mono">L101</td><td>L-1011 TriStar</td><td>no airworthy commercial examples</td><td class="c no">✗</td></tr>
+      <tr><td class="mono">T154 · IL62</td><td>Tu-154, Il-62</td><td>government / Air Koryo only; never in open ADS-B</td><td class="c no">✗</td></tr>
+      <tr><td class="mono">B29 · LANC</td><td>B-29, Lancaster</td><td><strong>1</strong> / <strong>2</strong> airworthy worldwide</td><td class="c may">~</td></tr>
+      <tr><td class="mono">VC25</td><td>Air Force One</td><td>singular; occasionally MLAT-visible</td><td class="c may">~</td></tr>
+      <tr><td class="mono">E4</td><td>E-4B Nightwatch</td><td>4 aircraft; occasional MLAT <span class="faint">(was epic — bump)</span></td><td class="c may">~</td></tr>
+      <tr><td class="mono">B2 · U2 · SR71 · CONC · F14</td><td>B-2, U-2, SR-71, Concorde, F-14</td><td>icons — no transponder, retired, or extinct; visual-ID only</td><td class="c no">✗</td></tr>
+    </tbody>
+  </table>
+
+  <p class="muted">Uncommon and common are unchanged from the framework doc, except the <strong>Q1 widebody refine</strong>:
+  current-gen workhorse widebodies (777/787/A350/A330/767-300) drop to <span class="tier t-common">common</span>; the
+  757-200 (<code>B752</code>, 130+ still flying) stays <span class="tier t-uncommon">uncommon</span>.</p>
+
+  <!-- FIXES -->
+  <h2 id="fixes">Pins to correct (today → proposed)</h2>
+  <table>
+    <thead><tr><th>ICAO</th><th>Aircraft</th><th class="c">Today</th><th class="c">Proposed</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">B721 · B722</td><td>727</td><td class="c"><span class="tier t-uncommon">uncommon</span></td><td class="c"><span class="tier t-legend">legendary</span></td><td>extinct from scheduled passenger service</td></tr>
+      <tr><td class="mono">B712</td><td>717</td><td class="c"><span class="tier t-uncommon">uncommon</span></td><td class="c"><span class="tier t-rare">rare</span></td><td>Delta/Hawaiian only; rare elsewhere</td></tr>
+      <tr><td class="mono">MD82 · MD83 · MD88</td><td>MD-80</td><td class="c"><span class="tier t-uncommon">uncommon</span></td><td class="c"><span class="tier t-rare">rare</span></td><td>~100 survive, charter only</td></tr>
+      <tr><td class="mono">MD90</td><td>MD-90</td><td class="c"><span class="tier t-uncommon">uncommon</span></td><td class="c"><span class="tier t-epic">epic</span></td><td>very scarce after Delta retirement</td></tr>
+      <tr><td class="mono">MD11</td><td>MD-11</td><td class="c"><span class="tier t-rare">rare</span></td><td class="c"><span class="tier t-epic">epic</span></td><td>all cargo, scarce</td></tr>
+      <tr><td class="mono">E4</td><td>E-4B</td><td class="c"><span class="tier t-epic">epic</span></td><td class="c"><span class="tier t-legend">legendary</span></td><td>4 aircraft total</td></tr>
+      <tr><td class="mono">P51</td><td>P-51 Mustang</td><td class="c"><span class="tier t-common">common</span></td><td class="c"><span class="tier t-rare">rare</span></td><td>warbird, but 100+ fly (Q7 layer)</td></tr>
+    </tbody>
+  </table>
+  <p class="faint">Plus all the new pins above that were previously <span class="tier t-common">common</span> by default
+  (A318, B732, A343, F100, BAe146, DC-9, A310, A300…).</p>
+
+  <!-- OPEN CALLS -->
+  <h2 id="calls">Open calls for you</h2>
+  <div class="callout">
+    <div class="k">Resolved ✓</div>
+    <ul class="tight" style="margin-top:8px">
+      <li><strong>A380 (<code>A388</code>) → <span class="tier t-rare">rare</span></strong> — sky presence over feel (your call). Added to the rare table.</li>
+      <li><strong>Uncatchable types → tiered anyway</strong> — completes the ladder + future visual ID. The live game still tops out at vanishing airliners + MLAT military.</li>
+      <li><strong>Military split → adopted</strong> — transport rare, strategic/combat epic, icons (incl. Air Force One) legendary.</li>
+    </ul>
+    <p class="muted" style="margin-bottom:0"><strong>Bonus hook (parked):</strong> several types are retiring in 2025–26
+    (A318, Fokker 100, Edelweiss A340). A “catch it before it’s gone” flag could be a great collection moment later.</p>
+  </div>
+
+  <h2>Decision log — research-grounded tiers</h2>
+  <table>
+    <thead><tr><th>Item</th><th>Proposed</th><th>Your call</th></tr></thead>
+    <tbody>
+      <tr><td>Military split (transport rare / strategic epic / icon legendary)</td><td><strong>Adopt</strong></td><td class="q">✓</td></tr>
+      <tr><td>Vanishing-narrowbody layer (A318, 737-200, 727, …)</td><td><strong>Adopt</strong></td><td class="q">✓</td></tr>
+      <tr><td>Vanishing-airliner rare/epic pins (A340, MD-11, DC-9, …)</td><td><strong>Adopt</strong></td><td class="q">✓</td></tr>
+      <tr><td>Pin corrections (727, 717, MD-80/90, MD-11, E-4, P-51)</td><td><strong>Adopt</strong></td><td class="q">✓</td></tr>
+      <tr><td>A380 epic vs rare</td><td><strong>Rare</strong> — sky presence (your call)</td><td class="q">✓</td></tr>
+      <tr><td>Tier uncatchable types anyway</td><td><strong>Yes</strong> (aspirational ladder)</td><td class="q">✓</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <div class="k">Then</div>
+    <p style="margin:6px 0 0">All settled — <strong>Decision 1 is locked.</strong> The full override list goes into the
+    generator, re-tiering flows to both platforms, and the re-score backfills existing catches. Moving to
+    <strong>Decision 2 — the reveal</strong>.</p>
+  </div>
+
+  <footer>
+    Composed 2026-06-28 by ce-plan · Tailspot Bet B · Decision 1 / Fork 1 (research-grounded tiers) · sources: aerotime.aero
+    (rare birds / rarest to photograph), airportspotting.com (historic flights, 2025 rare-flights guide), achtungskyhawk.com
+    (GA oddballs), plus 2025–26 operator fleet reporting (A318/A340/747/757/MD-11/Fokker/BAe146/An-124 status). Fleet counts
+    current as of early 2026; tiers are proposals for review.
+  </footer>
+
+</div>
+</body>
+</html>

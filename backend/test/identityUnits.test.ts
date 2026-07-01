@@ -19,10 +19,10 @@ describe("containsProfanity (substring on lowercased handle)", () => {
 describe("pointsForRarity (mirror of iOS GameSystem tiers)", () => {
   it("maps each tier", () => {
     expect(pointsForRarity("common")).toBe(10);
-    expect(pointsForRarity("uncommon")).toBe(25);
-    expect(pointsForRarity("rare")).toBe(100);
-    expect(pointsForRarity("epic")).toBe(500);
-    expect(pointsForRarity("legendary")).toBe(2000);
+    expect(pointsForRarity("uncommon")).toBe(20);
+    expect(pointsForRarity("rare")).toBe(50);
+    expect(pointsForRarity("epic")).toBe(100);
+    expect(pointsForRarity("legendary")).toBe(500);
   });
   it("unknown/null rarity scores the common floor (10)", () => {
     expect(pointsForRarity(null)).toBe(10);

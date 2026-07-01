@@ -51,6 +51,18 @@ struct CardPlane: Equatable {
     /// placeholder in the rarity tint (matches the design's
     /// PhotoPlaceholder when Planespotters hasn't returned).
     let photoURL: URL?
+    /// Route, when the catch carried it. ICAO idents (e.g. "RJAA"/"KSFO")
+    /// render as the big codes in the reveal's ROUTE row; the optional
+    /// human-readable names ("Tokyo Narita"/"San Francisco") render under
+    /// them. nil route falls back to slant distance.
+    let originIcao: String?
+    let destIcao: String?
+    let originName: String?
+    let destName: String?
+    /// Whether this is the observer's first catch of this typecode.
+    /// Drives the reveal's "FIRST OF TYPE" ledger line. Display-only —
+    /// the backend is authoritative for the awarded bonus.
+    let isFirstOfType: Bool
 
     init(
         callsign: String?,
@@ -61,7 +73,12 @@ struct CardPlane: Equatable {
         altText: String? = nil,
         speedText: String? = nil,
         distText: String? = nil,
-        photoURL: URL? = nil
+        photoURL: URL? = nil,
+        originIcao: String? = nil,
+        destIcao: String? = nil,
+        originName: String? = nil,
+        destName: String? = nil,
+        isFirstOfType: Bool = false
     ) {
         self.callsign = callsign
         self.model = model
@@ -72,6 +89,11 @@ struct CardPlane: Equatable {
         self.speedText = speedText
         self.distText = distText
         self.photoURL = photoURL
+        self.originIcao = originIcao
+        self.destIcao = destIcao
+        self.originName = originName
+        self.destName = destName
+        self.isFirstOfType = isFirstOfType
     }
 }
 

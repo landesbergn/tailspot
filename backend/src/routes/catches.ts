@@ -3,7 +3,7 @@
  *
  *   POST /v1/catches   (auth required)
  *     body { catchUuid, icao24, callsign|null, caughtAt, observer{…}, aircraft{…} }
- *     → 201 { catchId, points, rarity, typecode, duplicate:false }
+ *     → 201 { catchId, points, rarity, typecode, firstOfType, duplicate:false }
  *       200 { …, duplicate:true }   when catchUuid was already ingested (replay)
  *       401 bad/absent token
  *       422 malformed body
@@ -153,9 +153,18 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     }
 
     // ── Server-side scoring (typecode → rarity → points, regime-stamped) ────
-    // The ONE canonical scorer; the re-score job (catches/rescore.ts) calls the
-    // same `scoreCatch`, so an upload and a later re-score agree by construction.
-    const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24);
+    // First-of-type is server-authoritative (un-spoofable): resolve the typecode,
+    // then check whether THIS device already holds a catch of it BEFORE inserting
+    // — the new row is first-of-type iff none exists. The flag is frozen onto the
+    // row and fed into the ONE canonical scorer (the same `scoreCatch` the
+    // re-score job calls), which adds the +50%-of-base bonus. (The deliberate
+    // double-resolve — once here, once inside `scoreCatch` — keeps the scorer the
+    // single owner of the rarity→points mapping; the lookups are small + indexed.)
+    const { typecode: resolvedTypecode } = await catchStore.resolveRarity(icao24);
+    const firstOfType = await catchStore.isFirstOfType(device.id, resolvedTypecode);
+    const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24, {
+      firstOfType,
+    });
 
     // ── Instrumented anti-cheat (stored, never enforced) ────────────────────
     const observer: ObserverPose = {
@@ -183,6 +192,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       rarity,
       points,
       scoringVersion,
+      firstOfType,
       caughtAt: new Date(caughtAt * 1000),
       observerLat: obsLat,
       observerLon: obsLon,
@@ -204,6 +214,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       points: result.points,
       rarity: result.rarity,
       typecode: result.typecode,
+      firstOfType: result.firstOfType,
       duplicate,
     });
   });

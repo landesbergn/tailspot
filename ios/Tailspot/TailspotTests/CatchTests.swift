@@ -146,11 +146,12 @@ struct CatchTests {
 
     @Test func insertRunsClassifierAndSnapshotsRarityAndType() throws {
         // New rows still snapshot rarity + type from the classifier at
-        // insert time (stored as audit values). Note: post-2026-06-08
-        // resolvedRarity DERIVES live from the typecode/classifier rather
-        // than reading the stored rarity — with no typecode here both
-        // equal the classifier verdict (787 is a workhorse widebody →
-        // uncommon under the activity model).
+        // insert time (stored as audit values). Post-2026-06-08
+        // resolvedRarity DERIVES live, and under the single-source rule
+        // (U3) a row with NO typecode resolves to the conservative .common
+        // default — so the stored audit rarity (classifier verdict: 787 →
+        // .uncommon) and the resolved rarity deliberately DIVERGE here.
+        // resolvedType still falls out of the classifier (787 → .wide).
         let container = try makeContainer()
         let context = ModelContext(container)
 
@@ -167,17 +168,20 @@ struct CatchTests {
         try context.save()
 
         let fetched = try #require(try context.fetch(FetchDescriptor<Catch>()).first)
-        #expect(fetched.rarity == Rarity.uncommon.rawValue)
+        #expect(fetched.rarity == Rarity.uncommon.rawValue)   // stored audit = classifier verdict
         #expect(fetched.aircraftType == AircraftType.wide.rawValue)
-        #expect(fetched.resolvedRarity == .uncommon)
+        #expect(fetched.resolvedRarity == .common)            // no typecode → conservative default
         #expect(fetched.resolvedType == .wide)
     }
 
-    @Test func resolvedRarityBackfillsFromClassifierWhenNil() {
-        // Legacy rows written before the rarity/type fields existed
-        // come back with nil. resolvedRarity must reproduce the
-        // classifier's verdict so the Hangar / Detail views don't
-        // render them all as Common.
+    @Test func resolvedTypeBackfillsFromClassifierWhenNil_rarityDefaultsCommon() {
+        // Legacy rows written before the rarity/type fields existed come
+        // back with nil. resolvedType still reproduces the classifier's
+        // verdict so the Hangar / Detail views don't render them all as one
+        // type. resolvedRarity, under the single-source rule (U3), no longer
+        // reads the classifier ladder: with NO typecode it resolves to the
+        // conservative .common default. (A typecoded legacy row would still
+        // re-tier correctly via the authoritative table.)
         let c = Catch(
             icao24: "x",
             callsign: nil,
@@ -191,8 +195,8 @@ struct CatchTests {
         // the migration would have left empty.
         c.rarity = nil
         c.aircraftType = nil
-        #expect(c.resolvedRarity == .epic)
-        #expect(c.resolvedType == .wide)
+        #expect(c.resolvedRarity == .common)   // no typecode → conservative default
+        #expect(c.resolvedType == .wide)       // type still backfills from the classifier
     }
 
     @Test func explicitRarityStoredButResolvedRarityDerives() {
@@ -275,6 +279,50 @@ struct CatchTests {
         #expect(fetched?.placeName == nil)
     }
 
+    @Test func routePersistsWhenSet() throws {
+        // Route (origin → destination) is a frozen catch-moment fact, stored
+        // when the live feed carried one. Round-trips through SwiftData.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a1b2c3", callsign: "UAL901",
+            model: "787-9", manufacturer: "BOEING",
+            caughtAt: Date(), observerLat: 0, observerLon: 0,
+            slantDistanceMeters: 0,
+            originIcao: "KSFO",
+            destIcao: "EGLL"
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>()).first
+        #expect(fetched?.originIcao == "KSFO")
+        #expect(fetched?.destIcao == "EGLL")
+    }
+
+    @Test func routeDefaultsToNilWhenOmitted() throws {
+        // `originIcao`/`destIcao` were added 2026-06. Existing call sites omit
+        // them (default nil); pre-field rows decode as nil under SwiftData
+        // lightweight migration. Most catches (routeless GA/military) are nil
+        // here too. Pin the default + migration shape.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a3b15e",
+            callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+        )
+        context.insert(c)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Catch>()).first
+        #expect(fetched?.originIcao == nil)
+        #expect(fetched?.destIcao == nil)
+    }
+
     // MARK: - CardPlane from a stored Catch
 
     @Test func cardPlaneFormatsStoredAltAndSpeed() {
@@ -334,8 +382,9 @@ struct CatchTests {
         // The SIA248 case: a foreign airframe the FAA-only /v1/metadata endpoint
         // can't resolve, so model/manufacturer are nil — but the feed supplied
         // the typecode. Storing it alone must produce a real name + correct
-        // type/tier: no "Unknown aircraft", no GA/common fallback. The airline
-        // (callsign-derived) keeps showing as before.
+        // type: no "Unknown aircraft", no GA-default fallback (the .wide type and
+        // the resolved model prove it). The airline (callsign-derived) keeps
+        // showing as before.
         let c = Catch(
             icao24: "76cdb5", callsign: "SIA248",
             model: nil, manufacturer: nil,
@@ -348,7 +397,7 @@ struct CatchTests {
         #expect(plane.model == "Airbus A350-900")
         #expect(plane.model != "Unknown aircraft")
         #expect(plane.type == .wide)            // not the .ga unknown-airframe default
-        #expect(c.resolvedRarity == .uncommon)  // not the .common default
+        #expect(c.resolvedRarity == .common)    // A350 is a workhorse widebody → common
         #expect(plane.carrier == "Singapore Airlines")
     }
 

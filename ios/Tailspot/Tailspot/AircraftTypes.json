@@ -15,7 +15,7 @@
   "lengthFt": 53.3,
   "make": "Fairchild",
   "model": "A-10 Thunderbolt 2",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow",
   "wingspanFt": 57.5
  },
@@ -48,7 +48,7 @@
  "A129": {
   "make": "Agusta",
   "model": "T-129",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "A139": {
@@ -223,7 +223,7 @@
   "lengthFt": 177.4,
   "make": "Airbus",
   "model": "A300B4-600",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "wide",
   "wingspanFt": 147.1
  },
@@ -231,7 +231,7 @@
   "lengthFt": 175.5,
   "make": "Airbus",
   "model": "A300B4-2",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "wide",
   "wingspanFt": 147.1
  },
@@ -245,7 +245,7 @@
   "lengthFt": 153.2,
   "make": "Airbus",
   "model": "A310",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "wide",
   "wingspanFt": 144.0
  },
@@ -253,7 +253,7 @@
   "lengthFt": 103.2,
   "make": "Airbus",
   "model": "A318",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "narrow",
   "wingspanFt": 111.9
  },
@@ -284,14 +284,14 @@
  "A33": {
   "make": "Aeropract",
   "model": "A-33",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "A332": {
   "lengthFt": 193.6,
   "make": "Airbus",
   "model": "A330-200",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 197.8
  },
@@ -299,7 +299,7 @@
   "lengthFt": 209.0,
   "make": "Airbus",
   "model": "A330-300",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 197.8
  },
@@ -307,7 +307,7 @@
   "lengthFt": 207.0,
   "make": "Airbus",
   "model": "A330-700 Beluga XL",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 197.8
  },
@@ -315,7 +315,7 @@
   "lengthFt": 193.0,
   "make": "Airbus",
   "model": "A330-800",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 210.0
  },
@@ -323,7 +323,7 @@
   "lengthFt": 208.9,
   "make": "Airbus",
   "model": "A330-900",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 210.0
  },
@@ -331,7 +331,7 @@
   "lengthFt": 195.0,
   "make": "Airbus",
   "model": "A340-200",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "wide",
   "wingspanFt": 197.8
  },
@@ -362,14 +362,14 @@
  "A35": {
   "make": "Avantage",
   "model": "A-35 Scanner",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "A359": {
   "lengthFt": 218.5,
   "make": "Airbus",
   "model": "A350-900",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 212.4
  },
@@ -377,7 +377,7 @@
   "lengthFt": 241.4,
   "make": "Airbus",
   "model": "A350-1000",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 212.4
  },
@@ -391,27 +391,27 @@
   "lengthFt": 238.6,
   "make": "Airbus",
   "model": "A380-800",
-  "rarity": "epic",
+  "rarity": "rare",
   "type": "wide",
   "wingspanFt": 261.7
  },
  "A3ST": {
   "make": "Airbus",
   "model": "A300ST Beluga",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "A4": {
   "make": "McDonnell Douglas",
   "model": "A-4 Skyhawk",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "A400": {
   "lengthFt": 148.0,
   "make": "Airbus",
   "model": "A400M Atlas",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 139.1
  },
@@ -432,7 +432,7 @@
  "A50": {
   "make": "Beriev",
   "model": "A-50",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "A500": {
@@ -947,20 +947,20 @@
   "lengthFt": 111.6,
   "make": "Antonov",
   "model": "An-12",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 124.8
  },
  "AN2": {
   "make": "Aicsa",
   "model": "An-2",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "AN22": {
   "make": "Antonov",
   "model": "An-22 Antheus",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "AN24": {
@@ -1560,7 +1560,7 @@
  "B1": {
   "make": "Rockwell",
   "model": "B-1 Lancer",
-  "rarity": "epic",
+  "rarity": "legendary",
   "type": "mil"
  },
  "B103": {
@@ -1602,7 +1602,7 @@
  "B17": {
   "make": "Boeing",
   "model": "B-17 Flying Fortress",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "ga"
  },
  "B18T": {
@@ -1686,7 +1686,7 @@
  "B25": {
   "make": "North American",
   "model": "PBJ Mitchell",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "B26": {
@@ -1704,7 +1704,7 @@
  "B29": {
   "make": "Boeing",
   "model": "B-29 Superfortress",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "ga"
  },
  "B305": {
@@ -1799,7 +1799,7 @@
   "lengthFt": 85.9,
   "make": "British Aerospace",
   "model": "BAe-146-100",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "regional",
   "wingspanFt": 86.4
  },
@@ -1807,14 +1807,14 @@
   "lengthFt": 93.7,
   "make": "British Aerospace",
   "model": "BAe-146-200",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "regional",
   "wingspanFt": 86.4
  },
  "B463": {
   "make": "British Aerospace",
   "model": "BAe-146-300",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "regional"
  },
  "B47G": {
@@ -1845,7 +1845,7 @@
   "lengthFt": 160.9,
   "make": "Boeing",
   "model": "B-52 Stratofortress",
-  "rarity": "epic",
+  "rarity": "legendary",
   "type": "mil",
   "wingspanFt": 185.0
  },
@@ -1889,7 +1889,7 @@
   "lengthFt": 152.9,
   "make": "Boeing",
   "model": "707-300",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 145.8
  },
@@ -1897,7 +1897,7 @@
   "lengthFt": 124.0,
   "make": "Boeing",
   "model": "717-200",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "narrow",
   "wingspanFt": 93.3
  },
@@ -1911,7 +1911,7 @@
   "lengthFt": 133.2,
   "make": "Boeing",
   "model": "727-100",
-  "rarity": "uncommon",
+  "rarity": "legendary",
   "type": "narrow",
   "wingspanFt": 108.0
  },
@@ -1919,7 +1919,7 @@
   "lengthFt": 153.2,
   "make": "Boeing",
   "model": "727-200",
-  "rarity": "uncommon",
+  "rarity": "legendary",
   "type": "narrow",
   "wingspanFt": 108.0
  },
@@ -1927,7 +1927,7 @@
   "lengthFt": 100.2,
   "make": "Boeing",
   "model": "737-200",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "narrow",
   "wingspanFt": 93.0
  },
@@ -1991,7 +1991,7 @@
   "lengthFt": 231.8,
   "make": "Boeing",
   "model": "747-100",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 195.7
  },
@@ -2007,7 +2007,7 @@
   "lengthFt": 231.8,
   "make": "Boeing",
   "model": "747-300",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 195.7
  },
@@ -2030,7 +2030,7 @@
  "B74R": {
   "make": "Boeing",
   "model": "747SR",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "B74S": {
@@ -2043,7 +2043,7 @@
   "lengthFt": 155.3,
   "make": "Boeing",
   "model": "757-200",
-  "rarity": "common",
+  "rarity": "uncommon",
   "type": "narrow",
   "wingspanFt": 124.8
  },
@@ -2051,7 +2051,7 @@
   "lengthFt": 178.6,
   "make": "Boeing",
   "model": "757-300",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "narrow",
   "wingspanFt": 124.8
  },
@@ -2059,7 +2059,7 @@
   "lengthFt": 159.2,
   "make": "Boeing",
   "model": "767-200",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 156.1
  },
@@ -2067,7 +2067,7 @@
   "lengthFt": 180.3,
   "make": "Boeing",
   "model": "767-300",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 156.1
  },
@@ -2075,7 +2075,7 @@
   "lengthFt": 201.3,
   "make": "Boeing",
   "model": "767-400",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 170.3
  },
@@ -2083,7 +2083,7 @@
   "lengthFt": 209.1,
   "make": "Boeing",
   "model": "777-200",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 199.9
  },
@@ -2091,7 +2091,7 @@
   "lengthFt": 209.1,
   "make": "Boeing",
   "model": "777-300",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 199.9
  },
@@ -2099,7 +2099,7 @@
   "lengthFt": 229.0,
   "make": "Boeing",
   "model": "777-8",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 235.4
  },
@@ -2107,7 +2107,7 @@
   "lengthFt": 251.8,
   "make": "Boeing",
   "model": "777-9",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 235.4
  },
@@ -2115,7 +2115,7 @@
   "lengthFt": 209.1,
   "make": "Boeing",
   "model": "777-200LR",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 212.1
  },
@@ -2123,7 +2123,7 @@
   "lengthFt": 242.3,
   "make": "Boeing",
   "model": "777-300ER",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 212.6
  },
@@ -2131,7 +2131,7 @@
   "lengthFt": 186.1,
   "make": "Boeing",
   "model": "787-8 Dreamliner",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 197.3
  },
@@ -2139,7 +2139,7 @@
   "lengthFt": 206.1,
   "make": "Boeing",
   "model": "787-9 Dreamliner",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 197.3
  },
@@ -2147,7 +2147,7 @@
   "lengthFt": 224.1,
   "make": "Boeing",
   "model": "787-10 Dreamliner",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 197.3
  },
@@ -2289,7 +2289,7 @@
   "lengthFt": 35.3,
   "make": "Beechcraft",
   "model": "18",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga",
   "wingspanFt": 49.7
  },
@@ -2627,7 +2627,7 @@
   "lengthFt": 235.2,
   "make": "Boeing",
   "model": "747-400LCF Dreamlifter",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 213.0
  },
@@ -2945,14 +2945,14 @@
   "lengthFt": 97.8,
   "make": "Lockheed",
   "model": "EC-130 Aya",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 132.6
  },
  "C135": {
   "make": "Boeing",
   "model": "NC-135",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "C140": {
@@ -2995,7 +2995,7 @@
   "lengthFt": 106.3,
   "make": "Transall",
   "model": "C-160",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 131.2
  },
@@ -3011,7 +3011,7 @@
   "lengthFt": 174.0,
   "make": "Boeing",
   "model": "C-17 Globemaster 3",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 169.8
  },
@@ -3096,7 +3096,7 @@
  "C2": {
   "make": "Grumman",
   "model": "C-2 Greyhound",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil"
  },
  "C205": {
@@ -3206,13 +3206,13 @@
  "C27J": {
   "make": "Alenia Aermacchi",
   "model": "C-27J Spartan",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil"
  },
  "C295": {
   "make": "CASA",
   "model": "T-21",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil"
  },
  "C303": {
@@ -3239,7 +3239,7 @@
   "lengthFt": 112.8,
   "make": "Lockheed Martin",
   "model": "AC-130J Ghostrider",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 132.6
  },
@@ -4805,7 +4805,7 @@
   "lengthFt": 181.6,
   "make": "McDonnell Douglas",
   "model": "DC-10",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "wide",
   "wingspanFt": 165.3
  },
@@ -4819,7 +4819,7 @@
   "lengthFt": 64.7,
   "make": "Douglas",
   "model": "DC-3",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga",
   "wingspanFt": 95.2
  },
@@ -4862,14 +4862,14 @@
  "DC86": {
   "make": "Douglas",
   "model": "DC-8-60",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "DC87": {
   "lengthFt": 187.7,
   "make": "Douglas",
   "model": "DC-8-70",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide",
   "wingspanFt": 148.4
  },
@@ -4877,35 +4877,35 @@
   "lengthFt": 104.4,
   "make": "Douglas",
   "model": "DC-9-10",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "narrow",
   "wingspanFt": 89.4
  },
  "DC92": {
   "make": "Douglas",
   "model": "DC-9-20",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "narrow"
  },
  "DC93": {
   "lengthFt": 119.3,
   "make": "McDonnell Douglas",
   "model": "DC-9-30",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "narrow",
   "wingspanFt": 93.3
  },
  "DC94": {
   "make": "Douglas",
   "model": "DC-9-40",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "narrow"
  },
  "DC95": {
   "lengthFt": 133.6,
   "make": "Douglas",
   "model": "DC-9-50",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "narrow",
   "wingspanFt": 93.4
  },
@@ -5404,7 +5404,7 @@
  "E2": {
   "make": "Grumman",
   "model": "E-2 Daya",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil"
  },
  "E200": {
@@ -5482,13 +5482,13 @@
  "E3CF": {
   "make": "Boeing",
   "model": "E-3D Sentry",
-  "rarity": "epic",
+  "rarity": "legendary",
   "type": "mil"
  },
  "E3TF": {
   "make": "Boeing",
   "model": "E-3B Sentry",
-  "rarity": "epic",
+  "rarity": "legendary",
   "type": "mil"
  },
  "E400": {
@@ -5552,7 +5552,7 @@
  "E6": {
   "make": "Boeing",
   "model": "E-6 Mercury",
-  "rarity": "rare",
+  "rarity": "legendary",
   "type": "mil"
  },
  "E737": {
@@ -5580,7 +5580,7 @@
  "E767": {
   "make": "Boeing",
   "model": "E-767",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "EA40": {
@@ -5878,7 +5878,7 @@
  "EUFI": {
   "make": "Airbus",
   "model": "C-16",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "EUPA": {
@@ -6000,7 +6000,7 @@
  "F100": {
   "make": "Fokker",
   "model": "100",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "regional"
  },
  "F104": {
@@ -6012,7 +6012,7 @@
  "F117": {
   "make": "Lockheed",
   "model": "F-117 Night Hawk",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "F13": {
@@ -6024,14 +6024,14 @@
  "F14": {
   "make": "Grumman",
   "model": "F-14 Tomcat",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "F15": {
   "lengthFt": 63.8,
   "make": "McDonnell Douglas",
   "model": "F-15 Baz",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow",
   "wingspanFt": 42.8
  },
@@ -6045,7 +6045,7 @@
   "lengthFt": 49.4,
   "make": "General Dynamics",
   "model": "F-16 Netz",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow",
   "wingspanFt": 32.7
  },
@@ -6081,7 +6081,7 @@
   "lengthFt": 62.1,
   "make": "Lockheed Martin",
   "model": "F-22 Raptor",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow",
   "wingspanFt": 44.5
  },
@@ -6126,7 +6126,7 @@
  "F35": {
   "make": "Lockheed Martin",
   "model": "F-35A Lightning 2",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "F3F": {
@@ -6138,7 +6138,7 @@
  "F4": {
   "make": "IAI",
   "model": "F-4 Kurnass 2000",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "F402": {
@@ -6170,7 +6170,7 @@
  "F5": {
   "make": "Northrop",
   "model": "F-5 Tiger 2",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "F50": {
@@ -6206,7 +6206,7 @@
  "F70": {
   "make": "Fokker",
   "model": "70",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "regional"
  },
  "F8": {
@@ -7410,13 +7410,13 @@
  "H46": {
   "make": "Boeing Vertol",
   "model": "107",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "H47": {
   "make": "Boeing Vertol",
   "model": "114",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "H500": {
@@ -7428,7 +7428,7 @@
  "H53": {
   "make": "Sikorsky",
   "model": "S-65",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "H53S": {
@@ -7440,13 +7440,13 @@
  "H60": {
   "make": "Sikorsky",
   "model": "S-70",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "H64": {
   "make": "McDonnell Douglas",
   "model": "AH-64 Apache",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "HA2": {
@@ -7484,7 +7484,7 @@
  "HAR": {
   "make": "McDonnell Douglas",
   "model": "VA-1",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "HAW3": {
@@ -7880,27 +7880,27 @@
  "IL62": {
   "make": "Ilyushin",
   "model": "Il-62",
-  "rarity": "uncommon",
+  "rarity": "legendary",
   "type": "wide"
  },
  "IL76": {
   "lengthFt": 152.9,
   "make": "Ilyushin",
   "model": "Il-76",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 165.7
  },
  "IL86": {
   "make": "Ilyushin",
   "model": "Il-86",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "IL96": {
   "make": "Ilyushin",
   "model": "Il-96",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "wide"
  },
  "IMPU": {
@@ -8056,7 +8056,7 @@
  "J10": {
   "make": "Chengdu",
   "model": "F-10",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "J177": {
@@ -8074,7 +8074,7 @@
  "J20": {
   "make": "Chengdu",
   "model": "J-20",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "J3": {
@@ -8358,7 +8358,7 @@
  "JU52": {
   "make": "CASA",
   "model": "352L",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "JUN1": {
@@ -8412,14 +8412,14 @@
  "K35E": {
   "make": "Boeing",
   "model": "KC-135E Stratotanker",
-  "rarity": "uncommon",
-  "type": "wide"
+  "rarity": "epic",
+  "type": "mil"
  },
  "K35R": {
   "lengthFt": 136.3,
   "make": "Boeing",
   "model": "C-135FR Stratotanker",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 130.8
  },
@@ -8528,13 +8528,13 @@
  "KC2": {
   "make": "Kawasaki",
   "model": "C-2",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "KE3": {
   "make": "Boeing",
   "model": "KE-3",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "KEHA": {
@@ -8816,7 +8816,7 @@
  "L101": {
   "make": "Lockheed",
   "model": "L-1011 TriStar",
-  "rarity": "uncommon",
+  "rarity": "legendary",
   "type": "wide"
  },
  "L11": {
@@ -9064,7 +9064,7 @@
  "LANC": {
   "make": "Avro",
   "model": "683 Lancaster",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "ga"
  },
  "LAR1": {
@@ -9847,7 +9847,7 @@
   "lengthFt": 202.2,
   "make": "Boeing",
   "model": "MD-11",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "wide",
   "wingspanFt": 170.5
  },
@@ -9879,7 +9879,7 @@
   "lengthFt": 147.8,
   "make": "Boeing",
   "model": "MD-81",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "narrow",
   "wingspanFt": 107.9
  },
@@ -9887,7 +9887,7 @@
   "lengthFt": 147.8,
   "make": "Boeing",
   "model": "MD-82",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "narrow",
   "wingspanFt": 107.9
  },
@@ -9895,7 +9895,7 @@
   "lengthFt": 147.8,
   "make": "Boeing",
   "model": "MD-83",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "narrow",
   "wingspanFt": 107.9
  },
@@ -9903,7 +9903,7 @@
   "lengthFt": 130.4,
   "make": "Boeing",
   "model": "MD-87",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "narrow",
   "wingspanFt": 107.9
  },
@@ -9911,7 +9911,7 @@
   "lengthFt": 147.8,
   "make": "Boeing",
   "model": "MD-88",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "narrow",
   "wingspanFt": 107.9
  },
@@ -9919,7 +9919,7 @@
   "lengthFt": 152.6,
   "make": "Boeing",
   "model": "MD-90",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "narrow",
   "wingspanFt": 107.9
  },
@@ -10016,13 +10016,13 @@
  "MG29": {
   "make": "Mikoyan",
   "model": "MiG-29",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "MG31": {
   "make": "Mapo",
   "model": "MiG-31",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "MG44": {
@@ -10572,7 +10572,7 @@
  "MYA4": {
   "make": "Myasishchev",
   "model": "3M",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "MYS4": {
@@ -10724,7 +10724,7 @@
  "NH90": {
   "make": "Nhi",
   "model": "HT-29",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "NI28": {
@@ -11091,7 +11091,7 @@
   "lengthFt": 116.0,
   "make": "Lockheed",
   "model": "P-3 Orion",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 99.7
  },
@@ -11165,7 +11165,7 @@
   "lengthFt": 32.3,
   "make": "North American",
   "model": "A-36 Mustang",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga",
   "wingspanFt": 37.0
  },
@@ -11237,7 +11237,7 @@
   "lengthFt": 129.5,
   "make": "Boeing",
   "model": "P-8 Poseidon",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil",
   "wingspanFt": 123.6
  },
@@ -11514,7 +11514,7 @@
  "PC21": {
   "make": "Pilatus",
   "model": "E-27",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "ga"
  },
  "PC24": {
@@ -12166,7 +12166,7 @@
  "R135": {
   "make": "Boeing",
   "model": "RC-135",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "R185": {
@@ -12422,7 +12422,7 @@
  "RFAL": {
   "make": "Dassault",
   "model": "Rafale",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "RGNT": {
@@ -12447,7 +12447,7 @@
   "lengthFt": 101.7,
   "make": "Avro",
   "model": "RJ-100 Avroliner",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "regional",
   "wingspanFt": 86.4
  },
@@ -12461,7 +12461,7 @@
   "lengthFt": 93.7,
   "make": "Avro",
   "model": "RJ-85 Avroliner",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "regional",
   "wingspanFt": 86.4
  },
@@ -13768,7 +13768,7 @@
  "SLCH": {
   "make": "Scaled",
   "model": "351 Stratolaunch",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "SLG2": {
@@ -13990,7 +13990,7 @@
  "SPIT": {
   "make": "Supermarine",
   "model": "Seafire",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "ga"
  },
  "SPKR": {
@@ -14294,7 +14294,7 @@
  "SU25": {
   "make": "Sukhoi",
   "model": "Su-25",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "SU26": {
@@ -14306,7 +14306,7 @@
  "SU27": {
   "make": "Sukhoi",
   "model": "J-11",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "SU29": {
@@ -14330,7 +14330,7 @@
  "SU57": {
   "make": "Sukhoi",
   "model": "T-50",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "SU7": {
@@ -14504,13 +14504,13 @@
  "T154": {
   "make": "Tupolev",
   "model": "Tu-154",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "T160": {
   "make": "Tupolev",
   "model": "Tu-160",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "T18": {
@@ -14625,7 +14625,7 @@
   "lengthFt": 46.3,
   "make": "Northrop",
   "model": "T-38 Talon",
-  "rarity": "common",
+  "rarity": "epic",
   "type": "ga",
   "wingspanFt": 25.3
  },
@@ -14687,7 +14687,7 @@
   "lengthFt": 29.0,
   "make": "North American",
   "model": "BC-1",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga",
   "wingspanFt": 42.0
  },
@@ -15032,7 +15032,7 @@
  "TOR": {
   "make": "Aeritalia",
   "model": "Tornado",
-  "rarity": "common",
+  "rarity": "legendary",
   "type": "narrow"
  },
  "TOUR": {
@@ -15188,7 +15188,7 @@
  "TU95": {
   "make": "Tupolev",
   "model": "Tu-20",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "TUCA": {
@@ -15314,7 +15314,7 @@
  "UH1": {
   "make": "Bell",
   "model": "204",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga"
  },
  "UH12": {
@@ -15441,7 +15441,7 @@
   "lengthFt": 63.0,
   "make": "Bell-Boeing",
   "model": "901 Osprey",
-  "rarity": "uncommon",
+  "rarity": "epic",
   "type": "ga",
   "wingspanFt": 45.8
  },
@@ -15730,7 +15730,7 @@
  "W135": {
   "make": "Boeing",
   "model": "WC-135R",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "W201": {
@@ -16200,7 +16200,7 @@
  "Y20": {
   "make": "Xian",
   "model": "Y-20 Kunpeng",
-  "rarity": "uncommon",
+  "rarity": "common",
   "type": "wide"
  },
  "YA1": {

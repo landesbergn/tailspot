@@ -81,6 +81,22 @@ final class Catch {
     /// Aircraft ground speed (m/s) at the catch moment. Same rules as
     /// `altitudeMeters`.
     var velocityMps: Double?
+    /// ICAO airport code (4-letter, e.g. "KSFO") of the flight's ORIGIN at the
+    /// catch moment, when the live feed carried a route. A frozen-at-catch
+    /// airframe/flight fact like altitude/velocity — NEVER backfilled (the route
+    /// of a past flight is unrecoverable). nil for the many routeless catches
+    /// (GA/military) and for rows written before this field existed. Added
+    /// 2026-06 — optional + nil-default for SwiftData lightweight migration.
+    var originIcao: String?
+    /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION at
+    /// the catch moment. Same source/semantics/migration as `originIcao`.
+    var destIcao: String?
+    /// Human-readable origin airport / city (e.g. "Tokyo Narita"), when the
+    /// route source provided it. Same optional/nil-default lightweight-migration
+    /// lifecycle as `originIcao`; shown under the ICAO code in the reveal.
+    var originName: String?
+    /// Human-readable destination airport / city (e.g. "San Francisco").
+    var destName: String?
     /// Reverse-geocoded observer place, e.g. "Berkeley, CA". Filled
     /// post-save at catch time (never blocks the catch) or by the
     /// detail-view backfill.
@@ -123,6 +139,10 @@ final class Catch {
         category: String? = nil,
         altitudeMeters: Double? = nil,
         velocityMps: Double? = nil,
+        originIcao: String? = nil,
+        destIcao: String? = nil,
+        originName: String? = nil,
+        destName: String? = nil,
         placeName: String? = nil,
         country: String? = nil,
         rarity: Rarity? = nil,
@@ -143,6 +163,10 @@ final class Catch {
         self.category = category
         self.altitudeMeters = altitudeMeters
         self.velocityMps = velocityMps
+        self.originIcao = originIcao
+        self.destIcao = destIcao
+        self.originName = originName
+        self.destName = destName
         self.placeName = placeName
         self.country = country
         // If the caller didn't explicitly classify, run the classifier
@@ -159,21 +183,25 @@ final class Catch {
     }
 
     /// The rarity tier for this airframe. Resolved live from the
-    /// typecode (authoritative, like `resolvedType`); falls back to the
-    /// string classifier for pre-typecode rows.
+    /// typecode (authoritative, like `resolvedType`); when there is NO
+    /// typecode it resolves to a single conservative default (`.common`).
+    ///
+    /// SINGLE-SOURCE RULE: rarity has exactly ONE source — the per-typecode
+    /// `rarity` in AircraftTypes.json (`AircraftNaming.rarity(forTypecode:)`).
+    /// The string classifier no longer supplies a rarity here: its curated
+    /// ladder diverged from the activity table, so the no-typecode path is a
+    /// flat `.common` rather than a second tier ladder. (The classifier still
+    /// provides the no-typecode TYPE — see `resolvedType`; only its rarity
+    /// output stopped being a rarity source.)
     ///
     /// NOTE: unlike `resolvedType`, this does NOT read the stored
-    /// `rarity` snapshot. Rarity now floats with the activity table so
+    /// `rarity` snapshot. Rarity floats with the activity table so
     /// re-tiering corrects prior catches on read (spec 2026-06-08) —
     /// the deliberate exception to the frozen-moment rule. The stored
     /// `rarity` string is kept only as an as-caught audit value.
     var resolvedRarity: Rarity {
         if let r = AircraftNaming.rarity(forTypecode: typecode) { return r }
-        return AircraftClassifier.classify(
-            manufacturer: manufacturer,
-            model: model,
-            operatorName: operatorName
-        ).rarity
+        return .common
     }
 
     /// The aircraft type for this airframe.

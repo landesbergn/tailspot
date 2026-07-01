@@ -1,0 +1,1 @@
+ALTER TABLE "catches" ADD COLUMN "first_of_type" boolean DEFAULT false NOT NULL;

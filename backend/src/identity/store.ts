@@ -13,7 +13,7 @@
  */
 
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { CURRENT_SCORING_VERSION, pointsForRarity } from "../catches/points.js";
+import { CURRENT_SCORING_VERSION, firstOfTypeBonus, pointsForRarity } from "../catches/points.js";
 import type { Database } from "../db/client.js";
 import { catches, devices, registry, typecodes } from "../db/schema.js";
 
@@ -112,6 +112,12 @@ export interface ScoredCatch {
   rarity: string | null;
   points: number;
   scoringVersion: number;
+  /**
+   * Whether the first-of-type bonus is baked into `points` (echoes the flag
+   * handed to the scorer). Persisted on the row and surfaced in the catch
+   * response so the iOS client can show the bonus.
+   */
+  firstOfType: boolean;
 }
 
 /** The fields the route hands the store to persist a new catch. */
@@ -125,6 +131,8 @@ export interface NewCatch {
   points: number;
   /** The scoring regime that produced points/rarity (CURRENT_SCORING_VERSION at upload). */
   scoringVersion: number;
+  /** Whether this is the device's first-ever catch of its typecode (drives the +50% bonus). */
+  firstOfType: boolean;
   caughtAt: Date;
   observerLat: number;
   observerLon: number;
@@ -145,6 +153,8 @@ export interface StoredCatchResult {
   points: number;
   rarity: string | null;
   typecode: string | null;
+  /** Whether the first-of-type bonus was awarded (read back on a replay too). */
+  firstOfType: boolean;
 }
 
 /** One leaderboard row. */
@@ -174,8 +184,21 @@ export interface CatchStore {
    * re-score job call THIS (never `resolveRarity` + `pointsForRarity` inline),
    * so scoring lives in exactly one place and a re-score reproduces an upload's
    * result identically.
+   *
+   * `firstOfType` is supplied by the caller — the scorer NEVER queries history
+   * itself. When true, the +50%-of-base first-of-type bonus is added on top of
+   * the resolved base. Upload computes the flag with `isFirstOfType`; re-score
+   * reads the frozen flag off the row.
    */
-  scoreCatch(icao24: string): Promise<ScoredCatch>;
+  scoreCatch(icao24: string, opts?: { firstOfType?: boolean }): Promise<ScoredCatch>;
+  /**
+   * Whether `deviceId` has NO existing catch of `typecode` — i.e. a new catch of
+   * it would be the device's first-of-type. A null typecode (unresolved
+   * airframe) is never first-of-type and returns false without a query. This is
+   * the un-spoofable server-side determination the upload path feeds into
+   * `scoreCatch`; it is NOT used by re-score (which reads the stored flag).
+   */
+  isFirstOfType(deviceId: string, typecode: string | null): Promise<boolean>;
   /**
    * Insert a catch, or — if THIS DEVICE already ingested `catchUuid` — return
    * the ORIGINAL stored result (idempotent replay). The boolean says which
@@ -214,14 +237,29 @@ export class DrizzleCatchStore implements CatchStore {
     return { typecode, rarity: tcRows[0]?.rarity ?? null };
   }
 
-  async scoreCatch(icao24: string): Promise<ScoredCatch> {
+  async scoreCatch(icao24: string, opts: { firstOfType?: boolean } = {}): Promise<ScoredCatch> {
     const { typecode, rarity } = await this.resolveRarity(icao24);
+    const firstOfType = opts.firstOfType ?? false;
+    const base = pointsForRarity(rarity);
+    const points = base + (firstOfType ? firstOfTypeBonus(base) : 0);
     return {
       typecode,
       rarity,
-      points: pointsForRarity(rarity),
+      points,
       scoringVersion: CURRENT_SCORING_VERSION,
+      firstOfType,
     };
+  }
+
+  async isFirstOfType(deviceId: string, typecode: string | null): Promise<boolean> {
+    // An unresolved airframe has no type identity — it can't be "first of type".
+    if (typecode === null) return false;
+    const existing = await this.db
+      .select({ id: catches.id })
+      .from(catches)
+      .where(and(eq(catches.deviceId, deviceId), eq(catches.typecode, typecode)))
+      .limit(1);
+    return existing.length === 0;
   }
 
   async insertOrGet(c: NewCatch): Promise<{ result: StoredCatchResult; duplicate: boolean }> {
@@ -240,6 +278,7 @@ export class DrizzleCatchStore implements CatchStore {
         rarity: c.rarity,
         points: c.points,
         scoringVersion: c.scoringVersion,
+        firstOfType: c.firstOfType,
         caughtAt: c.caughtAt,
         observerLat: c.observerLat,
         observerLon: c.observerLon,
@@ -258,12 +297,19 @@ export class DrizzleCatchStore implements CatchStore {
         points: catches.points,
         rarity: catches.rarity,
         typecode: catches.typecode,
+        firstOfType: catches.firstOfType,
       });
 
     if (inserted.length > 0) {
       const row = inserted[0];
       return {
-        result: { catchId: row.id, points: row.points, rarity: row.rarity, typecode: row.typecode },
+        result: {
+          catchId: row.id,
+          points: row.points,
+          rarity: row.rarity,
+          typecode: row.typecode,
+          firstOfType: row.firstOfType,
+        },
         duplicate: false,
       };
     }
@@ -276,13 +322,20 @@ export class DrizzleCatchStore implements CatchStore {
         points: catches.points,
         rarity: catches.rarity,
         typecode: catches.typecode,
+        firstOfType: catches.firstOfType,
       })
       .from(catches)
       .where(and(eq(catches.deviceId, c.deviceId), eq(catches.catchUuid, c.catchUuid)))
       .limit(1);
     const row = existing[0];
     return {
-      result: { catchId: row.id, points: row.points, rarity: row.rarity, typecode: row.typecode },
+      result: {
+        catchId: row.id,
+        points: row.points,
+        rarity: row.rarity,
+        typecode: row.typecode,
+        firstOfType: row.firstOfType,
+      },
       duplicate: true,
     };
   }

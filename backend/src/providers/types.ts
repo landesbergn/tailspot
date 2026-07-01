@@ -11,6 +11,19 @@
  * batch. Lossy-but-resilient beats all-or-nothing for live air traffic.
  */
 
+/**
+ * Origin → destination for a flight, as airport ICAO codes (e.g. "KSFO",
+ * "EGLL"). Resolved from the callsign via adsb.lol's route DB; either side may
+ * be absent if only one end is known. This is purely descriptive metadata —
+ * it never participates in the geometric identify math.
+ */
+export interface AircraftRoute {
+  /** Origin airport ICAO code (4-letter, e.g. "KSFO"), when known. */
+  originIcao?: string;
+  /** Destination airport ICAO code (4-letter, e.g. "EGLL"), when known. */
+  destIcao?: string;
+}
+
 /** A geographic bounding box in decimal degrees. */
 export interface Bbox {
   /** Minimum latitude (south edge). */
@@ -67,6 +80,15 @@ export interface NormalizedAircraft {
    * client uses it to tag rotorcraft instead of guessing from brand names.
    */
   category?: string;
+  /**
+   * Origin → destination airports for this flight's callsign, when adsb.lol's
+   * route DB resolves it (see `AdsbLolRouteService`). Optional, same
+   * omit-when-absent semantics as `typecode`: the JSON key is dropped entirely
+   * when no route is known, so old `Decodable` clients (and routeless flights)
+   * are unaffected — additive and backward-compatible. NOT set by the position
+   * normalizer; attached at serve time from the route cache.
+   */
+  route?: AircraftRoute;
 }
 
 /**

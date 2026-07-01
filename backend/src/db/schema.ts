@@ -25,6 +25,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   doublePrecision,
   index,
   integer,
@@ -169,6 +170,20 @@ export const catches = pgTable(
      * still-null `rarity` instead. Existing rows default to 1 (the launch regime).
      */
     scoringVersion: integer("scoring_version").notNull().default(1),
+    /**
+     * Whether this was the OWNING DEVICE's first-ever catch of its resolved
+     * typecode — earns a +50%-of-base bonus (applied by the ONE canonical
+     * scorer). Computed SERVER-SIDE at upload (the ingest path checks "does this
+     * device already hold a catch of this typecode?" before inserting), so it's
+     * un-spoofable. FROZEN once written: a later re-score re-derives the base
+     * (so the bonus floats with a re-tiering) but READS this flag rather than
+     * recomputing it from history — deleting an earlier catch must NOT
+     * retroactively promote a later one to "first". Existing rows default false:
+     * the bonus is going-forward only (no historical first-of-type). A null
+     * typecode (unresolved airframe) is never first-of-type — there's no type
+     * identity to be first of.
+     */
+    firstOfType: boolean("first_of_type").notNull().default(false),
     /** When the client says it was caught. */
     caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
     observerLat: doublePrecision("observer_lat").notNull(),

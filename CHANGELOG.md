@@ -5,6 +5,43 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-01 — Reveal field-polish + indoor-gate tuning — branch `feat/collection-economy-reveal`
+
+On-device review of the reveal drove a polish pass (verified by rendering the real view to PNG via a new `RevealSnapshotTests` harness, not by eyeballing a green build):
+
+- **Legibility:** every metric now scales off the card width (~1.2× on a phone) — the prototype's 300pt-card literals read small/cramped on-device; width cap 360 → 420, section spacing opened up.
+- **Long names wrap** across split-flap lines at a legible cell size instead of shrinking to dust (settle flows continuously across the lines).
+- **Data block restructure** (per Noah's mock): ALT/SPD as a two-column row with a tinted unit suffix, then a full-width ROUTE row — big ICAO codes, tinted arrow, human-readable city names underneath. No-route catches show DIST on its own row (fixes an ALT/SPD/DIST column collision); one-sided routes show just the known endpoint (no dangling `→ —`). `Catch` gains additive `originName`/`destName`; `CardPlane` carries the four route fields.
+- **Tap routing:** the dismiss gesture was on the container enclosing the CTA and swallowed "View in Hangar" — reworked to a layered hit-test (card taps fall through to a dismiss catcher; the button captures its own tap).
+- **CTA overlap:** a tall (wrapped-name) card's bottom ran through the "tap to continue / View in Hangar" strip. Card + CTA now share one VStack so the CTA is always a reserved strip below the card — can't overlap at any card height.
+
+**Indoor "look outside" gate — tuned back** (field report: over-eager): the ambient banner now needs ~5 s sustained not-sky (was 3), and `SkyCheck.warmThreshold` 0.04 → 0.07 so mildly-warm outdoor scenes (horizon, warm buildings, hazy/golden sky) stop false-tripping `.notSky` while clear interiors (~0.13+) still block. Only makes blocking rarer. Full corpus re-validation (`tools/authenticity-gate`) is a follow-up.
+
+`TailspotTests` green throughout.
+
+## 2026-06-30 — Catch-reveal shipped: split-flap + photo + score ledger (Bet B #7, Phase 2 core) — branch `feat/collection-economy-reveal`
+
+The agreed Decision-2 reveal replaces the v0 holo-flip card for single catches. `CatchRevealView` renders the design we mocked in `RevealV3` / `docs/plans/2026-06-29-001`: a **photo hero** (the real catch photo, else a stylized sky placeholder), the make/model in a **split-flap** display that settles char-by-char, a tier line, an **ALT · SPD · ROUTE** data row, and a **score ledger that counts up** from the rarity base — adding a gold **FIRST OF TYPE** line when it's a new type for you. Every beat is a function of one normalized clock `t` through `ss()` smoothsteps (ported verbatim from the prototype); `TimelineView(.animation)` drives `t` live instead of hand-rendered frames. **Cadence + intensity scale by tier** — common settles quickly and quietly (~1.7 s); legendary takes ~3.2 s with a tinted radial bloom.
+
+- **`CatchRevealView.swift`** (new) — the reveal; tap to skip-then-dismiss, "View in Hangar" CTA once settled, success haptic on settle.
+- **`CardPlane`** gains `routeText` + `isFirstOfType` (display-only — the backend stays authoritative for the awarded bonus); `cardPlane(from:)` formats the route from the frozen origin/dest ICAO and derives first-of-type from the Hangar.
+- **Debug `✦ Catch`** button (wrench panel, DEBUG-only) fabricates a non-persisted catch per tier and fires the reveal — cycles C-17 (epic) → Cessna 172 (common) → A220 (uncommon) → 747-400 (rare) → B-52 (legendary), so the reveal/economy is testable without a real plane. Doesn't touch the Hangar.
+- `MultiCatchReveal` (N≥2) unchanged for now; the old `CardReveal` survives only behind its own previews.
+
+The **route-guess +10% bonus round** (the pre-reveal "where's it going?" step, wishlist #9) is the remaining Phase 2 piece — the ledger already reserves its line. `TailspotTests` green; deployed to device.
+
+## 2026-06-29 — Collection economy re-balance + route data (Bet B #4/#6/#7, Phase 1) — branch `feat/collection-economy-reveal`
+
+Phase 1 of the Collection-economy redesign (design walk-through in `docs/plans/2026-06-28-002…004`; plan `2026-06-29-002`). 7 implementation units, all green on iOS + backend, committed. **Decision 3 — the trophy/medal rework + the full guess-the-type mechanic — is deferred.** The leaderboard-moving prod re-score is gated on Noah.
+
+- **Re-tier (U1 + military pass):** rewrote `tools/generate-aircraft-types.py` to a 2025-26 fleet-grounded tier list — **all military is now epic-or-legendary** (transports/tankers/patrol/trainers + helis incl. Apache/Black Hawk/Osprey at epic; combat jets — fighters, A-10, MiG/Su/Rafale/Typhoon/Tornado — plus bombers, AWACS/command, recon & icons at legendary; nothing military below epic), vanishing airliners + rare narrowbodies (A318·737-200 epic, 727 legendary, A340·717·MD-80·Fokker·BAe146 rare), a warbird/vintage layer, workhorse widebodies → common, A380 → rare, plus pin corrections (727/717/MD-80/90/MD-11/E-4/P-51). Regenerated `AircraftTypes.json` (rarity reassignments only — no name/dim drift).
+- **Re-balance (U2):** points `10/25/100/500/2000` → **`10/20/50/100/500`** (flatter — Common→Epic 10× not 50×; Legendary still towers). The generator writes `scoring-points.json` as the single source; iOS `Rarity.basePoints` and backend `POINTS` are each pinned to it by a parity test (`ScoringPointsParityTests` + `points.parity.test.ts`), so the profile-vs-leaderboard drift class can't recur. `CURRENT_SCORING_VERSION` → 2.
+- **Consolidation (U3, U4):** the no-typecode rarity fallback resolves to a flat `.common` — the string classifier no longer carries a divergent rarity ladder (TYPE only); `CardSetEntry.rarity` derives from the table for typecoded entries (drift-proof).
+- **First-of-type (U5):** a device's first-ever catch of a typecode earns +50% of base, server-authoritative (frozen `first_of_type` flag, migration `0005`), echoed as `firstOfType` in the catch response.
+- **Route (U6, U7):** adsb.lol route via the `routeset` endpoint → additive `route?:{originIcao,destIcao}` on `/v1/aircraft` (resilient, non-blocking, cached); iOS decodes it and freezes `originIcao`/`destIcao` on the `Catch`.
+
+**Gated on Noah, in order:** apply migrations `0004`+`0005` to prod → re-ingest the regenerated `AircraftTypes.json` into `typecodes` (so prod tiers match) → deploy backend to Fly → `npm run rescore -- --dry-run` (review the leaderboard delta) → `rescore`. iOS reaches testers via the next TestFlight build. Phase 2 (the reveal + the route-guess bonus round) is next.
+
 ## 2026-06-27 — Fix Profile panel open/close freeze — branch `fix/profile-open-close-freeze`
 
 The Profile sheet froze for a beat on both open and close ("frozen, then jumps").

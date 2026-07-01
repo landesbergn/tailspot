@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collection Economy &amp; Reveal — Plan</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#121a22; --panel2:#0e151c; --raise:#16202b;
+    --ink:#e7eef5; --muted:#8da0b2; --faint:#5f7284; --line:#21303f;
+    --cyan:#2fd4e6; --cyan-dim:#1c7d89; --rare:#3eb6f6; --gold:#fbbf24; --good:#52d486; --bad:#f1737d;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin-inline:auto;padding:32px 22px 90px}
+  a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
+  h1{font-size:28px;line-height:1.15;margin:0 0 6px;letter-spacing:-.4px}
+  h2{font-size:20px;margin:8px 0 2px;letter-spacing:-.2px}
+  h3{font-size:15.5px;margin:20px 0 6px;color:var(--ink)}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-dim)}
+  p{margin:8px 0;max-width:80ch;color:#d7e0e8}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  code{font-family:var(--mono);font-size:.85em;background:#0c141c;border:1px solid var(--line);padding:1px 5px;border-radius:5px;color:#cfe7ee}
+  hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+  section{border-top:1px solid var(--line);padding-top:8px;margin-top:30px}
+  .lede{font-size:16px;color:#c3d0db;max-width:82ch}
+  dl.meta{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;margin:16px 0 4px;font-size:12.5px}
+  dl.meta dt{font:600 11px/1.5 var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+  dl.meta dd{margin:0;font-family:var(--mono);color:var(--muted)}
+  dl.meta dd b{color:var(--good)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 6px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  nav.toc a{font:600 12px/1 var(--mono);color:var(--muted);padding:5px 9px;border-radius:7px}
+  nav.toc a:hover{background:var(--raise);color:var(--cyan);text-decoration:none}
+  .callout{background:#0e1820;border:1px solid #1d3a44;border-radius:12px;padding:14px 16px;margin:16px 0}
+  .callout.warn{background:#1c1812;border-color:#4a3b18}
+  .callout.gate{background:#1d1113;border-color:#5a2a2e}
+  .callout .k{font:600 11px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--cyan)}
+  .callout.warn .k{color:var(--gold)} .callout.gate .k{color:var(--bad)}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .rid{font-family:var(--mono);font-weight:700;color:var(--cyan);white-space:nowrap}
+  .grp{font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--gold);padding-top:14px}
+  ul.tight{margin:6px 0;padding-left:18px} ul.tight li{margin:4px 0;color:#d7e0e8}
+  article.unit{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 17px;margin:14px 0}
+  article.unit h3{margin:0 0 8px;font-size:15.5px;display:flex;gap:9px;align-items:baseline;flex-wrap:wrap}
+  .uid{font:700 12px/1 var(--mono);color:#06090d;background:var(--cyan);padding:4px 7px;border-radius:5px}
+  .phase{font:600 10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--gold);border:1px solid #4a3b18;padding:3px 7px;border-radius:5px}
+  dl.strip{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:6px 0;font-size:13px}
+  dl.strip dt{font:600 10px/1.5 var(--mono);color:var(--faint);text-transform:uppercase}
+  dl.strip dd{margin:0;color:#d7e0e8}
+  dl.strip dd code{font-size:.92em}
+  details{margin:8px 0 0;border-top:1px solid var(--line);padding-top:8px}
+  summary{font:600 12px/1 var(--mono);color:var(--cyan);cursor:pointer;letter-spacing:.04em}
+  details p,details ul{font-size:13px;margin:8px 0}
+  .kt{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin:10px 0}
+  .kt h4{margin:0 0 5px;font-size:14px}
+  .kt .id{font:700 11px/1 var(--mono);color:var(--cyan);margin-right:6px}
+  figure{margin:16px 0} figure svg{display:block;width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:13px}
+  figcaption{font-size:12px;color:var(--faint);margin-top:6px}
+  .idx td{font-size:12.5px} .idx .rid{font-size:12px}
+  footer{margin-top:54px;padding-top:16px;border-top:1px solid var(--line);font:500 12px/1.5 var(--mono);color:var(--faint)}
+  .pill{font:600 10px/1 var(--mono);padding:3px 7px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+  .pill.noah{color:var(--bad);border-color:#5a2a2e}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Tailspot · Bet B · Implementation Plan</div>
+    <h1>Collection Economy &amp; Reveal — Plan</h1>
+    <p class="lede">Re-balance the points/rarity economy onto a research-grounded, internally-consistent, single-source model,
+    and ship the new catch reveal — minimal + split-flap, with the photo, live data, a score ledger, and the route-guess bonus.
+    Decisions 1 &amp; 2 are locked; this is the executable plan. <strong>Decision 3 (trophy/medal rework + the full
+    guess-the-type mechanic) is deferred.</strong></p>
+    <dl class="meta">
+      <dt>type</dt><dd>feat</dd>
+      <dt>date</dt><dd>2026-06-29</dd>
+      <dt>artifact</dt><dd>ce-unified-plan/v1 · readiness <b>implementation-ready</b> · execution code</dd>
+      <dt>source</dt><dd>ce-plan-bootstrap (design locked in the 2026-06-28/29 walk-through docs)</dd>
+    </dl>
+    <nav class="toc">
+      <a href="#goal">Goal Capsule</a>
+      <a href="#product">Product Contract</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#planning">Planning Contract</a>
+      <a href="#design">Design</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#verify">Verification</a>
+      <a href="#done">Definition of Done</a>
+    </nav>
+  </header>
+
+  <!-- ───────── GOAL CAPSULE ───────── -->
+  <section id="goal">
+    <h2>Goal Capsule</h2>
+    <p><b>Objective.</b> Make the Collection economy clear, accurate, consistent, and scalable, and make the catch land as a
+    moment worth returning for — without changing the catch engine.</p>
+    <p><b>Authority.</b> The locked design docs are the source of truth for <em>what</em>:
+    <code>docs/plans/2026-06-28-002…004</code> (economy + research-grounded tiers), <code>2026-06-28-005</code> +
+    <code>2026-06-29-001</code> (reveal + route-guess). Then <code>STRATEGY.md</code> / <code>PLAN.md §9</code> / repo
+    conventions in <code>CLAUDE.md</code>. User preference overrides docs on conflict.</p>
+    <p><b>Execution profile.</b> Branch per phase → field-test with <code>bin/deploy</code> → PR → squash-merge on green CI.
+    Autonomous commit/deploy/merge-on-green is fine.</p>
+    <div class="callout gate">
+      <div class="k">Stop conditions — Noah-gated, do not self-execute</div>
+      <ul class="tight" style="margin-top:6px">
+        <li>Applying the prod DB migration + running the <strong>re-score on prod</strong> — only after a dry-run delta Noah reviews (it moves the live leaderboard).</li>
+        <li>Deploying the <strong>backend to Fly</strong> (<code>fly deploy</code>).</li>
+        <li>Cutting the <strong>TestFlight build</strong>.</li>
+      </ul>
+      <p class="muted" style="margin-bottom:0">Surface these with the dry-run/PR ready; wait for an explicit go-ahead.</p>
+    </div>
+  </section>
+
+  <!-- ───────── PRODUCT CONTRACT ───────── -->
+  <section id="product">
+    <h2>Product Contract</h2>
+    <h3>Summary</h3>
+    <p>Re-tier every aircraft to the research-grounded list and re-balance points to a flat 5-tier curve
+    (<code>10/20/50/100/500</code>) with a first-of-type bonus; collapse the three rarity resolvers and two point ladders into
+    one tested source; re-score existing catches. Pass adsb.lol route data through to the catch. Replace the reveal with the
+    minimal + split-flap card carrying the photo, altitude/speed/route, and a score ledger, plus an occasional route-guess
+    bonus round.</p>
+
+    <h3>Problem Frame</h3>
+    <p>Today the economy is opaque and inconsistent: flat-per-tier points are arbitrary; the rarity→points ladder is
+    hand-duplicated in iOS and the backend with no shared test; a third string-classifier ladder and hand-set
+    <code>Sets.swift</code> rarities can drift; and tier assignment is coarse (every widebody “uncommon”, all military
+    “rare”, warbirds and vanishing airliners lumped into “common”). The reveal is a flat card that doesn’t make a rare catch
+    feel rare, and the catch carries no route. The result understates real catches (the 940→2755 leaderboard bug) and leaves
+    the collection loop without a payoff moment.</p>
+
+    <h3 id="requirements">Requirements</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Requirement</th></tr></thead>
+      <tbody>
+        <tr><td colspan="2" class="grp">Economy &amp; tiering</td></tr>
+        <tr><td class="rid" id="r1">R1</td><td>Tiers are curated in one source (the generator → <code>AircraftTypes.json</code>) and re-tiered to the research-grounded list: military split (transport rare / strategic epic / icons legendary), vanishing airliners + rare narrowbodies (A318·737-200 epic, 727 legendary, A340·717·MD-80·Fokker·BAe146 rare), warbird/vintage layer (P-51 rare…), workhorse widebodies → common, A380 → rare, plus the pin corrections (727·717·MD-80/90·MD-11·E-4·P-51).</td></tr>
+        <tr><td class="rid" id="r2">R2</td><td>Five tiers with flat points <code>Common 10 · Uncommon 20 · Rare 50 · Epic 100 · Legendary 500</code>.</td></tr>
+        <tr><td class="rid" id="r3">R3</td><td>First-of-type bonus: <code>+50%</code> of base on the device’s first-ever catch of a typecode.</td></tr>
+        <tr><td class="rid" id="r4">R4</td><td>Route-guess bonus: <code>+10%</code> of the catch’s points on a correct far-endpoint guess.</td></tr>
+        <tr><td colspan="2" class="grp">Scoring consistency — one path</td></tr>
+        <tr><td class="rid" id="r5">R5</td><td>Tier and point values resolve through one source shared by app and backend; a test fails if the two disagree.</td></tr>
+        <tr><td class="rid" id="r6">R6</td><td>The no-typecode string-classifier fallback no longer carries a divergent tier ladder.</td></tr>
+        <tr><td class="rid" id="r7">R7</td><td><code>Sets.swift</code> rarities are consistent with the model — no nil-typecode divergence.</td></tr>
+        <tr><td class="rid" id="r8">R8</td><td>Existing catches re-score to the new regime via the versioned job; the leaderboard reflects it after a reviewed dry-run.</td></tr>
+        <tr><td colspan="2" class="grp">Route data</td></tr>
+        <tr><td class="rid" id="r9">R9</td><td>When adsb.lol has a route, origin→destination flows backend → iOS and is stored on the Catch (additive); absent route degrades gracefully (no line, no guess).</td></tr>
+        <tr><td colspan="2" class="grp">The reveal</td></tr>
+        <tr><td class="rid" id="r10">R10</td><td>The reveal presents the captured photo, make/model (split-flap), tier, altitude·speed·route, and a score ledger (base + bonuses → total), with intensity scaling by tier.</td></tr>
+        <tr><td class="rid" id="r11">R11</td><td>Per-catch points (incl. bonuses) show on the reveal/card/detail; base re-derives live (re-tier on read), bonuses are frozen on the Catch.</td></tr>
+        <tr><td colspan="2" class="grp">Route-guess bonus round</td></tr>
+        <tr><td class="rid" id="r12">R12</td><td>Every ~3–5 catches (randomized) and only when a route is known, a pre-reveal step asks for the endpoint farther from the observer — 4 airport options (real + same-region decoys), exact-airport correctness, route hidden until reveal, skippable, <code>+10%</code> on correct.</td></tr>
+        <tr><td colspan="2" class="grp">Rollout</td></tr>
+        <tr><td class="rid" id="r13">R13</td><td><code>scoring_version</code> bumped; prod migration + re-score and the Fly deploy and the TestFlight build are gated on Noah’s explicit go-ahead after a reviewed dry-run.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Acceptance Examples</h3>
+    <ul class="tight">
+      <li><b>AE1 (re-tier).</b> A caught <code>B744</code> resolves to <span class="rid">rare</span> (50) on both app and backend; a <code>B38M</code> to <span class="rid">common</span> (10); an <code>A388</code> to <span class="rid">rare</span>; a <code>B721</code> to <span class="rid">legendary</span>.</li>
+      <li><b>AE2 (first-of-type).</b> The device’s first <code>B744</code> ever scores <code>50 + 25 = 75</code>; a later <code>B744</code> scores <code>50</code>.</li>
+      <li><b>AE3 (guess).</b> On a routed catch in a guess round, picking the correct far airport adds <code>round(points × 0.10)</code>; a wrong pick or skip adds nothing; the route is not shown until after the pick.</li>
+      <li><b>AE4 (no route).</b> A catch whose flight has no adsb.lol route shows no route line and never triggers a guess round; everything else works.</li>
+      <li><b>AE5 (parity).</b> Editing the iOS point table without the backend (or vice-versa) fails the parity test in CI.</li>
+    </ul>
+
+    <h3>Scope Boundaries</h3>
+    <p><b>In:</b> R1–R13. <b>Deferred to follow-up (Decision 3 &amp; beyond):</b> the trophy/medal-tier rework and bonus-points-for-trophies; the bigger guess-the-<em>type</em>/airline/rarity mechanic (this plan ships only the route guess); illustrated cards (the photo is the v1 medium); a polished multi-catch reveal (basic stack only if the existing flow needs it); the “retiring soon” hook; regional rarity; relocating the “why it’s rare” line to the catch-detail view (nice-to-have, not required). <b>Not doing</b> (per STRATEGY): monetization, Android, web.</p>
+
+    <h3>Sources</h3>
+    <ul class="tight">
+      <li>Design (authority): <code>docs/plans/2026-06-28-002-feat-economy-d1-scoring-model.html</code>, <code>…003-tiering-review</code>, <code>…004-research-grounded-tiers</code>, <code>…005-feat-economy-d2-reveal</code>, <code>2026-06-29-001-…-reveal-prototype</code>.</li>
+      <li>Reveal SwiftUI prototype (seeds U9–U11): the <code>RevealV3.swift</code> harness produced during design (port into the app target).</li>
+      <li>Prior art: the 940→2755 re-score fix (PLAN §9, PR #79/#81) — the proven re-score lever; the <code>t</code>/<code>r</code>/<code>category</code> feed-passthrough (PR #65/#69) — the pattern U6/U7 mirror.</li>
+    </ul>
+  </section>
+
+  <!-- ───────── PLANNING CONTRACT ───────── -->
+  <section id="planning">
+    <h2>Planning Contract</h2>
+    <h3>Key Technical Decisions</h3>
+    <div class="kt"><h4><span class="id">KTD1</span> Curated tiering, research-grounded</h4><p class="muted">Tiers stay a hand-authored table in the generator (not a data pipeline) — re-tiered by judgment to the research list. Frequency is a tool consulted while authoring, not a runtime system. (D1 Fork 1)</p></div>
+    <div class="kt"><h4><span class="id">KTD2</span> Flat points + bonuses</h4><p class="muted">Flat per tier <code>10/20/50/100/500</code>; first-of-type <code>+50%</code> of base; route guess <code>+10%</code> of catch points. No bands, no decay. (D1 Forks 2–3, D2)</p></div>
+    <div class="kt"><h4><span class="id">KTD3</span> One source of truth + parity test</h4><p class="muted">Collapse the three rarity resolvers and two point ladders into one source both platforms read; a CI parity test fails on drift. The string-classifier fallback stops carrying its own tier ladder (R6). (D1 “one code path”)</p></div>
+    <div class="kt"><h4><span class="id">KTD4</span> Base live, bonuses frozen</h4><p class="muted">Base points re-derive live from <code>resolvedRarity</code> (so re-tiers correct old catches on read); per-catch bonuses (first-of-type flag, guess result/bonus) freeze on the <code>Catch</code>. The reveal ledger = live base + frozen bonuses. The server’s scored total is authoritative for the leaderboard; iOS reconstructs the ledger for display.</p></div>
+    <div class="kt"><h4><span class="id">KTD5</span> First-of-type scored server-side</h4><p class="muted">The canonical <code>scoreCatch</code> gains device context and checks the device’s catch history for the typecode at upload — authoritative, un-spoofable. iOS may show an optimistic chip, reconciled to the server value.</p></div>
+    <div class="kt"><h4><span class="id">KTD6</span> Route via adsb.lol passthrough</h4><p class="muted">Add route (origin/dest airports) to <code>NormalizedAircraft</code> → <code>/v1/aircraft</code> → iOS <code>Aircraft</code> → <code>Catch</code>, additive — the exact <code>t</code>/<code>r</code>/<code>category</code> pattern. <em>Execution-time confirm:</em> whether adsb.lol carries route inline in the aircraft feed or needs its routeset endpoint (a per-callsign lookup + cache).</p></div>
+    <div class="kt"><h4><span class="id">KTD7</span> Re-score discipline</h4><p class="muted">Bump <code>CURRENT_SCORING_VERSION</code>; <code>rescore --dry-run</code> prints the before→after delta + tier transitions; Noah reviews before the prod run. Mirrors the 940→2755 fix. Migration applied to prod manually (no release_command).</p></div>
+    <div class="kt"><h4><span class="id">KTD8</span> Reveal is a new SwiftUI surface</h4><p class="muted">Rework <code>CardReveal</code> into the minimal + split-flap card (photo, data, ledger), intensity scaling by tier; seed from the design prototype. Photo is the v1 medium. The front ledger carries the breakdown, so a separate flip-to-receipt is dropped (the flip, if kept, is airframe detail only).</p></div>
+    <div class="kt"><h4><span class="id">KTD9</span> The guess round</h4><p class="muted">A pure helper picks the endpoint farther from the observer and generates 4 options (real airport + plausible same-region decoys); exact-airport correctness; cadence every 3–5 catches with randomness, gated on a known route; <code>+10%</code> computed client-side and confirmed/owned by the server.</p></div>
+
+    <h3 id="design">High-Level Design</h3>
+    <figure>
+      <svg viewBox="0 0 920 300" role="img" aria-label="Catch scoring and reveal flow">
+        <text x="20" y="24" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">ONE SOURCE → SCORE → CATCH → REVEAL</text>
+        <g font-family="var(--mono)" font-size="10.5">
+          <rect x="20" y="44" width="200" height="70" rx="10" fill="#0d1d28" stroke="#1f5274"/>
+          <text x="120" y="68" fill="#3eb6f6" text-anchor="middle" font-weight="700">generator → AircraftTypes.json</text>
+          <text x="120" y="86" fill="#8da0b2" text-anchor="middle">tiers + point values</text>
+          <text x="120" y="102" fill="#5f7284" text-anchor="middle">bundled by iOS · ingested by backend</text>
+
+          <rect x="20" y="150" width="200" height="58" rx="10" fill="#101a22" stroke="#21303f"/>
+          <text x="120" y="174" fill="#cfe7ee" text-anchor="middle" font-weight="700">scoreCatch (one scorer)</text>
+          <text x="120" y="192" fill="#5f7284" text-anchor="middle">base + first-of-type · scoring_version</text>
+
+          <rect x="270" y="44" width="180" height="70" rx="10" fill="#101a22" stroke="#21303f"/>
+          <text x="360" y="68" fill="#cfe7ee" text-anchor="middle" font-weight="700">adsb.lol feed</text>
+          <text x="360" y="86" fill="#8da0b2" text-anchor="middle">+ route passthrough</text>
+          <text x="360" y="102" fill="#5f7284" text-anchor="middle">→ /v1/aircraft → Catch</text>
+
+          <rect x="270" y="150" width="180" height="58" rx="10" fill="#101a22" stroke="#21303f"/>
+          <text x="360" y="174" fill="#cfe7ee" text-anchor="middle" font-weight="700">Catch (SwiftData)</text>
+          <text x="360" y="192" fill="#5f7284" text-anchor="middle">route + frozen bonuses</text>
+
+          <rect x="500" y="44" width="180" height="58" rx="10" fill="#1c1812" stroke="#5b4715"/>
+          <text x="590" y="66" fill="#fbbf24" text-anchor="middle" font-weight="700">guess round</text>
+          <text x="590" y="84" fill="#5f7284" text-anchor="middle">every 3–5 · route hidden</text>
+
+          <rect x="500" y="130" width="180" height="98" rx="10" fill="#0c1f1a" stroke="#1c5346"/>
+          <text x="590" y="156" fill="#52d486" text-anchor="middle" font-weight="700">reveal</text>
+          <text x="590" y="174" fill="#8da0b2" text-anchor="middle">photo · split-flap</text>
+          <text x="590" y="190" fill="#8da0b2" text-anchor="middle">alt·spd·route</text>
+          <text x="590" y="206" fill="#8da0b2" text-anchor="middle">score ledger</text>
+
+          <rect x="730" y="130" width="170" height="58" rx="10" fill="#0d1d22" stroke="#1c7d89"/>
+          <text x="815" y="154" fill="#2fd4e6" text-anchor="middle" font-weight="700">leaderboard</text>
+          <text x="815" y="172" fill="#5f7284" text-anchor="middle">server total · re-score</text>
+        </g>
+        <g stroke="#3a4a59" stroke-width="1.5" fill="none">
+          <defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#3a4a59"/></marker></defs>
+          <line x1="120" y1="114" x2="120" y2="148" marker-end="url(#a)"/>
+          <line x1="360" y1="114" x2="360" y2="148" marker-end="url(#a)"/>
+          <line x1="220" y1="179" x2="268" y2="179" marker-end="url(#a)"/>
+          <line x1="450" y1="74" x2="498" y2="74" marker-end="url(#a)"/>
+          <line x1="590" y1="102" x2="590" y2="128" marker-end="url(#a)"/>
+          <line x1="680" y1="160" x2="728" y2="160" marker-end="url(#a)"/>
+        </g>
+      </svg>
+      <figcaption>One generated table feeds both platforms; one scorer stamps points; the catch carries route + frozen bonuses; the reveal reconstructs the ledger; the server total drives the leaderboard.</figcaption>
+    </figure>
+
+    <h3>Assumptions &amp; sequencing</h3>
+    <ul class="tight">
+      <li>Phase 1 (economy + data, U1–U8) lands first and is independently shippable; Phase 2 (reveal + guess, U9–U12) builds on it.</li>
+      <li>adsb.lol exposes usable route data (the premise of #6); the exact mechanism is confirmed in U6.</li>
+      <li>SwiftData migration stays additive (new optional fields, defaults) — testers keep their catches.</li>
+      <li>The point values move the leaderboard; the dry-run re-score is the review gate before any prod change.</li>
+    </ul>
+  </section>
+
+  <!-- ───────── IMPLEMENTATION UNITS ───────── -->
+  <section id="units">
+    <h2>Implementation Units</h2>
+    <table class="idx">
+      <thead><tr><th>U</th><th>Title</th><th>Key files</th><th>Deps</th></tr></thead>
+      <tbody>
+        <tr><td class="rid">U1</td><td>Re-tier the generator to the research list</td><td><code>tools/generate-aircraft-types.py</code>, <code>AircraftTypes.json</code></td><td>—</td></tr>
+        <tr><td class="rid">U2</td><td>Point values + single source + parity test</td><td><code>GameSystem.swift</code>, <code>backend/catches/points.ts</code></td><td>U1</td></tr>
+        <tr><td class="rid">U3</td><td>Kill the string-classifier tier divergence</td><td><code>GameSystem.swift</code></td><td>U1</td></tr>
+        <tr><td class="rid">U4</td><td>Reconcile <code>Sets.swift</code> rarities</td><td><code>Sets.swift</code></td><td>U1</td></tr>
+        <tr><td class="rid">U5</td><td>First-of-type bonus (server-authoritative)</td><td><code>identity/store.ts</code>, <code>points.ts</code>, <code>routes/catches.ts</code></td><td>U2</td></tr>
+        <tr><td class="rid">U6</td><td>adsb.lol route passthrough (backend)</td><td><code>providers/adsblol.ts</code>, <code>providers/types.ts</code>, <code>routes/aircraft</code></td><td>—</td></tr>
+        <tr><td class="rid">U7</td><td>Route on Catch + Aircraft (iOS)</td><td><code>Aircraft.swift</code>, <code>Catch.swift</code></td><td>U6</td></tr>
+        <tr><td class="rid">U8</td><td>Re-score rollout (versioned)</td><td><code>catches/rescore.ts</code></td><td>U2,U5</td></tr>
+        <tr><td class="rid">U9</td><td>The reveal view (SwiftUI)</td><td><code>CardReveal.swift</code> + new components, <code>ContentView.swift</code></td><td>U2</td></tr>
+        <tr><td class="rid">U10</td><td>Catch data on reveal + detail</td><td>reveal view, <code>CatchDetailView.swift</code></td><td>U7,U9</td></tr>
+        <tr><td class="rid">U11</td><td>Route-guess bonus round</td><td><code>ContentView.swift</code>, new <code>GuessStep</code>, <code>Catch.swift</code></td><td>U7,U9</td></tr>
+        <tr><td class="rid">U12</td><td>Display surfaces reflect bonuses</td><td><code>ProfileScreen.swift</code>, <code>TailCardView.swift</code>, <code>CatchDetailView.swift</code></td><td>U5,U11</td></tr>
+      </tbody>
+    </table>
+
+    <!-- U1 -->
+    <article class="unit">
+      <h3><span class="uid">U1</span> Re-tier the generator to the research-grounded list <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>Every aircraft sits in the right tier per the locked research list.</dd>
+        <dt>Reqs</dt><dd><a href="#r1" class="rid">R1</a></dd>
+        <dt>Files</dt><dd><code>tools/generate-aircraft-types.py</code> (<code>aircraft_rarity</code>, <code>RARITY_OVERRIDES</code>) → regenerate <code>ios/Tailspot/Tailspot/AircraftTypes.json</code></dd>
+      </dl>
+      <details><summary>APPROACH</summary>
+        <ul class="tight">
+          <li>Default rules: widebody → <code>common</code> (was uncommon) for current-service workhorses; <code>mil</code> default stays <code>rare</code> (transport) with strategic pinned up; helicopters/bizjets unchanged.</li>
+          <li>Override table: add the vanishing-airliner/narrowbody set (A318·A342·B732 epic; A343/A346·B744·B753·B712·MD-80·F70/F100·BAe146/RJ rare; B721/B722·T154·IL62·B29·LANC legendary), the warbird/vintage layer (P-51·T-6 rare; B-17·B-29·Lancaster epic/legendary; DC-3·Ju-52·An-2 rare), military split (B-52·B-1·E-3·fighters epic; B-2·U-2 legendary), A380→rare, and the corrections (727·717·MD-80/90·MD-11·E-4·P-51). Source list: doc <code>…004</code>.</li>
+          <li>Add the handful of icon designators absent from the data if reachable (AF One, U-2…), else leave noted.</li>
+        </ul>
+      </details>
+      <details><summary>TEST SCENARIOS</summary>
+        <ul class="tight">
+          <li>Covers AE1. Regenerate; assert the distribution shifted as expected and spot-check ~20 designators (B744 rare, B38M common, A388 rare, B721 legendary, P51 rare, C130 rare, B52 epic).</li>
+          <li>Update <code>RarityResolutionTests.swift</code> / <code>RarityDivergenceTests.swift</code> expected tiers (they encode current values and will fail until updated).</li>
+        </ul>
+      </details>
+      <details><summary>VERIFICATION</summary><p>Generator runs clean; JSON regenerated; the iOS rarity tests pass with the new expectations.</p></details>
+    </article>
+
+    <!-- U2 -->
+    <article class="unit">
+      <h3><span class="uid">U2</span> Point values + single source + parity test <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>One set of point values, identical on both platforms, guarded by a test.</dd>
+        <dt>Reqs</dt><dd><a href="#r2" class="rid">R2</a> · <a href="#r5" class="rid">R5</a></dd>
+        <dt>Files</dt><dd><code>GameSystem.swift</code> (<code>Rarity.basePoints</code> → 10/20/50/100/500), <code>backend/src/catches/points.ts</code> (<code>POINTS</code>), bump <code>CURRENT_SCORING_VERSION</code>; a parity fixture/test.</dd>
+      </dl>
+      <details><summary>APPROACH</summary>
+        <ul class="tight">
+          <li>Set both ladders to the locked values; keep <code>UNKNOWN_RARITY_POINTS = 10</code> (floor = common).</li>
+          <li>Parity: emit the canonical values into a small checked-in fixture (e.g. from the generator) that the backend test and an iOS test both assert against — so editing one side without the other fails CI. Document the pairing at both call-sites.</li>
+          <li>Bump <code>CURRENT_SCORING_VERSION</code> (scoring logic changed).</li>
+        </ul>
+      </details>
+      <details><summary>TEST SCENARIOS</summary>
+        <ul class="tight">
+          <li>Covers AE5. Parity test: iOS <code>basePoints</code> for each tier == backend <code>POINTS</code> == the fixture; a deliberate mismatch fails.</li>
+          <li>Backend: a catch of each tier scores the new value; unknown → 10. Update <code>catches.route.test.ts</code> / <code>rescore.test.ts</code> expectations.</li>
+        </ul>
+      </details>
+      <details><summary>VERIFICATION</summary><p>Both test suites green; parity test present and failing on an injected drift.</p></details>
+    </article>
+
+    <!-- U3 -->
+    <article class="unit">
+      <h3><span class="uid">U3</span> Kill the string-classifier tier divergence <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>The no-typecode fallback can’t disagree with the table.</dd>
+        <dt>Reqs</dt><dd><a href="#r6" class="rid">R6</a></dd>
+        <dt>Files</dt><dd><code>GameSystem.swift</code> (<code>AircraftClassifier</code> / the fallback rarity path)</dd>
+      </dl>
+      <details><summary>APPROACH</summary><p>Where a typecode exists, always resolve via the table (already true for the AR/Catch paths). For the genuine no-typecode case, fall back to a single conservative default (e.g. <code>common</code>) rather than a parallel rule ladder — remove the divergent tiering from <code>AircraftClassifier.rules</code> (keep any non-rarity classification it still needs).</p></details>
+      <details><summary>TEST SCENARIOS</summary><ul class="tight"><li>A no-typecode aircraft resolves to the single fallback, not a classifier-specific tier. Update <code>RarityDivergenceTests</code> to pin the three resolvers converge.</li></ul></details>
+      <details><summary>VERIFICATION</summary><p>Divergence tests green; no second rarity ladder remains.</p></details>
+    </article>
+
+    <!-- U4 -->
+    <article class="unit">
+      <h3><span class="uid">U4</span> Reconcile <code>Sets.swift</code> rarities <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>Set-catalog rarities match the model — no nil-typecode drift.</dd>
+        <dt>Reqs</dt><dd><a href="#r7" class="rid">R7</a></dd>
+        <dt>Files</dt><dd><code>Sets.swift</code></dd>
+      </dl>
+      <details><summary>APPROACH</summary><p>For entries with a <code>representativeTypecode</code>, derive rarity from the table (already pinned). For nil-typecode entries, set rarity to match the model’s intent for that airframe (or give them a representative typecode). Keep the set silhouette colour semantics.</p></details>
+      <details><summary>TEST SCENARIOS</summary><ul class="tight"><li>Every set entry’s rarity equals the model resolution (or a documented intentional exception). Extend <code>RarityDivergenceTests</code> part (b) / <code>FamilySetsTests</code>.</li></ul></details>
+      <details><summary>VERIFICATION</summary><p>Set rarity tests green.</p></details>
+    </article>
+
+    <!-- U5 -->
+    <article class="unit">
+      <h3><span class="uid">U5</span> First-of-type bonus (server-authoritative) <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>The device’s first catch of a typecode earns +50% of base.</dd>
+        <dt>Reqs</dt><dd><a href="#r3" class="rid">R3</a></dd>
+        <dt>Files</dt><dd><code>backend/src/identity/store.ts</code> (<code>scoreCatch</code> + device context), <code>catches/points.ts</code>, <code>routes/catches.ts</code></dd>
+      </dl>
+      <details><summary>APPROACH</summary>
+        <ul class="tight">
+          <li>Extend the canonical scorer with device context: at upload, check whether the device already has a catch of this typecode (query <code>catches</code> by device + typecode). If not → add <code>round(base × 0.5)</code> and flag <code>first_of_type</code>.</li>
+          <li>Persist the flag + the bonus on the catch row so the re-score and the client can read it. Keep the breakdown (base, firstOfType) recoverable.</li>
+          <li>Execution note: dedupe rule must match the Hangar’s notion of “type” (typecode); decide tie-break when two of the same type upload in one batch (order by createdAt).</li>
+        </ul>
+      </details>
+      <details><summary>TEST SCENARIOS</summary>
+        <ul class="tight">
+          <li>Covers AE2. First <code>B744</code> for a device → <code>75</code>; second → <code>50</code>. A different device’s first <code>B744</code> → <code>75</code> independently.</li>
+          <li>Re-score preserves first-of-type correctly when recomputing historical catches (the earliest of each type keeps the bonus).</li>
+        </ul>
+      </details>
+      <details><summary>VERIFICATION</summary><p>Backend tests green incl. the first-of-type and re-score cases.</p></details>
+    </article>
+
+    <!-- U6 -->
+    <article class="unit">
+      <h3><span class="uid">U6</span> adsb.lol route passthrough (backend) <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>Origin→destination flows from adsb.lol to <code>/v1/aircraft</code> when available.</dd>
+        <dt>Reqs</dt><dd><a href="#r9" class="rid">R9</a></dd>
+        <dt>Files</dt><dd><code>providers/adsblol.ts</code>, <code>providers/types.ts</code> (<code>NormalizedAircraft.route</code>), the <code>/v1/aircraft</code> serializer; possibly a route cache</dd>
+      </dl>
+      <details><summary>APPROACH</summary>
+        <ul class="tight">
+          <li>Add an optional <code>route</code> (origin/dest airport codes, maybe names) to <code>NormalizedAircraft</code>; omit when absent. Serialize on <code>/v1/aircraft</code>, additive (old clients ignore it).</li>
+          <li><b>Execution-time confirm:</b> whether adsb.lol returns route inline in the aircraft feed or requires its routeset endpoint (per-callsign lookup). If the latter: enrich opportunistically (like <code>feedEnrich</code>), cache by callsign, never block the position response.</li>
+          <li>Coverage is partial — treat missing route as normal.</li>
+        </ul>
+      </details>
+      <details><summary>TEST SCENARIOS</summary>
+        <ul class="tight">
+          <li>A feed/lookup with route → <code>/v1/aircraft</code> carries origin/dest; without → key omitted. Old-client wire regression (additive keys ignored).</li>
+          <li>Route cache (if used) returns cached on repeat callsign; never throws on lookup failure.</li>
+        </ul>
+      </details>
+      <details><summary>VERIFICATION</summary><p>Backend tests green; route visible on <code>/v1/aircraft</code> for a known routed callsign in a manual check.</p></details>
+    </article>
+
+    <!-- U7 -->
+    <article class="unit">
+      <h3><span class="uid">U7</span> Route on Catch + Aircraft (iOS) <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>The app decodes the route and stores it on the catch.</dd>
+        <dt>Reqs</dt><dd><a href="#r9" class="rid">R9</a></dd>
+        <dt>Files</dt><dd><code>Aircraft.swift</code> / <code>BackendAircraft</code> (decode route), <code>Catch.swift</code> (additive <code>originAirport?</code>, <code>destAirport?</code>)</dd>
+      </dl>
+      <details><summary>APPROACH</summary><p>Add optional route fields to the decoded aircraft and to <code>Catch</code> (Optional + nil default → lightweight migration, same shape as <code>category</code>). Capture at catch time (feed-preferred). Route is frozen-at-catch like other airframe facts. <code>nonisolated</code> decode extension per the isolation convention.</p></details>
+      <details><summary>TEST SCENARIOS</summary><ul class="tight"><li>Decoding an aircraft with/without route (additive wire regression). A catch persists origin/dest when present; nil otherwise. Migration adds the fields without data loss.</li></ul></details>
+      <details><summary>VERIFICATION</summary><p><code>TailspotTests</code> green; a routed catch shows origin/dest end-to-end on device.</p></details>
+    </article>
+
+    <!-- U8 -->
+    <article class="unit">
+      <h3><span class="uid">U8</span> Re-score rollout (versioned) <span class="phase">Phase 1</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>Existing catches re-price to the new economy, reviewably.</dd>
+        <dt>Reqs</dt><dd><a href="#r8" class="rid">R8</a> · <a href="#r13" class="rid">R13</a></dd>
+        <dt>Files</dt><dd><code>backend/src/catches/rescore.ts</code></dd>
+      </dl>
+      <details><summary>APPROACH</summary><p>Confirm <code>rescoreCatches</code> re-scores the stale set (rarity null OR <code>scoring_version &lt; CURRENT</code>) through the one scorer, including the new first-of-type logic. Dry-run prints the before→after delta + tier transitions.</p></details>
+      <details><summary>TEST SCENARIOS</summary><ul class="tight"><li>Dry-run is idempotent and changes nothing; a real run re-scores all stale rows; first-of-type assigned to the earliest catch of each type per device. Update <code>rescore.test.ts</code>.</li></ul></details>
+      <details><summary>VERIFICATION</summary><p>Backend tests green. <span class="pill noah">Noah-gated</span> prod migration apply + <code>rescore --dry-run</code> reviewed → prod run.</p></details>
+    </article>
+
+    <!-- U9 -->
+    <article class="unit">
+      <h3><span class="uid">U9</span> The reveal view (SwiftUI) <span class="phase">Phase 2</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>The minimal + split-flap reveal with photo, tier, and score ledger.</dd>
+        <dt>Reqs</dt><dd><a href="#r10" class="rid">R10</a> · <a href="#r11" class="rid">R11</a></dd>
+        <dt>Files</dt><dd><code>CardReveal.swift</code> (rework) + new <code>SplitFlapText</code> / <code>ScoreLedger</code> views; <code>ContentView.swift</code> <code>presentReveal</code></dd>
+      </dl>
+      <details><summary>APPROACH</summary>
+        <ul class="tight">
+          <li>Port the design prototype (<code>RevealV3.swift</code>) into the target: photo hero (the captured JPEG), make/model split-flap, <code>• TIER</code>, the ledger (live base + frozen bonuses → total), intensity scaling by tier ordinal.</li>
+          <li>Ledger math is a pure helper (base from <code>resolvedRarity</code>, + first-of-type, + guess bonus) — unit-tested off the view.</li>
+          <li>Drop the separate flip-to-receipt (front ledger suffices); keep a flip only if airframe detail needs a back.</li>
+        </ul>
+      </details>
+      <details><summary>TEST SCENARIOS</summary>
+        <ul class="tight">
+          <li>Ledger helper: base+first+guess sums correctly; base re-derives after a re-tier; bonuses stay frozen. Intensity mapping returns the right tier treatment for each rarity.</li>
+          <li>Test expectation: visual/animation verified on device (not unit-testable).</li>
+        </ul>
+      </details>
+      <details><summary>VERIFICATION</summary><p>Ledger/intensity unit tests green; reveal looks/feels right via <code>bin/deploy</code>.</p></details>
+    </article>
+
+    <!-- U10 -->
+    <article class="unit">
+      <h3><span class="uid">U10</span> Catch data on reveal + detail <span class="phase">Phase 2</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>Altitude · speed · route shown on the reveal and the detail view.</dd>
+        <dt>Reqs</dt><dd><a href="#r10" class="rid">R10</a></dd>
+        <dt>Files</dt><dd>the reveal view, <code>CatchDetailView.swift</code></dd>
+      </dl>
+      <details><summary>APPROACH</summary><p>Single data row (ALT · SPD · ROUTE) on the reveal; the detail view carries the fuller airframe/route block (and optionally the relocated “why it’s rare” line). Handle missing route (drop the line).</p></details>
+      <details><summary>TEST SCENARIOS</summary><ul class="tight"><li>A catch with route renders all three; without route renders alt/spd only. Detail view shows frozen alt/spd and route. <code>CatchDetailView</code> stays frozen-moment (no overwrite of recorded values).</li></ul></details>
+      <details><summary>VERIFICATION</summary><p>Renders correctly with/without route on device.</p></details>
+    </article>
+
+    <!-- U11 -->
+    <article class="unit">
+      <h3><span class="uid">U11</span> Route-guess bonus round <span class="phase">Phase 2</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>An occasional pre-reveal guess of the far endpoint for +10%.</dd>
+        <dt>Reqs</dt><dd><a href="#r4" class="rid">R4</a> · <a href="#r12" class="rid">R12</a></dd>
+        <dt>Files</dt><dd><code>ContentView.swift</code> (catch flow + cadence), new <code>GuessStep</code> view, a pure guess helper, <code>Catch.swift</code> (frozen guess fields), scoring</dd>
+      </dl>
+      <details><summary>APPROACH</summary>
+        <ul class="tight">
+          <li>Pure helper: given observer location + route endpoints, pick the farther endpoint (the one to guess) and the prompt (“coming from” vs “headed to”); generate 4 options (real airport + 3 plausible same-region decoys).</li>
+          <li>Cadence: trigger every 3–5 catches with randomness, only when the route is known. Route hidden during the guess; resolved on the reveal.</li>
+          <li>Correctness = exact airport. On correct, add <code>round(catchPoints × 0.10)</code>; persist <code>guessedAirport</code> + result + bonus frozen on the Catch. Client computes; the server owns the authoritative total (validate on upload).</li>
+        </ul>
+      </details>
+      <details><summary>TEST SCENARIOS</summary>
+        <ul class="tight">
+          <li>Covers AE3, AE4. Far-endpoint pick: observer near SFO + HKG→SFO → asks origin (HKG); observer near HKG → asks destination. Option set always contains the answer + 3 unique decoys.</li>
+          <li>Cadence helper fires within the 3–5 window and never on a routeless catch. Bonus = 10% rounded; wrong/skip → 0. Guess fields freeze on the Catch.</li>
+        </ul>
+      </details>
+      <details><summary>VERIFICATION</summary><p>Helper unit tests green; the round triggers and resolves correctly on device.</p></details>
+    </article>
+
+    <!-- U12 -->
+    <article class="unit">
+      <h3><span class="uid">U12</span> Display surfaces reflect bonuses <span class="phase">Phase 2</span></h3>
+      <dl class="strip">
+        <dt>Goal</dt><dd>Totals and cards include the bonuses, computed efficiently.</dd>
+        <dt>Reqs</dt><dd><a href="#r11" class="rid">R11</a></dd>
+        <dt>Files</dt><dd><code>ProfileScreen.swift</code> (<code>ProfileStats</code>), <code>TailCardView.swift</code>, <code>CatchDetailView.swift</code></dd>
+      </dl>
+      <details><summary>APPROACH</summary><p>Per-catch points = live base + frozen bonuses (one helper, shared with the ledger). Profile total prefers the server standing; the local total uses the helper. Compute once in the aggregation pass (the <code>inputs(from:)</code> / PR #85 compute-once pattern) — never a computed property over <code>[Catch]</code> inside a <code>ForEach</code>.</p></details>
+      <details><summary>TEST SCENARIOS</summary><ul class="tight"><li><code>ProfileStats</code> total includes first-of-type + guess bonuses; matches the sum of per-catch ledger totals. Re-tier updates base but not frozen bonuses. No per-row recompute (perf).</li></ul></details>
+      <details><summary>VERIFICATION</summary><p><code>TailspotTests</code> green; Profile/Hangar scroll smoothly on device (no per-row recompute regression).</p></details>
+    </article>
+  </section>
+
+  <!-- ───────── VERIFICATION ───────── -->
+  <section id="verify">
+    <h2>Verification Contract</h2>
+    <ul class="tight">
+      <li><b>iOS tests:</b> <code>xcodebuild test -project ios/Tailspot/Tailspot.xcodeproj -scheme Tailspot -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' -only-testing:TailspotTests</code></li>
+      <li><b>Backend tests:</b> <code>cd backend &amp;&amp; npm test</code> (vitest, PGlite).</li>
+      <li><b>Parity gate:</b> the iOS↔backend point-value parity test (U2) is green and fails on injected drift.</li>
+      <li><b>Re-score gate:</b> <code>npm run rescore -- --dry-run</code> produces a delta Noah reviews before any prod run.</li>
+      <li><b>Field test:</b> <code>bin/deploy</code> to the iPhone for the reveal + guess (simulator can’t do camera/GPS).</li>
+      <li><b>CI:</b> the <em>Unit tests</em> GitHub Actions check must be green before merge to <code>main</code>.</li>
+    </ul>
+  </section>
+
+  <!-- ───────── DEFINITION OF DONE ───────── -->
+  <section id="done">
+    <h2>Definition of Done</h2>
+    <ul class="tight">
+      <li>R1–R12 implemented; iOS + backend + parity tests green in CI; the rarity/scoring fixtures updated to the new regime.</li>
+      <li>The reveal prototype is <strong>graduated into the app target</strong> — no design-harness/scratchpad code left in the diff; abandoned experiments removed.</li>
+      <li>Docs updated: <strong>PLAN §9</strong> (status, #4/#6/#7 advanced, D3 noted as the follow-up) and <strong>CHANGELOG</strong>; this plan’s deferred items recorded.</li>
+      <li>Route degrades gracefully where adsb.lol has none (AE4 holds).</li>
+      <li><b>R13 — Noah-gated, not self-executed:</b> <span class="pill noah">prod migration + reviewed dry-run → re-score</span> <span class="pill noah">backend Fly deploy</span> <span class="pill noah">TestFlight build</span>. The plan is “done” for merge when code + tests + the green PR are ready and the dry-run delta is posted for review; the prod/ship steps wait on Noah.</li>
+    </ul>
+    <div class="callout">
+      <div class="k">Suggested landing order</div>
+      <p style="margin:6px 0 0">Phase 1 as one or two PRs (U1–U4 economy/data on <code>main</code> behind the re-score gate; U5–U8 scoring + route + rollout), then Phase 2 (U9–U12 reveal + guess). Each PR field-tested, squash-merged on green CI. Re-score on prod once, after Phase 1 lands and the dry-run is approved.</p>
+    </div>
+  </section>
+
+  <footer>
+    Composed 2026-06-29 by ce-plan · Tailspot Bet B · implementation-ready · grounds: the locked design docs (2026-06-28-002…005,
+    2026-06-29-001), repo research (GameSystem.swift, generate-aircraft-types.py, providers/adsblol.ts, identity/store.ts,
+    Catch.swift), and the proven re-score lever. Decision 3 deferred.
+  </footer>
+
+</div>
+</body>
+</html>

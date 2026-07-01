@@ -75,7 +75,13 @@ nonisolated struct SkyCheck {
         /// Warm artificial light, only trusted when there's enough light
         /// to believe the white balance. Sky is blue/cool (warmth < this),
         /// so it never blocks; warm-lit frames (interiors, sunsets) do.
-        var warmThreshold: Double = 0.04
+        /// Raised 0.04 → 0.07 on 2026-07-01 after a field report that the
+        /// indoor warnings were over-eager: mildly-warm outdoor scenes
+        /// (horizon, warm buildings, hazy/golden sky) sat just above 0.04 and
+        /// false-tripped. 0.07 still blocks clear interiors (the corpus's
+        /// warm ceilings read ~0.13+) — full corpus re-validation is a
+        /// follow-up (tools/authenticity-gate).
+        var warmThreshold: Double = 0.07
         var luminanceForColorTrust: Double = 0.12
 
         static let `default` = Thresholds()

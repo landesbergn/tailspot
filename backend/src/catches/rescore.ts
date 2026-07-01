@@ -20,7 +20,9 @@
  *   - IDEMPOTENT — a second run over settled data changes nothing.
  *   - DRY-RUNNABLE — `{ dryRun: true }` computes the full delta and writes nothing,
  *     so a public-leaderboard re-score's blast radius is reviewable before it lands.
- *   - BATCHED — resolves each distinct icao24 once, writes once per airframe.
+ *   - BATCHED — resolves each (icao24, first-of-type) variant once, writes once
+ *     per variant (the +50% first-of-type bonus floats with the re-derived base,
+ *     so two catches of one airframe can land on different points).
  *
  * Run as a script:  npm run rescore -- [--all] [--dry-run]
  *   (default targets only stale rows: unresolved OR older-regime.)
@@ -93,6 +95,7 @@ export async function rescoreCatches(
       rarity: catches.rarity,
       points: catches.points,
       scoringVersion: catches.scoringVersion,
+      firstOfType: catches.firstOfType,
     })
     .from(catches);
   const rows = opts.all
@@ -113,21 +116,31 @@ export async function rescoreCatches(
   };
   if (rows.length === 0) return report;
 
-  // Resolve each distinct airframe ONCE (many catches share an icao24).
-  const distinct = [...new Set(rows.map((r) => r.icao24))];
-  report.distinctIcaos = distinct.length;
-  const scoredByIcao = new Map<string, ScoredCatch>();
-  for (const icao24 of distinct) {
-    scoredByIcao.set(icao24, await store.scoreCatch(icao24));
+  // Resolve+score each distinct (airframe, first-of-type) variant ONCE. The
+  // expensive part — the registry→typecode join — depends only on the icao24,
+  // but the FINAL points also depend on the row's FROZEN `firstOfType` flag (the
+  // +50% bonus floats with the re-derived base). Keying by (icao24, firstOfType)
+  // keeps it to at most two scorer calls per airframe while still feeding the
+  // STORED flag through the ONE canonical scorer — re-score reads the flag, it
+  // never recomputes it from history (a deleted earlier catch must not shift it).
+  report.distinctIcaos = new Set(rows.map((r) => r.icao24)).size;
+  const scoreKey = (icao24: string, firstOfType: boolean) => `${icao24}:${firstOfType ? 1 : 0}`;
+  const scoredByKey = new Map<string, ScoredCatch>();
+  for (const row of rows) {
+    const key = scoreKey(row.icao24, row.firstOfType);
+    if (!scoredByKey.has(key)) {
+      scoredByKey.set(key, await store.scoreCatch(row.icao24, { firstOfType: row.firstOfType }));
+    }
   }
 
-  // Tally deltas + bucket the ids that need a write, grouped by icao24 (all rows
-  // of one airframe get the same new projection → one UPDATE per airframe).
+  // Tally deltas + bucket the ids that need a write, grouped by (icao24,
+  // firstOfType): rows sharing both get the same new projection → one UPDATE per
+  // group. (`firstOfType` is frozen — it's read above, never written below.)
   const transitions = new Map<string, RarityTransition>();
-  const writesByIcao = new Map<string, { score: ScoredCatch; ids: string[] }>();
+  const writes = new Map<string, { score: ScoredCatch; ids: string[] }>();
   for (const row of rows) {
-    const scored = scoredByIcao.get(row.icao24);
-    if (!scored) continue; // unreachable — every icao24 was resolved above
+    const scored = scoredByKey.get(scoreKey(row.icao24, row.firstOfType));
+    if (!scored) continue; // unreachable — every (icao24, firstOfType) was resolved above
     report.pointsBefore += row.points;
     report.pointsAfter += scored.points;
 
@@ -152,20 +165,21 @@ export async function rescoreCatches(
     }
 
     if (projectionChanged || needsRestamp) {
-      const bucket = writesByIcao.get(row.icao24) ?? { score: scored, ids: [] };
+      const writeKey = scoreKey(row.icao24, row.firstOfType);
+      const bucket = writes.get(writeKey) ?? { score: scored, ids: [] };
       bucket.ids.push(row.id);
-      writesByIcao.set(row.icao24, bucket);
+      writes.set(writeKey, bucket);
     }
   }
-  report.written = [...writesByIcao.values()].reduce((n, b) => n + b.ids.length, 0);
+  report.written = [...writes.values()].reduce((n, b) => n + b.ids.length, 0);
   report.transitions = [...transitions.values()].sort((a, b) => b.catches - a.catches);
 
   if (opts.dryRun) return report;
 
-  // Apply: one UPDATE per airframe, all within a single transaction so a
-  // re-score is all-or-nothing.
+  // Apply: one UPDATE per (airframe, first-of-type) group, all within a single
+  // transaction so a re-score is all-or-nothing.
   await db.transaction(async (tx) => {
-    for (const { score, ids } of writesByIcao.values()) {
+    for (const { score, ids } of writes.values()) {
       await tx
         .update(catches)
         .set({

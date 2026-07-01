@@ -41,11 +41,15 @@ struct TrophyUnlockCenterTests {
             return Catch(
                 icao24: String(UUID().uuidString.prefix(6)),
                 callsign: nil,
-                model: isLegendary ? "VC-25" : "737-800",
-                manufacturer: "BOEING",
-                operatorName: isLegendary ? "USAF" : nil,
+                model: isLegendary ? "B-2" : "737-800",
+                manufacturer: isLegendary ? "NORTHROP" : "BOEING",
+                operatorName: nil,
                 caughtAt: Date(timeIntervalSince1970: 1_716_000_000),
-                observerLat: 0, observerLon: 0, slantDistanceMeters: 0
+                observerLat: 0, observerLon: 0, slantDistanceMeters: 0,
+                // Tier resolves only from the typecode table (single-source rule,
+                // U3): B2 → legendary, B738 → common. The old VC-25/USAF string
+                // path no longer yields a legendary tier.
+                typecode: isLegendary ? "B2" : "B738"
             )
         }
     }

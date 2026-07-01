@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decision 2 — The Reveal</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#121a22; --panel2:#0e151c; --raise:#16202b; --screen:#06090d;
+    --ink:#e7eef5; --muted:#8da0b2; --faint:#5f7284; --line:#21303f;
+    --cyan:#2fd4e6; --cyan-dim:#1c7d89;
+    --common:#9aa7b4; --uncommon:#52d486; --rare:#3eb6f6; --epic:#bd83fb; --legend:#fbbf24;
+    --good:#52d486; --warn:#fbbf24; --bad:#f1737d;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.56;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin-inline:auto;padding:32px 22px 80px}
+  a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
+  h1{font-size:29px;line-height:1.15;margin:0 0 6px;letter-spacing:-.4px}
+  h2{font-size:20px;margin:44px 0 4px;letter-spacing:-.2px}
+  h3{font-size:15.5px;margin:22px 0 6px}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-dim)}
+  p{margin:8px 0;max-width:76ch;color:#d7e0e8}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  code{font-family:var(--mono);font-size:.86em;background:#0c141c;border:1px solid var(--line);padding:1px 5px;border-radius:5px;color:#cfe7ee}
+  hr{border:0;border-top:1px solid var(--line);margin:36px 0}
+  .lede{font-size:16px;color:#c3d0db;max-width:78ch}
+  .metastrip{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+  .chip{font:600 11px/1 var(--mono);padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)}
+  .chip.on{color:var(--cyan);border-color:var(--cyan-dim)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 6px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  nav.toc a{font:600 12.5px/1 var(--mono);color:var(--muted);padding:5px 9px;border-radius:7px}
+  nav.toc a:hover{background:var(--raise);color:var(--cyan);text-decoration:none}
+  .callout{background:#0e1820;border:1px solid #1d3a44;border-radius:12px;padding:14px 16px;margin:16px 0}
+  .callout.warn{background:#1c1812;border-color:#4a3b18}
+  .callout .k{font:600 11px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--cyan)}
+  .callout.warn .k{color:var(--warn)}
+  .grid{display:grid;gap:14px}
+  .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:720px){.g3,.g2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 16px}
+  .card h4{margin:0 0 6px;font-size:14.5px}
+  .card p{font-size:13.5px;margin:4px 0 0}
+  figure{margin:18px 0}
+  figure svg{display:block;width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:14px}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:7px}
+  ul.tight{margin:6px 0;padding-left:18px} ul.tight li{margin:4px 0;color:#d7e0e8}
+  .q{color:var(--cyan);font-weight:600}
+  .lean{font:600 12px/1 var(--mono);color:var(--good)}
+  .fork{display:inline-block;font:600 11px/1 var(--mono);color:var(--cyan);background:#0d1d22;border:1px solid var(--cyan-dim);padding:4px 8px;border-radius:6px;margin-right:6px}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  td.num{font-family:var(--mono);text-align:right}
+  footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font:500 12px/1.5 var(--mono);color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Tailspot · Bet B · Walk-through 2 of 3</div>
+    <h1>Decision 2 — The Reveal</h1>
+    <p class="lede">The moment a catch lands — where the locked economy becomes a feeling. Today it’s a flip card with a bloom
+    and a <code>+N pt</code>. We’re turning it into a short <strong>anticipation</strong> that flips to a <strong>receipt</strong>,
+    scaled so a Legendary feels like an event and a Common stays quick. Mockups of the cards and the animation below.</p>
+    <div class="metastrip">
+      <span class="chip on">Decision 2 / 3</span>
+      <span class="chip">pays out the locked economy</span>
+      <span class="chip">5 forks</span>
+      <span class="chip">Date · 2026-06-28</span>
+    </div>
+    <nav class="toc">
+      <a href="#principles">Principles</a>
+      <a href="#flow">The hero flow</a>
+      <a href="#card">The card + receipt</a>
+      <a href="#scale">Drama scales with tier</a>
+      <a href="#why">The “why it’s rare” line</a>
+      <a href="#multi">Multi-catch</a>
+      <a href="#log">Decision log</a>
+    </nav>
+  </header>
+
+  <h2 id="principles">Principles</h2>
+  <div class="grid g3" style="margin-top:12px">
+    <div class="card"><h4>Anticipation &gt; the number</h4><p class="muted">The dopamine is in the build, not the digits. Invest the seconds <em>before</em> the points land.</p></div>
+    <div class="card"><h4>Legible — say why</h4><p class="muted">A rare catch shows <em>why</em> it’s rare. The economy earns trust when the player can see the reason.</p></div>
+    <div class="card"><h4>Drama scales with tier</h4><p class="muted">A Common is a quick beat; a Legendary is the full cinematic. Effort tracks rarity, so rare stays special.</p></div>
+  </div>
+
+  <hr>
+
+  <!-- HERO FLOW -->
+  <h2 id="flow">The hero flow — anticipation, then receipt</h2>
+  <p>Build-up → tier badge slams in → points count up → the “why” line + first-of-type bonus → tap to flip to the itemized
+  receipt. Shown for an <strong>epic</strong> catch (Airbus A318, the “Baby Bus” — 4 left):</p>
+  <figure>
+    <svg viewBox="0 0 990 350" role="img" aria-label="Reveal animation storyboard for an epic A318 catch">
+      <defs>
+        <radialGradient id="ebloom" cx="50%" cy="42%" r="60%">
+          <stop offset="0" stop-color="#bd83fb" stop-opacity=".6"/><stop offset="1" stop-color="#bd83fb" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <text x="20" y="24" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">REVEAL STORYBOARD — single catch · Airbus A318 · EPIC (100) · first-ever</text>
+      <!-- F1 -->
+      <g transform="translate(20,42)">
+        <rect width="170" height="290" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="142" height="258" rx="12" fill="#06090d"/>
+        <text x="85" y="150" fill="#3a4a59" font-family="var(--mono)" font-size="11" text-anchor="middle">shutter</text>
+        <text x="85" y="165" fill="#3a4a59" font-family="var(--mono)" font-size="11" text-anchor="middle">· · ·</text>
+        <text x="85" y="312" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">0.0s</text>
+      </g>
+      <!-- F2 -->
+      <g transform="translate(215,42)">
+        <rect width="170" height="290" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="142" height="258" rx="12" fill="#06090d"/>
+        <circle cx="85" cy="130" r="78" fill="url(#ebloom)"/>
+        <g stroke="#bd83fb" stroke-width="1.4" opacity=".55">
+          <line x1="85" y1="130" x2="85" y2="40"/><line x1="85" y1="130" x2="160" y2="85"/>
+          <line x1="85" y1="130" x2="160" y2="175"/><line x1="85" y1="130" x2="85" y2="220"/>
+          <line x1="85" y1="130" x2="14" y2="175"/><line x1="85" y1="130" x2="14" y2="85"/>
+        </g>
+        <text x="85" y="312" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">1.2s · rays gather</text>
+      </g>
+      <!-- F3 -->
+      <g transform="translate(410,42)">
+        <rect width="170" height="290" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="142" height="258" rx="12" fill="#06090d"/>
+        <circle cx="85" cy="120" r="64" fill="url(#ebloom)" opacity=".7"/>
+        <rect x="36" y="100" width="98" height="22" rx="6" fill="#1a1226" stroke="#4a3168"/>
+        <text x="85" y="115" fill="#bd83fb" font-family="var(--mono)" font-size="11" font-weight="700" text-anchor="middle">EPIC ◆◆◆◆</text>
+        <text x="85" y="158" fill="#cfe7ee" font-family="var(--mono)" font-size="11" text-anchor="middle">Airbus A318</text>
+        <text x="85" y="198" fill="#bd83fb" font-family="var(--mono)" font-size="22" font-weight="700" text-anchor="middle">+100</text>
+        <text x="85" y="312" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">2.2s · slam + count-up</text>
+      </g>
+      <!-- F4 -->
+      <g transform="translate(605,42)">
+        <rect width="170" height="290" rx="20" fill="#0a0e13" stroke="#21303f"/>
+        <rect x="14" y="16" width="142" height="258" rx="12" fill="#06090d"/>
+        <rect x="36" y="64" width="98" height="20" rx="6" fill="#1a1226" stroke="#4a3168"/>
+        <text x="85" y="78" fill="#bd83fb" font-family="var(--mono)" font-size="10" font-weight="700" text-anchor="middle">EPIC</text>
+        <text x="85" y="106" fill="#cfe7ee" font-family="var(--mono)" font-size="11" text-anchor="middle">Airbus A318</text>
+        <text x="85" y="128" fill="#bd83fb" font-family="var(--mono)" font-size="16" font-weight="700" text-anchor="middle">+100</text>
+        <text x="85" y="158" fill="#8da0b2" font-family="var(--mono)" font-size="9" text-anchor="middle">Air France’s last 4 —</text>
+        <text x="85" y="170" fill="#fbbf24" font-family="var(--mono)" font-size="9" text-anchor="middle">retiring 2026</text>
+        <rect x="28" y="186" width="114" height="20" rx="10" fill="#1c1812" stroke="#5b4715"/>
+        <text x="85" y="200" fill="#fbbf24" font-family="var(--mono)" font-size="9" font-weight="700" text-anchor="middle">✦ FIRST A318 +50</text>
+        <text x="85" y="312" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">3.2s · why + bonus</text>
+      </g>
+      <!-- F5 receipt -->
+      <g transform="translate(800,42)">
+        <rect width="170" height="290" rx="20" fill="#0a0e13" stroke="#2fd4e6" stroke-opacity=".4"/>
+        <rect x="14" y="16" width="142" height="258" rx="12" fill="#0a141b"/>
+        <text x="85" y="40" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">— tap to flip —</text>
+        <line x1="26" y1="52" x2="144" y2="52" stroke="#21303f"/>
+        <text x="26" y="78" fill="#8da0b2" font-family="var(--mono)" font-size="10">Base (Epic)</text><text x="144" y="78" fill="#cfe7ee" font-family="var(--mono)" font-size="10" text-anchor="end">100</text>
+        <text x="26" y="100" fill="#8da0b2" font-family="var(--mono)" font-size="10">First A318</text><text x="144" y="100" fill="#fbbf24" font-family="var(--mono)" font-size="10" text-anchor="end">+50</text>
+        <line x1="26" y1="114" x2="144" y2="114" stroke="#21303f"/>
+        <text x="26" y="138" fill="#e7eef5" font-family="var(--mono)" font-size="11" font-weight="700">TOTAL</text><text x="144" y="138" fill="#2fd4e6" font-family="var(--mono)" font-size="14" font-weight="700" text-anchor="end">+150</text>
+        <text x="85" y="178" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">AFR · CDG→NCE</text>
+        <text x="85" y="194" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">Set: Airbus narrowbody</text>
+        <text x="85" y="312" fill="#2fd4e6" font-family="var(--mono)" font-size="10" text-anchor="middle">receipt (flip side)</text>
+      </g>
+    </svg>
+    <figcaption>Anticipation builds (1–2), the tier badge slams and points count up (3), the “why” + first-of-type settle (4),
+    a tap flips to the itemized receipt (5). Note the fleet fact and the “retiring 2026” hook drawn straight from the research.</figcaption>
+  </figure>
+  <p><span class="fork">Fork 1</span> <span class="lean">Lean: anticipation front, receipt on flip.</span> This is the
+  flow you asked for — drama up front, full transparency on tap. The refined-current card (today’s card + a why-line, no new
+  animation) stays the low-risk fallback if the sequence proves fiddly on device.</p>
+
+  <hr>
+
+  <!-- CARD + RECEIPT -->
+  <h2 id="card">The card — front and receipt back</h2>
+  <p>The resting card after the animation. Front carries the identity + headline points; the flip side is the receipt.</p>
+  <figure>
+    <svg viewBox="0 0 620 360" role="img" aria-label="Card front and receipt back">
+      <!-- FRONT -->
+      <g transform="translate(40,30)">
+        <rect width="240" height="300" rx="16" fill="#0d1118" stroke="#4a3168"/>
+        <rect x="16" y="16" width="208" height="120" rx="8" fill="#11161f" stroke="#21303f"/>
+        <text x="120" y="82" fill="#3a4a59" font-family="var(--mono)" font-size="11" text-anchor="middle">[ A318 illustration ]</text>
+        <text x="24" y="166" fill="#bd83fb" font-family="var(--mono)" font-size="10" font-weight="700">EPIC ◆◆◆◆</text>
+        <text x="216" y="166" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="end">NEW CARD · #143</text>
+        <text x="24" y="196" fill="#e7eef5" font-family="var(--sans)" font-size="16" font-weight="700">Airbus A318</text>
+        <text x="24" y="216" fill="#8da0b2" font-family="var(--sans)" font-size="11">Air France · CDG→NCE</text>
+        <line x1="24" y1="234" x2="216" y2="234" stroke="#21303f"/>
+        <text x="24" y="262" fill="#8da0b2" font-family="var(--mono)" font-size="9">Air France’s last 4 — retiring 2026</text>
+        <text x="24" y="288" fill="#bd83fb" font-family="var(--mono)" font-size="20" font-weight="700">+150</text>
+        <text x="216" y="288" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="end">tap to flip ⟳</text>
+        <text x="120" y="324" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">FRONT</text>
+      </g>
+      <!-- BACK -->
+      <g transform="translate(340,30)">
+        <rect width="240" height="300" rx="16" fill="#0a141b" stroke="#1c7d89"/>
+        <text x="24" y="40" fill="#cfe7ee" font-family="var(--sans)" font-size="13" font-weight="700">Score</text>
+        <line x1="24" y1="52" x2="216" y2="52" stroke="#21303f"/>
+        <text x="24" y="80" fill="#8da0b2" font-family="var(--mono)" font-size="11">Base · Epic</text><text x="216" y="80" fill="#cfe7ee" font-family="var(--mono)" font-size="11" text-anchor="end">100</text>
+        <text x="24" y="106" fill="#8da0b2" font-family="var(--mono)" font-size="11">First-of-type</text><text x="216" y="106" fill="#fbbf24" font-family="var(--mono)" font-size="11" text-anchor="end">+50</text>
+        <line x1="24" y1="122" x2="216" y2="122" stroke="#21303f"/>
+        <text x="24" y="150" fill="#e7eef5" font-family="var(--mono)" font-size="13" font-weight="700">TOTAL</text><text x="216" y="150" fill="#2fd4e6" font-family="var(--mono)" font-size="16" font-weight="700" text-anchor="end">+150</text>
+        <text x="24" y="196" fill="#cfe7ee" font-family="var(--sans)" font-size="13" font-weight="700">Airframe</text>
+        <line x1="24" y1="208" x2="216" y2="208" stroke="#21303f"/>
+        <text x="24" y="232" fill="#8da0b2" font-family="var(--mono)" font-size="10">Reg · F-GUGO</text>
+        <text x="24" y="252" fill="#8da0b2" font-family="var(--mono)" font-size="10">Route · CDG → NCE</text>
+        <text x="24" y="272" fill="#8da0b2" font-family="var(--mono)" font-size="10">Set · Airbus narrowbody (4/12)</text>
+        <text x="120" y="324" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">BACK · receipt</text>
+      </g>
+    </svg>
+    <figcaption>Front = identity + the why-line + headline total. Back = the receipt (how the points were earned) plus the
+    airframe/route/set detail. Both grounded in the locked economy and the research fleet facts.</figcaption>
+  </figure>
+
+  <hr>
+
+  <!-- SCALE -->
+  <h2 id="scale">Drama scales with tier</h2>
+  <p>One reveal engine, five intensities. A Common is a half-second beat so a busy session doesn’t drag; a Legendary fills
+  the screen. The effort the moment spends matches what the catch is worth.</p>
+  <figure>
+    <svg viewBox="0 0 990 220" role="img" aria-label="Reveal intensity scaling across the five tiers">
+      <text x="20" y="24" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">INTENSITY BY TIER — same engine, escalating</text>
+      <!-- 5 mini frames -->
+      <!-- common -->
+      <g transform="translate(20,40)">
+        <rect width="170" height="150" rx="14" fill="#0a0e13" stroke="#21303f"/>
+        <text x="85" y="74" fill="#9aa7b4" font-family="var(--mono)" font-size="14" font-weight="700" text-anchor="middle">+10</text>
+        <text x="85" y="96" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">quick card, no rays</text>
+        <text x="85" y="132" fill="#9aa7b4" font-family="var(--mono)" font-size="9" text-anchor="middle">COMMON · ~0.4s</text>
+      </g>
+      <!-- uncommon -->
+      <g transform="translate(215,40)">
+        <rect width="170" height="150" rx="14" fill="#0a0e13" stroke="#21303f"/>
+        <circle cx="85" cy="66" r="34" fill="#52d486" opacity=".12"/>
+        <text x="85" y="72" fill="#52d486" font-family="var(--mono)" font-size="14" font-weight="700" text-anchor="middle">+20</text>
+        <text x="85" y="100" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">soft glow</text>
+        <text x="85" y="132" fill="#52d486" font-family="var(--mono)" font-size="9" text-anchor="middle">UNCOMMON · ~0.8s</text>
+      </g>
+      <!-- rare -->
+      <g transform="translate(410,40)">
+        <rect width="170" height="150" rx="14" fill="#0a0e13" stroke="#21303f"/>
+        <g stroke="#3eb6f6" stroke-width="1.2" opacity=".5"><line x1="85" y1="66" x2="85" y2="28"/><line x1="85" y1="66" x2="125" y2="46"/><line x1="85" y1="66" x2="45" y2="46"/><line x1="85" y1="66" x2="125" y2="86"/><line x1="85" y1="66" x2="45" y2="86"/></g>
+        <text x="85" y="72" fill="#3eb6f6" font-family="var(--mono)" font-size="14" font-weight="700" text-anchor="middle">+50</text>
+        <text x="85" y="104" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">rays + count-up</text>
+        <text x="85" y="132" fill="#3eb6f6" font-family="var(--mono)" font-size="9" text-anchor="middle">RARE · ~1.5s</text>
+      </g>
+      <!-- epic -->
+      <g transform="translate(605,40)">
+        <rect width="170" height="150" rx="14" fill="#0a0e13" stroke="#4a3168"/>
+        <circle cx="85" cy="66" r="40" fill="#bd83fb" opacity=".2"/>
+        <g stroke="#bd83fb" stroke-width="1.3" opacity=".6"><line x1="85" y1="66" x2="85" y2="24"/><line x1="85" y1="66" x2="132" y2="44"/><line x1="85" y1="66" x2="38" y2="44"/><line x1="85" y1="66" x2="132" y2="88"/><line x1="85" y1="66" x2="38" y2="88"/></g>
+        <text x="85" y="72" fill="#bd83fb" font-family="var(--mono)" font-size="14" font-weight="700" text-anchor="middle">+100</text>
+        <text x="85" y="104" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">rays + pulse + why</text>
+        <text x="85" y="132" fill="#bd83fb" font-family="var(--mono)" font-size="9" text-anchor="middle">EPIC · ~3s</text>
+      </g>
+      <!-- legendary -->
+      <g transform="translate(800,40)">
+        <rect width="170" height="150" rx="14" fill="#100c04" stroke="#5b4715"/>
+        <circle cx="85" cy="66" r="52" fill="#fbbf24" opacity=".22"/>
+        <g stroke="#fbbf24" stroke-width="1.5" opacity=".7"><line x1="85" y1="66" x2="85" y2="20"/><line x1="85" y1="66" x2="140" y2="40"/><line x1="85" y1="66" x2="30" y2="40"/><line x1="85" y1="66" x2="140" y2="92"/><line x1="85" y1="66" x2="30" y2="92"/><line x1="85" y1="66" x2="85" y2="112"/></g>
+        <text x="85" y="72" fill="#fbbf24" font-family="var(--mono)" font-size="14" font-weight="700" text-anchor="middle">+500</text>
+        <text x="85" y="104" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">screen-fill, cinematic</text>
+        <text x="85" y="132" fill="#fbbf24" font-family="var(--mono)" font-size="9" text-anchor="middle">LEGENDARY · ~5s</text>
+      </g>
+    </svg>
+    <figcaption>Tints are the locked rarity colors. The Common beat is deliberately tiny; the Legendary earns the full sequence.</figcaption>
+  </figure>
+  <p><span class="fork">Fork 2</span> <span class="lean">Lean: scale intensity by tier.</span> Keeps the rare moments rare and the common ones fast.</p>
+
+  <hr>
+
+  <!-- WHY -->
+  <h2 id="why">The “why it’s rare” line</h2>
+  <p>For <strong>rare and above</strong>, the reveal shows a one-line fleet fact — the same research that set the tiers, now
+  surfacing as the reason. It does two jobs: teaches the spotter something, and makes the points feel <em>earned</em> rather
+  than arbitrary (principle 2).</p>
+  <table>
+    <thead><tr><th>Catch</th><th>Line shown</th></tr></thead>
+    <tbody>
+      <tr><td>A318</td><td class="mono">“Air France’s last 4 — retiring 2026”</td></tr>
+      <tr><td>717</td><td class="mono">“Only Delta &amp; Hawaiian still fly it”</td></tr>
+      <tr><td>A340</td><td class="mono">“71 left worldwide, mostly Lufthansa &amp; Mahan”</td></tr>
+      <tr><td>MD-11</td><td class="mono">“All-cargo now — no passenger MD-11s left”</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <div class="k">Build note</div>
+    <p style="margin:6px 0 0">This needs a short curated <strong>reason string</strong> per rare-and-above type (~80 types) in
+    the same generated table that holds the tier. Small, additive, and it doubles as the source of the “catch it before it’s
+    gone” retiring hook. Common/uncommon catches show no line — keeps the moment clean.</p>
+  </div>
+  <p><span class="fork">Fork 3</span> <span class="lean">Lean: yes, for rare+.</span> It’s the cheapest thing that makes the economy feel true.</p>
+
+  <hr>
+
+  <!-- MULTI -->
+  <h2 id="multi">Multi-catch — when one tap bags several</h2>
+  <p>The catch zone can hold more than one plane. Today that’s <code>MultiCatchReveal</code>. Proposal: a compact stack you
+  can flick through, with the combined total up top and each card openable.</p>
+  <figure>
+    <svg viewBox="0 0 620 300" role="img" aria-label="Multi-catch reveal stack">
+      <g transform="translate(225,24)">
+        <rect width="170" height="252" rx="18" fill="#0a0e13" stroke="#21303f"/>
+        <text x="85" y="44" fill="#cfe7ee" font-family="var(--mono)" font-size="11" font-weight="700" text-anchor="middle">3 CAUGHT</text>
+        <text x="85" y="62" fill="#2fd4e6" font-family="var(--mono)" font-size="15" font-weight="700" text-anchor="middle">+95</text>
+        <!-- stacked mini cards -->
+        <g font-family="var(--mono)" font-size="10">
+          <rect x="22" y="80" width="126" height="34" rx="7" fill="#11161f" stroke="#1f5274"/>
+          <text x="32" y="101" fill="#cfe7ee">Boeing 717</text><text x="138" y="101" fill="#3eb6f6" text-anchor="end">+75</text>
+          <rect x="22" y="120" width="126" height="34" rx="7" fill="#11161f" stroke="#36424e"/>
+          <text x="32" y="141" fill="#cfe7ee">A320</text><text x="138" y="141" fill="#9aa7b4" text-anchor="end">+10</text>
+          <rect x="22" y="160" width="126" height="34" rx="7" fill="#11161f" stroke="#36424e"/>
+          <text x="32" y="181" fill="#cfe7ee">E175</text><text x="138" y="181" fill="#9aa7b4" text-anchor="end">+10</text>
+        </g>
+        <text x="85" y="222" fill="#5f7284" font-family="var(--mono)" font-size="9" text-anchor="middle">tap any card to open it</text>
+      </g>
+      <text x="310" y="294" fill="#5f7284" font-family="var(--mono)" font-size="10" text-anchor="middle">the rarest of the batch leads; full reveal plays for it, the rest list below</text>
+    </svg>
+    <figcaption>The rarest catch in the batch gets the full animation; the others list as a quick tally so a multi-catch never drags.</figcaption>
+  </figure>
+  <p><span class="fork">Fork 4</span> <span class="lean">Lean: refine the stack; full reveal for the rarest only.</span></p>
+
+  <hr>
+
+  <h2 id="log">Decision log — Decision 2</h2>
+  <table>
+    <thead><tr><th>Fork</th><th>Question</th><th>Lean</th><th>Your call</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Reveal flow</td><td><strong>Anticipation front + receipt on flip</strong> (fallback: refined-current)</td><td class="q">?</td></tr>
+      <tr><td>2</td><td>Intensity scaling</td><td><strong>Scale by tier</strong> — common quick, legendary cinematic</td><td class="q">?</td></tr>
+      <tr><td>3</td><td>“Why it’s rare” line</td><td><strong>Yes for rare+</strong> (curated reason string, ~80 types)</td><td class="q">?</td></tr>
+      <tr><td>4</td><td>Multi-catch</td><td><strong>Stack; full reveal for the rarest</strong></td><td class="q">?</td></tr>
+      <tr><td>5</td><td>Retiring-soon flag on reveal</td><td><strong>Defer</strong> — data’s there; ship the hook later</td><td class="q">?</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <div class="k">Next</div>
+    <p style="margin:6px 0 0">Settle these and Decision 2 is locked. Last one: <strong>Decision 3 — trophies + your
+    bonus-points idea + the unlock moment</strong>, in its own doc.</p>
+  </div>
+
+  <footer>
+    Composed 2026-06-28 by ce-plan · Tailspot Bet B · Decision 2 of 3 (the reveal) · builds on the locked economy (Decision 1)
+    and the research fleet facts. Mockups are directional — exact colors, timing, copy, and layout are placeholders for review.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,539 @@
+//
+//  CatchRevealView.swift
+//  Tailspot
+//
+//  The catch-reveal moment — the agreed Decision-2 design (minimal +
+//  split-flap + photo + score ledger). Ported from the `RevealV3`
+//  prototype: every beat is a function of a single normalized clock
+//  `t` (0 → 1) through `ss()` smoothsteps. The prototype rendered frames
+//  by hand for the GIF mockups; here `TimelineView(.animation)` drives
+//  `t` live off a start timestamp, so the same interpolation plays as a
+//  real ~60fps animation.
+//
+//  Reveal cadence is tier-scaled: a common plane settles quickly and
+//  quietly, a legendary one takes its time with a tinted bloom. The
+//  score ledger counts up from the rarity base, adding a FIRST OF TYPE
+//  line when this is a new type for the observer. (The 10% route-guess
+//  bonus line lands with the guess round — Phase 2's remaining piece.)
+//
+//  This replaces the v0 holo-flip `CardReveal` for single catches. The
+//  multi-catch path still routes through `MultiCatchReveal`.
+//
+
+import SwiftUI
+import UIKit
+
+// MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
+
+private func revClamp(_ x: Double, _ lo: Double = 0, _ hi: Double = 1) -> Double { min(max(x, lo), hi) }
+/// Smoothstep from `a` to `b`, evaluated at `x`. Returns 0 below `a`,
+/// 1 above `b`, eased in between — the prototype's per-element timing.
+private func ss(_ a: Double, _ b: Double, _ x: Double) -> Double {
+    let u = revClamp((x - a) / (b - a))
+    return u * u * (3 - 2 * u)
+}
+private func easeOut(_ x: Double) -> Double { let u = revClamp(x); return 1 - (1 - u) * (1 - u) }
+
+/// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
+private let flapPool = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789-")
+
+/// Reveal-local palette — the near-black card ground and the neutral
+/// ink/rule tones from the prototype. Tier accent comes from
+/// `Rarity.color` so the reveal matches Hangar/badge tiering.
+private enum RP {
+    static let bg = Color(hex: 0x08090C)
+    static let ink = Color(hex: 0xE7EEF5)
+    static let muted = Color(hex: 0x8DA0B2)
+    static let faint = Color(hex: 0x5F7284)
+    static let rule = Color(hex: 0x232C38)
+    static let gold = Color(hex: 0xFBBF24)
+    static let flapFace = Color(hex: 0x131720)
+    static let flapUnsettled = Color(hex: 0x6B7886)
+}
+
+// MARK: - Split-flap row
+
+private struct FlapRow: View {
+    let text: String
+    let t: Double
+    let startT: Double
+    let spanT: Double
+    let fs: CGFloat
+    let cw: CGFloat
+    var gap: CGFloat = 2.5
+    /// Global index of this row's first character, and the total character
+    /// count across all wrapped rows — so the split-flap settle flows
+    /// continuously across lines instead of restarting on each line.
+    var indexOffset: Int = 0
+    var totalCount: Int = 0
+    let color: Color
+
+    var body: some View {
+        let chars = Array(text)
+        let total = totalCount > 0 ? totalCount : chars.count
+        let n = max(1, total - 1)
+        HStack(spacing: gap) {
+            ForEach(Array(chars.enumerated()), id: \.offset) { i, ch in
+                let isSettled = t >= startT + (Double(indexOffset + i) / Double(n)) * spanT
+                let shown: Character = ch == " "
+                    ? " "
+                    : (isSettled ? ch : flapPool[abs(Int(t * 42) + i * 5) % flapPool.count])
+                ZStack {
+                    RoundedRectangle(cornerRadius: 3).fill(RP.flapFace)
+                    RoundedRectangle(cornerRadius: 3).stroke(RP.rule, lineWidth: 1)
+                    Rectangle().fill(.black.opacity(0.45)).frame(height: 1)
+                    Text(String(shown))
+                        .font(.system(size: fs, weight: .bold, design: .monospaced))
+                        .foregroundColor(isSettled ? color : RP.flapUnsettled)
+                }
+                .frame(width: ch == " " ? cw * 0.45 : cw, height: fs * 1.5)
+                .opacity(ch == " " ? 0 : 1)
+            }
+        }
+    }
+}
+
+/// One wrapped line of the split-flap name. `id` is the global character
+/// offset of the line's first character (unique across lines).
+private struct FlapLine: Identifiable { let id: Int; let text: String }
+
+/// Greedy word-wrap for the split-flap name: break on spaces; hard-break a
+/// single word longer than `perLine`. Keeps each line within the budget so
+/// cells stay legible (wrap) instead of shrinking to fit everything on one line.
+private func wrapName(_ s: String, perLine: Int) -> [String] {
+    let limit = max(1, perLine)
+    var lines: [String] = []
+    var cur = ""
+    for w in s.split(separator: " ").map(String.init) {
+        var word = w
+        while word.count > limit {                       // hard-break over-long words
+            if !cur.isEmpty { lines.append(cur); cur = "" }
+            let idx = word.index(word.startIndex, offsetBy: limit)
+            lines.append(String(word[..<idx]))
+            word = String(word[idx...])
+        }
+        if cur.isEmpty {
+            cur = word
+        } else if cur.count + 1 + word.count <= limit {
+            cur += " " + word
+        } else {
+            lines.append(cur); cur = word
+        }
+    }
+    if !cur.isEmpty { lines.append(cur) }
+    return lines.isEmpty ? [s] : lines
+}
+
+// MARK: - Photo hero (real catch photo, else the sky placeholder)
+
+private struct RevealPhoto: View {
+    let url: URL?
+
+    var body: some View {
+        if let image = url.flatMap({ UIImage(contentsOfFile: $0.path) }) {
+            Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+        } else {
+            SkyPlaceholder()
+        }
+    }
+}
+
+/// The prototype's stylized sky — a banking silhouette over a gradient.
+/// Stands in until a real catch photo exists (and for fabricated catches).
+private struct SkyPlaceholder: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: 0x163A6B), Color(hex: 0x4F86C4), Color(hex: 0xBCDCF2)],
+                startPoint: .top, endPoint: .bottom
+            )
+            RadialGradient(
+                colors: [Color(hex: 0xFFF3D6, alpha: 0.85), .clear],
+                center: UnitPoint(x: 0.8, y: 0.2), startRadius: 1, endRadius: 120
+            )
+            Ellipse().fill(.white.opacity(0.45)).frame(width: 110, height: 26).offset(x: -78, y: 44)
+            Ellipse().fill(.white.opacity(0.30)).frame(width: 150, height: 30).offset(x: 56, y: 56)
+            Capsule()
+                .fill(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.6)],
+                                     startPoint: .leading, endPoint: .trailing))
+                .frame(width: 96, height: 3).rotationEffect(.degrees(-16)).offset(x: -26, y: -16)
+            Image(systemName: "airplane")
+                .font(.system(size: 28))
+                .foregroundColor(.black.opacity(0.72))
+                .rotationEffect(.degrees(22)).offset(x: 28, y: -14)
+            LinearGradient(colors: [.clear, .black.opacity(0.18)], startPoint: .center, endPoint: .bottom)
+        }
+    }
+}
+
+// MARK: - Data + ledger cells
+
+/// Splits a pre-formatted value like "36,745 ft" into ("36,745", "ft") so the
+/// unit can render smaller + tinted. Splits on the last space; no space → no unit.
+private func splitUnit(_ s: String?) -> (value: String, unit: String?) {
+    guard let s, !s.isEmpty else { return ("—", nil) }
+    if let r = s.range(of: " ", options: .backwards) {
+        return (String(s[..<r.lowerBound]), String(s[r.upperBound...]))
+    }
+    return (s, nil)
+}
+
+/// A labelled stat — big monospaced value with a smaller tinted unit suffix.
+private func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) -> some View {
+    let parts = splitUnit(raw)
+    return VStack(alignment: .leading, spacing: 3 * scale) {
+        Text(label)
+            .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+            .tracking(1.5).foregroundColor(RP.faint)
+        HStack(alignment: .firstTextBaseline, spacing: 4 * scale) {
+            Text(parts.value)
+                .font(.system(size: 21 * scale, weight: .semibold, design: .monospaced))
+                .foregroundColor(RP.ink)
+            if let unit = parts.unit {
+                Text(unit)
+                    .font(.system(size: 12 * scale, weight: .medium, design: .monospaced))
+                    .foregroundColor(accent)
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.6)
+    }
+}
+
+private func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Double, scale: CGFloat, big: Bool = false) -> some View {
+    HStack {
+        Text(label)
+            .font(.system(size: (big ? 12 : 11) * scale, weight: big ? .heavy : .regular, design: .monospaced))
+            .tracking(big ? 1.5 : 0)
+            .foregroundColor(big ? RP.ink : RP.muted)
+        Spacer()
+        Text(amount)
+            .font(.system(size: (big ? 24 : 13) * scale, weight: big ? .bold : .semibold, design: .monospaced))
+            .foregroundColor(color)
+    }
+    .opacity(opacity)
+}
+
+// MARK: - CatchRevealView
+
+struct CatchRevealView: View {
+    let plane: CardPlane
+    /// "ENTRY #N" — caller passes the count of unique icao24 after the catch.
+    let entryNumber: Int
+    let onDismiss: () -> Void
+    let onViewInHangar: () -> Void
+    var isDuplicate: Bool = false
+
+    /// Animation clock anchor. nil until `onAppear`; `t` is 0 until set.
+    @State private var start: Date?
+    /// Flips true once the reveal has played out (or the user taps to skip),
+    /// gating the dismiss CTAs and the success haptic.
+    @State private var settled = false
+
+    /// Tier-scaled wall-clock for the whole reveal.
+    private var duration: Double {
+        switch plane.rarity {
+        case .common:    return 1.7
+        case .uncommon:  return 1.9
+        case .rare:      return 2.2
+        case .epic:      return 2.6
+        case .legendary: return 3.2
+        }
+    }
+
+    private var base: Int { plane.rarity.basePoints }
+    private var firstOfTypeBonus: Int {
+        plane.isFirstOfType && !isDuplicate ? Int((Double(base) * 0.5).rounded()) : 0
+    }
+    private var finalTotal: Int { isDuplicate ? 0 : base + firstOfTypeBonus }
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = min(geo.size.width - 28, 420)
+            ZStack {
+                RP.bg.ignoresSafeArea()
+
+                // Full-screen dismiss / skip catcher, BELOW the card and CTA.
+                // The card sits above with hit-testing off so taps on it fall
+                // through to here; the CTA buttons sit above and capture their
+                // own taps. (Previously the tap gesture was on the enclosing
+                // container, so it swallowed the "View in Hangar" button.)
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceOrDismiss() }
+                    .ignoresSafeArea()
+
+                TimelineView(.animation) { context in
+                    let t = start.map { revClamp(context.date.timeIntervalSince($0) / duration) } ?? 0
+                    layout(t: t, settled: settled, width: width)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear { start = Date() }
+            .task {
+                try? await Task.sleep(for: .seconds(duration))
+                withAnimation(.easeOut(duration: 0.3)) { settled = true }
+            }
+            .sensoryFeedback(.success, trigger: settled)
+        }
+    }
+
+    /// Card stacked ABOVE the CTA so the "tap to continue / View in Hangar"
+    /// row is always a reserved strip below the card — never overlapped by a
+    /// tall (wrapped-name) card, which is what happened when the card was
+    /// free-centered in the full screen and the CTA was pinned to the bottom.
+    /// The card's frame fills the space above the CTA and centers its content;
+    /// card taps fall through (hit-testing off) to the dismiss catcher behind,
+    /// while the CTA captures its own taps.
+    @ViewBuilder
+    private func layout(t: Double, settled: Bool, width: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            card(t: t, width: width)
+                .allowsHitTesting(false)
+            Spacer(minLength: 0)
+            ctaRow
+                .opacity(settled ? 1 : 0)
+                .allowsHitTesting(settled)
+                .padding(.top, 14)
+                .padding(.bottom, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func advanceOrDismiss() {
+        if settled {
+            onDismiss()
+        } else {
+            // Skip the animation straight to its final frame.
+            start = Date().addingTimeInterval(-duration)
+            withAnimation(.easeOut(duration: 0.25)) { settled = true }
+        }
+    }
+
+    #if DEBUG
+    /// Renders the FULL reveal (card + CTA over the background) at a fixed
+    /// final state and concrete screen size — used by the snapshot / visual-
+    /// pass test (`RevealSnapshotTests`). Renders the whole screen, not just
+    /// the card, so card↔CTA spacing/overlap is visible. Uses a CONCRETE
+    /// `.frame(width:height:)` (not the device `layout`'s greedy
+    /// `maxHeight: .infinity`) because ImageRenderer double-renders greedy
+    /// frames — a snapshot-only artifact, not a device behavior. DEBUG-only.
+    @MainActor func _snapshotScreen(width: CGFloat, size: CGSize) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            card(t: 1.0, width: width)
+            Spacer(minLength: 0)
+            ctaRow
+                .padding(.top, 14)
+                .padding(.bottom, 28)
+        }
+        .frame(width: size.width, height: size.height)
+        .background(RP.bg)
+    }
+    #endif
+
+    // The card itself, fully parameterized by the reveal clock `t`.
+    private func card(t: Double, width: CGFloat) -> some View {
+        let accent = plane.rarity.tint
+        // The prototype's absolute sizes were tuned for a 300pt-wide card.
+        // Scale every metric off the real card width so it reads full-size
+        // (and not vertically cramped) on a phone instead of postage-stamp.
+        let scale = width / 300
+        let hPad = 22 * scale
+        let avail = Double(width - 2 * hPad)
+        let line = ss(0.5, 0.7, t)
+        let total = Int((Double(finalTotal) * easeOut(ss(0.82, 0.96, t))).rounded())
+
+        // Split-flap sizing: keep cells legible. If the name won't fit on one
+        // line at the floor cell size, WRAP it across lines rather than shrink
+        // the flaps to dust.
+        let model = (plane.model ?? "UNKNOWN AIRCRAFT").uppercased()
+        let flapGap = 2.5 * scale
+        let maxCW = 17.5 * scale
+        let minCW = 12.0 * scale
+        // Most chars that fit on a line before cells would drop below the floor.
+        let perLine = max(6, Int((avail + Double(flapGap)) / Double(minCW + flapGap)))
+        let nameLines = model.count <= perLine ? [model] : wrapName(model, perLine: perLine)
+        let longestLine = nameLines.map(\.count).max() ?? model.count
+        // Largest uniform cell that fits the longest wrapped line.
+        let cwFit = CGFloat((avail - Double(flapGap) * Double(max(0, longestLine - 1))) / Double(max(1, longestLine)))
+        let cw = min(maxCW, max(minCW, cwFit))
+        let fs = min(15 * scale, cw * 0.86)
+        let totalFlapChars = nameLines.reduce(0) { $0 + $1.count }
+        let flapLines: [FlapLine] = {
+            var acc = 0
+            return nameLines.map { line in
+                let l = FlapLine(id: acc, text: line); acc += line.count; return l
+            }
+        }()
+
+        return ZStack {
+            // Tier bloom behind the card — modest for rare, cinematic for legendary.
+            if plane.rarity.ordinal >= Rarity.epic.ordinal {
+                RadialGradient(colors: [accent.opacity(0.22), .clear],
+                               center: .center, startRadius: 1, endRadius: Double(width) * 0.9)
+                    .opacity(ss(0.0, 0.4, t) * (plane.rarity == .legendary ? 1.0 : 0.6))
+                    .blur(radius: 8)
+            }
+
+            VStack(alignment: .leading, spacing: 0) {
+                RevealPhoto(url: plane.photoURL)
+                    .frame(height: 168 * scale)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
+                    )
+                    .opacity(ss(0.0, 0.18, t))
+                    .padding(18 * scale)
+
+                VStack(alignment: .leading, spacing: 11 * scale) {
+                    VStack(alignment: .leading, spacing: 4 * scale) {
+                        ForEach(flapLines) { fl in
+                            FlapRow(text: fl.text, t: t, startT: 0.24, spanT: 0.36,
+                                    fs: fs, cw: cw, gap: flapGap,
+                                    indexOffset: fl.id, totalCount: totalFlapChars, color: RP.ink)
+                        }
+                    }
+
+                    HStack(spacing: 7 * scale) {
+                        Circle().fill(accent).frame(width: 6 * scale, height: 6 * scale)
+                        Text(plane.rarity.label.uppercased())
+                            .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
+                            .tracking(3).foregroundColor(accent)
+                        if isDuplicate {
+                            Text("· ALREADY CAUGHT")
+                                .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
+                                .tracking(1).foregroundColor(Color(hex: 0xE0556B))
+                        }
+                    }
+                    .opacity(ss(0.56, 0.7, t))
+
+                    Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)
+
+                    dataSection(t: t, scale: scale, accent: accent)
+
+                    VStack(spacing: 8 * scale) {
+                        Rectangle().fill(RP.rule).frame(height: 1).padding(.top, 4 * scale)
+                        if isDuplicate {
+                            ledgerRow("ALREADY IN HANGAR", "", RP.muted, ss(0.78, 0.86, t), scale: scale)
+                        } else {
+                            ledgerRow(plane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
+                            if firstOfTypeBonus > 0 {
+                                ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
+                            }
+                        }
+                        Rectangle().fill(RP.rule).frame(height: 1)
+                        ledgerRow("TOTAL", "+\(total)", accent, ss(0.84, 0.92, t), scale: scale, big: true)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Text("ENTRY #\(entryNumber)")
+                            .font(.system(size: 9 * scale, weight: .semibold, design: .monospaced))
+                            .tracking(1.5).foregroundColor(RP.faint)
+                    }
+                    .opacity(ss(0.9, 1.0, t))
+                    .padding(.top, 2 * scale)
+                }
+                .padding(.horizontal, hPad)
+                .padding(.bottom, 22 * scale)
+            }
+            .background(RP.bg)
+            .frame(width: width)
+            .clipShape(RoundedRectangle(cornerRadius: 26))
+            .overlay(RoundedRectangle(cornerRadius: 26).stroke(RP.rule, lineWidth: 1))
+        }
+    }
+
+    // ALT / SPD as a two-column top row, then (when there's route data) a
+    // rule and a full-width ROUTE row: big ICAO codes with a tinted arrow and
+    // the human-readable city names underneath. No route → DIST joins row one.
+    @ViewBuilder
+    private func dataSection(t: Double, scale: CGFloat, accent: Color) -> some View {
+        let hasRoute = (plane.originIcao ?? plane.destIcao) != nil
+        VStack(alignment: .leading, spacing: 12 * scale) {
+            // ALT / SPD — always two columns with a real gap so wide values
+            // (e.g. "35,433 ft") never butt against the next column.
+            HStack(spacing: 14 * scale) {
+                statCell("ALT", plane.altText, scale: scale, accent: accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                statCell("SPD", plane.speedText, scale: scale, accent: accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .opacity(ss(0.6, 0.76, t))
+
+            // The third fact gets its own full-width row: ROUTE when we have
+            // it, otherwise DIST. Never a cramped third column.
+            Rectangle().fill(RP.rule).frame(height: 1)
+            Group {
+                if hasRoute {
+                    routeCell(scale: scale, accent: accent)
+                } else {
+                    statCell("DIST", plane.distText, scale: scale, accent: accent)
+                }
+            }
+            .opacity(ss(0.66, 0.82, t))
+        }
+    }
+
+    private func routeCell(scale: CGFloat, accent: Color) -> some View {
+        // Only draw the arrow + second endpoint when BOTH exist — a one-sided
+        // route (origin known, destination not filed yet) shows just the one
+        // code, never a dangling "→ —".
+        let codeFont = Font.system(size: 21 * scale, weight: .semibold, design: .monospaced)
+        let arrowFont = Font.system(size: 16 * scale, weight: .semibold, design: .monospaced)
+        return VStack(alignment: .leading, spacing: 3 * scale) {
+            Text("ROUTE")
+                .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
+                .tracking(1.5).foregroundColor(RP.faint)
+            HStack(alignment: .firstTextBaseline, spacing: 8 * scale) {
+                if let o = plane.originIcao {
+                    Text(o).font(codeFont).foregroundColor(RP.ink)
+                    if let d = plane.destIcao {
+                        Text("→").font(arrowFont).foregroundColor(accent)
+                        Text(d).font(codeFont).foregroundColor(RP.ink)
+                    }
+                } else if let d = plane.destIcao {
+                    Text("→").font(arrowFont).foregroundColor(accent)
+                    Text(d).font(codeFont).foregroundColor(RP.ink)
+                }
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            if plane.originName != nil || plane.destName != nil {
+                HStack(spacing: 5 * scale) {
+                    if let on = plane.originName {
+                        Text(on)
+                        if let dn = plane.destName {
+                            Text("→").foregroundColor(RP.faint)
+                            Text(dn)
+                        }
+                    } else if let dn = plane.destName {
+                        Text("→").foregroundColor(RP.faint)
+                        Text(dn)
+                    }
+                }
+                .font(.system(size: 12 * scale))
+                .foregroundColor(RP.muted)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            }
+        }
+    }
+
+    private var ctaRow: some View {
+        HStack(spacing: 18) {
+            Text("tap to continue")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .tracking(1.2).foregroundColor(RP.faint)
+                .contentShape(Rectangle())
+                .onTapGesture { onDismiss() }
+            Button(action: onViewInHangar) {
+                Text("View in Hangar ›")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(0.5).foregroundColor(plane.rarity.tint)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}

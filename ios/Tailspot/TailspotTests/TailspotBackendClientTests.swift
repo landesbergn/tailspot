@@ -137,6 +137,10 @@ struct TailspotBackendClientTests {
         #expect(a.category == nil)
         #expect(a.emitterCategory == nil)
         #expect(a.isRotorcraft == false)
+        // Absent `route` key → both ends nil. ADDITIVE-WIRE regression: a flight
+        // with no route (most GA/military) decodes exactly as before, no throw.
+        #expect(a.originIcao == nil)
+        #expect(a.destIcao == nil)
         // No timestamp → extrapolation degrades gracefully to the raw fix.
         let pos = a.extrapolatedPosition(at: Date())
         #expect(pos.lat == 37.0)
@@ -189,6 +193,70 @@ struct TailspotBackendClientTests {
         #expect(EmitterCategory(rawValue: nil) == nil)
         #expect(EmitterCategory(rawValue: "") == nil)
         #expect(EmitterCategory(rawValue: "   ") == nil)
+    }
+
+    @Test func decodesRouteWhenPresent() throws {
+        // The U6 backend addition: a scheduled airline flight carries a nested
+        // `route` object with origin → destination ICAO airport codes. Maps
+        // straight through to the core Aircraft so the catch can freeze it.
+        let json = """
+        {
+          "fetchedAt": 1781122007,
+          "aircraft": [
+            {
+              "icao24": "a1b2c3",
+              "callsign": "UAL901",
+              "originCountry": "United States",
+              "longitude": -122.4,
+              "latitude": 37.6,
+              "altitudeMeters": 10668.0,
+              "velocityMps": 240.0,
+              "trackDeg": 50.0,
+              "onGround": false,
+              "positionTimestamp": 1781122007,
+              "typecode": "B789",
+              "registration": "N24976",
+              "route": { "originIcao": "KSFO", "destIcao": "EGLL" }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let a = try JSONDecoder().decode(BackendAircraftResponse.self, from: json)
+            .aircraft[0].asAircraft()
+        #expect(a.originIcao == "KSFO")
+        #expect(a.destIcao == "EGLL")
+    }
+
+    @Test func partialRouteDecodes() throws {
+        // Both sub-fields are independently optional: a route object may carry
+        // only one end (e.g. origin known, destination not yet resolved). The
+        // missing end is nil, the present end maps through — no throw.
+        let json = """
+        {
+          "fetchedAt": 1781122007,
+          "aircraft": [
+            {
+              "icao24": "a1b2c3",
+              "callsign": "SWA1",
+              "originCountry": "United States",
+              "longitude": -122.4,
+              "latitude": 37.6,
+              "altitudeMeters": 9000.0,
+              "velocityMps": 200.0,
+              "trackDeg": 90.0,
+              "onGround": false,
+              "positionTimestamp": 1781122007,
+              "route": { "originIcao": "KOAK" }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let a = try JSONDecoder().decode(BackendAircraftResponse.self, from: json)
+            .aircraft[0].asAircraft()
+        #expect(a.originIcao == "KOAK")
+        #expect(a.destIcao == nil)
     }
 
     @Test func decodesMetadataAndMapsToAircraftMetadata() throws {

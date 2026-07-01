@@ -58,6 +58,10 @@ struct ContentView: View {
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
     /// dumps are for inspection, not normal use.
     @State private var showDebug = false
+    #if DEBUG
+    /// Cycles the debug "Simulate catch" preset (tier) on each tap.
+    @State private var simCatchIndex = 0
+    #endif
     /// DEBUG-only: presents the trophy-icon gallery for visual review.
     @State private var showIconGallery = false
     /// Drives the Hangar sheet (collection of past catches). Opened
@@ -519,6 +523,7 @@ struct ContentView: View {
                         // haptic / a11y / hidden-reveal path can be eyeballed
                         // on-device without waiting for an organic crossing.
                         HStack(spacing: 8) {
+                            Button("✦ Catch") { simulateCatch() }
                             Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
                             Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
                             Button("⚑ Icons") { showIconGallery = true }
@@ -650,7 +655,7 @@ struct ContentView: View {
         // the device. Dismiss path either closes the sheet (Keep
         // spotting) or closes + opens the Hangar (View in Hangar).
         .fullScreenCover(item: $pendingReveal) { reveal in
-            CardReveal(
+            CatchRevealView(
                 plane: reveal.plane,
                 entryNumber: reveal.entryNumber,
                 onDismiss: {
@@ -718,7 +723,8 @@ struct ContentView: View {
                     gps: location.horizontalAccuracy
                 )
                 indoorStreak = verdict == .notSky ? indoorStreak + 1 : 0
-                let indoors = indoorStreak >= 3   // ~3 s sustained
+                let indoors = indoorStreak >= 5   // ~5 s sustained (was 3 —
+                                                  // the ambient nag was too eager, 2026-07-01)
                 if indoors != pointedIndoors { withAnimation { pointedIndoors = indoors } }
                 try? await Task.sleep(for: .seconds(1))
             }
@@ -1264,7 +1270,12 @@ struct ContentView: View {
                     // such field), so record the live value as-observed.
                     category: observed?.aircraft.category,
                     altitudeMeters: observed?.aircraft.altitudeMeters,
-                    velocityMps: observed?.aircraft.velocityMps
+                    velocityMps: observed?.aircraft.velocityMps,
+                    // Route (origin → destination) is feed-only and a frozen
+                    // catch-moment fact — record as-observed; nil for routeless
+                    // flights. No metadata-endpoint fallback / later backfill.
+                    originIcao: observed?.aircraft.originIcao,
+                    destIcao: observed?.aircraft.destIcao
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -1346,6 +1357,58 @@ struct ContentView: View {
     /// Duplicate-only case (single dup): synthesizes a `CardPlane`
     /// from the already-stored row + (when available) the current
     /// live observation for fresh alt/speed/distance.
+    #if DEBUG
+    /// Debug-only: fabricate a catch at a cycling tier and fire the reveal,
+    /// so the catch / reveal / economy can be eyeballed on-device without a
+    /// real plane (the synthetic ADS-B source was removed). Non-persisting —
+    /// shows the reveal card without writing to the Hangar.
+    private func simulateCatch() {
+        struct Sim {
+            let icao, callsign, model, mfr, op, typecode: String
+            let alt, vel, dist: Double
+            let origin, dest, originName, destName: String?
+        }
+        let presets: [Sim] = [
+            Sim(icao: "5101c7", callsign: "RCH872", model: "Boeing C-17 Globemaster III",
+                mfr: "Boeing", op: "U.S. Air Force", typecode: "C17",
+                alt: 8500, vel: 215, dist: 9200, origin: "KSUU", dest: "PHIK",
+                originName: "Travis AFB", destName: "Honolulu"),
+            Sim(icao: "a4e172", callsign: "N4521C", model: "Cessna 172",
+                mfr: "Cessna", op: "Private", typecode: "C172",
+                alt: 1100, vel: 52, dist: 3800, origin: nil, dest: nil,
+                originName: nil, destName: nil),
+            Sim(icao: "a9bc53", callsign: "JBU613", model: "Airbus A220-300",
+                mfr: "Airbus", op: "JetBlue", typecode: "BCS3",
+                alt: 10800, vel: 232, dist: 14500, origin: "KBOS", dest: "KSFO",
+                originName: "Boston Logan", destName: "San Francisco"),
+            Sim(icao: "3b7440", callsign: "GEC8160", model: "Boeing 747-400",
+                mfr: "Boeing", op: "Lufthansa Cargo", typecode: "B744",
+                alt: 11200, vel: 251, dist: 22000, origin: "RJAA", dest: "KSFO",
+                originName: "Tokyo Narita", destName: "San Francisco"),
+            Sim(icao: "ae0b52", callsign: "DOOM11", model: "Boeing B-52 Stratofortress",
+                mfr: "Boeing", op: "U.S. Air Force", typecode: "B52",
+                alt: 12200, vel: 244, dist: 31000, origin: "KBAD", dest: nil,
+                originName: "Barksdale AFB", destName: nil),
+        ]
+        let s = presets[simCatchIndex % presets.count]
+        simCatchIndex += 1
+        let c = Catch(
+            icao24: s.icao, callsign: s.callsign, model: s.model, manufacturer: s.mfr,
+            operatorName: s.op, caughtAt: Date(),
+            observerLat: 37.8, observerLon: -122.27,  // fabricated — observer coords irrelevant to the reveal
+            slantDistanceMeters: s.dist, typecode: s.typecode,
+            altitudeMeters: s.alt, velocityMps: s.vel,
+            originIcao: s.origin, destIcao: s.dest,
+            originName: s.originName, destName: s.destName
+        )
+        pendingReveal = PendingReveal(
+            plane: cardPlane(from: c, observed: nil),
+            entryNumber: Set(catches.map(\.icao24)).count + 1,
+            isDuplicate: false
+        )
+    }
+    #endif
+
     private func presentReveal(
         newCatches: [Catch],
         duplicates: [String],
@@ -1436,6 +1499,16 @@ struct ContentView: View {
             model: row.model
         )
         let distMeters = observed?.slantDistanceMeters ?? row.slantDistanceMeters
+        // Route, when the catch captured one (adsb.lol doesn't carry it for
+        // every plane). origin/dest are ICAO idents; names are the optional
+        // human-readable airport/city labels (frozen on the Catch).
+        let origin = observed?.aircraft.originIcao ?? row.originIcao
+        let dest = observed?.aircraft.destIcao ?? row.destIcao
+        // First-of-type: no *other* Hangar row shares this typecode. Display
+        // only — the reveal ledger mirrors what the backend awards.
+        let isFirstOfType = row.typecode.map { tc in
+            !catches.contains { $0 !== row && $0.typecode == tc }
+        } ?? false
         return CardPlane(
             callsign: row.callsign,
             model: canonical.displayName ?? row.model,
@@ -1445,7 +1518,12 @@ struct ContentView: View {
             altText: CardPlane.altText(fromMeters: observed?.aircraft.altitudeMeters ?? row.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
             distText: String(format: "%.1f km", distMeters / 1000),
-            photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+            photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
+            originIcao: origin,
+            destIcao: dest,
+            originName: row.originName,
+            destName: row.destName,
+            isFirstOfType: isFirstOfType
         )
     }
 
@@ -2321,14 +2399,21 @@ struct ContentView: View {
 
 // MARK: - AR-overlay rarity resolution
 
-/// Resolves the rarity tier for a live AR-overlay label using the same
-/// typecode-first precedence as `Catch.resolvedRarity`:
+/// Resolves the rarity tier for a live AR-overlay label, matching the
+/// single-source precedence of `Catch.resolvedRarity`:
 ///
 ///   1. Typecode → `AircraftNaming.rarity(forTypecode:)` from the
-///      activity-based AircraftTypes.json table.  This matches the
+///      activity-based AircraftTypes.json table. This matches the
 ///      post-catch tier so the HUD and the Hangar agree.
-///   2. String classifier fallback when no typecode is available yet
-///      (metadata not loaded, or OpenSky returned no `typecode` field).
+///   2. No typecode → a single conservative default (`.common`).
+///
+/// SINGLE-SOURCE RULE: rarity comes only from the typecode table. The
+/// string classifier (still the no-typecode TYPE source) no longer supplies
+/// a rarity — its curated ladder diverged from the activity model, so the
+/// no-typecode path is a flat `.common`, not a second tier ladder. The
+/// `manufacturer`/`model`/`operatorName` params are retained on the
+/// signature for the stable test/caller API even though rarity no longer
+/// reads them.
 ///
 /// Extracted as a free function so it can be unit-tested without
 /// instantiating a SwiftUI view (divergence-a fix, 2026-06-11).
@@ -2338,12 +2423,7 @@ nonisolated func resolveAROverlayRarity(
     model: String?,
     operatorName: String?
 ) -> Rarity {
-    if let r = AircraftNaming.rarity(forTypecode: typecode) { return r }
-    return AircraftClassifier.classify(
-        manufacturer: manufacturer,
-        model: model,
-        operatorName: operatorName
-    ).rarity
+    AircraftNaming.rarity(forTypecode: typecode) ?? .common
 }
 
 // MARK: - Per-plane ambient label

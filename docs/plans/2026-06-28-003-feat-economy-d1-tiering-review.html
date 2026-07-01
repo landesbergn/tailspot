@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiering Review — Decision 1 / Fork 1</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#121a22; --panel2:#0e151c; --raise:#16202b;
+    --ink:#e7eef5; --muted:#8da0b2; --faint:#5f7284; --line:#21303f;
+    --cyan:#2fd4e6; --cyan-dim:#1c7d89;
+    --common:#9aa7b4; --uncommon:#52d486; --rare:#3eb6f6; --epic:#bd83fb; --legend:#fbbf24;
+    --good:#52d486; --warn:#fbbf24; --bad:#f1737d;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.58;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:900px;margin-inline:auto;padding:32px 22px 80px}
+  a{color:var(--cyan);text-decoration:none} a:hover{text-decoration:underline}
+  h1{font-size:29px;line-height:1.15;margin:0 0 6px;letter-spacing:-.4px}
+  h2{font-size:20px;margin:42px 0 4px;letter-spacing:-.2px}
+  h3{font-size:15.5px;margin:22px 0 6px}
+  .eyebrow{font:600 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-dim)}
+  p{margin:8px 0;max-width:76ch;color:#d7e0e8}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  code{font-family:var(--mono);font-size:.86em;background:#0c141c;border:1px solid var(--line);padding:1px 5px;border-radius:5px;color:#cfe7ee}
+  hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+  .lede{font-size:16px;color:#c3d0db;max-width:78ch}
+  .metastrip{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
+  .chip{font:600 11px/1 var(--mono);padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)}
+  .chip.on{color:var(--cyan);border-color:var(--cyan-dim)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 6px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px}
+  nav.toc a{font:600 12.5px/1 var(--mono);color:var(--muted);padding:5px 9px;border-radius:7px}
+  nav.toc a:hover{background:var(--raise);color:var(--cyan);text-decoration:none}
+  .callout{background:#0e1820;border:1px solid #1d3a44;border-radius:12px;padding:14px 16px;margin:16px 0}
+  .callout.warn{background:#1c1812;border-color:#4a3b18}
+  .callout .k{font:600 11px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--cyan)}
+  .callout.warn .k{color:var(--warn)}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:600 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  td.num,th.num{font-family:var(--mono);text-align:right}
+  .tier{font:600 11px/1 var(--mono);padding:3px 7px;border-radius:5px;display:inline-block;white-space:nowrap}
+  .t-common{color:var(--common);border:1px solid #36424e}
+  .t-uncommon{color:var(--uncommon);border:1px solid #245c3c}
+  .t-rare{color:var(--rare);border:1px solid #1f5274}
+  .t-epic{color:var(--epic);border:1px solid #4a3168}
+  .t-legend{color:var(--legend);border:1px solid #5b4715}
+  .mono{font-family:var(--mono)}
+  figure{margin:16px 0}
+  figure svg{display:block;width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:13px}
+  figcaption{font-size:12.5px;color:var(--faint);margin-top:6px}
+  ul.tight{margin:6px 0;padding-left:18px} ul.tight li{margin:4px 0;color:#d7e0e8}
+  .q{color:var(--cyan);font-weight:600}
+  .lean{font:600 12px/1 var(--mono);color:var(--good)}
+  .rq{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 16px;margin:14px 0}
+  .rq h4{margin:0 0 6px;font-size:15px}
+  .rq .opts{font-size:13.5px;margin:6px 0 0}
+  .flag{font:600 10px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:5px;border:1px solid var(--line);color:var(--muted);margin-left:6px}
+  .flag.big{color:var(--warn);border-color:#4a3b18;background:#1c1812}
+  footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font:500 12px/1.5 var(--mono);color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Tailspot · Bet B · Decision 1 · Fork 1 detail</div>
+    <h1>Tiering Review</h1>
+    <p class="lede">The curated model is locked — now we review <strong>which planes sit in which tier</strong>, and whether
+    the rules that put them there are right. Below: the philosophy, the current rules, what each tier actually holds, the full
+    override list, and seven judgment calls for you to settle.</p>
+    <div class="metastrip">
+      <span class="chip on">Decision 1 · Fork 1</span>
+      <span class="chip">2,612 types</span>
+      <span class="chip">7 review questions</span>
+      <span class="chip">Date · 2026-06-28</span>
+    </div>
+    <nav class="toc">
+      <a href="#axis">The axis</a>
+      <a href="#rules">The rules</a>
+      <a href="#contents">What each tier holds</a>
+      <a href="#overrides">The override list</a>
+      <a href="#review">7 review questions</a>
+      <a href="#log">What I need</a>
+    </nav>
+  </header>
+
+  <!-- AXIS -->
+  <h2 id="axis">The axis: sky presence, not prestige</h2>
+  <p>Rarity here means <strong>how often you’d actually see one overhead</strong> — not how new, expensive, or impressive
+  the plane is. An A380 is rare because few fly, not because it’s big. A brand-new 737 MAX is common because they’re
+  everywhere. Review every call below against that one question: <em>how often is this thing in the sky above a spotter?</em></p>
+  <p class="faint">Source: the curated tier logic in <code>tools/generate-aircraft-types.py</code> (<code>aircraft_rarity</code> +
+  <code>RARITY_OVERRIDES</code>), which feeds <code>AircraftTypes.json</code> → the app and the backend.</p>
+
+  <!-- RULES -->
+  <h2 id="rules">The rules — six lines decide everything</h2>
+  <p>A typecode gets its tier from the first rule that matches. Named exceptions (the override list) win over all of these.</p>
+  <table>
+    <thead><tr><th>#</th><th>If the plane is…</th><th>Tier</th><th>Reasoning</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>a helicopter / tiltrotor</td><td><span class="tier t-uncommon">uncommon</span></td><td>localized, lower numbers than the airliner + GA long tail</td></tr>
+      <tr><td>2</td><td>super-heavy (A380-class, WTC&nbsp;J)</td><td><span class="tier t-epic">epic</span></td><td>a handful in the sky worldwide</td></tr>
+      <tr><td>3</td><td>a widebody</td><td><span class="tier t-uncommon">uncommon</span></td><td>“a step below the narrowbody wall”</td></tr>
+      <tr><td>4</td><td>a business jet</td><td><span class="tier t-uncommon">uncommon</span></td><td>low utilization, parked most days</td></tr>
+      <tr><td>5</td><td>military</td><td><span class="tier t-rare">rare</span></td><td>occasional for most spotters</td></tr>
+      <tr><td>6</td><td>anything else (narrowbody, regional, GA)</td><td><span class="tier t-common">common</span></td><td>the high-movement long tail — the wallpaper of the sky</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Where that lands — the distribution</h3>
+  <figure>
+    <svg viewBox="0 0 860 130" role="img" aria-label="Rarity distribution across 2612 types">
+      <text x="20" y="24" fill="#e7eef5" font-family="var(--mono)" font-size="12" font-weight="700">DISTRIBUTION — 2,612 type entries</text>
+      <!-- stacked proportional bar -->
+      <g>
+        <rect x="20" y="42" width="704" height="26" rx="4" fill="#9aa7b4" opacity=".5"/>
+        <rect x="724" y="42" width="122" height="26" fill="#52d486" opacity=".5"/>
+        <rect x="20" y="42" width="826" height="26" rx="4" fill="none" stroke="#21303f"/>
+        <!-- thin slivers for rare/epic/legendary at far right, drawn over -->
+        <rect x="836" y="42" width="10" height="26" fill="#3eb6f6" opacity=".6"/>
+      </g>
+      <g font-family="var(--mono)" font-size="11" fill="#8da0b2">
+        <text x="40" y="59" fill="#cfd7df">common · 2191 (84%)</text>
+        <text x="730" y="59" fill="#52d486" font-size="9">uncommon · 381 (15%)</text>
+      </g>
+      <g font-family="var(--mono)" font-size="10" fill="#8da0b2">
+        <text x="20" y="92"><tspan fill="#3eb6f6">rare 30 (1.1%)</tspan>  ·  <tspan fill="#bd83fb">epic 8 (0.3%)</tspan>  ·  <tspan fill="#fbbf24">legendary 2 (0.08%)</tspan></text>
+        <text x="20" y="112" fill="#5f7284">…the top three tiers are 40 types combined — and most are military or scarce airframes you’ll rarely actually catch.</text>
+      </g>
+    </svg>
+    <figcaption>This is the spread of <em>type entries</em>. Real catches skew even harder to common, since the sky is dominated by a few narrowbody types.</figcaption>
+  </figure>
+
+  <!-- CONTENTS -->
+  <h2 id="contents">What each tier actually holds</h2>
+  <table>
+    <thead><tr><th>Tier</th><th class="num">Pts</th><th>Real examples (from today’s data)</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tier t-common">common</span></td><td class="num">10</td><td class="mono">B38M 737&nbsp;MAX · A20N A320neo · CRJ9 · E75L E175 · C172 — every narrowbody airliner, regional jet, and GA piston</td></tr>
+      <tr><td><span class="tier t-uncommon">uncommon</span></td><td class="num">20</td><td class="mono">B77W 777-300ER · B789 787-9 · A359 A350 · A333 A330 · B763 767 · EC35 H135 heli · BCS3 A220 · E190 · B712 717 · B350 King&nbsp;Air</td></tr>
+      <tr><td><span class="tier t-rare">rare</span></td><td class="num">50</td><td class="mono">C130 · C17 · P8 · KC135 (military) · B744 747-400 · A343 A340 · MD11 · GLF6 G650 · GL7T Global 7500</td></tr>
+      <tr><td><span class="tier t-epic">epic</span></td><td class="num">100</td><td class="mono">A388 A380 · B748 747-8 · C5M C-5M · A124 An-124 · B52 · B1 · E3 Sentry · E4 Nightwatch</td></tr>
+      <tr><td><span class="tier t-legend">legendary</span></td><td class="num">500</td><td class="mono">B2 Spirit — (VC-25 Air Force One, U-2, SR-71, Concorde are pinned but absent from the type data)</td></tr>
+    </tbody>
+  </table>
+
+  <!-- OVERRIDES -->
+  <h2 id="overrides">The override list — the curated judgment layer</h2>
+  <p>The six rules are coarse; the override table is where the real tiering judgment lives. These named typecodes ignore the
+  default and take a fixed tier. This is the list most worth your eyes.</p>
+  <table>
+    <thead><tr><th>Tier</th><th>Typecodes</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tier t-legend">legendary</span></td><td class="mono">VC25 · B2 · U2 · SR71 · CONC</td><td>Icons / one-offs. Only B-2 is in the active data; the rest are future-proofing.</td></tr>
+      <tr><td><span class="tier t-epic">epic</span></td><td class="mono">A388 · B748 · C5M · A124 · B52 · B1 · E3TF/E3CF · E4</td><td>Super-heavy or strategic — a handful airborne worldwide.</td></tr>
+      <tr><td><span class="tier t-rare">rare</span></td><td class="mono">B742/B744/B74S · A342/A343/A345/A346 · MD11</td><td>Scarce-in-the-air widebodies (747 classic/-400/SP, A340 family, MD-11).</td></tr>
+      <tr><td><span class="tier t-rare">rare</span></td><td class="mono">GLF6 · GA6C · GA7C · GA8C · GL7T · GL5T · GLEX</td><td>Heavy / ultra-long-range business jets (G650/600/700/800, Global 5000/7500/Express).</td></tr>
+      <tr><td><span class="tier t-uncommon">uncommon</span></td><td class="mono">BCS1/BCS3 · E190/E195 · E290/E295 · B712 · MD82/83/88/90 · B721/B722</td><td>Newer or smaller narrowbodies pulled up from common (A220, E-Jets, 717, MD-80, 727).</td></tr>
+      <tr><td><span class="tier t-uncommon">uncommon</span></td><td class="mono">PC12 · TBM7/8/9 · BE20/BE30/B350</td><td>GA turboprops worth a notch above the piston long tail (PC-12, TBM, King Air).</td></tr>
+    </tbody>
+  </table>
+  <p class="faint">Plus the military exact-match set (C130, C17, KC135, P8, A400, C295…) which lands at <span class="tier t-rare">rare</span>
+  by rule 5 without needing an override. That’s most of the 30 “rare” types.</p>
+
+  <!-- REVIEW QUESTIONS -->
+  <h2 id="review">Seven questions to settle</h2>
+  <p>Each is a judgment call the curated model makes today. Confirm, or tell me to change it.</p>
+
+  <div class="rq">
+    <h4>1 · Widebodies are all “uncommon” — even daily workhorses <span class="flag big">biggest call</span></h4>
+    <p class="muted" style="margin:4px 0">A 787-9, 777-300ER, A350, A330, 767 are <span class="tier t-uncommon">uncommon</span>
+    (20 pts) — the same as a hard-to-see one — while a 737 MAX is <span class="tier t-common">common</span> (10). At a hub
+    like SFO you see widebodies constantly. Calling every widebody “uncommon” makes the tier mean “is a widebody,” not “is
+    actually scarce.”</p>
+    <p class="opts"><span class="q">Keep:</span> widebody = one notch up, simple. &nbsp;·&nbsp; <span class="q">Refine
+    (my lean):</span> current-service workhorse widebodies (777/787/A350/A330/767) → <span class="tier t-common">common</span>;
+    keep the scarce ones (747/A340/MD-11) at rare. Then “uncommon” genuinely means less-frequent.</p>
+    <p class="lean" style="margin:6px 0 0">✓ Decided: refine. Lean was: refine — it makes the tier honest. Costs a handful of per-type calls.</p>
+  </div>
+
+  <div class="rq">
+    <h4>2 · Military is all “rare”</h4>
+    <p class="muted" style="margin:4px 0">Every military type is <span class="tier t-rare">rare</span> (50) unless pinned up
+    to epic/legendary. For most spotters that’s right — military is genuinely occasional. But you field-test near the Bay
+    (and travel), and near a base a C-130 or P-8 can be routine.</p>
+    <p class="opts"><span class="q">Keep (my lean):</span> military = rare; it’s scarce for the typical spotter and keeps the
+    rule simple. &nbsp;·&nbsp; <span class="q">Split:</span> common transports (C-130, C-12) → uncommon, strategic stays rare+. More nuance, more upkeep.</p>
+    <p class="lean" style="margin:6px 0 0">Lean: keep rare.</p>
+  </div>
+
+  <div class="rq">
+    <h4>3 · Helicopters are “uncommon”</h4>
+    <p class="muted" style="margin:4px 0">All rotorcraft → <span class="tier t-uncommon">uncommon</span> (20). Over Oakland/Berkeley,
+    police / news / medevac helis are a regular sight — arguably common. Over much of the country they’re genuinely uncommon.</p>
+    <p class="opts"><span class="q">Keep (my lean):</span> uncommon — localized but lower-volume than airliners. &nbsp;·&nbsp;
+    <span class="q">Common:</span> if your felt experience is “helis are everywhere here.” Your local read wins this one.</p>
+    <p class="lean" style="margin:6px 0 0">Lean: keep uncommon — but you’ve got the better data here.</p>
+  </div>
+
+  <div class="rq">
+    <h4>4 · Business jets are “uncommon”</h4>
+    <p class="muted" style="margin:4px 0">All bizjets → <span class="tier t-uncommon">uncommon</span> (20), with heavy/ULR ones
+    (G650, Global) pinned up to rare. A light Citation and a Phenom sit at uncommon. Bizjets are less frequent than airliners
+    but common near GA fields.</p>
+    <p class="opts"><span class="q">Keep (my lean):</span> uncommon, heavy ones rare. Seems right. &nbsp;·&nbsp; <span class="q">Adjust:</span> if you think common light jets should be… common.</p>
+    <p class="lean" style="margin:6px 0 0">Lean: keep.</p>
+  </div>
+
+  <div class="rq">
+    <h4>5 · Do you agree with the marquee pins?</h4>
+    <p class="muted" style="margin:4px 0">The override list is judgment — worth a sanity check on the headline calls:</p>
+    <ul class="tight">
+      <li>A380 = <span class="tier t-epic">epic</span> (not legendary). You see them at big hubs; legendary is for the truly singular.</li>
+      <li>747-400 = <span class="tier t-rare">rare</span>; 747-8 = <span class="tier t-epic">epic</span>. Reasonable?</li>
+      <li>G650 / Global 7500 = <span class="tier t-rare">rare</span>. The flagship bizjets as rare — agree?</li>
+      <li>Anything you’d <em>add</em>? (e.g. a livery, a type you care about that’s mis-tiered.)</li>
+    </ul>
+    <p class="lean" style="margin:6px 0 0">Lean: the pins look sound; flag any you’d move.</p>
+  </div>
+
+  <div class="rq">
+    <h4>6 · Legendary is nearly empty — add the icons?</h4>
+    <p class="muted" style="margin:4px 0">Only <strong>B-2</strong> resolves to legendary today. Air Force One (VC-25), U-2,
+    SR-71, and Concorde are pinned but aren’t in the active type database, so they never appear. If someone ever catches one,
+    it wouldn’t tier correctly.</p>
+    <p class="opts"><span class="q">Add (my lean):</span> inject those few designators into the type data so the grail tier
+    actually has reachable members. &nbsp;·&nbsp; <span class="q">Leave:</span> accept legendary is mostly aspirational/empty.</p>
+    <p class="lean" style="margin:6px 0 0">Lean: add the handful — a legendary tier you can’t reach is no fun.</p>
+  </div>
+
+  <div class="rq">
+    <h4>7 · General / non-commercial aviation — warbirds score like trainers <span class="flag big">your question</span></h4>
+    <p class="muted" style="margin:4px 0">GA is <strong>85% of the catalog</strong> — 2,215 of 2,612 types. Of those, 1,977 are
+    <span class="tier t-common">common</span> and 238 are <span class="tier t-uncommon">uncommon</span> — and those 238 are
+    almost entirely <em>helicopters</em> (plus the King Air / PC-12 / TBM turboprops). <strong>Zero GA types are rare, epic, or
+    legendary.</strong> So the whole fixed-wing GA world tops out at common — meaning a
+    <span class="mono">P-51 Mustang, Spitfire, B-17, and DC-3 are all “common” (10 pts)</span>, same as a Cessna 172.</p>
+    <p class="muted" style="margin:4px 0">Trainers, light singles/twins, and homebuilts (Van’s RVs, Pitts, Extra) <em>should</em>
+    be common — that’s honest sky presence. But a flying warbird or a vintage classic is a genuinely rare, special sight a
+    spotter would treasure, and right now it scores like a trainer. Same coarse-logic gap as the widebodies, on the GA side.</p>
+    <p class="opts"><span class="q">Keep flat:</span> all GA common; texture comes from collecting distinct types + first-of-type.
+    Simplest. &nbsp;·&nbsp; <span class="q">Add a warbird/vintage layer (my lean):</span> keep the GA long tail common, but pin
+    the special ones up — warbirds (P-51, Spitfire, B-25, Corsair) → <span class="tier t-rare">rare</span>, iconic heavy bombers
+    (B-17, B-29, Lancaster) → <span class="tier t-epic">epic</span>; vintage icons (DC-3, Ju-52, An-2, Beech 18, Constellation)
+    → <span class="tier t-rare">rare</span>. A handful of named designators, exactly like the existing override list.</p>
+    <p class="muted" style="margin:4px 0"><strong>Caveat:</strong> ADS-B coverage of GA — especially warbirds and vintage — is
+    patchy (many have no ADS-B Out, or broadcast on UAT). You’ll rarely actually catch one; but when you do it should be a real
+    moment, and rarity tiers won’t flood the board.</p>
+    <p class="lean" style="margin:6px 0 0">Lean: add the warbird/vintage layer — it’s the GA mirror of the widebody refine you just approved.</p>
+  </div>
+
+  <!-- LOG -->
+  <h2 id="log">What I need</h2>
+  <p>Settle the seven. Anything you change, I fold into the generator’s rules + override list; re-tiering then flows to both
+  platforms and the re-score backfills existing catches.</p>
+  <table>
+    <thead><tr><th>#</th><th>Question</th><th>My lean</th><th>Your call</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Workhorse widebodies</td><td><strong>Refine</strong> → common; scarce widebodies stay rare</td><td class="q">✓ refine</td></tr>
+      <tr><td>2</td><td>Military all rare</td><td><strong>Split</strong> — transport rare / strategic epic / icon legendary (research)</td><td class="q">↗ reworked in 004</td></tr>
+      <tr><td>3</td><td>Helicopters</td><td><strong>Keep uncommon</strong> (your local read wins)</td><td class="q">?</td></tr>
+      <tr><td>4</td><td>Business jets</td><td><strong>Keep</strong> (uncommon; heavy→rare)</td><td class="q">?</td></tr>
+      <tr><td>5</td><td>Marquee pins</td><td><strong>Sound</strong> — flag any to move</td><td class="q">?</td></tr>
+      <tr><td>6</td><td>Empty legendary</td><td><strong>Add</strong> the icon designators</td><td class="q">?</td></tr>
+      <tr><td>7</td><td>GA / non-commercial</td><td><strong>Add</strong> a warbird/vintage override layer</td><td class="q">?</td></tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <div class="k">Then</div>
+    <p style="margin:6px 0 0">The specific tier assignments above “uncommon” — military, vanishing airliners, rare
+    narrowbodies, warbirds — are now grounded in 2025–26 fleet data in the companion <strong>Research-Grounded Tiers</strong>
+    doc (the concrete override list to approve). Once that and these questions land, Decision 1 is fully locked and I move to
+    <strong>Decision 2 — the reveal</strong>.</p>
+  </div>
+
+  <footer>
+    Composed 2026-06-28 by ce-plan · Tailspot Bet B · Decision 1 / Fork 1 (tiering review) · source: tools/generate-aircraft-types.py
+    (aircraft_rarity + RARITY_OVERRIDES) and ios/Tailspot/Tailspot/AircraftTypes.json (2,612 entries). Tiers are the curated
+    current state, presented for review.
+  </footer>
+
+</div>
+</body>
+</html>

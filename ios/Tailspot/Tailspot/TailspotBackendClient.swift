@@ -54,6 +54,19 @@ nonisolated struct BackendAircraft: Decodable {
     /// the backend; nil when the feed didn't carry one. Same optional/back-compat
     /// semantics as `typecode`. Drives authoritative rotorcraft tagging.
     let category: String?
+    /// The flight's route (origin → destination airports) when the backend can
+    /// resolve it. ADDITIVE + optional: the whole `route` key is omitted for most
+    /// GA/military/routeless flights, and both sub-fields are independently
+    /// optional — so an older backend that never sends it (or a routeless flight)
+    /// decodes as nil with no error. Both codes are 4-letter ICAO airport idents.
+    let route: Route?
+
+    /// Nested `route` object on `GET /v1/aircraft` (U6 backend addition):
+    /// `{ "originIcao": "KSFO", "destIcao": "EGLL" }`. Both sub-fields optional.
+    nonisolated struct Route: Decodable {
+        let originIcao: String?
+        let destIcao: String?
+    }
 
     /// Map onto the app's core `Aircraft` value. `originCountry` is
     /// non-optional there (OpenSky always sent it); the backend derives it
@@ -73,7 +86,9 @@ nonisolated struct BackendAircraft: Decodable {
             positionTimestamp: positionTimestamp.map { Date(timeIntervalSince1970: $0) },
             typecode: typecode,
             registration: registration,
-            category: category
+            category: category,
+            originIcao: route?.originIcao,
+            destIcao: route?.destIcao
         )
     }
 }
