@@ -723,7 +723,8 @@ struct ContentView: View {
                     gps: location.horizontalAccuracy
                 )
                 indoorStreak = verdict == .notSky ? indoorStreak + 1 : 0
-                let indoors = indoorStreak >= 3   // ~3 s sustained
+                let indoors = indoorStreak >= 5   // ~5 s sustained (was 3 —
+                                                  // the ambient nag was too eager, 2026-07-01)
                 if indoors != pointedIndoors { withAnimation { pointedIndoors = indoors } }
                 try? await Task.sleep(for: .seconds(1))
             }
