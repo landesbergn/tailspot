@@ -5,10 +5,12 @@ import type { AircraftRoute, NormalizedAircraft } from "./types.js";
  *
  * The live position feed (`/v2/point`) carries hex/callsign/type/registration
  * but NOT the flight's route — adsb.lol exposes that through a *separate*
- * lookup: `POST /api/0/routeset` with `{ planes: [{ callsign, lat, lng }] }`,
- * which returns one row per callsign whose `airport_codes` is the "-"-joined
- * ICAO codes (e.g. "KSFO-EGLL", or the sentinel "unknown" for no route). Source:
- * https://github.com/adsblol/api (utils/api_routes.py + utils/provider.py).
+ * lookup: `GET /api/0/route/<callsign>`, which returns a route object whose
+ * `airport_codes` is the "-"-joined ICAO codes (e.g. "KSFO-EGLL") and whose
+ * `_airports` array carries per-airport name/city. (The batch
+ * `POST /api/0/routeset` was used until 2026-07, when it began returning an
+ * empty `201` for every plane; the per-callsign GET returns the same data and
+ * works.) Source: https://github.com/adsblol/api.
  *
  * Because that's a second network round-trip, route is enriched *opportunis-
  * tically* and NEVER blocks the position response:
@@ -17,8 +19,8 @@ import type { AircraftRoute, NormalizedAircraft } from "./types.js";
  *     already cached (a synchronous map read), and fires a background routeset
  *     lookup for the rest. The current response ships immediately; the route
  *     rides along on a subsequent poll (~20 s later) once the cache is warm.
- *   - Routes are cached by callsign (positive + negative), so the routeset POST
- *     rate is bounded by *distinct active callsigns per TTL*, not request volume.
+ *   - Routes are cached by callsign (positive + negative), so the per-callsign
+ *     GET rate is bounded by *distinct active callsigns per TTL*, not volume.
  *   - A lookup failure NEVER throws and NEVER caches — a missing route is the
  *     normal case (not every flight has one), so it's simply absent and retried.
  *
@@ -32,8 +34,8 @@ const DEFAULT_TIMEOUT_MS = 4000;
 const DEFAULT_TTL_MS = 30 * 60_000;
 /** Negative cache: re-check "no route" callsigns occasionally (data syncs in). */
 const DEFAULT_NEGATIVE_TTL_MS = 10 * 60_000;
-/** adsb.lol rejects a routeset POST with > 100 planes (HTTP 400). */
-const ROUTESET_MAX_BATCH = 100;
+/** Max concurrent per-callsign route GETs (be polite to adsb.lol). */
+const ROUTE_CONCURRENCY = 8;
 
 /** One airport in a routeset row's `_airports` array — only the fields we use.
  *  `location` is the city/municipality ("San Francisco"); `name` the full
@@ -153,58 +155,61 @@ export class AdsbLolRouteService implements RouteEnricher {
     if (batch.length === 0) return;
     for (const p of batch) this.inFlight.add(p.callsign);
     try {
-      for (let i = 0; i < batch.length; i += ROUTESET_MAX_BATCH) {
-        await this.fetchBatch(batch.slice(i, i + ROUTESET_MAX_BATCH));
-      }
+      await this.fetchBatch(batch);
     } finally {
       for (const p of batch) this.inFlight.delete(p.callsign);
     }
   }
 
-  /** Fetch + cache one ≤100-plane batch. Transport failure → onError, no cache. */
+  /**
+   * Resolve + cache each callsign's route via a bounded-concurrency pool of
+   * per-callsign GETs. (adsb.lol's batch `POST /api/0/routeset` started
+   * returning an empty `201` for every plane ~2026-07; the single
+   * `GET /api/0/route/<callsign>` returns the same `airport_codes` + `_airports`
+   * and works.) A per-callsign failure is isolated — onError, no cache, retried.
+   */
   private async fetchBatch(batch: RoutePlane[]): Promise<void> {
-    let rows: RoutesetRow[];
-    try {
-      rows = await this.postRouteset(batch);
-    } catch (err) {
-      this.onError(err); // leave uncached → retried on the next poll
-      return;
-    }
-    const byCallsign = new Map<string, RoutesetRow>();
-    for (const r of rows) {
-      if (typeof r.callsign === "string") byCallsign.set(r.callsign, r);
-    }
     const posExpiry = this.now() + this.ttlMs;
     const negExpiry = this.now() + this.negativeTtlMs;
-    for (const p of batch) {
-      const row = byCallsign.get(p.callsign);
-      const route = parseRoute(row?.airport_codes, row?._airports);
-      this.cache.set(
-        p.callsign,
-        route ? { route, expiresAt: posExpiry } : { route: null, expiresAt: negExpiry },
-      );
-    }
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < batch.length) {
+        const p = batch[cursor++];
+        let row: RoutesetRow | null;
+        try {
+          row = await this.getRoute(p.callsign);
+        } catch (err) {
+          this.onError(err); // leave uncached → retried on the next poll
+          continue;
+        }
+        const route = parseRoute(row?.airport_codes, row?._airports);
+        this.cache.set(
+          p.callsign,
+          route ? { route, expiresAt: posExpiry } : { route: null, expiresAt: negExpiry },
+        );
+      }
+    };
+    const pool = Array.from({ length: Math.min(ROUTE_CONCURRENCY, batch.length) }, () => worker());
+    await Promise.all(pool);
   }
 
-  private async postRouteset(batch: RoutePlane[]): Promise<RoutesetRow[]> {
+  /** GET one callsign's route. Returns the row, or null for "no route on file"
+   *  (404). Follows the endpoint's redirect (fetch default). */
+  private async getRoute(callsign: string): Promise<RoutesetRow | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(`${this.baseUrl}/api/0/routeset`, {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          "user-agent": "tailspot-backend",
+      const res = await this.fetchFn(
+        `${this.baseUrl}/api/0/route/${encodeURIComponent(callsign)}`,
+        {
+          headers: { accept: "application/json", "user-agent": "tailspot-backend" },
+          signal: controller.signal,
         },
-        body: JSON.stringify({
-          planes: batch.map((p) => ({ callsign: p.callsign, lat: p.lat, lng: p.lng })),
-        }),
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`adsb.lol routeset HTTP ${res.status}`);
-      const json = (await res.json()) as unknown;
-      return Array.isArray(json) ? (json as RoutesetRow[]) : [];
+      );
+      if (res.status === 404) return null; // no route on file → negative-cache
+      if (!res.ok) throw new Error(`adsb.lol route HTTP ${res.status}`);
+      const json = (await res.json()) as RoutesetRow | undefined;
+      return json && typeof json === "object" ? json : null;
     } finally {
       clearTimeout(timer);
     }

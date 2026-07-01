@@ -18,7 +18,9 @@ function plane(icao: string, callsign: string | null): NormalizedAircraft {
   };
 }
 
-/** A 200 routeset response carrying the given rows. */
+/** A 200 response for `GET /api/0/route/<callsign>` — the single route object.
+ *  (The enricher switched from the batch POST /routeset to the per-callsign GET
+ *  when adsb.lol's routeset started returning empty; return the first row.) */
 function routeset(
   rows: Array<{
     callsign: string;
@@ -26,7 +28,7 @@ function routeset(
     _airports?: Array<{ icao?: string; name?: string; location?: string }>;
   }>,
 ): Response {
-  return new Response(JSON.stringify(rows), {
+  return new Response(JSON.stringify(rows[0]), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
@@ -88,20 +90,20 @@ describe("parseRoute", () => {
 });
 
 describe("AdsbLolRouteService", () => {
-  it("POSTs callsign+lat+lng to /api/0/routeset", async () => {
+  it("GETs /api/0/route/<callsign>", async () => {
     let calledUrl = "";
-    let body: unknown;
+    let method = "";
     const fetchFn = (async (url: string | URL, init?: RequestInit) => {
       calledUrl = String(url);
-      body = JSON.parse(String(init?.body));
+      method = init?.method ?? "GET";
       return routeset([{ callsign: "UAL875", airport_codes: "KSFO-EGLL" }]);
     }) as unknown as typeof fetch;
 
     const svc = new AdsbLolRouteService({ baseUrl: "https://example.test", fetchFn });
     await svc.prefetch([{ callsign: "UAL875", lat: 37.82, lng: -122.45 }]);
 
-    expect(calledUrl).toBe("https://example.test/api/0/routeset");
-    expect(body).toEqual({ planes: [{ callsign: "UAL875", lat: 37.82, lng: -122.45 }] });
+    expect(calledUrl).toBe("https://example.test/api/0/route/UAL875");
+    expect(method).toBe("GET");
   });
 
   it("attaches origin → destination once the lookup has populated the cache", async () => {
@@ -156,9 +158,26 @@ describe("AdsbLolRouteService", () => {
     expect(ac[0].route).toBeUndefined();
     expect(fetchFn).toHaveBeenCalledTimes(1);
 
-    // Same callsign still in flight → a concurrent enrich issues no 2nd POST.
+    // Same callsign still in flight → a concurrent enrich issues no 2nd GET.
     svc.enrich([plane("bbbbbb", "UAL875")]);
     expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a 404 as 'no route' — negative-cached, not an error", async () => {
+    const errors: unknown[] = [];
+    const fetchFn = vi.fn(async () => new Response("", { status: 404 })) as unknown as typeof fetch;
+    const svc = new AdsbLolRouteService({
+      baseUrl: "https://example.test",
+      fetchFn,
+      onError: (e) => errors.push(e),
+    });
+
+    await svc.prefetch([{ callsign: "GA123", lat: 37.7, lng: -122.4 }]);
+    const ac = [plane("d", "GA123")];
+    svc.enrich(ac);
+    expect(ac[0].route).toBeUndefined();
+    expect(errors).toHaveLength(0); // 404 = normal "no route", not a failure
+    expect(fetchFn).toHaveBeenCalledTimes(1); // negative-cached → no repeat lookup
   });
 
   it("caches by callsign — a cached route is not looked up again", async () => {
