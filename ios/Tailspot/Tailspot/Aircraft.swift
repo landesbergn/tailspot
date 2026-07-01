@@ -65,6 +65,11 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION, or
     /// nil. Same source/semantics as `originIcao`.
     let destIcao: String?
+    /// Human-readable origin airport/city ("San Francisco"), when the backend's
+    /// routeset enrichment carried it. Same source/lifecycle as `originIcao`.
+    let originName: String?
+    /// Human-readable destination airport/city ("London"). Same as `originName`.
+    let destName: String?
 
     var id: String { icao24 }
 
@@ -99,7 +104,9 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         registration: String? = nil,
         category: String? = nil,
         originIcao: String? = nil,
-        destIcao: String? = nil
+        destIcao: String? = nil,
+        originName: String? = nil,
+        destName: String? = nil
     ) {
         self.icao24 = icao24
         self.callsign = callsign
@@ -116,6 +123,8 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         self.category = category
         self.originIcao = originIcao
         self.destIcao = destIcao
+        self.originName = originName
+        self.destName = destName
     }
 
     /// Heuristic: is this a small (GA-sized) airframe? US general-aviation
@@ -267,6 +276,8 @@ nonisolated extension Aircraft: Decodable {
         self.category = nil
         self.originIcao = nil
         self.destIcao = nil
+        self.originName = nil
+        self.destName = nil
 
         // 14 squawk, 15 spi, 16 position_source, 17 category — all skipped
     }
