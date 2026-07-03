@@ -48,6 +48,38 @@ struct CatchTests {
         #expect(fetched.first?.operatorName == "United Airlines")
     }
 
+    @Test func suspectedRowsAreQuarantinedFromUpload() throws {
+        // Post-catch confirm (2026-07-04): a gate-suspected catch must not
+        // upload until the user answers Keep. Pins the uploader's pending
+        // predicate against an in-memory store: clean rows are pending,
+        // suspected rows are not — and clearing the flag (Keep) re-pends.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let clean = Catch(
+            icao24: "aaaaaa", callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(timeIntervalSince1970: 1_715_000_000),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 1000
+        )
+        let suspected = Catch(
+            icao24: "bbbbbb", callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(timeIntervalSince1970: 1_715_000_100),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 62_600,
+            suspectReason: CatchSuspicion.tooFar.rawValue
+        )
+        context.insert(clean)
+        context.insert(suspected)
+        try context.save()
+
+        let pending = FetchDescriptor<Catch>(predicate: CatchUploader.pendingPredicate)
+        #expect(try context.fetch(pending).map(\.icao24) == ["aaaaaa"])
+
+        // Keep: clearing the flag un-quarantines the row.
+        suspected.suspectReason = nil
+        try context.save()
+        #expect(try context.fetch(pending).count == 2)
+    }
+
     @Test func operatorNameDefaultsToNilWhenOmitted() throws {
         // operatorName was added after v0; existing call sites pass
         // it via the default parameter. This pins that default so a
