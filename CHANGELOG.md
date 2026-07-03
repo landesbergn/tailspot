@@ -5,6 +5,27 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-04 — Backend: airplanes.live fallback feed — branch `backend/airplanes-live-fallback`
+
+Cheap transport-failure insurance for the position feed (from the same coverage audit
+as the 10 s polling round). airplanes.live speaks the identical readsb `/v2/point` API
+as adsb.lol, and live sampling (2026-07-03) showed it equal-or-superset everywhere
+tested (Singapore 14 vs 9, all 9 shared; Berkeley ~even; Bali 0=0 — the Lombok gap is
+a *shared* receiver desert no aggregator fixes).
+
+- **`AirplanesLiveProvider`** — the adsb.lol client pointed at `api.airplanes.live`
+  (thin subclass, same normalizer).
+- **`FallbackProvider`** — new default (`adsblol+airplaneslive`): serves adsb.lol; on
+  a THROW serves airplanes.live. Deliberately narrow: empty-but-successful responses
+  do NOT fall back (zero planes is a legitimate answer), results are never merged
+  (duplicate icao24s with conflicting positions), and every engagement is logged via
+  `onFallback` → `app.log.warn` — no silent failover (the 2026-06-21 cutover lesson).
+- `POSITION_PROVIDER=adsblol|airplaneslive|opensky` still selects a single feed; the
+  route enricher gate now matches `name.startsWith("adsblol")` so the composite keeps
+  route enrichment.
+- Tests: fallback semantics (5), airplanes.live URL/name/error identity (2), selector
+  (2). 230 backend tests green. **Not yet deployed to prod** — deploy is Noah's call.
+
 ## 2026-07-04 — North-star baseline + L2 sky-gate calibration → ENFORCE — branch `feat/l2-gate-enforce`
 
 GA-push items #1 and #2 (Bet A close-out).

@@ -187,7 +187,10 @@ export interface AdsbLolProviderOptions {
 }
 
 export class AdsbLolProvider implements PositionProvider {
-  readonly name = "adsblol";
+  // Widened to `string` (not the literal type) so AirplanesLiveProvider — a
+  // thin subclass pointing the same readsb client at a different aggregator —
+  // can override it.
+  readonly name: string = "adsblol";
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
@@ -229,12 +232,12 @@ export class AdsbLolProvider implements PositionProvider {
         signal: controller.signal,
       });
       if (!res.ok) {
-        throw new UpstreamError(`adsb.lol returned HTTP ${res.status}`);
+        throw new UpstreamError(`${this.name} returned HTTP ${res.status}`);
       }
       return (await res.json()) as AdsbLolResponse;
     } catch (err) {
       if (err instanceof UpstreamError) throw err;
-      throw new UpstreamError("adsb.lol request failed", err);
+      throw new UpstreamError(`${this.name} request failed`, err);
     } finally {
       clearTimeout(timer);
     }
