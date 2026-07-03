@@ -5,6 +5,20 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-04 — Route lookups go direct to standing data (prod enrichment was silently dead) — branch `fix/route-lookup-standing-data`
+
+Deploy-time discovery while verifying `GET /v1/routes` (the backfill endpoint): **every
+adsb.lol route GET from Fly was timing out** — the `api.adsb.lol` hop takes ~6 s just to
+serve its 302 from sjc (IPv6 addresses stall before the v4 fallback), past the 4 s lookup
+timeout. All prod route enrichment had been silently failing (the AbortError spam in the
+logs), meaning live catches were getting routes only from earlier cache warm-ups, if ever.
+
+Fix: `getRoute` now fetches adsb.lol's **standing-data host directly** at the same URL the
+(deprecated-marked) API redirects to — `vrs-standing-data.adsb.lol/routes/<CS[0:2]>/<CS>.json`,
+~100 ms from Fly, same JSON shape — with the API URL kept as a transport-error-only
+fallback (a standing-data 404 is the authoritative "no route"). New tests pin the primary
+URL, the fallback ordering, and 404-doesn't-fall-back; 239 backend tests green.
+
 ## 2026-07-04 — Analytics: handle self-heal for pinned-id devices — branch `fix/handle-selfheal-pinned-id`
 
 Root-caused why several claimed handles (eagle_eye, skywatcher, …) never appeared on
