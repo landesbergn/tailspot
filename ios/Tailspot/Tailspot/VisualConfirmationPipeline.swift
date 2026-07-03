@@ -55,13 +55,16 @@ final class VisualConfirmationPipeline: ObservableObject {
     static let enabledKey = "tailspot.debug.visualConfirm"
     private static let defaultEnabled = true
 
-    /// L2 localized sky gate ENFORCEMENT. Ships OFF (shadow mode): the gate
-    /// computes its verdict and fires `catch_local_gate` telemetry on every
-    /// catch, but does NOT block until this is flipped on — after the on-device
-    /// texture threshold is calibrated from the shadow data. Debug-overlay
-    /// toggle only; production has no user-facing control by design.
+    /// L2 localized sky gate ENFORCEMENT. Ships ON since 2026-07-04: the
+    /// shadow telemetry confirmed the texture dial transfers on-device (sky
+    /// ≤ 0.0116 vs the 0.014 threshold) and the two real false-block classes
+    /// it surfaced (night patches, golden-hour warmth) are guarded in
+    /// `LocalSkyGate.verdict`. A block always offers one-tap "Catch anyway";
+    /// `catch_occluded_override` is the live false-block signal to watch.
+    /// Debug-overlay toggle can drop back to shadow; no user-facing control
+    /// by design.
     var localGateEnforcing: Bool {
-        get { UserDefaults.standard.bool(forKey: Self.localGateKey) }
+        get { UserDefaults.standard.object(forKey: Self.localGateKey) as? Bool ?? true }
         set {
             objectWillChange.send()   // not @Published (UserDefaults-backed)
             UserDefaults.standard.set(newValue, forKey: Self.localGateKey)

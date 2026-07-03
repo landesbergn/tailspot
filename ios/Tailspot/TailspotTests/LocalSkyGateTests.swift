@@ -50,6 +50,23 @@ struct LocalSkyGateTests {
         #expect(gate.verdict(feat(tex: 0.005, warm: 0.20, lum: 0.05)) == .sky)
     }
 
+    @Test func goldenHourSkyIsNotReadAsWarmOccluder() {
+        // 2026-07-04 calibration: golden-hour skies read 0.045–0.06 warm but
+        // are smooth — below the 0.07 warm threshold they must stay sky (the
+        // same false-block SkyCheck hit in the field). Strongly-warm lit
+        // structure (≥ 0.07) still blocks — see warmLitPatchIsOccluded.
+        #expect(gate.verdict(feat(tex: 0.006, warm: 0.055, lum: 0.70)) == .sky)
+        #expect(gate.verdict(feat(tex: 0.006, warm: 0.08, lum: 0.70)) == .notSky)
+    }
+
+    @Test func nightTexturedPatchFailsOpen() {
+        // Near-dark patch: the plane's OWN lights (bright dots on black,
+        // centered in the patch) and sensor noise read as texture — a night
+        // catch must not block itself. Shadow telemetry showed exactly this:
+        // lum ≈ 0.05, textured, sky_fraction ≈ 0.8 → was a would-block.
+        #expect(gate.verdict(feat(tex: 0.034, warm: 0.28, lum: 0.06, sky: 0.86)) == .uncertain)
+    }
+
     @Test func texturedButNoSkyAvailableFailsOpen() {
         // Featureless / wall-filling frame: textured patch but no sky reference
         // to contrast against → uncertain (allow). Doctrine: fail open.
