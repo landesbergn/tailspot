@@ -30,7 +30,7 @@ private final class CountingMetadataSource: ADSBSource, @unchecked Sendable {
     func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
         callCounts[icao24, default: 0] += 1
         if errors.contains(icao24) {
-            throw ADSBSourceError.rateLimited
+            throw ADSBSourceError.http(status: 503)
         }
         if let result = results[icao24] {
             return result

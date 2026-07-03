@@ -25,6 +25,29 @@ a *shared* receiver desert no aggregator fixes).
   route enrichment.
 - Tests: fallback semantics (5), airplanes.live URL/name/error identity (2), selector
   (2). 230 backend tests green. **Not yet deployed to prod** — deploy is Noah's call.
+## 2026-07-04 — 10 s polling + OpenSky-era dead code removed — branch `ios/poll-cleanup`
+
+Fell out of a coverage/accuracy Q&A: an audit of the actual rate-limit situation showed
+the app's 20 s poll + 429 backoff were guarding against an API that no longer exists.
+
+- **Poll interval 20 s → 10 s.** `/v1/aircraft` has **no rate limit** (the backend's
+  token buckets cover register/handle/catch/suggest only); the real upstream protection
+  is the tile cache (10 s TTL, single-flight), so 10 s is the fastest cadence that can
+  see fresh data — faster only re-reads the cache.
+- **429 backoff machinery removed** (`maxBackoffInterval`, `currentInterval`,
+  `ADSBSourceError.rateLimited`, `lastErrorIsTransient`, the reAnnotate staleness
+  widening): the backend never returns 429 on the aircraft route, so all of it was
+  dead. Errors now surface uniformly via `lastError`; the empty-sky pill lost its
+  "transient" softening (nothing produces a transient error anymore).
+- **OpenSky positional-array decoder deleted** (`Aircraft: Decodable`,
+  `FailableDecodable`, `AircraftDecodingTests`): production decodes only the backend's
+  keyed DTOs; the array decoder was exercised by its own tests and nothing else. Its
+  baro-first field order misleadingly suggested barometric altitude was in play —
+  the pipeline prefers GEOMETRIC (`alt_geom`) end-to-end (backend normalizer), now
+  documented on `Aircraft.altitudeMeters`.
+- Dead `refreshNow()` (mock-toggle leftover) removed; stale comments (maxPositionAge
+  rationale, backend-client header, replay-format note) rewritten; CLAUDE.md + PLAN §8
+  updated to match.
 
 ## 2026-07-04 — North-star baseline + L2 sky-gate calibration → ENFORCE — branch `feat/l2-gate-enforce`
 

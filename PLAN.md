@@ -313,13 +313,11 @@ tailspot/
       │  ├─ LocationManager.swift   — CLLocation + CLHeading wrapper
       │  ├─ MotionManager.swift     — CMDeviceMotion wrapper (incl. cameraElevationDeg)
       │  ├─ Geo.swift               — pure geometry: distance, bearing, elevation, project, screenPosition
-      │  ├─ Aircraft.swift          — Aircraft struct + Decodable + FailableDecodable + extrapolatedPosition
+      │  ├─ Aircraft.swift          — core Aircraft value type + EmitterCategory + extrapolatedPosition
       │  ├─ AircraftMetadata.swift  — Decodable struct from /metadata/aircraft/icao
       │  ├─ MetadataCache.swift     — bounded LRU actor keyed by icao24
       │  ├─ Log.swift               — os.Logger wrapper, subsystem com.landesberg.tailspot
       │  ├─ ADSBSource.swift        — protocol abstracting fetch
-      │  ├─ OpenSkyClient.swift     — ADSBSource for OpenSky (OAuth2 client-credentials)
-      │  ├─ MockADSBSource.swift    — ADSBSource for synthetic couch-testing data
       │  ├─ ADSBManager.swift       — @MainActor ObservableObject: polling, annotation, smoothness, visibility, metadata(for:)
       │  ├─ LockOnEngine.swift      — pure state machine for the AR lock-on interaction + closestTargetIcao24 helper
       │  ├─ Catch.swift             — @Model SwiftData row written when the user taps "Catch this plane" (incl. operatorName)
@@ -332,7 +330,6 @@ tailspot/
       ├─ TailspotTests/
       │  ├─ TailspotTests.swift     — Xcode template placeholder (kept for noise; the real tests are below)
       │  ├─ GeoTests.swift          — geometry + screen-projection tests
-      │  ├─ AircraftDecodingTests.swift — OpenSky positional JSON + FailableDecodable
       │  ├─ ADSBManagerTests.swift  — orchestration tests using injected FixedSource
       │  ├─ AircraftMetadataDecodingTests.swift — payload + tolerant decode
       │  ├─ MetadataCacheTests.swift            — LRU + miss-as-hit semantics

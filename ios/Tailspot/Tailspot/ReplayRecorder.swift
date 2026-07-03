@@ -173,9 +173,9 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
     }
 
     /// A flat snapshot of the fields we want to replay through the
-    /// engine. Deliberately separate from `Aircraft` (which has a
-    /// positional OpenSky-shaped Decodable) so the replay format is
-    /// stable even if Aircraft's decoder changes.
+    /// engine. Deliberately separate from `Aircraft` so the replay
+    /// format is stable even if the core type or the backend wire
+    /// shape changes.
     struct AircraftSnapshot: Codable, Equatable, Sendable {
         let icao24: String
         let callsign: String?
