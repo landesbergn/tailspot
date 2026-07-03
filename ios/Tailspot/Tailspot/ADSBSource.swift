@@ -32,20 +32,19 @@ nonisolated protocol ADSBSource: Sendable {
 }
 
 /// Transport errors an `ADSBSource` can throw. Source-neutral — the live
-/// source (`TailspotBackendClient`) throws these, and `ADSBManager`'s
-/// 429-backoff matches on `.rateLimited`. (Formerly `OpenSkyClient.ClientError`;
-/// promoted to a shared type when the OpenSky source was removed and the
-/// backend became the only ADS-B source.)
+/// source (`TailspotBackendClient`) throws these and `ADSBManager` surfaces
+/// them via `lastError`. (Formerly `OpenSkyClient.ClientError`; promoted to
+/// a shared type when the OpenSky source was removed and the backend became
+/// the only ADS-B source. The `rateLimited` case went with it: `/v1/aircraft`
+/// has no rate limit, so a 429 is just another unexpected `http(status:)`.)
 nonisolated enum ADSBSourceError: Error, LocalizedError {
     case badURL
-    case rateLimited                 // HTTP 429 — backend token bucket drained, back off
     case http(status: Int)
     case decoding(Error)
 
     var errorDescription: String? {
         switch self {
         case .badURL:              return "Bad URL"
-        case .rateLimited:         return "Rate limit (HTTP 429)"
         case .http(let s):         return "HTTP \(s)"
         case .decoding(let inner): return "Decoding: \(inner.localizedDescription)"
         }

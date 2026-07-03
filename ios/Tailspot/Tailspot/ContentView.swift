@@ -1675,7 +1675,6 @@ struct ContentView: View {
     /// the horizon or past 30 km.
     private func emptySkyOverlay(rawCount: Int) -> some View {
         let lastErr = adsb.lastError
-        let transient = adsb.lastErrorIsTransient
         let neverFetched = adsb.lastFetched == nil && lastErr == nil
         let pillText: String = {
             if let lastErr { return lastErr.uppercased() }
@@ -1685,11 +1684,9 @@ struct ContentView: View {
             }
             return "NO AIRCRAFT NEARBY"
         }()
-        // Hard errors (auth, transport) → amber caution. Transient
-        // errors (auto-recovering rate-limit backoff) and the neutral
-        // states share the textSecondary tint so the user isn't
-        // alarmed by a state the system is already handling.
-        let pillTint: Color = (lastErr != nil && !transient)
+        // Errors (transport, backend down) → amber caution; the neutral
+        // scanning / empty states use the textSecondary tint.
+        let pillTint: Color = lastErr != nil
             ? Brand.Color.alertCaution
             : Brand.Color.textSecondary
         return GeometryReader { geo in
@@ -1714,7 +1711,7 @@ struct ContentView: View {
                         Circle()
                             .fill(pillTint)
                             .frame(width: 6, height: 6)
-                            .modifier(EmptyPulse(active: lastErr == nil || transient))
+                            .modifier(EmptyPulse(active: lastErr == nil))
                         Text(pillText)
                             .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(1.2)

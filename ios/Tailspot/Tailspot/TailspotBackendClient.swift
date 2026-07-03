@@ -4,15 +4,15 @@
 //
 //  ADSBSource implementation backed by our own api.tailspot.app proxy
 //  (WP 1.6 of the Track 1 plan). The backend polls adsb.lol server-side
-//  (MLAT included — GA and helicopters appear), caches per region tile,
-//  and serves a NAMED-KEY JSON shape in SI units — so unlike the OpenSky
-//  positional-array decode in Aircraft.swift, this file decodes ordinary
-//  keyed Codable structs and maps them onto the existing `Aircraft` value.
+//  (MLAT included — GA and helicopters appear), caches per region tile
+//  (10 s TTL — the poll cadence in ADSBManager matches it), and serves a
+//  NAMED-KEY JSON shape in SI units: this file decodes ordinary keyed
+//  Codable structs and maps them onto the existing `Aircraft` value.
 //
 //  Deliberate seams:
 //  - `baseURL` is injectable (tests, local dev server, future hostname move).
 //  - Errors are thrown as `ADSBSourceError` (a source-neutral enum) so
-//    ADSBManager's 429-backoff (`catch ADSBSourceError.rateLimited`) works.
+//    ADSBManager can surface them uniformly via `lastError`.
 //  - The wire DTOs (`BackendAircraftResponse` etc.) are separate from
 //    `Aircraft`, mirroring how `AircraftSnapshot` stays separate in the
 //    replay format: backend wire changes must not ripple into core types.
@@ -199,7 +199,6 @@ nonisolated struct TailspotBackendClient: ADSBSource {
         }
         switch http.statusCode {
         case 200: return data
-        case 429: throw ADSBSourceError.rateLimited
         default: throw ADSBSourceError.http(status: http.statusCode)
         }
     }
