@@ -94,7 +94,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Provider is selected ONCE at build time (env read here, not per-request).
-  const provider = options.provider ?? selectProvider();
+  // The default is adsb.lol with an airplanes.live fallback; every engaged
+  // fallback is logged — a silently-dead primary must not look healthy (the
+  // client-side silent-failover lesson from the 2026-06-21 cutover).
+  const provider =
+    options.provider ??
+    selectProvider(process.env, {
+      onFallback: (err) =>
+        app.log.warn({ err }, "primary position feed failed; serving airplanes.live fallback"),
+    });
 
   // Cache TTL / staleness from env, overridable per-build (tests pass explicit
   // values). Falls back to TileCache's documented defaults when unset.
@@ -134,12 +142,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Opportunistic origin → destination enrichment: adsb.lol carries route only
   // via a separate routeset POST, so each served snapshot is passed through a
   // per-callsign-cached lookup that attaches `route` without blocking the
-  // position response (see AdsbLolRouteService). Enabled only with the adsb.lol
-  // provider and outside tests (so the route suite never hits the network); an
-  // injected override (tests) always wins.
+  // position response (see AdsbLolRouteService). Enabled whenever adsb.lol is
+  // the (primary) provider — `startsWith` also matches the default
+  // "adsblol+airplaneslive" fallback composite — and outside tests (so the
+  // route suite never hits the network); an injected override (tests) always
+  // wins. Route lookups deliberately stay adsb.lol-direct even when positions
+  // are served by the fallback: routes are cached, non-blocking metadata.
   const routeEnricher =
     options.routeEnricher ??
-    (process.env.NODE_ENV !== "test" && provider.name === "adsblol"
+    (process.env.NODE_ENV !== "test" && provider.name.startsWith("adsblol")
       ? new AdsbLolRouteService({
           onError: (err) => app.log.warn({ err }, "route lookup failed"),
         })
