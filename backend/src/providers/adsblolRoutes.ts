@@ -29,6 +29,9 @@ import type { AircraftRoute, NormalizedAircraft } from "./types.js";
  */
 
 const DEFAULT_BASE_URL = "https://api.adsb.lol";
+/** adsb.lol's standing-data host — the API's own (deprecated-marked) redirect
+ *  target, hit directly because the API hop is what stalls (see `getRoute`). */
+const DEFAULT_STANDING_DATA_BASE_URL = "https://vrs-standing-data.adsb.lol";
 const DEFAULT_TIMEOUT_MS = 4000;
 /** Positive cache: routes are static for a callsign's scheduled life. */
 const DEFAULT_TTL_MS = 30 * 60_000;
@@ -94,6 +97,9 @@ export interface RouteResolver {
 
 export interface AdsbLolRouteServiceOptions {
   baseUrl?: string;
+  /** Base URL of adsb.lol's standing-data host (the primary lookup path —
+   *  see `getRoute`). Injectable for tests. */
+  standingDataBaseUrl?: string;
   timeoutMs?: number;
   /** Injectable for tests; defaults to global fetch. */
   fetchFn?: typeof fetch;
@@ -109,6 +115,7 @@ export interface AdsbLolRouteServiceOptions {
 
 export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
   private readonly baseUrl: string;
+  private readonly standingDataBaseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
@@ -122,6 +129,10 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
 
   constructor(opts: AdsbLolRouteServiceOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.standingDataBaseUrl = (opts.standingDataBaseUrl ?? DEFAULT_STANDING_DATA_BASE_URL).replace(
+      /\/+$/,
+      "",
+    );
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchFn = opts.fetchFn ?? fetch;
     this.now = opts.now ?? Date.now;
@@ -205,19 +216,40 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
     await Promise.all(pool);
   }
 
-  /** GET one callsign's route. Returns the row, or null for "no route on file"
-   *  (404). Follows the endpoint's redirect (fetch default). */
+  /**
+   * GET one callsign's route. Returns the row, or null for "no route on file"
+   * (404).
+   *
+   * Primary: adsb.lol's STANDING-DATA host, hit directly at the same URL the
+   * (deprecated-marked) API route 302s to — `routes/<CS[0:2]>/<CS>.json`.
+   * Measured from Fly sjc (2026-07-04): the API hop alone took ~6 s to serve
+   * its redirect (IPv6 path stalls before the v4 fallback) — longer than the
+   * lookup timeout, which had silently broken ALL route enrichment in prod —
+   * while the standing-data host answers in ~100 ms. Fallback: the API URL,
+   * on TRANSPORT errors only (a 404 from standing data IS the authoritative
+   * "no route on file"; both hosts serve the same JSON shape).
+   */
   private async getRoute(callsign: string): Promise<RoutesetRow | null> {
+    const cs = callsign.toUpperCase();
+    const primary = `${this.standingDataBaseUrl}/routes/${encodeURIComponent(cs.slice(0, 2))}/${encodeURIComponent(cs)}.json`;
+    try {
+      return await this.getRouteFrom(primary);
+    } catch (err) {
+      this.onError(err);
+      return await this.getRouteFrom(`${this.baseUrl}/api/0/route/${encodeURIComponent(cs)}`);
+    }
+  }
+
+  /** One route GET against a specific URL, with the lookup timeout. Returns
+   *  the row, or null for a 404 ("no route on file" → negative-cache). */
+  private async getRouteFrom(url: string): Promise<RoutesetRow | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(
-        `${this.baseUrl}/api/0/route/${encodeURIComponent(callsign)}`,
-        {
-          headers: { accept: "application/json", "user-agent": "tailspot-backend" },
-          signal: controller.signal,
-        },
-      );
+      const res = await this.fetchFn(url, {
+        headers: { accept: "application/json", "user-agent": "tailspot-backend" },
+        signal: controller.signal,
+      });
       if (res.status === 404) return null; // no route on file → negative-cache
       if (!res.ok) throw new Error(`adsb.lol route HTTP ${res.status}`);
       const json = (await res.json()) as RoutesetRow | undefined;
