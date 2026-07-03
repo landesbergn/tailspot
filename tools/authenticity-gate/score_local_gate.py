@@ -22,6 +22,8 @@ Three signals per bracket point:
 Verdict:
   warm  (lum>=LUM_TRUST and warmth>=WARM_THRESH)        -> NOT_SKY  (warm-lit occluder)
   smooth(texture<=TEX_SMOOTH)                           -> SKY      (day/night/overcast/cloud)
+  textured + near-dark (lum<LUM_TRUST)                  -> UNCERTAIN (night guard: noise +
+                                                           the plane's own lights read as texture)
   textured + skyFraction>=MIN_SKY_FRACTION              -> NOT_SKY  (occluder, sky available)
   textured + no sky available                           -> UNCERTAIN (fail open)
 
@@ -38,7 +40,9 @@ import numpy as np
 from PIL import Image
 
 TEX_SMOOTH = 0.014
-WARM_THRESH = 0.040
+# 0.040 -> 0.070 (2026-07-04): golden-hour skies read 0.045-0.06 warm in the
+# shadow telemetry -- the same false-block SkyCheck hit in the field.
+WARM_THRESH = 0.070
 LUM_TRUST = 0.120
 MIN_SKY_FRACTION = 0.20
 GRID = 16
@@ -114,6 +118,10 @@ def verdict(tex, warm, lum, skyfrac):
         return NOT_SKY
     if tex <= TEX_SMOOTH:
         return SKY
+    # Night guard (2026-07-04): near-dark, texture is untrustworthy -- sensor
+    # noise and the plane's OWN lights read as texture. Fail open.
+    if lum < LUM_TRUST:
+        return UNCERTAIN
     if skyfrac >= MIN_SKY_FRACTION:
         return NOT_SKY
     return UNCERTAIN

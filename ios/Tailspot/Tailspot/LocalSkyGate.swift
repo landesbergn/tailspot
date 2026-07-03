@@ -56,10 +56,18 @@ nonisolated struct LocalSkyGate {
     /// scales with the sample lattice). Retune only against labeled frames.
     struct Thresholds: Sendable, Equatable {
         /// At/below this the patch is "smooth" (open sky — day/night/overcast).
+        /// Confirmed on-device by the 2026-07 shadow telemetry: real sky
+        /// verdicts max out at 0.0116, first occluders appear at 0.0153 —
+        /// the dial sits in the gap, so the offline value transfers.
         var texSmooth: Double = 0.014
         /// Warm artificial light, trusted only with enough light to believe
         /// white balance. Sky is cool (warmth < this) so it never blocks.
-        var warmThreshold: Double = 0.04
+        /// 0.04 → 0.07 (2026-07-04 shadow calibration): golden-hour skies
+        /// read 0.045–0.06 warm — the same false-block `SkyCheck` hit in the
+        /// field, fixed the same way (its warmThreshold moved 0.04 → 0.07).
+        var warmThreshold: Double = 0.07
+        /// Below this luminance neither colour NOR texture is trustworthy —
+        /// see the night guard in `verdict`.
         var luminanceForColorTrust: Double = 0.12
         /// Need at least this much clearly-sky frame before trusting that a
         /// textured patch is an occluder; below it, fail open.
@@ -85,6 +93,12 @@ nonisolated struct LocalSkyGate {
         if f.patchTexture <= thresholds.texSmooth {
             return .sky
         }
+        // Near-dark patch: texture is as untrustworthy as colour — sensor
+        // noise AND the plane's OWN lights (bright dots on black, centered in
+        // the patch by construction) read as texture, so a night catch would
+        // block itself. Fail open. (2026-07-04 shadow telemetry: night
+        // catches at lum ≈ 0.05 with sky_fraction ≈ 0.8 were would-blocks.)
+        guard colorTrustworthy else { return .uncertain }
         // Textured + cool → an occluder, but only confidently so when there's
         // clearly sky elsewhere to contrast against. A featureless frame (fog,
         // or a wall filling the view) has no sky reference → fail open.

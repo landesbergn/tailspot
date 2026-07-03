@@ -5,6 +5,42 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-04 — North-star baseline + L2 sky-gate calibration → ENFORCE — branch `feat/l2-gate-enforce`
+
+GA-push items #1 and #2 (Bet A close-out).
+
+**#1 North-star baseline (PostHog, no code):** new pinned dashboard **"North star — Real
+catch (Bet A)"** (id 1797334) with three insights: weekly catch-confirmation-rate
+(`(catch_performed − catch_deleted)/catch_performed`), raw attempt/delete volumes +
+unique catchers, and per-gate blocks-vs-overrides (indoor, size, L2 would-block, L2
+override). **Baseline ≈ 97.7% kept** — 133 `catch_performed` / 3 `catch_deleted` since
+the telemetry shipped (2026-06-26); all 3 deletes from one tester. The attempt-inclusive
+framing (un-overridden gate blocks counted as failed attempts) reads ~75%; kept out of
+the headline because a working anti-cheat block is not a distrusted ID.
+
+**#2 L2 localized sky gate — calibrated from shadow telemetry, enforcement flipped ON:**
+
+- **Shadow data (74 `catch_local_gate` events, 9 users, 06-28 → 07-03) confirmed the
+  texture dial transfers on-device:** sky verdicts max at `patch_texture` 0.0116, first
+  would-blocks at 0.0153 — `texSmooth = 0.014` sits in the gap, unchanged. The would-block
+  population clusters exactly where L2 was built to fire (the NYC-canyon session, foliage
+  at 0.08–0.15).
+- **Two real false-block classes surfaced, both guarded:** (1) **night catches self-block**
+  — the bracket centers the plane, so its own lights (bright dots on black) read as
+  texture at `patch_lum < 0.12`; new night guard fails open (`uncertain`) when the patch
+  is near-dark. (2) **Golden-hour skies read 0.045–0.06 warm** — `warmThreshold` 0.04 →
+  0.07, the same fix the whole-frame `SkyCheck` gate took in the 2026-07-01 field
+  recalibration. Both mirrored in the offline reference scorer (`score_local_gate.py`).
+- **`localGateEnforcing` default OFF → ON** (`VisualConfirmationPipeline`; UserDefaults
+  override preserved, debug-overlay SHADOW↔ENFORCE toggle unchanged). A block always
+  offers one-tap "Catch anyway"; `catch_occluded_override` (already on the north-star
+  dashboard) is the live false-block signal. Visual confirmation could not serve as
+  ground truth — `visual_fix_active` was false on every shadow-joined catch (distant
+  specks, the model's size cliff) — which is why **L4 (detector soft-gate) stays next**
+  as the mirror-glass backstop.
+- New `LocalSkyGateTests`: golden-hour-not-warm (0.055 allows / 0.08 blocks) + night
+  textured fails open.
+
 ## 2026-07-04 — GA-push re-prioritization of PLAN §9 (docs only)
 
 Re-ranked the canonical backlog for a concerted push toward GA launch, strictly by the
