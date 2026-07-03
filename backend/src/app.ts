@@ -183,10 +183,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.routeResolver ??
     (routeEnricher instanceof AdsbLolRouteService ? routeEnricher : undefined);
   if (routeResolver) {
-    const routeLimiter = new RateLimiter(
-      { capacity: 120, windowMs: 60_000 },
-      options.rateLimitNow,
-    ); // 120/min per IP — one backfill pass over an old Hangar is ~1/callsign
+    const routeLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, options.rateLimitNow); // 120/min per IP — one backfill pass over an old Hangar is ~1/callsign
     registerRoutesRoute(app, { resolver: routeResolver, routeLimiter });
   }
 
