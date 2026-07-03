@@ -277,4 +277,86 @@ struct CatchBackfillTests {
         #expect(c.manufacturer == manufacturerBefore)
         #expect(c.model == modelBefore)
     }
+
+    // MARK: - Route backfill (2026-07-04)
+
+    private func makeRoutedCatch(
+        callsign: String?, origin: String? = nil, dest: String? = nil,
+        in context: ModelContext
+    ) -> Catch {
+        let c = Catch(
+            icao24: "86e123", callsign: callsign, model: nil, manufacturer: nil,
+            caughtAt: Date(timeIntervalSince1970: 1_700_000_000),
+            observerLat: 35.55, observerLon: 139.78, slantDistanceMeters: 9000,
+            originIcao: origin, destIcao: dest
+        )
+        context.insert(c)
+        return c
+    }
+
+    private var tokyoRoute: BackendAircraft.Route {
+        makeRoute(origin: "RJTT", dest: "KSFO", originName: "Tokyo", destName: "San Francisco")
+    }
+
+    /// Decode a Route through JSON — its memberwise init is synthesized
+    /// internal-to-Decodable shape; building via decoder mirrors production.
+    private func makeRoute(
+        origin: String?, dest: String?, originName: String? = nil, destName: String? = nil
+    ) -> BackendAircraft.Route {
+        var dict: [String: String] = [:]
+        if let origin { dict["originIcao"] = origin }
+        if let dest { dict["destIcao"] = dest }
+        if let originName { dict["originName"] = originName }
+        if let destName { dict["destName"] = destName }
+        let data = try! JSONEncoder().encode(dict)
+        return try! JSONDecoder().decode(BackendAircraft.Route.self, from: data)
+    }
+
+    @Test func needsRouteGate() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // Route-less catch with a callsign -> needs.
+        #expect(CatchBackfill.needsRoute(makeRoutedCatch(callsign: "ANA858", in: context)))
+        // No callsign -> nothing to look up.
+        #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: nil, in: context)))
+        #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: "  ", in: context)))
+        // Any recorded route data (even one-sided) is moment-data -> left alone.
+        #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: "ANA858", origin: "RJTT", in: context)))
+        #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)))
+    }
+
+    @Test func applyRouteFillsNilOnlyWithNames() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeRoutedCatch(callsign: "ANA858", in: context)
+
+        #expect(CatchBackfill.applyRoute(tokyoRoute, to: [c]))
+        #expect(c.originIcao == "RJTT")
+        #expect(c.destIcao == "KSFO")
+        #expect(c.originName == "Tokyo")
+        #expect(c.destName == "San Francisco")
+    }
+
+    @Test func applyRouteNeverOverwritesRecordedRoute() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // As-flown one-sided route stays exactly as recorded.
+        let c = makeRoutedCatch(callsign: "ANA858", origin: "RJAA", in: context)
+
+        #expect(!CatchBackfill.applyRoute(tokyoRoute, to: [c]))
+        #expect(c.originIcao == "RJAA")
+        #expect(c.destIcao == nil)
+    }
+
+    @Test func applyRouteRejectsHalfAnswers() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeRoutedCatch(callsign: "ANA858", in: context)
+
+        // A lookup that resolves only one end fills nothing — a half route
+        // is worse than none on the card.
+        #expect(!CatchBackfill.applyRoute(makeRoute(origin: "RJTT", dest: nil), to: [c]))
+        #expect(c.originIcao == nil)
+        #expect(c.destIcao == nil)
+    }
 }

@@ -134,6 +134,13 @@ nonisolated struct BackendMetadata: Decodable {
     }
 }
 
+/// `GET /v1/routes/{callsign}` body (route backfill, 2026-07-04). `route` is
+/// JSON null when no route is on file — a real answer, not an error.
+nonisolated struct BackendRouteResponse: Decodable {
+    let callsign: String
+    let route: BackendAircraft.Route?
+}
+
 // MARK: - Client
 
 nonisolated struct TailspotBackendClient: ADSBSource {
@@ -168,6 +175,23 @@ nonisolated struct TailspotBackendClient: ADSBSource {
         do {
             let decoded = try JSONDecoder().decode(BackendAircraftResponse.self, from: data)
             return decoded.aircraft.map { $0.asAircraft() }
+        } catch {
+            throw ADSBSourceError.decoding(error)
+        }
+    }
+
+    /// The route currently on file for a callsign (`GET /v1/routes/{callsign}`)
+    /// — the catch route backfill (2026-07-04). Returns nil when the backend
+    /// has no route for the flight (a real answer the caller can stop on).
+    /// Not part of `ADSBSource` — route lookup is a backfill concern, not a
+    /// position-source one; `CatchBackfill` holds a concrete client for it.
+    func route(forCallsign callsign: String) async throws -> BackendAircraft.Route? {
+        let trimmed = callsign.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let url = baseURL.appendingPathComponent("v1/routes/\(trimmed)")
+        let data = try await get(url)
+        do {
+            return try JSONDecoder().decode(BackendRouteResponse.self, from: data).route
         } catch {
             throw ADSBSourceError.decoding(error)
         }

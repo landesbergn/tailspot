@@ -218,8 +218,11 @@ source + each one's focused test file — they're not restated here.
   (dedupe is a Hangar concern). `CatchDetailView` is a **frozen-moment** view that
   may backfill **nil-only airframe** fields (registration, typecode, manufacturer,
   model, placeName, operator) but never overwrites recorded values or backfills
-  moment-data. `Catch.resolvedRarity` is the deliberate exception — it re-derives
-  live so re-tiering corrects old catches on read, no migration.
+  moment-data. Deliberate exceptions: `Catch.resolvedRarity` re-derives live (so
+  re-tiering corrects old catches on read, no migration), and a **fully-nil route**
+  heals via `CatchBackfill`'s per-callsign `GET /v1/routes` lookup (2026-07-04 —
+  current filing, best-effort like operatorName; a one-sided as-observed route is
+  moment-data and is never touched).
 - **Permission strings** (`NSCameraUsageDescription`,
   `NSLocationWhenInUseUsageDescription`) live in the target's **Info** tab in
   Xcode, not in any tracked source file. Adding one is a **manual Xcode step Claude
