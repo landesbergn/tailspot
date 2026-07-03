@@ -107,6 +107,24 @@ STRATEGY.md bet sequence (supersedes the 2026-06-24 ordering). Shape of the call
 Also flagged: a TestFlight build cut is due (economy/reveal/iPhone-only/airport names
 are on `main` but not on testers' phones) — Noah's call. No code changes this round.
 
+## 2026-07-04 — Recent card speaks the reveal's design language — branch `feat/recent-card-reveal-language`
+
+Noah's follow-on to the reveal (airport field session): the Hangar **Recent** card
+(`TailCard` rich variant) now matches `CatchRevealView`'s vocabulary. Display-only —
+no model/schema/telemetry change; the Sets compact variant is untouched.
+
+- **Make/model promoted to the hero line** (primary ink, semibold — the card's echo of
+  the reveal's split-flap name; was mid-grey secondary).
+- **Route surfaces on the card for the first time**: mono ICAO codes with the
+  rarity-tinted `→` (the reveal's `routeCell` pattern) + a short date. One-sided routes
+  render one code, never a dangling arrow; no-route rows keep the quiet
+  `date · location` line. Rarity tint now carries two meanings (points + route arrow) —
+  still the two-hue discipline (cyan callsign; rarity tint).
+- Visual pass via new `TailCardSnapshotTests` (ImageRenderer, RevealSnapshotTests
+  pattern) over routes/one-sided/none, long names, hex-fallback callsign, all-missing,
+  and the Sets regression. Before/after review doc:
+  `docs/reviews/2026-07-04-recent-card-reveal-language.html`.
+
 ## 2026-07-01 — Airport city names + economy rolled out to prod — branch `feat/route-airport-names` (PR #89) + ops
 
 **Airport city names (PR #89):** real catches now get the reveal's city subline. adsb.lol's
