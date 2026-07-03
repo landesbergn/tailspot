@@ -84,7 +84,10 @@ enum PostHogSessionReplay {
         // `DeviceID.currentIfPresent()` (NEVER mints) and gate on a claimed
         // handle, so a genuine first launch doesn't identify before registration
         // establishes the canonical id. `identify` is idempotent (posthog-ios
-        // dedupes an identical repeat). See AnalyticsIdentity.
+        // dedupes an identical repeat), and for a device whose SDK is pinned to
+        // a stale pre-#76 local id — where posthog-ios silently DROPS the
+        // identify — the sink falls back to `$set`ting the handle on the pinned
+        // person (see AnalyticsIdentity.identifyRoute).
         let handle = UserDefaults.standard.string(forKey: SpotterHandle.storageKey)
         let hasHandle = AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
         if let id = AnalyticsIdentity.launchIdentity(deviceId: DeviceID.currentIfPresent(),

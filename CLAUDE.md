@@ -209,7 +209,11 @@ source + each one's focused test file — they're not restated here.
   anonymous activity in — so the analytics person == the backend device id
   (catches/leaderboard). `DeviceID` is the backend id only; don't reintroduce a
   second analytics id or a REST capture path (the dual pipeline fragmented one
-  device into multiple persons — CHANGELOG 2026-06-27).
+  device into multiple persons — CHANGELOG 2026-06-27). **posthog-ios gotcha:**
+  `identify()` is a SILENT no-op (handle `$set` included) when the SDK is already
+  identified under a different distinct_id; the sink routes around it via
+  `AnalyticsIdentity.identifyRoute` (`$set` on the pinned person) — never "fix"
+  a pinned device with `reset()`/re-identify (CHANGELOG 2026-07-04).
 - **`ADSBSourceError`** (in `ADSBSource.swift`) is the source-neutral
   transport-error enum (`badURL`/`http(status:)`/`decoding`); all errors surface
   uniformly via `lastError` (the OpenSky-era 429 backoff was removed —

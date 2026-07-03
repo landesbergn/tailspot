@@ -80,14 +80,34 @@ nonisolated private struct PostHogAnalyticsSink: AnalyticsSink {
 
     func identify(_ distinctId: String, handle: String?) {
         guard !distinctId.isEmpty else { return }
-        if let handle, !handle.isEmpty {
-            // `identify(_:userProperties:)` `$set`s the handle alongside the
-            // identify. posthog-ios dedupes an identical repeat, and an already-
-            // identified SDK ignores a *different* id (identify is call-once),
-            // so re-calling on launch self-heals a profile missing the handle.
-            PostHogSDK.shared.identify(distinctId, userProperties: ["handle": handle])
-        } else {
-            PostHogSDK.shared.identify(distinctId)
+        let handle = (handle?.isEmpty == false) ? handle : nil
+        // posthog-ios's identify() is a SILENT no-op when the SDK is already
+        // identified under a different distinct_id — the handle `$set` riding
+        // along included. Devices pinned to a pre-#76 throwaway local id hit
+        // that every launch, so their claimed handle never reached PostHog.
+        // Route around it: when identify would be dropped, `$set` the handle
+        // on the person the SDK is pinned to instead (the server-side merges
+        // made that the same person). See AnalyticsIdentity.identifyRoute.
+        switch AnalyticsIdentity.identifyRoute(target: distinctId,
+                                               currentDistinctId: PostHogSDK.shared.getDistinctId(),
+                                               anonymousId: PostHogSDK.shared.getAnonymousId(),
+                                               hasHandle: handle != nil) {
+        case .identify:
+            if let handle {
+                // `identify(_:userProperties:)` `$set`s the handle alongside
+                // the identify; posthog-ios dedupes an identical repeat, so
+                // re-calling on launch self-heals a profile missing the handle.
+                PostHogSDK.shared.identify(distinctId, userProperties: ["handle": handle])
+            } else {
+                PostHogSDK.shared.identify(distinctId)
+            }
+        case .setHandleOnCurrentPerson:
+            if let handle {
+                PostHogSDK.shared.capture("$set", userProperties: ["handle": handle])
+                Log.analytics.notice("identify would be dropped (SDK pinned to another id); $set handle on current person instead")
+            }
+        case .drop:
+            Log.analytics.notice("identify skipped: SDK already identified under a different id, no handle to set")
         }
     }
 

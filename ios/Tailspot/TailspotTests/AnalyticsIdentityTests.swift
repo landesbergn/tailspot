@@ -106,4 +106,51 @@ struct AnalyticsIdentityTests {
         #expect(AnalyticsIdentity.launchUserProperties(handle: "", placeholder: placeholder) == nil)
         #expect(AnalyticsIdentity.launchUserProperties(handle: "   ", placeholder: placeholder) == nil)
     }
+
+    // MARK: - identifyRoute (pinned-id fallback)
+    //
+    // posthog-ios silently drops identify() when the SDK is already identified
+    // under a different distinct_id — the handle `$set` inside it included.
+    // These tests pin the routing that works around it (2026-07-04: claimed
+    // handles eagle_eye/skywatcher never reached PostHog because of this).
+
+    private let serverId = "edd4da6a-e4d9-49a3-8476-71d604edd2eb"
+    private let staleLocalId = "91DB621E-E353-4874-9991-8986FB8D823F"
+    private let anonId = "019EE2B8-D400-708E-A2BE-BB72D4FDD331"
+
+    @Test func firstIdentifyRoutesToIdentify() {
+        // Not yet identified (distinct id == anonymous id): the SDK accepts
+        // identify with a new id — the normal registration/claim path.
+        #expect(AnalyticsIdentity.identifyRoute(target: serverId,
+                                                currentDistinctId: anonId,
+                                                anonymousId: anonId,
+                                                hasHandle: true) == .identify)
+    }
+
+    @Test func reIdentifySameIdRoutesToIdentify() {
+        // Already identified with the SAME id: posthog-ios turns the repeat
+        // into a `$set` of the user properties — the launch self-heal.
+        #expect(AnalyticsIdentity.identifyRoute(target: serverId,
+                                                currentDistinctId: serverId,
+                                                anonymousId: anonId,
+                                                hasHandle: true) == .identify)
+    }
+
+    @Test func pinnedToStaleIdFallsBackToSetHandle() {
+        // Identified under a DIFFERENT id (pre-#76 pinned device): identify
+        // would be silently dropped, so the handle must be `$set` on the
+        // person the SDK is pinned to.
+        #expect(AnalyticsIdentity.identifyRoute(target: serverId,
+                                                currentDistinctId: staleLocalId,
+                                                anonymousId: anonId,
+                                                hasHandle: true) == .setHandleOnCurrentPerson)
+    }
+
+    @Test func pinnedToStaleIdWithoutHandleDrops() {
+        // Same pinned state but nothing to salvage: don't emit anything.
+        #expect(AnalyticsIdentity.identifyRoute(target: serverId,
+                                                currentDistinctId: staleLocalId,
+                                                anonymousId: anonId,
+                                                hasHandle: false) == .drop)
+    }
 }
