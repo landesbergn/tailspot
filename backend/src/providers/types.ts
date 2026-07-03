@@ -6,9 +6,9 @@
  * — see the GET /v1/aircraft route. SI units throughout: meters, m/s, degrees
  * true, unix *seconds* (not milliseconds).
  *
- * Philosophy mirrors the iOS `FailableDecodable`: an upstream row that can't be
- * normalized (e.g. no lat/lon) is dropped per-element, never failing the whole
- * batch. Lossy-but-resilient beats all-or-nothing for live air traffic.
+ * Normalization is lossy per-element: an upstream row that can't be normalized
+ * (e.g. no lat/lon) is dropped, never failing the whole batch.
+ * Lossy-but-resilient beats all-or-nothing for live air traffic.
  */
 
 /**
