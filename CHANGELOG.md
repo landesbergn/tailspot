@@ -5,6 +5,28 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-04 — GA-push re-prioritization of PLAN §9 (docs only)
+
+Re-ranked the canonical backlog for a concerted push toward GA launch, strictly by the
+STRATEGY.md bet sequence (supersedes the 2026-06-24 ordering). Shape of the call:
+
+- **Bet A is closed out, not re-litigated:** the engine work shipped (telemetry, replay
+  loop, visual confirmation, anti-cheat L1/L3). What remains is #1 *reading* the
+  north-star (catch-confirmation-rate has never been computed from the shipped events)
+  and #2 flipping L2 from shadow to enforcing off its accumulated telemetry.
+- **The push's bulk goes to Bet B:** #3 onboarding re-do (the measured ~36→5 activation
+  leak, now unblocked by the shipped economy; compass-calibration UX folded in), #4
+  game-layer completion (route-guess bonus + the deferred Decision 3 trophy/medal
+  rework + guess-the-type), #5 card-art medium decision → cards build, #6 polish sweep.
+- **Two GA-scale enablers promoted from "not urgent":** #7 Hangar restore/sync (the
+  local-only Hangar is a catastrophic-loss risk at GA scale) and #8 GA-gate
+  housekeeping (ICAO terms re-check, privacy policy/ToS, App Store assets, region call).
+- **#9 push alerts recommended post-GA** (retention lever needs an installed base);
+  #10 sharing/reticle-color polish stays the tail.
+
+Also flagged: a TestFlight build cut is due (economy/reveal/iPhone-only/airport names
+are on `main` but not on testers' phones) — Noah's call. No code changes this round.
+
 ## 2026-07-01 — Airport city names + economy rolled out to prod — branch `feat/route-airport-names` (PR #89) + ops
 
 **Airport city names (PR #89):** real catches now get the reveal's city subline. adsb.lol's
