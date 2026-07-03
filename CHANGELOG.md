@@ -5,6 +5,32 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-04 — Analytics: handle self-heal for pinned-id devices — branch `fix/handle-selfheal-pinned-id`
+
+Root-caused why several claimed handles (eagle_eye, skywatcher, …) never appeared on
+their PostHog persons despite the launch self-heal: **posthog-ios's `identify()` is a
+silent no-op when the SDK is already identified under a different distinct_id — and
+the handle `$set` riding along is dropped with it** (verified in the SDK source: the
+different-id branch requires "not yet identified"; same-id re-identify becomes a
+`$set`). Devices pinned to a pre-#76 throwaway local id hit this on every launch, so
+neither the claim-time identify nor the self-heal could ever land their handle.
+
+- **`AnalyticsIdentity.identifyRoute`** — new pure routing decision (unit-tested):
+  first identify / same-id re-identify → `identify()`; pinned to a different id →
+  fall back to a `$set` of the handle on the *current* (pinned) person — the
+  2026-06-26/27 server-side merges made that the same person as the server-id one;
+  pinned with no handle → drop (logged). `PostHogAnalyticsSink.identify` now routes
+  through it, so ALL identify call sites (launch self-heal, registration, handle
+  claim/change in Settings) are covered.
+- **One-time backfill (data op, not code):** `$set` handle via the capture API for
+  the 4 affected persons with verified distinct_id↔person mappings — eagle_eye,
+  skywatcher, grant, approach_287. The remaining 3 backend handles missing from
+  PostHog (spotter_42, contrail_cam, blue_hour — all registered day-one 2026-06-16)
+  have **zero analytics events ever**; no person exists to backfill, and their
+  unpinned SDKs will identify correctly on their next launch with a current build.
+- Diagnosis artifact: the three "UUID persons" Noah flagged were eagle_eye,
+  skywatcher, and planespotters — the last was already healed (its SDK id matches
+  the server id; its launch `$set` landed 2026-07-03).
 ## 2026-07-04 — Route backfill: old catches gain origin → destination — branch `feat/route-backfill`
 
 Noah's ask after the Recent-card redesign: "backfill the old cards to the new design."

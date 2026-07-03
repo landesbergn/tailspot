@@ -64,6 +64,48 @@ nonisolated enum AnalyticsIdentity {
         return true
     }
 
+    // MARK: - Identify routing (the pinned-id fallback)
+
+    /// How the sink should deliver an `identify(distinctId, handle:)` call,
+    /// given the SDK's current identity state.
+    enum IdentifyRoute: Equatable {
+        /// The SDK will accept the identify: either its very first one, or a
+        /// re-identify with the id it already holds (posthog-ios turns the
+        /// latter into a `$set` of the user properties — the self-heal path).
+        case identify
+        /// The SDK is already identified under a DIFFERENT distinct_id, so
+        /// posthog-ios silently drops `identify()` — the handle `$set` inside
+        /// it included. Deliver the handle as a plain `$set` capture on the
+        /// *current* person instead.
+        case setHandleOnCurrentPerson
+        /// Identify would be dropped and there is no handle to salvage.
+        case drop
+    }
+
+    /// Decide how to route an identify call around a posthog-ios quirk:
+    /// `identify()` is a SILENT no-op when the SDK is already identified under
+    /// a different distinct_id (its different-id branch requires "not yet
+    /// identified"; there is no error, no event). Devices pinned to a pre-#76
+    /// throwaway local id hit exactly that every launch — the self-heal
+    /// `identify(serverId, handle:)` evaporated client-side, which is why
+    /// claimed handles (eagle_eye, skywatcher; found 2026-07-04) never reached
+    /// their PostHog persons. The escape hatch: `$set` the handle on whatever
+    /// person the SDK is pinned to — the 2026-06-26/27 server-side merges made
+    /// that the same person as the server-id one, and even unmerged, labelling
+    /// the active person with the handle is what makes it findable.
+    ///
+    /// `isIdentified` is inferred as `currentDistinctId != anonymousId`: until
+    /// the first accepted identify, posthog-ios reports the anonymous id as the
+    /// distinct id, and after one it keeps the anonymous id around unchanged.
+    static func identifyRoute(target: String,
+                              currentDistinctId: String,
+                              anonymousId: String,
+                              hasHandle: Bool) -> IdentifyRoute {
+        let isIdentified = currentDistinctId != anonymousId
+        if !isIdentified || currentDistinctId == target { return .identify }
+        return hasHandle ? .setHandleOnCurrentPerson : .drop
+    }
+
     /// Person properties to `$set` alongside the launch `identify()`, or `nil`
     /// when there's nothing to sync.
     ///
