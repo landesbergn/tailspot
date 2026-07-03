@@ -12,7 +12,11 @@ import {
 } from "./identity/store.js";
 import { makeRegistryEnrichSink } from "./ingest/feedEnrich.js";
 import { DrizzleMetadataStore, type MetadataStore } from "./metadata/store.js";
-import { AdsbLolRouteService, type RouteEnricher } from "./providers/adsblolRoutes.js";
+import {
+  AdsbLolRouteService,
+  type RouteEnricher,
+  type RouteResolver,
+} from "./providers/adsblolRoutes.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
@@ -20,6 +24,7 @@ import { registerDevicesRoutes } from "./routes/devices.js";
 import { registerHandlesRoute } from "./routes/handles.js";
 import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
+import { registerRoutesRoute } from "./routes/routes.js";
 
 // Resolve the package.json version at startup so /healthz can report it.
 // __dirname equivalent in ESM:
@@ -60,6 +65,12 @@ export interface BuildAppOptions {
    * active; left undefined in tests so they never hit the network.
    */
   routeEnricher?: RouteEnricher;
+  /**
+   * Per-callsign route resolver for GET /v1/routes/{callsign} (tests inject a
+   * fake). Production defaults to the SAME AdsbLolRouteService instance as the
+   * enricher (shared cache); absent both → the endpoint isn't registered.
+   */
+  routeResolver?: RouteResolver;
   /**
    * Metadata store override (tests inject a PGlite-backed or in-memory store
    * here). Production passes nothing and we lazily build a Drizzle store over
@@ -162,6 +173,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     onFreshSnapshot,
     routeEnricher,
   });
+
+  // GET /v1/routes/{callsign} — per-callsign route lookup for the iOS catch
+  // route backfill (2026-07-04). Shares the enricher's cache when the default
+  // AdsbLolRouteService is in play (a hot flight is a map read); an injected
+  // resolver (tests) always wins. Registered only when a resolver exists —
+  // a non-adsblol deployment simply has no route data to serve.
+  const routeResolver =
+    options.routeResolver ??
+    (routeEnricher instanceof AdsbLolRouteService ? routeEnricher : undefined);
+  if (routeResolver) {
+    const routeLimiter = new RateLimiter(
+      { capacity: 120, windowMs: 60_000 },
+      options.rateLimitNow,
+    ); // 120/min per IP — one backfill pass over an old Hangar is ~1/callsign
+    registerRoutesRoute(app, { resolver: routeResolver, routeLimiter });
+  }
 
   // GET /v1/metadata/{icao24} — FAA + DOC 8643 merged lookup (WP 1.4).
   //

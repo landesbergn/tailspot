@@ -5,6 +5,26 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-04 — Route backfill: old catches gain origin → destination — branch `feat/route-backfill`
+
+Noah's ask after the Recent-card redesign: "backfill the old cards to the new design."
+The design applies everywhere already — what old catches lack is route DATA (capture
+started 2026-06-29, and only for flights the feed had routes for). Both halves:
+
+- **Backend `GET /v1/routes/:callsign`** — per-callsign route lookup for the heal.
+  `AdsbLolRouteService` gains an awaitable `resolve` (RouteResolver seam) over the SAME
+  cache the position-path enricher fills; anonymous, per-IP rate-limited (120/min),
+  `route: null` is a normal 200, upstream failure → 502 (client retries a later pass).
+  Registered only when an adsb.lol-backed resolver exists; tests inject a fake.
+- **iOS `CatchBackfill`** — new route pass in `backfillAll` (Hangar-open heal): once
+  per DISTINCT callsign, fill origin/dest (+ names) onto catches where BOTH codes are
+  nil. **Route joins operatorName as a documented best-effort exception to the
+  frozen-moment rule** — the lookup answers with the route *currently on file*, which
+  for scheduled callsigns is almost always the flown pair. A one-sided as-observed
+  route is moment-data and is never touched; a half answer from the lookup fills
+  nothing. CLAUDE.md + the `runCatch` comment updated accordingly.
+- Backend 238 tests (8 new) + `TailspotTests` green (4 new `CatchBackfill` route tests).
+
 ## 2026-07-04 — Backend: airplanes.live fallback feed — branch `backend/airplanes-live-fallback`
 
 Cheap transport-failure insurance for the position feed (from the same coverage audit

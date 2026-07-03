@@ -1271,9 +1271,10 @@ struct ContentView: View {
                     category: observed?.aircraft.category,
                     altitudeMeters: observed?.aircraft.altitudeMeters,
                     velocityMps: observed?.aircraft.velocityMps,
-                    // Route (origin → destination) is feed-only and a frozen
-                    // catch-moment fact — record as-observed; nil for routeless
-                    // flights. No metadata-endpoint fallback / later backfill.
+                    // Route (origin → destination): record as-observed from
+                    // the feed; nil when the feed had none. A fully-nil route
+                    // may later heal via CatchBackfill's per-callsign lookup
+                    // (2026-07-04) — a one-sided as-observed route never does.
                     originIcao: observed?.aircraft.originIcao,
                     destIcao: observed?.aircraft.destIcao,
                     originName: observed?.aircraft.originName,

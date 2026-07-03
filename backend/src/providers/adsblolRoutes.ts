@@ -80,6 +80,18 @@ export interface RouteEnricher {
   enrich(aircraft: NormalizedAircraft[]): void;
 }
 
+/**
+ * The seam the `GET /v1/routes/:callsign` backfill endpoint calls — unlike
+ * `enrich`, this AWAITS the upstream lookup (the caller is a one-shot heal,
+ * not the hot position path). Implemented by `AdsbLolRouteService` over the
+ * same cache the enricher fills; tests inject a trivial fake.
+ */
+export interface RouteResolver {
+  /** The route for one callsign, or null when none is on file. Never throws
+   *  for "no route"; transport errors reject (the endpoint maps them). */
+  resolve(callsign: string): Promise<AircraftRoute | null>;
+}
+
 export interface AdsbLolRouteServiceOptions {
   baseUrl?: string;
   timeoutMs?: number;
@@ -95,7 +107,7 @@ export interface AdsbLolRouteServiceOptions {
   onError?: (err: unknown) => void;
 }
 
-export class AdsbLolRouteService implements RouteEnricher {
+export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
@@ -213,6 +225,21 @@ export class AdsbLolRouteService implements RouteEnricher {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Await-resolve one callsign's route, cache-first (RouteResolver — the
+   * `GET /v1/routes/:callsign` backfill endpoint). Shares the enricher's
+   * cache, so a hot flight is a map read and a cold one costs a single
+   * upstream GET. If the callsign is already in-flight from a concurrent
+   * `enrich`, `prefetch` skips it and this returns null rather than waiting —
+   * the client's next backfill pass picks up the by-then-cached answer.
+   */
+  async resolve(callsign: string): Promise<AircraftRoute | null> {
+    const hit = this.lookupCache(callsign);
+    if (hit !== undefined) return hit;
+    await this.prefetch([{ callsign, lat: 0, lng: 0 }]);
+    return this.lookupCache(callsign) ?? null;
   }
 
   /** Fresh cache value: an `AircraftRoute` (positive), `null` (negative — don't
