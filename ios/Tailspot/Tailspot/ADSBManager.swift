@@ -147,18 +147,14 @@ extension ObservedAircraft {
     }
 
     /// Drop aircraft whose last ADS-B position update is older than
-    /// this (seconds). OpenSky position timestamps update every few
-    /// seconds for in-flight aircraft; a stale row usually means the
-    /// plane landed, lost coverage, or dropped off radar — a "ghost".
+    /// this (seconds). In-flight aircraft refresh every few seconds when
+    /// a receiver hears them; a stale row usually means the plane landed,
+    /// lost coverage, or dropped off radar — a "ghost".
     ///
-    /// Raised 60 → 150 on 2026-06-01. The old 60 s floor deleted labels
-    /// for genuinely-visible planes whose free-tier OpenSky position was
-    /// merely slow to refresh — and, worse, during 429 backoff (poll gap
-    /// up to 120 s) it aged out EVERY plane at once, reading in the field
-    /// as "no planes at all" until an app restart forced a fresh poll.
-    /// `reAnnotate` additionally grows this allowance by however overdue
-    /// polling is (see its `effectiveMaxAge`), so a backoff gap can't
-    /// blank the whole sky.
+    /// Raised 60 → 150 on 2026-06-01: a tight floor deleted labels for
+    /// genuinely-visible planes whose upstream position was merely slow
+    /// to refresh (MLAT contacts especially can lag behind direct ADS-B),
+    /// reading in the field as "no planes at all".
     static let maxPositionAge: TimeInterval = 150
 
     /// Whether this aircraft is plausibly visible to the naked eye
@@ -452,33 +448,26 @@ final class ADSBManager: ObservableObject {
     /// logs when the counts actually change, not 60× a minute.
     private var lastLoggedDiagnostic: VisibilityDiagnostic?
     @Published var lastError: String?
-    /// True when the last error is auto-recovering (e.g. HTTP 429
-    /// backoff) and doesn't require user action. UI surfaces use
-    /// this to render the message in a softer, non-alarming style.
-    @Published var lastErrorIsTransient: Bool = false
     @Published var lastFetched: Date?
 
     /// Search radius around the user, in km. 50 km comfortably covers the
     /// ~30 km visibility cap with margin for planes climbing into view.
     var radiusKm: Double = 50
 
-    /// Network poll interval. The backend caches per-region tiles and
-    /// rate-limits per device (token bucket), so 20 s is a sustainable
-    /// cadence that keeps the AR list fresh without draining the bucket.
-    var pollInterval: TimeInterval = 20
+    /// Network poll interval. `/v1/aircraft` has no rate limit — the
+    /// backend absorbs client polling in a per-region tile cache with a
+    /// 10 s TTL, so 10 s is the fastest cadence that can actually see
+    /// fresh data; polling harder would only re-read the cache. (The
+    /// old 20 s value and its 429 backoff dated from the OpenSky era,
+    /// whose per-account quota the 2026-06-21 backend cutover removed.)
+    var pollInterval: TimeInterval = 10
 
     /// How often we re-annotate the last-fetched raw aircraft to "now"
     /// — forward-extrapolating positions and recomputing bearings from
     /// the current observer location. Decoupled from `pollInterval` so
     /// boxes glide smoothly between network fetches instead of jumping
-    /// every 20s when new data arrives.
+    /// whenever new data arrives.
     var reAnnotationInterval: TimeInterval = 1
-
-    /// When the last fetch returned HTTP 429, we exponentially back off
-    /// up to this cap before trying again. Resets to `pollInterval` on
-    /// the next successful fetch.
-    private let maxBackoffInterval: TimeInterval = 120
-    private var currentInterval: TimeInterval = 20
 
     /// The one and only ADS-B source: the Tailspot backend proxy
     /// (api.tailspot.app — adsb.lol data WITH MLAT, so GA aircraft and
@@ -517,15 +506,13 @@ final class ADSBManager: ObservableObject {
     func start(locationProvider: @escaping @MainActor () -> CLLocation?) {
         guard pollTask == nil else { return }
         self.locationProvider = locationProvider
-        self.currentInterval = pollInterval
 
         // Network poll: fetches new state from the backend periodically.
         pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 if let loc = self?.locationProvider?() {
                     await self?.refresh(around: loc)
-                    let waitSeconds = self?.currentInterval ?? 20
-                    try? await Task.sleep(for: .seconds(waitSeconds))
+                    try? await Task.sleep(for: .seconds(self?.pollInterval ?? 10))
                 } else {
                     // Location not yet available — short retry so we
                     // fetch as soon as the first GPS fix arrives.
@@ -538,8 +525,8 @@ final class ADSBManager: ObservableObject {
         // the raw aircraft positions to "now" using the current
         // observer location, recompute angular positions, publish.
         // This is what makes the AR boxes glide smoothly with each
-        // plane's motion instead of jumping every 20s when new ADS-B
-        // data arrives.
+        // plane's motion instead of jumping whenever new ADS-B data
+        // arrives.
         let tick = reAnnotationInterval
         reAnnotationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -556,14 +543,6 @@ final class ADSBManager: ObservableObject {
         pollTask = nil
         reAnnotationTask?.cancel()
         reAnnotationTask = nil
-    }
-
-    /// Force an immediate fetch using the current location, if any.
-    /// Used by the useMock toggle so flipping modes is instantaneous
-    /// rather than waiting for the next poll tick.
-    func refreshNow() async {
-        guard let loc = locationProvider?() else { return }
-        await refresh(around: loc)
     }
 
     /// Single fetch + annotate cycle. Errors are surfaced via lastError;
@@ -596,22 +575,9 @@ final class ADSBManager: ObservableObject {
             self.reAnnotate(observer: location, now: Date(), verbose: true)
 
             self.lastError = nil
-            self.lastErrorIsTransient = false
             self.lastFetched = Date()
-            // Successful fetch — snap polling back to the base interval.
-            self.currentInterval = pollInterval
-        } catch ADSBSourceError.rateLimited {
-            // 429: over the daily quota or per-IP limit. Back off
-            // exponentially so we stop hammering the backend. The error
-            // is auto-recovering — UI marks it transient so the
-            // empty-sky pill doesn't render it as a screaming alert.
-            let nextSecs = Int(min(currentInterval * 2, maxBackoffInterval))
-            self.lastError = "API limit · retry in \(nextSecs)s"
-            self.lastErrorIsTransient = true
-            self.currentInterval = min(currentInterval * 2, maxBackoffInterval)
         } catch {
             self.lastError = error.localizedDescription
-            self.lastErrorIsTransient = false
         }
     }
 
@@ -629,8 +595,8 @@ final class ADSBManager: ObservableObject {
                 await metadataCache.set(icao24: icao24, value: fetched)
                 return fetched
             } catch {
-                // Transport / auth / 429 — surface via lastError but
-                // do NOT cache. The next tap will retry.
+                // Transport error — surface via lastError but do NOT
+                // cache. The next tap will retry.
                 Log.adsb.error("metadata lookup failed for \(icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 self.lastError = "Metadata lookup failed: \(error.localizedDescription)"
                 return nil
@@ -647,18 +613,9 @@ final class ADSBManager: ObservableObject {
     /// `ObservedAircraft.annotate(_:observer:now:)` so the replay
     /// analyzer can reuse the exact same geometry.
     private func reAnnotate(observer: CLLocation, now: Date, verbose: Bool = false) {
-        // During 429 backoff we poll slowly, so the freshest data we hold is
-        // legitimately older than at the base cadence. Grow the staleness
-        // allowance by however overdue polling is, so a backoff gap doesn't
-        // age out every plane at once (the "no planes + restart fixes it"
-        // failure). At the base 20 s cadence the extra term is 0.
-        let effectiveMaxAge = ObservedAircraft.maxPositionAge
-            + max(0, currentInterval - pollInterval)
-
         var annotated = rawAircraft
             .compactMap {
-                ObservedAircraft.annotate($0, observer: observer, now: now,
-                                          maxPositionAge: effectiveMaxAge)
+                ObservedAircraft.annotate($0, observer: observer, now: now)
             }
             .sorted { $0.slantDistanceMeters < $1.slantDistanceMeters }
         // Stamp visibility hysteresis from the prior frame's shown set so a
@@ -666,15 +623,15 @@ final class ADSBManager: ObservableObject {
         shownIcaos = applyVisibilityHysteresis(&annotated, previouslyShown: shownIcaos)
         self.observed = annotated
 
-        updateDiagnostic(now: now, effectiveMaxAge: effectiveMaxAge,
-                         annotated: annotated, verbose: verbose)
+        updateDiagnostic(now: now, annotated: annotated, verbose: verbose)
     }
 
     /// Compute the visibility funnel for instrumentation. Does NOT change
     /// what `observed` holds (consumers still apply `isLikelyVisibleToObserver`
     /// themselves) — this is counts + optional per-plane logs only.
-    private func updateDiagnostic(now: Date, effectiveMaxAge: TimeInterval,
+    private func updateDiagnostic(now: Date,
                                   annotated: [ObservedAircraft], verbose: Bool) {
+        let maxAge = ObservedAircraft.maxPositionAge
         var diag = VisibilityDiagnostic()
         diag.fetched = rawAircraft.count
 
@@ -682,10 +639,10 @@ final class ADSBManager: ObservableObject {
         // counts here from the raw set so the funnel adds up.
         for ac in rawAircraft {
             if ac.onGround { diag.onGround += 1; continue }
-            if let ts = ac.positionTimestamp, now.timeIntervalSince(ts) > effectiveMaxAge {
+            if let ts = ac.positionTimestamp, now.timeIntervalSince(ts) > maxAge {
                 diag.stale += 1
                 if verbose {
-                    Log.adsb.info("drop STALE \(ac.callsign ?? ac.icao24, privacy: .public) age=\(Int(now.timeIntervalSince(ts)))s (limit \(Int(effectiveMaxAge))s)")
+                    Log.adsb.info("drop STALE \(ac.callsign ?? ac.icao24, privacy: .public) age=\(Int(now.timeIntervalSince(ts)))s (limit \(Int(maxAge))s)")
                 }
             }
         }

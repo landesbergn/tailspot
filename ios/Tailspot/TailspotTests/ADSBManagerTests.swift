@@ -158,36 +158,6 @@ struct ADSBManagerTests {
 
     // MARK: - Error handling
 
-    @Test func rateLimitedErrorIsSurfacedAsTransientBackoffMessage() async {
-        // ADSBSourceError.rateLimited is the typed signal that
-        // ADSBManager catches specifically to apply backoff. Verify the
-        // user-facing lastError message mentions the backoff and flags
-        // the error as transient so UI surfaces can render it softly
-        // (the system auto-recovers; no user action required).
-        let source = FixedSource([], error: ADSBSourceError.rateLimited)
-        let manager = ADSBManager(source: source)
-
-        await manager.refresh(around: Self.observer())
-
-        let msg = manager.lastError ?? ""
-        #expect(msg.localizedCaseInsensitiveContains("limit"))
-        #expect(msg.localizedCaseInsensitiveContains("retry"))
-        #expect(manager.lastErrorIsTransient)
-    }
-
-    @Test func nonTransientErrorClearsTransientFlag() async {
-        // A plain transport error is NOT auto-recovering — verify the
-        // transient flag stays false so UI surfaces treat it as a real
-        // alert.
-        let source = FixedSource([], error: TestError())
-        let manager = ADSBManager(source: source)
-
-        await manager.refresh(around: Self.observer())
-
-        #expect(manager.lastError != nil)
-        #expect(!manager.lastErrorIsTransient)
-    }
-
     @Test func sourceErrorsLandInLastErrorWithoutCrashing() async {
         let source = FixedSource([], error: TestError())
         let manager = ADSBManager(source: source)
@@ -503,14 +473,13 @@ struct ADSBManagerTests {
         #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now) == nil)
     }
 
-    @Test func annotateRespectsWidenedAgeDuringBackoff() {
-        // The backoff-aware reAnnotate path passes a larger maxPositionAge
-        // so a plane that's stale vs the base floor still survives during a
-        // 429 poll gap (250 s = 150 base + 100 s overdue at the 120 s cap).
-        // Without that widening the whole sky blanks mid-backoff.
+    @Test func annotateHonorsExplicitMaxPositionAge() {
+        // `annotate` takes maxPositionAge as a parameter (the replay
+        // analyzer passes its own) — verify a plane stale vs the default
+        // floor survives under a wider explicit allowance.
         let now = Date()
         let ac = Self.aircraftAt(bearing: 0, distanceMeters: 10_000,
-                                 altitudeMeters: 5_000, icao: "backoff",
+                                 altitudeMeters: 5_000, icao: "widened",
                                  positionTimestamp: now.addingTimeInterval(-200))
         #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now) == nil)
         #expect(ObservedAircraft.annotate(ac, observer: Self.observer(), now: now,

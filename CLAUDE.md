@@ -156,7 +156,7 @@ source + each one's focused test file — they're not restated here.
   indicator). If the backend is unreachable the app shows an error / empty sky
   rather than degrading — intended, for debugging clarity.
 - **Split fetch from annotation.** `ADSBManager` runs two loops: `pollTask` (every
-  ~20 s, fetches the bbox into `rawAircraft`, exponential 429-backoff to ~120 s)
+  ~10 s, matching the backend tile cache's TTL — `/v1/aircraft` has no rate limit)
   and `reAnnotationTask` (every ~1 s, forward-extrapolates each plane via
   `Aircraft.extrapolatedPosition(at:)` and recomputes bearing/elevation/distance
   from the current observer pose). This is what makes reticles glide between
@@ -211,8 +211,9 @@ source + each one's focused test file — they're not restated here.
   second analytics id or a REST capture path (the dual pipeline fragmented one
   device into multiple persons — CHANGELOG 2026-06-27).
 - **`ADSBSourceError`** (in `ADSBSource.swift`) is the source-neutral
-  transport-error enum (`badURL`/`rateLimited`/`http(status:)`/`decoding`);
-  `ADSBManager.refresh` matches `.rateLimited` to drive the 429 backoff.
+  transport-error enum (`badURL`/`http(status:)`/`decoding`); all errors surface
+  uniformly via `lastError` (the OpenSky-era 429 backoff was removed —
+  `/v1/aircraft` never rate-limits).
 - **`Catch` is a flat SwiftData `@Model`**; duplicate icao24 rows are allowed
   (dedupe is a Hangar concern). `CatchDetailView` is a **frozen-moment** view that
   may backfill **nil-only airframe** fields (registration, typecode, manufacturer,

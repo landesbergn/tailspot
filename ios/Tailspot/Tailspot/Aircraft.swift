@@ -2,20 +2,13 @@
 //  Aircraft.swift
 //  Tailspot
 //
-//  The Aircraft struct + its custom Decodable for the OpenSky API.
-//
-//  OpenSky's `/api/states/all` returns each aircraft as a *positional*
-//  JSON array — values keyed by index, not by name — like:
-//
-//    ["a3b15e", "AAL123  ", "United States", 1715000000, 1715000000,
-//     -122.27, 37.87, 9144.0, false, 230.0, 270.5, ...]
-//
-//  We decode by pulling values off an unkeyed container in order.
-//
-//  The `FailableDecodable` wrapper lets us decode an array of aircraft
-//  *lossily*: any entry that fails to decode (e.g. a radar contact with
-//  no lat/lon) becomes nil instead of throwing and killing the whole
-//  batch. We compactMap the nils away after.
+//  The core in-flight-aircraft value type. Not itself a wire format:
+//  the backend feed arrives as keyed DTOs (`BackendAircraft` in
+//  TailspotBackendClient.swift) and the replay format as
+//  `AircraftSnapshot` (ReplayRecorder.swift); both map onto this
+//  struct. (The OpenSky positional-array Decodable that used to live
+//  here was removed with the rest of the OpenSky path — the backend
+//  is the only source.)
 //
 
 import Foundation
@@ -32,35 +25,41 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     let originCountry: String   // country of registration
     let longitude: Double
     let latitude: Double
-    let altitudeMeters: Double  // best available altitude above MSL
+    /// Best available altitude above MSL, meters. GEOMETRIC (GPS) altitude
+    /// preferred, barometric only as fallback — the preference is applied in
+    /// the backend's feed normalizer (`alt_geom ?? alt_baro`), so what
+    /// arrives here is already the right one. Baro can sit hundreds of feet
+    /// off true altitude with local pressure; at close range that error is
+    /// degrees of elevation angle, exactly where the visibility curve is
+    /// tightest.
+    let altitudeMeters: Double
     let velocityMps: Double?    // ground speed, m/s
     let trackDeg: Double?       // direction of travel, degrees true
     let onGround: Bool
     /// When the network last received a position update for this aircraft.
     /// Used by `extrapolatedPosition(at:)` to project the position forward
-    /// to "now" along the reported track. Nil if OpenSky didn't report it.
+    /// to "now" along the reported track. Nil if the feed didn't report it.
     let positionTimestamp: Date?
     /// ICAO type designator from the live position feed (e.g. "A359"), or nil
     /// when the source didn't carry one. `TailspotBackendClient` populates this
-    /// from adsb.lol's `t` field; the legacy OpenSky positional decoder and the
-    /// replay-snapshot path leave it nil. Lets a catch resolve make/model/type
-    /// at catch time without the per-hex metadata endpoint (which is FAA-only).
+    /// from adsb.lol's `t` field; the replay-snapshot path leaves it nil. Lets
+    /// a catch resolve make/model/type at catch time without the per-hex
+    /// metadata endpoint (which is FAA-only).
     let typecode: String?
     /// Registration / tail number from the live feed (e.g. "9V-SMH"), or nil.
     let registration: String?
     /// ADS-B emitter category broadcast by the airframe (DO-260B), e.g. "A5"
     /// (heavy) or "A7" (rotorcraft) — uppercased by the backend. Nil when the
     /// source didn't carry one. `TailspotBackendClient` populates this from
-    /// adsb.lol's `category`; the legacy OpenSky positional decoder and the
-    /// replay path leave it nil. Unlike the manufacturer string, this is an
-    /// authoritative rotorcraft signal — see `emitterCategory` / `isRotorcraft`.
+    /// adsb.lol's `category`; the replay path leaves it nil. Unlike the
+    /// manufacturer string, this is an authoritative rotorcraft signal — see
+    /// `emitterCategory` / `isRotorcraft`.
     let category: String?
     /// ICAO airport code (4-letter, e.g. "KSFO") of the flight's ORIGIN, or nil
     /// when the feed didn't carry a route. `TailspotBackendClient` populates this
-    /// from the backend's additive `route.originIcao`; the legacy OpenSky
-    /// positional decoder and the replay path leave it nil. Frozen onto a `Catch`
-    /// at catch time like the other airframe facts — most GA/military/routeless
-    /// flights have no route, which is normal.
+    /// from the backend's additive `route.originIcao`; the replay path leaves it
+    /// nil. Frozen onto a `Catch` at catch time like the other airframe facts —
+    /// most GA/military/routeless flights have no route, which is normal.
     let originIcao: String?
     /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION, or
     /// nil. Same source/semantics as `originIcao`.
@@ -84,11 +83,11 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     var isRotorcraft: Bool { emitterCategory == .rotorcraft }
 
     /// Memberwise init with `typecode`/`registration`/`category` defaulted to
-    /// nil so the many existing construction sites — the OpenSky positional
-    /// decoder, the replay-snapshot `init(_:)`, and tests — compile unchanged;
-    /// only the backend feed path (`BackendAircraft.asAircraft`) supplies the
-    /// new fields. (An explicit init here suppresses the synthesized memberwise
-    /// init, so there's no ambiguity between the two.)
+    /// nil so the many existing construction sites — the replay-snapshot
+    /// `init(_:)` and tests — compile unchanged; only the backend feed path
+    /// (`BackendAircraft.asAircraft`) supplies the new fields. (An explicit
+    /// init here suppresses the synthesized memberwise init, so there's no
+    /// ambiguity between the two.)
     init(
         icao24: String,
         callsign: String?,
@@ -187,7 +186,7 @@ extension Aircraft {
         }
         let age = now.timeIntervalSince(t)
         // Sanity-cap to avoid extrapolating from corrupt data; a "fresh"
-        // OpenSky response should never be more than a couple of minutes old.
+        // feed position should never be more than a couple of minutes old.
         guard age > 0, age < 120 else {
             return (latitude, longitude)
         }
@@ -196,90 +195,6 @@ extension Aircraft {
             bearingDeg: track,
             distanceMeters: v * age
         )
-    }
-}
-
-// `nonisolated` applies to the whole extension — without it, the
-// project's MainActor default isolation makes the Decodable conformance
-// MainActor-isolated, which breaks tests that decode in nonisolated
-// context. The init's `nonisolated` alone isn't enough; the *conformance*
-// itself has to be nonisolated.
-nonisolated extension Aircraft: Decodable {
-    init(from decoder: Decoder) throws {
-        var c = try decoder.unkeyedContainer()
-
-        // 0  icao24
-        self.icao24 = try c.decode(String.self)
-
-        // 1  callsign (often padded with trailing whitespace)
-        let rawCallsign = try c.decodeIfPresent(String.self)
-        self.callsign = rawCallsign?
-            .trimmingCharacters(in: .whitespaces)
-            .nilIfEmpty
-
-        // 2  origin_country
-        self.originCountry = try c.decode(String.self)
-
-        // 3  time_position (Int?, Unix seconds when network last received
-        //    a position update for this aircraft). Used for forward
-        //    extrapolation in ObservedAircraft annotation.
-        let timePosition = try c.decodeIfPresent(Int.self)
-        self.positionTimestamp = timePosition.map {
-            Date(timeIntervalSince1970: TimeInterval($0))
-        }
-
-        // 4  last_contact (Int)          — we don't use it
-        _ = try c.decode(Int.self)
-
-        // 5  longitude (Double?)
-        // 6  latitude (Double?)
-        guard
-            let lon = try c.decodeIfPresent(Double.self),
-            let lat = try c.decodeIfPresent(Double.self)
-        else {
-            throw DecodingError.dataCorruptedError(
-                in: c,
-                debugDescription: "Aircraft is missing lat/lon (radar contact?)"
-            )
-        }
-        self.longitude = lon
-        self.latitude = lat
-
-        // 7  baro_altitude (Double?, meters)
-        let baro = try c.decodeIfPresent(Double.self)
-
-        // 8  on_ground
-        self.onGround = try c.decode(Bool.self)
-
-        // 9  velocity (m/s)
-        self.velocityMps = try c.decodeIfPresent(Double.self)
-
-        // 10 true_track (deg)
-        self.trackDeg = try c.decodeIfPresent(Double.self)
-
-        // 11 vertical_rate                — skipped
-        _ = try c.decodeIfPresent(Double.self)
-
-        // 12 sensors (array)              — skipped
-        _ = try? c.decodeIfPresent([Int].self)
-
-        // 13 geo_altitude (Double?, meters) — preferred over baro
-        let geo = try c.decodeIfPresent(Double.self)
-
-        self.altitudeMeters = geo ?? baro ?? 0
-
-        // OpenSky's positional state vector carries no type/registration/category/
-        // route in the slots we read — the backend feed (BackendAircraft) is the
-        // only source that supplies them.
-        self.typecode = nil
-        self.registration = nil
-        self.category = nil
-        self.originIcao = nil
-        self.destIcao = nil
-        self.originName = nil
-        self.destName = nil
-
-        // 14 squawk, 15 spi, 16 position_source, 17 category — all skipped
     }
 }
 
@@ -332,21 +247,4 @@ nonisolated enum EmitterCategory: Equatable, Sendable {
         default: self = .other
         }
     }
-}
-
-/// Wraps a Decodable so per-element errors don't kill the whole batch.
-/// JSONDecoder will assign `value = nil` for any element whose inner
-/// init(from:) throws.
-nonisolated struct FailableDecodable<T: Decodable>: Decodable {
-    let value: T?
-
-    init(from decoder: Decoder) throws {
-        self.value = try? T(from: decoder)
-    }
-}
-
-// MARK: - Convenience
-
-nonisolated private extension String {
-    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
