@@ -33,6 +33,21 @@ Three field reports from Noah's Haneda session, one round:
 Backend 241 tests green (degenerate + IATA parse pins); `TailspotTests` green
 (IATA fill/translate/mismatch-guard, degenerate repair, display-preference tests).
 
+## 2026-07-05 — Leaderboard: one catch is the entry ticket + stranded-handle cleanup — branch `fix/leaderboard-zero-catch`
+
+Fallout from the "why 23 handles for ~13 testers" reconciliation: onboarding's
+suggestion chips mint a handle for every drive-by install, and those 0-point rows
+padded the public leaderboard.
+
+- **`leaderboard()` now requires ≥1 catch** (`HAVING count(catches.id) > 0`) — a
+  claimed handle alone no longer appears on the public board. `myStanding` is
+  unchanged (it already returned null for catch-less devices). Route test added.
+- **Data op (prod):** nulled the 4 stranded day-one duplicate handles — spotter_42,
+  contrail_cam, blue_hour, approach_287 (all registered 2026-06-16, zero catches,
+  zero analytics; pre-#55 keychain-loss orphans of testers who re-claimed under
+  their current names). Frees the names for re-claim; the matching stale PostHog
+  handle on approach_287's person was `$unset`.
+
 ## 2026-07-04 — Route lookups go direct to standing data (prod enrichment was silently dead) — branch `fix/route-lookup-standing-data`
 
 Deploy-time discovery while verifying `GET /v1/routes` (the backfill endpoint): **every
