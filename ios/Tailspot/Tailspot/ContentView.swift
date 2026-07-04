@@ -698,15 +698,11 @@ struct ContentView: View {
         // answering leaves the rows quarantined locally, re-asked never
         // (they stay in the Hangar, off the leaderboard).
         .confirmationDialog(
-            pendingSuspectReview?.question ?? "",
-            isPresented: Binding(
-                get: { pendingSuspectReview != nil },
-                set: { if !$0 { pendingSuspectReview = nil } }
-            ),
+            suspectReviewQuestion,
+            isPresented: suspectReviewPresented,
             titleVisibility: .visible
         ) {
-            Button("I saw it — keep") { resolveSuspectReview(keep: true) }
-            Button("Discard it", role: .destructive) { resolveSuspectReview(keep: false) }
+            suspectReviewActions
         }
         // 1 Hz replay capture loop. Re-launches whenever the recorder
         // toggles on; tears down when it toggles off (Task is cancelled
@@ -745,16 +741,23 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .sheet(isPresented: Binding(
-            get: { replayURL != nil },
-            set: { if !$0 { replayURL = nil } }
-        )) {
+        .sheet(isPresented: replaySheetPresented) {
             if let replayURL {
                 ReplayReportView(url: replayURL)
             } else {
                 EmptyView()
             }
         }
+    }
+
+    /// Extracted from `body` for the same type-check-budget reason as
+    /// `suspectReviewPresented` — inline derived Bindings in the modifier
+    /// chain are what pushed CI's compiler past its time limit.
+    private var replaySheetPresented: Binding<Bool> {
+        Binding<Bool>(
+            get: { replayURL != nil },
+            set: { if !$0 { replayURL = nil } }
+        )
     }
 
     /// Content-keyed signature of the currently-visible icao24 set,
@@ -956,6 +959,27 @@ struct ContentView: View {
     private struct SuspectReview {
         let rows: [Catch]
         let question: String
+    }
+
+    /// The review dialog's presentation binding, question, and actions —
+    /// extracted from `body`'s modifier chain: an inline derived `Binding`
+    /// there pushed the whole-body expression past the CI compiler's
+    /// type-check time limit (the faster dev Mac squeaked through).
+    private var suspectReviewPresented: Binding<Bool> {
+        Binding<Bool>(
+            get: { pendingSuspectReview != nil },
+            set: { if !$0 { pendingSuspectReview = nil } }
+        )
+    }
+
+    private var suspectReviewQuestion: String {
+        pendingSuspectReview?.question ?? ""
+    }
+
+    @ViewBuilder
+    private var suspectReviewActions: some View {
+        Button("I saw it — keep") { resolveSuspectReview(keep: true) }
+        Button("Discard it", role: .destructive) { resolveSuspectReview(keep: false) }
     }
 
     /// Promote the stashed suspected rows into the review dialog. Called from
