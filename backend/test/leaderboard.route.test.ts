@@ -161,6 +161,21 @@ describe("GET /v1/leaderboard", () => {
     expect(body.me).toEqual({ rank: 2, points: 75 });
   });
 
+  it("hides handle-bearing devices with zero catches (drive-by onboarding claims)", async () => {
+    // Onboarding mints a handle for anyone who taps a suggestion chip, so a
+    // claimed handle alone must not appear on the public board — one catch is
+    // the entry ticket.
+    const driveBy = await register();
+    await claim(driveBy, "downwind_9346"); // handle, never catches
+    const player = await register();
+    await claim(player, "Player");
+    await postCatch(player, COMMON);
+
+    const res = await app.inject({ method: "GET", url: "/v1/leaderboard" });
+    const { entries } = res.json();
+    expect(entries).toEqual([{ rank: 1, handle: "Player", points: 15, catches: 1 }]);
+  });
+
   it("`me` is present for a valid token even without a handle; null without a token", async () => {
     const anon = await register(); // no handle
     await postCatch(anon, COMMON); // 15 points (first-of-type common: 10 + 5)

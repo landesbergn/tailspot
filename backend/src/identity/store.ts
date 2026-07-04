@@ -206,7 +206,7 @@ export interface CatchStore {
    * same uuid is a normal, independent insert (security-review fix).
    */
   insertOrGet(c: NewCatch): Promise<{ result: StoredCatchResult; duplicate: boolean }>;
-  /** Top-N devices WITH a handle, by total points. */
+  /** Top-N devices WITH a handle AND at least one catch, by total points. */
   leaderboard(limit: number): Promise<LeaderboardEntry[]>;
   /**
    * The given device's rank + total points — computed over ALL devices
@@ -341,7 +341,8 @@ export class DrizzleCatchStore implements CatchStore {
   }
 
   async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
-    // Aggregate points + catch count per device, only those WITH a handle.
+    // Aggregate points + catch count per device — only those WITH a handle
+    // AND at least one catch.
     // Ordering: points DESC, then created_at ASC, then device id ASC. The id is
     // the FINAL tiebreaker so the order is TOTAL and DETERMINISTIC even in the
     // (rare) case where two devices share a createdAt timestamp — the same data
@@ -357,6 +358,11 @@ export class DrizzleCatchStore implements CatchStore {
       .leftJoin(catches, eq(catches.deviceId, devices.id))
       .where(isNotNull(devices.handle))
       .groupBy(devices.id, devices.handle, devices.createdAt)
+      // A claimed handle alone doesn't put you on the public board — onboarding
+      // mints handles for drive-by installs (suggestion chips), and those
+      // 0-point rows were padding the bottom of the leaderboard. One catch is
+      // the entry ticket.
+      .having(sql`count(${catches.id}) > 0`)
       .orderBy(desc(sql`points`), devices.createdAt, devices.id)
       .limit(limit);
 
