@@ -2,22 +2,20 @@
 //  CatchDetailView.swift
 //  Tailspot
 //
-//  Tail detail — catch card hero front-and-center. Rewritten per spec
-//  § 8 (T18): the card carries identity (callsign + model + carrier)
-//  and the photo slot, so the page drops the prior 320pt photo hero,
-//  the 6-cell stats grid, and the catch-log timeline. What remains is
-//  the card + EARNED panel + first-caught panel + (optional)
-//  Planespotters attribution.
+//  Tail detail — Direction B, "the settled reveal" (Noah's pick,
+//  2026-07-05): the reveal card AT REST is the whole story. One
+//  `SettledCatchCard` (photo hero, settled split-flap name, tier line,
+//  ALT/SPD + ROUTE, score ledger) + one quiet fine-print block
+//  (REG/ICAO/TYPE + caught date · place) + optional Planespotters
+//  attribution. The old EARNED / ROUTE / FIRST CAUGHT / AIRFRAME box
+//  stack is gone — each fact appears exactly once.
 //
-//  Photo-slot priority is owned by `CatchCardView` via `CardPlane.photoURL`:
-//  the default builder threads the user's catch JPEG when present. We
-//  fall through to Planespotters here: on appear, if there's no catch
-//  photo we fetch by icao24, then rebuild the CardPlane with that URL.
-//  If Planespotters also has nothing, the card paints its own
-//  rarity-tinted striped placeholder.
+//  Photo slot: the user's catch JPEG when present; otherwise we fetch a
+//  Planespotters thumbnail by icao24 on appear and rebuild the CardPlane
+//  with that URL; if that also misses, the card paints its placeholder.
 //
 //  Dates pulled from `row.firstCatch` (earliest), not `row.mostRecent`,
-//  so "FIRST CAUGHT" reads as a fact about the tail, not the latest tap.
+//  so CAUGHT reads as a fact about the tail, not the latest tap.
 //
 
 import SwiftUI
@@ -41,23 +39,33 @@ struct CatchDetailView: View {
     @State private var planespottersPhoto: PlanePhoto? = nil
     @State private var didFetchPhoto = false
 
+    /// Whole-Hangar query, only consulted by `wasFirstOfType` (the ledger's
+    /// FIRST OF TYPE line needs to know whether any catch of this typecode
+    /// predates this one).
+    @Query private var allCatches: [Catch]
+
     private var first: Catch { row.firstCatch }
     private var rarity: Rarity { row.rarity }
     private var type: AircraftType { row.aircraftType }
     private var hasCatchPhoto: Bool { first.photoFilename != nil }
 
     var body: some View {
+        GeometryReader { geo in
         ZStack(alignment: .top) {
             Brand.Color.bgPrimary.ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 14) {
-                    catchCardHero
-                        .padding(.top, 8)
-                    earnedPanel
-                    routePanel
-                    firstCaughtPanel
-                    airframePanel
+                    // Direction B (2026-07-05): the reveal card at rest IS
+                    // the detail screen — one card design across the app.
+                    SettledCatchCard(
+                        plane: detailPlane,
+                        isFirstOfType: wasFirstOfType,
+                        width: min(geo.size.width - 36, 420)
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                    finePrint
                     if let photo = planespottersPhoto, !hasCatchPhoto {
                         attribution(photo)
                     }
@@ -69,6 +77,7 @@ struct CatchDetailView: View {
 
             chromeBar
                 .padding(.top, 8)
+        }
         }
         .toolbar(.hidden, for: .navigationBar)
         .swipeBackEnabled()
@@ -100,180 +109,73 @@ struct CatchDetailView: View {
         }
     }
 
-    // MARK: - Hero
+    // MARK: - Card model
 
-    /// Catch card at `.lg`, centered. Photo slot is resolved here: catch
-    /// JPEG (handled by `CardPlane.init(catchRecord:)`) → Planespotters
-    /// thumbnail (rebuilt below once `planespottersPhoto` lands) →
-    /// striped rarity placeholder (handled by the card itself).
-    private var catchCardHero: some View {
-        CatchCardView(plane: catchCardPlane, size: .lg)
-            .frame(maxWidth: .infinity)
-    }
-
-    /// `CardPlane` for the card. When the catch carries its own photo
-    /// we use the default builder (which threads `photoFilename` into
-    /// `photoURL`). Otherwise we layer a Planespotters URL on top once
-    /// the network call returns; until it returns, `photoURL` is nil
-    /// and the card falls through to its striped placeholder.
-    private var catchCardPlane: CardPlane {
-        let base = CardPlane(catchRecord: first)
-        if hasCatchPhoto { return base }
-        guard let photo = planespottersPhoto else { return base }
+    /// `CardPlane` for the settled card. Route display codes prefer IATA
+    /// (`Catch.displayOrigin`/`displayDest`). Photo slot: catch JPEG →
+    /// Planespotters thumbnail (once loaded) → the card's placeholder.
+    private var detailPlane: CardPlane {
+        let canonical = AircraftNaming.canonical(
+            typecode: first.typecode,
+            manufacturer: first.manufacturer,
+            model: first.model
+        )
+        let photoURL = hasCatchPhoto
+            ? first.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+            : planespottersPhoto?.thumbnailLargeURL
         return CardPlane(
-            callsign: base.callsign,
-            model: base.model,
-            carrier: base.carrier,
-            rarity: base.rarity,
-            type: base.type,
-            altText: base.altText,
-            speedText: base.speedText,
-            distText: base.distText,
-            photoURL: photo.thumbnailLargeURL
+            callsign: first.callsign,
+            model: canonical.displayName ?? first.model,
+            carrier: Airlines.operatorLabel(operatorName: first.operatorName,
+                                            callsign: first.callsign),
+            rarity: rarity,
+            type: type,
+            altText: CardPlane.altText(fromMeters: first.altitudeMeters),
+            speedText: CardPlane.speedText(fromMps: first.velocityMps),
+            distText: String(format: "%.1f km", first.slantDistanceMeters / 1000),
+            photoURL: photoURL,
+            originIcao: first.displayOrigin,
+            destIcao: first.displayDest,
+            originName: first.originName,
+            destName: first.destName
         )
     }
 
-    // MARK: - EARNED panel
-
-    /// Rarity-tinted summary box: base points (left), rarity + type
-    /// (right). Spec § 8.
-    private var earnedPanel: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("EARNED")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(rarity.tint)
-                Text("+\(rarity.basePoints) pts")
-                    .font(Brand.Font.mono(size: 22, weight: .bold))
-                    .foregroundStyle(rarity.tint)
-                    .monospacedDigit()
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(rarity.label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text("Type · \(type.label.capitalized)")
-                    .font(Brand.Font.mono(size: 10, weight: .regular))
-                    .foregroundStyle(Brand.Color.textTertiary)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(rarity.tint.opacity(0.10))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(rarity.tint, lineWidth: 1)
-        )
+    /// Historical first-of-type: no catch of this typecode predates the
+    /// row's earliest. Mirrors the +50% the backend awarded at catch time
+    /// (re-derived, like `resolvedRarity` — no stored flag needed).
+    private var wasFirstOfType: Bool {
+        guard let tc = first.typecode else { return false }
+        return !allCatches.contains { $0.typecode == tc && $0.caughtAt < first.caughtAt }
     }
 
-    // MARK: - Route panel (the reveal's routeCell vocabulary, 2026-07-04)
+    // MARK: - Fine print (below the card)
 
-    /// Origin → destination: airport codes in mono (IATA preferred — HND, not
-    /// RJTT — falling back to ICAO), the arrow in the rarity tint, city
-    /// subline when known. Rendered only when the catch carries a route
-    /// (recorded live, or healed by the callsign backfill). One-sided routes
-    /// never dangle an arrow at a missing end.
-    @ViewBuilder
-    private var routePanel: some View {
-        let origin = first.displayOrigin
-        let dest = first.displayDest
-        if origin != nil || dest != nil {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("ROUTE")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    if let origin {
-                        Text(origin)
-                            .font(Brand.Font.mono(size: 18, weight: .semibold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                        if let dest {
-                            Text("→")
-                                .font(Brand.Font.mono(size: 14, weight: .semibold))
-                                .foregroundStyle(rarity.tint)
-                            Text(dest)
-                                .font(Brand.Font.mono(size: 18, weight: .semibold))
-                                .foregroundStyle(Brand.Color.textPrimary)
-                        }
-                    } else if let dest {
-                        Text("→")
-                            .font(Brand.Font.mono(size: 14, weight: .semibold))
-                            .foregroundStyle(rarity.tint)
-                        Text(dest)
-                            .font(Brand.Font.mono(size: 18, weight: .semibold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                    }
-                }
-                if first.originName != nil || first.destName != nil {
-                    HStack(spacing: 5) {
-                        if let on = first.originName {
-                            Text(on)
-                            if let dn = first.destName {
-                                Text("→").foregroundStyle(Brand.Color.textTertiary)
-                                Text(dn)
-                            }
-                        } else if let dn = first.destName {
-                            Text("→").foregroundStyle(Brand.Color.textTertiary)
-                            Text(dn)
-                        }
-                    }
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
-        }
-    }
-
-    // MARK: - First-caught panel
-
-    /// Earliest catch on this tail: date · time, then observer lat/lon
-    /// with hemispheric letters.
-    private var firstCaughtPanel: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("FIRST CAUGHT")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(Brand.Color.textTertiary)
-            Text(first.caughtAt.formatted(date: .abbreviated, time: .shortened))
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(Brand.Color.textPrimary)
-            Text(first.placeName ?? observerCoordText)
-                .font(Brand.Font.mono(size: 12, weight: .regular))
-                .foregroundStyle(Brand.Color.textTertiary)
-                .monospacedDigit()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
-    }
-
-    // MARK: - Airframe panel
-
-    /// Registration (tail number) + ICAO hex + type designator. These
-    /// are airframe facts, not moment facts — recoverable by the
-    /// backfill for rows that predate the fields. "—" when OpenSky
-    /// simply doesn't know.
-    private var airframePanel: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("AIRFRAME")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(Brand.Color.textTertiary)
+    /// The quiet facts under the card, one block in the reveal's label
+    /// vocabulary: airframe identity (REG / ICAO / TYPE — backfillable
+    /// facts, "—" when unknown) above a rule, then the catch moment
+    /// (date · time · place). Everything the old EARNED / ROUTE / FIRST
+    /// CAUGHT / AIRFRAME boxes said now lives either on the card (points,
+    /// tier, route) or here — each fact exactly once.
+    private var finePrint: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 0) {
                 airframeField("REG", first.registration?.trimmedNonEmpty ?? "—")
                 airframeField("ICAO", first.icao24.uppercased())
                 airframeField("TYPE", first.typecode?.trimmedNonEmpty ?? "—")
+            }
+            Rectangle().fill(Brand.Color.textPrimary.opacity(0.07)).frame(height: 1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("CAUGHT")
+                    .font(Brand.Font.mono(size: 8, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text("\(first.caughtAt.formatted(date: .abbreviated, time: .shortened)) · \(first.placeName ?? observerCoordText)")
+                    .font(Brand.Font.mono(size: 12, weight: .regular))
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -335,8 +237,8 @@ struct CatchDetailView: View {
     /// Rendered share-card image for this catch — the local capture photo
     /// when present, else the card's branded placeholder.
     private var shareImage: Image {
-        let photo = CatchShare.loadLocalPhoto(catchCardPlane.photoURL)
-        return CatchShare.image(for: catchCardPlane, photo: photo)
+        let photo = CatchShare.loadLocalPhoto(detailPlane.photoURL)
+        return CatchShare.image(for: detailPlane, photo: photo)
     }
 
     private func chromePill(icon: String, action: @escaping () -> Void) -> some View {
