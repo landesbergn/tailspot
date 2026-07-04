@@ -127,11 +127,12 @@ struct TailCard: View {
                 }
 
                 // Line 3 — the reveal's ROUTE vocabulary when the catch
-                // carries one (mono ICAO codes, rarity-tinted arrow, short
-                // date), else the quiet date · location. Reveal rule: a
-                // one-sided route never dangles an arrow at "—".
-                let origin = c.originIcao?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-                let dest = c.destIcao?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                // carries one (mono airport codes — IATA preferred, ICAO
+                // fallback — rarity-tinted arrow, short date), else the
+                // quiet date · location. Reveal rule: a one-sided route
+                // never dangles an arrow at "—".
+                let origin = c.displayOrigin
+                let dest = c.displayDest
                 if showPoints, origin != nil || dest != nil {
                     HStack(spacing: 6) {
                         routeLine(origin: origin, dest: dest, tint: row.rarity.tint)

@@ -52,29 +52,78 @@ enum CatchBackfill {
         c.typecode == nil || c.registration == nil
     }
 
-    /// Whether this catch can gain a backfilled route: it has a callsign to
-    /// look up and BOTH route codes are nil. A one-sided route recorded at
-    /// catch time is moment-data and is deliberately left alone — mixing an
-    /// as-flown origin with a currently-filed destination would fabricate a
-    /// journey no one observed.
+    /// Whether this catch can gain something from a route lookup: it has a
+    /// callsign, and EITHER both route codes are nil (full fill) OR it has a
+    /// full ICAO route but no IATA display codes yet (translation fill —
+    /// added 2026-07-05 with the IATA switch, so pre-IATA rows upgrade).
+    /// A one-sided route recorded at catch time is moment-data and is left
+    /// alone — mixing an as-flown origin with a currently-filed destination
+    /// would fabricate a journey no one observed.
     static func needsRoute(_ c: Catch) -> Bool {
-        c.originIcao == nil && c.destIcao == nil
-            && !(c.callsign ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !(c.callsign ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+        let noRoute = c.originIcao == nil && c.destIcao == nil
+        let fullRouteNoIata = c.originIcao != nil && c.destIcao != nil
+            && c.originIata == nil && c.destIata == nil
+        return noRoute || fullRouteNoIata
     }
 
-    /// Fill the route onto `catches` (all sharing one callsign) — only rows
-    /// where BOTH codes are still nil, and only from a complete origin+dest
-    /// answer (a half route is worse than none on the card). Names fill
-    /// alongside their codes. Returns true if anything changed.
+    /// Fill route facts onto `catches` (all sharing one callsign) from a
+    /// complete origin+dest answer (a half route is worse than none on the
+    /// card). Two cases, both fill-only-if-nil:
+    ///  - BOTH codes nil → fill the whole route (codes, IATA, names).
+    ///  - Full ICAO route, IATA missing → fill IATA + names ONLY when the
+    ///    lookup's ICAO pair MATCHES the stored one — translating the codes
+    ///    we recorded, never re-routing a catch whose current filing differs.
+    /// Returns true if anything changed.
     static func applyRoute(_ route: BackendAircraft.Route, to catches: [Catch]) -> Bool {
         guard let origin = route.originIcao?.trimmedNonEmpty,
               let dest = route.destIcao?.trimmedNonEmpty else { return false }
         var changed = false
-        for c in catches where c.originIcao == nil && c.destIcao == nil {
-            c.originIcao = origin
-            c.destIcao = dest
-            if let v = route.originName?.trimmedNonEmpty { c.originName = v }
-            if let v = route.destName?.trimmedNonEmpty { c.destName = v }
+        for c in catches {
+            if c.originIcao == nil && c.destIcao == nil {
+                c.originIcao = origin
+                c.destIcao = dest
+                if let v = route.originIata?.trimmedNonEmpty { c.originIata = v }
+                if let v = route.destIata?.trimmedNonEmpty { c.destIata = v }
+                if let v = route.originName?.trimmedNonEmpty { c.originName = v }
+                if let v = route.destName?.trimmedNonEmpty { c.destName = v }
+                changed = true
+            } else if c.originIcao == origin, c.destIcao == dest {
+                if c.originIata == nil, let v = route.originIata?.trimmedNonEmpty {
+                    c.originIata = v; changed = true
+                }
+                if c.destIata == nil, let v = route.destIata?.trimmedNonEmpty {
+                    c.destIata = v; changed = true
+                }
+                if c.originName == nil, let v = route.originName?.trimmedNonEmpty {
+                    c.originName = v; changed = true
+                }
+                if c.destName == nil, let v = route.destName?.trimmedNonEmpty {
+                    c.destName = v; changed = true
+                }
+            }
+        }
+        return changed
+    }
+
+    /// One-time repair for degenerate stored routes (origin == destination):
+    /// an out-and-back filing ("KLGA-KTEB-KLGA") used to collapse to
+    /// "KLGA → KLGA" (field report 2026-07-05; the parser now rejects it
+    /// server-side). Clearing all four fields returns the row to the
+    /// fill-nil-only pool — the next lookup now answers null and it stays
+    /// clean. Returns true if anything changed.
+    static func clearDegenerateRoutes(_ catches: [Catch]) -> Bool {
+        var changed = false
+        for c in catches {
+            guard let o = c.originIcao?.trimmedNonEmpty,
+                  let d = c.destIcao?.trimmedNonEmpty, o == d else { continue }
+            c.originIcao = nil
+            c.destIcao = nil
+            c.originIata = nil
+            c.destIata = nil
+            c.originName = nil
+            c.destName = nil
             changed = true
         }
         return changed
@@ -130,11 +179,18 @@ enum CatchBackfill {
             if Task.isCancelled { break }
         }
 
+        // Degenerate-route repair (2026-07-05): "KLGA → KLGA" rows from the
+        // old first→last collapse of out-and-back filings get cleared, which
+        // drops them back into the fill pool below (where the fixed lookup
+        // now answers null). No network; must run BEFORE needsRoute filters.
+        if clearDegenerateRoutes(catches) { changedAny = true }
+
         // Route backfill (2026-07-04): once per DISTINCT callsign, fill
-        // origin → destination onto catches that predate route capture.
-        // Errors are swallowed per lookup (a 502/offline just means a later
-        // Hangar open retries); a null route is a real answer we stop on
-        // for this pass.
+        // origin → destination onto catches that predate route capture —
+        // and, since 2026-07-05, IATA display codes onto rows that have an
+        // ICAO route but predate the IATA fields. Errors are swallowed per
+        // lookup (a 502/offline just means a later Hangar open retries); a
+        // null route is a real answer we stop on for this pass.
         let routeNeeding = catches.filter(needsRoute)
         let byCallsign = Dictionary(grouping: routeNeeding) {
             ($0.callsign ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()

@@ -301,11 +301,15 @@ struct CatchBackfillTests {
     /// Decode a Route through JSON — its memberwise init is synthesized
     /// internal-to-Decodable shape; building via decoder mirrors production.
     private func makeRoute(
-        origin: String?, dest: String?, originName: String? = nil, destName: String? = nil
+        origin: String?, dest: String?,
+        originIata: String? = nil, destIata: String? = nil,
+        originName: String? = nil, destName: String? = nil
     ) -> BackendAircraft.Route {
         var dict: [String: String] = [:]
         if let origin { dict["originIcao"] = origin }
         if let dest { dict["destIcao"] = dest }
+        if let originIata { dict["originIata"] = originIata }
+        if let destIata { dict["destIata"] = destIata }
         if let originName { dict["originName"] = originName }
         if let destName { dict["destName"] = destName }
         let data = try! JSONEncoder().encode(dict)
@@ -320,9 +324,11 @@ struct CatchBackfillTests {
         // No callsign -> nothing to look up.
         #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: nil, in: context)))
         #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: "  ", in: context)))
-        // Any recorded route data (even one-sided) is moment-data -> left alone.
+        // A one-sided recorded route is moment-data -> left alone.
         #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: "ANA858", origin: "RJTT", in: context)))
-        #expect(!CatchBackfill.needsRoute(makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)))
+        // A full ICAO route without IATA display codes DOES re-qualify
+        // (2026-07-05 translation pass) — see needsRouteIncludesIataUpgradeRows.
+        #expect(CatchBackfill.needsRoute(makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)))
     }
 
     @Test func applyRouteFillsNilOnlyWithNames() throws {
@@ -358,5 +364,88 @@ struct CatchBackfillTests {
         #expect(!CatchBackfill.applyRoute(makeRoute(origin: "RJTT", dest: nil), to: [c]))
         #expect(c.originIcao == nil)
         #expect(c.destIcao == nil)
+    }
+
+    // MARK: - IATA + degenerate routes (2026-07-05)
+
+    @Test func applyRouteFillsIataAlongsideCodes() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeRoutedCatch(callsign: "ANA858", in: context)
+
+        let route = makeRoute(origin: "RJTT", dest: "KSFO",
+                              originIata: "HND", destIata: "SFO")
+        #expect(CatchBackfill.applyRoute(route, to: [c]))
+        #expect(c.originIata == "HND")
+        #expect(c.destIata == "SFO")
+        #expect(c.displayOrigin == "HND")   // IATA wins the display
+        #expect(c.displayDest == "SFO")
+    }
+
+    @Test func applyRouteTranslatesIataOntoMatchingStoredRoute() throws {
+        // Pre-IATA row: full ICAO route recorded, no display codes. The
+        // lookup translates ONLY when its ICAO pair matches what we stored.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)
+
+        let match = makeRoute(origin: "RJTT", dest: "KSFO",
+                              originIata: "HND", destIata: "SFO")
+        #expect(CatchBackfill.applyRoute(match, to: [c]))
+        #expect(c.originIata == "HND")
+        #expect(c.originIcao == "RJTT")     // codes untouched
+    }
+
+    @Test func applyRouteNeverRelabelsAMismatchedRoute() throws {
+        // Current filing differs from the as-flown stored route → the IATA
+        // of TODAY'S airports must not be stamped onto yesterday's journey.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeRoutedCatch(callsign: "ANA858", origin: "RJAA", dest: "KSFO", in: context)
+
+        let different = makeRoute(origin: "VVNB", dest: "RJTT",
+                                  originIata: "HAN", destIata: "HND")
+        #expect(!CatchBackfill.applyRoute(different, to: [c]))
+        #expect(c.originIata == nil)
+        #expect(c.originIcao == "RJAA")
+    }
+
+    @Test func needsRouteIncludesIataUpgradeRows() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // Full ICAO route, no IATA → needs (translation pass).
+        #expect(CatchBackfill.needsRoute(
+            makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)))
+        // One-sided route → still left alone.
+        #expect(!CatchBackfill.needsRoute(
+            makeRoutedCatch(callsign: "ANA858", origin: "RJTT", in: context)))
+    }
+
+    @Test func clearDegenerateRoutesRepairsRoundTrips() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let bad = makeRoutedCatch(callsign: "JBU1", origin: "KLGA", dest: "KLGA", in: context)
+        bad.originName = "New York"
+        bad.destName = "New York"
+        let good = makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)
+
+        #expect(CatchBackfill.clearDegenerateRoutes([bad, good]))
+        #expect(bad.originIcao == nil)
+        #expect(bad.destIcao == nil)
+        #expect(bad.originName == nil)
+        #expect(bad.destName == nil)
+        // A real route is untouched.
+        #expect(good.originIcao == "RJTT")
+        #expect(good.destIcao == "KSFO")
+        // Nothing degenerate → no change reported.
+        #expect(!CatchBackfill.clearDegenerateRoutes([good]))
+    }
+
+    @Test func displayCodesFallBackToIcao() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)
+        #expect(c.displayOrigin == "RJTT")
+        #expect(c.displayDest == "KSFO")
     }
 }

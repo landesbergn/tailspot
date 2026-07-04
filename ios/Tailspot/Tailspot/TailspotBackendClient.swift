@@ -66,6 +66,11 @@ nonisolated struct BackendAircraft: Decodable {
     nonisolated struct Route: Decodable {
         let originIcao: String?
         let destIcao: String?
+        /// IATA display codes ("HND"/"SFO") when the backend carried them
+        /// (additive 2026-07-05) — what travelers read; display prefers
+        /// these over the ICAO codes. Older backends decode as nil.
+        let originIata: String?
+        let destIata: String?
         /// Human-readable origin/destination airport/city ("San Francisco"),
         /// when the backend's routeset enrichment carried it. Optional — an
         /// older backend or code-only route decodes these as nil.
@@ -94,6 +99,8 @@ nonisolated struct BackendAircraft: Decodable {
             category: category,
             originIcao: route?.originIcao,
             destIcao: route?.destIcao,
+            originIata: route?.originIata,
+            destIata: route?.destIata,
             originName: route?.originName,
             destName: route?.destName
         )
