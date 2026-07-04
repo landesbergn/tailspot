@@ -82,15 +82,23 @@ final class Catch {
     /// `altitudeMeters`.
     var velocityMps: Double?
     /// ICAO airport code (4-letter, e.g. "KSFO") of the flight's ORIGIN at the
-    /// catch moment, when the live feed carried a route. A frozen-at-catch
-    /// airframe/flight fact like altitude/velocity — NEVER backfilled (the route
-    /// of a past flight is unrecoverable). nil for the many routeless catches
-    /// (GA/military) and for rows written before this field existed. Added
-    /// 2026-06 — optional + nil-default for SwiftData lightweight migration.
+    /// catch moment, when the live feed carried a route. Recorded as-observed;
+    /// a FULLY-nil route may later heal via `CatchBackfill`'s per-callsign
+    /// lookup (2026-07-04, best-effort current filing — see CLAUDE.md's
+    /// frozen-moment exceptions). nil for the many routeless catches
+    /// (GA/military). Added 2026-06 — optional + nil-default for SwiftData
+    /// lightweight migration.
     var originIcao: String?
     /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION at
     /// the catch moment. Same source/semantics/migration as `originIcao`.
     var destIcao: String?
+    /// IATA display code (3-letter, e.g. "HND") of the origin, when the route
+    /// source carried it — what travelers read; display goes through
+    /// `displayOrigin`, which prefers this and falls back to the ICAO code.
+    /// Added 2026-07-05 — optional + nil-default for lightweight migration.
+    var originIata: String?
+    /// IATA display code of the destination. Same as `originIata`.
+    var destIata: String?
     /// Human-readable origin airport / city (e.g. "Tokyo Narita"), when the
     /// route source provided it. Same optional/nil-default lightweight-migration
     /// lifecycle as `originIcao`; shown under the ICAO code in the reveal.
@@ -150,6 +158,8 @@ final class Catch {
         velocityMps: Double? = nil,
         originIcao: String? = nil,
         destIcao: String? = nil,
+        originIata: String? = nil,
+        destIata: String? = nil,
         originName: String? = nil,
         destName: String? = nil,
         placeName: String? = nil,
@@ -159,6 +169,8 @@ final class Catch {
         suspectReason: String? = nil
     ) {
         self.suspectReason = suspectReason
+        self.originIata = originIata
+        self.destIata = destIata
         self.icao24 = icao24
         self.callsign = callsign
         self.model = model
@@ -192,6 +204,14 @@ final class Catch {
         self.rarity = (rarity ?? autoRarity).rawValue
         self.aircraftType = (aircraftType ?? autoType).rawValue
     }
+
+    /// The airport code to DISPLAY for the origin: the IATA code when we
+    /// have it ("HND" — what travelers actually read), falling back to the
+    /// ICAO ident ("RJTT"). Every route display site goes through this pair
+    /// rather than reading `originIcao` directly (Noah, 2026-07-05).
+    var displayOrigin: String? { originIata ?? originIcao }
+    /// Display code for the destination. Same preference as `displayOrigin`.
+    var displayDest: String? { destIata ?? destIcao }
 
     /// The rarity tier for this airframe. Resolved live from the
     /// typecode (authoritative, like `resolvedType`); when there is NO

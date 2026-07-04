@@ -51,10 +51,12 @@ struct CardPlane: Equatable {
     /// placeholder in the rarity tint (matches the design's
     /// PhotoPlaceholder when Planespotters hasn't returned).
     let photoURL: URL?
-    /// Route, when the catch carried it. ICAO idents (e.g. "RJAA"/"KSFO")
-    /// render as the big codes in the reveal's ROUTE row; the optional
-    /// human-readable names ("Tokyo Narita"/"San Francisco") render under
-    /// them. nil route falls back to slant distance.
+    /// Route DISPLAY codes, when the catch carried a route. Builders pass
+    /// the traveler-readable code (IATA preferred — "HND" — falling back to
+    /// ICAO "RJTT"; see `Catch.displayOrigin`): CardPlane is a presentation
+    /// model, so the field keeps its historical name but holds whichever
+    /// code should render. The optional human-readable names ("Tokyo" /
+    /// "San Francisco") render under them. nil route → slant distance.
     let originIcao: String?
     let destIcao: String?
     let originName: String?

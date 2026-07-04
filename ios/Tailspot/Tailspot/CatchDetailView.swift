@@ -55,6 +55,7 @@ struct CatchDetailView: View {
                     catchCardHero
                         .padding(.top, 8)
                     earnedPanel
+                    routePanel
                     firstCaughtPanel
                     airframePanel
                     if let photo = planespottersPhoto, !hasCatchPhoto {
@@ -168,6 +169,70 @@ struct CatchDetailView: View {
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(rarity.tint, lineWidth: 1)
         )
+    }
+
+    // MARK: - Route panel (the reveal's routeCell vocabulary, 2026-07-04)
+
+    /// Origin → destination: airport codes in mono (IATA preferred — HND, not
+    /// RJTT — falling back to ICAO), the arrow in the rarity tint, city
+    /// subline when known. Rendered only when the catch carries a route
+    /// (recorded live, or healed by the callsign backfill). One-sided routes
+    /// never dangle an arrow at a missing end.
+    @ViewBuilder
+    private var routePanel: some View {
+        let origin = first.displayOrigin
+        let dest = first.displayDest
+        if origin != nil || dest != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("ROUTE")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if let origin {
+                        Text(origin)
+                            .font(Brand.Font.mono(size: 18, weight: .semibold))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                        if let dest {
+                            Text("→")
+                                .font(Brand.Font.mono(size: 14, weight: .semibold))
+                                .foregroundStyle(rarity.tint)
+                            Text(dest)
+                                .font(Brand.Font.mono(size: 18, weight: .semibold))
+                                .foregroundStyle(Brand.Color.textPrimary)
+                        }
+                    } else if let dest {
+                        Text("→")
+                            .font(Brand.Font.mono(size: 14, weight: .semibold))
+                            .foregroundStyle(rarity.tint)
+                        Text(dest)
+                            .font(Brand.Font.mono(size: 18, weight: .semibold))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                    }
+                }
+                if first.originName != nil || first.destName != nil {
+                    HStack(spacing: 5) {
+                        if let on = first.originName {
+                            Text(on)
+                            if let dn = first.destName {
+                                Text("→").foregroundStyle(Brand.Color.textTertiary)
+                                Text(dn)
+                            }
+                        } else if let dn = first.destName {
+                            Text("→").foregroundStyle(Brand.Color.textTertiary)
+                            Text(dn)
+                        }
+                    }
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+        }
     }
 
     // MARK: - First-caught panel

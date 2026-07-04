@@ -43,6 +43,35 @@ describe("parseRoute", () => {
     expect(parseRoute("KSFO-KDEN-EGLL")).toEqual({ originIcao: "KSFO", destIcao: "EGLL" });
   });
 
+  it("returns null for a degenerate round trip (first == last)", () => {
+    // An out-and-back filing collapses to the same airport at both ends —
+    // which leg was being flown is unknowable, and "KLGA → KLGA" on a card
+    // is worse than nothing (field report, 2026-07-05).
+    expect(parseRoute("KLGA-KTEB-KLGA")).toBeNull();
+    expect(parseRoute("KLGA-KLGA")).toBeNull();
+  });
+
+  it("carries IATA display codes from _airports, uppercased", () => {
+    expect(
+      parseRoute("RJTT-KSFO", [
+        { icao: "RJTT", iata: "hnd", location: "Tokyo" },
+        { icao: "KSFO", iata: "SFO", location: "San Francisco" },
+      ]),
+    ).toEqual({
+      originIcao: "RJTT",
+      destIcao: "KSFO",
+      originIata: "HND",
+      destIata: "SFO",
+      originName: "Tokyo",
+      destName: "San Francisco",
+    });
+    // Missing/blank iata → field omitted, ICAO remains the fallback.
+    expect(parseRoute("RJTT-KSFO", [{ icao: "RJTT", iata: " " }])).toEqual({
+      originIcao: "RJTT",
+      destIcao: "KSFO",
+    });
+  });
+
   it("returns null for the 'unknown' sentinel, blanks, single codes, and non-strings", () => {
     expect(parseRoute("unknown")).toBeNull();
     expect(parseRoute("Unknown")).toBeNull();

@@ -64,6 +64,12 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
     /// ICAO airport code (4-letter, e.g. "EGLL") of the flight's DESTINATION, or
     /// nil. Same source/semantics as `originIcao`.
     let destIcao: String?
+    /// IATA display code (3-letter, e.g. "HND") of the origin, when the
+    /// backend carried it — what travelers actually read; display prefers it
+    /// and falls back to `originIcao`. Additive 2026-07-05.
+    let originIata: String?
+    /// IATA display code of the destination. Same as `originIata`.
+    let destIata: String?
     /// Human-readable origin airport/city ("San Francisco"), when the backend's
     /// routeset enrichment carried it. Same source/lifecycle as `originIcao`.
     let originName: String?
@@ -104,6 +110,8 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         category: String? = nil,
         originIcao: String? = nil,
         destIcao: String? = nil,
+        originIata: String? = nil,
+        destIata: String? = nil,
         originName: String? = nil,
         destName: String? = nil
     ) {
@@ -122,6 +130,8 @@ nonisolated struct Aircraft: Identifiable, Equatable, Sendable {
         self.category = category
         self.originIcao = originIcao
         self.destIcao = destIcao
+        self.originIata = originIata
+        self.destIata = destIata
         self.originName = originName
         self.destName = destName
     }

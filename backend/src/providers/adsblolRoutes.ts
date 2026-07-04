@@ -42,9 +42,11 @@ const ROUTE_CONCURRENCY = 8;
 
 /** One airport in a routeset row's `_airports` array — only the fields we use.
  *  `location` is the city/municipality ("San Francisco"); `name` the full
- *  airport name ("San Francisco International Airport"). */
+ *  airport name ("San Francisco International Airport"); `iata` the 3-letter
+ *  display code ("SFO") travelers actually read. */
 interface RoutesetAirport {
   icao?: string;
+  iata?: string;
   name?: string;
   location?: string;
 }
@@ -307,13 +309,24 @@ export function parseRoute(
   const origin = parts[0];
   const dest = parts[parts.length - 1];
   if (!origin || !dest || parts.length < 2) return null;
+  // Degenerate round trip: an out-and-back filing ("KLGA-KTEB-KLGA")
+  // collapses first → last to the SAME airport — which leg the plane was on
+  // is unknowable here, and "KLGA → KLGA" on a card is worse than nothing.
+  if (origin === dest) return null;
   const route: AircraftRoute = { originIcao: origin, destIcao: dest };
-  // Enrich with human-readable names when the routeset row carried `_airports`.
+  // Enrich with IATA display codes + human-readable names when the routeset
+  // row carried `_airports`.
   if (airports && airports.length > 0) {
     const byIcao = new Map<string, RoutesetAirport>();
     for (const a of airports) if (a.icao) byIcao.set(a.icao, a);
-    const originName = airportName(byIcao.get(origin));
-    const destName = airportName(byIcao.get(dest));
+    const originAirport = byIcao.get(origin);
+    const destAirport = byIcao.get(dest);
+    const originIata = originAirport?.iata?.trim();
+    const destIata = destAirport?.iata?.trim();
+    if (originIata) route.originIata = originIata.toUpperCase();
+    if (destIata) route.destIata = destIata.toUpperCase();
+    const originName = airportName(originAirport);
+    const destName = airportName(destAirport);
     if (originName) route.originName = originName;
     if (destName) route.destName = destName;
   }

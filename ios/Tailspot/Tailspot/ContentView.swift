@@ -1230,6 +1230,8 @@ struct ContentView: View {
                     // (2026-07-04) — a one-sided as-observed route never does.
                     originIcao: observed?.aircraft.originIcao,
                     destIcao: observed?.aircraft.destIcao,
+                    originIata: observed?.aircraft.originIata,
+                    destIata: observed?.aircraft.destIata,
                     originName: observed?.aircraft.originName,
                     destName: observed?.aircraft.destName,
                     // Post-catch confirm: a gate-suspected row is born
@@ -1476,10 +1478,13 @@ struct ContentView: View {
         )
         let distMeters = observed?.slantDistanceMeters ?? row.slantDistanceMeters
         // Route, when the catch captured one (adsb.lol doesn't carry it for
-        // every plane). origin/dest are ICAO idents; names are the optional
-        // human-readable airport/city labels (frozen on the Catch).
-        let origin = observed?.aircraft.originIcao ?? row.originIcao
-        let dest = observed?.aircraft.destIcao ?? row.destIcao
+        // every plane). Display codes prefer IATA ("HND") over ICAO ("RJTT")
+        // per source — live observation first, then the stored row; names
+        // are the optional human-readable airport/city labels.
+        let origin = observed.flatMap { $0.aircraft.originIata ?? $0.aircraft.originIcao }
+            ?? row.displayOrigin
+        let dest = observed.flatMap { $0.aircraft.destIata ?? $0.aircraft.destIcao }
+            ?? row.displayDest
         // First-of-type: no *other* Hangar row shares this typecode. Display
         // only — the reveal ledger mirrors what the backend awards.
         let isFirstOfType = row.typecode.map { tc in

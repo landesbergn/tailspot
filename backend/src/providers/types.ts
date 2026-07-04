@@ -22,6 +22,12 @@ export interface AircraftRoute {
   originIcao?: string;
   /** Destination airport ICAO code (4-letter, e.g. "EGLL"), when known. */
   destIcao?: string;
+  /** Origin airport IATA code (3-letter, e.g. "SFO"), when the route DB
+   *  carried it. The DISPLAY code — travelers read HND, not RJTT; clients
+   *  fall back to the ICAO code when absent. Additive 2026-07-05. */
+  originIata?: string;
+  /** Destination airport IATA code (3-letter, e.g. "LHR"), when known. */
+  destIata?: string;
   /** Human-readable origin airport/city (e.g. "San Francisco"), when the
    *  route DB carried it. Rendered under the ICAO code in the catch reveal. */
   originName?: string;

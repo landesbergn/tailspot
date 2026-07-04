@@ -5,6 +5,34 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-05 — IATA route codes + detail-view ROUTE panel + degenerate-route fix — branch `feat/detail-reveal-language`
+
+Three field reports from Noah's Haneda session, one round:
+
+- **"Use the common airport identifiers" — IATA end-to-end.** The standing-data
+  `_airports[]` rows carry 3-letter IATA codes; `parseRoute` now emits
+  `originIata`/`destIata` (uppercased) alongside the ICAO pair → `/v1/aircraft` +
+  `/v1/routes` wire (additive) → `Aircraft`/`BackendAircraft.Route` → new
+  `Catch.originIata`/`destIata` (additive migration). ALL route display goes through
+  `Catch.displayOrigin`/`displayDest` (IATA preferred, ICAO fallback) — reveal, Recent
+  card, and the new detail panel show **HND → SFO**, not RJTT → KSFO. The backfill
+  gains a **translation pass**: rows with a full ICAO route but no IATA re-qualify,
+  and IATA/names fill ONLY when the lookup's ICAO pair matches the stored one (never
+  re-routing an as-flown journey to today's filing).
+- **"KLGA → KLGA" degenerate routes.** Out-and-back filings ("KLGA-KTEB-KLGA")
+  collapsed first → last to the same airport. `parseRoute` now rejects origin == dest
+  (which leg was flown is unknowable), and `CatchBackfill.clearDegenerateRoutes`
+  repairs already-stored ones on Hangar open (cleared rows re-enter the fill pool,
+  where the fixed lookup answers null).
+- **"It still looks the same" — the detail view.** The Recent-card redesign (#96)
+  restyled the LIST row; the tap-through `CatchDetailView` was untouched and had no
+  route display at all. New **ROUTE panel** in the reveal's routeCell vocabulary
+  (mono display codes, rarity-tinted arrow, city subline) between EARNED and FIRST
+  CAUGHT.
+
+Backend 241 tests green (degenerate + IATA parse pins); `TailspotTests` green
+(IATA fill/translate/mismatch-guard, degenerate repair, display-preference tests).
+
 ## 2026-07-04 — Route lookups go direct to standing data (prod enrichment was silently dead) — branch `fix/route-lookup-standing-data`
 
 Deploy-time discovery while verifying `GET /v1/routes` (the backfill endpoint): **every
