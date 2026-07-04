@@ -5,6 +5,27 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-05 — Detail screen becomes the settled reveal (Direction B) — branch `feat/detail-settled-card`
+
+Noah picked Direction B from the design-directions doc ("mirroring the reveal"):
+the catch detail screen now frames the reveal card AT REST instead of stacking
+grey panels.
+
+- **New `SettledCatchCard`** — the reveal's layout settled at t=1, built from the
+  SAME atoms the reveal animates (RP palette, `FlapRow`, `statCell`/`ledgerRow`,
+  `RevealPhoto`, `wrapName` — all promoted from `private` to internal), so the
+  catch moment and the Hangar cannot drift apart. Photo hero, static split-flap
+  name, tier line (dot + tier + carrier), ALT/SPD + full-width ROUTE (IATA display
+  codes), and the score ledger — with a re-derived **FIRST OF TYPE +50%** line when
+  this catch was historically first of its typecode (computed from the Hangar, no
+  stored flag — same philosophy as `resolvedRarity`).
+- **`CatchDetailView` collapses to card + fine print**: one quiet block with
+  REG / ICAO / TYPE over a rule and CAUGHT date · time · place. The EARNED / ROUTE /
+  FIRST CAUGHT / AIRFRAME box stack is deleted — each fact appears exactly once
+  (the doc's critique #2/#3). Share sheet unchanged (still the share-card image).
+- Visual pass via new `SettledCardSnapshotTests` (route/no-route, first-of-type,
+  long wrapped name, tier extremes, all-nil); full `TailspotTests` green.
+
 ## 2026-07-05 — IATA route codes + detail-view ROUTE panel + degenerate-route fix — branch `feat/detail-reveal-language`
 
 Three field reports from Noah's Haneda session, one round:

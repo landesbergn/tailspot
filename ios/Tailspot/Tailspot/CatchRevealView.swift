@@ -35,12 +35,16 @@ private func ss(_ a: Double, _ b: Double, _ x: Double) -> Double {
 private func easeOut(_ x: Double) -> Double { let u = revClamp(x); return 1 - (1 - u) * (1 - u) }
 
 /// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
-private let flapPool = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789-")
+let flapPool = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789-")
 
-/// Reveal-local palette — the near-black card ground and the neutral
+/// The reveal's palette — the near-black card ground and the neutral
 /// ink/rule tones from the prototype. Tier accent comes from
 /// `Rarity.color` so the reveal matches Hangar/badge tiering.
-private enum RP {
+/// INTERNAL (2026-07-05): these tokens — plus FlapRow/wrapName/RevealPhoto/
+/// splitUnit/statCell/ledgerRow — are the shared "reveal vocabulary" that
+/// `SettledCatchCard` (the Hangar detail screen) renders at rest, so the
+/// catch moment and the collection speak one visual language (Direction B).
+enum RP {
     static let bg = Color(hex: 0x08090C)
     static let ink = Color(hex: 0xE7EEF5)
     static let muted = Color(hex: 0x8DA0B2)
@@ -53,7 +57,7 @@ private enum RP {
 
 // MARK: - Split-flap row
 
-private struct FlapRow: View {
+struct FlapRow: View {
     let text: String
     let t: Double
     let startT: Double
@@ -95,12 +99,12 @@ private struct FlapRow: View {
 
 /// One wrapped line of the split-flap name. `id` is the global character
 /// offset of the line's first character (unique across lines).
-private struct FlapLine: Identifiable { let id: Int; let text: String }
+struct FlapLine: Identifiable { let id: Int; let text: String }
 
 /// Greedy word-wrap for the split-flap name: break on spaces; hard-break a
 /// single word longer than `perLine`. Keeps each line within the budget so
 /// cells stay legible (wrap) instead of shrinking to fit everything on one line.
-private func wrapName(_ s: String, perLine: Int) -> [String] {
+func wrapName(_ s: String, perLine: Int) -> [String] {
     let limit = max(1, perLine)
     var lines: [String] = []
     var cur = ""
@@ -126,7 +130,7 @@ private func wrapName(_ s: String, perLine: Int) -> [String] {
 
 // MARK: - Photo hero (real catch photo, else the sky placeholder)
 
-private struct RevealPhoto: View {
+struct RevealPhoto: View {
     let url: URL?
 
     var body: some View {
@@ -170,7 +174,7 @@ private struct SkyPlaceholder: View {
 
 /// Splits a pre-formatted value like "36,745 ft" into ("36,745", "ft") so the
 /// unit can render smaller + tinted. Splits on the last space; no space → no unit.
-private func splitUnit(_ s: String?) -> (value: String, unit: String?) {
+func splitUnit(_ s: String?) -> (value: String, unit: String?) {
     guard let s, !s.isEmpty else { return ("—", nil) }
     if let r = s.range(of: " ", options: .backwards) {
         return (String(s[..<r.lowerBound]), String(s[r.upperBound...]))
@@ -179,7 +183,7 @@ private func splitUnit(_ s: String?) -> (value: String, unit: String?) {
 }
 
 /// A labelled stat — big monospaced value with a smaller tinted unit suffix.
-private func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) -> some View {
+func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) -> some View {
     let parts = splitUnit(raw)
     return VStack(alignment: .leading, spacing: 3 * scale) {
         Text(label)
@@ -199,7 +203,7 @@ private func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: C
     }
 }
 
-private func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Double, scale: CGFloat, big: Bool = false) -> some View {
+func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Double, scale: CGFloat, big: Bool = false) -> some View {
     HStack {
         Text(label)
             .font(.system(size: (big ? 12 : 11) * scale, weight: big ? .heavy : .regular, design: .monospaced))
