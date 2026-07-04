@@ -142,17 +142,13 @@ struct ContentView: View {
     /// the multi-button chrome. T8 will re-wire inside the new merged
     /// `performCatch(mode:)`. Reveal-dismiss callbacks still clear it.
     @State private var captureInFlight = false
-    /// Transient "catch blocked" nudge — shown when a catch gate (indoor, or
-    /// too-far) stops a catch, with a one-tap "Catch anyway" override.
-    @State private var showCatchBlockedNudge = false
-    /// Copy for the active block nudge — keyed to the block reason.
-    @State private var catchBlockMessage = ""
-    /// The blocked catch's "Catch anyway" override — set when a gate blocks,
-    /// run if the user taps through the nudge.
-    @State private var overrideCatch: (() -> Void)?
-    /// Bumped on each block so the nudge's auto-dismiss timer re-arms
-    /// (`.task(id:)`) on a rapid second block within the window.
-    @State private var nudgeToken = 0
+    /// Post-catch confirm (2026-07-04, replaces the pre-catch block nudge):
+    /// the suspected rows of the just-revealed catch, stashed by `runCatch`
+    /// and promoted into `pendingSuspectReview` when the reveal dismisses —
+    /// the review must never interrupt the reveal moment itself.
+    @State private var suspectAwaitingReview: [Catch] = []
+    /// Non-nil → the one-question Keep/Discard review dialog is up.
+    @State private var pendingSuspectReview: SuspectReview?
     /// Ambient "you're indoors" hint, shown proactively when the camera
     /// has read a confident not-sky frame for a sustained spell (so a
     /// brief misread doesn't nag). Auto-clears the moment it sees sky.
@@ -647,7 +643,6 @@ struct ContentView: View {
         }
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
-        .overlay(alignment: .bottom) { catchBlockedNudge }
         .overlay(alignment: .top) { indoorHintBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
@@ -661,11 +656,13 @@ struct ContentView: View {
                 onDismiss: {
                     pendingReveal = nil
                     captureInFlight = false
+                    presentSuspectReviewIfNeeded()
                 },
                 onViewInHangar: {
                     pendingReveal = nil
                     captureInFlight = false
                     showHangar = true
+                    presentSuspectReviewIfNeeded()
                 },
                 isDuplicate: reveal.isDuplicate
             )
@@ -683,14 +680,33 @@ struct ContentView: View {
                 onDismiss: {
                     pendingMultiReveal = nil
                     captureInFlight = false
+                    presentSuspectReviewIfNeeded()
                 },
                 onViewInHangar: {
                     pendingMultiReveal = nil
                     captureInFlight = false
                     showHangar = true
+                    presentSuspectReviewIfNeeded()
                 }
             )
             .presentationBackground(.clear)
+        }
+        // Post-catch confirm: one Keep/Discard question for the suspected
+        // rows of the catch that just revealed. Keep vouches (un-quarantines
+        // → uploads next scene-activation); Discard deletes — the earned
+        // confirm/deny signal. Cancel-free by design: dismissing without
+        // answering leaves the rows quarantined locally, re-asked never
+        // (they stay in the Hangar, off the leaderboard).
+        .confirmationDialog(
+            pendingSuspectReview?.question ?? "",
+            isPresented: Binding(
+                get: { pendingSuspectReview != nil },
+                set: { if !$0 { pendingSuspectReview = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("I saw it — keep") { resolveSuspectReview(keep: true) }
+            Button("Discard it", role: .destructive) { resolveSuspectReview(keep: false) }
         }
         // 1 Hz replay capture loop. Re-launches whenever the recorder
         // toggles on; tears down when it toggles off (Task is cancelled
@@ -808,56 +824,6 @@ struct ContentView: View {
             .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
             .padding(.top, 60)
             .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    @ViewBuilder
-    private var catchBlockedNudge: some View {
-        if showCatchBlockedNudge {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "airplane")
-                        .foregroundStyle(Brand.Color.cyan)
-                        .accessibilityHidden(true)
-                    Text(catchBlockMessage)
-                        .font(Brand.Font.mono(size: 12, weight: .semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(Brand.Color.textPrimary)
-                }
-                // Escape hatch: a rare false-block (a dramatic warm sunset sky,
-                // a mis-sized airframe) is never a dead end. The tap-rate is our
-                // calibration signal (catch_gate_override / catch_size_override).
-                Button {
-                    withAnimation { showCatchBlockedNudge = false }
-                    let go = overrideCatch
-                    overrideCatch = nil
-                    go?()
-                } label: {
-                    Text("Catch anyway")
-                        .font(Brand.Font.mono(size: 12, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Brand.Color.cyan.opacity(0.12), in: .capsule)
-                        .overlay(Capsule().strokeBorder(Brand.Color.cyan.opacity(0.4), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Brand.Color.bgElevated.opacity(0.95), in: .rect(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(Brand.Color.alertCaution.opacity(0.5), lineWidth: 1)
-            )
-            .padding(.horizontal, 32)
-            .padding(.bottom, 130)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-            .task(id: nudgeToken) {
-                try? await Task.sleep(for: .seconds(4.5))
-                withAnimation { showCatchBlockedNudge = false }
-                overrideCatch = nil
-            }
         }
     }
 
@@ -985,23 +951,53 @@ struct ContentView: View {
     /// plane with mild compass drift still qualifies. Tunable in field test.
     private static let catchZoneRadius: CGFloat = 100
 
-    /// Why a catch was blocked — drives the nudge copy. Every reason fails OPEN
-    /// with a "Catch anyway" override; the per-reason override rate is the
-    /// tuning signal (a reason testers override constantly is mis-calibrated).
-    private enum CatchBlock {
-        case indoor
-        case tooFar
-        case occluded
-        var message: String {
-            switch self {
-            case .indoor:
-                return "Looks like you're indoors — head outside to catch a plane!"
-            case .tooFar:
-                return "That one's too far to make out — find a closer plane to catch!"
-            case .occluded:
-                return "Point at the plane — it looks like there's something in the way."
+    /// Payload for the post-catch Keep/Discard review dialog: the suspected
+    /// rows of the just-revealed catch and the one question asked about them.
+    private struct SuspectReview {
+        let rows: [Catch]
+        let question: String
+    }
+
+    /// Promote the stashed suspected rows into the review dialog. Called from
+    /// the reveal's dismiss callbacks so the question lands right AFTER the
+    /// card moment, never on top of it (post-catch confirm, 2026-07-04).
+    private func presentSuspectReviewIfNeeded() {
+        guard !suspectAwaitingReview.isEmpty else { return }
+        let rows = suspectAwaitingReview.filter { !$0.isDeleted && $0.suspectReason != nil }
+        suspectAwaitingReview = []
+        guard !rows.isEmpty else { return }
+        let question: String
+        if rows.count == 1, let row = rows.first,
+           let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) {
+            question = reason.question(slantKm: row.slantDistanceMeters / 1000)
+        } else {
+            question = "\(rows.count) of those look doubtful (hidden or very far) — did you really see them?"
+        }
+        pendingSuspectReview = SuspectReview(rows: rows, question: question)
+    }
+
+    /// Apply the review answer to every row it covered. Keep vouches — the
+    /// flag clears and the row uploads on the next scene-activation sweep.
+    /// Discard deletes the row + photo and fires the deny signals.
+    private func resolveSuspectReview(keep: Bool) {
+        guard let review = pendingSuspectReview else { return }
+        pendingSuspectReview = nil
+        for row in review.rows where !row.isDeleted {
+            guard let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) else { continue }
+            if keep {
+                CatchTelemetry.fireSuspectKept(icao24: row.icao24, reason: reason)
+                row.suspectReason = nil
+            } else {
+                CatchTelemetry.fireSuspectDiscarded(icao24: row.icao24, reason: reason)
+                // A discard IS a delete — fire the north-star deny signal too.
+                CatchTelemetry.fireDeleted(
+                    icao24: row.icao24, count: 1, rarity: row.resolvedRarity.rawValue
+                )
+                CatchPhotoStore.delete(filename: row.photoFilename)
+                modelContext.delete(row)
             }
         }
+        try? modelContext.save()
     }
 
     /// Bottom capture bar — hangar (left), big central capture
@@ -1046,80 +1042,54 @@ struct ContentView: View {
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
 
+        // Post-catch confirm model (2026-07-04): the gates below RAISE
+        // SUSPICION instead of blocking — the catch + reveal always proceed
+        // instantly. A pre-catch nudge interrupted a moving target, and its
+        // "Catch anyway" re-ran seconds later against stale aim (the JA10VA
+        // field case: override caught an invisible plane 62.6 km out).
+        // Suspected rows quarantine from upload and get one Keep/Discard
+        // question after the reveal (`presentSuspectReviewIfNeeded`).
+        var suspicions: [String: CatchSuspicion] = [:]
+
         // Gate 1 — indoor (v1 whole-frame authenticity gate). A confident
-        // "not sky" blocks the whole tap; everything else proceeds (fail open).
+        // "not sky" suspects the whole tap; everything else passes (fail open).
         let skyFeatures = visualConfirm.latestSkyFeatures
         let gpsAccuracy = location.horizontalAccuracy
         if computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy) == .notSky {
             CatchTelemetry.fireBlockedOutdoors(
                 verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
             )
-            // A rare false-block (a dramatic warm sunset) is never a dead end;
-            // the override tap-rate is our calibration signal.
-            blockCatch(message: CatchBlock.indoor.message) {
-                CatchTelemetry.fireGateOverride(
-                    verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
-                )
-                runCatch(icaos: icaos, screenSize: screenSize, positions: positions)
+            for icao in icaos {
+                suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .indoor)
             }
-            return
         }
 
         // Gate 2 — angular-size floor (L3). A plane too small-and-distant to
-        // resolve by eye isn't a real catch (independent of occlusion, which the
-        // localized sky gate will own). If the WHOLE tap is too far, block with a
-        // one-tap override; if only some targets are, catch the resolvable ones
-        // and drop the specks (telemetry only — a partial block shouldn't
-        // interrupt an otherwise-good multi-catch).
+        // resolve by eye is doubtful (independent of occlusion, which the
+        // localized sky gate owns). Per-target: specks are caught + flagged,
+        // never dropped — the review question owns the outcome now.
         let observedByIcao = Dictionary(
             adsb.observed.map { ($0.aircraft.icao24, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        var resolvable: [String] = []
-        var tooFar: [ObservedAircraft] = []
         for icao in icaos {
             // No observation (shouldn't happen — it was on screen) → fail open.
-            if observedByIcao[icao]?.clearsCatchSizeFloor ?? true {
-                resolvable.append(icao)
-            } else if let obs = observedByIcao[icao] {
-                tooFar.append(obs)
-            }
-        }
-
-        if resolvable.isEmpty,
-           let worst = tooFar.min(by: { $0.apparentSizeArcminutes < $1.apparentSizeArcminutes }) {
-            CatchTelemetry.fireBlockedSize(
-                arcmin: worst.apparentSizeArcminutes,
-                slantKm: worst.slantDistanceMeters / 1000,
-                blockedCount: tooFar.count
-            )
-            blockCatch(message: CatchBlock.tooFar.message) {
-                CatchTelemetry.fireSizeOverride(
-                    arcmin: worst.apparentSizeArcminutes,
-                    slantKm: worst.slantDistanceMeters / 1000
-                )
-                runCatch(icaos: icaos, screenSize: screenSize, positions: positions)
-            }
-            return
-        }
-        // Some passed: record the dropped specks (no nudge — don't interrupt).
-        for obs in tooFar {
+            guard let obs = observedByIcao[icao], !obs.clearsCatchSizeFloor else { continue }
             CatchTelemetry.fireBlockedSize(
                 arcmin: obs.apparentSizeArcminutes,
                 slantKm: obs.slantDistanceMeters / 1000
             )
+            suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .tooFar)
         }
 
         // Gate 3 — localized sky gate (L2). Judge the patch under each
-        // resolvable target's bracket. SHADOW MODE by default: fire telemetry
-        // for what it WOULD do (the calibration stream) but don't block. When
-        // enforcing, a confidently-occluded target (bracket on a building/tree)
-        // blocks — whole tap → nudge + override; partial → drop the occluded.
+        // target's bracket. SHADOW (debug toggle) → telemetry only;
+        // enforcing (the default) → a confidently-occluded bracket
+        // (building/tree under it) raises suspicion.
         let enforcing = visualConfirm.localGateEnforcing
         if let grid = visualConfirm.latestLocalGrid {
             let gate = LocalSkyGate()
-            var occluded: [(icao: String, features: LocalSkyFeatures)] = []
-            for icao in resolvable {
+            for icao in icaos {
                 guard let pos = positions[icao] else { continue }
                 let f = grid.features(atScreenPoint: pos, screenSize: screenSize)
                 let v = gate.verdict(f)
@@ -1127,32 +1097,14 @@ struct ContentView: View {
                 CatchTelemetry.fireLocalGate(
                     verdict: v, features: f, wouldBlock: wouldBlock, enforcing: enforcing
                 )
-                if wouldBlock { occluded.append((icao, f)) }
-            }
-            if enforcing, !occluded.isEmpty {
-                let blockedSet = Set(occluded.map(\.icao))
-                let clear = resolvable.filter { !blockedSet.contains($0) }
-                if clear.isEmpty, let worst = occluded.first {
-                    blockCatch(message: CatchBlock.occluded.message) {
-                        CatchTelemetry.fireOccludedOverride(features: worst.features)
-                        runCatch(icaos: resolvable, screenSize: screenSize, positions: positions)
-                    }
-                    return
+                if wouldBlock, enforcing {
+                    suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .occluded)
                 }
-                runCatch(icaos: clear, screenSize: screenSize, positions: positions)
-                return
             }
         }
-        runCatch(icaos: resolvable, screenSize: screenSize, positions: positions)
-    }
 
-    /// Show the "catch blocked" nudge with a reason message and stash the
-    /// "Catch anyway" override. Shared by every catch gate (indoor, too-far).
-    private func blockCatch(message: String, override: @escaping () -> Void) {
-        catchBlockMessage = message
-        overrideCatch = override
-        nudgeToken &+= 1
-        withAnimation { showCatchBlockedNudge = true }
+        runCatch(icaos: icaos, screenSize: screenSize, positions: positions,
+                 suspicions: suspicions)
     }
 
     /// The actual catch — capture the JPEG, build + save the rows, fire
@@ -1162,7 +1114,8 @@ struct ContentView: View {
     private func runCatch(
         icaos: [String],
         screenSize: CGSize,
-        positions: [String: CGPoint]
+        positions: [String: CGPoint],
+        suspicions: [String: CatchSuspicion] = [:]
     ) {
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
@@ -1278,7 +1231,11 @@ struct ContentView: View {
                     originIcao: observed?.aircraft.originIcao,
                     destIcao: observed?.aircraft.destIcao,
                     originName: observed?.aircraft.originName,
-                    destName: observed?.aircraft.destName
+                    destName: observed?.aircraft.destName,
+                    // Post-catch confirm: a gate-suspected row is born
+                    // quarantined (skipped by CatchUploader) until the
+                    // post-reveal review clears or deletes it.
+                    suspectReason: suspicions[icao]?.rawValue
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -1332,6 +1289,22 @@ struct ContentView: View {
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
+
+            // Post-catch confirm: record each quarantined row and stash the
+            // suspected set — the reveal's dismiss callbacks promote it into
+            // the Keep/Discard dialog (never shown on top of the reveal).
+            let suspected = newCatches.filter { $0.suspectReason != nil }
+            for row in suspected {
+                guard let reason = row.suspectReason
+                    .flatMap(CatchSuspicion.init(rawValue:)) else { continue }
+                CatchTelemetry.fireSuspected(
+                    icao24: row.icao24,
+                    reason: reason,
+                    arcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes,
+                    slantKm: row.slantDistanceMeters / 1000
+                )
+            }
+            suspectAwaitingReview = suspected
 
             presentReveal(newCatches: newCatches, duplicates: duplicates,
                           visibleByIcao: visibleByIcao)

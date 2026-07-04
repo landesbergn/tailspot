@@ -175,7 +175,6 @@ struct CatchTelemetryTests {
 
     @Test func gateEventNamesAreStable() {
         #expect(CatchTelemetry.blockedOutdoorsEvent == "catch_blocked_outdoors")
-        #expect(CatchTelemetry.gateOverrideEvent == "catch_gate_override")
     }
 
     // MARK: - Anti-cheat telemetry (PR1: aim + size floor)
@@ -210,7 +209,6 @@ struct CatchTelemetryTests {
 
     @Test func sizeEventNamesAreStable() {
         #expect(CatchTelemetry.blockedSizeEvent == "catch_blocked_size")
-        #expect(CatchTelemetry.sizeOverrideEvent == "catch_size_override")
     }
 
     // MARK: - Localized sky gate (L2)
@@ -230,6 +228,54 @@ struct CatchTelemetryTests {
 
     @Test func localGateEventNamesAreStable() {
         #expect(CatchTelemetry.localGateEvent == "catch_local_gate")
-        #expect(CatchTelemetry.occludedOverrideEvent == "catch_occluded_override")
+    }
+
+    // MARK: - Post-catch confirm (suspected → kept / discarded)
+
+    @Test func suspectEventNamesAreStable() {
+        #expect(CatchTelemetry.suspectedEvent == "catch_suspected")
+        #expect(CatchTelemetry.suspectKeptEvent == "catch_suspect_kept")
+        #expect(CatchTelemetry.suspectDiscardedEvent == "catch_suspect_discarded")
+    }
+
+    @Test func suspectPropertiesCarryReasonAndContext() {
+        let p = CatchTelemetry.suspectProperties(
+            icao24: "84b0a5", reason: .tooFar, arcmin: 2.0, slantKm: 62.6)
+        #expect(p["icao24"]?.jsonValue as? String == "84b0a5")
+        #expect(p["reason"]?.jsonValue as? String == "too_far")
+        #expect((p["angular_size_arcmin"]?.jsonValue as? Double) == 2.0)
+        #expect((p["slant_km"]?.jsonValue as? Double) == 62.6)
+    }
+
+    @Test func suspectPropertiesOmitAbsentContext() {
+        let p = CatchTelemetry.suspectProperties(icao24: "84b0a5", reason: .occluded)
+        #expect(p["reason"]?.jsonValue as? String == "occluded")
+        #expect(p["angular_size_arcmin"] == nil)
+        #expect(p["slant_km"] == nil)
+    }
+
+    @Test func suspicionRawValuesArePersistedStrings() {
+        // Raw values ARE the on-disk Catch.suspectReason strings + the
+        // PostHog reason property — renaming one silently orphans rows.
+        #expect(CatchSuspicion.occluded.rawValue == "occluded")
+        #expect(CatchSuspicion.tooFar.rawValue == "too_far")
+        #expect(CatchSuspicion.indoor.rawValue == "indoor")
+    }
+
+    @Test func suspicionPrecedencePrefersTheMostActionableReason() {
+        // occluded > tooFar > indoor; nil yields the new reason.
+        #expect(CatchSuspicion.preferred(nil, .indoor) == .indoor)
+        #expect(CatchSuspicion.preferred(.indoor, .tooFar) == .tooFar)
+        #expect(CatchSuspicion.preferred(.tooFar, .occluded) == .occluded)
+        #expect(CatchSuspicion.preferred(.occluded, .indoor) == .occluded)
+        #expect(CatchSuspicion.preferred(.tooFar, .indoor) == .tooFar)
+    }
+
+    @Test func tooFarQuestionCarriesTheDistance() {
+        // The JA10VA case: the review question must say how far out it was.
+        #expect(CatchSuspicion.tooFar.question(slantKm: 62.6).contains("63 km"))
+        // Degenerate slant (0 — no observation at catch time) falls back
+        // to distance-free copy rather than "0 km".
+        #expect(!CatchSuspicion.tooFar.question(slantKm: 0).contains("0 km"))
     }
 }

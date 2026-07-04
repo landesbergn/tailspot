@@ -122,6 +122,15 @@ final class Catch {
     /// migration (every pre-WP-1.7 row is "pending" and uploads on the
     /// next launch, which is the intended backfill behavior).
     var uploadedAt: Date?
+    /// Why the authenticity gates doubted this catch at capture time
+    /// (`"occluded"` / `"too_far"` / `"indoor"`), or nil for a clean or
+    /// user-kept catch. Post-catch confirm model (2026-07-04): gates never
+    /// block — a suspected catch records + reveals instantly, then gets one
+    /// Keep/Discard question after the reveal. While non-nil the row is
+    /// quarantined from upload (`CatchUploader` skips it); Keep clears the
+    /// flag (uploads next scene-activation), Discard deletes the row.
+    /// Added 2026-07-04 — optional + nil-default for lightweight migration.
+    var suspectReason: String?
 
     init(
         icao24: String,
@@ -146,8 +155,10 @@ final class Catch {
         placeName: String? = nil,
         country: String? = nil,
         rarity: Rarity? = nil,
-        aircraftType: AircraftType? = nil
+        aircraftType: AircraftType? = nil,
+        suspectReason: String? = nil
     ) {
+        self.suspectReason = suspectReason
         self.icao24 = icao24
         self.callsign = callsign
         self.model = model

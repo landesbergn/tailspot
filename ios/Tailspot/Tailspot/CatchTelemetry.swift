@@ -9,7 +9,7 @@
 //  pure builders that unit tests can pin, with thin `@MainActor` wrappers
 //  that read a `Catch` and hand off to `Analytics.capture`.
 //
-//  Events (REST path, per Analytics.swift — NOT the PostHog SDK):
+//  Events (via Analytics.swift):
 //    - catch_performed  — fires once per processed target on a catch tap.
 //                         Successful catches carry rarity/type/slant;
 //                         duplicates (already in the Hangar, no new row)
@@ -26,8 +26,8 @@
 //    - catch_deleted    — fires once per delete action (a HangarRow may
 //                         group N icao rows; `count` records how many).
 //
-//  Together with the confirm/deny affordance (catch_confirmed /
-//  catch_denied) these are the numerator + negative signals the
+//  Together with the post-catch confirm outcomes (catch_suspect_kept /
+//  catch_suspect_discarded) these are the numerator + negative signals the
 //  catch-confirmation-rate funnel needs.
 //
 
@@ -38,20 +38,24 @@ nonisolated enum CatchTelemetry {
     static let performedEvent = "catch_performed"
     static let uploadedEvent = "catch_uploaded"
     static let deletedEvent = "catch_deleted"
+    // Gate-positive streams. Post-catch confirm model (2026-07-04): the gates
+    // no longer block the catch, so these record "the gate raised suspicion",
+    // not a user-facing wall. Names kept for dashboard continuity with the
+    // pre-2026-07-04 blocking era; the *_override events retired with it.
     static let blockedOutdoorsEvent = "catch_blocked_outdoors"
-    static let gateOverrideEvent = "catch_gate_override"
-    // Lever 3 (angular-size floor) block + override. A parallel stream to the
-    // indoor gate's, kept as distinct events so the two block reasons break
-    // out cleanly in PostHog without disturbing the existing indoor history.
     static let blockedSizeEvent = "catch_blocked_size"
-    static let sizeOverrideEvent = "catch_size_override"
     // Lever 2 (localized sky gate). `catch_local_gate` fires on EVERY catch
     // (shadow + enforce) with the per-target verdict + features — the
-    // calibration stream that tunes the on-device texture threshold before
-    // enforcement. `catch_occluded_override` fires on a "Catch anyway" through
-    // an enforced occlusion block.
+    // calibration stream for the on-device texture threshold.
     static let localGateEvent = "catch_local_gate"
-    static let occludedOverrideEvent = "catch_occluded_override"
+    // Post-catch confirm outcomes: a suspected catch records + reveals
+    // instantly, then gets one Keep/Discard question after the reveal.
+    // `catch_suspected` fires when a row is quarantined; kept/discarded record
+    // the answer — the EARNED confirm/deny signal for the north-star (a
+    // discard also fires `catch_deleted`, so the headline rate absorbs it).
+    static let suspectedEvent = "catch_suspected"
+    static let suspectKeptEvent = "catch_suspect_kept"
+    static let suspectDiscardedEvent = "catch_suspect_discarded"
 
     // MARK: - Pure property builders (unit-tested)
 
@@ -257,7 +261,8 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    /// Fired when the gate blocks an indoor catch (verdict `.notSky`).
+    /// Fired when the indoor gate suspects a catch (verdict `.notSky`).
+    /// Post-catch confirm: raises suspicion, never blocks.
     static func fireBlockedOutdoors(
         verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
     ) {
@@ -266,30 +271,12 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    /// Fired when the user taps "Catch anyway" through a block — the
-    /// calibration signal for how often the gate is wrong.
-    static func fireGateOverride(
-        verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
-    ) {
-        Analytics.capture(gateOverrideEvent, outdoorGateProperties(
-            verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
-        ))
-    }
-
-    /// Fired when the angular-size floor blocks a catch (target too small-and-
+    /// Fired when the angular-size floor suspects a target (too small-and-
     /// distant to resolve). `blockedCount` ≥ 1 — on a multi-tap it's how many
-    /// targets the floor dropped (1 when the whole tap is blocked).
+    /// targets the floor flagged.
     static func fireBlockedSize(arcmin: Double, slantKm: Double, blockedCount: Int = 1) {
         Analytics.capture(blockedSizeEvent, sizeGateProperties(
             arcmin: arcmin, slantKm: slantKm, blockedCount: blockedCount
-        ))
-    }
-
-    /// Fired when the user taps "Catch anyway" through a size block — the
-    /// false-block / floor-too-high calibration signal.
-    static func fireSizeOverride(arcmin: Double, slantKm: Double) {
-        Analytics.capture(sizeOverrideEvent, sizeGateProperties(
-            arcmin: arcmin, slantKm: slantKm
         ))
     }
 
@@ -322,11 +309,81 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    /// Fired when the user taps "Catch anyway" through an enforced occlusion
-    /// block — the false-block calibration signal for the localized gate.
-    static func fireOccludedOverride(features: LocalSkyFeatures) {
-        Analytics.capture(occludedOverrideEvent, localGateProperties(
-            verdict: .notSky, features: features, wouldBlock: true, enforcing: true
+    // MARK: - Post-catch confirm (suspected → kept / discarded)
+
+    /// Properties for the post-catch confirm events: the reason plus the
+    /// target's size/distance context when the size floor supplied it.
+    static func suspectProperties(
+        icao24: String, reason: CatchSuspicion,
+        arcmin: Double? = nil, slantKm: Double? = nil
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
+            "icao24": .string(icao24),
+            "reason": .string(reason.rawValue),
+        ]
+        if let a = arcmin { props["angular_size_arcmin"] = .double(a) }
+        if let s = slantKm { props["slant_km"] = .double(s) }
+        return props
+    }
+
+    /// Fired when a catch is quarantined as suspected (once per suspected row,
+    /// at catch time — alongside the gate-positive stream that raised it).
+    static func fireSuspected(
+        icao24: String, reason: CatchSuspicion,
+        arcmin: Double? = nil, slantKm: Double? = nil
+    ) {
+        Analytics.capture(suspectedEvent, suspectProperties(
+            icao24: icao24, reason: reason, arcmin: arcmin, slantKm: slantKm
         ))
+    }
+
+    /// The user vouched for a suspected catch — it un-quarantines and uploads.
+    static func fireSuspectKept(icao24: String, reason: CatchSuspicion) {
+        Analytics.capture(suspectKeptEvent, suspectProperties(icao24: icao24, reason: reason))
+    }
+
+    /// The user agreed the catch wasn't real — the row is deleted. The caller
+    /// also fires `catch_deleted` so the north-star headline absorbs it.
+    static func fireSuspectDiscarded(icao24: String, reason: CatchSuspicion) {
+        Analytics.capture(suspectDiscardedEvent, suspectProperties(icao24: icao24, reason: reason))
+    }
+}
+
+/// Why the authenticity gates doubted a catch. Raw values are the persisted
+/// `Catch.suspectReason` strings and the telemetry `reason` property.
+nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
+    case occluded            // L2: the patch under the bracket reads building/tree
+    case tooFar = "too_far"  // L3: below the angular-size floor
+    case indoor              // whole-frame SkyCheck: not pointed at open sky
+
+    /// Precedence when several gates fire on one target — the most specific,
+    /// most actionable reason wins the review copy (occluded > tooFar > indoor).
+    static func preferred(_ current: CatchSuspicion?, _ new: CatchSuspicion) -> CatchSuspicion {
+        guard let current else { return new }
+        return current.priority >= new.priority ? current : new
+    }
+
+    private var priority: Int {
+        switch self {
+        case .occluded: return 3
+        case .tooFar: return 2
+        case .indoor: return 1
+        }
+    }
+
+    /// The post-reveal review question for a single suspected catch. Keeps the
+    /// playful product tone — a doubt, not an accusation.
+    func question(slantKm: Double?) -> String {
+        switch self {
+        case .occluded:
+            return "Looks like something was between you and that one — did you really see it?"
+        case .tooFar:
+            if let km = slantKm, km.isFinite, km > 0 {
+                return "That one was \(Int(km.rounded())) km out — could you really see it?"
+            }
+            return "That one was a long way out — could you really see it?"
+        case .indoor:
+            return "Looks like you were indoors — did you really see it?"
+        }
     }
 }

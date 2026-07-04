@@ -40,13 +40,19 @@ class CatchUploader {
     ///   2. Call `ensureRegistered()` — no-op if already registered.
     ///   3. POST the catch; on success or duplicate, set `uploadedAt = now`.
     ///   4. On any error, log and continue — the row stays pending.
+    /// What "pending upload" means: never uploaded AND not quarantined as a
+    /// gate suspect (post-catch confirm, 2026-07-04) — a suspected catch must
+    /// not touch the server/leaderboard until the user answers Keep (clears
+    /// `suspectReason`); Discard deletes the row. Static so the quarantine
+    /// rule is unit-testable against an in-memory store.
+    static let pendingPredicate = #Predicate<Catch> {
+        $0.uploadedAt == nil && $0.suspectReason == nil
+    }
+
     func uploadPending(context: ModelContext) async {
         let pendingRows: [Catch]
         do {
-            // Fetch all rows where uploadedAt is nil.
-            var descriptor = FetchDescriptor<Catch>(
-                predicate: #Predicate<Catch> { $0.uploadedAt == nil }
-            )
+            var descriptor = FetchDescriptor<Catch>(predicate: Self.pendingPredicate)
             descriptor.sortBy = [SortDescriptor(\Catch.caughtAt, order: .forward)]
             pendingRows = try context.fetch(descriptor)
         } catch {

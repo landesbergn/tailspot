@@ -145,6 +145,32 @@ the headline because a working anti-cheat block is not a distrusted ID.
 - New `LocalSkyGateTests`: golden-hour-not-warm (0.055 allows / 0.08 blocks) + night
   textured fails open.
 
+**Post-catch confirm — same-day field pivot (airport test, Noah).** The enforcement
+model reversed within hours of the flip: a pre-catch block interrupts a moving target,
+and its "Catch anyway" re-runs seconds later against stale aim — the **JA10VA case**
+(aimed at a just-departed plane not yet in the feed; the override caught the only
+in-data candidate in the cone, an invisible plane **62.6 km** out in haze, ~2′ — below
+the size floor). New model, all three gates:
+
+- **Gates raise suspicion, never block.** Catch + reveal proceed instantly; the
+  pre-catch nudge / "Catch anyway" apparatus is deleted (`CatchBlock`, `blockCatch`,
+  the nudge overlay + state, the `catch_*_override` events + fire wrappers).
+- **`Catch.suspectReason`** (additive optional: `occluded` / `too_far` / `indoor`;
+  `CatchSuspicion` with occluded > too_far > indoor precedence). While set, the row is
+  **quarantined from upload** (`CatchUploader.pendingPredicate`, now static + pinned by
+  a test) — a doubted catch never touches the leaderboard unanswered.
+- **One Keep/Discard question after the reveal** (never on top of it): reason-specific
+  copy ("That one was 63 km out — could you really see it?"). Keep → clears the flag,
+  uploads on the next scene-activation sweep (`catch_suspect_kept`). Discard → deletes
+  row + photo (`catch_suspect_discarded` + `catch_deleted`, so the north-star headline
+  absorbs it). Unanswered → stays local + quarantined.
+- New events: `catch_suspected` / `catch_suspect_kept` / `catch_suspect_discarded` —
+  the **earned** confirm/deny signal for catch-confirmation-rate. The gate-positive
+  streams (`catch_blocked_*`, `catch_local_gate`) keep their names for dashboard
+  continuity but now mean "suspicion raised".
+- Data-latency follow-up noted: just-departed planes lag the feed (the actual JA10VA
+  root cause) — no client gate can fix that; tracked as a backend freshness question.
+
 ## 2026-07-04 — GA-push re-prioritization of PLAN §9 (docs only)
 
 Re-ranked the canonical backlog for a concerted push toward GA launch, strictly by the
