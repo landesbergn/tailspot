@@ -60,11 +60,37 @@ nonisolated enum CatchPhotoComposer {
     /// Scaled to photo pixels by 1 / aspectFillScale inside `compose(...)`.
     static let bracketScreenHaloWidth: CGFloat = 1.5
 
+    /// A composed catch photo: the bracketed JPEG plus WHERE the plane sits
+    /// in it (normalized 0…1 photo coordinates, top-left origin — the
+    /// bracket center). The focus is persisted on `Catch` so photo displays
+    /// can anchor their aspect-fill crop on the plane instead of the frame
+    /// center.
+    struct Composed {
+        let jpegData: Data
+        let normalizedFocus: CGPoint
+    }
+
+    /// The bracket center in NORMALIZED photo coordinates, clamped to 0…1
+    /// (the projected point can land a hair outside the photo when the
+    /// plane sits at the aspect-fill crop edge). Pure math, unit-testable
+    /// without decoding an image.
+    static func normalizedFocus(overlay: BracketOverlay, photoSize: CGSize) -> CGPoint {
+        let transform = AspectFillTransform(
+            screenSize: overlay.screenSize,
+            photoSize: photoSize
+        )
+        let p = transform.photoPoint(fromScreenPoint: overlay.screenPosition)
+        return CGPoint(
+            x: min(1, max(0, p.x / photoSize.width)),
+            y: min(1, max(0, p.y / photoSize.height))
+        )
+    }
+
     /// Compose the JPEG with a cyan bracket drawn around the plane at
     /// `overlay.screenPosition`. Returns nil if the JPEG can't be
     /// decoded or if the dimensions are unusable; callers should fall
-    /// back to the original `jpegData` in that case.
-    static func compose(jpegData: Data, overlay: BracketOverlay) -> Data? {
+    /// back to the original `jpegData` (with no focus) in that case.
+    static func compose(jpegData: Data, overlay: BracketOverlay) -> Composed? {
         guard let image = UIImage(data: jpegData) else { return nil }
         let photoSize = image.size
         guard photoSize.width > 0, photoSize.height > 0,
@@ -103,7 +129,11 @@ nonisolated enum CatchPhotoComposer {
                 haloWidth: photoHaloWidth
             )
         }
-        return composed.jpegData(compressionQuality: 0.9)
+        guard let outData = composed.jpegData(compressionQuality: 0.9) else { return nil }
+        return Composed(
+            jpegData: outData,
+            normalizedFocus: normalizedFocus(overlay: overlay, photoSize: photoSize)
+        )
     }
 
     private static func drawCornerBrackets(

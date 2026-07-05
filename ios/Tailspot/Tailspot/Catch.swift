@@ -24,6 +24,7 @@
 //
 
 import Foundation
+import CoreGraphics
 import SwiftData
 
 @Model
@@ -139,6 +140,16 @@ final class Catch {
     /// flag (uploads next scene-activation), Discard deletes the row.
     /// Added 2026-07-04 — optional + nil-default for lightweight migration.
     var suspectReason: String?
+    /// Where the caught plane sits inside the saved catch photo, as
+    /// NORMALIZED photo coordinates (0…1, top-left origin) — the same point
+    /// the composer draws the lock-on bracket around. Lets every photo
+    /// display (settled card, reveal, share) anchor its aspect-fill crop on
+    /// the plane instead of the frame center, so an off-center plane isn't
+    /// cropped out of the hero. nil (pre-field rows / compose failures) →
+    /// center crop, the old behavior. Added 2026-07-05 — optional +
+    /// nil-default for lightweight migration.
+    var photoFocusX: Double?
+    var photoFocusY: Double?
 
     init(
         icao24: String,
@@ -166,9 +177,13 @@ final class Catch {
         country: String? = nil,
         rarity: Rarity? = nil,
         aircraftType: AircraftType? = nil,
-        suspectReason: String? = nil
+        suspectReason: String? = nil,
+        photoFocusX: Double? = nil,
+        photoFocusY: Double? = nil
     ) {
         self.suspectReason = suspectReason
+        self.photoFocusX = photoFocusX
+        self.photoFocusY = photoFocusY
         self.originIata = originIata
         self.destIata = destIata
         self.icao24 = icao24
@@ -212,6 +227,13 @@ final class Catch {
     var displayOrigin: String? { originIata ?? originIcao }
     /// Display code for the destination. Same preference as `displayOrigin`.
     var displayDest: String? { destIata ?? destIcao }
+
+    /// The photo focus as a CGPoint, or nil when either axis is missing
+    /// (pre-field rows) — callers treat nil as "center crop".
+    var photoFocus: CGPoint? {
+        guard let x = photoFocusX, let y = photoFocusY else { return nil }
+        return CGPoint(x: x, y: y)
+    }
 
     /// The rarity tier for this airframe. Resolved live from the
     /// typecode (authoritative, like `resolvedType`); when there is NO

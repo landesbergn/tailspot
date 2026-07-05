@@ -58,7 +58,7 @@ struct SettledCatchCard: View {
         }()
 
         return VStack(alignment: .leading, spacing: 0) {
-            RevealPhoto(url: plane.photoURL)
+            RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
                 .frame(height: 168 * scale)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 16))

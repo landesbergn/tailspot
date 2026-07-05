@@ -1208,6 +1208,10 @@ struct ContentView: View {
                 // plane has no recorded position (unusual — it was on
                 // screen when the button rendered, but the dict missed)
                 // we fall back to the raw photo bytes.
+                // The composer also reports WHERE the plane sits in the
+                // photo (the bracket center, normalized 0…1); persisted so
+                // photo displays crop around the plane, not the frame center.
+                var photoFocus: CGPoint? = nil
                 let photoFilename: String? = photoData.flatMap { data -> String? in
                     let toSave: Data
                     if let pos = positions[icao] {
@@ -1215,9 +1219,14 @@ struct ContentView: View {
                             screenPosition: pos,
                             screenSize: screenSize
                         )
-                        toSave = CatchPhotoComposer.compose(
+                        if let composed = CatchPhotoComposer.compose(
                             jpegData: data, overlay: overlay
-                        ) ?? data
+                        ) {
+                            toSave = composed.jpegData
+                            photoFocus = composed.normalizedFocus
+                        } else {
+                            toSave = data
+                        }
                     } else {
                         toSave = data
                     }
@@ -1261,7 +1270,9 @@ struct ContentView: View {
                     // Post-catch confirm: a gate-suspected row is born
                     // quarantined (skipped by CatchUploader) until the
                     // post-reveal review clears or deletes it.
-                    suspectReason: suspicions[icao]?.rawValue
+                    suspectReason: suspicions[icao]?.rawValue,
+                    photoFocusX: photoFocus.map { Double($0.x) },
+                    photoFocusY: photoFocus.map { Double($0.y) }
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -1524,6 +1535,7 @@ struct ContentView: View {
             speedText: CardPlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
             distText: String(format: "%.1f km", distMeters / 1000),
             photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
+            photoFocus: row.photoFocus,
             originIcao: origin,
             destIcao: dest,
             originName: observed?.aircraft.originName ?? row.originName,

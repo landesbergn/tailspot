@@ -121,10 +121,103 @@ struct CatchPhotoComposerTests {
         )
         #expect(result != nil)
         // JPEG magic: starts with 0xFF 0xD8.
-        if let result, result.count >= 2 {
-            #expect(result[0] == 0xFF)
-            #expect(result[1] == 0xD8)
+        if let data = result?.jpegData, data.count >= 2 {
+            #expect(data[0] == 0xFF)
+            #expect(data[1] == 0xD8)
         }
+        // Screen and photo share the aspect here (300×400 vs 600×800), so
+        // screen (100, 200) → photo (200, 400) → normalized (1/3, 1/2).
+        if let focus = result?.normalizedFocus {
+            #expect(abs(focus.x - 1.0 / 3.0) < 1e-6)
+            #expect(abs(focus.y - 0.5) < 1e-6)
+        }
+    }
+
+    // MARK: normalizedFocus
+
+    /// Same-aspect screen/photo: normalization is the plain screen ratio.
+    @Test func normalizedFocusMapsSameAspectDirectly() {
+        let overlay = CatchPhotoComposer.BracketOverlay(
+            screenPosition: CGPoint(x: 75, y: 300),
+            screenSize: CGSize(width: 300, height: 400)
+        )
+        let f = CatchPhotoComposer.normalizedFocus(
+            overlay: overlay, photoSize: CGSize(width: 600, height: 800)
+        )
+        #expect(abs(f.x - 0.25) < 1e-6)
+        #expect(abs(f.y - 0.75) < 1e-6)
+    }
+
+    /// A screen point projected outside the photo (possible when the plane
+    /// sits at the aspect-fill crop edge) clamps to 0…1 instead of leaking
+    /// an out-of-range focus into the store.
+    @Test func normalizedFocusClampsToUnitRange() {
+        // Photo much wider than the screen: screen x=0 maps INTO the photo
+        // (cropped region), but a negative-x screen point maps before it.
+        let overlay = CatchPhotoComposer.BracketOverlay(
+            screenPosition: CGPoint(x: -500, y: -500),
+            screenSize: CGSize(width: 400, height: 800)
+        )
+        let f = CatchPhotoComposer.normalizedFocus(
+            overlay: overlay, photoSize: CGSize(width: 3000, height: 4000)
+        )
+        #expect(f.x >= 0 && f.x <= 1)
+        #expect(f.y >= 0 && f.y <= 1)
+        #expect(f.y == 0)
+    }
+
+    // MARK: FocusFill.layout
+
+    /// Center focus reproduces plain aspect-fill: image centered, symmetric
+    /// negative origin on the overflowing axis.
+    @Test func focusFillCenterMatchesPlainFill() {
+        let l = FocusFill.layout(
+            imageSize: CGSize(width: 4000, height: 3000),
+            frameSize: CGSize(width: 300, height: 168),
+            focus: CGPoint(x: 0.5, y: 0.5)
+        )
+        // scale = max(300/4000, 168/3000) = 0.075 → 300×225
+        #expect(abs(l.size.width - 300) < 1e-6)
+        #expect(abs(l.size.height - 225) < 1e-6)
+        #expect(abs(l.origin.x - 0) < 1e-6)
+        #expect(abs(l.origin.y - (-28.5)) < 1e-6)   // (168 − 225)/2
+    }
+
+    /// An off-center focus slides the crop so the focus point lands at the
+    /// frame center (when the image has room to slide).
+    @Test func focusFillCentersTheFocusPoint(){
+        let l = FocusFill.layout(
+            imageSize: CGSize(width: 1000, height: 3000),
+            frameSize: CGSize(width: 300, height: 168),
+            focus: CGPoint(x: 0.5, y: 0.25)
+        )
+        // scale = max(0.3, 0.056) = 0.3 → 300×900; focus y in scaled = 225.
+        // origin.y = 168/2 − 225 = −141 (within clamp range [−732, 0]).
+        #expect(abs(l.origin.y - (-141)) < 1e-6)
+        #expect(abs(l.origin.x - 0) < 1e-6)
+    }
+
+    /// A focus near the image edge clamps so the fill never exposes
+    /// background past the image's own edge.
+    @Test func focusFillClampsAtImageEdges() {
+        let tall = CGSize(width: 1000, height: 3000)
+        let frame = CGSize(width: 300, height: 168)
+        let top = FocusFill.layout(imageSize: tall, frameSize: frame,
+                                   focus: CGPoint(x: 0.5, y: 0.0))
+        #expect(top.origin.y == 0)                    // can't slide above the top edge
+        let bottom = FocusFill.layout(imageSize: tall, frameSize: frame,
+                                      focus: CGPoint(x: 0.5, y: 1.0))
+        #expect(abs(bottom.origin.y - (168 - 900)) < 1e-6)  // flush with the bottom edge
+    }
+
+    /// Degenerate inputs (zero-size image or frame) fall back to a no-op
+    /// layout instead of dividing by zero.
+    @Test func focusFillHandlesDegenerateSizes() {
+        let l = FocusFill.layout(imageSize: .zero,
+                                 frameSize: CGSize(width: 300, height: 168),
+                                 focus: CGPoint(x: 0.5, y: 0.5))
+        #expect(l.size == CGSize(width: 300, height: 168))
+        #expect(l.origin == .zero)
     }
 
     /// Invalid JPEG bytes should return nil rather than crash.
