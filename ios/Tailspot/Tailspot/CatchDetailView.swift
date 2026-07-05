@@ -134,10 +134,12 @@ struct CatchDetailView: View {
             speedText: CardPlane.speedText(fromMps: first.velocityMps),
             distText: String(format: "%.1f km", first.slantDistanceMeters / 1000),
             photoURL: photoURL,
+            photoFocus: hasCatchPhoto ? first.photoFocus : nil,
             originIcao: first.displayOrigin,
             destIcao: first.displayDest,
             originName: first.originName,
-            destName: first.destName
+            destName: first.destName,
+            isFirstOfType: wasFirstOfType
         )
     }
 
@@ -234,11 +236,10 @@ struct CatchDetailView: View {
         .padding(.horizontal, 16)
     }
 
-    /// Rendered share-card image for this catch — the local capture photo
-    /// when present, else the card's branded placeholder.
+    /// Rendered share-card image for this catch — the settled card in share
+    /// chrome; the local capture photo when present, else the sky placeholder.
     private var shareImage: Image {
-        let photo = CatchShare.loadLocalPhoto(detailPlane.photoURL)
-        return CatchShare.image(for: detailPlane, photo: photo)
+        CatchShare.image(for: detailPlane)
     }
 
     private func chromePill(icon: String, action: @escaping () -> Void) -> some View {

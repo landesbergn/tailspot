@@ -51,6 +51,10 @@ struct CardPlane: Equatable {
     /// placeholder in the rarity tint (matches the design's
     /// PhotoPlaceholder when Planespotters hasn't returned).
     let photoURL: URL?
+    /// Where the plane sits in the local catch photo (normalized 0…1;
+    /// `Catch.photoFocus`) — anchors the hero's aspect-fill crop on the
+    /// plane. nil → center crop (pre-focus rows, remote photos).
+    let photoFocus: CGPoint?
     /// Route DISPLAY codes, when the catch carried a route. Builders pass
     /// the traveler-readable code (IATA preferred — "HND" — falling back to
     /// ICAO "RJTT"; see `Catch.displayOrigin`): CardPlane is a presentation
@@ -76,6 +80,7 @@ struct CardPlane: Equatable {
         speedText: String? = nil,
         distText: String? = nil,
         photoURL: URL? = nil,
+        photoFocus: CGPoint? = nil,
         originIcao: String? = nil,
         destIcao: String? = nil,
         originName: String? = nil,
@@ -91,6 +96,7 @@ struct CardPlane: Equatable {
         self.speedText = speedText
         self.distText = distText
         self.photoURL = photoURL
+        self.photoFocus = photoFocus
         self.originIcao = originIcao
         self.destIcao = destIcao
         self.originName = originName

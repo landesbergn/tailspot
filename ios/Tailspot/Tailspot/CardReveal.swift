@@ -87,7 +87,7 @@ struct CardReveal: View {
                 animateIn = true
             }
             if shareImage == nil {
-                shareImage = CatchShare.image(for: plane, photo: CatchShare.loadLocalPhoto(plane.photoURL))
+                shareImage = CatchShare.image(for: plane)
             }
         }
         .background(.black) // covers any underlying view bleed-through

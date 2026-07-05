@@ -132,13 +132,79 @@ func wrapName(_ s: String, perLine: Int) -> [String] {
 
 struct RevealPhoto: View {
     let url: URL?
+    /// Where the plane sits in the photo (normalized 0…1, top-left origin —
+    /// `Catch.photoFocus`). Non-nil → the aspect-fill crop centers on the
+    /// plane instead of the frame center, clamped so no edge ever shows.
+    /// nil (pre-focus catches, Planespotters photos) → plain center fill.
+    var focus: CGPoint? = nil
 
     var body: some View {
         if let image = url.flatMap({ UIImage(contentsOfFile: $0.path) }) {
-            Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+            // Both paths clip HERE: the fill overflow isn't reliably caught
+            // by the caller's clipShape under ImageRenderer (share renders
+            // showed the oversize image bleeding past the card).
+            if let focus {
+                GeometryReader { geo in
+                    let layout = FocusFill.layout(
+                        imageSize: image.size, frameSize: geo.size, focus: focus
+                    )
+                    Image(uiImage: image)
+                        .resizable()
+                        .frame(width: layout.size.width, height: layout.size.height)
+                        .offset(x: layout.origin.x, y: layout.origin.y)
+                }
+                .clipped()
+            } else {
+                Color.clear
+                    .overlay(
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    )
+                    .clipped()
+            }
+        } else if let url, !url.isFileURL {
+            // Remote hero (Planespotters thumbnail on catches with no local
+            // photo). AsyncImage can't be waited on by ImageRenderer, so
+            // share renders show the placeholder — same as the old share
+            // card, which also skipped remote photos.
+            AsyncImage(url: url) { img in
+                img.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                SkyPlaceholder()
+            }
         } else {
             SkyPlaceholder()
         }
+    }
+}
+
+/// Pure aspect-fill-around-a-focus-point math: scale the image to cover
+/// `frameSize` (identical scale to `.fill`), then slide it so `focus` lands
+/// as close to the frame center as the image edges allow. `origin` is the
+/// image's top-left offset within the frame (always ≤ 0 on the overflowing
+/// axis). `nonisolated` — pure geometry, unit-tested without a view tree.
+nonisolated enum FocusFill {
+    struct Layout: Equatable {
+        let size: CGSize
+        let origin: CGPoint
+    }
+
+    static func layout(imageSize: CGSize, frameSize: CGSize, focus: CGPoint) -> Layout {
+        guard imageSize.width > 0, imageSize.height > 0,
+              frameSize.width > 0, frameSize.height > 0
+        else { return Layout(size: frameSize, origin: .zero) }
+        let s = max(frameSize.width / imageSize.width,
+                    frameSize.height / imageSize.height)
+        let size = CGSize(width: imageSize.width * s, height: imageSize.height * s)
+        // Ideal: focus point at the frame center. Clamp between "image's
+        // trailing edge flush with the frame" and "leading edge flush" so
+        // the fill never exposes background.
+        let x = min(0, max(frameSize.width - size.width,
+                           frameSize.width / 2 - focus.x * size.width))
+        let y = min(0, max(frameSize.height - size.height,
+                           frameSize.height / 2 - focus.y * size.height))
+        return Layout(size: size, origin: CGPoint(x: x, y: y))
     }
 }
 
@@ -381,7 +447,7 @@ struct CatchRevealView: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                RevealPhoto(url: plane.photoURL)
+                RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
                     .frame(height: 168 * scale)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 16))

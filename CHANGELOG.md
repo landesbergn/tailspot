@@ -5,6 +5,35 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-05 — Share card = settled card + plane-anchored photo crop — branch `feat/share-settled-focus`
+
+Field feedback on Direction B, same day: (1) the SHARE image still used the
+old pre-B artboard; (2) the hero photo "cropped weirdly" — the aspect-fill
+crop centered on the FRAME, so an off-center plane (they usually are; you
+shoot upward) got pushed to the edge or out of the hero entirely.
+
+- **Share artboard restyled**: `CatchShareCard` now wraps `SettledCatchCard`
+  in minimal brand chrome (wordmark + tier up top, "CAUGHT ON TAILSPOT"
+  below) — one card design across catch, Hangar, and share.
+  `CatchShare.image(for:)` drops the separate photo param (the card loads
+  its own local JPEG); both call sites (CardReveal, CatchDetailView) updated.
+- **Plane-anchored crop**: `CatchPhotoComposer.compose` now also returns the
+  bracket center as NORMALIZED photo coordinates (`Composed.normalizedFocus`,
+  clamped 0…1); persisted as `Catch.photoFocusX/Y` (additive, lightweight
+  migration) and carried through `CardPlane.photoFocus`. `RevealPhoto` gained
+  a focus-anchored fill mode via the pure `FocusFill.layout` helper — scale
+  identical to `.fill`, slid so the plane lands as close to the hero center
+  as the image edges allow. nil focus (pre-field rows, Planespotters photos)
+  → the old center crop.
+- **Two side-fixes found by the snapshot pass**: RevealPhoto now clips both
+  fill paths itself (ImageRenderer let the oversize fill bleed past the card
+  in share renders), and non-file photo URLs render via AsyncImage —
+  Planespotters heroes on photo-less catches had silently regressed to the
+  sky placeholder in Direction B.
+- Tests: `normalizedFocus` mapping/clamping, `FocusFill` center/offset/clamp/
+  degenerate cases, compose smoke updated; `ShareCardSnapshotTests` renders a
+  synthetic marker photo with/without focus + the new share artboard.
+
 ## 2026-07-05 — Detail screen becomes the settled reveal (Direction B) — branch `feat/detail-settled-card`
 
 Noah picked Direction B from the design-directions doc ("mirroring the reveal"):
