@@ -5,6 +5,29 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-06 — Offline-banner debounce (field: North Shore Towers) — branch `fix/offline-banner-debounce`
+
+Field report 2026-07-05 (JFK approach corridor, one-bar cellular): intermittent
+"THE INTERNET CONNECTION APPEARS TO BE OFFLINE" flashes. Root cause: any single
+failed 10 s poll set `lastError` immediately, while the 1 Hz re-annotation loop
+was gliding fine on forward-extrapolated positions — the banner screamed about
+a non-problem.
+
+- `ADSBManager.refresh` now tolerates `fetchFailureGraceCount` (3) consecutive
+  poll failures (~30 s at the 10 s cadence) before surfacing the error; a
+  success resets the count. Cold-start-while-offline (`lastFetched == nil`)
+  still surfaces the FIRST failure — an empty sky needs an explanation.
+  Suppressed failures still log via `Log.adsb`.
+- Tests: `ScriptedSource` fixture (ordered results) + grace-exhaustion and
+  blip-reset cases; existing cold-start error tests unchanged and green.
+
+Same field session, tracked not fixed here: (1) Recent list still shows ICAO
+route codes — the PR #102 IATA translation is merged but the **prod backend
+was never redeployed after it** (deploy = the fix; rows then self-heal via the
+Hangar backfill); (2) dense-corridor precision — catches of not-actually-
+visible planes / wrong plane under a JFK arrival stream — folded into the
+PLAN §9 #2 residual (L4 detector soft-gate + disambiguation under density).
+
 ## 2026-07-05 — Share card = settled card + plane-anchored photo crop — branch `feat/share-settled-focus`
 
 Field feedback on Direction B, same day: (1) the SHARE image still used the
