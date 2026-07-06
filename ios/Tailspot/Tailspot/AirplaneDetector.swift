@@ -76,18 +76,32 @@ nonisolated final class AirplaneDetector: Sendable {
     /// frame. Returns detections in BUFFER pixel coordinates (same
     /// top-left-origin space as `cropRect`), post-NMS.
     func detect(in pixelBuffer: CVPixelBuffer, cropRect: CGRect) -> [Detection] {
-        let bufferH = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
+        detect(ci: CIImage(cvPixelBuffer: pixelBuffer),
+               imageHeight: CGFloat(CVPixelBufferGetHeight(pixelBuffer)),
+               cropRect: cropRect)
+    }
 
+    /// Still-photo variant: same crop-at-native-resolution pipeline over a
+    /// decoded image (the catch-photo snap path). Coordinates are image
+    /// pixels, top-left origin, exactly like the buffer variant.
+    func detect(in cgImage: CGImage, cropRect: CGRect) -> [Detection] {
+        detect(ci: CIImage(cgImage: cgImage),
+               imageHeight: CGFloat(cgImage.height),
+               cropRect: cropRect)
+    }
+
+    /// Shared core: crop → letterbox-scale to 640 → predict → decode → NMS.
+    private func detect(ci sourceImage: CIImage, imageHeight: CGFloat, cropRect: CGRect) -> [Detection] {
         // CoreImage uses a BOTTOM-left origin; our rects are top-left.
         let ciRect = CGRect(
             x: cropRect.minX,
-            y: bufferH - cropRect.maxY,
+            y: imageHeight - cropRect.maxY,
             width: cropRect.width,
             height: cropRect.height
         )
         let scale = CGFloat(Self.inputSide) / cropRect.width
 
-        var image = CIImage(cvPixelBuffer: pixelBuffer)
+        var image = sourceImage
             .cropped(to: ciRect)
         // Move the crop to the origin, then scale to 640×640.
         image = image

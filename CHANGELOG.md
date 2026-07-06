@@ -5,6 +5,42 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-06 — Catch-photo bracket snaps onto the detected plane — branch `photo-bracket-snap`
+
+Field reports (2026-07-04 iPhone-15 tester + Noah's 2026-07-05 NYC/PHL batch):
+the bracket baked into the catch photo often sits well off the plane. Root
+causes: compass wobble in the geometric prediction, plus hand drift during
+the ~0.2–0.6 s between the catch tap and the shutter (positions were
+snapshotted at tap time). Validated offline first: the shipped YOLOX model
+was run over all 79 real on-device catch photos (pulled via `devicectl`);
+the shipped policy simulation snaps 14/42 bracketed photos (median
+correction 150 px, max 404 px) with zero hallucinated snaps — full
+annotated evidence in the session's snap-eval review doc.
+
+- **`CatchPhotoSnapper` (new)**: after the shutter returns, runs the
+  detector over the captured STILL — native-res 640 px crops (center +
+  8-tile ring at ±480 px; never a downscaled wider crop, which erases
+  near-floor planes and hallucinates giant boxes), gates conf ≥ 0.45 +
+  box ≤ ⅓ crop + snap radius ≤ 700 px, and picks the detection NEAREST
+  the prediction (airports: nearest beats most-confident). No hit → the
+  geometric position ships as before (never worse than today).
+- **Shutter-lag re-projection**: `runCatch` re-projects the target through
+  the CURRENT pose once the photo exists (`refreshedScreenPosition`) so
+  even the fallback bracket reflects where the phone points at exposure
+  time, not at tap time.
+- **`AirplaneDetector.detect(in: CGImage, …)`**: still-photo entry point
+  refactored out of the pixel-buffer path (shared CIImage core).
+- Snapped focus flows into `Catch.photoFocusX/Y`, so the reveal/share
+  plane-anchored crop (#104) now anchors on the actual plane too.
+- Single-target catches only (a multi-catch could snap two brackets onto
+  one detection); multi keeps tap-time geometry. Telemetry:
+  `catch_photo_snap` (outcome + correction_pt) to watch the snap rate and
+  tune the confidence floor from the field.
+- Known limitation (eval-verified, accepted): at an airport with background
+  aircraft in view the nearest detection can be a parked plane.
+- Tests: `CatchPhotoSnapperTests` pin the gates + nearest-wins choice and
+  the ring geometry; full TailspotTests suite green.
+
 ## 2026-07-05 — Share card = settled card + plane-anchored photo crop — branch `feat/share-settled-focus`
 
 Field feedback on Direction B, same day: (1) the SHARE image still used the
