@@ -5,6 +5,17 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-07 — `first_plane_catch` activation event — branch `feat/first-catch-event`
+
+The user's very first catch (the tap that takes the Hangar 0 → N) now fires a
+first-class `first_plane_catch` event — the activation edge the ~36 openers →
+5 catchers funnel (PLAN §9 #3) pivots on, without reconstructing "first" in
+HogQL over `catch_performed`. Carries icao24/rarity/aircraft_type/slant_km in
+the performed vocabulary. Fired at most once per install (UserDefaults latch;
+a reinstall wipes Hangar + latch together, so the semantics stay "first catch
+in this Hangar"). Detection = `fetchCount` of `Catch` snapshotted before the
+insert loop in `runCatch`.
+
 ## 2026-07-06 — Offline-banner debounce (field: North Shore Towers) — branch `fix/offline-banner-debounce`
 
 Field report 2026-07-05 (JFK approach corridor, one-bar cellular): intermittent
