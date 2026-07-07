@@ -17,7 +17,8 @@
 //      prediction — never by downscaling a wider crop. Distant planes sit
 //      near the detector's ~15–20 px floor; a 2× downscale erases them
 //      and instead surfaces giant low-confidence hallucination boxes.
-//    - Gates: confidence ≥ 0.45, box side ≤ ⅓ crop (kills the giant-FP
+//    - Gates: confidence ≥ 0.25 (tuned on the labeled corpus — see the
+//      note on `confidenceFloor`), box side ≤ ⅓ crop (kills the giant-FP
 //      class), snap radius ≤ 700 px (largest verified real correction
 //      was 609 px).
 //    - Choose the detection NEAREST the prediction, not the most
@@ -39,8 +40,15 @@ import UIKit
 
 nonisolated enum CatchPhotoSnapper {
 
-    /// Gates — see the eval rationale in the header.
-    static let confidenceFloor: Float = 0.45
+    /// Gates — see the eval rationale in the header. The floor was tuned
+    /// against Noah's hand-labeled corpus (2026-07-07, 65 photos): every
+    /// reachable labeled plane down to 0.25 is real, the none/unsure
+    /// photos produce zero candidates even at 0.20, and all 14 verified
+    /// snaps choose the same detection at 0.25 as at 0.45. 0.25 gains 5
+    /// correct snaps over 0.45 on that corpus at zero measured cost;
+    /// margin above 0.20 kept because the negative set is small — revisit
+    /// with catch_photo_snap field data.
+    static let confidenceFloor: Float = 0.25
     static let maxDetectionSide: CGFloat = CGFloat(AirplaneDetector.inputSide) / 3
     static let maxSnapRadiusPixels: CGFloat = 700
     /// Early-exit: a gated hit this close from the center crop is taken

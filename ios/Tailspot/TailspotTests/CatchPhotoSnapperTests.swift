@@ -24,8 +24,8 @@ struct CatchPhotoSnapperGateTests {
     }
 
     @Test func confidenceFloorRejects() {
-        #expect(!CatchPhotoSnapper.passesGates(det(0, 0, conf: 0.44)))
-        #expect(CatchPhotoSnapper.passesGates(det(0, 0, conf: 0.45)))
+        #expect(!CatchPhotoSnapper.passesGates(det(0, 0, conf: 0.24)))
+        #expect(CatchPhotoSnapper.passesGates(det(0, 0, conf: 0.25)))
     }
 
     @Test func giantBoxRejected() {

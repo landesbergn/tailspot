@@ -20,7 +20,7 @@ annotated evidence in the session's snap-eval review doc.
 - **`CatchPhotoSnapper` (new)**: after the shutter returns, runs the
   detector over the captured STILL — native-res 640 px crops (center +
   8-tile ring at ±480 px; never a downscaled wider crop, which erases
-  near-floor planes and hallucinates giant boxes), gates conf ≥ 0.45 +
+  near-floor planes and hallucinates giant boxes), gates conf ≥ 0.25 +
   box ≤ ⅓ crop + snap radius ≤ 700 px, and picks the detection NEAREST
   the prediction (airports: nearest beats most-confident). No hit → the
   geometric position ships as before (never worse than today).
@@ -40,6 +40,17 @@ annotated evidence in the session's snap-eval review doc.
   aircraft in view the nearest detection can be a parked plane.
 - Tests: `CatchPhotoSnapperTests` pin the gates + nearest-wins choice and
   the ring geometry; full TailspotTests suite green.
+- **2026-07-08 floor tuning from Noah's ground truth:** Noah hand-labeled
+  all 65 non-snapping photos via a local click-to-label utility
+  (`tools/visual-confirmation/labeler.py`; labels committed as
+  `labels.json`). Analysis (`analyze_labels.py`): every reachable labeled
+  plane down to conf 0.25 is real, the none/unsure photos yield zero
+  candidates even at 0.20, and all 14 verified snaps are choice-stable at
+  0.25 — so `confidenceFloor` dropped 0.45 → 0.25 (+5 correct snaps on
+  the corpus, incl. the house-wall case and the July-5 E175). Also
+  measured: the detector cannot see ~60% of the labeled specks at any
+  threshold (model recall floor) — a future model upgrade, not a
+  threshold problem.
 
 ## 2026-07-05 — Share card = settled card + plane-anchored photo crop — branch `feat/share-settled-focus`
 
