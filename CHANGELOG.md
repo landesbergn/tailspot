@@ -16,6 +16,53 @@ a reinstall wipes Hangar + latch together, so the semantics stay "first catch
 in this Hangar"). Detection = `fetchCount` of `Catch` snapshotted before the
 insert loop in `runCatch`.
 
+## 2026-07-06 — Catch-photo bracket snaps onto the detected plane — branch `photo-bracket-snap`
+
+Field reports (2026-07-04 iPhone-15 tester + Noah's 2026-07-05 NYC/PHL batch):
+the bracket baked into the catch photo often sits well off the plane. Root
+causes: compass wobble in the geometric prediction, plus hand drift during
+the ~0.2–0.6 s between the catch tap and the shutter (positions were
+snapshotted at tap time). Validated offline first: the shipped YOLOX model
+was run over all 79 real on-device catch photos (pulled via `devicectl`);
+the shipped policy simulation snaps 14/42 bracketed photos (median
+correction 150 px, max 404 px) with zero hallucinated snaps — full
+annotated evidence in the session's snap-eval review doc.
+
+- **`CatchPhotoSnapper` (new)**: after the shutter returns, runs the
+  detector over the captured STILL — native-res 640 px crops (center +
+  8-tile ring at ±480 px; never a downscaled wider crop, which erases
+  near-floor planes and hallucinates giant boxes), gates conf ≥ 0.25 +
+  box ≤ ⅓ crop + snap radius ≤ 700 px, and picks the detection NEAREST
+  the prediction (airports: nearest beats most-confident). No hit → the
+  geometric position ships as before (never worse than today).
+- **Shutter-lag re-projection**: `runCatch` re-projects the target through
+  the CURRENT pose once the photo exists (`refreshedScreenPosition`) so
+  even the fallback bracket reflects where the phone points at exposure
+  time, not at tap time.
+- **`AirplaneDetector.detect(in: CGImage, …)`**: still-photo entry point
+  refactored out of the pixel-buffer path (shared CIImage core).
+- Snapped focus flows into `Catch.photoFocusX/Y`, so the reveal/share
+  plane-anchored crop (#104) now anchors on the actual plane too.
+- Single-target catches only (a multi-catch could snap two brackets onto
+  one detection); multi keeps tap-time geometry. Telemetry:
+  `catch_photo_snap` (outcome + correction_pt) to watch the snap rate and
+  tune the confidence floor from the field.
+- Known limitation (eval-verified, accepted): at an airport with background
+  aircraft in view the nearest detection can be a parked plane.
+- Tests: `CatchPhotoSnapperTests` pin the gates + nearest-wins choice and
+  the ring geometry; full TailspotTests suite green.
+- **2026-07-08 floor tuning from Noah's ground truth:** Noah hand-labeled
+  all 65 non-snapping photos via a local click-to-label utility
+  (`tools/visual-confirmation/labeler.py`; labels committed as
+  `labels.json`). Analysis (`analyze_labels.py`): every reachable labeled
+  plane down to conf 0.25 is real, the none/unsure photos yield zero
+  candidates even at 0.20, and all 14 verified snaps are choice-stable at
+  0.25 — so `confidenceFloor` dropped 0.45 → 0.25 (+5 correct snaps on
+  the corpus, incl. the house-wall case and the July-5 E175). Also
+  measured: the detector cannot see ~60% of the labeled specks at any
+  threshold (model recall floor) — a future model upgrade, not a
+  threshold problem.
+
 ## 2026-07-06 — Offline-banner debounce (field: North Shore Towers) — branch `fix/offline-banner-debounce`
 
 Field report 2026-07-05 (JFK approach corridor, one-bar cellular): intermittent

@@ -1131,6 +1131,31 @@ struct ContentView: View {
                  suspicions: suspicions)
     }
 
+    /// Project an aircraft's CURRENT feed position through the CURRENT
+    /// pose. The catch path calls this after the shutter returns so the
+    /// bracket prediction reflects where the phone points NOW, not where
+    /// it pointed when the button rendered (shutter latency = hand
+    /// drift). nil when the plane left the feed or the compass is down —
+    /// caller falls back to the tap-time position.
+    private func refreshedScreenPosition(for icao: String, screenSize: CGSize) -> CGPoint? {
+        guard let obs = adsb.observed.first(where: { $0.aircraft.icao24 == icao }),
+              let heading = location.heading else { return nil }
+        let roll = Geo.rollDeg(
+            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+        )
+        let basis = Geo.cameraBasis(
+            headingDeg: heading,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: roll
+        )
+        return obs.screenPosition(
+            basis: basis,
+            in: screenSize,
+            hfovDeg: Self.baseHfovDeg / zoom,
+            vfovDeg: Self.baseVfovDeg / zoom
+        )
+    }
+
     /// The actual catch — capture the JPEG, build + save the rows, fire
     /// `catch_performed`, present the reveal. Bypasses the authenticity
     /// gate (the gate decision lives in `performCatch`; the nudge's
@@ -1178,6 +1203,42 @@ struct ContentView: View {
             }
             let now = Date()
 
+            // Bracket snap (single-target catches): geometry places the
+            // bracket, but compass wobble plus hand drift during the
+            // ~0.2-0.6 s shutter latency leaves it off the plane in the
+            // saved photo (field reports 2026-07-04/05; offline eval over
+            // the real catch corpus in PR). Two corrections, in order:
+            //   1. Re-project from the CURRENT pose — tap-time screen
+            //      coordinates are stale by the time the photo exists.
+            //   2. Run the YOLOX detector over the captured still around
+            //      the prediction (CatchPhotoSnapper) and snap to the
+            //      plane it finds. No detection -> keep the projection.
+            // Multi-catches keep tap-time geometry: one search per plane
+            // could snap two brackets onto the same detection.
+            var bracketPositions = positions
+            if let data = photoData, icaos.count == 1, let icao = icaos.first,
+               let tapTimePosition = positions[icao] {
+                let predicted = refreshedScreenPosition(for: icao, screenSize: screenSize)
+                    ?? tapTimePosition
+                // Detached: up to 9 CoreML passes; never on the MainActor.
+                let snapped = await Task.detached(priority: .userInitiated) {
+                    CatchPhotoSnapper.snapScreenPosition(
+                        jpegData: data,
+                        predictedScreen: predicted,
+                        screenSize: screenSize
+                    )
+                }.value
+                bracketPositions[icao] = snapped ?? predicted
+                let correction = snapped.map {
+                    Int(hypot($0.x - predicted.x, $0.y - predicted.y).rounded())
+                }
+                Log.adsb.notice("Catch photo snap: \(snapped != nil ? "snapped" : "fallback", privacy: .public) correction=\(correction ?? 0, privacy: .public)pt")
+                Analytics.capture("catch_photo_snap", [
+                    "outcome": .string(snapped != nil ? "snapped" : "fallback"),
+                    "correction_pt": .int(correction ?? 0),
+                ])
+            }
+
             // Snapshot BEFORE inserting: was the Hangar empty? (The
             // first_plane_catch activation event fires on the tap that
             // takes it 0 → N.)
@@ -1221,7 +1282,7 @@ struct ContentView: View {
                 var photoFocus: CGPoint? = nil
                 let photoFilename: String? = photoData.flatMap { data -> String? in
                     let toSave: Data
-                    if let pos = positions[icao] {
+                    if let pos = bracketPositions[icao] {
                         let overlay = CatchPhotoComposer.BracketOverlay(
                             screenPosition: pos,
                             screenSize: screenSize
