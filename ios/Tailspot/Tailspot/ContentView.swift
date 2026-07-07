@@ -1178,6 +1178,13 @@ struct ContentView: View {
             }
             let now = Date()
 
+            // Snapshot BEFORE inserting: was the Hangar empty? (The
+            // first_plane_catch activation event fires on the tap that
+            // takes it 0 → N.)
+            let priorCatchCount = (try? modelContext.fetchCount(
+                FetchDescriptor<Catch>()
+            )) ?? 0
+
             var newCatches: [Catch] = []
             var duplicates: [String] = []
 
@@ -1326,6 +1333,12 @@ struct ContentView: View {
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
+
+            // Activation milestone: this tap took the Hangar from empty to
+            // its first catch(es). Latched inside fireFirstCatch.
+            if priorCatchCount == 0, let first = newCatches.first {
+                CatchTelemetry.fireFirstCatch(first)
+            }
 
             // Post-catch confirm: record each quarantined row and stash the
             // suspected set — the reveal's dismiss callbacks promote it into
