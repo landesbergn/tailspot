@@ -56,6 +56,15 @@ nonisolated enum CatchTelemetry {
     static let suspectedEvent = "catch_suspected"
     static let suspectKeptEvent = "catch_suspect_kept"
     static let suspectDiscardedEvent = "catch_suspect_discarded"
+    // Activation milestone: the user's very FIRST catch ever (the Hangar was
+    // empty before this tap). The single most load-bearing activation edge —
+    // ~36 openers → 5 catchers/30d (PLAN §9 #3) — so it gets a first-class
+    // event funnels can pivot on, not a HogQL reconstruction over
+    // catch_performed. Fired at most once per install (UserDefaults latch;
+    // a reinstall wipes the Hangar AND the latch together, so "first catch
+    // in this Hangar" stays true).
+    static let firstCatchEvent = "first_plane_catch"
+    static let firstCatchFiredKey = "tailspot.telemetry.firstCatchFired"
 
     // MARK: - Pure property builders (unit-tested)
 
@@ -90,6 +99,23 @@ nonisolated enum CatchTelemetry {
         if let c = visualFixConfidence { props["visual_fix_confidence"] = .double(Double(c)) }
         if let a = angularSizeArcmin { props["angular_size_arcmin"] = .double(a) }
         return props
+    }
+
+    /// Properties for the activation milestone (`first_plane_catch`): the
+    /// identity of the plane that converted this user, in the same vocabulary
+    /// as catch_performed so the two join cleanly.
+    static func firstCatchProperties(
+        icao24: String,
+        rarity: String,
+        aircraftType: String,
+        slantKm: Double
+    ) -> [String: AnalyticsValue] {
+        [
+            "icao24": .string(icao24),
+            "rarity": .string(rarity),
+            "aircraft_type": .string(aircraftType),
+            "slant_km": .double(slantKm),
+        ]
     }
 
     /// Properties for a duplicate-catch tap — the target is already in the
@@ -225,6 +251,21 @@ nonisolated enum CatchTelemetry {
             visualFixConfidence: visualFixConfidence,
             multiN: multiN,
             angularSizeArcmin: angularSizeArcmin
+        ))
+    }
+
+    /// Fire `first_plane_catch` once per install. The caller decides
+    /// "the Hangar was empty before this tap"; the latch here makes the
+    /// event idempotent across any double-fire path.
+    @MainActor static func fireFirstCatch(_ row: Catch) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: firstCatchFiredKey) else { return }
+        defaults.set(true, forKey: firstCatchFiredKey)
+        Analytics.capture(firstCatchEvent, firstCatchProperties(
+            icao24: row.icao24,
+            rarity: row.resolvedRarity.rawValue,
+            aircraftType: row.resolvedType.rawValue,
+            slantKm: row.slantDistanceMeters / 1000
         ))
     }
 

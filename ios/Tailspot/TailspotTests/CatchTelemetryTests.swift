@@ -16,6 +16,16 @@ import Testing
 @Suite("CatchTelemetry properties")
 struct CatchTelemetryTests {
 
+    @Test func firstCatchCarriesPlaneIdentityInPerformedVocabulary() {
+        let p = CatchTelemetry.firstCatchProperties(
+            icao24: "a1b2c3", rarity: "epic", aircraftType: "mil", slantKm: 12.4
+        )
+        #expect(p["icao24"]?.jsonValue as? String == "a1b2c3")
+        #expect(p["rarity"]?.jsonValue as? String == "epic")
+        #expect(p["aircraft_type"]?.jsonValue as? String == "mil")
+        #expect((p["slant_km"]?.jsonValue as? Double) == 12.4)
+    }
+
     @Test func performedCarriesRarityTypeSlantAndNotDuplicate() {
         let p = CatchTelemetry.performedProperties(
             icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,

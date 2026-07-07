@@ -448,6 +448,18 @@ final class ADSBManager: ObservableObject {
     /// logs when the counts actually change, not 60× a minute.
     private var lastLoggedDiagnostic: VisibilityDiagnostic?
     @Published var lastError: String?
+
+    /// Consecutive `refresh` failures since the last success. A single
+    /// failed poll on flaky cellular (one bar under an approach corridor)
+    /// shouldn't flash THE INTERNET CONNECTION APPEARS TO BE OFFLINE while
+    /// the 1 Hz re-annotation loop is still gliding happily on
+    /// forward-extrapolated positions. With data on hand we tolerate
+    /// `fetchFailureGraceCount` misses (~30 s at the 10 s poll cadence)
+    /// before surfacing; if we've NEVER fetched successfully (cold start
+    /// while offline) the very first failure surfaces immediately — the
+    /// user needs to know why the sky is empty.
+    private var consecutiveFetchFailures = 0
+    static let fetchFailureGraceCount = 3
     @Published var lastFetched: Date?
 
     /// Search radius around the user, in km. 50 km comfortably covers the
@@ -575,9 +587,17 @@ final class ADSBManager: ObservableObject {
             self.reAnnotate(observer: location, now: Date(), verbose: true)
 
             self.lastError = nil
+            self.consecutiveFetchFailures = 0
             self.lastFetched = Date()
         } catch {
-            self.lastError = error.localizedDescription
+            self.consecutiveFetchFailures += 1
+            if self.lastFetched == nil
+                || self.consecutiveFetchFailures >= Self.fetchFailureGraceCount {
+                self.lastError = error.localizedDescription
+            } else {
+                // Within grace: log it, keep the HUD quiet, keep extrapolating.
+                Log.adsb.notice("Poll failed (\(self.consecutiveFetchFailures, privacy: .public)/\(Self.fetchFailureGraceCount, privacy: .public), banner suppressed): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

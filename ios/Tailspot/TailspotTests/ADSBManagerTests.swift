@@ -181,6 +181,63 @@ struct ADSBManagerTests {
         #expect(manager.observed.count == 1)
     }
 
+    /// A source whose responses play out in order — for exercising the
+    /// consecutive-failure grace (FixedSource is immutable by design).
+    /// @unchecked Sendable: tests drive it strictly serially.
+    private final class ScriptedSource: ADSBSource, @unchecked Sendable {
+        var script: [Result<[Aircraft], any Error>]
+        init(_ script: [Result<[Aircraft], any Error>]) { self.script = script }
+        func aircraftInBbox(
+            lamin: Double, lomin: Double, lamax: Double, lomax: Double
+        ) async throws -> [Aircraft] {
+            precondition(!script.isEmpty, "script exhausted")
+            return try script.removeFirst().get()
+        }
+        func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? { nil }
+    }
+
+    /// With data on hand, a transient poll failure stays off the HUD —
+    /// the banner only surfaces after `fetchFailureGraceCount` consecutive
+    /// misses (~30 s at the 10 s cadence). Field case: one-bar cellular
+    /// under the JFK approach corridor, 2026-07-05.
+    @Test func transientPollFailuresStayQuietUntilGraceExhausted() async {
+        let plane = Self.aircraftAt(
+            bearing: 0, distanceMeters: 10_000, altitudeMeters: 5_000, icao: "x"
+        )
+        var script: [Result<[Aircraft], any Error>] = [.success([plane])]
+        script += Array(repeating: .failure(TestError()),
+                        count: ADSBManager.fetchFailureGraceCount)
+        let manager = ADSBManager(source: ScriptedSource(script))
+
+        await manager.refresh(around: Self.observer())
+        #expect(manager.lastError == nil)
+
+        for i in 1..<ADSBManager.fetchFailureGraceCount {
+            await manager.refresh(around: Self.observer())
+            #expect(manager.lastError == nil, "failure \(i) is within grace")
+        }
+        await manager.refresh(around: Self.observer())
+        #expect(manager.lastError != nil, "grace exhausted — banner surfaces")
+    }
+
+    /// A success inside the grace window resets the failure count — two
+    /// separate blips never add up to a banner.
+    @Test func successWithinGraceResetsFailureCount() async {
+        let plane = Self.aircraftAt(
+            bearing: 0, distanceMeters: 10_000, altitudeMeters: 5_000, icao: "x"
+        )
+        let manager = ADSBManager(source: ScriptedSource([
+            .success([plane]),
+            .failure(TestError()), .failure(TestError()),
+            .success([plane]),
+            .failure(TestError()), .failure(TestError()),
+        ]))
+        for _ in 0..<6 {
+            await manager.refresh(around: Self.observer())
+            #expect(manager.lastError == nil)
+        }
+    }
+
     @Test func updatesLastFetchedTimestampOnSuccess() async {
         let source = FixedSource([])
         let manager = ADSBManager(source: source)
