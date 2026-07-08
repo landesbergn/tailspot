@@ -92,6 +92,22 @@ struct ProfileSettingsSnapshotTests {
         snapshot(NavigationStack { SettingsScreen() }, as: "settings")
         snapshot(NavigationStack { RarityReferenceScreen() }, as: "reference_rarity")
         snapshot(NavigationStack { TypesReferenceScreen() }, as: "reference_types")
+
+        // The share artboard, with the same seeded Hangar driving the
+        // derived NEXT UP goal + BEST CATCH rows. Plain view → ImageRenderer.
+        let seededCatches = try container.mainContext.fetch(FetchDescriptor<Catch>())
+        let card = ProfileShareCard(
+            stats: ProfileStats(catches: seededCatches),
+            handle: "noah",
+            rankLabel: "1st",
+            goal: ProfileShareCard.nearestGoal(inputs: Trophies.inputs(from: seededCatches)),
+            best: ProfileShareCard.bestCatch(in: seededCatches)
+        )
+        let renderer = ImageRenderer(content: card.padding(20).background(Brand.Color.bgPrimary))
+        renderer.scale = 3
+        if let ui = renderer.uiImage, let png = ui.pngData() {
+            try? png.write(to: Self.snapDir.appendingPathComponent("share_card_profile.png"))
+        }
         #expect(true)
     }
 }

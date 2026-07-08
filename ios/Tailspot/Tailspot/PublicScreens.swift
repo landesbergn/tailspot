@@ -10,8 +10,10 @@
 //     Loading / error / empty states follow Brand patterns.
 //     Pull-to-refresh supported.
 //
-//   - ShareCardSheet — shareable card composed in SwiftUI, handed
-//     to ShareLink as an Image-renderable view.
+//   - ProfileShareCard — the shareable profile artboard (Direction-B
+//     "Progression" language: standing hero, NEXT UP goal ring, best
+//     catch). Rendered to an Image by ProfileScreen and handed to a
+//     direct toolbar ShareLink — there is no preview sheet.
 //
 //  PublicHangarScreen was removed (backend not ready; the NavigationLink
 //  it was reachable via has also been removed).
@@ -308,59 +310,75 @@ struct LeaderboardScreen: View {
 
 // MARK: - Share card
 
-struct ShareCardSheet: View {
+/// The shareable profile artboard, redesigned 2026-07-08 in the
+/// "Progression" language from the profile layout exploration (Direction
+/// B): the card leads with the points/rank standing, then tells a LIVE
+/// story — the nearest goal as a tier-metal progress ring and the
+/// collection's best catch — instead of a static stat dump. Shared
+/// directly from the Profile toolbar via `ShareLink` (the old preview
+/// sheet was an extra tap that showed what the share preview shows).
+struct ProfileShareCard: View {
     let stats: ProfileStats
     let handle: String
-    @Environment(\.dismiss) private var dismiss
+    /// Server rank label ("1st"); nil before the first standing fetch.
+    let rankLabel: String?
+    /// Nearest incomplete trophy, from `nearestGoal(inputs:)`.
+    let goal: ShareGoal?
+    /// Highest-rarity airframe in the Hangar, from `bestCatch(in:)`.
+    let best: BestCatch?
+
+    /// The trophy tier closest to completion: highest progress fraction
+    /// against its next threshold. Zero-progress goals are excluded so a
+    /// fresh Hangar doesn't showcase "0/5".
+    nonisolated struct ShareGoal {
+        let title: String
+        let done: Int
+        let total: Int
+        let tier: TrophyTier
+
+        var fraction: Double { total == 0 ? 0 : Double(done) / Double(total) }
+        /// Ring in the metal of the tier being chased (gold ring for a
+        /// gold tier) — same grammar as the trophy icons.
+        var ringTint: Color { SwiftUI.Color(hex: tier.outerHex) }
+    }
+
+    nonisolated struct BestCatch {
+        let name: String
+        let rarity: Rarity
+    }
+
+    nonisolated static func nearestGoal(inputs: TrophyProgressInputs) -> ShareGoal? {
+        var best: (fraction: Double, goal: ShareGoal)?
+        for achievement in Trophies.roster where !achievement.secret {
+            let progress = achievement.progress(inputs)
+            guard progress > 0,
+                  let next = achievement.tiers.first(where: { progress < $0.at })
+            else { continue }
+            let fraction = Double(progress) / Double(next.at)
+            if best == nil || fraction > best!.fraction {
+                best = (fraction, ShareGoal(title: achievement.title,
+                                            done: progress, total: next.at,
+                                            tier: next.tier))
+            }
+        }
+        return best?.goal
+    }
+
+    nonisolated static func bestCatch(in catches: [Catch]) -> BestCatch? {
+        guard let top = catches.max(by: {
+            ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
+                < ($1.resolvedRarity.ordinal, $1.caughtAt.timeIntervalSince1970)
+        }) else { return nil }
+        let canonical = AircraftNaming.canonical(
+            typecode: top.typecode,
+            manufacturer: top.manufacturer,
+            model: top.model
+        )
+        let name = canonical.displayName ?? top.callsign ?? top.icao24.uppercased()
+        return BestCatch(name: name, rarity: top.resolvedRarity)
+    }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 18) {
-                shareCardArtboard
-                    .padding(.top, 24)
-                Spacer()
-                ShareLink(
-                    item: shareImage,
-                    preview: SharePreview("Tailspot · @\(handle)", image: shareImage)
-                ) {
-                    Text("Share")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.85))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Brand.Color.cyan, in: .rect(cornerRadius: 12))
-                        .padding(.horizontal, 24)
-                }
-                .padding(.bottom, 24)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Brand.Color.bgPrimary.ignoresSafeArea())
-            .navigationTitle("Share")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                }
-            }
-        }
-    }
-
-    /// Pre-rendered Image of the share card. ImageRenderer runs on the
-    /// MainActor and stamps the live SwiftUI view into a UIImage, which
-    /// ShareLink can hand off to any share target.
-    private var shareImage: Image {
-        let renderer = ImageRenderer(content: shareCardArtboard.frame(width: 360, height: 540))
-        renderer.scale = 3
-        if let ui = renderer.uiImage {
-            return Image(uiImage: ui)
-        }
-        return Image(systemName: "airplane")
-    }
-
-    /// The shareable artboard itself — also rendered to screen
-    /// before sharing so the user previews exactly what they're
-    /// about to send.
-    private var shareCardArtboard: some View {
         ZStack {
             LinearGradient(
                 colors: [Brand.Color.bgElevated, Brand.Color.bgSurface],
@@ -374,7 +392,7 @@ struct ShareCardSheet: View {
                 endRadius: 280
             )
             .blendMode(.screen)
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Image(systemName: "airplane")
                         .foregroundStyle(Brand.Color.cyan)
@@ -388,15 +406,85 @@ struct ShareCardSheet: View {
                         .font(Brand.Font.mono(size: 13, weight: .bold))
                         .foregroundStyle(Brand.Color.cyan)
                 }
-                Spacer(minLength: 0)
-                Text(stats.totalPoints.formatted(.number))
-                    .font(Brand.Font.mono(size: 64, weight: .heavy))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .monospacedDigit()
-                Text("TOTAL POINTS")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+
+                // Standing hero: points + rank on one baseline.
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(stats.totalPoints.formatted(.number))
+                        .font(Brand.Font.mono(size: 46, weight: .heavy))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .monospacedDigit()
+                    if let rankLabel {
+                        Text(rankLabel.uppercased())
+                            .font(Brand.Font.mono(size: 20, weight: .bold))
+                            .foregroundStyle(Brand.Color.podiumGold)
+                    }
+                }
+                Text(rankLabel == nil ? "TOTAL POINTS" : "TOTAL POINTS · GLOBAL RANK")
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(Brand.Color.textTertiary)
+
+                Spacer(minLength: 0)
+
+                // The live story: what's about to be earned…
+                if let goal {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle().stroke(goal.ringTint.opacity(0.18), lineWidth: 4.5)
+                            Circle().trim(from: 0, to: goal.fraction)
+                                .stroke(goal.ringTint,
+                                        style: .init(lineWidth: 4.5, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                            Text("\(goal.done)/\(goal.total)")
+                                .font(Brand.Font.mono(size: 8, weight: .bold))
+                                .foregroundStyle(goal.ringTint)
+                        }
+                        .frame(width: 44, height: 44)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("NEXT UP")
+                                .font(Brand.Font.mono(size: 8, weight: .semibold))
+                                .tracking(1.2)
+                                .foregroundStyle(Brand.Color.textTertiary)
+                            Text(goal.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Brand.Color.textPrimary)
+                            Text("\(goal.total - goal.done) to go")
+                                .font(Brand.Font.caption)
+                                .foregroundStyle(Brand.Color.textSecondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(12)
+                    .background(Brand.Color.bgPrimary.opacity(0.45), in: .rect(cornerRadius: 12))
+                }
+
+                // …and the proudest thing already caught.
+                if let best {
+                    HStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(best.rarity.tint)
+                            .frame(width: 4, height: 34)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("BEST CATCH")
+                                .font(Brand.Font.mono(size: 8, weight: .semibold))
+                                .tracking(1.2)
+                                .foregroundStyle(Brand.Color.textTertiary)
+                            Text(best.name)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Brand.Color.textPrimary)
+                                .lineLimit(1)
+                            Text(best.rarity.label)
+                                .font(Brand.Font.mono(size: 9, weight: .bold))
+                                .tracking(0.8)
+                                .foregroundStyle(best.rarity.tint)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(12)
+                    .background(Brand.Color.bgPrimary.opacity(0.45), in: .rect(cornerRadius: 12))
+                }
+
+                Spacer(minLength: 0)
                 Divider().background(Brand.Color.textTertiary.opacity(0.3))
                 HStack {
                     statTile(label: "Catches", value: stats.totalCatches)
@@ -405,7 +493,6 @@ struct ShareCardSheet: View {
                     Spacer()
                     statTile(label: "Rare+",   value: stats.rarePlusUnique, tint: Brand.Color.alertAdvisory)
                 }
-                Spacer(minLength: 0)
                 Text("Catch every plane you see. Build a hangar of them.")
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
@@ -418,7 +505,6 @@ struct ShareCardSheet: View {
             RoundedRectangle(cornerRadius: 22)
                 .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.4), radius: 18, y: 10)
     }
 
     private func statTile(label: String, value: Int, tint: Color = Brand.Color.textPrimary) -> some View {
@@ -440,9 +526,14 @@ struct ShareCardSheet: View {
         .modelContainer(for: Catch.self, inMemory: true)
 }
 
-#Preview("Share") {
-    ShareCardSheet(
+#Preview("Share card") {
+    ProfileShareCard(
         stats: ProfileStats(catches: []),
-        handle: "preview"
+        handle: "preview",
+        rankLabel: "1st",
+        goal: .init(title: "Centurion", done: 84, total: 100, tier: .gold),
+        best: .init(name: "C-17 Globemaster III", rarity: .epic)
     )
+    .padding()
+    .background(Brand.Color.bgPrimary)
 }

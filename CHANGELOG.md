@@ -25,8 +25,21 @@ The four stat tiles and the rarity strip are gone (census detail lives in
 the Hangar/references). Surfaces moved to iOS 26 Liquid Glass
 (`.glassEffect`) tinted to `bgElevated` — untinted glass resolves too
 bright over the fixed dark palette — over a backdrop with two faint radial
-glows so the glass has something to refract. `ProfileStats` is unchanged
-(ShareCardSheet still reads it); only the view reorganized.
+glows so the glass has something to refract. `ProfileStats` is unchanged;
+only the view reorganized.
+
+**Share follow-ups (same branch):** the toolbar Share got the brand CTA
+treatment (cyan disc, dark glyph — the page's one action), and then became
+a DIRECT `ShareLink` — one tap opens the system share sheet; the old
+`ShareCardSheet` preview detour (an extra tap showing what the share
+preview already shows) is deleted. The share artboard itself was redesigned
+in the exploration's Direction-B "Progression" language (`ProfileShareCard`
+in PublicScreens.swift): points + gold rank on one baseline, a **NEXT UP**
+ring (nearest incomplete trophy by progress fraction, ring in the chased
+tier's metal; zero-progress goals excluded so a fresh Hangar isn't shamed
+with "0/5"), and a **BEST CATCH** row (highest-rarity airframe,
+rarity-tinted). The card is rendered once per profile body evaluation so
+the first tap is instant.
 
 ## 2026-07-08 — Profile/Settings legacy-artifact cleanup for v1 — branch `polish/settings-v1-cleanup`
 

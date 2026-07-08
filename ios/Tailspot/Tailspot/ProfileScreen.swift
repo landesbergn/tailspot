@@ -35,7 +35,6 @@ struct ProfileScreen: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
-    @State private var showingShare = false
 
     /// Last server-authoritative standing, CACHED in app storage so the headline
     /// shows the known server points + rank INSTANTLY on every open (no flash from
@@ -59,6 +58,17 @@ struct ProfileScreen: View {
         // then we thread the values down to the sections.
         let stats = ProfileStats(catches: catches)
         let inputs = Trophies.inputs(from: catches)
+        // Render the share image up front so the toolbar ShareLink opens the
+        // system share sheet on the FIRST tap (the old flow detoured through
+        // a preview sheet — an extra tap showing what the share preview
+        // already shows). Body re-evaluates rarely for this screen (catch
+        // insert / standing fetch), so the ~ms ImageRenderer cost is fine.
+        let shareImage = Self.renderShareCard(
+            stats: stats, handle: handle,
+            rankLabel: cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : nil,
+            goal: ProfileShareCard.nearestGoal(inputs: inputs),
+            best: ProfileShareCard.bestCatch(in: catches)
+        )
         return NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
@@ -84,9 +94,12 @@ struct ProfileScreen: View {
                     // CTA treatment (cyan disc, dark glyph) instead of the
                     // bare system tint — same accent grammar as the reveal's
                     // CTA and the planned Spotter Pass share (PLAN §9 #10).
-                    Button {
-                        showingShare = true
-                    } label: {
+                    // A direct ShareLink: one tap → the system share sheet,
+                    // whose preview shows the card (no intermediate sheet).
+                    ShareLink(
+                        item: shareImage,
+                        preview: SharePreview("Tailspot · @\(handle)", image: shareImage)
+                    ) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(Brand.Color.bgPrimary)
@@ -96,10 +109,23 @@ struct ProfileScreen: View {
                     .accessibilityLabel("Share profile")
                 }
             }
-            .sheet(isPresented: $showingShare) {
-                ShareCardSheet(stats: stats, handle: handle)
-            }
         }
+    }
+
+    /// Stamp the share artboard into an `Image` for ShareLink. ImageRenderer
+    /// is MainActor-bound, which this view already is.
+    private static func renderShareCard(
+        stats: ProfileStats, handle: String, rankLabel: String?,
+        goal: ProfileShareCard.ShareGoal?, best: ProfileShareCard.BestCatch?
+    ) -> Image {
+        let card = ProfileShareCard(stats: stats, handle: handle,
+                                    rankLabel: rankLabel, goal: goal, best: best)
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = 3
+        if let ui = renderer.uiImage {
+            return Image(uiImage: ui)
+        }
+        return Image(systemName: "airplane")
     }
 
     // MARK: - Standing fetch
