@@ -95,6 +95,9 @@ nonisolated enum Airlines {
         "SJX": "Starlux Airlines", "TTW": "Tigerair Taiwan",
         // India
         "AXB": "Air India Express", "SEJ": "SpiceJet", "AKJ": "Akasa Air",
+        // Dataset gaps — designators the bundled VRS snapshot doesn't know,
+        // identified from real catches (Noah, 2026-07-08). US charter/bizav.
+        "ERY": "Sky Quest", "RLI": "Reliant Air", "FTO": "Tropic Ocean Airways",
     ]
 
     /// Comprehensive designator → name table from the bundled snapshot

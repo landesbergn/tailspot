@@ -55,6 +55,15 @@ struct AirlinesTests {
         #expect(Airlines.name(forCallsign: "EWG905") == "Eurowings")
     }
 
+    // Charter/bizav designators absent from the VRS dataset, identified from
+    // real catches (the last 3 unresolved of the 234 in prod, 2026-07-08).
+    @Test func curatedCoversDatasetGaps() {
+        #expect(Airlines.bundled["ERY"] == nil)   // gap is real, not a stale note
+        #expect(Airlines.name(forCallsign: "ERY94") == "Sky Quest")
+        #expect(Airlines.name(forCallsign: "RLI904") == "Reliant Air")
+        #expect(Airlines.name(forCallsign: "FTO382") == "Tropic Ocean Airways")
+    }
+
     // The curated table is the display-name override layer: dataset names
     // are often legal names ("Federal Express", "Peach").
     @Test func curatedDisplayNameWinsOverBundledLegalName() {
