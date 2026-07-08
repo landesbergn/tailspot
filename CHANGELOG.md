@@ -5,6 +5,30 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — Activation funnel instrumented end-to-end — branch `feat/activation-funnel-telemetry`
+
+Phase 1 of the onboarding re-do (PLAN §9 #3): before redesigning the leaky
+first-run (~36 openers → 5 catchers/30d), make the leak measurable — the
+funnel was blind between the SDK's "Application Opened" autocapture and
+`first_plane_catch`. New `ActivationTelemetry` (CatchTelemetry's shape: pure
+tested builders + thin fire wrappers): `onboarding_step_viewed`
+(welcome/permissions/handle, onAppear + step change), `permission_outcome`
+(camera from the `requestAccess` callback; location from the throwaway
+manager's published `authorizationStatus`, one-shot), `onboarding_completed`
+(claim result: success / offline_fallback — a 409 keeps the user on the step
+and is already covered by `handle_claimed`), once-per-install milestones
+`ar_first_frame` (first camera frame ever — latched UserDefaults, fired from
+the frame-bridge tap) and `first_plane_seen` (first post-filter visible
+label, from an `onReceive` on the observed list at ~1 Hz), plus the compass
+triad `compass_caution_shown` (after the existing 4 s debounce) /
+`compass_sheet_opened` / `compass_calibrated` (the sheet's false→true latch
+transition only — arriving already-good doesn't count). The funnel now reads:
+opened → step 0/1/2 → permissions granted? → completed → first frame → first
+plane seen → first catch, with the compass events explaining the "saw a label
+but it pointed wrong" gap. Phase 2 (the design pass — calibration step back
+into the flow per `design/screens/onboarding.jsx` Variation A, camera-denied /
+location-denied recovery UI, general craft) follows.
+
 ## 2026-07-09 — L4 detector soft-gate ships in shadow (anti-cheat PR3) — branch `feat/l4-detector-soft-gate`
 
 The last anti-cheat lever (docs/anti-cheat-plan.md §5 L4), adapted to the
