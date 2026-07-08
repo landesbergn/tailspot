@@ -41,6 +41,18 @@ with "0/5"), and a **BEST CATCH** row (highest-rarity airframe,
 rarity-tinted). The card is rendered once per profile body evaluation so
 the first tap is instant.
 
+**Brag + invite (same branch, Noah 2026-07-08):** the share is now also an
+invitation. The card's tagline became a challenge block — "THINK YOU CAN
+OUT-SPOT @HANDLE?" + a scannable **tailspot.app QR** (CoreImage, white chip
+so scanners get dark-on-light) — and the ShareLink payload gained a
+`message` with the brag + a tappable install link, so Messages/Mail carry
+the invite even though the card is a flat PNG. New `profile_share_opened`
+funnel event (via simultaneous gesture — ShareLink exposes no tap
+callback; "opened", not "completed"). The **invite trophy** is deliberately
+NOT this round: awarding it honestly needs joined-from-your-invite
+attribution (per-user codes/deep link), which is the Spotter Pass work —
+coupled there in PLAN §9 #10.
+
 ## 2026-07-08 — Profile/Settings legacy-artifact cleanup for v1 — branch `polish/settings-v1-cleanup`
 
 A pre-launch scrub of the Profile hub + Settings surface (PLAN §9 #6). Every

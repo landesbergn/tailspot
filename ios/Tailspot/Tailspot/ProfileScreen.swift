@@ -96,8 +96,19 @@ struct ProfileScreen: View {
                     // CTA and the planned Spotter Pass share (PLAN §9 #10).
                     // A direct ShareLink: one tap → the system share sheet,
                     // whose preview shows the card (no intermediate sheet).
+                    // The payload is brag + invite: the card image AND a
+                    // message with the tappable tailspot.app link — targets
+                    // like Messages/Mail carry both, so the invite survives
+                    // even where the image is all that's visible (the card
+                    // itself carries the challenge + QR).
                     ShareLink(
                         item: shareImage,
+                        subject: Text("Tailspot · @\(handle)"),
+                        message: Text(ProfileShareCard.inviteMessage(
+                            handle: handle,
+                            points: cachedServerPoints >= 0 ? cachedServerPoints : stats.totalPoints,
+                            rankLabel: cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : nil
+                        )),
                         preview: SharePreview("Tailspot · @\(handle)", image: shareImage)
                     ) {
                         Image(systemName: "square.and.arrow.up")
@@ -107,6 +118,15 @@ struct ProfileScreen: View {
                             .background(Brand.Color.cyan, in: .circle)
                     }
                     .accessibilityLabel("Share profile")
+                    // ShareLink exposes no tap callback; a simultaneous
+                    // gesture gives the share-funnel signal (opened, not
+                    // necessarily completed — completion isn't observable).
+                    .simultaneousGesture(TapGesture().onEnded {
+                        Analytics.capture("profile_share_opened", [
+                            "points": .int(cachedServerPoints >= 0 ? cachedServerPoints : stats.totalPoints),
+                            "has_rank": .bool(cachedServerRank >= 1),
+                        ])
+                    })
                 }
             }
         }

@@ -21,6 +21,7 @@
 
 import SwiftUI
 import SwiftData
+import CoreImage.CIFilterBuiltins
 
 // MARK: - Leaderboard (live)
 
@@ -364,6 +365,35 @@ struct ProfileShareCard: View {
         return best?.goal
     }
 
+    /// Where an invited friend lands. The site carries install instructions
+    /// now (TestFlight) and becomes the App Store pointer at GA — the card
+    /// never needs re-issuing. Real invite attribution (per-user codes, the
+    /// invite trophy) is the Spotter Pass item, PLAN §9 #10.
+    nonisolated static let inviteURL = URL(string: "https://tailspot.app")!
+
+    /// The text half of the share payload: brag + challenge + link.
+    /// Messages/Mail render it alongside the card image, so the invite
+    /// link stays tappable even though the card is a flat PNG.
+    nonisolated static func inviteMessage(handle: String, points: Int, rankLabel: String?) -> String {
+        let standing = rankLabel.map { "\(points.formatted()) points, ranked \($0)" }
+            ?? "\(points.formatted()) points"
+        return "Think you can out-spot me? I'm @\(handle) on Tailspot — \(standing). "
+            + "Point your phone at a plane, catch it, build the hangar: \(inviteURL.absoluteString)"
+    }
+
+    /// QR for the card's corner — the scannable version of the invite.
+    /// Generated once per card via CoreImage; rendered `.interpolation(.none)`
+    /// so the modules stay crisp when scaled.
+    nonisolated static func inviteQR() -> UIImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(inviteURL.absoluteString.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+        guard let cg = CIContext().createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+
     nonisolated static func bestCatch(in catches: [Catch]) -> BestCatch? {
         guard let top = catches.max(by: {
             ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
@@ -493,9 +523,35 @@ struct ProfileShareCard: View {
                     Spacer()
                     statTile(label: "Rare+",   value: stats.rarePlusUnique, tint: Brand.Color.alertAdvisory)
                 }
-                Text("Catch every plane you see. Build a hangar of them.")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
+
+                // The invite: a challenge + the scannable way in. The QR sits
+                // on a white chip because scanners want dark-on-light.
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("THINK YOU CAN OUT-SPOT @\(handle.uppercased())?")
+                            .font(Brand.Font.mono(size: 10, weight: .bold))
+                            .tracking(0.8)
+                            .foregroundStyle(Brand.Color.cyan)
+                        Text("Get Tailspot · ")
+                            .font(Brand.Font.caption)
+                            .foregroundStyle(Brand.Color.textSecondary)
+                        + Text("tailspot.app")
+                            .font(Brand.Font.mono(size: 12, weight: .bold))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                    }
+                    // Never let the invite truncate — it's the card's point.
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if let qr = Self.inviteQR() {
+                        Image(uiImage: qr)
+                            .interpolation(.none)
+                            .resizable()
+                            .frame(width: 46, height: 46)
+                            .padding(5)
+                            .background(.white, in: .rect(cornerRadius: 8))
+                    }
+                }
+                .padding(.top, 2)
             }
             .padding(22)
         }
