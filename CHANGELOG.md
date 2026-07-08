@@ -28,6 +28,20 @@ bright over the fixed dark palette — over a backdrop with two faint radial
 glows so the glass has something to refract. `ProfileStats` is unchanged;
 only the view reorganized.
 
+**Field-review round 2 (Noah, 2026-07-08):** the Map's rarity filter strip
+no longer hyphen-wraps ("LEGENDAR-Y") — chips are lineLimit(1) + fixedSize
+inside a horizontal ScrollView, so overflow scrolls instead of wrapping.
+The profile gained the **BEST CATCH** card from the exploration's
+Direction B (highest-rarity airframe, most recent on ties; taps through to
+the catch detail via the Map screen's single-catch HangarRow pattern). The
+**Sets quick card** was removed (the Hangar's default segment IS Sets — a
+duplicate door), and the **Types reference** was cut entirely (link +
+screen — the Sets segment teaches the type buckets in context). The Rarity
+reference copy was sharpened to the current tiering: tiers = sky presence
+plus a scarcity layer (military/vintage/vanishing airliners), and
+unidentified planes default to Common. Its examples were already re-synced
+to `AircraftTypes.json` in the cleanup round below.
+
 **Share (same branch — iterated with Noah to deliberately minimal):** the
 toolbar Share got the brand CTA treatment (cyan disc, dark glyph — the
 page's one action) and is a DIRECT `ShareLink`: one tap → the system share

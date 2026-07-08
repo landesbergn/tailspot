@@ -63,6 +63,9 @@ struct ProfileScreen: View {
                 VStack(spacing: 16) {
                     identityHeader(stats: stats)
                     statsStrip(stats: stats, inputs: inputs)
+                    if let best = Self.bestCatch(in: catches) {
+                        bestCatchCard(best)
+                    }
                     quickLinks
                     sectionLinks
                 }
@@ -285,11 +288,77 @@ struct ProfileScreen: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Best catch
+
+    /// The collection's proudest airframe (highest rarity, most recent on
+    /// ties) — the "Progression" element Noah kept from the layout
+    /// exploration's Direction B. Tapping opens the catch detail.
+    private struct BestCatch {
+        let top: Catch
+        let name: String
+        let rarity: Rarity
+    }
+
+    private static func bestCatch(in catches: [Catch]) -> BestCatch? {
+        guard let top = catches.max(by: {
+            ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
+                < ($1.resolvedRarity.ordinal, $1.caughtAt.timeIntervalSince1970)
+        }) else { return nil }
+        let canonical = AircraftNaming.canonical(
+            typecode: top.typecode,
+            manufacturer: top.manufacturer,
+            model: top.model
+        )
+        let name = canonical.displayName ?? top.callsign ?? top.icao24.uppercased()
+        return BestCatch(top: top, name: name, rarity: top.resolvedRarity)
+    }
+
+    private func bestCatchCard(_ best: BestCatch) -> some View {
+        NavigationLink {
+            // Single-catch row, the MapScreen pin-sheet pattern.
+            CatchDetailView(row: HangarRow(
+                icao24: best.top.icao24,
+                mostRecent: best.top,
+                count: 1,
+                allCatches: [best.top]
+            ))
+        } label: {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(best.rarity.tint)
+                    .frame(width: 4, height: 36)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("BEST CATCH")
+                        .font(Brand.Font.mono(size: 8, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                    Text(best.name)
+                        .font(Brand.Font.cardTitle)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .lineLimit(1)
+                    Text(best.rarity.label)
+                        .font(Brand.Font.mono(size: 9, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(best.rarity.tint)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Quick links
 
+    // "Sets" deliberately absent: the Hangar's default segment IS Sets, so
+    // the quick card was a duplicate door (Noah, 2026-07-08).
     private var quickLinks: some View {
         HStack(spacing: 10) {
-            quickLink(label: "Sets", glyph: "rectangle.stack") { SetsScreen() }
             quickLink(label: "Map", glyph: "map") { MapScreen() }
             quickLink(label: "Leaders", glyph: "list.number") { LeaderboardScreen() }
         }
@@ -319,8 +388,6 @@ struct ProfileScreen: View {
     private var sectionLinks: some View {
         VStack(spacing: 0) {
             sectionLink(label: "Rarity reference", systemImage: "diamond") { RarityReferenceScreen() }
-            divider
-            sectionLink(label: "Types reference", systemImage: "rectangle.3.group") { TypesReferenceScreen() }
             divider
             sectionLink(label: "Settings", systemImage: "gear") { SettingsScreen() }
         }
