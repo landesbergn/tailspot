@@ -5,6 +5,21 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-08 — Asia-Pacific operator gaps (APJ545 / BTK6143) — branch `fix/asia-pacific-operator-gaps`
+
+Field report: two 2026-07-03 catches (APJ545 — Peach Aviation, BTK6143 —
+Batik Air) showed "Operator unknown". Root cause: no upstream source supplies
+an operator (the backend metadata seam is intentionally null, the adsb.lol
+feed carries none), so the ONLY operator source is the client's hardcoded
+`Airlines.byICAO` callsign-prefix table — and its original seed was
+US/Europe-heavy with no Asia-Pacific LCC coverage. Added ~45 designators
+(Japan, Indonesia, SE Asia, Korea, China/HK/Taiwan, India LCCs + flydubai /
+Air Arabia / Gulf Air) with regression tests for the two field callsigns. No
+migration needed: `CatchBackfill.backfillAll`'s offline pass retries every
+`operatorName == nil` catch on Hangar open, so existing cards heal on first
+open after update. The durable fix (a real operator dataset behind the
+backend's `operatorNameSeam`) stays a later work package.
+
 ## 2026-07-07 — `first_plane_catch` activation event — branch `feat/first-catch-event`
 
 The user's very first catch (the tap that takes the Hangar 0 → N) now fires a

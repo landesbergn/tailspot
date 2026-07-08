@@ -36,7 +36,6 @@ nonisolated enum Airlines {
         "FDX": "FedEx Express", "UPS": "UPS Airlines", "GTI": "Atlas Air",
         "ABX": "ABX Air", "GEC": "Lufthansa Cargo", "PAC": "Polar Air Cargo",
         "CKS": "Kalitta Air", "CLX": "Cargolux", "ATN": "Air Transport International",
-        "FDX2": "FedEx Express",
         // Canada
         "ACA": "Air Canada", "WJA": "WestJet", "JZA": "Jazz Aviation",
         "ROU": "Air Canada Rouge", "POE": "Porter Airlines", "TSC": "Air Transat",
@@ -55,6 +54,7 @@ nonisolated enum Airlines {
         // Middle East
         "UAE": "Emirates", "QTR": "Qatar Airways", "ETD": "Etihad Airways",
         "SVA": "Saudia", "ELY": "El Al", "MEA": "Middle East Airlines",
+        "FDB": "flydubai", "ABY": "Air Arabia", "GFA": "Gulf Air",
         // Asia / Pacific
         "ANA": "All Nippon Airways", "JAL": "Japan Airlines", "SIA": "Singapore Airlines",
         "CPA": "Cathay Pacific", "KAL": "Korean Air", "AAR": "Asiana Airlines",
@@ -64,6 +64,30 @@ nonisolated enum Airlines {
         "HVN": "Vietnam Airlines", "VJC": "VietJet Air", "QFA": "Qantas",
         "ANZ": "Air New Zealand", "VOZ": "Virgin Australia", "JST": "Jetstar",
         "AIC": "Air India", "IGO": "IndiGo",
+        // Asia / Pacific — LCC/regional expansion (2026-07-08: APJ545 + BTK6143
+        // field gap; the original seed was US/Europe-heavy).
+        // Japan
+        "APJ": "Peach Aviation", "SKY": "Skymark Airlines", "ADO": "Air Do",
+        "SFJ": "Starflyer", "SNJ": "Solaseed Air", "JJP": "Jetstar Japan",
+        "TZP": "Zipair Tokyo", "SJO": "Spring Japan", "JTA": "Japan Transocean Air",
+        "IBX": "Ibex Airlines", "FDA": "Fuji Dream Airlines",
+        // Indonesia
+        "BTK": "Batik Air", "LNI": "Lion Air", "SJV": "Super Air Jet",
+        "CTV": "Citilink", "WON": "Wings Air", "AWQ": "Indonesia AirAsia",
+        "SJY": "Sriwijaya Air", "TNU": "TransNusa", "PAS": "Pelita Air",
+        // Southeast Asia
+        "AXM": "AirAsia", "XAX": "AirAsia X", "MXD": "Batik Air Malaysia",
+        "TGW": "Scoot", "BKP": "Bangkok Airways", "AIQ": "Thai AirAsia",
+        "TLM": "Thai Lion Air", "NOK": "Nok Air", "CEB": "Cebu Pacific",
+        "BAV": "Bamboo Airways",
+        // Korea
+        "JJA": "Jeju Air", "JNA": "Jin Air", "TWB": "T'way Air", "ABL": "Air Busan",
+        // China / Hong Kong / Taiwan
+        "CHH": "Hainan Airlines", "CXA": "Xiamen Air", "CSZ": "Shenzhen Airlines",
+        "HKE": "Hong Kong Express", "CRK": "Hong Kong Airlines",
+        "SJX": "Starlux Airlines", "TTW": "Tigerair Taiwan",
+        // India
+        "AXB": "Air India Express", "SEJ": "SpiceJet", "AKJ": "Akasa Air",
     ]
 
     /// True when the callsign is an airline flight number (3-letter designator
