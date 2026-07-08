@@ -80,11 +80,20 @@ struct ProfileScreen: View {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    // Share is the page's one action, so it gets the brand's
+                    // CTA treatment (cyan disc, dark glyph) instead of the
+                    // bare system tint — same accent grammar as the reveal's
+                    // CTA and the planned Spotter Pass share (PLAN §9 #10).
                     Button {
                         showingShare = true
                     } label: {
                         Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Brand.Color.bgPrimary)
+                            .padding(7)
+                            .background(Brand.Color.cyan, in: .circle)
                     }
+                    .accessibilityLabel("Share profile")
                 }
             }
             .sheet(isPresented: $showingShare) {
