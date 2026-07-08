@@ -45,18 +45,37 @@ struct AirlinesTests {
         #expect(!Airlines.isAirlineFormat("ABCD"))     // no flight number
     }
 
-    // Shape invariant: lookup is `byICAO[cs.prefix(3)]`, so any key that isn't
+    // The bundled snapshot (airlines.json, ~5,900 designators) is the
+    // comprehensive layer beneath the curated table. If this fails the
+    // resource fell out of the app bundle — resolution silently degrades
+    // to the curated ~130.
+    @Test func bundledDatasetLoadsAndCovers() {
+        #expect(Airlines.bundled.count > 5000)
+        // Resolves designators the curated table never carried.
+        #expect(Airlines.name(forCallsign: "EWG905") == "Eurowings")
+    }
+
+    // The curated table is the display-name override layer: dataset names
+    // are often legal names ("Federal Express", "Peach").
+    @Test func curatedDisplayNameWinsOverBundledLegalName() {
+        #expect(Airlines.bundled["FDX"] == "Federal Express")
+        #expect(Airlines.name(forCallsign: "FDX350") == "FedEx Express")
+        #expect(Airlines.bundled["APJ"] == "Peach")
+        #expect(Airlines.name(forCallsign: "APJ545") == "Peach Aviation")
+    }
+
+    // Shape invariant: lookup is `[cs.prefix(3)]`, so any key that isn't
     // exactly 3 uppercase letters is dead weight that can never match (a
     // 4-char "FDX2" entry sat unreachable in the table until 2026-07-08).
     @Test func tableKeysAreMatchableDesignators() {
-        for key in Airlines.byICAO.keys {
-            #expect(key.count == 3, "\(key) can never match a prefix(3) lookup")
-            #expect(key.allSatisfy { $0.isLetter && $0.isUppercase },
-                    "\(key) isn't an ICAO designator")
-        }
-        for (key, value) in Airlines.byICAO {
-            #expect(!value.trimmingCharacters(in: .whitespaces).isEmpty,
-                    "\(key) maps to an empty name")
+        for table in [Airlines.byICAO, Airlines.bundled] {
+            for (key, value) in table {
+                #expect(key.count == 3, "\(key) can never match a prefix(3) lookup")
+                #expect(key.allSatisfy { $0.isLetter && $0.isUppercase },
+                        "\(key) isn't an ICAO designator")
+                #expect(!value.trimmingCharacters(in: .whitespaces).isEmpty,
+                        "\(key) maps to an empty name")
+            }
         }
     }
 
