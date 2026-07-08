@@ -10,6 +10,7 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
 import os
 import PostHog   // session-replay masking of the camera view
 
@@ -53,6 +54,9 @@ struct ContentView: View {
     /// recording (U3); driven by the same record toggle as the recorder.
     @State private var logCapture = LogCapture()
     @State private var cameraAuthorized = false
+    /// True only after an explicit camera denial (vs. not-yet-asked) — the
+    /// difference between "wait for the prompt" and "show Open Settings".
+    @State private var cameraDenied = false
     /// Hidden by default. Tap the small wrench glyph in the top-right
     /// to reveal the sensor readout (top) + nearby-aircraft list
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
@@ -207,6 +211,14 @@ struct ContentView: View {
                         // (a GPU surface) renders black on its own without a mask.
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
+                }
+
+                // Recovery for explicitly-denied permissions. Before this,
+                // a camera denial was a silent black void and a location
+                // denial a forever-"waiting" GPS — both first-run dead ends
+                // with no way back short of finding Settings unaided.
+                if cameraDenied || locationDenied {
+                    permissionRecoveryOverlay
                 }
 
                 // Lock-on AR overlay. The view is clean by default — no
@@ -2016,14 +2028,30 @@ struct ContentView: View {
 
     // MARK: - Permission
 
+    /// True after an explicit location denial. `.notDetermined` is NOT
+    /// denied — the prompt may still be pending from onboarding.
+    private var locationDenied: Bool {
+        location.authorizationStatus == .denied
+            || location.authorizationStatus == .restricted
+    }
+
+    private var permissionRecoveryOverlay: some View {
+        PermissionRecoveryCard(cameraDenied: cameraDenied, locationDenied: locationDenied)
+    }
+
     private func requestCameraPermission() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             cameraAuthorized = true
         case .notDetermined:
             cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
+            cameraDenied = !cameraAuthorized
         case .denied, .restricted:
             cameraAuthorized = false
+            // An explicit prior "don't allow" — unlike notDetermined, only
+            // the Settings app can undo it, so the recovery overlay shows
+            // an Open Settings path instead of a silent black screen.
+            cameraDenied = true
         @unknown default:
             cameraAuthorized = false
         }

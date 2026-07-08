@@ -23,12 +23,13 @@ struct ActivationTelemetryTests {
         #expect(ActivationTelemetry.stepName(0) == "welcome")
         #expect(ActivationTelemetry.stepName(1) == "permissions")
         #expect(ActivationTelemetry.stepName(2) == "handle")
+        #expect(ActivationTelemetry.stepName(3) == "calibration")
     }
 
     @Test func unknownStepsStillReportRatherThanVanish() {
-        // A future 4th step (e.g. compass calibration) must show up in the
-        // funnel even before anyone names it here.
-        #expect(ActivationTelemetry.stepName(3) == "step_3")
+        // A future 5th step must show up in the funnel even before anyone
+        // names it here.
+        #expect(ActivationTelemetry.stepName(4) == "step_4")
     }
 
     // MARK: - Builders
@@ -45,9 +46,12 @@ struct ActivationTelemetryTests {
         #expect(p["granted"]?.jsonValue as? Bool == false)
     }
 
-    @Test func completedCarriesClaimResult() {
-        let p = ActivationTelemetry.completedProperties(claimResult: "offline_fallback")
+    @Test func completedCarriesClaimResultAndCalibration() {
+        let p = ActivationTelemetry.completedProperties(
+            claimResult: "offline_fallback", calibrated: false
+        )
         #expect(p["handle_claim"]?.jsonValue as? String == "offline_fallback")
+        #expect(p["calibrated"]?.jsonValue as? Bool == false)
     }
 
     // MARK: - Once-per-install latches
