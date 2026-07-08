@@ -723,7 +723,20 @@ struct ContentView: View {
             // nonisolated and lock-guarded for exactly that.
             frameBridge.frameHandler = { [weak visualConfirm] buffer in
                 visualConfirm?.ingestFrame(buffer)
+                // Activation funnel: the first camera frame EVER means the
+                // user reached a live AR view (permissions granted, session
+                // up). Once-per-install latch inside; the guard is a cached
+                // UserDefaults bool read, cheap enough for the frame path.
+                ActivationTelemetry.fireARFirstFrameOnce()
             }
+        }
+        // Activation funnel: the first time any plane label is actually
+        // visible (post-filter), the user has something to catch. ~1 Hz
+        // re-annotation cadence; once-per-install latch inside the fire.
+        .onReceive(adsb.$observed) { observed in
+            let visible = observed.filter(\.isLikelyVisibleToObserver)
+            guard !visible.isEmpty else { return }
+            ActivationTelemetry.fireFirstPlaneSeenOnce(visibleCount: visible.count)
         }
         // Ambient indoor hint: poll the gate verdict ~1 Hz off the
         // already-computed sky features (no extra camera work) and
@@ -835,6 +848,9 @@ struct ContentView: View {
         if isHeadingAccuracyBad {
             Button {
                 showCompassSheet = true
+                ActivationTelemetry.fireCompassSheetOpened(
+                    headingAccuracyDeg: location.headingAccuracy
+                )
             } label: {
                 HStack(spacing: 6) {
                     Circle()
@@ -2067,6 +2083,10 @@ struct ContentView: View {
                 let acc = location.headingAccuracy ?? -1
                 if acc > Self.compassBadThreshold {
                     showCompassWarning = true
+                    // Activation funnel: how often the compass is bad enough
+                    // to warn — the suspected silent killer of "label points
+                    // the wrong way" first sessions.
+                    ActivationTelemetry.fireCompassCautionShown(headingAccuracyDeg: acc)
                 }
                 compassDebounceTask = nil
             }

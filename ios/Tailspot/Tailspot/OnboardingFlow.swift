@@ -18,6 +18,7 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import CoreLocation   // CLAuthorizationStatus cases in the permission-outcome hook
 import os
 
 // MARK: - Gate
@@ -109,6 +110,9 @@ struct OnboardingFlow: View {
     /// then creates its own LocationManager.
     @StateObject private var locationForPermissions = LocationManager()
     @State private var permissionsRequested = false
+    /// Latches the one-shot `permission_outcome` (location) event — the
+    /// authorization status can re-publish without changing meaning.
+    @State private var locationOutcomeReported = false
     /// Non-nil when the backend returned 409 (handle taken) during the
     /// last claim attempt.
     @State private var handleTakenError: String? = nil
@@ -145,6 +149,24 @@ struct OnboardingFlow: View {
             }
             .padding(.horizontal, 28)
             .padding(.bottom, 40)
+        }
+        // Activation funnel: record every step the user actually SEES, so
+        // PostHog can show where the ~36 openers → 5 catchers leak starts
+        // (nothing between "Application Opened" and first_plane_catch was
+        // instrumented before). onAppear covers step 0; onChange the rest.
+        .onAppear { ActivationTelemetry.fireStepViewed(step: step) }
+        .onChange(of: step) { _, newStep in
+            ActivationTelemetry.fireStepViewed(step: newStep)
+        }
+        // Location permission outcome. The camera outcome comes straight
+        // from the requestAccess callback; location only surfaces through
+        // the (throwaway) manager's published authorization status.
+        .onChange(of: locationForPermissions.authorizationStatus) { _, status in
+            guard permissionsRequested, !locationOutcomeReported,
+                  status != .notDetermined else { return }
+            locationOutcomeReported = true
+            let granted = status == .authorizedWhenInUse || status == .authorizedAlways
+            ActivationTelemetry.firePermissionOutcome(permission: "location", granted: granted)
         }
     }
 
@@ -504,6 +526,7 @@ struct OnboardingFlow: View {
             // one person, handle attached. See AnalyticsIdentity.
             Analytics.identify(deviceId, handle: trimmed)
             Analytics.capture("handle_claimed", ["result": .string("success")])
+            ActivationTelemetry.fireCompleted(claimResult: "success")
             onFinish()
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken. Try a different handle."
@@ -516,6 +539,7 @@ struct OnboardingFlow: View {
             Log.ui.error("Onboarding: handle claim failed (non-fatal): \(error, privacy: .public)")
             handle = trimmed
             handleTakenError = nil
+            ActivationTelemetry.fireCompleted(claimResult: "offline_fallback")
             onFinish()
         }
     }
@@ -553,7 +577,11 @@ struct OnboardingFlow: View {
     private func requestSystemPermissions() {
         guard !permissionsRequested else { return }
         permissionsRequested = true
-        AVCaptureDevice.requestAccess(for: .video) { _ in }
+        // The callback runs on an arbitrary queue; Analytics.capture is
+        // nonisolated + thread-safe (the PostHog SDK queues internally).
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            ActivationTelemetry.firePermissionOutcome(permission: "camera", granted: granted)
+        }
         locationForPermissions.requestPermissionAndStart()
     }
 
