@@ -168,14 +168,6 @@ struct ProfileScreen: View {
                     }
                 }
                 Spacer()
-                Text("PUBLIC")
-                    .font(Brand.Font.mono(size: 9, weight: .bold))
-                    .tracking(1)
-                    .foregroundStyle(Brand.Color.alertNormal)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Brand.Color.alertNormal.opacity(0.14), in: .capsule)
-                    .overlay(Capsule().strokeBorder(Brand.Color.alertNormal.opacity(0.45), lineWidth: 1))
             }
             HStack(spacing: 16) {
                 VStack(spacing: 2) {
@@ -330,8 +322,6 @@ struct ProfileScreen: View {
             sectionLink(label: "Types reference", systemImage: "rectangle.3.group") { TypesReferenceScreen() }
             divider
             sectionLink(label: "Settings", systemImage: "gear") { SettingsScreen() }
-            divider
-            sectionLink(label: "Notifications", systemImage: "bell") { NotificationsScreen() }
         }
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
     }

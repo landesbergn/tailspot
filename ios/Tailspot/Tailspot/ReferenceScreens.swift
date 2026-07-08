@@ -19,7 +19,7 @@ struct RarityReferenceScreen: View {
                 ForEach(Rarity.allCases, id: \.self) { r in
                     rarityCard(r)
                 }
-                Text("Points are awarded by rarity only — no XP multipliers, no time-of-day bonuses. Multi-catch combo is the one exception.")
+                Text("Points come from rarity, plus a one-time bonus the first time you catch a new type. Multi-catch combos stack on top.")
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textTertiary)
                     .padding(.horizontal, 4)
@@ -78,13 +78,16 @@ struct RarityReferenceScreen: View {
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
     }
 
+    // Examples must track the live tier table (AircraftTypes.json —
+    // re-tiered by the 2026-07-01 collection economy). Spot-check a
+    // typecode's `rarity` there before editing these strings.
     private func examples(for r: Rarity) -> String {
         switch r {
-        case .common:    return "737 · A320 · E175 · ATR · Cessna 172"
-        case .uncommon:  return "A330 · 787 · 777 · Phenom 300 · King Air"
-        case .rare:      return "747 · A340 · G650 · C-130 · C-17"
-        case .epic:      return "A380 · 747-8 · B-52 · C-5"
-        case .legendary: return "Air Force One · SR-71 · B-2 · Concorde"
+        case .common:    return "737 · A320 · E175 · 787 · Cessna 172"
+        case .uncommon:  return "Phenom 300 · King Air · PC-12 · Challenger"
+        case .rare:      return "747 · A380 · A340 · G650 · P-51"
+        case .epic:      return "747-8 · C-17 · C-130 · C-5 · DC-10"
+        case .legendary: return "Air Force One · B-2 · F-16 · SR-71"
         }
     }
 }

@@ -5,6 +5,40 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-08 — Profile/Settings legacy-artifact cleanup for v1 — branch `polish/settings-v1-cleanup`
+
+A pre-launch scrub of the Profile hub + Settings surface (PLAN §9 #6). Every
+change removes something stale or false rather than adding surface:
+
+- **Settings ABOUT told users the wrong data source** — "OpenSky Network",
+  dead since the 2026-06-21 cutover. Now "Live aircraft data · adsb.lol",
+  matching the attributions page; stale OpenSky/ODbL comments fixed too.
+- **Fake affordances removed**: the hardcoded `PUBLIC` pill on the Profile
+  header and onboarding's "Public profile / anyone can view your hangar"
+  toggle (wrote `tailspot.profile.public`, which controlled nothing — the
+  public hangar was cut in WP 1.7). Onboarding copy no longer promises a
+  public hangar.
+- **Notifications placeholder retired**: the Profile row + `NotificationsScreen`
+  ("coming after launch") deleted — push is post-GA (#9); re-add with the real
+  feature. `TrophiesScreen.swift` deleted too (orphaned wrapper, zero callsites
+  since trophies moved into the Hangar).
+- **Rarity reference re-synced to the 2026-07-01 economy**: example strings
+  had A330/787/777 at uncommon (now common), C-130/C-17 at rare (now epic),
+  A380 at epic (now rare), B-52 at epic (now legendary); footer copy now
+  mentions the first-of-type bonus. Verified each example against
+  `AircraftTypes.json` tiers.
+- **Settings/Notifications were the last two screens on system list chrome**
+  (white in light mode against the fixed dark Brand palette) — Settings now
+  uses the SetsScreen brand treatment (`scrollContentBackground(.hidden)` +
+  `bgPrimary` + `bgElevated` rows).
+- New `ProfileSettingsSnapshotTests` visual-pass suite (UIWindow +
+  `drawHierarchy`, since ImageRenderer renders List/NavigationStack blank).
+
+Known-but-deferred: `SpotterHandle.defaultPlaceholder == "spotter_42"` is a
+real user's claimed handle, but the string doubles as the "not claimed"
+sentinel in `HandleSyncer`/`AnalyticsIdentity` — changing it silently flips
+existing placeholder installs to "claimed", so it needs its own careful pass.
+
 ## 2026-07-07 — `first_plane_catch` activation event — branch `feat/first-catch-event`
 
 The user's very first catch (the tap that takes the Hangar 0 → N) now fires a

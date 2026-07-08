@@ -101,7 +101,6 @@ struct OnboardingFlow: View {
 
     @State private var step: Int = 0
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
-    @AppStorage("tailspot.profile.public") private var publicProfile: Bool = true
     @State private var draftHandle: String = ""
     /// Held as a @StateObject so its CLLocationManager delegate stays
     /// alive long enough for iOS to surface the prompt and receive the
@@ -270,7 +269,7 @@ struct OnboardingFlow: View {
             Text("Pick a handle.")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text("Shown on the global leaderboard and your public hangar. Real name stays private.")
+            Text("Shown on the global leaderboard. Real name stays private.")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
 
@@ -352,24 +351,6 @@ struct OnboardingFlow: View {
                     }
                 }
             }
-
-            // Public-profile toggle.
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Public profile")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                    Text("Anyone can view your hangar")
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                }
-                Spacer()
-                Toggle("", isOn: $publicProfile)
-                    .labelsHidden()
-                    .tint(Brand.Color.cyan)
-            }
-            .padding(14)
-            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
         }
         // Replace the local randomized chips with backend-verified-free
         // suggestions the first time this step appears. Best-effort.

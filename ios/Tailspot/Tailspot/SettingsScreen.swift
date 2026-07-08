@@ -2,25 +2,14 @@
 //  SettingsScreen.swift
 //  Tailspot
 //
-//  Organised into three sections in order:
-//    SPOTTER  — handle claim (the only real identity setting)
-//    APP      — nothing real to show yet; removed vestigial toggles:
-//                 • "Public hangar" was cut from beta scope — the
-//                   tailspot.profile.public key is still written during
-//                   onboarding but the toggle here controlled nothing
-//                   server-side; revive when backend public-hangar
-//                   endpoint ships (PLAN §9 #2).
-//                 • "Rare-aircraft alerts" toggle (tailspot.notif.rare)
-//                   never wired to push infrastructure; honest coming-soon
-//                   state is in NotificationsScreen — remove here to avoid
-//                   a fake affordance (PLAN §9 #2).
-//                 • Playback rows (Source / Autocatch hold / Visibility cap)
-//                   were display-only labels, not real settings — source
-//                   toggle lives in the debug overlay, the others are
-//                   in-code constants. Removed to cut clutter.
+//  Organised into two sections:
+//    SPOTTER  — handle claim (the only real identity setting; everything
+//               else that once lived here was a fake affordance and has
+//               been removed — see git history for the inventory).
 //    ABOUT    — legal links (Privacy Policy, Terms, Attributions —
-//               ODbL attribution is a licence obligation), data-source
-//               credit, plus the tap-to-copy version footer.
+//               ODbL attribution for adsb.lol data is a licence
+//               obligation), data-source credits, plus the tap-to-copy
+//               version footer.
 //
 
 import SwiftUI
@@ -114,6 +103,9 @@ struct SettingsScreen: View {
                 .buttonStyle(.plain)
                 .disabled(!isDirty || isSavingHandle)
                 .animation(.easeInOut(duration: 0.15), value: isDirty)
+                // The button draws its own fill; clear the row so the idle
+                // (bgElevated) state doesn't vanish into the section row color.
+                .listRowBackground(Color.clear)
 
             } header: {
                 Text("SPOTTER")
@@ -124,13 +116,14 @@ struct SettingsScreen: View {
             } footer: {
                 Text("Your handle is the only thing visible on the leaderboard. Claim it to reserve your spot.")
             }
+            .listRowBackground(Brand.Color.bgElevated)
 
             // MARK: ABOUT
 
             Section {
                 // Legal links — open URLs in Safari.
                 // Attributions row is REQUIRED to satisfy the ODbL licence
-                // obligation for OpenSky data; do not remove.
+                // obligation for adsb.lol data; do not remove.
                 legalLink(label: "Privacy Policy",
                           url: URL(string: "https://tailspot.app/privacy.html")!)
                 legalLink(label: "Terms of Use",
@@ -138,7 +131,7 @@ struct SettingsScreen: View {
                 legalLink(label: "Attributions",
                           url: URL(string: "https://tailspot.app/attributions.html")!)
 
-                LabeledContent("Data source", value: "OpenSky Network")
+                LabeledContent("Live aircraft data", value: "adsb.lol")
                 LabeledContent("Photos", value: "Planespotters.net")
 
             } header: {
@@ -152,8 +145,14 @@ struct SettingsScreen: View {
                 // reports can paste an exact identifier.
                 versionFooter
             }
+            .listRowBackground(Brand.Color.bgElevated)
         }
         .listStyle(.insetGrouped)
+        // Brand the list like SetsScreen/SetDetailView — without this the
+        // List renders system grouped chrome, which flips white in light
+        // mode against the fixed dark Brand palette.
+        .scrollContentBackground(.hidden)
+        .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { handleDraft = handle }
