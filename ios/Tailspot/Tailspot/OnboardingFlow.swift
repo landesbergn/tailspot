@@ -100,7 +100,14 @@ struct RootView: View {
 struct OnboardingFlow: View {
     let onFinish: () -> Void
 
-    @State private var step: Int = 0
+    @State private var step: Int
+
+    /// `initialStep` exists for the snapshot harness (render any step
+    /// without tapping through) — production always starts at 0.
+    init(onFinish: @escaping () -> Void, initialStep: Int = 0) {
+        self.onFinish = onFinish
+        _step = State(initialValue: initialStep)
+    }
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
     @AppStorage("tailspot.profile.public") private var publicProfile: Bool = true
     @State private var draftHandle: String = ""
@@ -117,7 +124,13 @@ struct OnboardingFlow: View {
     /// last claim attempt.
     @State private var handleTakenError: String? = nil
 
-    private let totalSteps = 3
+    private let totalSteps = 4
+    /// Outcome of the handle claim (success / offline_fallback), stashed so
+    /// `onboarding_completed` can report it from the final (calibration) step.
+    @State private var claimOutcome = "success"
+    /// Latches once the live heading accuracy reads good (≤10°) during the
+    /// calibration step — mirrors CompassCalibrationSheet's session latch.
+    @State private var calibratedInFlow = false
     private let accountClient = TailspotAccountClient()
 
     /// Suggested handles offered in the handle step. Seeded with a LOCALLY
@@ -170,6 +183,29 @@ struct OnboardingFlow: View {
         }
     }
 
+    #if DEBUG
+    /// Snapshot-only mirror of `body` with the ScrollView flattened —
+    /// ImageRenderer renders ScrollView content as empty (the same
+    /// limitation CatchRevealView's `_snapshotScreen` works around).
+    /// Production layout keeps the ScrollView for SE-height devices.
+    @MainActor func _snapshotScreen(size: CGSize) -> some View {
+        ZStack {
+            Brand.Color.bgPrimary
+            backdrop
+            VStack(spacing: 16) {
+                content
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 80)
+                Spacer(minLength: 0)
+                footer
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 40)
+        }
+        .frame(width: size.width, height: size.height)
+    }
+    #endif
+
     private var backdrop: some View {
         ZStack {
             // Subtle cyan radial near the top.
@@ -196,7 +232,8 @@ struct OnboardingFlow: View {
         switch step {
         case 0: welcomeStep
         case 1: permissionsStep
-        default: handleStep
+        case 2: handleStep
+        default: calibrationStep
         }
     }
 
@@ -205,7 +242,7 @@ struct OnboardingFlow: View {
     private var welcomeStep: some View {
         VStack(alignment: .leading, spacing: 18) {
             lockup
-            stepLabel("STEP 1 / 3")
+            stepLabel("STEP 1 / 4")
             Text("Spot every plane overhead.")
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -244,7 +281,7 @@ struct OnboardingFlow: View {
 
     private var permissionsStep: some View {
         VStack(alignment: .leading, spacing: 18) {
-            stepLabel("STEP 2 / 3 · PERMISSIONS")
+            stepLabel("STEP 2 / 4 · PERMISSIONS")
             Text("Three things we need to read the sky.")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -288,7 +325,7 @@ struct OnboardingFlow: View {
 
     private var handleStep: some View {
         VStack(alignment: .leading, spacing: 16) {
-            stepLabel("FINAL STEP · PUBLIC HANDLE")
+            stepLabel("STEP 3 / 4 · PUBLIC HANDLE")
             Text("Pick a handle.")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -398,6 +435,73 @@ struct OnboardingFlow: View {
         .task { await loadSuggestions() }
     }
 
+    // MARK: - Step 4: Compass calibration
+
+    /// The compass step (design ref: design/screens/onboarding.jsx
+    /// Variation A). Last on purpose: it needs location permission (heading
+    /// updates) from step 2, and it's the hand-off into AR — the user walks
+    /// in with a compass that points at the right plane. Skippable — the
+    /// same coaching remains reachable later via the AR caution badge
+    /// (CompassCalibrationSheet); a first run must never dead-end on a
+    /// stubborn magnetometer.
+    private var calibrationStep: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            stepLabel("FINAL STEP · COMPASS")
+            Text(calibratedInFlow ? "Compass calibrated." : "Trace a figure-8 in the air.")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(Brand.Color.textPrimary)
+            Text("iPhone compasses drift near metal and buildings. A quick figure-8 motion calibrates yours, so labels point at the plane you're actually looking at.")
+                .font(Brand.Font.body)
+                .foregroundStyle(Brand.Color.textSecondary)
+
+            Figure8Animation()
+                .frame(height: 200)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 6)
+
+            // Live readout, mirroring CompassCalibrationSheet: watching the
+            // ± number fall IS the feedback loop.
+            HStack(spacing: 14) {
+                Text("HDG")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(calibrationHeadingText)
+                    .font(Brand.Font.mono(size: 15, weight: .bold))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                Text(calibrationAccuracyText)
+                    .font(Brand.Font.mono(size: 15, weight: .bold))
+                    .foregroundStyle(calibratedInFlow
+                                     ? Brand.Color.alertNormal
+                                     : Brand.Color.alertCaution)
+                Spacer()
+                if calibratedInFlow {
+                    Label("CALIBRATED", systemImage: "checkmark.circle.fill")
+                        .font(Brand.Font.mono(size: 10, weight: .bold))
+                        .tracking(1.0)
+                        .foregroundStyle(Brand.Color.alertNormal)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
+        }
+        .onChange(of: locationForPermissions.headingAccuracy) { _, acc in
+            guard let acc, acc >= 0, acc <= 10 else { return }
+            calibratedInFlow = true
+        }
+    }
+
+    private var calibrationHeadingText: String {
+        guard let h = locationForPermissions.heading else { return "—" }
+        return String(format: "%.0f°", h)
+    }
+
+    private var calibrationAccuracyText: String {
+        guard let acc = locationForPermissions.headingAccuracy, acc >= 0 else { return "±—" }
+        return String(format: "±%.0f°", acc)
+    }
+
     /// Compact status pill rendered inside the handle field. Reads
     /// "● AVAILABLE" when the draft is valid, "● TOO SHORT" when
     /// length is wrong, "● BAD CHARS" when characters are invalid.
@@ -451,6 +555,12 @@ struct OnboardingFlow: View {
         }
     }
 
+    /// On the calibration step the button is a quiet "skip" until the
+    /// compass actually reads good — a bright cyan CTA would invite
+    /// skipping the one step that makes labels point at the right plane
+    /// (mock: onboarding.jsx Variation A's `subtle` footer).
+    private var primaryIsSubtle: Bool { step == 3 && !calibratedInFlow }
+
     private var primaryButton: some View {
         Button {
             advance()
@@ -465,20 +575,25 @@ struct OnboardingFlow: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .foregroundStyle(.black.opacity(0.88))
-            .background(Brand.Color.cyan, in: .rect(cornerRadius: 14))
-            .shadow(color: Brand.Color.cyan.opacity(0.30), radius: 16, y: 6)
+            .foregroundStyle(primaryIsSubtle ? Brand.Color.textSecondary : .black.opacity(0.88))
+            .background(
+                primaryIsSubtle ? Brand.Color.bgElevated : Brand.Color.cyan,
+                in: .rect(cornerRadius: 14)
+            )
+            .shadow(color: Brand.Color.cyan.opacity(primaryIsSubtle ? 0 : 0.30),
+                    radius: 16, y: 6)
         }
         .buttonStyle(.plain)
-        .disabled(step == totalSteps - 1 && !handleIsValid)
-        .opacity((step == totalSteps - 1 && !handleIsValid) ? 0.6 : 1)
+        .disabled(step == 2 && !handleIsValid)
+        .opacity((step == 2 && !handleIsValid) ? 0.6 : 1)
     }
 
     private var primaryButtonTitle: String {
         switch step {
         case 0: return "Get started"
         case 1: return "Allow permissions"
-        default: return "Start spotting"
+        case 2: return "Claim handle"
+        default: return calibratedInFlow ? "Start spotting" : "Skip · I'll do it later"
         }
     }
 
@@ -491,26 +606,36 @@ struct OnboardingFlow: View {
     }
 
     private func advance() {
-        if step == 1 {
+        switch step {
+        case 1:
             requestSystemPermissions()
-        }
-        if step < totalSteps - 1 {
             withAnimation { step += 1 }
-        } else {
-            // Persist handle locally first — onboarding completes even if
-            // the backend claim fails. The backend call is best-effort: a
-            // 409 shows an inline error and leaves the user on the handle
-            // step so they can pick a different name.
+        case 2:
+            // Claim before advancing — a 409 shows the inline error and
+            // keeps the user here; success/offline moves to calibration.
             let trimmed = draftHandle.trimmingCharacters(in: .whitespacesAndNewlines)
             Task { await claimHandleIfNeeded(trimmed) }
+        case totalSteps - 1:
+            ActivationTelemetry.fireCompleted(
+                claimResult: claimOutcome, calibrated: calibratedInFlow
+            )
+            onFinish()
+        default:
+            withAnimation { step += 1 }
         }
     }
 
     /// Attempt to claim `trimmed` on the backend. On success (or no backend
-    /// conflict) persist locally and finish onboarding. On 409 (taken), set
-    /// `handleTakenError` so the UI shows an inline error and the user stays
-    /// on the handle step.
+    /// conflict) persist locally and advance to the calibration step. On 409
+    /// (taken), set `handleTakenError` so the UI shows an inline error and
+    /// the user stays on the handle step.
     private func claimHandleIfNeeded(_ trimmed: String) async {
+        // Already confirmed on the server (the user came Back from the
+        // calibration step and advanced again) — no second network claim.
+        if UserDefaults.standard.string(forKey: SpotterHandle.confirmedKey) == trimmed {
+            withAnimation { step += 1 }
+            return
+        }
         do {
             let deviceId = try await accountClient.ensureRegistered()
             try await accountClient.claimHandle(trimmed)
@@ -526,8 +651,8 @@ struct OnboardingFlow: View {
             // one person, handle attached. See AnalyticsIdentity.
             Analytics.identify(deviceId, handle: trimmed)
             Analytics.capture("handle_claimed", ["result": .string("success")])
-            ActivationTelemetry.fireCompleted(claimResult: "success")
-            onFinish()
+            claimOutcome = "success"
+            withAnimation { step += 1 }
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken. Try a different handle."
             Analytics.capture("handle_claimed", ["result": .string("taken")])
@@ -539,8 +664,8 @@ struct OnboardingFlow: View {
             Log.ui.error("Onboarding: handle claim failed (non-fatal): \(error, privacy: .public)")
             handle = trimmed
             handleTakenError = nil
-            ActivationTelemetry.fireCompleted(claimResult: "offline_fallback")
-            onFinish()
+            claimOutcome = "offline_fallback"
+            withAnimation { step += 1 }
         }
     }
 

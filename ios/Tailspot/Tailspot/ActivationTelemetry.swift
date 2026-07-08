@@ -53,6 +53,7 @@ nonisolated enum ActivationTelemetry {
         case 0: return "welcome"
         case 1: return "permissions"
         case 2: return "handle"
+        case 3: return "calibration"
         default: return "step_\(step)"
         }
     }
@@ -71,8 +72,14 @@ nonisolated enum ActivationTelemetry {
         ]
     }
 
-    static func completedProperties(claimResult: String) -> [String: AnalyticsValue] {
-        ["handle_claim": .string(claimResult)]
+    static func completedProperties(claimResult: String, calibrated: Bool) -> [String: AnalyticsValue] {
+        [
+            "handle_claim": .string(claimResult),
+            // Did the user calibrate the compass in-flow (vs skip)? The
+            // split against later compass_caution_shown rates is the
+            // evidence for whether the step earns its place.
+            "calibrated": .bool(calibrated),
+        ]
     }
 
     // MARK: - Fire wrappers
@@ -85,8 +92,10 @@ nonisolated enum ActivationTelemetry {
     /// "offline_fallback" (claim failed non-409; handle persisted locally,
     /// retried later by HandleSyncer). A 409 keeps the user on the handle
     /// step, so it never reaches completion — `handle_claimed` records it.
-    static func fireCompleted(claimResult: String) {
-        Analytics.capture(completedEvent, completedProperties(claimResult: claimResult))
+    static func fireCompleted(claimResult: String, calibrated: Bool) {
+        Analytics.capture(completedEvent, completedProperties(
+            claimResult: claimResult, calibrated: calibrated
+        ))
     }
 
     static func firePermissionOutcome(permission: String, granted: Bool) {

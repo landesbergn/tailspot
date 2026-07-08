@@ -5,6 +5,30 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — Onboarding re-do phase 2: calibration step + denied-permission recovery — branch `feat/onboarding-calibration-redo`
+
+The design half of PLAN §9 #3 (phase 1 below instrumented it). **Compass
+calibration is now the flow's final step** (4 of 4; design ref
+`design/screens/onboarding.jsx` Variation A): figure-8 coaching
+(`Figure8Animation`, back in onboarding for the first time since the handle
+step displaced it), a live HDG/± readout off the flow's own
+`LocationManager` (heading updates already start on grant), and a latch at
+≤10° that flips the quiet "Skip · I'll do it later" button into a bright
+"Start spotting" — the skip is deliberately subtle so the coaching gets a
+chance. The handle claim moved from flow-end to the handle step's own
+"Claim handle" CTA (409 still holds the user there; Back-then-forward skips
+the re-claim via the confirmedKey check); `onboarding_completed` now fires
+from the final step with a `calibrated` boolean — the evidence for whether
+the step earns its place (watch it against later `compass_caution_shown`).
+**Both first-run dead ends got recovery UI** (`PermissionRecoveryCard`,
+standalone for snapshotability): an explicit camera denial used to render a
+silent black void, a location denial a forever-"waiting" GPS; each now gets
+a card naming what's off, why it matters, and an Open Settings deep-link.
+Visual pass via `OnboardingSnapshotTests` (all four steps + SE height + all
+three denial variants; `OnboardingFlow._snapshotScreen` flattens the
+ScrollView that ImageRenderer can't see into); review doc with every screen
+at `docs/reviews/2026-07-09-onboarding-redo.html`.
+
 ## 2026-07-09 — Activation funnel instrumented end-to-end — branch `feat/activation-funnel-telemetry`
 
 Phase 1 of the onboarding re-do (PLAN §9 #3): before redesigning the leaky
