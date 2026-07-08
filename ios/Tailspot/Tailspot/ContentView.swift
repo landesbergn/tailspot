@@ -1216,18 +1216,29 @@ struct ContentView: View {
             // Multi-catches keep tap-time geometry: one search per plane
             // could snap two brackets onto the same detection.
             var bracketPositions = positions
+            // Gate 4 — L4 detector soft-gate (anti-cheat PR3), fed by the
+            // SAME still search: the snapper's ring pass is the strongest
+            // detector evidence the catch path has, so its outcome doubles
+            // as the corroboration signal. Judged only inside the detector's
+            // competence envelope (daylight + expected footprint above the
+            // model's resolution floor — DetectorGate); out-of-envelope and
+            // multi-catches are never doubted. SHADOW by default: telemetry
+            // always fires, suspicion only when the debug flag enforces.
+            var suspicions = suspicions
+            var detectorVerdict: DetectorGateVerdict?
             if let data = photoData, icaos.count == 1, let icao = icaos.first,
                let tapTimePosition = positions[icao] {
                 let predicted = refreshedScreenPosition(for: icao, screenSize: screenSize)
                     ?? tapTimePosition
                 // Detached: up to 9 CoreML passes; never on the MainActor.
-                let snapped = await Task.detached(priority: .userInitiated) {
-                    CatchPhotoSnapper.snapScreenPosition(
+                let snap = await Task.detached(priority: .userInitiated) {
+                    CatchPhotoSnapper.snapOutcome(
                         jpegData: data,
                         predictedScreen: predicted,
                         screenSize: screenSize
                     )
                 }.value
+                let snapped = snap.screenPoint
                 bracketPositions[icao] = snapped ?? predicted
                 let correction = snapped.map {
                     Int(hypot($0.x - predicted.x, $0.y - predicted.y).rounded())
@@ -1237,6 +1248,40 @@ struct ContentView: View {
                     "outcome": .string(snapped != nil ? "snapped" : "fallback"),
                     "correction_pt": .int(correction ?? 0),
                 ])
+
+                // A live preview fix also corroborates (fresh by construction
+                // — it expires after ~1 s of detector misses).
+                let liveFix = visualConfirm.fixes[icao] != nil
+                // Envelope footprint only when the still was actually
+                // searched — an undecodable photo must fail open.
+                let footprintPx: Double? = snap.searched
+                    ? visibleByIcao[icao].flatMap { obs in
+                        snap.photoWidthPx.flatMap { photoWidth in
+                            DetectorGate.expectedFootprintPx(
+                                wingspanMeters: obs.aircraft.estimatedWingspanMeters,
+                                slantMeters: obs.slantDistanceMeters,
+                                effectiveHfovDeg: Self.baseHfovDeg / zoom,
+                                photoWidthPx: photoWidth
+                            )
+                        }
+                    }
+                    : nil
+                let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
+                let verdict = DetectorGate().verdict(
+                    sawPlane: snapped != nil || liveFix,
+                    expectedFootprintPx: footprintPx,
+                    meanLuminance: meanLum
+                )
+                detectorVerdict = verdict
+                let enforcing = visualConfirm.detectorGateEnforcing
+                CatchTelemetry.fireDetectorGate(
+                    verdict: verdict, snapHit: snapped != nil, liveFix: liveFix,
+                    expectedFootprintPx: footprintPx, meanLuminance: meanLum,
+                    enforcing: enforcing
+                )
+                if verdict == .noDetection, enforcing {
+                    suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .noDetection)
+                }
             }
 
             // Snapshot BEFORE inserting: was the Hangar empty? (The
@@ -1390,7 +1435,10 @@ struct ContentView: View {
                     // Anti-cheat signals: how many this tap caught (L1 → ~1) and
                     // the caught plane's apparent size (L3 → trending bigger).
                     multiN: newCatches.count,
-                    angularSizeArcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes
+                    angularSizeArcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes,
+                    // Only ever non-nil for a single-target catch, so it can't
+                    // mislabel a multi-catch row.
+                    detectorVerdict: detectorVerdict
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
@@ -1858,6 +1906,7 @@ struct ContentView: View {
                 visualConfirmRow
                 gateDebugRow
                 localGateRow
+                detectorGateRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -2136,6 +2185,25 @@ struct ContentView: View {
         }
         .contentShape(.rect)
         .onTapGesture { visualConfirm.localGateEnforcing.toggle() }
+    }
+
+    /// Tap-to-toggle row for the L4 detector soft-gate (debug). SHADOW
+    /// (telemetry only, ships this way) ↔ ENFORCE (an in-envelope catch the
+    /// detector can't corroborate gets the post-reveal Keep/Discard). Lets a
+    /// field session feel the doubt question before the shadow stream
+    /// justifies flipping the default.
+    private var detectorGateRow: some View {
+        HStack(spacing: 8) {
+            Text("L4 gate:")
+            Text(visualConfirm.detectorGateEnforcing ? "[ENFORCE]" : "[SHADOW]")
+                .foregroundStyle(visualConfirm.detectorGateEnforcing
+                                 ? Brand.Color.alertCaution
+                                 : Brand.Color.textTertiary)
+                .bold()
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture { visualConfirm.detectorGateEnforcing.toggle() }
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record

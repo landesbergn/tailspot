@@ -5,6 +5,29 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — L4 detector soft-gate ships in shadow (anti-cheat PR3) — branch `feat/l4-detector-soft-gate`
+
+The last anti-cheat lever (docs/anti-cheat-plan.md §5 L4), adapted to the
+2026-07-04 post-catch confirm model: when the camera *should* have seen the
+plane and didn't, the catch gets the `no_detection` suspicion — post-reveal
+Keep/Discard, never a block. "Should have seen it" is the competence envelope:
+daylight (`meanLuminance ≥ 0.12`, SkyCheck's color-trust dial) AND an expected
+footprint ≥ 24 px in the captured still (`DetectorGate.expectedFootprintPx` —
+wingspan/slant through the zoom-effective FOV; the model's measured floor is
+~15–20 px). "Saw it" = the `CatchPhotoSnapper` full-res ring search over the
+captured still (the strongest evidence the catch path has, reused from PR
+#106 via the new `snapOutcome` API) OR a live preview `VisualFix` (fresh by
+construction — expires after ~1 s of misses). Corroboration always wins;
+night, specks, multi-catches, and missing signals are never judged (fail
+open, same doctrine as SkyCheck/LocalSkyGate). Ships in SHADOW exactly like
+L2 did: `catch_detector_gate` fires on every single-target catch (verdict +
+envelope signals; `detector_verdict` also lands on `catch_performed`), and a
+debug-overlay row toggles `[L4 SHADOW]` ↔ `[L4 ENFORCE]`
+(`detectorGateEnforcing`, UserDefaults). Flip enforcement when the shadow
+stream shows in-envelope no-detections are cheats rather than recall misses.
+New pure `DetectorGate` + `DetectorGateTests`; suspicion precedence is now
+occluded > no_detection > too_far > indoor.
+
 ## 2026-07-07 — `first_plane_catch` activation event — branch `feat/first-catch-event`
 
 The user's very first catch (the tap that takes the Hangar 0 → N) now fires a
