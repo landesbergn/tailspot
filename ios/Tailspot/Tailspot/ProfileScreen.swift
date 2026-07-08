@@ -2,12 +2,21 @@
 //  ProfileScreen.swift
 //  Tailspot
 //
-//  The gamification hub: total points, global rank (placeholder
-//  pending backend), four-stat grid, rarity breakdown strip, plus
-//  navigation entries to Sets, Map, Leaderboard, Rarity / Types
-//  reference, Settings, and Share. Trophies have moved into the
-//  Hangar's Trophies segment (Spec § 4.2, § 7) and no longer have
-//  an entry on this screen.
+//  The gamification hub, reorganized 2026-07-08 ("Direction A" of the
+//  profile layout exploration — docs/reviews). Hierarchy, in priority
+//  order: identity + server-authoritative standing (points/rank hero),
+//  ONE quiet collection-stat strip, then navigation (Sets/Map/Leaders +
+//  reference/settings links). The four loud stat tiles and the rarity
+//  breakdown strip were removed — the census detail lives in the Hangar
+//  and the references; the strip was also data-dishonest (equal segments
+//  regardless of counts). Trophies live in the Hangar's Trophies segment
+//  and have no entry here; the stat strip says TROPHIES (the system's
+//  one user-facing name — "medals" was this screen's invention).
+//
+//  Surfaces are iOS 26 Liquid Glass (`.glassEffect`) tinted to the brand
+//  dark; untinted glass renders too bright against the fixed dark
+//  palette. The backdrop adds two faint radial glows so the glass has
+//  something to refract.
 //
 //  The HEADLINE total-points + global-rank read the server's authoritative
 //  standing (GET /v1/leaderboard `me`) so the profile and the public
@@ -52,10 +61,9 @@ struct ProfileScreen: View {
         let inputs = Trophies.inputs(from: catches)
         return NavigationStack {
             ScrollView {
-                VStack(spacing: 18) {
+                VStack(spacing: 16) {
                     identityHeader(stats: stats)
-                    statsRow(stats: stats, inputs: inputs)
-                    rarityStrip(stats: stats)
+                    statsStrip(stats: stats, inputs: inputs)
                     quickLinks
                     sectionLinks
                 }
@@ -63,7 +71,7 @@ struct ProfileScreen: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
-            .background(Brand.Color.bgPrimary.ignoresSafeArea())
+            .background(glassBackdrop)
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .task { await loadStanding() }
@@ -197,91 +205,59 @@ struct ProfileScreen: View {
         }
         .frame(maxWidth: .infinity)
         .padding(18)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 18))
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 20))
     }
 
-    // MARK: - Stats grid
+    // MARK: - Glass treatment
 
-    private func statsRow(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
-        // `inputs` is the precomputed value passed in — the filter closure now
-        // reads that single snapshot instead of re-deriving it per trophy.
-        let earnedMedals = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
-        return HStack(spacing: 8) {
-            statTile(value: stats.totalCatches, label: "Catches")
-            statTile(value: stats.uniqueAirframes, label: "Unique")
-            statTile(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
-            statTile(value: earnedMedals, label: "Medals")
+    /// Liquid Glass anchored to the brand's elevated dark tone. Untinted
+    /// `.regular` glass resolves too bright over `bgPrimary` and washes
+    /// out the fixed light-on-dark text palette.
+    private static let brandGlass: Glass = .regular.tint(Brand.Color.bgElevated.opacity(0.88))
+
+    /// Two faint radial glows under the glass surfaces — pure decoration,
+    /// but glass over a flat color has nothing to refract and reads matte.
+    private var glassBackdrop: some View {
+        ZStack {
+            Brand.Color.bgPrimary
+            RadialGradient(colors: [Brand.Color.cyan.opacity(0.10), .clear],
+                           center: .init(x: 0.85, y: 0.05), startRadius: 10, endRadius: 420)
+            RadialGradient(colors: [Brand.Color.alertAdvisory.opacity(0.05), .clear],
+                           center: .init(x: 0.1, y: 0.75), startRadius: 10, endRadius: 380)
         }
+        .ignoresSafeArea()
     }
 
-    private func statTile(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
+    // MARK: - Stats strip
+
+    /// One quiet row for the collection counts — deliberately smaller type
+    /// than the points/rank hero above it so the two never compete.
+    private func statsStrip(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
+        // `inputs` is the precomputed value passed in — the filter closure
+        // reads that single snapshot instead of re-deriving it per trophy.
+        let earnedTrophies = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
+        return HStack(spacing: 0) {
+            statCell(value: stats.totalCatches, label: "Catches")
+            statCell(value: stats.uniqueAirframes, label: "Unique")
+            statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
+            statCell(value: earnedTrophies, label: "Trophies")
+        }
+        .padding(.vertical, 12)
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 16))
+    }
+
+    private func statCell(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
         VStack(spacing: 3) {
             Text("\(value)")
-                .font(Brand.Font.mono(size: 22, weight: .bold))
+                .font(Brand.Font.mono(size: 20, weight: .bold))
                 .foregroundStyle(valueColor)
                 .monospacedDigit()
             Text(label.uppercased())
-                .font(Brand.Font.mono(size: 8, weight: .semibold))
-                .tracking(1)
-                .foregroundStyle(Brand.Color.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
-    }
-
-    // MARK: - Rarity strip
-
-    private func rarityStrip(stats: ProfileStats) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("BREAKDOWN BY RARITY")
                 .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
-            HStack(spacing: 0) {
-                ForEach(Rarity.allCases, id: \.self) { r in
-                    let count = stats.countsByRarity[r] ?? 0
-                    let proportion = stats.totalCatches == 0
-                        ? 0
-                        : Double(count) / Double(stats.totalCatches)
-                    Rectangle()
-                        .fill(count > 0 ? r.tint : Brand.Color.bgSurface)
-                        .frame(height: 8)
-                        .frame(maxWidth: .infinity)
-                        // Each tier carries its proportion of the row,
-                        // but we render equal segments to keep
-                        // empty tiers visible. A more honest layout
-                        // would weight by proportion — try that if you
-                        // want the strip to read as data.
-                        .overlay(alignment: .leading) {
-                            GeometryReader { geo in
-                                Rectangle()
-                                    .fill(r.tint.opacity(count == 0 ? 0 : 0.6))
-                                    .frame(width: geo.size.width * CGFloat(proportion))
-                            }
-                        }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            HStack {
-                ForEach(Rarity.allCases, id: \.self) { r in
-                    let count = stats.countsByRarity[r] ?? 0
-                    VStack(spacing: 1) {
-                        Text("\(count)")
-                            .font(Brand.Font.mono(size: 13, weight: .bold))
-                            .foregroundStyle(count > 0 ? r.tint : Brand.Color.textTertiary)
-                            .monospacedDigit()
-                        Text(r.label)
-                            .font(Brand.Font.mono(size: 7, weight: .semibold))
-                            .tracking(0.6)
-                            .foregroundStyle(Brand.Color.textTertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
         }
-        .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Quick links
@@ -308,7 +284,7 @@ struct ProfileScreen: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
+            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 14))
         }
         .buttonStyle(.plain)
     }
@@ -323,7 +299,7 @@ struct ProfileScreen: View {
             divider
             sectionLink(label: "Settings", systemImage: "gear") { SettingsScreen() }
         }
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: 14))
     }
 
     private var divider: some View {

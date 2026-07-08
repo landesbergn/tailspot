@@ -5,6 +5,29 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-08 — Profile hub reorganized ("Direction A") — branch `feat/profile-standing-layout`
+
+Follow-on to the same-day cleanup below, answering Noah's "what is this page
+prioritizing?" Three questions drove it: medals-vs-trophies (one system, and
+this screen's MEDALS tile was the only surface not calling them Trophies),
+no clear information hierarchy, and a data-dishonest rarity strip (equal
+segments regardless of counts — the old code comment admitted it).
+
+Four divergent layouts were mocked in real SwiftUI (rendered via the
+snapshot harness; review artifact 2026-07-08) — A "Standing" scoreboard,
+B "Progression" quest log, C "Flight deck" instrument cluster, D "Boarding
+pass". **Noah picked A**; D's boarding-pass concept moved to the backlog as
+the share/invite artboard (PLAN §9 #10 "Spotter Pass").
+
+The shipped layout, in priority order: identity + points/rank hero → ONE
+quiet collection-stat strip (Catches · Unique · Rare+ · **Trophies**) → nav.
+The four stat tiles and the rarity strip are gone (census detail lives in
+the Hangar/references). Surfaces moved to iOS 26 Liquid Glass
+(`.glassEffect`) tinted to `bgElevated` — untinted glass resolves too
+bright over the fixed dark palette — over a backdrop with two faint radial
+glows so the glass has something to refract. `ProfileStats` is unchanged
+(ShareCardSheet still reads it); only the view reorganized.
+
 ## 2026-07-08 — Profile/Settings legacy-artifact cleanup for v1 — branch `polish/settings-v1-cleanup`
 
 A pre-launch scrub of the Profile hub + Settings surface (PLAN §9 #6). Every
