@@ -58,17 +58,6 @@ struct ProfileScreen: View {
         // then we thread the values down to the sections.
         let stats = ProfileStats(catches: catches)
         let inputs = Trophies.inputs(from: catches)
-        // Render the share image up front so the toolbar ShareLink opens the
-        // system share sheet on the FIRST tap (the old flow detoured through
-        // a preview sheet — an extra tap showing what the share preview
-        // already shows). Body re-evaluates rarely for this screen (catch
-        // insert / standing fetch), so the ~ms ImageRenderer cost is fine.
-        let shareImage = Self.renderShareCard(
-            stats: stats, handle: handle,
-            rankLabel: cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : nil,
-            goal: ProfileShareCard.nearestGoal(inputs: inputs),
-            best: ProfileShareCard.bestCatch(in: catches)
-        )
         return NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
@@ -94,22 +83,14 @@ struct ProfileScreen: View {
                     // CTA treatment (cyan disc, dark glyph) instead of the
                     // bare system tint — same accent grammar as the reveal's
                     // CTA and the planned Spotter Pass share (PLAN §9 #10).
-                    // A direct ShareLink: one tap → the system share sheet,
-                    // whose preview shows the card (no intermediate sheet).
-                    // The payload is brag + invite: the card image AND a
-                    // message with the tappable tailspot.app link — targets
-                    // like Messages/Mail carry both, so the invite survives
-                    // even where the image is all that's visible (the card
-                    // itself carries the challenge + QR).
+                    // A direct ShareLink, deliberately minimal (Noah,
+                    // 2026-07-08): one tap → the system share sheet with a
+                    // short invite + the tailspot.app link. Messages renders
+                    // the link as a rich preview from the site's OG tags; a
+                    // rendered stat-card image was tried and cut as too much.
                     ShareLink(
-                        item: shareImage,
-                        subject: Text("Tailspot · @\(handle)"),
-                        message: Text(ProfileShareCard.inviteMessage(
-                            handle: handle,
-                            points: cachedServerPoints >= 0 ? cachedServerPoints : stats.totalPoints,
-                            rankLabel: cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : nil
-                        )),
-                        preview: SharePreview("Tailspot · @\(handle)", image: shareImage)
+                        item: Self.inviteURL,
+                        message: Text("Join me on Tailspot:")
                     ) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 13, weight: .bold))
@@ -132,21 +113,10 @@ struct ProfileScreen: View {
         }
     }
 
-    /// Stamp the share artboard into an `Image` for ShareLink. ImageRenderer
-    /// is MainActor-bound, which this view already is.
-    private static func renderShareCard(
-        stats: ProfileStats, handle: String, rankLabel: String?,
-        goal: ProfileShareCard.ShareGoal?, best: ProfileShareCard.BestCatch?
-    ) -> Image {
-        let card = ProfileShareCard(stats: stats, handle: handle,
-                                    rankLabel: rankLabel, goal: goal, best: best)
-        let renderer = ImageRenderer(content: card)
-        renderer.scale = 3
-        if let ui = renderer.uiImage {
-            return Image(uiImage: ui)
-        }
-        return Image(systemName: "airplane")
-    }
+    /// Where an invited friend lands. The site carries install instructions
+    /// now (TestFlight) and becomes the App Store pointer at GA. Real invite
+    /// attribution (per-user codes, the invite trophy) is PLAN §9 #10.
+    private static let inviteURL = URL(string: "https://tailspot.app")!
 
     // MARK: - Standing fetch
 
