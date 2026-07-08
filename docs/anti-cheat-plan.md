@@ -244,8 +244,18 @@ Reuse the existing offline harness rather than guessing thresholds:
 
 - **PR1** L1 (aim) + L3 (size floor) + telemetry — pure logic, no perception risk,
   ships the biggest safe cut (stops the 28.7/21.9/20.7/18.2 km catches + the spray).
-- **PR2** L2 (localized sky) — after the calibration corpus.
+  *(Shipped 2026-06-27.)*
+- **PR2** L2 (localized sky) — after the calibration corpus. *(Shipped in shadow
+  2026-06-27; enforcement on 2026-07-04.)*
 - **PR3** L4 (detector gate) — flagged, default-off, enabled on telemetry evidence.
+  *(Shipped in SHADOW 2026-07-09 — adapted to the post-catch confirm model that
+  superseded hard-block on 2026-07-04: an in-envelope no-detection raises the
+  `no_detection` suspicion → post-reveal Keep/Discard, never a block. "Saw the
+  plane" = the CatchPhotoSnapper full-res still search (PR #106) OR a live
+  preview VisualFix; envelope = daylight (`meanLuminance ≥ 0.12`) + expected
+  footprint ≥ 24 px in the still (`DetectorGate.expectedFootprintPx`). Watch
+  `catch_detector_gate` — flip `detectorGateEnforcing` when the in-envelope
+  no-detection stream reads as cheats, not detector-recall misses.)*
 - **Risk:** re-breaking "never hide a visible plane." **Mitigated by:** catch-eligibility
   decoupled from label rendering (labels stay generous); fail-open everywhere; an
   override on every block; override-rate watch. The doctrine stays intact — labels

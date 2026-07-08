@@ -64,26 +64,52 @@ nonisolated enum CatchPhotoSnapper {
     /// is missing from the bundle (feature silently off).
     private static let detector = AirplaneDetector()
 
+    /// Result of a catch-photo snap attempt, with enough context for the L4
+    /// detector gate to reason about it: `screenPoint` is nil both when the
+    /// detector saw nothing AND when the search couldn't run at all
+    /// (undecodable photo, degenerate sizes) — `searched` separates the two,
+    /// and `photoWidthPx` feeds the expected-footprint envelope math.
+    struct Snap: Sendable {
+        let screenPoint: CGPoint?
+        let searched: Bool
+        let photoWidthPx: Double?
+
+        static let notSearched = Snap(screenPoint: nil, searched: false, photoWidthPx: nil)
+    }
+
     /// Full pipeline for the catch path: decode the captured JPEG, map the
     /// predicted SCREEN position into photo pixels, search, and map the
     /// snapped point back to screen space so the existing
     /// `CatchPhotoComposer.BracketOverlay` API is unchanged.
-    /// Returns nil when there is nothing to snap to.
+    static func snapOutcome(
+        jpegData: Data,
+        predictedScreen: CGPoint,
+        screenSize: CGSize
+    ) -> Snap {
+        guard let cgImage = UIImage(data: jpegData)?.cgImage else { return .notSearched }
+        let photoSize = CGSize(width: cgImage.width, height: cgImage.height)
+        guard photoSize.width > 0, photoSize.height > 0,
+              screenSize.width > 0, screenSize.height > 0 else { return .notSearched }
+        let transform = AspectFillTransform(screenSize: screenSize, photoSize: photoSize)
+        let predictedPhoto = transform.photoPoint(fromScreenPoint: predictedScreen)
+        let snappedPhoto = snappedPhotoPoint(in: cgImage, predictedPhotoPoint: predictedPhoto)
+        return Snap(
+            screenPoint: snappedPhoto.map(transform.screenPoint(fromPhotoPoint:)),
+            searched: true,
+            photoWidthPx: Double(photoSize.width)
+        )
+    }
+
+    /// Snap-only convenience (the pre-L4 shape; kept for tests and callers
+    /// that don't need the search context). Returns nil when there is
+    /// nothing to snap to.
     static func snapScreenPosition(
         jpegData: Data,
         predictedScreen: CGPoint,
         screenSize: CGSize
     ) -> CGPoint? {
-        guard let cgImage = UIImage(data: jpegData)?.cgImage else { return nil }
-        let photoSize = CGSize(width: cgImage.width, height: cgImage.height)
-        guard photoSize.width > 0, photoSize.height > 0,
-              screenSize.width > 0, screenSize.height > 0 else { return nil }
-        let transform = AspectFillTransform(screenSize: screenSize, photoSize: photoSize)
-        let predictedPhoto = transform.photoPoint(fromScreenPoint: predictedScreen)
-        guard let snappedPhoto = snappedPhotoPoint(
-            in: cgImage, predictedPhotoPoint: predictedPhoto
-        ) else { return nil }
-        return transform.screenPoint(fromPhotoPoint: snappedPhoto)
+        snapOutcome(jpegData: jpegData, predictedScreen: predictedScreen,
+                    screenSize: screenSize).screenPoint
     }
 
     /// Detector search in photo-pixel space. Center crop first (early exit
