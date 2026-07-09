@@ -34,6 +34,8 @@ describe("rescoreCatches", () => {
     points: number;
     scoringVersion?: number;
     firstOfType?: boolean;
+    guessKind?: string | null;
+    guessCorrect?: boolean;
   }): Promise<string> {
     const rows = await db
       .insert(catches)
@@ -48,6 +50,9 @@ describe("rescoreCatches", () => {
         // Default false: these are FROZEN historical rows, not first-of-type
         // (the column default + the "no historical bonus" semantics).
         firstOfType: opts.firstOfType ?? false,
+        // Frozen guess verdict (defaults mirror the columns: no guess).
+        guessKind: opts.guessKind ?? null,
+        guessCorrect: opts.guessCorrect ?? false,
         caughtAt: new Date("2026-06-11T00:00:00Z"),
         observerLat: 37.8,
         observerLon: -122.3,
@@ -120,6 +125,89 @@ describe("rescoreCatches", () => {
     expect(after[0].rarity).toBe("epic");
     expect(after[0].firstOfType).toBe(true); // flag preserved, not recomputed
     expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
+  });
+
+  it("re-scores a catch with a STORED correct guess from the frozen flags (verdict frozen, amount floats)", async () => {
+    // A correct TYPE guess frozen at the unknown floor. Re-score resolves the
+    // base to epic (100) and re-applies the +25% type-guess bonus → 125. The
+    // verdict is READ off the row — never re-verified against live route/
+    // registry truth — while the AMOUNT floats with the re-derived base.
+    const id = await insertCatch({
+      icao24: FOREIGN,
+      rarity: null,
+      typecode: null,
+      points: 13, // unknown floor 10 + round(10*0.25)=3 as scored at upload
+      guessKind: "type",
+      guessCorrect: true,
+    });
+    const applied = await rescoreCatches(db, {});
+    expect(applied.changed).toBe(1);
+    const after = await db.select().from(catches).where(eq(catches.id, id));
+    expect(after[0].points).toBe(125); // 100 base + round(100*0.25)
+    expect(after[0].guessKind).toBe("type"); // frozen, not rewritten
+    expect(after[0].guessCorrect).toBe(true);
+    expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
+  });
+
+  it("a stored ROUTE guess re-scores at +10%, and stacks with first-of-type", async () => {
+    const id = await insertCatch({
+      icao24: FOREIGN,
+      rarity: null,
+      typecode: null,
+      points: 10,
+      firstOfType: true,
+      guessKind: "route",
+      guessCorrect: true,
+    });
+    await rescoreCatches(db, {});
+    const after = await db.select().from(catches).where(eq(catches.id, id));
+    expect(after[0].points).toBe(160); // 100 base + 50 first-of-type + round(100*0.1)=10
+  });
+
+  it("a stored INCORRECT guess earns nothing on re-score", async () => {
+    const id = await insertCatch({
+      icao24: FOREIGN,
+      rarity: null,
+      typecode: null,
+      points: 10,
+      guessKind: "type",
+      guessCorrect: false,
+    });
+    await rescoreCatches(db, {});
+    const after = await db.select().from(catches).where(eq(catches.id, id));
+    expect(after[0].points).toBe(100); // base only — the frozen verdict says wrong
+  });
+
+  it("v2→v3 regime bump is a ZERO-DELTA: pre-guess rows restamp without moving a point", async () => {
+    // Rows scored under regime 2 with their v2-correct points (no guesses exist
+    // pre-v3 — guess_correct defaults false). The version bump makes them stale;
+    // re-scoring must move ZERO points and only restamp the version. This is
+    // the property the prod rollout dry-run (`rescore -- --all --dry-run`)
+    // verifies before applying.
+    const plain = await insertCatch({
+      icao24: KNOWN,
+      typecode: "C172",
+      rarity: "common",
+      points: 10,
+      scoringVersion: 2,
+    });
+    const bonused = await insertCatch({
+      icao24: FOREIGN,
+      typecode: "A388",
+      rarity: "epic",
+      points: 150, // epic 100 + first-of-type 50, correct under v2 AND v3
+      scoringVersion: 2,
+      firstOfType: true,
+    });
+    const report = await rescoreCatches(db, {});
+    expect(report.scanned).toBe(2); // both stale by version
+    expect(report.changed).toBe(0); // …but no projection moved
+    expect(report.written).toBe(2); // version restamps only
+    expect(report.pointsAfter).toBe(report.pointsBefore);
+    for (const id of [plain, bonused]) {
+      const after = await db.select().from(catches).where(eq(catches.id, id));
+      expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
+    }
   });
 
   it("is idempotent — a second run over settled data changes nothing", async () => {
