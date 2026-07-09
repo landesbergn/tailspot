@@ -60,6 +60,25 @@ nonisolated enum CatchPhotoComposer {
     /// Scaled to photo pixels by 1 / aspectFillScale inside `compose(...)`.
     static let bracketScreenHaloWidth: CGFloat = 1.5
 
+    /// Saved photos are capped at this long side. Stills now come off the
+    /// sensor at ~12 MP (full-res capture so the snap detector can see
+    /// distant planes); saving that verbatim would triple-plus per-catch
+    /// storage and make Hangar grids decode 12 MP images. 3072 keeps
+    /// ~2.8× the pixel detail of the old 1080-wide photos (plenty for the
+    /// share-card plane crop) at roughly a quarter of the full-res bytes.
+    /// The snap SEARCH runs on the uncapped bytes before compose.
+    static let maxSavedLongSidePixels: CGFloat = 3072
+
+    /// The size a photo is actually saved at: source size, uniformly
+    /// scaled down if the long side exceeds `maxSavedLongSidePixels`.
+    static func savedPhotoSize(for photoSize: CGSize) -> CGSize {
+        let longSide = max(photoSize.width, photoSize.height)
+        guard longSide > maxSavedLongSidePixels else { return photoSize }
+        let r = maxSavedLongSidePixels / longSide
+        return CGSize(width: (photoSize.width * r).rounded(),
+                      height: (photoSize.height * r).rounded())
+    }
+
     /// A composed catch photo: the bracketed JPEG plus WHERE the plane sits
     /// in it (normalized 0…1 photo coordinates, top-left origin — the
     /// bracket center). The focus is persisted on `Catch` so photo displays
@@ -92,7 +111,10 @@ nonisolated enum CatchPhotoComposer {
     /// back to the original `jpegData` (with no focus) in that case.
     static func compose(jpegData: Data, overlay: BracketOverlay) -> Composed? {
         guard let image = UIImage(data: jpegData) else { return nil }
-        let photoSize = image.size
+        // All geometry runs in the CAPPED output space — the transform,
+        // bracket center, and stroke widths all reference the pixels
+        // actually being written.
+        let photoSize = savedPhotoSize(for: image.size)
         guard photoSize.width > 0, photoSize.height > 0,
               overlay.screenSize.width > 0, overlay.screenSize.height > 0
         else { return nil }
@@ -109,14 +131,15 @@ nonisolated enum CatchPhotoComposer {
         // is small relative to the screen (transform.scale > 1).
         let photoHaloWidth = max(0.5, bracketScreenHaloWidth / transform.scale)
 
-        // Render at the photo's native pixel resolution (not the
-        // device scale). A 12MP photo blown up 3× would be 36MP for no
-        // visual gain after re-encoding to JPEG.
+        // Render at the (capped) photo pixel resolution, not the device
+        // scale — blowing a photo up by the screen scale would multiply
+        // pixels for no visual gain after re-encoding to JPEG.
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1.0
         format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: photoSize, format: format)
         let composed = renderer.image { ctx in
+            ctx.cgContext.interpolationQuality = .high
             image.draw(in: CGRect(origin: .zero, size: photoSize))
             drawCornerBrackets(
                 in: ctx.cgContext,
@@ -134,6 +157,32 @@ nonisolated enum CatchPhotoComposer {
             jpegData: outData,
             normalizedFocus: normalizedFocus(overlay: overlay, photoSize: photoSize)
         )
+    }
+
+    /// Re-render WITHOUT a bracket: upright pixel order + the same
+    /// long-side cap as `compose`. Used when a catch saves a photo but no
+    /// bracket should be baked (no recorded position, or the target was
+    /// off-frame at exposure) — otherwise the raw sensor-landscape 12 MP
+    /// bytes would land in the Hangar verbatim. Returns nil when the JPEG
+    /// can't be decoded; callers fall back to the raw bytes.
+    static func normalizedWithoutBracket(jpegData: Data) -> Data? {
+        guard let image = UIImage(data: jpegData) else { return nil }
+        let photoSize = savedPhotoSize(for: image.size)
+        guard photoSize.width > 0, photoSize.height > 0 else { return nil }
+        // Skip the decode→re-encode when the photo is already saved-size
+        // and upright — legacy 1080p captures pass through untouched.
+        if photoSize == image.size, image.imageOrientation == .up {
+            return jpegData
+        }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = true
+        let rendered = UIGraphicsImageRenderer(size: photoSize, format: format)
+            .image { ctx in
+                ctx.cgContext.interpolationQuality = .high
+                image.draw(in: CGRect(origin: .zero, size: photoSize))
+            }
+        return rendered.jpegData(compressionQuality: 0.9)
     }
 
     private static func drawCornerBrackets(
