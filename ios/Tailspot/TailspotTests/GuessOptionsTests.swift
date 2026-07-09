@@ -2,16 +2,12 @@
 //  GuessOptionsTests.swift
 //  TailspotTests
 //
-//  Pins the bonus-round option builder (plan 2026-07-09-001 §A5/§B):
-//  every set contains the correct answer among 4 unique display strings;
-//  route distractors come from the correct answer's broad region and are
-//  plausibility-weighted by distance-from-observer; type distractors share
-//  the answer's AircraftType class within ±1 rarity tier and never collapse
-//  to the answer's display name (the E75L/E75S "Embraer 175" trap). Military
-//  types miscoded `.narrow`/`.wide`/`.ga` in the bundled table
-//  (MilitaryDesignators) are excluded from a commercial question — a narrowbody
-//  never draws an EA-18 Growler — and vice versa.
-//  All sampling is seeded (SeededRNG) — assertions are exact replays.
+//  Pins the ROUTE bonus-round option builder (plan 2026-07-09-001 §A5/§B;
+//  route-only per Noah 2026-07-09): every set contains the correct answer
+//  among 4 unique display strings; route distractors come from the correct
+//  answer's broad region and are plausibility-weighted by
+//  distance-from-observer. All sampling is seeded (SeededRNG) — assertions
+//  are exact replays.
 //
 
 import Foundation
@@ -176,148 +172,5 @@ struct GuessOptionsRouteTests {
         #expect(a == b)
         let c = try #require(question(seed: 8))
         #expect(a != c, "different seeds should (in practice) differ")
-    }
-}
-
-@Suite("GuessOptions — type questions")
-struct GuessOptionsTypeTests {
-
-    private func question(typecode: String?, seed: UInt64 = 1) -> GuessOptions.TypeQuestion? {
-        var rng = SeededRNG(seed: seed)
-        return GuessOptions.typeQuestion(typecode: typecode, using: &rng)
-    }
-
-    @Test func correctIncludedAmongFourUniqueOptions() throws {
-        let q = try #require(question(typecode: "B738"))
-        #expect(q.correctValue == "B738")
-        #expect(q.options.count == GuessOptions.optionCount)
-        #expect(q.options.contains { $0.value == "B738" })
-        #expect(Set(q.options.map(\.value)).count == q.options.count)
-        #expect(Set(q.options.map { $0.display.lowercased() }).count == q.options.count)
-        // The correct chip shows the canonical name.
-        let correctOption = try #require(q.options.first { $0.value == "B738" })
-        #expect(correctOption.display == "Boeing 737-800")
-    }
-
-    @Test func distractorsShareClassWithinOneRarityTier() throws {
-        // B738: narrow / common. Distractors must be narrowbodies within
-        // ±1 tier (common/uncommon) — "737-800 / A320 / A220" confusable,
-        // never "737-800 / B-52 / Cessna 172".
-        for seed in UInt64(1)...30 {
-            let q = try #require(question(typecode: "B738", seed: seed))
-            for option in q.options where option.value != "B738" {
-                let entry = try #require(AircraftNaming.table[option.value])
-                #expect(entry.type == .narrow, "\(option.value) not a narrowbody")
-                let ordinal = (entry.rarity ?? .common).ordinal
-                #expect(abs(ordinal - Rarity.common.ordinal) <= 1,
-                        "\(option.value) rarity \(String(describing: entry.rarity)) beyond ±1 tier")
-            }
-        }
-    }
-
-    @Test func collapsedDisplayNamesAreNeverOffered() throws {
-        // E75L and E75S BOTH render "Embraer 175" — the classic collapse.
-        // Whichever is the answer, the other must never appear: two chips
-        // with identical text where one is "wrong" is a coin-flip trap.
-        for answer in ["E75L", "E75S"] {
-            for seed in UInt64(1)...50 {
-                let q = try #require(question(typecode: answer, seed: seed))
-                let displays = q.options.map { $0.display.lowercased() }
-                #expect(displays.filter { $0 == "embraer 175" }.count == 1)
-                let twin = answer == "E75L" ? "E75S" : "E75L"
-                #expect(!q.options.contains { $0.value == twin })
-            }
-        }
-    }
-
-    @Test func unresolvableTypecodesReturnNil() {
-        #expect(question(typecode: nil) == nil)
-        #expect(question(typecode: "") == nil)
-        #expect(question(typecode: "ZZZ9") == nil)
-        #expect(GuessOptions.typeAvailable(typecode: nil) == false)
-        #expect(GuessOptions.typeAvailable(typecode: "ZZZ9") == false)
-        #expect(GuessOptions.typeAvailable(typecode: "B738") == true)
-        // Case/whitespace-normalized like the route path.
-        #expect(GuessOptions.typeAvailable(typecode: " b738 ") == true)
-    }
-
-    @Test func commercialNarrowbodyNeverDrawsMilitaryDistractor() throws {
-        // The reported bug: a commercial narrowbody (A321neo / 737-800) drew
-        // Boeing EA-18 Growler + Tupolev Tu-22 as "same-class" distractors,
-        // because several military jets are miscoded `.narrow` in the bundled
-        // table. Across many seeds, no distractor may be military — every
-        // distractor stays a genuine commercial narrowbody.
-        for answer in ["A21N", "B738"] {
-            for seed in UInt64(1)...200 {
-                let q = try #require(question(typecode: answer, seed: seed))
-                #expect(q.options.count == GuessOptions.optionCount)
-                for option in q.options where option.value != answer {
-                    let entry = try #require(AircraftNaming.table[option.value])
-                    #expect(
-                        !MilitaryDesignators.isMilitary(typecode: option.value, type: entry.type),
-                        "military distractor \(option.value) offered for \(answer) (seed \(seed))")
-                    #expect(entry.type == .narrow, "\(option.value) not a narrowbody")
-                }
-            }
-        }
-    }
-
-    @Test func militaryTypeDrawsMilitaryDistractors() throws {
-        // Symmetry: A-10 is miscoded `.narrow` in the table but is military
-        // (MilitaryDesignators), so its distractors must ALL be military —
-        // an A-10 question offering a 737 is as broken as the reverse.
-        // Also exercises the ±1-tier bucket at the ladder's top edge (A-10 is
-        // legendary) and, if starved, the same-class widening.
-        for seed in UInt64(1)...30 {
-            let q = try #require(question(typecode: "A10", seed: seed))
-            #expect(q.options.count == GuessOptions.optionCount)
-            for option in q.options where option.value != "A10" {
-                let entry = try #require(AircraftNaming.table[option.value])
-                #expect(
-                    MilitaryDesignators.isMilitary(typecode: option.value, type: entry.type),
-                    "\(option.value) offered as a distractor for A-10 but is not military")
-            }
-        }
-    }
-
-    @Test func seededDeterminism() throws {
-        let a = try #require(question(typecode: "B738", seed: 7))
-        let b = try #require(question(typecode: "B738", seed: 7))
-        #expect(a == b)
-        let c = try #require(question(typecode: "B738", seed: 8))
-        #expect(a != c, "different seeds should (in practice) differ")
-    }
-}
-
-@Suite("MilitaryDesignators")
-struct MilitaryDesignatorsTests {
-
-    @Test func flagsMiscodedCombatTypesButNotCivilianLookAlikes() {
-        // Genuine military combat jets that the bundled table miscodes as
-        // narrow/wide/ga — must be flagged despite the wrong table `.type`.
-        for code in ["F18S", "TU22", "T160", "TU95", "F16", "MG29", "SU27",
-                     "RFAL", "GJ11", "JH7", "A10"] {
-            let type = AircraftNaming.table[code]?.type
-            #expect(MilitaryDesignators.isMilitary(typecode: code, type: type),
-                    "\(code) should be flagged military")
-        }
-        // Civilian / airliner look-alikes that a naive keyword match would
-        // wrongly catch — must NOT be flagged. Tu-134/154/204/334 are
-        // airliners; Su-26/29/31 are aerobatic light aircraft.
-        for code in ["T134", "T154", "T204", "T334", "SU26", "SU29", "SU31",
-                     "B738", "A21N", "E75L", "C172"] {
-            let type = AircraftNaming.table[code]?.type
-            #expect(!MilitaryDesignators.isMilitary(typecode: code, type: type),
-                    "\(code) should NOT be flagged military")
-        }
-    }
-
-    @Test func tableNativeMilitaryIsFlaggedViaType() {
-        // Types the bundled table already classifies `.mil` (C-130, C-17)
-        // are flagged through their `.type`, not the miscoded set.
-        #expect(MilitaryDesignators.isMilitary(
-            typecode: "C130", type: AircraftNaming.table["C130"]?.type))
-        #expect(!MilitaryDesignators.miscoded.contains("C130"),
-                "table-native mil types don't belong in the miscoded set")
     }
 }

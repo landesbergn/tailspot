@@ -12,6 +12,24 @@ layer landed in PR1 (#115, backend) + PR2 (#118, iOS `GuessScheduler` /
 `GuessOptions` / `Catch` guess fields); this PR is the **player-facing round**
 and the ContentView sequencing that hosts it. No data-layer logic changed.
 
+> **Update 2026-07-09 (later, same PR) — route-guessing ONLY, type guessing
+> cut (Noah's call).** Before merge Noah decided the client should ask **only**
+> the route question. Removed from the client: `GuessOptions.typeQuestion` /
+> `typeAvailable` / `TypeQuestion`; the scheduler's route-vs-type 50/50 pick +
+> `typeAvailable` param (it's now a pure route cadence gate — fires route or
+> nil); `GuessRoundPlanner`'s `typeAvailable`/`typecode`; the `CALL THE TYPE`
+> screen; and **`MilitaryDesignators.swift` + its tests** (that distractor
+> guard existed solely to keep *type* distractors commercial — reverting the
+> ac14239 fix is correct now that type guessing is gone). The ledger label is
+> **`10% ROUTE BONUS`** (Noah's pick over the plan's "ROUTE CALLED"). `GuessKind`
+> keeps both cases and `ScoringBonuses.typeGuess` stays — they're the backend
+> wire + scoring contract (`scoring-bonuses.json`, pinned by parity tests); the
+> client simply never sends `kind:"type"`. **Backend untouched** — no migration,
+> no rescore; the server still accepts `type` harmlessly. `Catch.guessKind`
+> stays generic (only ever `"route"` now). The bullets below describing the
+> type path / `MilitaryDesignators` are retained for history but no longer
+> reflect the shipped client.
+
 - **`GuessRoundView` (new)** — the reveal surface with the answer MASKED. Reuses
   `RevealPhoto` + the `RP` palette so the guess and the reveal read as one
   screen: photo hero, a cyan-mono prompt ("Where's it coming from?" /

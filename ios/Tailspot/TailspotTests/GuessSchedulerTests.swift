@@ -2,11 +2,11 @@
 //  GuessSchedulerTests.swift
 //  TailspotTests
 //
-//  Pins the bonus-round cadence rules (plan 2026-07-09-001 D3): ~1-in-3
-//  eligible catches, minimum 2-catch gap, never the user's very first catch,
-//  eligibility = fresh single non-duplicate non-suspect. Everything runs
-//  against SeededRNG so the distribution assertions are exact replays, not
-//  flakes.
+//  Pins the ROUTE bonus-round cadence rules (plan 2026-07-09-001 D3;
+//  route-only per Noah 2026-07-09): ~1-in-3 eligible catches, minimum 2-catch
+//  gap, never the user's very first catch, eligibility = fresh single
+//  non-duplicate non-suspect with a renderable route. Everything runs against
+//  SeededRNG so the distribution assertions are exact replays, not flakes.
 //
 
 import Foundation
@@ -32,7 +32,6 @@ struct GuessSchedulerCoreTests {
         isDuplicate: Bool = false,
         isSuspect: Bool = false,
         routeAvailable: Bool = true,
-        typeAvailable: Bool = true,
         priorCatchCount: Int = 10,
         catchesSinceLastRound: Int? = nil,
         rng: inout some RandomNumberGenerator
@@ -42,7 +41,6 @@ struct GuessSchedulerCoreTests {
             isDuplicate: isDuplicate,
             isSuspect: isSuspect,
             routeAvailable: routeAvailable,
-            typeAvailable: typeAvailable,
             priorCatchCount: priorCatchCount,
             catchesSinceLastRound: catchesSinceLastRound,
             using: &rng
@@ -79,9 +77,9 @@ struct GuessSchedulerCoreTests {
         #expect(decide(isFreshSingle: false, rng: &rng) == nil)
     }
 
-    @Test func noRenderableKindNeverFires() {
+    @Test func noRenderableRouteNeverFires() {
         var rng = ConstantRNG(value: 0)
-        #expect(decide(routeAvailable: false, typeAvailable: false, rng: &rng) == nil)
+        #expect(decide(routeAvailable: false, rng: &rng) == nil)
     }
 
     // ── Minimum gap ─────────────────────────────────────────────────────
@@ -97,27 +95,9 @@ struct GuessSchedulerCoreTests {
         #expect(decide(catchesSinceLastRound: nil, rng: &rng) != nil)
     }
 
-    // ── Kind pick ───────────────────────────────────────────────────────
-
-    @Test func kindFollowsAvailability() {
+    @Test func firesRouteWhenEligible() {
         var rng = ConstantRNG(value: 0)
-        #expect(decide(routeAvailable: true, typeAvailable: false, rng: &rng) == .route)
-        #expect(decide(routeAvailable: false, typeAvailable: true, rng: &rng) == .type)
-    }
-
-    @Test func bothAvailableSplitsRoughlyFiftyFifty() {
-        var rng = SeededRNG(seed: 7)
-        var counts: [GuessKind: Int] = [:]
-        var fired = 0
-        for _ in 0..<20_000 {
-            if let kind = decide(rng: &rng) {
-                counts[kind, default: 0] += 1
-                fired += 1
-            }
-        }
-        let routeShare = Double(counts[.route, default: 0]) / Double(fired)
-        #expect(fired > 5_000)
-        #expect(abs(routeShare - 0.5) < 0.03, "route share \(routeShare) not ~50/50")
+        #expect(decide(rng: &rng) == .route)
     }
 
     // ── Cadence distribution ────────────────────────────────────────────
@@ -167,7 +147,6 @@ struct GuessSchedulerWrapperTests {
             isDuplicate: isDuplicate,
             isSuspect: false,
             routeAvailable: true,
-            typeAvailable: true,
             using: &rng
         )
     }

@@ -2,10 +2,10 @@
 //  GuessRoundSnapshotTests.swift
 //  TailspotTests
 //
-//  Visual-pass harness for the pre-reveal BONUS ROUND (game-layer PR3),
-//  mirroring RevealSnapshotTests. Renders the route-question screen, the
-//  type-question screen, and a reveal WITH a guess-bonus ledger line to PNGs
-//  via ImageRenderer so the layout can be eyeballed off-device. NOT an
+//  Visual-pass harness for the pre-reveal ROUTE BONUS ROUND (game-layer PR3;
+//  route-only per Noah 2026-07-09), mirroring RevealSnapshotTests. Renders the
+//  route-question screen and a reveal WITH a "10% ROUTE BONUS" ledger line to
+//  PNGs via ImageRenderer so the layout can be eyeballed off-device. NOT an
 //  assertion test: it writes images to /private/tmp/tailspot_snaps and passes.
 //  Review the PNGs after running.
 //
@@ -35,24 +35,16 @@ struct GuessRoundSnapshotTests {
         // 1 — route question ("Where's it headed?" · HKG among 4 chips).
         if let route = routeQuestion() {
             let view = GuessRoundView(
-                question: .route(route), photoURL: nil, photoFocus: nil,
+                question: GuessRoundQuestion(route: route), photoURL: nil, photoFocus: nil,
                 onComplete: { _, _ in }
             )._snapshotScreen(width: cardWidth, size: screen)
             write(view, name: "guess_route_question", to: dir)
         }
 
-        // 2 — type question ("CALL THE TYPE" · Boeing 737-800 among 4 chips).
-        if let type = typeQuestion() {
-            let view = GuessRoundView(
-                question: .type(type), photoURL: nil, photoFocus: nil,
-                onComplete: { _, _ in }
-            )._snapshotScreen(width: cardWidth, size: screen)
-            write(view, name: "guess_type_question", to: dir)
-        }
-
-        // 3 — reveal WITH a correct-guess bonus line (rare wide, first-of-type +
-        // a correct TYPE call → both bonus lines + the count-up TOTAL that
-        // includes them).
+        // 2 — reveal WITH a correct route-guess bonus line (rare wide,
+        // first-of-type + a correct ROUTE call → both bonus lines + the
+        // count-up TOTAL that includes them; the guess line reads
+        // "10% ROUTE BONUS +N").
         let base = Rarity.rare.basePoints
         let plane = CardPlane(
             callsign: "UAL248", model: "Boeing 787-9", carrier: "United Airlines",
@@ -61,8 +53,8 @@ struct GuessRoundSnapshotTests {
             originIcao: "KSFO", destIcao: "RJTT",
             originName: "San Francisco", destName: "Tokyo Narita",
             isFirstOfType: true,
-            guessKind: .type,
-            guessBonusPoints: ScoringBonuses.guessBonus(base: base, kind: .type)
+            guessKind: .route,
+            guessBonusPoints: ScoringBonuses.guessBonus(base: base, kind: .route)
         )
         let reveal = CatchRevealView(
             plane: plane, entryNumber: 62, onDismiss: {}, onViewInHangar: {}
@@ -79,11 +71,6 @@ struct GuessRoundSnapshotTests {
             observerLat: observerLat, observerLon: observerLon,
             using: &rng
         )
-    }
-
-    private func typeQuestion() -> GuessOptions.TypeQuestion? {
-        var rng = SeededRNG(seed: 7)
-        return GuessOptions.typeQuestion(typecode: "B738", using: &rng)
     }
 
     private func write(_ view: some View, name: String, to dir: URL) {

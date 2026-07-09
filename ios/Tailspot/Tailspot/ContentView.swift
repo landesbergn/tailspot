@@ -1629,18 +1629,16 @@ struct ContentView: View {
                 duplicateCount: duplicates.count,
                 suspectReason: firstFresh?.suspectReason,
                 originIcao: firstFresh?.originIcao,
-                destIcao: firstFresh?.destIcao,
-                typecode: firstFresh?.typecode
+                destIcao: firstFresh?.destIcao
             )
             if guessInputs.isFreshSingle, let row = firstFresh {
                 let kind = guessScheduler.decideForRecordedCatch(
                     isFreshSingle: true,
                     isDuplicate: false,
                     isSuspect: guessInputs.isSuspect,
-                    routeAvailable: guessInputs.routeAvailable,
-                    typeAvailable: guessInputs.typeAvailable
+                    routeAvailable: guessInputs.routeAvailable
                 )
-                if let kind, let question = buildGuessQuestion(kind: kind, row: row) {
+                if let kind, let question = buildGuessQuestion(row: row) {
                     pendingGuess = PendingGuess(
                         question: question,
                         kind: kind,
@@ -1664,24 +1662,18 @@ struct ContentView: View {
         }
     }
 
-    /// Build the guess question for a chosen kind off a fresh catch row, or nil
-    /// when no honest option set can be rendered (the scheduler picked a kind
-    /// but, e.g., the airport/type distractor pool is too thin). Production RNG.
-    private func buildGuessQuestion(kind: GuessKind, row: Catch) -> GuessRoundQuestion? {
+    /// Build the route guess question off a fresh catch row, or nil when no
+    /// honest option set can be rendered (e.g. the airport distractor pool is
+    /// too thin for the correct answer's region). Production RNG.
+    private func buildGuessQuestion(row: Catch) -> GuessRoundQuestion? {
         var rng = SystemRandomNumberGenerator()
-        switch kind {
-        case .route:
-            return GuessOptions.routeQuestion(
-                originIcao: row.originIcao,
-                destIcao: row.destIcao,
-                observerLat: row.observerLat,
-                observerLon: row.observerLon,
-                using: &rng
-            ).map(GuessRoundQuestion.route)
-        case .type:
-            return GuessOptions.typeQuestion(typecode: row.typecode, using: &rng)
-                .map(GuessRoundQuestion.type)
-        }
+        return GuessOptions.routeQuestion(
+            originIcao: row.originIcao,
+            destIcao: row.destIcao,
+            observerLat: row.observerLat,
+            observerLon: row.observerLon,
+            using: &rng
+        ).map { GuessRoundQuestion(route: $0) }
     }
 
     /// v1 authenticity gate decision. Pure: maps the latest camera-frame
@@ -1860,10 +1852,11 @@ struct ContentView: View {
         let isFirstOfType = row.typecode.map { tc in
             !catches.contains { $0 !== row && $0.typecode == tc }
         } ?? false
-        // Guess bonus (game-layer PR3): a "ROUTE/TYPE CALLED +N" line only for a
-        // CORRECT call (wrong/skipped/no-round → nil kind → no line). The amount
-        // derives live off the current base like firstOfType, so it re-tiers on
-        // read. Server re-verifies at upload and is authoritative.
+        // Guess bonus (game-layer PR3; route-only per Noah 2026-07-09): a
+        // "10% ROUTE BONUS +N" line only for a CORRECT call (wrong/skipped/
+        // no-round → nil kind → no line). The amount derives live off the
+        // current base like firstOfType, so it re-tiers on read. Server
+        // re-verifies at upload and is authoritative.
         let guessKind: GuessKind? = (row.guessCorrect == true)
             ? row.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil

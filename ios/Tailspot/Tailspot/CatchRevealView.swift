@@ -502,14 +502,10 @@ struct CatchRevealView: View {
                             if firstOfTypeBonus > 0 {
                                 ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
                             }
-                            // Correct-guess bonus. LABEL is flagged for Noah:
-                            // the plan (2026-07-09-001 §B) specifies parallel
-                            // "ROUTE CALLED +N" / "TYPE CALLED +N" labels; the
-                            // older economy mock said "10% ROUTE BONUS". Default
-                            // is the plan's — swap here if Noah prefers the mock.
-                            if let kind = plane.guessKind, guessBonus > 0 {
-                                let label = kind == .route ? "ROUTE CALLED" : "TYPE CALLED"
-                                ledgerRow(label, "+\(guessBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
+                            // Correct route-guess bonus (route-only per Noah
+                            // 2026-07-09). Label locked to "10% ROUTE BONUS".
+                            if plane.guessKind != nil, guessBonus > 0 {
+                                ledgerRow("10% ROUTE BONUS", "+\(guessBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
                             }
                         }
                         Rectangle().fill(RP.rule).frame(height: 1)

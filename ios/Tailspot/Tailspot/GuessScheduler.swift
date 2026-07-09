@@ -2,8 +2,13 @@
 //  GuessScheduler.swift
 //  Tailspot
 //
-//  Decides whether a freshly-recorded catch gets a pre-reveal BONUS ROUND
-//  ("Where's it headed?" / "Call the type"), and which question kind.
+//  Decides whether a freshly-recorded catch gets a pre-reveal ROUTE BONUS
+//  ROUND ("Where's it coming from?" / "Where's it headed?").
+//
+//  Route-only per Noah 2026-07-09: type guessing was cut, so the scheduler is
+//  a pure cadence gate — it fires a route round or it doesn't. A round fires
+//  only when the row has a frozen route the option builder can render honest
+//  airport chips for (`routeAvailable`).
 //
 //  The one hard product constraint (plan 2026-07-09-001 §A1, decision D3):
 //  guessing is an occasional treat, never a per-catch tax. The field-polished
@@ -15,12 +20,6 @@
 //    - ~1-in-3 roll on eligible catches;
 //    - minimum 2-catch gap after a round fires;
 //    - never on the user's very first catch (protect activation).
-//
-//  Kind pick: when the catch is route-eligible (frozen route on the row AND
-//  the option builder can render honest airport chips) it's a 50/50 between
-//  route and type; otherwise type. Type itself requires a typecode with a
-//  resolvable canonical name — a round we can't render honest options for
-//  simply doesn't fire.
 //
 //  Split design, per the repo's testability convention (ADSBSource,
 //  AnalyticsSink): a PURE nonisolated core (`decide`) that takes every input
@@ -35,6 +34,11 @@ import Foundation
 /// The bonus-round question kinds. Raw values are the wire enum for
 /// `POST /v1/catches` `guess.kind` and the stored `Catch.guessKind` string —
 /// they must match the backend's `GuessKind` in backend/src/catches/points.ts.
+///
+/// The client only ever produces `.route` (type guessing was cut 2026-07-09);
+/// `.type` is retained solely because it's part of the backend wire + scoring
+/// contract (`ScoringBonuses.guessBonus`, `scoring-bonuses.json`) that the
+/// server still honors — the client just never sends it.
 nonisolated enum GuessKind: String, CaseIterable, Sendable {
     case route
     case type
@@ -79,8 +83,8 @@ final class GuessScheduler {
 
     // MARK: Pure core
 
-    /// The pure cadence + kind decision. Everything is an explicit input;
-    /// same inputs + same RNG state → same decision, forever.
+    /// The pure cadence decision. Everything is an explicit input; same
+    /// inputs + same RNG state → same decision, forever.
     ///
     /// - Parameters:
     ///   - isFreshSingle: a brand-new single-catch row (not part of a
@@ -92,20 +96,17 @@ final class GuessScheduler {
     ///     question owns that moment.
     ///   - routeAvailable: frozen route on the row AND
     ///     `GuessOptions.routeAvailable` says honest chips can be built.
-    ///   - typeAvailable: `GuessOptions.typeAvailable` — typecode with a
-    ///     resolvable canonical name.
     ///   - priorCatchCount: recorded catches BEFORE this one (0 → this is the
     ///     user's very first catch → never fire).
     ///   - catchesSinceLastRound: recorded catches since a round last fired,
     ///     nil if no round has ever fired.
-    /// - Returns: the question kind to ask, or nil for the (common) no-round
-    ///   path.
+    /// - Returns: `.route` when a route round should fire, or nil for the
+    ///   (common) no-round path.
     nonisolated static func decide(
         isFreshSingle: Bool,
         isDuplicate: Bool,
         isSuspect: Bool,
         routeAvailable: Bool,
-        typeAvailable: Bool,
         priorCatchCount: Int,
         catchesSinceLastRound: Int?,
         using rng: inout some RandomNumberGenerator
@@ -113,7 +114,7 @@ final class GuessScheduler {
         // Eligibility guards — cheap, RNG-free, so an ineligible catch never
         // perturbs the random sequence (keeps seeded replays stable).
         guard isFreshSingle, !isDuplicate, !isSuspect else { return nil }
-        guard routeAvailable || typeAvailable else { return nil }
+        guard routeAvailable else { return nil }
         // Never the user's very first catch (activation protection).
         guard priorCatchCount >= 1 else { return nil }
         // Minimum gap after the last fired round.
@@ -122,11 +123,7 @@ final class GuessScheduler {
         // The ~1-in-3 roll.
         guard Double.random(in: 0..<1, using: &rng) < fireProbability else { return nil }
 
-        // Kind pick (D3): route-eligible → 50/50 route/type; else type.
-        if routeAvailable && typeAvailable {
-            return Bool.random(using: &rng) ? .route : .type
-        }
-        return routeAvailable ? .route : .type
+        return .route
     }
 
     // MARK: Stateful wrapper (UserDefaults counters)
@@ -156,7 +153,6 @@ final class GuessScheduler {
         isDuplicate: Bool,
         isSuspect: Bool,
         routeAvailable: Bool,
-        typeAvailable: Bool,
         using rng: inout some RandomNumberGenerator
     ) -> GuessKind? {
         let prior = defaults.integer(forKey: Self.catchCountKey)
@@ -167,7 +163,6 @@ final class GuessScheduler {
             isDuplicate: isDuplicate,
             isSuspect: isSuspect,
             routeAvailable: routeAvailable,
-            typeAvailable: typeAvailable,
             priorCatchCount: prior,
             catchesSinceLastRound: gap,
             using: &rng
@@ -189,8 +184,7 @@ final class GuessScheduler {
         isFreshSingle: Bool,
         isDuplicate: Bool,
         isSuspect: Bool,
-        routeAvailable: Bool,
-        typeAvailable: Bool
+        routeAvailable: Bool
     ) -> GuessKind? {
         var rng = SystemRandomNumberGenerator()
         return decideForRecordedCatch(
@@ -198,7 +192,6 @@ final class GuessScheduler {
             isDuplicate: isDuplicate,
             isSuspect: isSuspect,
             routeAvailable: routeAvailable,
-            typeAvailable: typeAvailable,
             using: &rng
         )
     }

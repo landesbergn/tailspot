@@ -311,8 +311,8 @@ struct CatchTelemetryTests {
 
     @Test func guessRoundAnsweredCarriesKindCorrectAndElapsed() {
         let p = CatchTelemetry.guessRoundAnsweredProperties(
-            kind: .type, correct: true, elapsedMs: 1234)
-        #expect(p["kind"]?.jsonValue as? String == "type")
+            kind: .route, correct: true, elapsedMs: 1234)
+        #expect(p["kind"]?.jsonValue as? String == "route")
         #expect(p["correct"]?.jsonValue as? Bool == true)
         #expect(p["elapsed_ms"]?.jsonValue as? Int == 1234)
     }
@@ -326,11 +326,11 @@ struct CatchTelemetryTests {
     }
 
     @Test func guessRoundSkippedCarriesKindAndOptionalElapsed() {
-        let p = CatchTelemetry.guessRoundSkippedProperties(kind: .type, elapsedMs: 800)
-        #expect(p["kind"]?.jsonValue as? String == "type")
+        let p = CatchTelemetry.guessRoundSkippedProperties(kind: .route, elapsedMs: 800)
+        #expect(p["kind"]?.jsonValue as? String == "route")
         #expect(p["elapsed_ms"]?.jsonValue as? Int == 800)
         // Absent elapsed → key omitted.
-        let q = CatchTelemetry.guessRoundSkippedProperties(kind: .type)
+        let q = CatchTelemetry.guessRoundSkippedProperties(kind: .route)
         #expect(q["elapsed_ms"] == nil)
     }
 }

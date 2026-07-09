@@ -2,15 +2,17 @@
 //  GuessRoundView.swift
 //  Tailspot
 //
-//  The pre-reveal BONUS ROUND (game-layer PR3, plan 2026-07-09-001 §2 A1 / §3).
-//  When the scheduler fires on a fresh single catch, this screen slides in
-//  BEFORE the reveal: the reveal surface with the answer MASKED. You see the
-//  captured photo hero, a question ("Where's it headed?" / "CALL THE TYPE"),
-//  and 4 option chips — then guess blind. The reveal that follows shows the
-//  truth AND, on a correct call, the bonus in its ledger.
+//  The pre-reveal ROUTE BONUS ROUND (game-layer PR3, plan 2026-07-09-001
+//  §2 A1 / §3; route-only per Noah 2026-07-09). When the scheduler fires on a
+//  fresh single catch, this screen slides in BEFORE the reveal: the reveal
+//  surface with the answer MASKED. You see the captured photo hero, a route
+//  question ("Where's it coming from?" / "Where's it headed?"), and 4 option
+//  chips — then guess blind. The reveal that follows shows the truth AND, on a
+//  correct call, the bonus in its ledger.
 //
 //  Shape (locked design + decisions D1/D5):
-//    - one shared interstitial, question kind (route/type) varies;
+//    - one interstitial asking about the route endpoint farther from the
+//      observer;
 //    - UNTIMED — pacing protection comes from cadence (GuessScheduler), not a
 //      stress timer, so there's no countdown;
 //    - a correct tap gets a brief positive beat, a wrong tap a red MISS FLASH
@@ -33,50 +35,29 @@ import SwiftUI
 
 // MARK: - GuessRoundQuestion
 
-/// The question a `GuessRoundView` renders — a route or a type question.
-/// Built by the caller (ContentView) from `GuessOptions`, so the view stays a
-/// pure renderer of a prompt + 4 chips + a completion callback. `nonisolated`
-/// per repo convention (pure value data wrapping Sendable option sets).
-nonisolated enum GuessRoundQuestion: Equatable, Sendable {
-    case route(GuessOptions.RouteQuestion)
-    case type(GuessOptions.TypeQuestion)
+/// The route question a `GuessRoundView` renders. Built by the caller
+/// (ContentView) from `GuessOptions`, so the view stays a pure renderer of a
+/// prompt + 4 chips + a completion callback. `nonisolated` per repo convention
+/// (pure value data wrapping a Sendable option set).
+nonisolated struct GuessRoundQuestion: Equatable, Sendable {
+    let route: GuessOptions.RouteQuestion
 
-    /// The wire/stored kind — mirrors `GuessKind` for the freeze + telemetry.
-    var kind: GuessKind {
-        switch self {
-        case .route: return .route
-        case .type:  return .type
-        }
-    }
+    /// The wire/stored kind — always `.route` (type guessing was cut).
+    var kind: GuessKind { .route }
 
     /// The 4 shuffled option chips (correct answer embedded).
-    var options: [GuessOptions.Option] {
-        switch self {
-        case .route(let q): return q.options
-        case .type(let q):  return q.options
-        }
-    }
+    var options: [GuessOptions.Option] { route.options }
 
     /// The correct option's `value` — the local verdict compares a tap's
     /// `value` against this (`tapped.value == correctValue`).
-    var correctValue: String {
-        switch self {
-        case .route(let q): return q.correctValue
-        case .type(let q):  return q.correctValue
-        }
-    }
+    var correctValue: String { route.correctValue }
 
-    /// The prompt copy. Route keys off the asked endpoint (the one farther
-    /// from the observer); type is a fixed callout (plan §A1/§B).
+    /// The prompt copy — keyed off the asked endpoint (the one farther from
+    /// the observer).
     var prompt: String {
-        switch self {
-        case .route(let q):
-            switch q.endpoint {
-            case .origin:      return "Where's it coming from?"
-            case .destination: return "Where's it headed?"
-            }
-        case .type:
-            return "CALL THE TYPE"
+        switch route.endpoint {
+        case .origin:      return "Where's it coming from?"
+        case .destination: return "Where's it headed?"
         }
     }
 }
@@ -338,14 +319,12 @@ nonisolated enum GuessRoundPlanner {
         let isSuspect: Bool
         /// A route question can be built from the row's frozen endpoints.
         let routeAvailable: Bool
-        /// A type question can be built from the row's typecode.
-        let typeAvailable: Bool
 
-        /// A round can only fire when the batch is a fresh single AND at least
-        /// one question kind can render honest options. (Cadence + the suspect
-        /// guard are the scheduler's call, not this flag's.)
+        /// A round can only fire when the batch is a fresh single AND a route
+        /// question can render honest options. (Cadence + the suspect guard
+        /// are the scheduler's call, not this flag's.)
         var canOfferRound: Bool {
-            isFreshSingle && (routeAvailable || typeAvailable)
+            isFreshSingle && routeAvailable
         }
     }
 
@@ -354,14 +333,12 @@ nonisolated enum GuessRoundPlanner {
         duplicateCount: Int,
         suspectReason: String?,
         originIcao: String?,
-        destIcao: String?,
-        typecode: String?
+        destIcao: String?
     ) -> Inputs {
         Inputs(
             isFreshSingle: freshCount == 1 && duplicateCount == 0,
             isSuspect: suspectReason != nil,
-            routeAvailable: GuessOptions.routeAvailable(originIcao: originIcao, destIcao: destIcao),
-            typeAvailable: GuessOptions.typeAvailable(typecode: typecode)
+            routeAvailable: GuessOptions.routeAvailable(originIcao: originIcao, destIcao: destIcao)
         )
     }
 }

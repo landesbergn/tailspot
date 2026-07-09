@@ -2,9 +2,10 @@
 //  GuessOptions.swift
 //  Tailspot
 //
-//  Builds the 4-chip option sets for the bonus round (game-layer PR2,
-//  plan 2026-07-09-001 §A5/§B). Pure value logic — no UI, no state; the
-//  guess-round screen (PR3) renders whatever this emits.
+//  Builds the 4-chip option set for the ROUTE bonus round (game-layer PR2,
+//  plan 2026-07-09-001 §A5/§B; route-only per Noah 2026-07-09). Pure value
+//  logic — no UI, no state; the guess-round screen (PR3) renders whatever
+//  this emits.
 //
 //  ROUTE — "Where's it coming from?" / "Where's it headed?":
 //    The question asks about the route endpoint FARTHER from the observer
@@ -17,16 +18,7 @@
 //    close to the correct airport's are preferred, so a plane 11,000 km out
 //    of SFO gets "HKG / ICN / SIN / NRT", not "HKG / OAK / LAS / SJC".
 //
-//  TYPE — "Call the type":
-//    The correct typecode plus 3 distractors sampled from the bundled
-//    AircraftTypes.json sharing the catch's AircraftType class within ±1
-//    rarity tier — genuinely confusable ("737-800 / A320 / A220-300 / E195"),
-//    never "737-800 / B-52 / Cessna 172 / Concorde". A distractor whose
-//    canonical display name collapses to the answer's (E75S vs E75L are both
-//    "Embraer 175") is excluded — two chips with identical text where one is
-//    "wrong" would be a coin-flip trap.
-//
-//  Every option set contains the correct answer and 4 unique display
+//  The option set contains the correct answer and 4 unique display
 //  strings, shuffled with the injectable RNG (SeededRNG in tests).
 //
 //  `nonisolated` per repo convention: pure data/geometry logic callable from
@@ -64,8 +56,8 @@ nonisolated enum GuessOptions {
     static let optionCount = 4
 
     /// One tappable chip. `value` is what goes on the wire (`guess.value`):
-    /// an ICAO airport ident for route, a typecode for type. `display` is
-    /// the chip text; option sets guarantee 4 unique displays.
+    /// an ICAO airport ident. `display` is the chip text; option sets
+    /// guarantee 4 unique displays.
     struct Option: Equatable, Sendable {
         let value: String
         let display: String
@@ -86,13 +78,6 @@ nonisolated enum GuessOptions {
         let correctValue: String
     }
 
-    struct TypeQuestion: Equatable, Sendable {
-        /// Exactly 4, shuffled, includes the correct answer.
-        let options: [Option]
-        /// The correct ICAO typecode (uppercased).
-        let correctValue: String
-    }
-
     /// The curated airport pool, ICAO-sorted (the JSON is generated sorted;
     /// array order matters for seeded determinism). Missing/corrupt resource
     /// degrades to an empty pool — route questions become unavailable, never
@@ -109,7 +94,7 @@ nonisolated enum GuessOptions {
         Dictionary(airports.map { ($0.icao, $0) }, uniquingKeysWith: { a, _ in a })
     }()
 
-    // MARK: - Availability (the scheduler's routeAvailable/typeAvailable inputs)
+    // MARK: - Availability (the scheduler's routeAvailable input)
 
     /// True when a route question can actually be built: at least one
     /// endpoint resolves in the curated airport table (the correct chip
@@ -123,15 +108,6 @@ nonisolated enum GuessOptions {
         let originKnown = origin.flatMap { airportsByIcao[$0] } != nil
         let destKnown = dest.flatMap { airportsByIcao[$0] } != nil
         return originKnown || destKnown
-    }
-
-    /// True when a type question can be built: the typecode resolves in the
-    /// bundled table to a canonical display name and an AircraftType class
-    /// (needed for confusable-distractor sampling).
-    static func typeAvailable(typecode: String?) -> Bool {
-        guard let code = normalizedIdent(typecode),
-              let entry = AircraftNaming.table[code] else { return false }
-        return entry.displayName != nil && entry.type != nil
     }
 
     // MARK: - Route question
@@ -204,80 +180,6 @@ nonisolated enum GuessOptions {
             .map { Option(value: $0.icao, display: $0.display) }
             .shuffled(using: &rng)
         return RouteQuestion(endpoint: asked.endpoint, options: options, correctValue: correct.icao)
-    }
-
-    // MARK: - Type question
-
-    /// Build the type question for a catch's typecode, or nil when the code
-    /// doesn't resolve to a canonical name + class (the round can't render
-    /// honest options — `typeAvailable` mirrors this).
-    static func typeQuestion(
-        typecode: String?,
-        using rng: inout some RandomNumberGenerator
-    ) -> TypeQuestion? {
-        guard let code = normalizedIdent(typecode),
-              let answer = AircraftNaming.table[code],
-              let answerDisplay = answer.displayName,
-              let answerClass = answer.type
-        else { return nil }
-        let answerRarity = answer.rarity ?? .common
-
-        // Effective class for distractor matching. Several genuine military
-        // types are miscoded `.narrow`/`.wide`/`.ga` in the bundled table
-        // (see MilitaryDesignators); comparing raw `.type` would let a
-        // commercial narrowbody draw an EA-18 Growler or a Tu-22 as a
-        // "same-class" distractor — the reported bug. Collapsing every
-        // military type to `.mil` (for both the answer AND every candidate)
-        // makes the match symmetric: a commercial question offers only
-        // commercial distractors, and a military question offers only
-        // military ones.
-        func effectiveClass(_ typecode: String, _ type: AircraftType) -> AircraftType {
-            MilitaryDesignators.isMilitary(typecode: typecode, type: type) ? .mil : type
-        }
-        let answerEffectiveClass = effectiveClass(code, answerClass)
-
-        // Candidates sharing the (effective) class, sorted by typecode for
-        // deterministic seeded sampling (dictionary iteration order is not
-        // stable). A candidate whose display name collapses to the answer's
-        // is never offered (the E75L/E75S "Embraer 175" trap).
-        func candidates(maxTierDelta: Int) -> [(code: String, display: String)] {
-            AircraftNaming.table.compactMap { key, entry -> (String, String)? in
-                guard key != code,
-                      let candidateType = entry.type,
-                      effectiveClass(key, candidateType) == answerEffectiveClass,
-                      let display = entry.displayName,
-                      display.caseInsensitiveCompare(answerDisplay) != .orderedSame,
-                      abs((entry.rarity ?? .common).ordinal - answerRarity.ordinal) <= maxTierDelta
-                else { return nil }
-                return (key, display)
-            }
-            .sorted { $0.0 < $1.0 }
-        }
-
-        // ±1 rarity tier keeps the choices honestly confusable; a starved
-        // class+tier bucket relaxes to the whole class before giving up.
-        var pool = candidates(maxTierDelta: 1)
-        if pool.count < optionCount - 1 {
-            pool = candidates(maxTierDelta: Rarity.allCases.count)
-        }
-
-        // Sample 3 with pairwise-unique display strings (distinct typecodes
-        // can share a canonical name — only one of a display may appear).
-        var picked: [(code: String, display: String)] = []
-        var usedDisplays: Set<String> = [answerDisplay.lowercased()]
-        for candidate in pool.shuffled(using: &rng) {
-            guard picked.count < optionCount - 1 else { break }
-            let key = candidate.display.lowercased()
-            guard !usedDisplays.contains(key) else { continue }
-            usedDisplays.insert(key)
-            picked.append(candidate)
-        }
-        guard picked.count == optionCount - 1 else { return nil }
-
-        let options = ([(code: code, display: answerDisplay)] + picked)
-            .map { Option(value: $0.code, display: $0.display) }
-            .shuffled(using: &rng)
-        return TypeQuestion(options: options, correctValue: code)
     }
 
     // MARK: - Helpers
