@@ -101,7 +101,14 @@ class CatchUploader {
                         observerLon: catchRow.observerLon,
                         headingDeg: nil,
                         elevationDeg: nil,
-                        headingAccuracyDeg: nil
+                        headingAccuracyDeg: nil,
+                        // The frozen bonus-round guess (game-layer PR2). The
+                        // wire carries the guess VALUE only — the server
+                        // verifies it against its own truth and awards the
+                        // bonus itself; the local `guessCorrect` verdict is
+                        // display/trophy state and never leaves the device.
+                        guessKind: catchRow.guessKind,
+                        guessValue: catchRow.guessValue
                     )
                     // Mark uploaded regardless of duplicate status — both mean
                     // the server has accepted this catch.

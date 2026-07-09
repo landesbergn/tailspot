@@ -150,6 +150,26 @@ final class Catch {
     /// nil-default for lightweight migration.
     var photoFocusX: Double?
     var photoFocusY: Double?
+    /// Which bonus-round question this catch was asked and ANSWERED —
+    /// `"route"` / `"type"` (`GuessKind.rawValue`). nil = the round never
+    /// fired for this catch or the user hit SKIP. Written once at answer
+    /// time (game-layer PR3) and shipped with the deferred upload, never
+    /// mutated after. Like `serverUuid`, not exposed on the init — the
+    /// guess happens after the row is born. Added 2026-07 (game-layer
+    /// PR2) — optional + nil-default for lightweight migration.
+    var guessKind: String?
+    /// The guessed VALUE, frozen at answer time: an ICAO airport ident
+    /// ("VHHH") for route guesses, an ICAO typecode ("B738") for type
+    /// guesses. This — never a verdict — is what `POST /v1/catches`
+    /// carries; the server verifies it against its own truth. Same
+    /// lifecycle/migration as `guessKind`.
+    var guessValue: String?
+    /// The LOCAL verdict, frozen at answer time — drives the reveal
+    /// ledger and guess trophies offline. The server independently
+    /// re-verifies at upload (`UploadCatchResponse.guessCorrect`);
+    /// rare drift is accepted (plan §A4, D9 optimistic). Same
+    /// lifecycle/migration as `guessKind`.
+    var guessCorrect: Bool?
 
     init(
         icao24: String,
