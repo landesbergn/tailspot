@@ -222,14 +222,29 @@ nonisolated enum GuessOptions {
         else { return nil }
         let answerRarity = answer.rarity ?? .common
 
-        // Candidates sharing the class, sorted by typecode for deterministic
-        // seeded sampling (dictionary iteration order is not stable).
-        // A candidate whose display name collapses to the answer's is never
-        // offered (the E75L/E75S "Embraer 175" trap).
+        // Effective class for distractor matching. Several genuine military
+        // types are miscoded `.narrow`/`.wide`/`.ga` in the bundled table
+        // (see MilitaryDesignators); comparing raw `.type` would let a
+        // commercial narrowbody draw an EA-18 Growler or a Tu-22 as a
+        // "same-class" distractor — the reported bug. Collapsing every
+        // military type to `.mil` (for both the answer AND every candidate)
+        // makes the match symmetric: a commercial question offers only
+        // commercial distractors, and a military question offers only
+        // military ones.
+        func effectiveClass(_ typecode: String, _ type: AircraftType) -> AircraftType {
+            MilitaryDesignators.isMilitary(typecode: typecode, type: type) ? .mil : type
+        }
+        let answerEffectiveClass = effectiveClass(code, answerClass)
+
+        // Candidates sharing the (effective) class, sorted by typecode for
+        // deterministic seeded sampling (dictionary iteration order is not
+        // stable). A candidate whose display name collapses to the answer's
+        // is never offered (the E75L/E75S "Embraer 175" trap).
         func candidates(maxTierDelta: Int) -> [(code: String, display: String)] {
             AircraftNaming.table.compactMap { key, entry -> (String, String)? in
                 guard key != code,
-                      entry.type == answerClass,
+                      let candidateType = entry.type,
+                      effectiveClass(key, candidateType) == answerEffectiveClass,
                       let display = entry.displayName,
                       display.caseInsensitiveCompare(answerDisplay) != .orderedSame,
                       abs((entry.rarity ?? .common).ordinal - answerRarity.ordinal) <= maxTierDelta

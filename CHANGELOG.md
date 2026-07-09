@@ -59,13 +59,35 @@ and the ContentView sequencing that hosts it. No data-layer logic changed.
   `/private/tmp/tailspot_snaps`, visual-pass reviewed), `GuessRoundPlannerTests`
   (8 — fresh-single gate, duplicate/multi exclusion, suspect flag, route/type
   availability), and 4 telemetry builder tests.
+- **Distractor-quality fix — military types excluded (follow-up in this PR).**
+  The observation below bit for real: an A321neo type round drew **Boeing
+  EA-18 Growler** + **Tupolev Tu-22** because ~55 genuine military combat jets
+  (fighters/bombers/attack/EW) are miscoded `.narrow`/`.wide`/`.ga` in the
+  bundled `AircraftTypes.json` — the 2026-06-09 round deliberately left the
+  military tail mislabeled as "low ROI," and the guess mechanic surfaced it.
+  **Fix path chosen: a runtime guard, NOT a JSON/generator reclassification.**
+  The generator (`generate-aircraft-types.py`) fetches LIVE ICAO DOC 8643 data
+  and has no offline source snapshot, so a regen would mix upstream drift (PR1's
+  documented reason for not running it); and reclassifying these to `.mil`
+  moves their rarity `common → epic` (the military default), which feeds
+  scoring and would need a `scoring_version` bump + prod re-score — out of scope
+  for a distractor fix. Instead, a new **`MilitaryDesignators`** — a curated,
+  EXACT-MATCH designator set (regex/keyword matching floods with false
+  positives: Diamond DA-20 "Falcon", the aerobatic Sukhoi Su-26/29/31, the
+  Tupolev Tu-134/154/204/334 airliners) — feeds an `effectiveClass` in
+  `GuessOptions.typeQuestion` that collapses every military type to `.mil` for
+  BOTH the answer and each candidate. A commercial question now offers only
+  commercial distractors, and a military question only military ones — **zero
+  scoring impact** (the JSON/rarity is untouched). When a deterministic regen
+  eventually lands (source saved offline + rescore), these become truly `.mil`
+  and the set is redundant but harmless (`isMilitary` short-circuits on
+  `.type == .mil`). +3 tests (the pinned A321neo/737-800-never-military bug
+  guard across 200 seeds, the military-draws-military symmetry, and the
+  designator-set unit test); re-rendered `guess_type_question.png` verified
+  clean (737-800 / A320neo / E175-E2 / Martin 2-0-2).
 
 **Acceptance bar is the on-device pacing** of catch → guess → reveal — needs
-Noah's field pass before merge; **no auto-merge**. Observed for a later data
-look (PR2/`AircraftTypes.json` scope, not this PR): a few military types are
-classed `.narrow` in the type table, so a common-narrowbody type round can draw
-military distractors — distractor quality (plan risk #5) to tune from
-`guess_round_answered` accuracy.
+Noah's field pass before merge; **no auto-merge**.
 
 ## 2026-07-09 — Bracket-snap follow-ups: full-res stills, orientation fix, off-frame drop + collection heal — branch `fix/bracket-snap-followups`
 
