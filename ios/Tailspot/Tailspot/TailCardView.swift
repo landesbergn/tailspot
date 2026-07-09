@@ -81,21 +81,11 @@ struct TailCard: View {
         ).displayName
 
         return HStack(spacing: 12) {
-            ZStack {
-                if let photoURL {
-                    AsyncImage(url: photoURL) { phase in
-                        if case .success(let img) = phase {
-                            img.resizable().aspectRatio(contentMode: .fill)
-                        } else {
-                            SlotPlaceholder()
-                        }
-                    }
-                } else {
-                    SlotPlaceholder()
-                }
-            }
-            .frame(width: 76, height: 76)
-            .clipShape(RoundedRectangle(cornerRadius: 11))
+            // Crop toward the plane (Catch.photoFocus), same as the big card —
+            // not a plain center-crop that hides an edge-of-frame plane. Decoded
+            // at thumbnail size off the main actor (FocusThumbnail).
+            FocusThumbnail(url: photoURL, focus: c.photoFocus, side: 76)
+                .clipShape(RoundedRectangle(cornerRadius: 11))
 
             VStack(alignment: .leading, spacing: 5) {
                 // Line 1 — cyan callsign · airline. The callsign is the lead
