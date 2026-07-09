@@ -61,6 +61,15 @@ nonisolated enum CatchTelemetry {
     static let suspectedEvent = "catch_suspected"
     static let suspectKeptEvent = "catch_suspect_kept"
     static let suspectDiscardedEvent = "catch_suspect_discarded"
+    // Bonus-round engagement funnel (game-layer PR3). `guess_round_shown`
+    // fires when the pre-reveal guess cover appears; `_answered` carries the
+    // kind + local verdict (the per-device accuracy stream that watches for
+    // 100%-correct cheat outliers — plan §A4) + elapsed ms; `_skipped` records
+    // the quiet opt-out. Together they feed the catches-per-spotter analysis of
+    // whether the guessing hook actually works.
+    static let guessRoundShownEvent = "guess_round_shown"
+    static let guessRoundAnsweredEvent = "guess_round_answered"
+    static let guessRoundSkippedEvent = "guess_round_skipped"
     // Activation milestone: the user's very FIRST catch ever (the Hangar was
     // empty before this tap). The single most load-bearing activation edge —
     // ~36 openers → 5 catchers/30d (PLAN §9 #3) — so it gets a first-class
@@ -242,6 +251,36 @@ nonisolated enum CatchTelemetry {
         ]
     }
 
+    // MARK: - Bonus-round property builders (unit-tested)
+
+    /// Properties for `guess_round_shown` — the round kind offered.
+    static func guessRoundShownProperties(kind: GuessKind) -> [String: AnalyticsValue] {
+        ["kind": .string(kind.rawValue)]
+    }
+
+    /// Properties for `guess_round_answered` — the kind, the LOCAL verdict, and
+    /// (when measured) how long the user took. `elapsedMs` is omitted when nil,
+    /// matching the omit-blank convention elsewhere in this file.
+    static func guessRoundAnsweredProperties(
+        kind: GuessKind, correct: Bool, elapsedMs: Int? = nil
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
+            "kind": .string(kind.rawValue),
+            "correct": .bool(correct),
+        ]
+        if let elapsedMs { props["elapsed_ms"] = .int(elapsedMs) }
+        return props
+    }
+
+    /// Properties for `guess_round_skipped` — the kind the user opted out of.
+    static func guessRoundSkippedProperties(
+        kind: GuessKind, elapsedMs: Int? = nil
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = ["kind": .string(kind.rawValue)]
+        if let elapsedMs { props["elapsed_ms"] = .int(elapsedMs) }
+        return props
+    }
+
     // MARK: - Fire wrappers (read MainActor-isolated `Catch`, then capture)
 
     @MainActor static func firePerformed(
@@ -400,6 +439,29 @@ nonisolated enum CatchTelemetry {
             verdict: verdict, snapHit: snapHit, liveFix: liveFix,
             expectedFootprintPx: expectedFootprintPx,
             meanLuminance: meanLuminance, enforcing: enforcing
+        ))
+    }
+
+    // MARK: - Bonus-round fire wrappers
+
+    /// Fired when the pre-reveal guess cover appears (ContentView presents it).
+    @MainActor static func fireGuessRoundShown(kind: GuessKind) {
+        Analytics.capture(guessRoundShownEvent, guessRoundShownProperties(kind: kind))
+    }
+
+    /// Fired when the user answers — carries the local verdict + elapsed ms.
+    @MainActor static func fireGuessRoundAnswered(
+        kind: GuessKind, correct: Bool, elapsedMs: Int? = nil
+    ) {
+        Analytics.capture(guessRoundAnsweredEvent, guessRoundAnsweredProperties(
+            kind: kind, correct: correct, elapsedMs: elapsedMs
+        ))
+    }
+
+    /// Fired when the user SKIPs the round.
+    @MainActor static func fireGuessRoundSkipped(kind: GuessKind, elapsedMs: Int? = nil) {
+        Analytics.capture(guessRoundSkippedEvent, guessRoundSkippedProperties(
+            kind: kind, elapsedMs: elapsedMs
         ))
     }
 

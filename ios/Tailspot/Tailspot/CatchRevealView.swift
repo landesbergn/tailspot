@@ -317,7 +317,13 @@ struct CatchRevealView: View {
         // from the server's award.
         plane.isFirstOfType && !isDuplicate ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
     }
-    private var finalTotal: Int { isDuplicate ? 0 : base + firstOfTypeBonus }
+    /// Correct-guess bonus (game-layer PR3). `plane.guessKind` is non-nil ONLY
+    /// on a correct call — a wrong/skipped/no-round catch carries no line — and
+    /// the amount is 0 on a duplicate (no base to bonus).
+    private var guessBonus: Int {
+        (plane.guessKind != nil && !isDuplicate) ? plane.guessBonusPoints : 0
+    }
+    private var finalTotal: Int { isDuplicate ? 0 : base + firstOfTypeBonus + guessBonus }
 
     var body: some View {
         GeometryReader { geo in
@@ -495,6 +501,15 @@ struct CatchRevealView: View {
                             ledgerRow(plane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
                             if firstOfTypeBonus > 0 {
                                 ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
+                            }
+                            // Correct-guess bonus. LABEL is flagged for Noah:
+                            // the plan (2026-07-09-001 §B) specifies parallel
+                            // "ROUTE CALLED +N" / "TYPE CALLED +N" labels; the
+                            // older economy mock said "10% ROUTE BONUS". Default
+                            // is the plan's — swap here if Noah prefers the mock.
+                            if let kind = plane.guessKind, guessBonus > 0 {
+                                let label = kind == .route ? "ROUTE CALLED" : "TYPE CALLED"
+                                ledgerRow(label, "+\(guessBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
                             }
                         }
                         Rectangle().fill(RP.rule).frame(height: 1)

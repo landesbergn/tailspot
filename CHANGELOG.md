@@ -5,6 +5,68 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — Guess-round UI: the pre-reveal bonus round (game-layer PR3) — branch `feat/guess-round-ui`
+
+Third PR of the game-layer plan (`docs/plans/2026-07-09-001`, §9 #4). The data
+layer landed in PR1 (#115, backend) + PR2 (#118, iOS `GuessScheduler` /
+`GuessOptions` / `Catch` guess fields); this PR is the **player-facing round**
+and the ContentView sequencing that hosts it. No data-layer logic changed.
+
+- **`GuessRoundView` (new)** — the reveal surface with the answer MASKED. Reuses
+  `RevealPhoto` + the `RP` palette so the guess and the reveal read as one
+  screen: photo hero, a cyan-mono prompt ("Where's it coming from?" /
+  "Where's it headed?" keyed off the asked endpoint · "CALL THE TYPE"), 4 chips
+  (OnboardingFlow's bgElevated + cyan-hairline styling; route chips read
+  `HKG · Hong Kong`), and a quiet SKIP. **UNTIMED** — pacing protection is the
+  scheduler's cadence, not a stress timer (decision D5). A correct tap gets a
+  `.sensoryFeedback(.success)` beat; a wrong tap a `.error` buzz + a red MISS
+  FLASH that also marks which chip was right; either way it hands to the reveal
+  after a brief beat (a miss lingers ~1.15 s so the right answer registers). A
+  wrong guess shows **no** rub-it-in line in the reveal — the flash was the
+  answer. Purely presentational (no analytics/SwiftData in the view), so it
+  snapshot-tests off-device.
+- **The interleave seam (`ContentView.runCatch`)** — right before the reveal,
+  a fresh **single** catch (never a duplicate — no points to bonus; never a
+  multi-catch — `MultiCatchReveal` owns its path; suspect-aware) runs the
+  scheduler. The eligibility translation is a pure, unit-tested
+  `GuessRoundPlanner` so ContentView stays thin, and the scheduler's cadence
+  counters advance **only** on catches that could host a round. When it fires
+  AND an honest question builds, the reveal defers behind a `pendingGuess`
+  full-screen cover; otherwise the reveal path is byte-for-byte unchanged. The
+  guess→reveal handoff fires from the guess cover's **`onDismiss`** (two
+  `fullScreenCover`s can't present at once — presenting the reveal synchronously
+  would drop it); `captureInFlight` stays latched across the whole
+  catch→guess→reveal chain, and the post-reveal suspect Keep/Discard step still
+  fires after, unchanged.
+- **Freeze-on-answer** — the outcome writes to the row like `serverUuid` (after
+  it's born): correct/skip → `guessKind`/`guessValue`/`guessCorrect` (SKIP
+  leaves all three nil), `modelContext.save()`, then the deferred upload
+  (`CatchUploader`, already shipped in PR2) carries the guess *value* — never a
+  verdict — for the server to re-verify.
+- **Reveal ledger** — a gold **`ROUTE CALLED +N` / `TYPE CALLED +N`** line
+  after FIRST OF TYPE, shown **only on a correct call**, with N via
+  `ScoringBonuses.guessBonus` (pinned to `scoring-bonuses.json` by the parity
+  test) and folded into the count-up TOTAL. `CardPlane` gained
+  `guessKind`/`guessBonusPoints`, computed off the row like `isFirstOfType`
+  (re-tiers on read). **Label flagged for Noah:** the plan specifies parallel
+  "ROUTE/TYPE CALLED"; the older economy mock said "10% ROUTE BONUS" — defaulted
+  to the plan, one-line swap in `CatchRevealView` if Noah prefers the mock.
+- **Telemetry** — `guess_round_shown` / `_answered` (kind, correct, elapsed_ms —
+  the per-device accuracy stream that watches for 100 %-correct cheat outliers)
+  / `_skipped`, house pattern (pure builders + `@MainActor` fire wrappers).
+- **Tests (13 new, full `TailspotTests` green):** `GuessRoundSnapshotTests`
+  (route-question · type-question · reveal-with-guess-bonus PNGs to
+  `/private/tmp/tailspot_snaps`, visual-pass reviewed), `GuessRoundPlannerTests`
+  (8 — fresh-single gate, duplicate/multi exclusion, suspect flag, route/type
+  availability), and 4 telemetry builder tests.
+
+**Acceptance bar is the on-device pacing** of catch → guess → reveal — needs
+Noah's field pass before merge; **no auto-merge**. Observed for a later data
+look (PR2/`AircraftTypes.json` scope, not this PR): a few military types are
+classed `.narrow` in the type table, so a common-narrowbody type round can draw
+military distractors — distractor quality (plan risk #5) to tune from
+`guess_round_answered` accuracy.
+
 ## 2026-07-09 — Bracket-snap follow-ups: full-res stills, orientation fix, off-frame drop + collection heal — branch `fix/bracket-snap-followups`
 
 Field trigger: Noah's RPA4343 / ACA708 / DAL405 catches (2026-07-08, Central
