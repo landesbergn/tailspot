@@ -37,6 +37,16 @@ targeted detector pass finds it at 15 px / 0.54 conf, so it re-heals.
   catch photos (`FocusCenteringSnapshotTests`); new `FocusFill` zoom +
   `CatchPhotoFocusRecovery` orientation/centroid unit tests. Full
   `TailspotTests` green.
+- **Follow-up (branch `feat/thumbnail-focus`):** the Hangar **list
+  thumbnail** (`TailCard`) had the same defect — a plain aspect-fill
+  `AsyncImage` center-cropping the tall photo. New `FocusThumbnail` crops
+  toward `photoFocus` via the shared `FocusFill` (so the 76 px thumbnail
+  and the big card frame the plane identically), decoding at thumbnail
+  size via ImageIO (`kCGImageSourceThumbnailMaxPixelSize` +
+  `…WithTransform` for upright pixels) off the MainActor with an
+  `NSCache` — a scrolling list can't decode full 12 MP stills per row.
+  `FocusedImage` split out so the crop renders synchronously for the
+  snapshot harness. New loader (downsample + orientation) tests.
 
 ## 2026-07-09 — Bracket-snap follow-ups: full-res stills, orientation fix, off-frame drop + collection heal — branch `fix/bracket-snap-followups`
 
