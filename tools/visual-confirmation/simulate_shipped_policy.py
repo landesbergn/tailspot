@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Simulate the exact CatchPhotoSnapper policy over every bracketed catch
-photo: 640 native crops (center + 8-ring at ±480), conf ≥ 0.45,
-box side ≤ 213, nearest-to-prediction within 700 px, center early-exit
-at 340 px. Reports per-photo outcome + summary."""
+"""Simulate the CatchPhotoSnapper FINE pass over every bracketed catch
+photo: 640 native crops (center + 8-ring at ±480), conf ≥ 0.25 (the
+shipped floor, retuned 2026-07-07 on the labeled corpus), box side
+≤ 213, nearest-to-prediction within 700 px, center early-exit at 340 px.
+Reports per-photo outcome + summary.
+
+NOTE: with full-res capture the on-device snapper also runs a COARSE
+1080-equivalent pass + native refine for >1080 px photos; this script
+models the 1080-px reference behavior, exact for the pre-2026-07-09
+corpus."""
 from __future__ import annotations
 import json, sys
 from pathlib import Path
@@ -12,7 +18,7 @@ from PIL import Image, ImageOps
 sys.path.insert(0, str(Path(__file__).parent))
 from eval_catch_photos import Detector, find_bracket, decode_airplanes, INPUT_SIZE  # noqa
 
-CONF = 0.45
+CONF = 0.25
 MAX_SIDE = INPUT_SIZE / 3
 MAX_SNAP = 700.0
 CENTER_ACCEPT = 340.0
