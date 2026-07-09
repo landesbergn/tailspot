@@ -70,6 +70,12 @@ nonisolated enum CatchTelemetry {
     // in this Hangar" stays true).
     static let firstCatchEvent = "first_plane_catch"
     static let firstCatchFiredKey = "tailspot.telemetry.firstCatchFired"
+    // Grounded easter egg (2026-07-09): the user tapped a parked plane in
+    // the AR view. No catch is attempted (grounded planes are never
+    // catchable) — the toast + this event ARE the feature's output, and the
+    // event doubles as the how-often-does-this-happen signal for the
+    // "Ground Stop" secret badge.
+    static let groundedAttemptEvent = "grounded_catch_attempt"
 
     // MARK: - Pure property builders (unit-tested)
 
@@ -125,6 +131,18 @@ nonisolated enum CatchTelemetry {
             "aircraft_type": .string(aircraftType),
             "slant_km": .double(slantKm),
         ]
+    }
+
+    /// Properties for a grounded-plane tap (`grounded_catch_attempt`):
+    /// icao24 only — no location, no airframe fields; the plane was never
+    /// caught, so there is nothing else honest to attach.
+    static func groundedAttemptProperties(icao24: String) -> [String: AnalyticsValue] {
+        ["icao24": .string(icao24)]
+    }
+
+    /// Fired once per grounded-plane tap, alongside the parked-plane toast.
+    static func fireGroundedAttempt(icao24: String) {
+        Analytics.capture(groundedAttemptEvent, groundedAttemptProperties(icao24: icao24))
     }
 
     /// Properties for a duplicate-catch tap — the target is already in the
