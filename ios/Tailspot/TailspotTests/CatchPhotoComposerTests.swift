@@ -243,17 +243,71 @@ struct CatchPhotoComposerTests {
         #expect(CatchPhotoComposer.compose(jpegData: imageBytes, overlay: overlay) == nil)
     }
 
+    // MARK: saved-size cap + bracket-less normalization
+
+    /// Small photos save at their own size; a 12 MP still caps at 3072 on
+    /// the long side, preserving aspect.
+    @Test func savedPhotoSizeCapsOnlyOversizedPhotos() {
+        let legacy = CGSize(width: 1080, height: 1920)
+        #expect(CatchPhotoComposer.savedPhotoSize(for: legacy) == legacy)
+        let full = CatchPhotoComposer.savedPhotoSize(
+            for: CGSize(width: 3024, height: 4032))
+        #expect(full == CGSize(width: 2304, height: 3072))
+    }
+
+    /// Composing a photo bigger than the cap writes the capped size (and
+    /// the focus normalization stays cap-independent).
+    @Test func composeCapsOversizedOutput() {
+        let imageBytes = makeSolidJPEG(
+            size: CGSize(width: 3200, height: 6400), color: .black)
+        let overlay = CatchPhotoComposer.BracketOverlay(
+            screenPosition: CGPoint(x: 100, y: 200),
+            screenSize: CGSize(width: 300, height: 600)
+        )
+        let result = CatchPhotoComposer.compose(jpegData: imageBytes, overlay: overlay)
+        let saved = result.flatMap { UIImage(data: $0.jpegData) }
+        #expect(saved?.size == CGSize(width: 1536, height: 3072))
+        // Same aspect as the screen → focus is the plain screen ratio,
+        // unaffected by the cap.
+        if let focus = result?.normalizedFocus {
+            #expect(abs(focus.x - 1.0 / 3.0) < 1e-6)
+            #expect(abs(focus.y - 1.0 / 3.0) < 1e-6)
+        }
+    }
+
+    /// Bracket-less normalization: an EXIF-rotated "sensor" JPEG comes out
+    /// upright and capped; an already-upright, already-small JPEG passes
+    /// through byte-identical (no needless re-encode of legacy captures).
+    @Test func normalizedWithoutBracketUprightsAndCaps() {
+        // Landscape pixels tagged .right → portrait content 3024×4032 → capped.
+        let landscape = makeSolidJPEG(
+            size: CGSize(width: 4032, height: 3024), color: .black, orientation: .right)
+        let out = CatchPhotoComposer.normalizedWithoutBracket(jpegData: landscape)
+        let img = out.flatMap { UIImage(data: $0) }
+        #expect(img?.imageOrientation == .up)
+        #expect(img?.size == CGSize(width: 2304, height: 3072))
+
+        let small = makeSolidJPEG(size: CGSize(width: 1080, height: 1920), color: .black)
+        #expect(CatchPhotoComposer.normalizedWithoutBracket(jpegData: small) == small)
+    }
+
     // MARK: helpers
 
-    /// Synthesize a tiny solid-color JPEG for tests.
-    private func makeSolidJPEG(size: CGSize, color: UIColor) -> Data {
+    /// Synthesize a tiny solid-color JPEG for tests. A non-.up
+    /// `orientation` writes the EXIF tag the way AVFoundation does for
+    /// sensor-landscape stills.
+    private func makeSolidJPEG(size: CGSize, color: UIColor,
+                               orientation: UIImage.Orientation = .up) -> Data {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let image = renderer.image { ctx in
+        var image = renderer.image { ctx in
             color.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        if orientation != .up, let cg = image.cgImage {
+            image = UIImage(cgImage: cg, scale: 1, orientation: orientation)
         }
         return image.jpegData(compressionQuality: 0.9) ?? Data()
     }

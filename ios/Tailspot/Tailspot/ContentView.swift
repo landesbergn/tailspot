@@ -1258,7 +1258,9 @@ struct ContentView: View {
                let tapTimePosition = positions[icao] {
                 let predicted = refreshedScreenPosition(for: icao, screenSize: screenSize)
                     ?? tapTimePosition
-                // Detached: up to 9 CoreML passes; never on the MainActor.
+                // Detached: up to ~19 CoreML passes (fine ring + coarse
+                // ring + refine) plus a 12 MP resample; never on the
+                // MainActor.
                 let snap = await Task.detached(priority: .userInitiated) {
                     CatchPhotoSnapper.snapOutcome(
                         jpegData: data,
@@ -1267,13 +1269,28 @@ struct ContentView: View {
                     )
                 }.value
                 let snapped = snap.screenPoint
-                bracketPositions[icao] = snapped ?? predicted
+                let outcome: String
+                if let snapped {
+                    bracketPositions[icao] = snapped
+                    outcome = "snapped"
+                } else if CGRect(origin: .zero, size: screenSize).contains(predicted) {
+                    bracketPositions[icao] = predicted
+                    outcome = "fallback"
+                } else {
+                    // The re-projected target was outside the frame at
+                    // exposure and the detector found nothing — baking a
+                    // clipped bracket at the frame edge points at nothing
+                    // and reads as a bug (2026-07-08 ACA708 field photo).
+                    // Save the photo bracket-free instead.
+                    bracketPositions.removeValue(forKey: icao)
+                    outcome = "offframe"
+                }
                 let correction = snapped.map {
                     Int(hypot($0.x - predicted.x, $0.y - predicted.y).rounded())
                 }
-                Log.adsb.notice("Catch photo snap: \(snapped != nil ? "snapped" : "fallback", privacy: .public) correction=\(correction ?? 0, privacy: .public)pt")
+                Log.adsb.notice("Catch photo snap: \(outcome, privacy: .public) correction=\(correction ?? 0, privacy: .public)pt")
                 Analytics.capture("catch_photo_snap", [
-                    "outcome": .string(snapped != nil ? "snapped" : "fallback"),
+                    "outcome": .string(outcome),
                     "correction_pt": .int(correction ?? 0),
                 ])
 
@@ -1369,7 +1386,12 @@ struct ContentView: View {
                             toSave = data
                         }
                     } else {
-                        toSave = data
+                        // No bracket to bake (missing position or
+                        // off-frame target) — still normalize orientation
+                        // and cap the size so a raw 12 MP sensor still
+                        // never lands in the Hangar verbatim.
+                        toSave = CatchPhotoComposer.normalizedWithoutBracket(
+                            jpegData: data) ?? data
                     }
                     return CatchPhotoStore.save(toSave, icao24: icao, at: now)
                 }
