@@ -885,7 +885,7 @@ struct ContentView: View {
     @ViewBuilder
     private var groundedToastBanner: some View {
         if groundedToastAt != nil {
-            Text("That one's still parked — Tailspot is for planes in the *air*.")
+            Text("Tailspot only works with planes in the air")
                 .font(Brand.Font.mono(size: 12, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
