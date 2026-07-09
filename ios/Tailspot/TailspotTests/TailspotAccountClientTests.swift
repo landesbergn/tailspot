@@ -120,6 +120,33 @@ struct TailspotAccountClientDTOTests {
         #expect(r.rarity == "rare")
         #expect(r.typecode == "B77W")
         #expect(r.duplicate == false)
+        // DECODE REGRESSION (game-layer PR2): this fixture deliberately
+        // predates the firstOfType/guessCorrect response keys. Old payloads
+        // (or a backend rollback) must keep decoding — the additive keys
+        // come back nil, never a decode failure.
+        #expect(r.firstOfType == nil)
+        #expect(r.guessCorrect == nil)
+    }
+
+    @Test func decodesUploadCatchResponse_withGuessAndFirstOfType() throws {
+        // The current backend response shape (backend/src/routes/catches.ts):
+        // firstOfType + guessCorrect are always present.
+        let json = """
+        {
+          "catchId": "00000000-0000-4000-8000-000000000003",
+          "points": 165,
+          "rarity": "epic",
+          "typecode": "A124",
+          "firstOfType": true,
+          "guessCorrect": true,
+          "duplicate": false
+        }
+        """.data(using: .utf8)!
+
+        let r = try JSONDecoder().decode(UploadCatchResponse.self, from: json)
+        #expect(r.firstOfType == true)
+        #expect(r.guessCorrect == true)
+        #expect(r.points == 165)
     }
 
     @Test func decodesUploadCatchResponse_duplicate() throws {
@@ -234,7 +261,8 @@ struct TailspotAccountClientDTOTests {
             observer: .init(lat: 37.87, lon: -122.27,
                             headingDeg: 45.0, elevationDeg: 20.0,
                             headingAccuracyDeg: nil),
-            aircraft: nil
+            aircraft: nil,
+            guess: nil
         )
 
         let data = try JSONEncoder().encode(req)
@@ -284,7 +312,9 @@ protocol UploadCatchClient {
         observerLon: Double,
         headingDeg: Double?,
         elevationDeg: Double?,
-        headingAccuracyDeg: Double?
+        headingAccuracyDeg: Double?,
+        guessKind: String?,
+        guessValue: String?
     ) async throws -> UploadCatchResponse
 }
 
@@ -306,6 +336,9 @@ final class FakeUploadClient: UploadCatchClient {
     var registrationError: Error? = nil
 
     var uploadedIcaos: [String] = []
+    /// Guess block per icao24, recorded so tests can assert the frozen
+    /// Catch.guessKind/guessValue reach the wire call unchanged.
+    var uploadedGuesses: [String: (kind: String?, value: String?)] = [:]
     var registrationCallCount = 0
 
     func ensureRegistered() async throws -> String {
@@ -323,9 +356,12 @@ final class FakeUploadClient: UploadCatchClient {
         observerLon: Double,
         headingDeg: Double?,
         elevationDeg: Double?,
-        headingAccuracyDeg: Double?
+        headingAccuracyDeg: Double?,
+        guessKind: String?,
+        guessValue: String?
     ) async throws -> UploadCatchResponse {
         uploadedIcaos.append(icao24)
+        uploadedGuesses[icao24] = (kind: guessKind, value: guessValue)
         let outcome = globalOutcome ?? outcomes[icao24]
         switch outcome {
         case .success(let pts, let dup):
@@ -334,13 +370,16 @@ final class FakeUploadClient: UploadCatchClient {
                 points: pts,
                 rarity: nil,
                 typecode: nil,
-                duplicate: dup
+                duplicate: dup,
+                firstOfType: nil,
+                guessCorrect: nil
             )
         case .failure(let e):
             throw e
         case nil:
             return UploadCatchResponse(
-                catchId: catchUuid, points: 10, rarity: nil, typecode: nil, duplicate: false
+                catchId: catchUuid, points: 10, rarity: nil, typecode: nil,
+                duplicate: false, firstOfType: nil, guessCorrect: nil
             )
         }
     }
@@ -383,7 +422,8 @@ func uploadPendingWithClient(
                 caughtAt: catchRow.caughtAt,
                 observerLat: catchRow.observerLat,
                 observerLon: catchRow.observerLon,
-                headingDeg: nil, elevationDeg: nil, headingAccuracyDeg: nil
+                headingDeg: nil, elevationDeg: nil, headingAccuracyDeg: nil,
+                guessKind: catchRow.guessKind, guessValue: catchRow.guessValue
             )
             catchRow.uploadedAt = Date()
             anySuccess = true
@@ -461,6 +501,31 @@ struct CatchUploaderTests {
         let fetched = try ctx.fetch(FetchDescriptor<Catch>())
         // duplicate:true is still treated as "accepted" → mark uploaded.
         #expect(fetched.first?.uploadedAt != nil)
+    }
+
+    @Test func frozenGuessFieldsReachTheUploadCall() async throws {
+        // A row that answered a bonus round carries frozen guessKind/guessValue;
+        // the uploader must ship them with the deferred upload untouched.
+        // The local verdict (guessCorrect) deliberately does NOT go on the
+        // wire — the server verifies the value against its own truth.
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let c = insertCatch(icao24: "aaa010", context: ctx)
+        c.guessKind = "route"
+        c.guessValue = "VHHH"
+        c.guessCorrect = true
+        let plain = insertCatch(icao24: "aaa011", context: ctx)
+        #expect(plain.guessKind == nil)
+
+        let fake = FakeUploadClient()
+        await uploadPendingWithClient(fake, context: ctx)
+
+        #expect(fake.uploadedGuesses["aaa010"]?.kind == "route")
+        #expect(fake.uploadedGuesses["aaa010"]?.value == "VHHH")
+        // A guess-less row uploads with nil kind/value → the client omits
+        // the block entirely (pinned by CatchUploadPayloadTests).
+        #expect(fake.uploadedGuesses["aaa011"]?.kind == nil)
+        #expect(fake.uploadedGuesses["aaa011"]?.value == nil)
     }
 
     @Test func alreadyUploadedRowsAreSkipped() async throws {
@@ -721,6 +786,35 @@ struct CatchMigrationAdditivityTests {
         let fetched = try ctx.fetch(FetchDescriptor<Catch>())
         #expect(fetched.first?.serverUuid == nil)
         #expect(fetched.first?.uploadedAt == nil)
+        // Game-layer PR2 fields: same additive, nil-default contract.
+        #expect(fetched.first?.guessKind == nil)
+        #expect(fetched.first?.guessValue == nil)
+        #expect(fetched.first?.guessCorrect == nil)
+    }
+
+    @Test func guessFieldsPersistRoundTrip() throws {
+        // The frozen answer-time guess survives a save/fetch cycle — it's
+        // what the deferred upload and the reveal ledger both read.
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+
+        let c = Catch(
+            icao24: "a3a3a3",
+            callsign: "CPA873", model: nil, manufacturer: nil,
+            caughtAt: Date(),
+            observerLat: 37.87, observerLon: -122.27,
+            slantDistanceMeters: 30_000
+        )
+        c.guessKind = "type"
+        c.guessValue = "B77W"
+        c.guessCorrect = false
+        ctx.insert(c)
+        try ctx.save()
+
+        let fetched = try ctx.fetch(FetchDescriptor<Catch>())
+        #expect(fetched.first?.guessKind == "type")
+        #expect(fetched.first?.guessValue == "B77W")
+        #expect(fetched.first?.guessCorrect == false)
     }
 
     @Test func serverUuidPersistsRoundTrip() throws {

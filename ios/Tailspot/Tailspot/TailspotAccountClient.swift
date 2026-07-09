@@ -148,6 +148,16 @@ nonisolated struct UploadCatchRequest: Encodable {
         }
     }
 
+    /// The bonus-round guess (game-layer PR2): the VALUE the user picked —
+    /// an ICAO airport ident for `kind: "route"`, a typecode for
+    /// `kind: "type"` — NEVER a verdict. The server verifies it against
+    /// its own truth and awards the bonus itself; there is no
+    /// "guessedRight" boolean on the wire by design.
+    struct Guess: Encodable {
+        let kind: String
+        let value: String
+    }
+
     let catchUuid: String
     let icao24: String
     let callsign: String?
@@ -158,6 +168,10 @@ nonisolated struct UploadCatchRequest: Encodable {
     /// Typed as a nullable JSON object: the server distinguishes null (skip validation)
     /// from an absent key.
     let aircraft: String? // nil serialises as JSON null via custom encoder below
+    /// Optional guess block. Unlike the pose angles (whose ABSENCE is 422),
+    /// the backend treats an absent `guess` key as "no guess" — so nil here
+    /// is correctly OMITTED, not encoded as null.
+    let guess: Guess?
 
     // Custom Encodable so `aircraft` becomes JSON null (not the Swift String? nullable).
     // We keep the field as String? just to carry nil; the real encoding is explicit.
@@ -171,20 +185,38 @@ nonisolated struct UploadCatchRequest: Encodable {
         // Always encode aircraft as explicit JSON null (backend distinguishes
         // `null` from a missing key; null = "no position, still accept").
         try container.encodeNil(forKey: .aircraft)
+        // Guess is the opposite: absent key = "no guess" (the common case);
+        // present only when the user actually answered a bonus round.
+        try container.encodeIfPresent(guess, forKey: .guess)
     }
 
     enum CodingKeys: String, CodingKey {
-        case catchUuid, icao24, callsign, caughtAt, observer, aircraft
+        case catchUuid, icao24, callsign, caughtAt, observer, aircraft, guess
     }
 }
 
 /// Response from POST /v1/catches (201 or 200).
+///
+/// `firstOfType` / `guessCorrect` are ADDITIVE keys: older backend payloads
+/// (and fixtures) simply lack them, and the synthesized Decodable's
+/// `decodeIfPresent` makes them nil — pinned by a decode-regression test so
+/// a future "tidy up" can never turn missing-key into a decode failure
+/// (the PR #65 old-payload pattern).
 nonisolated struct UploadCatchResponse: Decodable {
     let catchId: String
     let points: Int
     let rarity: String?
     let typecode: String?
     let duplicate: Bool
+    /// Whether the server counted this as the device's first catch of its
+    /// typecode (+50% bonus already included in `points`). Sent by the
+    /// backend since the first-of-type regime; decoded since game-layer PR2.
+    let firstOfType: Bool?
+    /// The SERVER'S verdict on the uploaded guess (nil when the backend
+    /// predates game-layer PR1 or no guess was sent — the backend echoes
+    /// false for guess-less catches, which is fine: the local ledger reads
+    /// the frozen `Catch.guessCorrect`, not this).
+    let guessCorrect: Bool?
 }
 
 /// One row in GET /v1/leaderboard's `entries` array.
@@ -344,6 +376,12 @@ nonisolated struct TailspotAccountClient {
     /// Upload a single catch to the backend. `catchUuid` is the caller-supplied
     /// idempotency key — sending the same UUID twice returns the original result
     /// with `duplicate: true`. Always sends `aircraft: null` (backfill path).
+    ///
+    /// `guessKind`/`guessValue` are the frozen bonus-round guess from the Catch
+    /// row (game-layer PR2). The `guess` block is sent only when BOTH are
+    /// present and non-empty — the backend 422s a malformed block, and a
+    /// half-recorded guess is a bug we'd rather surface as "no guess" than a
+    /// rejected catch.
     func uploadCatch(
         catchUuid: String,
         icao24: String,
@@ -353,7 +391,9 @@ nonisolated struct TailspotAccountClient {
         observerLon: Double,
         headingDeg: Double?,
         elevationDeg: Double?,
-        headingAccuracyDeg: Double?
+        headingAccuracyDeg: Double?,
+        guessKind: String? = nil,
+        guessValue: String? = nil
     ) async throws -> UploadCatchResponse {
         guard let token = storedToken else { throw AccountError.notRegistered }
 
@@ -362,6 +402,12 @@ nonisolated struct TailspotAccountClient {
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let guess: UploadCatchRequest.Guess? = {
+            guard let kind = guessKind, !kind.isEmpty,
+                  let value = guessValue, !value.isEmpty else { return nil }
+            return .init(kind: kind, value: value)
+        }()
 
         let payload = UploadCatchRequest(
             catchUuid: catchUuid,
@@ -375,7 +421,8 @@ nonisolated struct TailspotAccountClient {
                 elevationDeg: elevationDeg,
                 headingAccuracyDeg: headingAccuracyDeg
             ),
-            aircraft: nil
+            aircraft: nil,
+            guess: guess
         )
         request.httpBody = try JSONEncoder().encode(payload)
 

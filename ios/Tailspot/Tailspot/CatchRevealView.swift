@@ -312,7 +312,10 @@ struct CatchRevealView: View {
 
     private var base: Int { plane.rarity.basePoints }
     private var firstOfTypeBonus: Int {
-        plane.isFirstOfType && !isDuplicate ? Int((Double(base) * 0.5).rounded()) : 0
+        // Fraction via ScoringBonuses (pinned to scoring-bonuses.json by the
+        // parity test) — never a local literal, so the ledger can't drift
+        // from the server's award.
+        plane.isFirstOfType && !isDuplicate ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
     }
     private var finalTotal: Int { isDuplicate ? 0 : base + firstOfTypeBonus }
 
