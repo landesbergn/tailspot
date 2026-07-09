@@ -5,6 +5,39 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — Catch card: flight number, plane-centered photo crop + focus backfill — branch `feat/catch-card-centering`
+
+Field feedback (Noah, 2026-07-08): the catch photo doesn't center on the
+plane ("especially for planes less close to the center of the frame"), and
+he wanted the **flight number** on the card. Also re-opened N415YX (RPA4343):
+the plane IS visible — my earlier "sub-floor speck" call was wrong; a
+targeted detector pass finds it at 15 px / 0.54 conf, so it re-heals.
+
+- **Flight number on `SettledCatchCard`**: the callsign (already carried on
+  `CardPlane`, never shown) now renders right-aligned on the tier line
+  (`● COMMON · AIR CANADA        ACA708`), truncating a long carrier before
+  itself. The detail card previously surfaced the tail number only, in the
+  fine-print footer.
+- **Photo now centers on the plane.** Root cause: 82/85 catches had no
+  `photoFocus`, so `FocusFill` center-cropped the tall photo and the plane
+  landed at the frame edge. Two fixes: (1) **`CatchPhotoFocusRecovery`**
+  (new) recovers focus from the cyan bracket already baked into each saved
+  JPEG (nearest-neighbor downsample + strict brand-cyan centroid, span-gated
+  against multi-catch) — the bracket IS the focus, so this is
+  correct-by-construction and follows the offline heal; wired as a
+  version-gated one-time pass in `CatchBackfill.backfillPhotoFocus`, run off
+  the Hangar `.task` (bytes + pixels off the MainActor). (2) **`FocusFill`
+  zoom-to-center**: the short/wide hero slot pins outer-band planes to the
+  edge even with correct focus, so the crop now zooms in just enough
+  (capped 1.6×) to bring an edge plane toward center — center-band planes
+  are untouched.
+- **N415YX re-healed** onto its detected plane (554,860) and pushed to the
+  device; the on-device focus backfill then centers it.
+- Verified with before/after `ImageRenderer` snapshots over four real
+  catch photos (`FocusCenteringSnapshotTests`); new `FocusFill` zoom +
+  `CatchPhotoFocusRecovery` orientation/centroid unit tests. Full
+  `TailspotTests` green.
+
 ## 2026-07-09 — Bracket-snap follow-ups: full-res stills, orientation fix, off-frame drop + collection heal — branch `fix/bracket-snap-followups`
 
 Field trigger: Noah's RPA4343 / ACA708 / DAL405 catches (2026-07-08, Central
