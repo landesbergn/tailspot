@@ -91,6 +91,17 @@ struct SettledCatchCard: View {
                             .tracking(1).foregroundColor(RP.muted)
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
+                    // Flight number (callsign) — the identifier a spotter reads
+                    // off the card. Right-aligned so a long carrier name
+                    // truncates before it; monospaced to match the HUD vocabulary.
+                    if let flight = plane.callsign?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !flight.isEmpty {
+                        Spacer(minLength: 6 * scale)
+                        Text(flight.uppercased())
+                            .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
+                            .tracking(1).foregroundColor(RP.ink)
+                            .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                    }
                 }
 
                 Rectangle().fill(RP.rule).frame(height: 1)
