@@ -5,6 +5,22 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — Card-art medium DECIDED: keep the current hero — docs only
+
+The §6.3 question (open since 2026-06-18) is closed. Noah compared the
+candidate mediums **on his own phone against his real catches** via a
+throwaway "Card Art Lab" spike (local branch `spike/card-art-mediums`,
+never merge): the production `CatchCardView` with the hero slot swapped
+across CURRENT / generative livery-silhouette / treated own-photo /
+real 3D models (FR24 glTF, converted 1.0→2.0 and pre-rendered via
+three.js; the license map on the record: FR24 = GPL-2.0 prototype-only,
+Sketchfab CC-BY = the shippable 3D path if ever revisited). Verdict:
+**none beat the current look — keep the own-photo/placeholder hero, no
+commissioning pipeline, no art spend.** PLAN §9 #5 retired; §6.3 marked
+resolved. Card excitement keeps improving through the chrome/reveal
+polish track (#6) instead. Decision materials: the decision-pack and
+catches-×-mediums comparison artifacts (2026-07-09 session).
+
 ## 2026-07-09 — Catch card: flight number, plane-centered photo crop + focus backfill — branch `feat/catch-card-centering`
 
 Field feedback (Noah, 2026-07-08): the catch photo doesn't center on the
