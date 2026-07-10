@@ -197,8 +197,9 @@ struct CatchPhotoComposerTests {
         #expect(abs(l.origin.x - 0) < 1e-6)
     }
 
-    /// A focus near the image edge clamps so the fill never exposes
-    /// background past the image's own edge.
+    /// A focus at the image edge never exposes background past the image's
+    /// own edge — the leading edge stays flush at the top, the trailing edge
+    /// flush at the bottom. (Holds regardless of centering zoom.)
     @Test func focusFillClampsAtImageEdges() {
         let tall = CGSize(width: 1000, height: 3000)
         let frame = CGSize(width: 300, height: 168)
@@ -207,7 +208,41 @@ struct CatchPhotoComposerTests {
         #expect(top.origin.y == 0)                    // can't slide above the top edge
         let bottom = FocusFill.layout(imageSize: tall, frameSize: frame,
                                       focus: CGPoint(x: 0.5, y: 1.0))
-        #expect(abs(bottom.origin.y - (168 - 900)) < 1e-6)  // flush with the bottom edge
+        // Trailing edge flush with the frame bottom; never below.
+        #expect(abs(bottom.origin.y - (frame.height - bottom.size.height)) < 1e-6)
+        #expect(bottom.origin.y <= 0)
+    }
+
+    /// A plane in the outer band (unreachable by sliding at pure fill) gets
+    /// zoomed in — capped — so it lands closer to the frame center than fill
+    /// alone allows. This is the "planes far from center" fix.
+    @Test func focusFillZoomsToCenterEdgePlanes() {
+        let tall = CGSize(width: 1080, height: 1920)   // real portrait catch
+        let frame = CGSize(width: 264, height: 168)    // the hero slot
+        let focusY: CGFloat = 0.1
+        let z = FocusFill.layout(imageSize: tall, frameSize: frame,
+                                 focus: CGPoint(x: 0.5, y: focusY))
+        let fill = max(frame.width / tall.width, frame.height / tall.height)
+        let fillH = tall.height * fill
+        // Zoom engaged, and bounded by the cap.
+        #expect(z.size.height > fillH + 1)
+        #expect(z.size.height <= fillH * FocusFill.maxCenteringZoom + 1e-6)
+        // The plane sits closer to the vertical center than it would at fill.
+        let planeYZoom = z.origin.y + focusY * z.size.height
+        let fillOriginY = min(0, max(frame.height - fillH, frame.height / 2 - focusY * fillH))
+        let planeYFill = fillOriginY + focusY * fillH
+        #expect(abs(planeYZoom - frame.height / 2) < abs(planeYFill - frame.height / 2))
+    }
+
+    /// A center-band plane needs no zoom — pure aspect-fill is preserved, so
+    /// the common case is visually unchanged.
+    @Test func focusFillLeavesCenterBandUnzoomed() {
+        let tall = CGSize(width: 1080, height: 1920)
+        let frame = CGSize(width: 264, height: 168)
+        let l = FocusFill.layout(imageSize: tall, frameSize: frame,
+                                 focus: CGPoint(x: 0.5, y: 0.5))
+        let fill = max(frame.width / tall.width, frame.height / tall.height)
+        #expect(abs(l.size.height - tall.height * fill) < 1e-6)
     }
 
     /// Degenerate inputs (zero-size image or frame) fall back to a no-op
@@ -243,17 +278,71 @@ struct CatchPhotoComposerTests {
         #expect(CatchPhotoComposer.compose(jpegData: imageBytes, overlay: overlay) == nil)
     }
 
+    // MARK: saved-size cap + bracket-less normalization
+
+    /// Small photos save at their own size; a 12 MP still caps at 3072 on
+    /// the long side, preserving aspect.
+    @Test func savedPhotoSizeCapsOnlyOversizedPhotos() {
+        let legacy = CGSize(width: 1080, height: 1920)
+        #expect(CatchPhotoComposer.savedPhotoSize(for: legacy) == legacy)
+        let full = CatchPhotoComposer.savedPhotoSize(
+            for: CGSize(width: 3024, height: 4032))
+        #expect(full == CGSize(width: 2304, height: 3072))
+    }
+
+    /// Composing a photo bigger than the cap writes the capped size (and
+    /// the focus normalization stays cap-independent).
+    @Test func composeCapsOversizedOutput() {
+        let imageBytes = makeSolidJPEG(
+            size: CGSize(width: 3200, height: 6400), color: .black)
+        let overlay = CatchPhotoComposer.BracketOverlay(
+            screenPosition: CGPoint(x: 100, y: 200),
+            screenSize: CGSize(width: 300, height: 600)
+        )
+        let result = CatchPhotoComposer.compose(jpegData: imageBytes, overlay: overlay)
+        let saved = result.flatMap { UIImage(data: $0.jpegData) }
+        #expect(saved?.size == CGSize(width: 1536, height: 3072))
+        // Same aspect as the screen → focus is the plain screen ratio,
+        // unaffected by the cap.
+        if let focus = result?.normalizedFocus {
+            #expect(abs(focus.x - 1.0 / 3.0) < 1e-6)
+            #expect(abs(focus.y - 1.0 / 3.0) < 1e-6)
+        }
+    }
+
+    /// Bracket-less normalization: an EXIF-rotated "sensor" JPEG comes out
+    /// upright and capped; an already-upright, already-small JPEG passes
+    /// through byte-identical (no needless re-encode of legacy captures).
+    @Test func normalizedWithoutBracketUprightsAndCaps() {
+        // Landscape pixels tagged .right → portrait content 3024×4032 → capped.
+        let landscape = makeSolidJPEG(
+            size: CGSize(width: 4032, height: 3024), color: .black, orientation: .right)
+        let out = CatchPhotoComposer.normalizedWithoutBracket(jpegData: landscape)
+        let img = out.flatMap { UIImage(data: $0) }
+        #expect(img?.imageOrientation == .up)
+        #expect(img?.size == CGSize(width: 2304, height: 3072))
+
+        let small = makeSolidJPEG(size: CGSize(width: 1080, height: 1920), color: .black)
+        #expect(CatchPhotoComposer.normalizedWithoutBracket(jpegData: small) == small)
+    }
+
     // MARK: helpers
 
-    /// Synthesize a tiny solid-color JPEG for tests.
-    private func makeSolidJPEG(size: CGSize, color: UIColor) -> Data {
+    /// Synthesize a tiny solid-color JPEG for tests. A non-.up
+    /// `orientation` writes the EXIF tag the way AVFoundation does for
+    /// sensor-landscape stills.
+    private func makeSolidJPEG(size: CGSize, color: UIColor,
+                               orientation: UIImage.Orientation = .up) -> Data {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let image = renderer.image { ctx in
+        var image = renderer.image { ctx in
             color.setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        if orientation != .up, let cg = image.cgImage {
+            image = UIImage(cgImage: cg, scale: 1, orientation: orientation)
         }
         return image.jpegData(compressionQuality: 0.9) ?? Data()
     }

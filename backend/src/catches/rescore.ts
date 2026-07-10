@@ -20,9 +20,10 @@
  *   - IDEMPOTENT — a second run over settled data changes nothing.
  *   - DRY-RUNNABLE — `{ dryRun: true }` computes the full delta and writes nothing,
  *     so a public-leaderboard re-score's blast radius is reviewable before it lands.
- *   - BATCHED — resolves each (icao24, first-of-type) variant once, writes once
- *     per variant (the +50% first-of-type bonus floats with the re-derived base,
- *     so two catches of one airframe can land on different points).
+ *   - BATCHED — resolves each (icao24, first-of-type, guess) variant once,
+ *     writes once per variant (the first-of-type and correct-guess bonuses
+ *     float with the re-derived base, so two catches of one airframe can land
+ *     on different points).
  *
  * Run as a script:  npm run rescore -- [--all] [--dry-run]
  *   (default targets only stale rows: unresolved OR older-regime.)
@@ -31,8 +32,8 @@
 import { eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
-import { DrizzleCatchStore, type ScoredCatch } from "../identity/store.js";
-import { CURRENT_SCORING_VERSION } from "./points.js";
+import { DrizzleCatchStore, type GuessVerdict, type ScoredCatch } from "../identity/store.js";
+import { CURRENT_SCORING_VERSION, isGuessKind } from "./points.js";
 
 export interface RescoreOptions {
   /** Re-score EVERY catch, not just the stale set. Default false. */
@@ -96,6 +97,8 @@ export async function rescoreCatches(
       points: catches.points,
       scoringVersion: catches.scoringVersion,
       firstOfType: catches.firstOfType,
+      guessKind: catches.guessKind,
+      guessCorrect: catches.guessCorrect,
     })
     .from(catches);
   const rows = opts.all
@@ -116,31 +119,50 @@ export async function rescoreCatches(
   };
   if (rows.length === 0) return report;
 
-  // Resolve+score each distinct (airframe, first-of-type) variant ONCE. The
-  // expensive part — the registry→typecode join — depends only on the icao24,
-  // but the FINAL points also depend on the row's FROZEN `firstOfType` flag (the
-  // +50% bonus floats with the re-derived base). Keying by (icao24, firstOfType)
-  // keeps it to at most two scorer calls per airframe while still feeding the
-  // STORED flag through the ONE canonical scorer — re-score reads the flag, it
-  // never recomputes it from history (a deleted earlier catch must not shift it).
+  // Resolve+score each distinct (airframe, first-of-type, guess) variant ONCE.
+  // The expensive part — the registry→typecode join — depends only on the
+  // icao24, but the FINAL points also depend on the row's FROZEN `firstOfType`
+  // flag and its FROZEN guess verdict (`guess_kind`/`guess_correct`) — both
+  // bonuses float with the re-derived base while the VERDICTS stay frozen
+  // (re-score reads the flags, it never recomputes them: a deleted earlier
+  // catch must not shift first-of-type, and drifted route standing data must
+  // not flip an honestly-earned guess). Keying by the variant keeps scorer
+  // calls bounded per airframe while still feeding the STORED flags through
+  // the ONE canonical scorer.
   report.distinctIcaos = new Set(rows.map((r) => r.icao24)).size;
-  const scoreKey = (icao24: string, firstOfType: boolean) => `${icao24}:${firstOfType ? 1 : 0}`;
+  type RescoreRow = (typeof rows)[number];
+  // The frozen guess verdict off a row; undefined when the row has no guess.
+  // (A non-guess-kind string in guess_kind can't score — treat it as no guess.)
+  const rowGuess = (row: RescoreRow): GuessVerdict | undefined =>
+    isGuessKind(row.guessKind) ? { kind: row.guessKind, correct: row.guessCorrect } : undefined;
+  const scoreKey = (row: RescoreRow) => {
+    const guess = rowGuess(row);
+    const guessPart = guess ? `${guess.kind}:${guess.correct ? 1 : 0}` : "-";
+    return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}`;
+  };
   const scoredByKey = new Map<string, ScoredCatch>();
   for (const row of rows) {
-    const key = scoreKey(row.icao24, row.firstOfType);
+    const key = scoreKey(row);
     if (!scoredByKey.has(key)) {
-      scoredByKey.set(key, await store.scoreCatch(row.icao24, { firstOfType: row.firstOfType }));
+      scoredByKey.set(
+        key,
+        await store.scoreCatch(row.icao24, {
+          firstOfType: row.firstOfType,
+          guess: rowGuess(row),
+        }),
+      );
     }
   }
 
   // Tally deltas + bucket the ids that need a write, grouped by (icao24,
-  // firstOfType): rows sharing both get the same new projection → one UPDATE per
-  // group. (`firstOfType` is frozen — it's read above, never written below.)
+  // firstOfType, guess): rows sharing the variant get the same new projection →
+  // one UPDATE per group. (`firstOfType` and the guess columns are frozen —
+  // read above, never written below.)
   const transitions = new Map<string, RarityTransition>();
   const writes = new Map<string, { score: ScoredCatch; ids: string[] }>();
   for (const row of rows) {
-    const scored = scoredByKey.get(scoreKey(row.icao24, row.firstOfType));
-    if (!scored) continue; // unreachable — every (icao24, firstOfType) was resolved above
+    const scored = scoredByKey.get(scoreKey(row));
+    if (!scored) continue; // unreachable — every variant was resolved above
     report.pointsBefore += row.points;
     report.pointsAfter += scored.points;
 
@@ -165,7 +187,7 @@ export async function rescoreCatches(
     }
 
     if (projectionChanged || needsRestamp) {
-      const writeKey = scoreKey(row.icao24, row.firstOfType);
+      const writeKey = scoreKey(row);
       const bucket = writes.get(writeKey) ?? { score: scored, ids: [] };
       bucket.ids.push(row.id);
       writes.set(writeKey, bucket);
@@ -176,8 +198,8 @@ export async function rescoreCatches(
 
   if (opts.dryRun) return report;
 
-  // Apply: one UPDATE per (airframe, first-of-type) group, all within a single
-  // transaction so a re-score is all-or-nothing.
+  // Apply: one UPDATE per (airframe, first-of-type, guess) group, all within a
+  // single transaction so a re-score is all-or-nothing.
   await db.transaction(async (tx) => {
     for (const { score, ids } of writes.values()) {
       await tx

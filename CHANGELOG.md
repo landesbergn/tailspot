@@ -5,6 +5,155 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — Catch card: flight number, plane-centered photo crop + focus backfill — branch `feat/catch-card-centering`
+
+Field feedback (Noah, 2026-07-08): the catch photo doesn't center on the
+plane ("especially for planes less close to the center of the frame"), and
+he wanted the **flight number** on the card. Also re-opened N415YX (RPA4343):
+the plane IS visible — my earlier "sub-floor speck" call was wrong; a
+targeted detector pass finds it at 15 px / 0.54 conf, so it re-heals.
+
+- **Flight number on `SettledCatchCard`**: the callsign (already carried on
+  `CardPlane`, never shown) now renders right-aligned on the tier line
+  (`● COMMON · AIR CANADA        ACA708`), truncating a long carrier before
+  itself. The detail card previously surfaced the tail number only, in the
+  fine-print footer.
+- **Photo now centers on the plane.** Root cause: 82/85 catches had no
+  `photoFocus`, so `FocusFill` center-cropped the tall photo and the plane
+  landed at the frame edge. Two fixes: (1) **`CatchPhotoFocusRecovery`**
+  (new) recovers focus from the cyan bracket already baked into each saved
+  JPEG (nearest-neighbor downsample + strict brand-cyan centroid, span-gated
+  against multi-catch) — the bracket IS the focus, so this is
+  correct-by-construction and follows the offline heal; wired as a
+  version-gated one-time pass in `CatchBackfill.backfillPhotoFocus`, run off
+  the Hangar `.task` (bytes + pixels off the MainActor). (2) **`FocusFill`
+  zoom-to-center**: the short/wide hero slot pins outer-band planes to the
+  edge even with correct focus, so the crop now zooms in just enough
+  (capped 1.6×) to bring an edge plane toward center — center-band planes
+  are untouched.
+- **N415YX re-healed** onto its detected plane (554,860) and pushed to the
+  device; the on-device focus backfill then centers it.
+- Verified with before/after `ImageRenderer` snapshots over four real
+  catch photos (`FocusCenteringSnapshotTests`); new `FocusFill` zoom +
+  `CatchPhotoFocusRecovery` orientation/centroid unit tests. Full
+  `TailspotTests` green.
+- **Follow-up (branch `feat/thumbnail-focus`):** the Hangar **list
+  thumbnail** (`TailCard`) had the same defect — a plain aspect-fill
+  `AsyncImage` center-cropping the tall photo. New `FocusThumbnail` crops
+  toward `photoFocus` via the shared `FocusFill` (so the 76 px thumbnail
+  and the big card frame the plane identically), decoding at thumbnail
+  size via ImageIO (`kCGImageSourceThumbnailMaxPixelSize` +
+  `…WithTransform` for upright pixels) off the MainActor with an
+  `NSCache` — a scrolling list can't decode full 12 MP stills per row.
+  `FocusedImage` split out so the crop renders synchronously for the
+  snapshot harness. New loader (downsample + orientation) tests.
+
+## 2026-07-09 — Bracket-snap follow-ups: full-res stills, orientation fix, off-frame drop + collection heal — branch `fix/bracket-snap-followups`
+
+Field trigger: Noah's RPA4343 / ACA708 / DAL405 catches (2026-07-08, Central
+Park) all had the bracket well off the plane — diagnosed as *the snapper never
+shipped* (TestFlight builds 79/80 predate PR #106; zero `catch_photo_snap`
+events ever). Fixing that surfaced more:
+
+- **Latent 90° orientation bug in `CatchPhotoSnapper`** (would have field-fired
+  on first ship): raw AVFoundation stills are sensor-landscape + EXIF
+  orientation 6, and the snapper searched the raw `cgImage` while the composer
+  draws in UIImage-oriented space. All search math now runs on
+  `uprightCGImage`; pinned by tests.
+- **Full-sensor stills** (`AVCapturePhotoOutput.maxPhotoDimensions` → ~12 MP,
+  `.speed` quality prioritization to keep shutter lag down): the root reason
+  RPA4343-class photos can't heal is that a distant plane is ~10 px in a
+  1080-wide photo, under the detector's ~15–20 px floor; at 12 MP it's ~28 px.
+  `CatchPhotoSnapper` became **resolution-adaptive**: fine native-res ring
+  (distance gates scaled by width/1080) then, for wide photos, a coarse
+  1080-equivalent pass (the exact eval-calibrated policy) + one native refine
+  crop. Saved photos cap at 3072 long side (`CatchPhotoComposer.savedPhotoSize`)
+  so the Hangar doesn't eat 12 MP decodes; bracket-less saves normalize through
+  `normalizedWithoutBracket`.
+- **Off-frame targets save bracket-free** (`catch_photo_snap` outcome
+  `offframe`): a re-projected prediction outside the frame with no detection
+  used to bake a clipped, pointing-at-nothing bracket (the ACA708 photo).
+- **Collection heal (offline, one-off):** all 80 on-device catch photos ran
+  through a full-frame detector sweep (`scratchpad heal_collection.py`, mask
+  out the baked glyph, nearest-within-700px, composer-style redraw after
+  inpaint). 11 healed + pushed back to the device (incl. ACA708 + DAL405);
+  2 candidate heals **vetoed by cross-checking the SwiftData row's recorded
+  slant** — the detector wanted gate/taxiing planes for targets ADS-B put at
+  38–62 km (the known airport wrong-plane mode). 40 fallbacks are the
+  sub-floor-speck class the 12 MP capture fixes going forward. Originals:
+  `~/Desktop/tailspot-catch-backup-2026-07-08/`; review doc sent to Noah.
+
+## 2026-07-09 — Onboarding re-do phase 2: calibration step + denied-permission recovery — branch `feat/onboarding-calibration-redo`
+
+The design half of PLAN §9 #3 (phase 1 below instrumented it). **Compass
+calibration is now the flow's final step** (4 of 4; design ref
+`design/screens/onboarding.jsx` Variation A): figure-8 coaching
+(`Figure8Animation`, back in onboarding for the first time since the handle
+step displaced it), a live HDG/± readout off the flow's own
+`LocationManager` (heading updates already start on grant), and a latch at
+≤10° that flips the quiet "Skip · I'll do it later" button into a bright
+"Start spotting" — the skip is deliberately subtle so the coaching gets a
+chance. The handle claim moved from flow-end to the handle step's own
+"Claim handle" CTA (409 still holds the user there; Back-then-forward skips
+the re-claim via the confirmedKey check); `onboarding_completed` now fires
+from the final step with a `calibrated` boolean — the evidence for whether
+the step earns its place (watch it against later `compass_caution_shown`).
+**Both first-run dead ends got recovery UI** (`PermissionRecoveryCard`,
+standalone for snapshotability): an explicit camera denial used to render a
+silent black void, a location denial a forever-"waiting" GPS; each now gets
+a card naming what's off, why it matters, and an Open Settings deep-link.
+Visual pass via `OnboardingSnapshotTests` (all four steps + SE height + all
+three denial variants; `OnboardingFlow._snapshotScreen` flattens the
+ScrollView that ImageRenderer can't see into); review doc with every screen
+at `docs/reviews/2026-07-09-onboarding-redo.html`.
+
+## 2026-07-09 — Activation funnel instrumented end-to-end — branch `feat/activation-funnel-telemetry`
+
+Phase 1 of the onboarding re-do (PLAN §9 #3): before redesigning the leaky
+first-run (~36 openers → 5 catchers/30d), make the leak measurable — the
+funnel was blind between the SDK's "Application Opened" autocapture and
+`first_plane_catch`. New `ActivationTelemetry` (CatchTelemetry's shape: pure
+tested builders + thin fire wrappers): `onboarding_step_viewed`
+(welcome/permissions/handle, onAppear + step change), `permission_outcome`
+(camera from the `requestAccess` callback; location from the throwaway
+manager's published `authorizationStatus`, one-shot), `onboarding_completed`
+(claim result: success / offline_fallback — a 409 keeps the user on the step
+and is already covered by `handle_claimed`), once-per-install milestones
+`ar_first_frame` (first camera frame ever — latched UserDefaults, fired from
+the frame-bridge tap) and `first_plane_seen` (first post-filter visible
+label, from an `onReceive` on the observed list at ~1 Hz), plus the compass
+triad `compass_caution_shown` (after the existing 4 s debounce) /
+`compass_sheet_opened` / `compass_calibrated` (the sheet's false→true latch
+transition only — arriving already-good doesn't count). The funnel now reads:
+opened → step 0/1/2 → permissions granted? → completed → first frame → first
+plane seen → first catch, with the compass events explaining the "saw a label
+but it pointed wrong" gap. Phase 2 (the design pass — calibration step back
+into the flow per `design/screens/onboarding.jsx` Variation A, camera-denied /
+location-denied recovery UI, general craft) follows.
+
+## 2026-07-09 — L4 detector soft-gate ships in shadow (anti-cheat PR3) — branch `feat/l4-detector-soft-gate`
+
+The last anti-cheat lever (docs/anti-cheat-plan.md §5 L4), adapted to the
+2026-07-04 post-catch confirm model: when the camera *should* have seen the
+plane and didn't, the catch gets the `no_detection` suspicion — post-reveal
+Keep/Discard, never a block. "Should have seen it" is the competence envelope:
+daylight (`meanLuminance ≥ 0.12`, SkyCheck's color-trust dial) AND an expected
+footprint ≥ 24 px in the captured still (`DetectorGate.expectedFootprintPx` —
+wingspan/slant through the zoom-effective FOV; the model's measured floor is
+~15–20 px). "Saw it" = the `CatchPhotoSnapper` full-res ring search over the
+captured still (the strongest evidence the catch path has, reused from PR
+#106 via the new `snapOutcome` API) OR a live preview `VisualFix` (fresh by
+construction — expires after ~1 s of misses). Corroboration always wins;
+night, specks, multi-catches, and missing signals are never judged (fail
+open, same doctrine as SkyCheck/LocalSkyGate). Ships in SHADOW exactly like
+L2 did: `catch_detector_gate` fires on every single-target catch (verdict +
+envelope signals; `detector_verdict` also lands on `catch_performed`), and a
+debug-overlay row toggles `[L4 SHADOW]` ↔ `[L4 ENFORCE]`
+(`detectorGateEnforcing`, UserDefaults). Flip enforcement when the shadow
+stream shows in-envelope no-detections are cheats rather than recall misses.
+New pure `DetectorGate` + `DetectorGateTests`; suspicion precedence is now
+occluded > no_detection > too_far > indoor.
+
 ## 2026-07-08 — Asia-Pacific operator gaps (APJ545 / BTK6143) — branch `fix/asia-pacific-operator-gaps`
 
 Field report: two 2026-07-03 catches (APJ545 — Peach Aviation, BTK6143 —

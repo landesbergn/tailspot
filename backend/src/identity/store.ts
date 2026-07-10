@@ -13,7 +13,13 @@
  */
 
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { CURRENT_SCORING_VERSION, firstOfTypeBonus, pointsForRarity } from "../catches/points.js";
+import {
+  CURRENT_SCORING_VERSION,
+  type GuessKind,
+  firstOfTypeBonus,
+  guessBonus,
+  pointsForRarity,
+} from "../catches/points.js";
 import type { Database } from "../db/client.js";
 import { catches, devices, registry, typecodes } from "../db/schema.js";
 
@@ -102,6 +108,17 @@ export interface RarityResolution {
 }
 
 /**
+ * A server-verified guess VERDICT, handed to the scorer the same way
+ * `firstOfType` is: the caller (upload path or re-score) establishes it, the
+ * scorer only turns it into points. `correct` is the server's own verification
+ * — the wire never carries a client verdict.
+ */
+export interface GuessVerdict {
+  kind: GuessKind;
+  correct: boolean;
+}
+
+/**
  * A fully-scored catch: resolved airframe identity, its rarity tier, the awarded
  * points, and the scoring regime that produced them. The output of the ONE
  * canonical scorer (`CatchStore.scoreCatch`) — the upload path and the re-score
@@ -118,6 +135,12 @@ export interface ScoredCatch {
    * response so the iOS client can show the bonus.
    */
   firstOfType: boolean;
+  /**
+   * Whether a correct-guess bonus is baked into `points` (echoes the verdict
+   * handed to the scorer; false when no guess was made). Persisted on the row
+   * and surfaced in the catch response.
+   */
+  guessCorrect: boolean;
 }
 
 /** The fields the route hands the store to persist a new catch. */
@@ -133,6 +156,12 @@ export interface NewCatch {
   scoringVersion: number;
   /** Whether this is the device's first-ever catch of its typecode (drives the +50% bonus). */
   firstOfType: boolean;
+  /** Bonus-round guess, frozen at upload: what was asked, what the user said,
+   *  and the SERVER's verdict (see the schema column comments). Null/false when
+   *  no guess was made. */
+  guessKind: GuessKind | null;
+  guessValue: string | null;
+  guessCorrect: boolean;
   caughtAt: Date;
   observerLat: number;
   observerLon: number;
@@ -155,6 +184,8 @@ export interface StoredCatchResult {
   typecode: string | null;
   /** Whether the first-of-type bonus was awarded (read back on a replay too). */
   firstOfType: boolean;
+  /** Whether a correct-guess bonus was awarded (read back on a replay too). */
+  guessCorrect: boolean;
 }
 
 /** One leaderboard row. */
@@ -189,8 +220,16 @@ export interface CatchStore {
    * itself. When true, the +50%-of-base first-of-type bonus is added on top of
    * the resolved base. Upload computes the flag with `isFirstOfType`; re-score
    * reads the frozen flag off the row.
+   *
+   * `guess` follows the same pattern: the caller supplies the server-verified
+   * VERDICT (upload verifies the wire's guess value against registry/route
+   * truth; re-score reads the frozen `guess_kind`/`guess_correct` off the row),
+   * and a correct guess adds `guessBonus(base, kind)` on top.
    */
-  scoreCatch(icao24: string, opts?: { firstOfType?: boolean }): Promise<ScoredCatch>;
+  scoreCatch(
+    icao24: string,
+    opts?: { firstOfType?: boolean; guess?: GuessVerdict },
+  ): Promise<ScoredCatch>;
   /**
    * Whether `deviceId` has NO existing catch of `typecode` — i.e. a new catch of
    * it would be the device's first-of-type. A null typecode (unresolved
@@ -237,17 +276,25 @@ export class DrizzleCatchStore implements CatchStore {
     return { typecode, rarity: tcRows[0]?.rarity ?? null };
   }
 
-  async scoreCatch(icao24: string, opts: { firstOfType?: boolean } = {}): Promise<ScoredCatch> {
+  async scoreCatch(
+    icao24: string,
+    opts: { firstOfType?: boolean; guess?: GuessVerdict } = {},
+  ): Promise<ScoredCatch> {
     const { typecode, rarity } = await this.resolveRarity(icao24);
     const firstOfType = opts.firstOfType ?? false;
+    const guessCorrect = opts.guess?.correct ?? false;
     const base = pointsForRarity(rarity);
-    const points = base + (firstOfType ? firstOfTypeBonus(base) : 0);
+    const points =
+      base +
+      (firstOfType ? firstOfTypeBonus(base) : 0) +
+      (opts.guess?.correct ? guessBonus(base, opts.guess.kind) : 0);
     return {
       typecode,
       rarity,
       points,
       scoringVersion: CURRENT_SCORING_VERSION,
       firstOfType,
+      guessCorrect,
     };
   }
 
@@ -279,6 +326,9 @@ export class DrizzleCatchStore implements CatchStore {
         points: c.points,
         scoringVersion: c.scoringVersion,
         firstOfType: c.firstOfType,
+        guessKind: c.guessKind,
+        guessValue: c.guessValue,
+        guessCorrect: c.guessCorrect,
         caughtAt: c.caughtAt,
         observerLat: c.observerLat,
         observerLon: c.observerLon,
@@ -298,6 +348,7 @@ export class DrizzleCatchStore implements CatchStore {
         rarity: catches.rarity,
         typecode: catches.typecode,
         firstOfType: catches.firstOfType,
+        guessCorrect: catches.guessCorrect,
       });
 
     if (inserted.length > 0) {
@@ -309,6 +360,7 @@ export class DrizzleCatchStore implements CatchStore {
           rarity: row.rarity,
           typecode: row.typecode,
           firstOfType: row.firstOfType,
+          guessCorrect: row.guessCorrect,
         },
         duplicate: false,
       };
@@ -323,6 +375,7 @@ export class DrizzleCatchStore implements CatchStore {
         rarity: catches.rarity,
         typecode: catches.typecode,
         firstOfType: catches.firstOfType,
+        guessCorrect: catches.guessCorrect,
       })
       .from(catches)
       .where(and(eq(catches.deviceId, c.deviceId), eq(catches.catchUuid, c.catchUuid)))
@@ -335,6 +388,7 @@ export class DrizzleCatchStore implements CatchStore {
         rarity: row.rarity,
         typecode: row.typecode,
         firstOfType: row.firstOfType,
+        guessCorrect: row.guessCorrect,
       },
       duplicate: true,
     };

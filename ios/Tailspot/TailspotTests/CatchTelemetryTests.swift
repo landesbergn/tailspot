@@ -268,17 +268,30 @@ struct CatchTelemetryTests {
         // Raw values ARE the on-disk Catch.suspectReason strings + the
         // PostHog reason property — renaming one silently orphans rows.
         #expect(CatchSuspicion.occluded.rawValue == "occluded")
+        #expect(CatchSuspicion.noDetection.rawValue == "no_detection")
         #expect(CatchSuspicion.tooFar.rawValue == "too_far")
         #expect(CatchSuspicion.indoor.rawValue == "indoor")
     }
 
     @Test func suspicionPrecedencePrefersTheMostActionableReason() {
-        // occluded > tooFar > indoor; nil yields the new reason.
+        // occluded > noDetection > tooFar > indoor; nil yields the new reason.
         #expect(CatchSuspicion.preferred(nil, .indoor) == .indoor)
         #expect(CatchSuspicion.preferred(.indoor, .tooFar) == .tooFar)
         #expect(CatchSuspicion.preferred(.tooFar, .occluded) == .occluded)
         #expect(CatchSuspicion.preferred(.occluded, .indoor) == .occluded)
         #expect(CatchSuspicion.preferred(.tooFar, .indoor) == .tooFar)
+        #expect(CatchSuspicion.preferred(.tooFar, .noDetection) == .noDetection)
+        #expect(CatchSuspicion.preferred(.noDetection, .occluded) == .occluded)
+        #expect(CatchSuspicion.preferred(.noDetection, .indoor) == .noDetection)
+    }
+
+    @Test func everySuspicionHasReviewCopy() {
+        // A reason with no question would present an empty Keep/Discard
+        // dialog — catch it at the enum, not in the field.
+        for reason in CatchSuspicion.allCases {
+            #expect(!reason.question(slantKm: nil).isEmpty)
+            #expect(reason.question(slantKm: nil).hasSuffix("?"))
+        }
     }
 
     @Test func tooFarQuestionCarriesTheDistance() {

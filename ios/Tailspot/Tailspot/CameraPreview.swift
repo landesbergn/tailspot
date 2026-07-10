@@ -147,6 +147,19 @@ final class PreviewView: UIView {
 
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
+                // Full-sensor stills. The `.high` preset picks a ~1080p
+                // video format, and by default the photo output inherits
+                // that as its still size — which put distant planes at
+                // ~8–14 px in the saved photo, below the airplane
+                // detector's ~15–20 px floor (CatchPhotoSnapper). Most
+                // formats support 12 MP stills alongside 1080p video;
+                // opt in to the largest the active format offers.
+                // Must happen AFTER addOutput (the output needs a device
+                // connection to know its supported dimensions).
+                if let maxDims = device.activeFormat.supportedMaxPhotoDimensions
+                    .max(by: { $0.width * $0.height < $1.width * $1.height }) {
+                    photoOutput.maxPhotoDimensions = maxDims
+                }
             }
 
             // Visual-confirmation frame tap: only when a bridge was wired.
@@ -232,10 +245,20 @@ final class PreviewView: UIView {
     /// delegate is bytes — not worth the closure-capture ceremony of
     /// scrubbing them on completion.
     private func capturePhoto(completion: @escaping (Data?) -> Void) {
-        let settings = AVCapturePhotoSettings()
         let delegate = PhotoCaptureDelegate(completion: completion)
         pendingCaptureDelegates.append(delegate)
         sessionQueue.async { [photoOutput] in
+            let settings = AVCapturePhotoSettings()
+            // Ask for the full-sensor still the output was configured for
+            // (per-capture settings default back to the video size
+            // otherwise). Read on the session queue, where the output was
+            // configured.
+            settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
+            // The subject is a moving plane behind a hand-held phone:
+            // shutter latency costs bracket accuracy (the tap→shutter
+            // drift CatchPhotoSnapper corrects for), so skip the
+            // multi-frame fusion pipelines.
+            settings.photoQualityPrioritization = .speed
             photoOutput.capturePhoto(with: settings, delegate: delegate)
         }
     }

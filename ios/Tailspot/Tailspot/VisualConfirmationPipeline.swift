@@ -72,6 +72,22 @@ final class VisualConfirmationPipeline: ObservableObject {
     }
     static let localGateKey = "tailspot.debug.localGateEnforcing"
 
+    /// L4 detector soft-gate ENFORCEMENT. Ships in SHADOW (default OFF, the
+    /// same rollout the L2 gate used): `catch_detector_gate` telemetry fires
+    /// on every single-target catch either way, but only enforcement raises
+    /// the `no_detection` suspicion (post-catch Keep/Discard — never a
+    /// block). Flip after the shadow stream shows the in-envelope
+    /// no-detection rate is a cheat signal, not a detector-recall artifact.
+    /// Debug-overlay toggle; no user-facing control by design.
+    var detectorGateEnforcing: Bool {
+        get { UserDefaults.standard.object(forKey: Self.detectorGateKey) as? Bool ?? false }
+        set {
+            objectWillChange.send()   // not @Published (UserDefaults-backed)
+            UserDefaults.standard.set(newValue, forKey: Self.detectorGateKey)
+        }
+    }
+    static let detectorGateKey = "tailspot.debug.detectorGateEnforcing"
+
     /// What the detector should look for, refreshed every render frame.
     nonisolated struct Target: Sendable {
         let icao24: String

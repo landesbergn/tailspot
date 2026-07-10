@@ -5,6 +5,7 @@ import { buildApp } from "../src/app.js";
 import type { Database } from "../src/db/client.js";
 import { catches, registry, typecodes } from "../src/db/schema.js";
 import { DrizzleCatchStore, DrizzleIdentityStore } from "../src/identity/store.js";
+import type { AircraftRoute } from "../src/providers/types.js";
 import { makeTestDb } from "./helpers/pgliteDb.js";
 
 /**
@@ -118,6 +119,7 @@ describe("POST /v1/catches", () => {
       rarity: "rare",
       typecode: "B738",
       firstOfType: true,
+      guessCorrect: false, // no guess sent → additive key present, false
       duplicate: false,
     });
   });
@@ -183,6 +185,7 @@ describe("POST /v1/catches", () => {
       rarity: "rare",
       typecode: "B738",
       firstOfType: true,
+      guessCorrect: false,
       duplicate: false,
     });
 
@@ -230,6 +233,15 @@ describe("POST /v1/catches", () => {
       ],
       // aircraft may be null, but a present-but-non-object value is still malformed.
       ["aircraft is a non-object scalar", { ...base, aircraft: "nope" }],
+      // guess is optional, but a present-but-malformed guess is 422 (the wire
+      // carries the guess VALUE — a client sending a verdict-shaped or junk
+      // block is a bug, not a scoring decision).
+      ["guess is a non-object scalar", { ...base, guess: "B738" }],
+      ["guess.kind is not route/type", { ...base, guess: { kind: "airline", value: "UAL" } }],
+      ["guess.value missing", { ...base, guess: { kind: "type" } }],
+      ["guess.value empty", { ...base, guess: { kind: "type", value: "   " } }],
+      ["guess.value non-string", { ...base, guess: { kind: "type", value: 738 } }],
+      ["guess.value absurdly long", { ...base, guess: { kind: "route", value: "X".repeat(17) } }],
     ];
     for (const [label, body] of cases) {
       it(`rejects ${label}`, async () => {
@@ -237,6 +249,109 @@ describe("POST /v1/catches", () => {
         expect(res.statusCode).toBe(422);
       });
     }
+  });
+
+  describe("type guess (server-verified against the registry typecode)", () => {
+    it("a correct type guess earns +25% of base and freezes the guess on the row", async () => {
+      const body = {
+        ...catchBody("aaaaaa", "aaaa1111-1111-4111-8111-111111111111"),
+        guess: { kind: "type", value: "b738" }, // lowercase on the wire — server normalizes
+      };
+      const res = await post(body);
+      expect(res.statusCode).toBe(201);
+      const json = res.json();
+      expect(json.guessCorrect).toBe(true);
+      expect(json.firstOfType).toBe(true);
+      expect(json.points).toBe(88); // rare 50 + first-of-type 25 + type-guess round(50*0.25)=13
+
+      // The guess is FROZEN on the row: what was asked, the (normalized) value,
+      // and the server's verdict.
+      const rows = await db
+        .select({
+          guessKind: catches.guessKind,
+          guessValue: catches.guessValue,
+          guessCorrect: catches.guessCorrect,
+        })
+        .from(catches)
+        .where(eq(catches.catchUuid, body.catchUuid))
+        .limit(1);
+      expect(rows[0]).toEqual({ guessKind: "type", guessValue: "B738", guessCorrect: true });
+    });
+
+    it("a wrong type guess earns no bonus but is still recorded", async () => {
+      const body = {
+        ...catchBody("aaaaaa", "aaaa2222-2222-4222-8222-222222222222"),
+        guess: { kind: "type", value: "A320" }, // it's actually a B738
+      };
+      const res = await post(body);
+      expect(res.statusCode).toBe(201);
+      expect(res.json().guessCorrect).toBe(false);
+      expect(res.json().points).toBe(75); // first-of-type only — no guess bonus
+      const rows = await db
+        .select({
+          guessKind: catches.guessKind,
+          guessValue: catches.guessValue,
+          guessCorrect: catches.guessCorrect,
+        })
+        .from(catches)
+        .where(eq(catches.catchUuid, body.catchUuid))
+        .limit(1);
+      expect(rows[0]).toEqual({ guessKind: "type", guessValue: "A320", guessCorrect: false });
+    });
+
+    it("a type guess on an unresolvable airframe is incorrect, never an error", async () => {
+      const body = {
+        ...catchBody("ffffff", "aaaa3333-3333-4333-8333-333333333333"),
+        guess: { kind: "type", value: "B738" }, // no registry row → no truth to match
+      };
+      const res = await post(body);
+      expect(res.statusCode).toBe(201);
+      expect(res.json().guessCorrect).toBe(false);
+      expect(res.json().points).toBe(10); // unknown floor, no bonuses
+    });
+
+    it("a no-guess row stores null kind/value and false verdict", async () => {
+      const body = catchBody("aaaaaa", "aaaa4444-4444-4444-8444-444444444444");
+      await post(body);
+      const rows = await db
+        .select({
+          guessKind: catches.guessKind,
+          guessValue: catches.guessValue,
+          guessCorrect: catches.guessCorrect,
+        })
+        .from(catches)
+        .where(eq(catches.catchUuid, body.catchUuid))
+        .limit(1);
+      expect(rows[0]).toEqual({ guessKind: null, guessValue: null, guessCorrect: false });
+    });
+
+    it("a replay echoes the ORIGINAL guess verdict", async () => {
+      const uuid = "aaaa5555-5555-4555-8555-555555555555";
+      const first = await post({
+        ...catchBody("aaaaaa", uuid),
+        guess: { kind: "type", value: "B738" },
+      });
+      expect(first.json().guessCorrect).toBe(true);
+
+      // Replay without the guess block — the stored result must win.
+      const replay = await post(catchBody("aaaaaa", uuid));
+      expect(replay.statusCode).toBe(200);
+      expect(replay.json().duplicate).toBe(true);
+      expect(replay.json().guessCorrect).toBe(true);
+      expect(replay.json().points).toBe(first.json().points);
+    });
+  });
+
+  it("a route guess with NO resolver wired verifies incorrect, never a 500", async () => {
+    // This app was built without a routeResolver (like a non-adsblol deploy):
+    // the guess is simply wrong; the catch itself is untouched.
+    const res = await post({
+      ...catchBody("aaaaaa", "aaaa6666-6666-4666-8666-666666666666"),
+      guess: { kind: "route", value: "KSFO" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(false);
+    expect(res.json().points).toBe(75); // first-of-type only
   });
 
   it("NO ORACLE: an implausible catch returns the same status + body SHAPE as a plausible one", async () => {
@@ -272,6 +387,124 @@ describe("POST /v1/catches", () => {
     expect(validation).toBeTruthy();
     expect(validation?.verdict).toBe("implausible");
     expect(validation?.reasons.some((r) => r.includes("bearing off"))).toBe(true);
+  });
+});
+
+// ── Route-guess verification (game-layer PR1) ────────────────────────────────
+// The route guess is verified through the SAME RouteResolver seam behind
+// GET /v1/routes/:callsign. These tests inject a controllable fake so the
+// upstream behaviors (route on file, no route, resolver down) are deterministic.
+describe("route guess (server-verified via the RouteResolver)", () => {
+  let app: FastifyInstance;
+  let db: Database;
+  let token: string;
+  /** Per-test resolver behavior; the injected resolver delegates here. */
+  let resolveImpl: (callsign: string) => Promise<AircraftRoute | null>;
+  /** Callsigns the resolver was actually asked about. */
+  let resolvedCallsigns: string[];
+
+  beforeEach(async () => {
+    db = await makeTestDb();
+    await db.insert(typecodes).values({
+      typecode: "B738",
+      manufacturer: "Boeing",
+      model: "737-800",
+      type: "narrow",
+      rarity: "rare",
+    });
+    await db.insert(registry).values({ icao24: "aaaaaa", typecode: "B738", source: "faa" });
+
+    resolveImpl = async () => ({ originIcao: "KSFO", destIcao: "EGLL" });
+    resolvedCallsigns = [];
+    app = await buildApp({
+      identityStore: new DrizzleIdentityStore(db),
+      catchStore: new DrizzleCatchStore(db),
+      routeResolver: {
+        resolve: (callsign: string) => {
+          resolvedCallsigns.push(callsign);
+          return resolveImpl(callsign);
+        },
+      },
+      nowSeconds: () => NOW,
+      rateLimitNow: () => 0,
+    });
+    const reg = await app.inject({ method: "POST", url: "/v1/devices" });
+    token = reg.json().deviceToken;
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  function post(body: unknown) {
+    return app.inject({
+      method: "POST",
+      url: "/v1/catches",
+      headers: { authorization: `Bearer ${token}` },
+      payload: body as object,
+    });
+  }
+
+  function guessedBody(uuid: string, value: string) {
+    return { ...catchBody("aaaaaa", uuid), guess: { kind: "route", value } };
+  }
+
+  it("a correct guess on the ORIGIN earns +10% of base (and the callsign is normalized)", async () => {
+    const body = guessedBody("bbbb1111-1111-4111-8111-111111111111", "ksfo");
+    body.callsign = "ual123"; // lowercase on the wire — resolver must get UAL123
+    const res = await post(body);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(true);
+    expect(res.json().points).toBe(80); // rare 50 + first-of-type 25 + route-guess round(50*0.1)=5
+    expect(resolvedCallsigns).toEqual(["UAL123"]);
+  });
+
+  it("a correct guess on the DESTINATION also counts (either-endpoint match)", async () => {
+    const res = await post(guessedBody("bbbb2222-2222-4222-8222-222222222222", "EGLL"));
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(true);
+    expect(res.json().points).toBe(80);
+  });
+
+  it("a wrong guess earns no bonus", async () => {
+    const res = await post(guessedBody("bbbb3333-3333-4333-8333-333333333333", "KLAX"));
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(false);
+    expect(res.json().points).toBe(75); // first-of-type only
+  });
+
+  it("no route on file → incorrect, catch accepted", async () => {
+    resolveImpl = async () => null;
+    const res = await post(guessedBody("bbbb4444-4444-4444-8444-444444444444", "KSFO"));
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(false);
+    expect(res.json().points).toBe(75);
+  });
+
+  it("resolver DOWN → incorrect, catch accepted, never a 500", async () => {
+    resolveImpl = async () => {
+      throw new Error("adsb.lol unreachable");
+    };
+    const res = await post(guessedBody("bbbb5555-5555-4555-8555-555555555555", "KSFO"));
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(false);
+    expect(res.json().points).toBe(75);
+    // The forfeited guess is still frozen on the row for telemetry.
+    const rows = await db
+      .select({ guessKind: catches.guessKind, guessCorrect: catches.guessCorrect })
+      .from(catches)
+      .where(eq(catches.catchUuid, "bbbb5555-5555-4555-8555-555555555555"))
+      .limit(1);
+    expect(rows[0]).toEqual({ guessKind: "route", guessCorrect: false });
+  });
+
+  it("a route guess on a callsign-less catch is incorrect without consulting the resolver", async () => {
+    const body = guessedBody("bbbb6666-6666-4666-8666-666666666666", "KSFO");
+    body.callsign = null as unknown as string;
+    const res = await post(body);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(false);
+    expect(resolvedCallsigns).toEqual([]);
   });
 });
 

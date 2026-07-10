@@ -204,6 +204,48 @@ enum CatchBackfill {
 
         if changedAny { try? context.save() }
     }
+
+    /// UserDefaults key + current version for the one-time `photoFocus`
+    /// recovery. Bump the version to force a re-scan after the baked
+    /// brackets change on disk (e.g. an offline heal re-draws them).
+    static let focusBackfillVersionKey = "tailspot.focusBackfillVersion"
+    static let focusBackfillVersion = 1
+
+    /// One-time pass: for every catch with a saved photo, recover the crop
+    /// focus from the baked cyan bracket (`CatchPhotoFocusRecovery`) so
+    /// pre-focus / re-healed catches center the plane instead of
+    /// center-cropping. Version-gated so it scans once; file read + pixel
+    /// scan run off the MainActor, only the model write is here. Sets focus
+    /// when it's nil OR the bracket has clearly moved from the stored point
+    /// (a heal) — a no-op for new catches, which already store this point.
+    static func backfillPhotoFocus(_ catches: [Catch], in context: ModelContext) async {
+        let defaults = UserDefaults.standard
+        guard defaults.integer(forKey: focusBackfillVersionKey) < focusBackfillVersion
+        else { return }
+
+        var changed = false
+        var completed = true
+        for c in catches {
+            if Task.isCancelled { completed = false; break }
+            guard let name = c.photoFilename,
+                  let url = CatchPhotoStore.url(forFilename: name) else { continue }
+            let focus = await Task.detached(priority: .utility) { () -> CGPoint? in
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return CatchPhotoFocusRecovery.recoverFocus(fromJPEG: data)
+            }.value
+            guard let focus else { continue }
+            let movedX = abs((c.photoFocusX ?? -9) - Double(focus.x))
+            let movedY = abs((c.photoFocusY ?? -9) - Double(focus.y))
+            if c.photoFocusX == nil || movedX > 0.03 || movedY > 0.03 {
+                c.photoFocusX = Double(focus.x)
+                c.photoFocusY = Double(focus.y)
+                changed = true
+            }
+        }
+        if changed { try? context.save() }
+        // Only mark done on a full pass — a cancelled run resumes next open.
+        if completed { defaults.set(focusBackfillVersion, forKey: focusBackfillVersionKey) }
+    }
 }
 
 private extension String {
