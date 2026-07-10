@@ -197,8 +197,9 @@ struct CatchPhotoComposerTests {
         #expect(abs(l.origin.x - 0) < 1e-6)
     }
 
-    /// A focus near the image edge clamps so the fill never exposes
-    /// background past the image's own edge.
+    /// A focus at the image edge never exposes background past the image's
+    /// own edge — the leading edge stays flush at the top, the trailing edge
+    /// flush at the bottom. (Holds regardless of centering zoom.)
     @Test func focusFillClampsAtImageEdges() {
         let tall = CGSize(width: 1000, height: 3000)
         let frame = CGSize(width: 300, height: 168)
@@ -207,7 +208,41 @@ struct CatchPhotoComposerTests {
         #expect(top.origin.y == 0)                    // can't slide above the top edge
         let bottom = FocusFill.layout(imageSize: tall, frameSize: frame,
                                       focus: CGPoint(x: 0.5, y: 1.0))
-        #expect(abs(bottom.origin.y - (168 - 900)) < 1e-6)  // flush with the bottom edge
+        // Trailing edge flush with the frame bottom; never below.
+        #expect(abs(bottom.origin.y - (frame.height - bottom.size.height)) < 1e-6)
+        #expect(bottom.origin.y <= 0)
+    }
+
+    /// A plane in the outer band (unreachable by sliding at pure fill) gets
+    /// zoomed in — capped — so it lands closer to the frame center than fill
+    /// alone allows. This is the "planes far from center" fix.
+    @Test func focusFillZoomsToCenterEdgePlanes() {
+        let tall = CGSize(width: 1080, height: 1920)   // real portrait catch
+        let frame = CGSize(width: 264, height: 168)    // the hero slot
+        let focusY: CGFloat = 0.1
+        let z = FocusFill.layout(imageSize: tall, frameSize: frame,
+                                 focus: CGPoint(x: 0.5, y: focusY))
+        let fill = max(frame.width / tall.width, frame.height / tall.height)
+        let fillH = tall.height * fill
+        // Zoom engaged, and bounded by the cap.
+        #expect(z.size.height > fillH + 1)
+        #expect(z.size.height <= fillH * FocusFill.maxCenteringZoom + 1e-6)
+        // The plane sits closer to the vertical center than it would at fill.
+        let planeYZoom = z.origin.y + focusY * z.size.height
+        let fillOriginY = min(0, max(frame.height - fillH, frame.height / 2 - focusY * fillH))
+        let planeYFill = fillOriginY + focusY * fillH
+        #expect(abs(planeYZoom - frame.height / 2) < abs(planeYFill - frame.height / 2))
+    }
+
+    /// A center-band plane needs no zoom — pure aspect-fill is preserved, so
+    /// the common case is visually unchanged.
+    @Test func focusFillLeavesCenterBandUnzoomed() {
+        let tall = CGSize(width: 1080, height: 1920)
+        let frame = CGSize(width: 264, height: 168)
+        let l = FocusFill.layout(imageSize: tall, frameSize: frame,
+                                 focus: CGPoint(x: 0.5, y: 0.5))
+        let fill = max(frame.width / tall.width, frame.height / tall.height)
+        #expect(abs(l.size.height - tall.height * fill) < 1e-6)
     }
 
     /// Degenerate inputs (zero-size image or frame) fall back to a no-op
