@@ -349,7 +349,7 @@ struct CatchCardView: View {
                 placeholderStripes
             }
             // Photo bevel — top highlight + bottom shadow vignette.
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: Brand.Radius.row)
                 .stroke(.white.opacity(0.06), lineWidth: 0.5)
             LinearGradient(
                 colors: [.clear, .black.opacity(0.35)],
@@ -357,7 +357,7 @@ struct CatchCardView: View {
             )
             .blendMode(.multiply)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
     }
 
     /// Striped placeholder in the rarity tint. Replaces the design's

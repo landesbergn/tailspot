@@ -85,7 +85,7 @@ struct TailCard: View {
             // not a plain center-crop that hides an edge-of-frame plane. Decoded
             // at thumbnail size off the main actor (FocusThumbnail).
             FocusThumbnail(url: photoURL, focus: c.photoFocus, side: 76)
-                .clipShape(RoundedRectangle(cornerRadius: 11))
+                .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
 
             VStack(alignment: .leading, spacing: 5) {
                 // Line 1 — cyan callsign · airline. The callsign is the lead
@@ -167,9 +167,9 @@ struct TailCard: View {
             }
         }
         .padding(12)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
         )
     }

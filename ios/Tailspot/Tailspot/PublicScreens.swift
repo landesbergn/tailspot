@@ -203,8 +203,8 @@ struct LeaderboardScreen: View {
                     .monospacedDigit()
             }
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 6).fill(tint.opacity(0.18))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(tint, lineWidth: 1))
+                RoundedRectangle(cornerRadius: Brand.Radius.chip).fill(tint.opacity(0.18))
+                    .overlay(RoundedRectangle(cornerRadius: Brand.Radius.chip).strokeBorder(tint, lineWidth: 1))
                 Text("\(rank)")
                     .font(Brand.Font.mono(size: 28, weight: .heavy))
                     .foregroundStyle(tint)

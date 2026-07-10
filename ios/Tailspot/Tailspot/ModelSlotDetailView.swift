@@ -166,8 +166,8 @@ struct ModelSlotDetailView: View {
         // disclosure chevron — no hand-rolled one here.
         .padding(.vertical, 8)
         .padding(.trailing, 12)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 7))
-        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.chip))
+        .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.chip))
     }
 }
 

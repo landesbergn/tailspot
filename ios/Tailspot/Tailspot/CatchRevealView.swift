@@ -701,9 +701,9 @@ struct CatchRevealView: View {
                 RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
                     .frame(height: photoHeight)
                     .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
                     )
                     .opacity(ss(0.0, 0.18, t))
@@ -788,8 +788,8 @@ struct CatchRevealView: View {
             }
             .background(RP.bg)
             .frame(width: width)
-            .clipShape(RoundedRectangle(cornerRadius: 26))
-            .overlay(RoundedRectangle(cornerRadius: 26).stroke(RP.rule, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.hero))
+            .overlay(RoundedRectangle(cornerRadius: Brand.Radius.hero).stroke(RP.rule, lineWidth: 1))
         }
     }
 

@@ -167,7 +167,7 @@ struct MapScreen: View {
             }
         }
         .padding(14)
-        .background(.thinMaterial, in: .rect(cornerRadius: 14))
+        .background(.thinMaterial, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     private var dateSpanText: String? {

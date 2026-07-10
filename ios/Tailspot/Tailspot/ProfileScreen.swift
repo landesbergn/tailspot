@@ -154,6 +154,15 @@ struct ProfileScreen: View {
 
     // MARK: - Identity
 
+    /// Whether the stored handle is a real user choice. Until it is, the
+    /// header must not render the "spotter_42" placeholder as if it were a
+    /// claimed identity — unclaimed is an honest designed state (Noah,
+    /// 2026-07-10 polish sweep) with a CLAIM YOUR HANDLE affordance that
+    /// routes to the Settings SPOTTER section.
+    private var isHandleClaimed: Bool {
+        AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
+    }
+
     /// First-letter initials for the avatar disc. Uses the first two
     /// non-symbol characters of the handle.
     private var initials: String {
@@ -183,22 +192,53 @@ struct ProfileScreen: View {
                         .fill(Brand.Color.bgPrimary)
                     Circle()
                         .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1.5)
-                    Text(initials)
-                        .font(Brand.Font.mono(size: 18, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan)
+                    if isHandleClaimed {
+                        Text(initials)
+                            .font(Brand.Font.mono(size: 18, weight: .bold))
+                            .foregroundStyle(Brand.Color.cyan)
+                    } else {
+                        // No initials to show yet — a quiet person glyph,
+                        // not fake "SP" initials off the placeholder.
+                        Image(systemName: "person")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(Brand.Color.textTertiary)
+                    }
                 }
                 .frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("@\(handle)")
-                        .font(Brand.Font.mono(size: 20, weight: .bold))
-                        .tracking(0.4)
-                        .foregroundStyle(Brand.Color.textPrimary)
-                    if let joined = joinedDateLabel {
-                        Text(joined)
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.textSecondary)
+                    if isHandleClaimed {
+                        Text("@\(handle)")
+                            .font(Brand.Font.mono(size: 20, weight: .bold))
+                            .tracking(0.4)
+                            .foregroundStyle(Brand.Color.textPrimary)
+                        if let joined = joinedDateLabel {
+                            Text(joined)
+                                .font(Brand.Font.caption)
+                                .foregroundStyle(Brand.Color.textSecondary)
+                        } else {
+                            Text("ready to spot")
+                                .font(Brand.Font.caption)
+                                .foregroundStyle(Brand.Color.textSecondary)
+                        }
                     } else {
-                        Text("ready to spot")
+                        // Unclaimed: a designed affordance, not "@spotter_42"
+                        // masquerading as a handle. Taps into the existing
+                        // claim flow (Settings → SPOTTER).
+                        NavigationLink {
+                            SettingsScreen()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("CLAIM YOUR HANDLE")
+                                    .font(Brand.Font.mono(size: 13, weight: .bold))
+                                    .tracking(1.2)
+                                    .foregroundStyle(Brand.Color.cyan)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Brand.Color.cyan.opacity(0.7))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        Text("shown on the global leaderboard")
                             .font(Brand.Font.caption)
                             .foregroundStyle(Brand.Color.textSecondary)
                     }
@@ -233,7 +273,7 @@ struct ProfileScreen: View {
         }
         .frame(maxWidth: .infinity)
         .padding(18)
-        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 20))
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     // MARK: - Glass treatment
@@ -271,7 +311,7 @@ struct ProfileScreen: View {
             statCell(value: earnedTrophies, label: "Trophies")
         }
         .padding(.vertical, 12)
-        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 16))
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     private func statCell(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
@@ -348,7 +388,7 @@ struct ProfileScreen: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 14))
+            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }
         .buttonStyle(.plain)
     }
@@ -378,7 +418,7 @@ struct ProfileScreen: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 14))
+            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }
         .buttonStyle(.plain)
     }
@@ -391,7 +431,7 @@ struct ProfileScreen: View {
             divider
             sectionLink(label: "Settings", systemImage: "gear") { SettingsScreen() }
         }
-        .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     private var divider: some View {

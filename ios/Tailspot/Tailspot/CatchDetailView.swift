@@ -182,7 +182,7 @@ struct CatchDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
     }
 
     private func airframeField(_ label: String, _ value: String) -> some View {
