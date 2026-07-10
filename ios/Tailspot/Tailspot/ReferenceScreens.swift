@@ -2,9 +2,10 @@
 //  ReferenceScreens.swift
 //  Tailspot
 //
-//  Two static "Pokédex reference" screens: one for the 5 rarity tiers,
-//  one for the 7 aircraft types. Both serve as in-app docs explaining
-//  the game system the player is interacting with.
+//  Static "Pokédex reference" for the 5 rarity tiers — in-app docs for
+//  the game system. (A companion Types reference existed until
+//  2026-07-08; cut as not useful — the Hangar's Sets segment already
+//  teaches the type buckets in context.)
 //
 
 import SwiftUI
@@ -19,7 +20,7 @@ struct RarityReferenceScreen: View {
                 ForEach(Rarity.allCases, id: \.self) { r in
                     rarityCard(r)
                 }
-                Text("Points come from rarity, plus a one-time bonus the first time you catch a new type. Multi-catch combos stack on top.")
+                Text("Points come from rarity, plus a one-time bonus the first time you catch a new type. Multi-catch combos stack on top. Planes we can't identify default to Common.")
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textTertiary)
                     .padding(.horizontal, 4)
@@ -41,7 +42,7 @@ struct RarityReferenceScreen: View {
             Text("Every plane has a tier.")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text("Ranked by how much each type actually flies — how likely you are to see one overhead.")
+            Text("Tiers track how much of a type is actually in the sky — plus a scarcity layer for military, vintage, and vanishing airliners.")
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
         }
@@ -92,73 +93,7 @@ struct RarityReferenceScreen: View {
     }
 }
 
-// MARK: - Types
-
-struct TypesReferenceScreen: View {
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(AircraftType.allCases, id: \.self) { t in
-                        typeCard(t)
-                    }
-                }
-                Text("Sets are organized by type. Catch one of every plane in a set to complete it.")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 8)
-            }
-            .padding(20)
-        }
-        .background(Brand.Color.bgPrimary.ignoresSafeArea())
-        .navigationTitle("Types")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("SEVEN TYPES")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(Brand.Color.cyan)
-            Text("How we bucket the sky.")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundStyle(Brand.Color.textPrimary)
-        }
-    }
-
-    private func typeCard(_ t: AircraftType) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(t.tint.opacity(0.18))
-                Text(t.glyph)
-                    .font(Brand.Font.mono(size: 30, weight: .bold))
-                    .foregroundStyle(t.tint)
-            }
-            .frame(height: 76)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(t.label)
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
-                    .tracking(0.6)
-                    .foregroundStyle(t.tint)
-                Text(t.summary)
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
-    }
-}
-
 #Preview("Rarity") {
     NavigationStack { RarityReferenceScreen() }
 }
 
-#Preview("Types") {
-    NavigationStack { TypesReferenceScreen() }
-}
