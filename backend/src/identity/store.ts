@@ -188,6 +188,48 @@ export interface StoredCatchResult {
   guessCorrect: boolean;
 }
 
+/**
+ * One catch as GET /v1/catches serves it — the fields a reinstalled client
+ * needs to reconstruct a Hangar row. Everything comes from what the server
+ * actually stores: the catch row itself plus two cheap joins (registration
+ * from `registry` by icao24; clean manufacturer/model names from `typecodes`
+ * by the row's frozen typecode). No photo — photos are never uploaded, so
+ * they are unrecoverable by design.
+ */
+export interface RestorableCatch {
+  /** The client-generated idempotency uuid — doubles as the RESTORE key
+   *  (a re-run skips uuids already present locally). */
+  catchUuid: string;
+  icao24: string;
+  callsign: string | null;
+  typecode: string | null;
+  rarity: string | null;
+  points: number;
+  firstOfType: boolean;
+  guessKind: string | null;
+  guessValue: string | null;
+  guessCorrect: boolean;
+  /** Unix seconds (matching the POST wire format). */
+  caughtAt: number;
+  observerLat: number;
+  observerLon: number;
+  /** Null for nearly every row — the iOS uploader sends `aircraft: null`. */
+  aircraftAltitudeMeters: number | null;
+  /** Joined from `registry` by icao24 (null for unregistered airframes). */
+  registration: string | null;
+  /** Joined from `typecodes` by the row's typecode (clean DOC 8643 names). */
+  manufacturer: string | null;
+  model: string | null;
+}
+
+/** One page of a device's catches, for the restore endpoint. */
+export interface CatchPage {
+  /** TOTAL catches this device holds (not the page size) — lets the client
+   *  size the restore prompt ("we found N catches") and page to completion. */
+  total: number;
+  catches: RestorableCatch[];
+}
+
 /** One leaderboard row. */
 export interface LeaderboardEntry {
   rank: number;
@@ -245,6 +287,13 @@ export interface CatchStore {
    * same uuid is a normal, independent insert (security-review fix).
    */
   insertOrGet(c: NewCatch): Promise<{ result: StoredCatchResult; duplicate: boolean }>;
+  /**
+   * One page of `deviceId`'s catches (oldest first, deterministic order:
+   * caughtAt ASC then id ASC), with the airframe joins the client needs to
+   * rebuild Hangar rows. `total` is the device's FULL catch count regardless
+   * of the page bounds. Powers GET /v1/catches (Hangar restore, issue #58).
+   */
+  listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage>;
   /** Top-N devices WITH a handle AND at least one catch, by total points. */
   leaderboard(limit: number): Promise<LeaderboardEntry[]>;
   /**
@@ -391,6 +440,73 @@ export class DrizzleCatchStore implements CatchStore {
         guessCorrect: row.guessCorrect,
       },
       duplicate: true,
+    };
+  }
+
+  async listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage> {
+    // Total first: the client sizes its restore prompt on this, and it must be
+    // the device's FULL count even when the page window is smaller.
+    const totalRows = await this.db
+      .select({ n: sql<number>`count(*)` })
+      .from(catches)
+      .where(eq(catches.deviceId, deviceId));
+    const total = Number(totalRows[0]?.n ?? 0);
+
+    // Page query with the two airframe joins. LEFT joins: a foreign airframe
+    // has no registry row, and an unresolved catch has a null typecode — both
+    // must still restore (the client's own backfill can heal names later).
+    // Ordered oldest-first with the id as a total-order tiebreaker so pages
+    // never overlap or skip rows even when timestamps collide.
+    const rows = await this.db
+      .select({
+        catchUuid: catches.catchUuid,
+        icao24: catches.icao24,
+        callsign: catches.callsign,
+        typecode: catches.typecode,
+        rarity: catches.rarity,
+        points: catches.points,
+        firstOfType: catches.firstOfType,
+        guessKind: catches.guessKind,
+        guessValue: catches.guessValue,
+        guessCorrect: catches.guessCorrect,
+        caughtAt: catches.caughtAt,
+        observerLat: catches.observerLat,
+        observerLon: catches.observerLon,
+        aircraftAltitudeMeters: catches.aircraftAltitudeMeters,
+        registration: registry.registration,
+        manufacturer: typecodes.manufacturer,
+        model: typecodes.model,
+      })
+      .from(catches)
+      .leftJoin(registry, eq(registry.icao24, catches.icao24))
+      .leftJoin(typecodes, eq(typecodes.typecode, catches.typecode))
+      .where(eq(catches.deviceId, deviceId))
+      .orderBy(catches.caughtAt, catches.id)
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      total,
+      catches: rows.map((r) => ({
+        catchUuid: r.catchUuid,
+        icao24: r.icao24,
+        callsign: r.callsign,
+        typecode: r.typecode,
+        rarity: r.rarity,
+        points: r.points,
+        firstOfType: r.firstOfType,
+        guessKind: r.guessKind,
+        guessValue: r.guessValue,
+        guessCorrect: r.guessCorrect,
+        // Wire format matches POST /v1/catches: unix seconds.
+        caughtAt: Math.floor(r.caughtAt.getTime() / 1000),
+        observerLat: r.observerLat,
+        observerLon: r.observerLon,
+        aircraftAltitudeMeters: r.aircraftAltitudeMeters,
+        registration: r.registration,
+        manufacturer: r.manufacturer,
+        model: r.model,
+      })),
     };
   }
 

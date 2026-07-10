@@ -5,6 +5,62 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-10 — Hangar restore-from-server (PLAN §9 #7, issue #58) — branch `feat/hangar-restore`
+
+The local-only Hangar's catastrophic-loss gap gets its restore path: catches
+already upload to the backend for scoring, the Keychain device id (#55)
+survives reinstall, so a fresh install can now pull the collection back.
+**Catch-data only — photos were never uploaded and cannot come back**; the
+prompt says so plainly. No schema change anywhere (no drizzle migration, no
+SwiftData field).
+
+- **Backend `GET /v1/catches`** (auth required — the bearer token both
+  authenticates and scopes; there's no deviceId param to probe): the device's
+  own catches, oldest-first, `limit`/`offset` paged (≤500/page; the biggest
+  real device is <100), with `total` always the full count. Rows carry what
+  the server actually stores — catchUuid, icao24, callsign, frozen scoring
+  facts (typecode/rarity/points/firstOfType), the guess triple, caughtAt,
+  observer lat/lon, aircraft altitude — plus two cheap LEFT joins:
+  `registration` from `registry`, clean `manufacturer`/`model` from
+  `typecodes`. New `CatchStore.listCatches`; 8 new route tests
+  (`test/catchesList.route.test.ts`): 401s, own-rows-only isolation,
+  pagination/ordering, null-heavy rows, param clamping, guess passthrough.
+- **iOS restore flow** (`HangarRestore.swift` + `HangarRestorePromptView.swift`):
+  once per launch, ContentView asks `HangarRestoreManager.checkIfNeeded` —
+  local Hangar empty → wait (bounded, no self-register: racing a second
+  `POST /v1/devices` is the #55/#76 duplicate-identity bug class) for the
+  launch registration → probe `fetchCatches(limit: 1)` → server total > 0
+  ⇒ a full-screen branded offer in the `TrophyUnlockView` chrome family:
+  "WELCOME BACK / N CATCHES FOUND", the photo caveat, RESTORE / NOT NOW
+  (declining stays quiet until next launch). Restore pages everything, maps
+  rows → `Catch` (`HangarRestore.makeCatch`), saves, and shows "N CATCHES
+  RESTORED"; failure gets a TRY AGAIN screen (re-runs are safe).
+- **Idempotency:** keyed on the upload idempotency uuid — `Catch.serverUuid`
+  == the server's `catchUuid` — compared case-folded (local UUIDs are
+  uppercase, Postgres returns lowercase), deduped against the store AND
+  within the batch, so re-running restore never duplicates.
+- **No re-upload, no re-toast, one event:** restored rows are born
+  `uploadedAt != nil` (the uploader's pending predicate can't see them; no
+  per-catch telemetry). After the bulk insert the trophy ledger is
+  **re-seeded** (`TrophyUnlockCenter.reseedAfterRestore` — the first-launch
+  silent-seed pattern) *before* ContentView's diff task can observe the new
+  rows, so trophies land in the trophy case without a celebration flood.
+  Analytics is exactly one `hangar_restored` event (`count`, `server_total`).
+- **Unknown-distance display:** the server never stored slant distance, so
+  restored rows carry the 0 sentinel — new `CardPlane.distText(fromMeters:)`
+  renders it as "—" instead of "0.0 km" (trophy math already treated 0 as
+  never-far). Restored placeName/country/route/operator heal via the existing
+  `CatchBackfill` passes on the next Hangar open, like any old row.
+- Tests: 10 new Swift tests (`HangarRestoreTests` — wire decode incl. nulls,
+  full + nil-field mapping, guessCorrect-nil rule, case-folded + intra-batch
+  idempotency, re-run inserts nothing, not-pending-upload, reseed queues no
+  celebrations) + `HangarRestoreSnapshotTests` (visual pass: offer N=1/62/500,
+  restoring, done, failed). Full `TailspotTests` green (910 test cases);
+  backend 290 green; Release device build clean. Visual pass fixed two
+  things: the system `ProgressView` (renders as a placeholder under
+  ImageRenderer, off-brand anyway) → a drawn cyan `RestoreSweep` arc, and a
+  mono-font apostrophe artifact ("COULDN' T") → "RESTORE FAILED".
+
 ## 2026-07-10 — Guess round, redesigned IN-CARD on the reveal (game-layer PR3) — branch `feat/guess-round-ui`
 
 Noah's 2026-07-10 direction reshaped the bonus round: **supersedes the separate

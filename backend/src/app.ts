@@ -236,6 +236,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     scoreCatch: (icao, opts) => getCatchStore().scoreCatch(icao, opts),
     isFirstOfType: (deviceId, typecode) => getCatchStore().isFirstOfType(deviceId, typecode),
     insertOrGet: (c) => getCatchStore().insertOrGet(c),
+    listCatches: (id, limit, offset) => getCatchStore().listCatches(id, limit, offset),
     leaderboard: (n) => getCatchStore().leaderboard(n),
     myStanding: (id) => getCatchStore().myStanding(id),
   };
