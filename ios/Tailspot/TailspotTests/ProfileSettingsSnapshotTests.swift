@@ -91,7 +91,7 @@ struct ProfileSettingsSnapshotTests {
         snapshot(ProfileScreen().modelContainer(container), as: "profile_hub")
         snapshot(NavigationStack { SettingsScreen() }, as: "settings")
         snapshot(NavigationStack { RarityReferenceScreen() }, as: "reference_rarity")
-        snapshot(NavigationStack { TypesReferenceScreen() }, as: "reference_types")
+        snapshot(NavigationStack { MapScreen() }.modelContainer(container), as: "map")
         #expect(true)
     }
 }

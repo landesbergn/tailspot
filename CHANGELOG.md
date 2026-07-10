@@ -5,6 +5,59 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-08 — Profile hub reorganized ("Direction A") — branch `feat/profile-standing-layout`
+
+Follow-on to the same-day cleanup below, answering Noah's "what is this page
+prioritizing?" Three questions drove it: medals-vs-trophies (one system, and
+this screen's MEDALS tile was the only surface not calling them Trophies),
+no clear information hierarchy, and a data-dishonest rarity strip (equal
+segments regardless of counts — the old code comment admitted it).
+
+Four divergent layouts were mocked in real SwiftUI (rendered via the
+snapshot harness; review artifact 2026-07-08) — A "Standing" scoreboard,
+B "Progression" quest log, C "Flight deck" instrument cluster, D "Boarding
+pass". **Noah picked A**; D's boarding-pass concept moved to the backlog as
+the share/invite artboard (PLAN §9 #10 "Spotter Pass").
+
+The shipped layout, in priority order: identity + points/rank hero → ONE
+quiet collection-stat strip (Catches · Unique · Rare+ · **Trophies**) → nav.
+The four stat tiles and the rarity strip are gone (census detail lives in
+the Hangar/references). Surfaces moved to iOS 26 Liquid Glass
+(`.glassEffect`) tinted to `bgElevated` — untinted glass resolves too
+bright over the fixed dark palette — over a backdrop with two faint radial
+glows so the glass has something to refract. `ProfileStats` is unchanged;
+only the view reorganized.
+
+**Field-review round 2 (Noah, 2026-07-08):** the Map's rarity filter strip
+no longer hyphen-wraps ("LEGENDAR-Y") — chips are lineLimit(1) + fixedSize
+inside a horizontal ScrollView, so overflow scrolls instead of wrapping.
+The profile gained the **BEST CATCH** card from the exploration's
+Direction B (highest-rarity airframe, most recent on ties; taps through to
+the catch detail via the Map screen's single-catch HangarRow pattern). The
+**Sets quick card** was removed (the Hangar's default segment IS Sets — a
+duplicate door), and the **Types reference** was cut entirely (link +
+screen — the Sets segment teaches the type buckets in context). The Rarity
+reference copy was sharpened to the current tiering: tiers = sky presence
+plus a scarcity layer (military/vintage/vanishing airliners), and
+unidentified planes default to Common. Its examples were already re-synced
+to `AircraftTypes.json` in the cleanup round below.
+
+**Share (same branch — iterated with Noah to deliberately minimal):** the
+toolbar Share got the brand CTA treatment (cyan disc, dark glyph — the
+page's one action) and is a DIRECT `ShareLink`: one tap → the system share
+sheet with **"Join me on Tailspot:" + https://tailspot.app** — nothing
+else. Messages renders the link as a rich preview from the site's OG tags.
+The old `ShareCardSheet` preview detour is deleted, and so is the
+in-between iteration: a rendered stat-card artboard (Direction-B language —
+points/rank hero, NEXT UP tier ring, best catch, challenge copy + a
+tailspot.app QR) was built, reviewed, and **cut as too much** — an invite
+should be a text and a link (Noah). The artboard lives in git history and
+the 2026-07-08 exploration artifact if the Spotter Pass work (PLAN §9 #10)
+wants to resurrect it as the share object. New `profile_share_opened`
+funnel event (simultaneous gesture — ShareLink exposes no tap callback;
+"opened", not "completed"). The **invite trophy** stays coupled to Spotter
+Pass: awarding it honestly needs joined-from-your-invite attribution.
+
 ## 2026-07-08 — Profile/Settings legacy-artifact cleanup for v1 — branch `polish/settings-v1-cleanup`
 
 A pre-launch scrub of the Profile hub + Settings surface (PLAN §9 #6). Every
