@@ -183,6 +183,20 @@ nonisolated struct TrophyProgressInputs: Sendable {
     // Hangar. Defaulted in the initializer — the established zero-churn
     // pattern for existing call sites.
     let triedGroundedCatch: Bool    // ever tapped a parked (on-ground) plane
+    // Metrics added with the 2026-07-10 roster expansion (game-layer PR4).
+    // `totalPoints` is the OFFLINE approximation of lifetime score — the sum
+    // of each catch's current base points (resolvedRarity.basePoints), the
+    // same math as `ProfileStats.totalPoints`. It deliberately excludes
+    // server-side bonuses (first-of-type, guess) so it never depends on the
+    // network; the server total is only ever >= this, so a points trophy
+    // earned offline is always honestly earned.
+    let totalPoints: Int            // Σ resolvedRarity.basePoints across catches
+    // Guess metrics (route-only guessing; kind is always "route"). Derived
+    // from the frozen local verdicts on catch rows: a row participates only
+    // when it was ANSWERED (`guessCorrect != nil`; SKIP leaves all guess
+    // fields nil, so skipped rounds neither count nor break a streak).
+    let correctGuesses: Int         // rows with guessCorrect == true
+    let bestGuessStreak: Int        // longest caughtAt-ordered run of correct answers
 
     init(
         totalCatches: Int,
@@ -219,7 +233,10 @@ nonisolated struct TrophyProgressInputs: Sendable {
         weekendDaysHit: Int = 0,
         hadDawnCatch: Bool = false,
         hadConsecutiveSameOperator: Bool = false,
-        triedGroundedCatch: Bool = false
+        triedGroundedCatch: Bool = false,
+        totalPoints: Int = 0,
+        correctGuesses: Int = 0,
+        bestGuessStreak: Int = 0
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -256,6 +273,9 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.hadDawnCatch = hadDawnCatch
         self.hadConsecutiveSameOperator = hadConsecutiveSameOperator
         self.triedGroundedCatch = triedGroundedCatch
+        self.totalPoints = totalPoints
+        self.correctGuesses = correctGuesses
+        self.bestGuessStreak = bestGuessStreak
     }
 
     static let zero = TrophyProgressInputs(
@@ -270,6 +290,20 @@ nonisolated struct TrophyProgressInputs: Sendable {
 // MARK: - The roster
 
 nonisolated enum Trophies {
+
+    /// Monotonic roster GENERATION, stamped onto `UserDefaultsTrophyLedger`
+    /// when the ledger is (re)seeded. When a stored stamp is behind this
+    /// value, the roster grew since that device last seeded — the unlock
+    /// center then RESEEDS (silently acknowledging any newly-added trophies
+    /// the user already qualifies for, instead of flooding them with unlock
+    /// moments) and presents the one-time "trophy case" recap sheet.
+    ///
+    /// History: 0 = never stamped (any ledger written before this existed),
+    /// 1 = reserved for the original 2026-06-20 binary roster, 2 = the
+    /// 2026-07-10 expansion (points milestones + guess trophies). Bump this
+    /// whenever a roster change should be absorbed-and-recapped rather than
+    /// celebrated one toast at a time.
+    static let rosterVersion = 2
 
     /// Full achievement roster. Every achievement is BINARY — earned or not,
     /// no tier ramp (the single `.gold` tier only drives the uniform hex
@@ -293,6 +327,27 @@ nonisolated enum Trophies {
         Achievement(id: "veteran", title: "Sky Veteran", summary: "Reach 500 catches",
                     iconName: "catcher", tiers: [.init(tier: .gold, at: 500)],
                     prerequisite: "centurion", progress: { $0.totalCatches }),
+
+        // ── Lifetime points (2026-07-10 expansion) ──
+        // Progress reads the offline approximation (Σ base points — see
+        // `TrophyProgressInputs.totalPoints`), so these earn without a network
+        // round-trip and can only undercount the server's authoritative total.
+        Achievement(id: "fourfigures", title: "Four Figures", summary: "Bank 1,000 lifetime points",
+                    iconName: "coin", tiers: [.init(tier: .gold, at: 1000)],
+                    progress: { $0.totalPoints }),
+        Achievement(id: "highroller", title: "High Roller", summary: "Bank 5,000 lifetime points",
+                    iconName: "coin", tiers: [.init(tier: .gold, at: 5000)],
+                    prerequisite: "fourfigures", progress: { $0.totalPoints }),
+
+        // ── Bonus round (route guessing — 2026-07-10 expansion) ──
+        // Counts CORRECT answered rounds off the frozen local verdicts
+        // (`Catch.guessCorrect`); guessing is route-only, so no kind filter.
+        Achievement(id: "calledit", title: "Called It", summary: "Nail your first route call",
+                    iconName: "crystal", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { min(1, $0.correctGuesses) }),
+        Achievement(id: "clairvoyant", title: "Clairvoyant", summary: "Nail 10 route calls",
+                    iconName: "crystal", tiers: [.init(tier: .gold, at: 10)],
+                    prerequisite: "calledit", progress: { $0.correctGuesses }),
 
         // ── Wide-body ──
         Achievement(id: "heavy", title: "Wide Awake", summary: "Catch 10 wide-bodies",
@@ -473,6 +528,12 @@ nonisolated enum Trophies {
         Achievement(id: "doubleheader", title: "Doubleheader", summary: "Two of the same airline in a row",
                     iconName: "twin", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.hadConsecutiveSameOperator ? 1 : 0 }),
+        // Hot Streak (2026-07-10 expansion): three correct route calls IN A
+        // ROW — consecutive over answered rounds in caughtAt order (a wrong
+        // answer resets; a catch with no round, or a SKIP, doesn't break it).
+        Achievement(id: "hotstreak", title: "Hot Streak", summary: "Three correct route calls in a row",
+                    iconName: "bolt", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.bestGuessStreak >= 3 ? 1 : 0 }),
         // The grounded easter egg (wishlist #9): tapping a parked plane
         // creates no Catch row (correctly), so this derives from the
         // event-based `triedGroundedCatch` input, not the Hangar.
@@ -516,12 +577,20 @@ nonisolated enum Trophies {
         // (burst) — derived after the loop.
         var icaoDays: [String: Set<Date>] = [:]
         var timestamps: [Date] = []
+        var totalPoints = 0
+        // (time, correct) for ANSWERED bonus rounds only — skipped/never-
+        // offered rounds leave guessCorrect nil and don't participate.
+        var guessTimeline: [(Date, Bool)] = []
         let calendar = Calendar(identifier: .gregorian)
 
         for c in catches {
             unique.insert(c.icao24)
             let r = c.resolvedRarity
             let t = c.resolvedType
+            totalPoints += r.basePoints
+            if let correct = c.guessCorrect {
+                guessTimeline.append((c.caughtAt, correct))
+            }
             switch r {
             case .rare:      rare += 1; rarePlusUnique.insert(c.icao24)
             case .epic:      epic += 1; rarePlusUnique.insert(c.icao24)
@@ -622,8 +691,25 @@ nonisolated enum Trophies {
             weekendDaysHit: weekendDays.count,
             hadDawnCatch: hadDawn,
             hadConsecutiveSameOperator: consecutiveOp,
-            triedGroundedCatch: events.hasOccurred(.groundedCatchAttempt)
+            triedGroundedCatch: events.hasOccurred(.groundedCatchAttempt),
+            totalPoints: totalPoints,
+            correctGuesses: guessTimeline.filter(\.1).count,
+            bestGuessStreak: bestGuessStreak(guessTimeline)
         )
+    }
+
+    /// Longest run of consecutive `true` verdicts over the answered-round
+    /// timeline, ordered by catch time (Hot Streak). The timeline already
+    /// excludes unanswered catches, so a plain catch (or a SKIP) between two
+    /// correct calls doesn't break a streak — only a wrong answer resets it.
+    static func bestGuessStreak(_ timeline: [(Date, Bool)]) -> Int {
+        var best = 0
+        var run = 0
+        for (_, correct) in timeline.sorted(by: { $0.0 < $1.0 }) {
+            run = correct ? run + 1 : 0
+            best = max(best, run)
+        }
+        return best
     }
 
     /// True if any two time-adjacent catches share the same operator

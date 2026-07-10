@@ -5,6 +5,54 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-10 — Trophy roster expansion + one-time trophy-case recap (game-layer PR4+PR6) — branch `feat/trophy-roster`
+
+One PR delivering the plan's PR4 (roster) and PR6 (recap) together, since the
+recap is the designed absorber for the roster change (plan §C4 / risk 6).
+
+**Roster: +5 trophies** (`Trophies.swift`, per D6 sign-off — low-end kept):
+
+- **Four Figures** (visible, 1,000 lifetime points) and **High Roller** (5,000,
+  prereq-chained behind Four Figures). Progress reads a new
+  `TrophyProgressInputs.totalPoints` — the OFFLINE approximation (Σ
+  `resolvedRarity.basePoints`, same math as `ProfileStats`), which excludes
+  server bonuses so it can only undercount: a points trophy earned offline is
+  always honestly earned.
+- **Called It** (visible, first correct route call) and **Clairvoyant** (10,
+  chained). Guessing is route-only (PR3), so these read the frozen local
+  verdicts (`Catch.guessCorrect == true`) with no kind filter.
+- **Hot Streak** (secret): three correct calls IN A ROW — consecutive over
+  *answered* rounds in `caughtAt` order. Plain catches and SKIPs (all guess
+  fields nil) neither count nor break a streak; only a wrong answer resets.
+  New inputs `correctGuesses` / `bestGuessStreak` follow the defaulted-param
+  pattern (zero call-site churn). Three new hex icons: `coin` (poker chip),
+  `crystal` (crystal ball), `bolt`.
+
+**One-time trophy-case recap** (`TrophyRecapView`, new): a full-screen
+celebratory sheet — RP reveal palette, gold accents, a count-up of the earned
+total, and a staggered grid of the earned hexes (secrets included — earning
+reveals them), one `TO THE SKIES` CTA. Reduce Motion renders the settled frame.
+Mechanism: the ledger now carries a **`rosterVersion` stamp**
+(`Trophies.rosterVersion = 2`); on the first `enqueueNewUnlocks` where the
+stored stamp is behind, `TrophyUnlockCenter` **reseeds instead of diffing**
+(silently acknowledging newly-added trophies the user already qualifies for —
+no unlock-toast flood) and queues the recap with the full earned set. Zero
+earned → stamp only, no recap (a fresh install never sees it). This replaces
+the old one-shot `recapShown` boolean + small recap card from the 2026-06-20
+redesign: a boolean can fire once ever; a version stamp fires once per roster
+expansion. Simulated ✦ catches stay inert — they're never inserted, and
+trophies/recap derive only from the `@Query` Hangar.
+
+Tests: new `TrophyRosterExpansionTests` (threshold boundaries at 999/1,000 and
+4,500/5,000, guess-count edges at 9/10, streak reset/ordering/gap semantics,
+roster-version pin), `TrophyUnlockCenterTests` version-bump suite
+(reseed-no-flood, stamp-silently-when-zero-earned, crossings-still-fire-after),
+and `TrophyRecapSnapshotTests` (recap at 1/24/long-name states + the Hangar
+trophy card list in mixed and fresh/masked states). Full suite green (919
+cases). Snapshot lesson: >2,000 pt offscreen windows don't draw at all under
+`drawHierarchy` — the card list snapshots render the extracted `TrophyCardRow`
+column via ImageRenderer instead.
+
 ## 2026-07-10 — Guess round, redesigned IN-CARD on the reveal (game-layer PR3) — branch `feat/guess-round-ui`
 
 Noah's 2026-07-10 direction reshaped the bonus round: **supersedes the separate

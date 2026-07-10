@@ -122,22 +122,23 @@ struct TrophyUnlockCenterTests {
         #expect(revived.pendingEvents.isEmpty)
     }
 
-    // MARK: - Recap (once)
+    // MARK: - Recap (once per roster generation)
 
     @Test func recapQueuedOnceForExistingTester() {
         let ledger = freshLedger()
         let center = TrophyUnlockCenter(ledger: ledger, roster: roster)
         // First enqueue over an already-earned Hangar (2 catches → medal silver)
-        // seeds AND queues exactly one recap.
+        // seeds AND queues exactly one recap carrying the earned set.
         center.enqueueNewUnlocks(from: catches(2))
         #expect(center.pendingRecap != nil)
         #expect(center.pendingRecap?.earned == 1)   // medal "m" earned at 2 catches
+        #expect(center.pendingRecap?.achievements.map(\.id) == ["m"])
+        #expect(ledger.rosterVersion == Trophies.rosterVersion)   // stamped at seed
 
         center.dismissRecap()
         #expect(center.pendingRecap == nil)
-        #expect(ledger.recapShown)
 
-        // A fresh center over the same (now seeded) ledger shows no recap.
+        // A fresh center over the same (now seeded + stamped) ledger shows no recap.
         let revived = TrophyUnlockCenter(ledger: ledger, roster: roster)
         revived.enqueueNewUnlocks(from: catches(2))
         #expect(revived.pendingRecap == nil)
@@ -148,7 +149,62 @@ struct TrophyUnlockCenterTests {
         let center = TrophyUnlockCenter(ledger: ledger, roster: roster)
         center.enqueueNewUnlocks(from: [])   // nothing earned
         #expect(center.pendingRecap == nil)
-        #expect(ledger.recapShown)           // marked so we don't re-check
+        // Stamped anyway, so nothing re-checks (and a later roster bump still works).
+        #expect(ledger.rosterVersion == Trophies.rosterVersion)
+    }
+
+    // MARK: - Roster-version reseed (the 2026-07-10 expansion path)
+
+    /// An EXISTING tester: seeded ledger, but stamped behind the current
+    /// roster generation. The next enqueue must RESEED — silently
+    /// acknowledging trophies the new roster hands them — and present ONE
+    /// recap instead of an unlock flood.
+    @Test func staleRosterStampReseedsAndRecapsWithoutFlood() {
+        let ledger = freshLedger()
+        // Yesterday's build: seeded under roster version 1 (a center pinned
+        // to version 1 over the SAME ledger + roster).
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(3, legendary: 1))   // seeds; medal gold + badge earned
+        #expect(ledger.rosterVersion == 1)
+
+        // Today's build (version 2). Same Hangar → reseed + recap, NO events.
+        let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
+        new.enqueueNewUnlocks(from: catches(3, legendary: 1))
+        #expect(new.pendingEvents.isEmpty, "version bump must absorb, not flood")
+        #expect(new.pendingRecap?.earned == 2)
+        #expect(ledger.rosterVersion == 2)
+
+        // After the stamp, normal diffing resumes (no recap re-queues).
+        new.dismissRecap()
+        new.enqueueNewUnlocks(from: catches(3, legendary: 1))
+        #expect(new.pendingRecap == nil)
+        #expect(new.pendingEvents.isEmpty)
+    }
+
+    /// A seeded-but-stale ledger with NOTHING earned (installed, never
+    /// caught) gets the stamp but never the recap.
+    @Test func staleStampWithZeroEarnedStampsSilently() {
+        let ledger = freshLedger()
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: [])
+        let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
+        new.enqueueNewUnlocks(from: [])
+        #expect(new.pendingRecap == nil)
+        #expect(ledger.rosterVersion == 2)
+    }
+
+    /// After the version-bump reseed, genuinely new crossings still fire as
+    /// normal unlock moments.
+    @Test func crossingAfterVersionBumpStillFires() {
+        let ledger = freshLedger()
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(1))   // seed at bronze
+        let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
+        new.enqueueNewUnlocks(from: catches(1))   // reseed + recap (bronze earned)
+        new.dismissRecap()
+        new.enqueueNewUnlocks(from: catches(2))   // silver crossing — a real event
+        #expect(new.pendingEvents.count == 1)
+        #expect(new.head?.newTier == .silver)
     }
 
     /// The real-roster late-backfill case (U6): Mr. Worldwide doesn't cross
