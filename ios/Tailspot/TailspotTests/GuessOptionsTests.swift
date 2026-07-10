@@ -2,13 +2,12 @@
 //  GuessOptionsTests.swift
 //  TailspotTests
 //
-//  Pins the bonus-round option builder (plan 2026-07-09-001 §A5/§B):
-//  every set contains the correct answer among 4 unique display strings;
-//  route distractors come from the correct answer's broad region and are
-//  plausibility-weighted by distance-from-observer; type distractors share
-//  the answer's AircraftType class within ±1 rarity tier and never collapse
-//  to the answer's display name (the E75L/E75S "Embraer 175" trap).
-//  All sampling is seeded (SeededRNG) — assertions are exact replays.
+//  Pins the ROUTE bonus-round option builder (plan 2026-07-09-001 §A5/§B;
+//  route-only per Noah 2026-07-09): every set contains the correct answer
+//  among 4 unique display strings; route distractors come from the correct
+//  answer's broad region and are plausibility-weighted by
+//  distance-from-observer. All sampling is seeded (SeededRNG) — assertions
+//  are exact replays.
 //
 
 import Foundation
@@ -172,88 +171,6 @@ struct GuessOptionsRouteTests {
         let b = try #require(question(seed: 7))
         #expect(a == b)
         let c = try #require(question(seed: 8))
-        #expect(a != c, "different seeds should (in practice) differ")
-    }
-}
-
-@Suite("GuessOptions — type questions")
-struct GuessOptionsTypeTests {
-
-    private func question(typecode: String?, seed: UInt64 = 1) -> GuessOptions.TypeQuestion? {
-        var rng = SeededRNG(seed: seed)
-        return GuessOptions.typeQuestion(typecode: typecode, using: &rng)
-    }
-
-    @Test func correctIncludedAmongFourUniqueOptions() throws {
-        let q = try #require(question(typecode: "B738"))
-        #expect(q.correctValue == "B738")
-        #expect(q.options.count == GuessOptions.optionCount)
-        #expect(q.options.contains { $0.value == "B738" })
-        #expect(Set(q.options.map(\.value)).count == q.options.count)
-        #expect(Set(q.options.map { $0.display.lowercased() }).count == q.options.count)
-        // The correct chip shows the canonical name.
-        let correctOption = try #require(q.options.first { $0.value == "B738" })
-        #expect(correctOption.display == "Boeing 737-800")
-    }
-
-    @Test func distractorsShareClassWithinOneRarityTier() throws {
-        // B738: narrow / common. Distractors must be narrowbodies within
-        // ±1 tier (common/uncommon) — "737-800 / A320 / A220" confusable,
-        // never "737-800 / B-52 / Cessna 172".
-        for seed in UInt64(1)...30 {
-            let q = try #require(question(typecode: "B738", seed: seed))
-            for option in q.options where option.value != "B738" {
-                let entry = try #require(AircraftNaming.table[option.value])
-                #expect(entry.type == .narrow, "\(option.value) not a narrowbody")
-                let ordinal = (entry.rarity ?? .common).ordinal
-                #expect(abs(ordinal - Rarity.common.ordinal) <= 1,
-                        "\(option.value) rarity \(String(describing: entry.rarity)) beyond ±1 tier")
-            }
-        }
-    }
-
-    @Test func collapsedDisplayNamesAreNeverOffered() throws {
-        // E75L and E75S BOTH render "Embraer 175" — the classic collapse.
-        // Whichever is the answer, the other must never appear: two chips
-        // with identical text where one is "wrong" is a coin-flip trap.
-        for answer in ["E75L", "E75S"] {
-            for seed in UInt64(1)...50 {
-                let q = try #require(question(typecode: answer, seed: seed))
-                let displays = q.options.map { $0.display.lowercased() }
-                #expect(displays.filter { $0 == "embraer 175" }.count == 1)
-                let twin = answer == "E75L" ? "E75S" : "E75L"
-                #expect(!q.options.contains { $0.value == twin })
-            }
-        }
-    }
-
-    @Test func unresolvableTypecodesReturnNil() {
-        #expect(question(typecode: nil) == nil)
-        #expect(question(typecode: "") == nil)
-        #expect(question(typecode: "ZZZ9") == nil)
-        #expect(GuessOptions.typeAvailable(typecode: nil) == false)
-        #expect(GuessOptions.typeAvailable(typecode: "ZZZ9") == false)
-        #expect(GuessOptions.typeAvailable(typecode: "B738") == true)
-        // Case/whitespace-normalized like the route path.
-        #expect(GuessOptions.typeAvailable(typecode: " b738 ") == true)
-    }
-
-    @Test func rareClassesStillBuildFullSets() throws {
-        // A legendary military type (A-10) exercises the ±1-tier bucket at
-        // the ladder's top edge — and, if starved, the same-class widening.
-        let q = try #require(question(typecode: "A10"))
-        #expect(q.options.count == GuessOptions.optionCount)
-        for option in q.options where option.value != "A10" {
-            let entry = try #require(AircraftNaming.table[option.value])
-            #expect(entry.type == AircraftNaming.table["A10"]?.type)
-        }
-    }
-
-    @Test func seededDeterminism() throws {
-        let a = try #require(question(typecode: "B738", seed: 7))
-        let b = try #require(question(typecode: "B738", seed: 7))
-        #expect(a == b)
-        let c = try #require(question(typecode: "B738", seed: 8))
         #expect(a != c, "different seeds should (in practice) differ")
     }
 }

@@ -69,6 +69,18 @@ struct CardPlane: Equatable {
     /// Drives the reveal's "FIRST OF TYPE" ledger line. Display-only —
     /// the backend is authoritative for the awarded bonus.
     let isFirstOfType: Bool
+    /// The bonus-round question this catch answered CORRECTLY (game-layer
+    /// PR3; route-only per Noah 2026-07-09) — drives the reveal's
+    /// "10% ROUTE BONUS +N" ledger line. nil when no round fired, was skipped,
+    /// or was wrong (a wrong guess shows no reveal line — the guess screen
+    /// already flashed the miss). Mirrors `isFirstOfType`: display-only,
+    /// computed off the frozen `Catch` row; the backend re-verifies and is
+    /// authoritative for the awarded bonus.
+    let guessKind: GuessKind?
+    /// The guess bonus amount to show in the ledger, 0 when none/wrong.
+    /// Computed off the row's live base via `ScoringBonuses.guessBonus` so it
+    /// re-tiers with the base like `firstOfType` does.
+    let guessBonusPoints: Int
 
     init(
         callsign: String?,
@@ -85,7 +97,9 @@ struct CardPlane: Equatable {
         destIcao: String? = nil,
         originName: String? = nil,
         destName: String? = nil,
-        isFirstOfType: Bool = false
+        isFirstOfType: Bool = false,
+        guessKind: GuessKind? = nil,
+        guessBonusPoints: Int = 0
     ) {
         self.callsign = callsign
         self.model = model
@@ -102,6 +116,8 @@ struct CardPlane: Equatable {
         self.originName = originName
         self.destName = destName
         self.isFirstOfType = isFirstOfType
+        self.guessKind = guessKind
+        self.guessBonusPoints = guessBonusPoints
     }
 }
 

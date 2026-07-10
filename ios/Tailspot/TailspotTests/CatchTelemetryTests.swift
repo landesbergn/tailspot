@@ -301,4 +301,36 @@ struct CatchTelemetryTests {
         // to distance-free copy rather than "0 km".
         #expect(!CatchSuspicion.tooFar.question(slantKm: 0).contains("0 km"))
     }
+
+    // MARK: - Bonus round (game-layer PR3)
+
+    @Test func guessRoundShownCarriesKind() {
+        let p = CatchTelemetry.guessRoundShownProperties(kind: .route)
+        #expect(p["kind"]?.jsonValue as? String == "route")
+    }
+
+    @Test func guessRoundAnsweredCarriesKindCorrectAndElapsed() {
+        let p = CatchTelemetry.guessRoundAnsweredProperties(
+            kind: .route, correct: true, elapsedMs: 1234)
+        #expect(p["kind"]?.jsonValue as? String == "route")
+        #expect(p["correct"]?.jsonValue as? Bool == true)
+        #expect(p["elapsed_ms"]?.jsonValue as? Int == 1234)
+    }
+
+    @Test func guessRoundAnsweredOmitsElapsedWhenAbsent() {
+        // A miss with no timing → correct=false, elapsed_ms absent (not 0/null).
+        let p = CatchTelemetry.guessRoundAnsweredProperties(kind: .route, correct: false)
+        #expect(p["kind"]?.jsonValue as? String == "route")
+        #expect(p["correct"]?.jsonValue as? Bool == false)
+        #expect(p["elapsed_ms"] == nil)
+    }
+
+    @Test func guessRoundSkippedCarriesKindAndOptionalElapsed() {
+        let p = CatchTelemetry.guessRoundSkippedProperties(kind: .route, elapsedMs: 800)
+        #expect(p["kind"]?.jsonValue as? String == "route")
+        #expect(p["elapsed_ms"]?.jsonValue as? Int == 800)
+        // Absent elapsed → key omitted.
+        let q = CatchTelemetry.guessRoundSkippedProperties(kind: .route)
+        #expect(q["elapsed_ms"] == nil)
+    }
 }

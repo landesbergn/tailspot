@@ -5,6 +5,62 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-10 — Guess round, redesigned IN-CARD on the reveal (game-layer PR3) — branch `feat/guess-round-ui`
+
+Noah's 2026-07-10 direction reshaped the bonus round: **supersedes the separate
+pre-reveal "own screen, guess blind" design** (the 2026-07-09 `GuessRoundView`
+cover, itself descended from the 2026-06-29 economy mock). The round now plays
+**on the reveal card itself** — "more like the catch card: reveal the airline +
+make/model, then pop up an extra guessing opportunity for bonus points, and the
+answer resolves as correct/incorrect on the card." One fluid surface, no cover
+handoff. Four beats, all on `CatchRevealView`:
+
+1. **Normal reveal first.** The card runs its existing settle exactly as today
+   (split-flap make/model, tier line, ALT/SPD, count-up ledger) — never delayed.
+   The ROUTE slot renders **masked** from the moment it fades in (a gold
+   `BONUS ROUND · +10%` eyebrow + the cyan-mono `Where's it headed?` /
+   `Where's it coming from?` prompt keyed off `RouteQuestion.endpoint`), so the
+   real route is never spoiled before the guess.
+2. **The round pops.** ~0.2 s after the reveal settles, the four airport chips
+   spring in below the route section (staggered `easeOutBack` scale+fade;
+   reduced-motion → a plain fade) with a quiet SKIP. The photo hero shrinks while
+   the chips are up so the whole round + ledger clears the safe area, restoring to
+   full height on collapse. The ledger shows base (+ FIRST OF TYPE) and the TOTAL
+   settles to the **pre-bonus** value.
+3. **Resolve in place.** Tapping a chip locks the set: correct → the chip flashes
+   green + `.sensoryFeedback(.success)`; wrong → the chosen chip flashes red, the
+   right chip highlights green, `.sensoryFeedback(.error)`. Simultaneously the
+   masked panel **crossfades to the real route** (codes + city names, the normal
+   layout). On a correct call a gold **`10% ROUTE BONUS +N`** row animates into
+   the ledger and the TOTAL **counts up** to the new total (a second clock, `bt`,
+   reusing the reveal's count-up mechanism). No penalty for wrong — no rub-it-in
+   line; the route just settles.
+4. **Settle.** After a beat the chips collapse; the standard settled card remains
+   with the full route (+ bonus line if earned). SKIP / dismiss-mid-chips is a
+   wrong-minus-flash: chips collapse, route reveals, no line, freeze nothing.
+
+- **Threaded into the reveal, not a cover.** `CatchRevealView` gained
+  `guess: GuessRoundQuestion?` + `onGuessShown` / `onGuessResolved(answeredValue:correct:)`.
+  The whole `pendingGuess` / `pendingGuessReveal` / `GuessRevealPayload` cover
+  machinery is **deleted**; `PendingReveal` carries the question + the fresh
+  `Catch` row to freeze onto (+ an `isSimulated` flag). When the scheduler fires
+  in `runCatch`, the reveal is presented **immediately with** the payload — no
+  deferred present, no two-cover race. ContentView's `onGuessResolved` freezes the
+  outcome onto the row (`guessKind`/`guessValue`/`guessCorrect` + `save()`) and
+  fires `guess_round_shown` (chips-pop) / `_answered` / `_skipped` (kind always
+  `route`); the ✦ Catch simulator keeps its `isSimulated` mute (no telemetry, no
+  persistence). Eligibility/cadence unchanged — `GuessRoundPlanner` +
+  `GuessScheduler` still decide; the standalone `GuessRoundView` is gone (its chip
+  styling/logic moved into `CatchRevealView`; `GuessRoundQuestion` +
+  `GuessRoundPlanner` live on in the renamed `GuessRound.swift`). Multi-catch,
+  duplicate, and suspect-review sequencing are untouched (guess resolves before
+  dismiss; the B-52's nil-dest catch never offers a round).
+- **Card stays a pure function of its clocks** (`t`, count-up `bt`, chip
+  stagger `gt`) + an immutable `GuessRender`, so any beat renders as a static
+  frame. Tests: `GuessRoundSnapshotTests` rewritten to the three beats
+  (chips-popped · correct-settled · wrong-settled → `/private/tmp/tailspot_snaps`,
+  visual-pass reviewed); `GuessRoundPlannerTests` + `GuessSchedulerTests` +
+  telemetry-builder tests unchanged; full `TailspotTests` green.
 ## 2026-07-09 — Card-art medium DECIDED: keep the current hero — docs only
 
 The §6.3 question (open since 2026-06-18) is closed. Noah compared the
@@ -63,6 +119,117 @@ targeted detector pass finds it at 15 px / 0.54 conf, so it re-heals.
   `NSCache` — a scrolling list can't decode full 12 MP stills per row.
   `FocusedImage` split out so the crop renders synchronously for the
   snapshot harness. New loader (downsample + orientation) tests.
+
+## 2026-07-09 — Guess-round UI: the pre-reveal bonus round (game-layer PR3) — branch `feat/guess-round-ui`
+
+> **SUPERSEDED 2026-07-10 (same PR/branch) — the round moved IN-CARD.** The
+> separate pre-reveal `GuessRoundView` cover described below was replaced by the
+> in-card bonus round on `CatchRevealView` (see the 2026-07-10 entry above) per
+> Noah's direction — "more like the catch card." The `pendingGuess` cover
+> machinery, `GuessRoundView`, and the "guess blind before the reveal" flow are
+> gone. The `GuessScheduler` / `GuessOptions` / `GuessRoundPlanner` /
+> `CardPlane` / telemetry / freeze-on-answer pieces below survive; only the
+> presentation changed. The bullets below are retained for history.
+
+Third PR of the game-layer plan (`docs/plans/2026-07-09-001`, §9 #4). The data
+layer landed in PR1 (#115, backend) + PR2 (#118, iOS `GuessScheduler` /
+`GuessOptions` / `Catch` guess fields); this PR is the **player-facing round**
+and the ContentView sequencing that hosts it. No data-layer logic changed.
+
+> **Update 2026-07-09 (later, same PR) — route-guessing ONLY, type guessing
+> cut (Noah's call).** Before merge Noah decided the client should ask **only**
+> the route question. Removed from the client: `GuessOptions.typeQuestion` /
+> `typeAvailable` / `TypeQuestion`; the scheduler's route-vs-type 50/50 pick +
+> `typeAvailable` param (it's now a pure route cadence gate — fires route or
+> nil); `GuessRoundPlanner`'s `typeAvailable`/`typecode`; the `CALL THE TYPE`
+> screen; and **`MilitaryDesignators.swift` + its tests** (that distractor
+> guard existed solely to keep *type* distractors commercial — reverting the
+> ac14239 fix is correct now that type guessing is gone). The ledger label is
+> **`10% ROUTE BONUS`** (Noah's pick over the plan's "ROUTE CALLED"). `GuessKind`
+> keeps both cases and `ScoringBonuses.typeGuess` stays — they're the backend
+> wire + scoring contract (`scoring-bonuses.json`, pinned by parity tests); the
+> client simply never sends `kind:"type"`. **Backend untouched** — no migration,
+> no rescore; the server still accepts `type` harmlessly. `Catch.guessKind`
+> stays generic (only ever `"route"` now). The bullets below describing the
+> type path / `MilitaryDesignators` are retained for history but no longer
+> reflect the shipped client.
+
+- **`GuessRoundView` (new)** — the reveal surface with the answer MASKED. Reuses
+  `RevealPhoto` + the `RP` palette so the guess and the reveal read as one
+  screen: photo hero, a cyan-mono prompt ("Where's it coming from?" /
+  "Where's it headed?" keyed off the asked endpoint · "CALL THE TYPE"), 4 chips
+  (OnboardingFlow's bgElevated + cyan-hairline styling; route chips read
+  `HKG · Hong Kong`), and a quiet SKIP. **UNTIMED** — pacing protection is the
+  scheduler's cadence, not a stress timer (decision D5). A correct tap gets a
+  `.sensoryFeedback(.success)` beat; a wrong tap a `.error` buzz + a red MISS
+  FLASH that also marks which chip was right; either way it hands to the reveal
+  after a brief beat (a miss lingers ~1.15 s so the right answer registers). A
+  wrong guess shows **no** rub-it-in line in the reveal — the flash was the
+  answer. Purely presentational (no analytics/SwiftData in the view), so it
+  snapshot-tests off-device.
+- **The interleave seam (`ContentView.runCatch`)** — right before the reveal,
+  a fresh **single** catch (never a duplicate — no points to bonus; never a
+  multi-catch — `MultiCatchReveal` owns its path; suspect-aware) runs the
+  scheduler. The eligibility translation is a pure, unit-tested
+  `GuessRoundPlanner` so ContentView stays thin, and the scheduler's cadence
+  counters advance **only** on catches that could host a round. When it fires
+  AND an honest question builds, the reveal defers behind a `pendingGuess`
+  full-screen cover; otherwise the reveal path is byte-for-byte unchanged. The
+  guess→reveal handoff fires from the guess cover's **`onDismiss`** (two
+  `fullScreenCover`s can't present at once — presenting the reveal synchronously
+  would drop it); `captureInFlight` stays latched across the whole
+  catch→guess→reveal chain, and the post-reveal suspect Keep/Discard step still
+  fires after, unchanged.
+- **Freeze-on-answer** — the outcome writes to the row like `serverUuid` (after
+  it's born): correct/skip → `guessKind`/`guessValue`/`guessCorrect` (SKIP
+  leaves all three nil), `modelContext.save()`, then the deferred upload
+  (`CatchUploader`, already shipped in PR2) carries the guess *value* — never a
+  verdict — for the server to re-verify.
+- **Reveal ledger** — a gold **`ROUTE CALLED +N` / `TYPE CALLED +N`** line
+  after FIRST OF TYPE, shown **only on a correct call**, with N via
+  `ScoringBonuses.guessBonus` (pinned to `scoring-bonuses.json` by the parity
+  test) and folded into the count-up TOTAL. `CardPlane` gained
+  `guessKind`/`guessBonusPoints`, computed off the row like `isFirstOfType`
+  (re-tiers on read). **Label flagged for Noah:** the plan specifies parallel
+  "ROUTE/TYPE CALLED"; the older economy mock said "10% ROUTE BONUS" — defaulted
+  to the plan, one-line swap in `CatchRevealView` if Noah prefers the mock.
+- **Telemetry** — `guess_round_shown` / `_answered` (kind, correct, elapsed_ms —
+  the per-device accuracy stream that watches for 100 %-correct cheat outliers)
+  / `_skipped`, house pattern (pure builders + `@MainActor` fire wrappers).
+- **Tests (13 new, full `TailspotTests` green):** `GuessRoundSnapshotTests`
+  (route-question · type-question · reveal-with-guess-bonus PNGs to
+  `/private/tmp/tailspot_snaps`, visual-pass reviewed), `GuessRoundPlannerTests`
+  (8 — fresh-single gate, duplicate/multi exclusion, suspect flag, route/type
+  availability), and 4 telemetry builder tests.
+- **Distractor-quality fix — military types excluded (follow-up in this PR).**
+  The observation below bit for real: an A321neo type round drew **Boeing
+  EA-18 Growler** + **Tupolev Tu-22** because ~55 genuine military combat jets
+  (fighters/bombers/attack/EW) are miscoded `.narrow`/`.wide`/`.ga` in the
+  bundled `AircraftTypes.json` — the 2026-06-09 round deliberately left the
+  military tail mislabeled as "low ROI," and the guess mechanic surfaced it.
+  **Fix path chosen: a runtime guard, NOT a JSON/generator reclassification.**
+  The generator (`generate-aircraft-types.py`) fetches LIVE ICAO DOC 8643 data
+  and has no offline source snapshot, so a regen would mix upstream drift (PR1's
+  documented reason for not running it); and reclassifying these to `.mil`
+  moves their rarity `common → epic` (the military default), which feeds
+  scoring and would need a `scoring_version` bump + prod re-score — out of scope
+  for a distractor fix. Instead, a new **`MilitaryDesignators`** — a curated,
+  EXACT-MATCH designator set (regex/keyword matching floods with false
+  positives: Diamond DA-20 "Falcon", the aerobatic Sukhoi Su-26/29/31, the
+  Tupolev Tu-134/154/204/334 airliners) — feeds an `effectiveClass` in
+  `GuessOptions.typeQuestion` that collapses every military type to `.mil` for
+  BOTH the answer and each candidate. A commercial question now offers only
+  commercial distractors, and a military question only military ones — **zero
+  scoring impact** (the JSON/rarity is untouched). When a deterministic regen
+  eventually lands (source saved offline + rescore), these become truly `.mil`
+  and the set is redundant but harmless (`isMilitary` short-circuits on
+  `.type == .mil`). +3 tests (the pinned A321neo/737-800-never-military bug
+  guard across 200 seeds, the military-draws-military symmetry, and the
+  designator-set unit test); re-rendered `guess_type_question.png` verified
+  clean (737-800 / A320neo / E175-E2 / Martin 2-0-2).
+
+**Acceptance bar is the on-device pacing** of catch → guess → reveal — needs
+Noah's field pass before merge; **no auto-merge**.
 
 ## 2026-07-09 — Bracket-snap follow-ups: full-res stills, orientation fix, off-frame drop + collection heal — branch `fix/bracket-snap-followups`
 
