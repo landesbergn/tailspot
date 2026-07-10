@@ -3044,16 +3044,23 @@ private struct CornerBracket: Shape {
 /// status dot so it telegraphs "actively scanning" without being
 /// a radar sweep. Disabled (`active: false`) when the pill is
 /// surfacing an error string — at that point we don't want the
-/// liveness signal contradicting the message.
+/// liveness signal contradicting the message. Reduce Motion: a
+/// steady full-opacity dot, no TimelineView ticking.
 private struct EmptyPulse: ViewModifier {
     let active: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @ViewBuilder
     func body(content: Content) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            // Cosine breathing: 0.4 → 1.0 → 0.4 once per ~1.4 s.
-            let phase = (cos(t * 4.5) + 1) / 2     // 0…1
-            let opacity = active ? (0.4 + 0.6 * phase) : 1.0
-            content.opacity(opacity)
+        if active && !reduceMotion {
+            TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                // Cosine breathing: 0.4 → 1.0 → 0.4 once per ~1.4 s.
+                let phase = (cos(t * 4.5) + 1) / 2     // 0…1
+                content.opacity(0.4 + 0.6 * phase)
+            }
+        } else {
+            content
         }
     }
 }

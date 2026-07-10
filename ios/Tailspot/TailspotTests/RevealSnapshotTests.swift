@@ -61,6 +61,19 @@ struct RevealSnapshotTests {
             guard let img = renderer.uiImage, let data = img.pngData() else { continue }
             try? data.write(to: dir.appendingPathComponent("\(name).png"))
         }
+
+        // Reduce Motion must end on the IDENTICAL settled frame (the
+        // split-flap tumble becomes a straight fade, but at t = 1 both
+        // paths show the settled characters). Rendered for eyeball diffing
+        // against a220_route_uncommon.png.
+        var rmReveal = CatchRevealView(plane: cases[0].1, entryNumber: 62, onDismiss: {}, onViewInHangar: {})
+        rmReveal._reduceMotionOverride = true
+        let rmView = rmReveal._snapshotScreen(width: min(screen.width - 28, 420), size: screen)
+        let rmRenderer = ImageRenderer(content: rmView)
+        rmRenderer.scale = 3
+        if let img = rmRenderer.uiImage, let data = img.pngData() {
+            try? data.write(to: dir.appendingPathComponent("a220_route_uncommon_reducemotion.png"))
+        }
     }
 }
 #endif

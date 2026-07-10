@@ -45,6 +45,11 @@ struct MultiCatchReveal: View {
     let onDismiss: () -> Void
     let onViewInHangar: () -> Void
 
+    /// Reduce Motion: cards keep the one-at-a-time cadence (the haptic +
+    /// chime ladder rides it) but land as plain fades — no spring, no
+    /// slide/scale entrances.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// 0..<entries.count as the stagger advances. -1 = pre-stagger.
     @State private var revealedIndex: Int = -1
 
@@ -107,7 +112,7 @@ struct MultiCatchReveal: View {
             VStack(spacing: 14) {
                 statusPill
                     .opacity(revealedIndex >= 0 ? 1 : 0)
-                    .offset(y: revealedIndex >= 0 ? 0 : -8)
+                    .offset(y: revealedIndex >= 0 || reduceMotion ? 0 : -8)
 
                 comboBanner
                     .opacity(revealedIndex >= 0 ? 1 : 0)
@@ -124,15 +129,21 @@ struct MultiCatchReveal: View {
                 // during stagger.
                 if revealedIndex >= entries.count - 1 {
                     receipt
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .transition(reduceMotion
+                            ? .opacity
+                            : .opacity.combined(with: .move(edge: .bottom)))
                     buttons
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .transition(reduceMotion
+                            ? .opacity
+                            : .opacity.combined(with: .move(edge: .bottom)))
                 }
             }
             .padding(.top, 64)
             .padding(.horizontal, 20)
             .padding(.bottom, 28)
-            .animation(.spring(response: 0.45, dampingFraction: 0.78),
+            .animation(reduceMotion
+                ? .easeOut(duration: 0.25)
+                : .spring(response: 0.45, dampingFraction: 0.78),
                        value: revealedIndex)
         }
         .background(.black)
@@ -245,7 +256,7 @@ struct MultiCatchReveal: View {
             .padding(.vertical, 6)
             .background(tint.opacity(0.16), in: .capsule)
             .overlay(Capsule().strokeBorder(tint.opacity(0.55), lineWidth: 1))
-            .scaleEffect(isComboLive ? 1.02 : 1.0)
+            .scaleEffect(isComboLive && !reduceMotion ? 1.02 : 1.0)
     }
 
     // MARK: - Fan
@@ -287,11 +298,13 @@ struct MultiCatchReveal: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .offset(x: CGFloat(xOffset), y: visible ? 0 : 40)
+                .offset(x: CGFloat(xOffset), y: visible || reduceMotion ? 0 : 40)
                 .zIndex(Double(i))
                 .opacity(visible ? 1 : 0)
-                .scaleEffect(visible ? 1 : 0.6)
-                .animation(.spring(response: 0.45, dampingFraction: 0.7),
+                .scaleEffect(visible || reduceMotion ? 1 : 0.6)
+                .animation(reduceMotion
+                    ? .easeOut(duration: 0.25)
+                    : .spring(response: 0.45, dampingFraction: 0.7),
                            value: revealedIndex)
             }
         }

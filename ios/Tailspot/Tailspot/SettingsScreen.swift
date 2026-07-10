@@ -212,8 +212,11 @@ struct SettingsScreen: View {
             UIApplication.shared.open(url)
         } label: {
             HStack {
+                // Brand token, not Color.primary — the row background is the
+                // fixed dark palette, so system-primary flips to near-black
+                // (invisible) when the device is in light mode.
                 Text(label)
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(Brand.Color.textPrimary)
                 Spacer()
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 12, weight: .medium))

@@ -94,5 +94,39 @@ struct ProfileSettingsSnapshotTests {
         snapshot(NavigationStack { MapScreen() }.modelContainer(container), as: "map")
         #expect(true)
     }
+
+    @Test func renderLeaderboard() throws {
+        let defaults = UserDefaults.standard
+        let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
+        defaults.set("noah", forKey: SpotterHandle.storageKey)
+        defer { defaults.set(savedHandle, forKey: SpotterHandle.storageKey) }
+
+        let entries: [LeaderboardEntry] = [
+            .init(rank: 1, handle: "skykid", points: 4210, catches: 61),
+            .init(rank: 2, handle: "noah", points: 2755, catches: 43),
+            .init(rank: 3, handle: "contrail", points: 1980, catches: 35),
+            .init(rank: 4, handle: "heavywatcher", points: 1420, catches: 28),
+            .init(rank: 5, handle: "dotbali", points: 660, catches: 12),
+        ]
+        let container = try seededContainer()
+        snapshot(
+            NavigationStack {
+                LeaderboardScreen(_debugEntries: entries, me: MyStanding(rank: 2, points: 2755))
+            }
+            .modelContainer(container),
+            as: "leaderboard"
+        )
+        // Handle-less variant exercises the "claim a handle" standing hint
+        // (the section-header + stale-copy fixes both render here).
+        defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
+        snapshot(
+            NavigationStack {
+                LeaderboardScreen(_debugEntries: entries, me: nil)
+            }
+            .modelContainer(container),
+            as: "leaderboard_nohandle"
+        )
+        #expect(true)
+    }
 }
 #endif
