@@ -100,19 +100,26 @@ struct MapScreen: View {
 
     // MARK: - Filter strip
 
+    // Horizontally scrollable: six chips don't quite fit a 393pt screen,
+    // and letting the row wrap hyphenated LEGENDARY across two lines
+    // ("LEGENDAR-Y"). Chips are lineLimit(1)+fixedSize so they can never
+    // wrap; overflow scrolls instead.
     private var filterStrip: some View {
-        HStack(spacing: 6) {
-            filterChip(label: "ALL", tint: Brand.Color.textPrimary, active: minRarityFilter == nil) {
-                minRarityFilter = nil
-            }
-            ForEach(Rarity.allCases, id: \.self) { r in
-                filterChip(label: r.label, tint: r.tint, active: minRarityFilter == r) {
-                    minRarityFilter = minRarityFilter == r ? nil : r
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                filterChip(label: "ALL", tint: Brand.Color.textPrimary, active: minRarityFilter == nil) {
+                    minRarityFilter = nil
+                }
+                ForEach(Rarity.allCases, id: \.self) { r in
+                    filterChip(label: r.label, tint: r.tint, active: minRarityFilter == r) {
+                        minRarityFilter = minRarityFilter == r ? nil : r
+                    }
                 }
             }
+            .padding(8)
         }
-        .padding(8)
         .background(.thinMaterial, in: .capsule)
+        .clipShape(.capsule)
     }
 
     private func filterChip(label: String, tint: Color, active: Bool, action: @escaping () -> Void) -> some View {
@@ -120,6 +127,8 @@ struct MapScreen: View {
             Text(label)
                 .font(Brand.Font.mono(size: 9, weight: .bold))
                 .tracking(0.8)
+                .lineLimit(1)
+                .fixedSize()
                 .foregroundStyle(active ? .black.opacity(0.85) : tint)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
