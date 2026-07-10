@@ -48,6 +48,11 @@ nonisolated enum CatchTelemetry {
     // (shadow + enforce) with the per-target verdict + features — the
     // calibration stream for the on-device texture threshold.
     static let localGateEvent = "catch_local_gate"
+    // Lever 4 (detector soft-gate). `catch_detector_gate` fires on every
+    // single-target catch (shadow + enforce) with the verdict + envelope
+    // signals — the calibration stream that decides when enforcement is safe
+    // to flip (watch the in-envelope no-detection rate on real catches).
+    static let detectorGateEvent = "catch_detector_gate"
     // Post-catch confirm outcomes: a suspected catch records + reveals
     // instantly, then gets one Keep/Discard question after the reveal.
     // `catch_suspected` fires when a row is quarantined; kept/discarded record
@@ -77,7 +82,8 @@ nonisolated enum CatchTelemetry {
         visualConfirmEnabled: Bool,
         visualFixConfidence: Float?,
         multiN: Int = 1,
-        angularSizeArcmin: Double? = nil
+        angularSizeArcmin: Double? = nil,
+        detectorVerdict: DetectorGateVerdict? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -98,6 +104,9 @@ nonisolated enum CatchTelemetry {
         ]
         if let c = visualFixConfidence { props["visual_fix_confidence"] = .double(Double(c)) }
         if let a = angularSizeArcmin { props["angular_size_arcmin"] = .double(a) }
+        // L4 detector soft-gate verdict for this target; omitted when the
+        // gate didn't run (multi-catch, no photo) so absent means "not judged".
+        if let v = detectorVerdict { props["detector_verdict"] = .string(v.rawValue) }
         return props
     }
 
@@ -240,7 +249,8 @@ nonisolated enum CatchTelemetry {
         visualConfirmEnabled: Bool,
         visualFixConfidence: Float?,
         multiN: Int = 1,
-        angularSizeArcmin: Double? = nil
+        angularSizeArcmin: Double? = nil,
+        detectorVerdict: DetectorGateVerdict? = nil
     ) {
         Analytics.capture(performedEvent, performedProperties(
             icao24: row.icao24,
@@ -250,7 +260,8 @@ nonisolated enum CatchTelemetry {
             visualConfirmEnabled: visualConfirmEnabled,
             visualFixConfidence: visualFixConfidence,
             multiN: multiN,
-            angularSizeArcmin: angularSizeArcmin
+            angularSizeArcmin: angularSizeArcmin,
+            detectorVerdict: detectorVerdict
         ))
     }
 
@@ -350,6 +361,48 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
+    /// Properties for the detector-soft-gate events (L4): the verdict + the
+    /// envelope signals + how the plane was (or wasn't) corroborated, so the
+    /// footprint/luminance envelope can be calibrated from real catches
+    /// before enforcement flips on.
+    static func detectorGateProperties(
+        verdict: DetectorGateVerdict,
+        snapHit: Bool,
+        liveFix: Bool,
+        expectedFootprintPx: Double?,
+        meanLuminance: Double?,
+        enforcing: Bool
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
+            "verdict": .string(verdict.rawValue),
+            "snap_hit": .bool(snapHit),
+            "live_fix": .bool(liveFix),
+            "would_flag": .bool(verdict == .noDetection),
+            "enforcing": .bool(enforcing),
+        ]
+        if let f = expectedFootprintPx { props["expected_footprint_px"] = .double(f) }
+        if let l = meanLuminance { props["mean_luminance"] = .double(l) }
+        return props
+    }
+
+    /// Fired once per single-target catch with the L4 verdict — on every such
+    /// catch, in shadow and enforce mode. The calibration stream that gates
+    /// flipping enforcement.
+    static func fireDetectorGate(
+        verdict: DetectorGateVerdict,
+        snapHit: Bool,
+        liveFix: Bool,
+        expectedFootprintPx: Double?,
+        meanLuminance: Double?,
+        enforcing: Bool
+    ) {
+        Analytics.capture(detectorGateEvent, detectorGateProperties(
+            verdict: verdict, snapHit: snapHit, liveFix: liveFix,
+            expectedFootprintPx: expectedFootprintPx,
+            meanLuminance: meanLuminance, enforcing: enforcing
+        ))
+    }
+
     // MARK: - Post-catch confirm (suspected → kept / discarded)
 
     /// Properties for the post-catch confirm events: the reason plus the
@@ -394,11 +447,13 @@ nonisolated enum CatchTelemetry {
 /// `Catch.suspectReason` strings and the telemetry `reason` property.
 nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
     case occluded            // L2: the patch under the bracket reads building/tree
+    case noDetection = "no_detection"  // L4: camera should have seen it, didn't
     case tooFar = "too_far"  // L3: below the angular-size floor
     case indoor              // whole-frame SkyCheck: not pointed at open sky
 
     /// Precedence when several gates fire on one target — the most specific,
-    /// most actionable reason wins the review copy (occluded > tooFar > indoor).
+    /// most actionable reason wins the review copy
+    /// (occluded > noDetection > tooFar > indoor).
     static func preferred(_ current: CatchSuspicion?, _ new: CatchSuspicion) -> CatchSuspicion {
         guard let current else { return new }
         return current.priority >= new.priority ? current : new
@@ -406,7 +461,8 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
 
     private var priority: Int {
         switch self {
-        case .occluded: return 3
+        case .occluded: return 4
+        case .noDetection: return 3
         case .tooFar: return 2
         case .indoor: return 1
         }
@@ -418,6 +474,8 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
         switch self {
         case .occluded:
             return "Looks like something was between you and that one — did you really see it?"
+        case .noDetection:
+            return "The camera couldn't spot that one — did you really see it?"
         case .tooFar:
             if let km = slantKm, km.isFinite, km > 0 {
                 return "That one was \(Int(km.rounded())) km out — could you really see it?"

@@ -10,6 +10,7 @@
 import SwiftUI
 import SwiftData
 import AVFoundation
+import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
 import os
 import PostHog   // session-replay masking of the camera view
 
@@ -53,6 +54,9 @@ struct ContentView: View {
     /// recording (U3); driven by the same record toggle as the recorder.
     @State private var logCapture = LogCapture()
     @State private var cameraAuthorized = false
+    /// True only after an explicit camera denial (vs. not-yet-asked) — the
+    /// difference between "wait for the prompt" and "show Open Settings".
+    @State private var cameraDenied = false
     /// Hidden by default. Tap the small wrench glyph in the top-right
     /// to reveal the sensor readout (top) + nearby-aircraft list
     /// (bottom). Field-testing UI is intentionally clean; raw sensor
@@ -207,6 +211,14 @@ struct ContentView: View {
                         // (a GPU surface) renders black on its own without a mask.
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
+                }
+
+                // Recovery for explicitly-denied permissions. Before this,
+                // a camera denial was a silent black void and a location
+                // denial a forever-"waiting" GPS — both first-run dead ends
+                // with no way back short of finding Settings unaided.
+                if cameraDenied || locationDenied {
+                    permissionRecoveryOverlay
                 }
 
                 // Lock-on AR overlay. The view is clean by default — no
@@ -723,7 +735,20 @@ struct ContentView: View {
             // nonisolated and lock-guarded for exactly that.
             frameBridge.frameHandler = { [weak visualConfirm] buffer in
                 visualConfirm?.ingestFrame(buffer)
+                // Activation funnel: the first camera frame EVER means the
+                // user reached a live AR view (permissions granted, session
+                // up). Once-per-install latch inside; the guard is a cached
+                // UserDefaults bool read, cheap enough for the frame path.
+                ActivationTelemetry.fireARFirstFrameOnce()
             }
+        }
+        // Activation funnel: the first time any plane label is actually
+        // visible (post-filter), the user has something to catch. ~1 Hz
+        // re-annotation cadence; once-per-install latch inside the fire.
+        .onReceive(adsb.$observed) { observed in
+            let visible = observed.filter(\.isLikelyVisibleToObserver)
+            guard !visible.isEmpty else { return }
+            ActivationTelemetry.fireFirstPlaneSeenOnce(visibleCount: visible.count)
         }
         // Ambient indoor hint: poll the gate verdict ~1 Hz off the
         // already-computed sky features (no extra camera work) and
@@ -835,6 +860,9 @@ struct ContentView: View {
         if isHeadingAccuracyBad {
             Button {
                 showCompassSheet = true
+                ActivationTelemetry.fireCompassSheetOpened(
+                    headingAccuracyDeg: location.headingAccuracy
+                )
             } label: {
                 HStack(spacing: 6) {
                     Circle()
@@ -1216,27 +1244,89 @@ struct ContentView: View {
             // Multi-catches keep tap-time geometry: one search per plane
             // could snap two brackets onto the same detection.
             var bracketPositions = positions
+            // Gate 4 — L4 detector soft-gate (anti-cheat PR3), fed by the
+            // SAME still search: the snapper's ring pass is the strongest
+            // detector evidence the catch path has, so its outcome doubles
+            // as the corroboration signal. Judged only inside the detector's
+            // competence envelope (daylight + expected footprint above the
+            // model's resolution floor — DetectorGate); out-of-envelope and
+            // multi-catches are never doubted. SHADOW by default: telemetry
+            // always fires, suspicion only when the debug flag enforces.
+            var suspicions = suspicions
+            var detectorVerdict: DetectorGateVerdict?
             if let data = photoData, icaos.count == 1, let icao = icaos.first,
                let tapTimePosition = positions[icao] {
                 let predicted = refreshedScreenPosition(for: icao, screenSize: screenSize)
                     ?? tapTimePosition
-                // Detached: up to 9 CoreML passes; never on the MainActor.
-                let snapped = await Task.detached(priority: .userInitiated) {
-                    CatchPhotoSnapper.snapScreenPosition(
+                // Detached: up to ~19 CoreML passes (fine ring + coarse
+                // ring + refine) plus a 12 MP resample; never on the
+                // MainActor.
+                let snap = await Task.detached(priority: .userInitiated) {
+                    CatchPhotoSnapper.snapOutcome(
                         jpegData: data,
                         predictedScreen: predicted,
                         screenSize: screenSize
                     )
                 }.value
-                bracketPositions[icao] = snapped ?? predicted
+                let snapped = snap.screenPoint
+                let outcome: String
+                if let snapped {
+                    bracketPositions[icao] = snapped
+                    outcome = "snapped"
+                } else if CGRect(origin: .zero, size: screenSize).contains(predicted) {
+                    bracketPositions[icao] = predicted
+                    outcome = "fallback"
+                } else {
+                    // The re-projected target was outside the frame at
+                    // exposure and the detector found nothing — baking a
+                    // clipped bracket at the frame edge points at nothing
+                    // and reads as a bug (2026-07-08 ACA708 field photo).
+                    // Save the photo bracket-free instead.
+                    bracketPositions.removeValue(forKey: icao)
+                    outcome = "offframe"
+                }
                 let correction = snapped.map {
                     Int(hypot($0.x - predicted.x, $0.y - predicted.y).rounded())
                 }
-                Log.adsb.notice("Catch photo snap: \(snapped != nil ? "snapped" : "fallback", privacy: .public) correction=\(correction ?? 0, privacy: .public)pt")
+                Log.adsb.notice("Catch photo snap: \(outcome, privacy: .public) correction=\(correction ?? 0, privacy: .public)pt")
                 Analytics.capture("catch_photo_snap", [
-                    "outcome": .string(snapped != nil ? "snapped" : "fallback"),
+                    "outcome": .string(outcome),
                     "correction_pt": .int(correction ?? 0),
                 ])
+
+                // A live preview fix also corroborates (fresh by construction
+                // — it expires after ~1 s of detector misses).
+                let liveFix = visualConfirm.fixes[icao] != nil
+                // Envelope footprint only when the still was actually
+                // searched — an undecodable photo must fail open.
+                let footprintPx: Double? = snap.searched
+                    ? visibleByIcao[icao].flatMap { obs in
+                        snap.photoWidthPx.flatMap { photoWidth in
+                            DetectorGate.expectedFootprintPx(
+                                wingspanMeters: obs.aircraft.estimatedWingspanMeters,
+                                slantMeters: obs.slantDistanceMeters,
+                                effectiveHfovDeg: Self.baseHfovDeg / zoom,
+                                photoWidthPx: photoWidth
+                            )
+                        }
+                    }
+                    : nil
+                let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
+                let verdict = DetectorGate().verdict(
+                    sawPlane: snapped != nil || liveFix,
+                    expectedFootprintPx: footprintPx,
+                    meanLuminance: meanLum
+                )
+                detectorVerdict = verdict
+                let enforcing = visualConfirm.detectorGateEnforcing
+                CatchTelemetry.fireDetectorGate(
+                    verdict: verdict, snapHit: snapped != nil, liveFix: liveFix,
+                    expectedFootprintPx: footprintPx, meanLuminance: meanLum,
+                    enforcing: enforcing
+                )
+                if verdict == .noDetection, enforcing {
+                    suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .noDetection)
+                }
             }
 
             // Snapshot BEFORE inserting: was the Hangar empty? (The
@@ -1296,7 +1386,12 @@ struct ContentView: View {
                             toSave = data
                         }
                     } else {
-                        toSave = data
+                        // No bracket to bake (missing position or
+                        // off-frame target) — still normalize orientation
+                        // and cap the size so a raw 12 MP sensor still
+                        // never lands in the Hangar verbatim.
+                        toSave = CatchPhotoComposer.normalizedWithoutBracket(
+                            jpegData: data) ?? data
                     }
                     return CatchPhotoStore.save(toSave, icao24: icao, at: now)
                 }
@@ -1390,7 +1485,10 @@ struct ContentView: View {
                     // Anti-cheat signals: how many this tap caught (L1 → ~1) and
                     // the caught plane's apparent size (L3 → trending bigger).
                     multiN: newCatches.count,
-                    angularSizeArcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes
+                    angularSizeArcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes,
+                    // Only ever non-nil for a single-target catch, so it can't
+                    // mislabel a multi-catch row.
+                    detectorVerdict: detectorVerdict
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
@@ -1858,6 +1956,7 @@ struct ContentView: View {
                 visualConfirmRow
                 gateDebugRow
                 localGateRow
+                detectorGateRow
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -1951,14 +2050,30 @@ struct ContentView: View {
 
     // MARK: - Permission
 
+    /// True after an explicit location denial. `.notDetermined` is NOT
+    /// denied — the prompt may still be pending from onboarding.
+    private var locationDenied: Bool {
+        location.authorizationStatus == .denied
+            || location.authorizationStatus == .restricted
+    }
+
+    private var permissionRecoveryOverlay: some View {
+        PermissionRecoveryCard(cameraDenied: cameraDenied, locationDenied: locationDenied)
+    }
+
     private func requestCameraPermission() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             cameraAuthorized = true
         case .notDetermined:
             cameraAuthorized = await AVCaptureDevice.requestAccess(for: .video)
+            cameraDenied = !cameraAuthorized
         case .denied, .restricted:
             cameraAuthorized = false
+            // An explicit prior "don't allow" — unlike notDetermined, only
+            // the Settings app can undo it, so the recovery overlay shows
+            // an Open Settings path instead of a silent black screen.
+            cameraDenied = true
         @unknown default:
             cameraAuthorized = false
         }
@@ -2018,6 +2133,10 @@ struct ContentView: View {
                 let acc = location.headingAccuracy ?? -1
                 if acc > Self.compassBadThreshold {
                     showCompassWarning = true
+                    // Activation funnel: how often the compass is bad enough
+                    // to warn — the suspected silent killer of "label points
+                    // the wrong way" first sessions.
+                    ActivationTelemetry.fireCompassCautionShown(headingAccuracyDeg: acc)
                 }
                 compassDebounceTask = nil
             }
@@ -2136,6 +2255,25 @@ struct ContentView: View {
         }
         .contentShape(.rect)
         .onTapGesture { visualConfirm.localGateEnforcing.toggle() }
+    }
+
+    /// Tap-to-toggle row for the L4 detector soft-gate (debug). SHADOW
+    /// (telemetry only, ships this way) ↔ ENFORCE (an in-envelope catch the
+    /// detector can't corroborate gets the post-reveal Keep/Discard). Lets a
+    /// field session feel the doubt question before the shadow stream
+    /// justifies flipping the default.
+    private var detectorGateRow: some View {
+        HStack(spacing: 8) {
+            Text("L4 gate:")
+            Text(visualConfirm.detectorGateEnforcing ? "[ENFORCE]" : "[SHADOW]")
+                .foregroundStyle(visualConfirm.detectorGateEnforcing
+                                 ? Brand.Color.alertCaution
+                                 : Brand.Color.textTertiary)
+                .bold()
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture { visualConfirm.detectorGateEnforcing.toggle() }
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record

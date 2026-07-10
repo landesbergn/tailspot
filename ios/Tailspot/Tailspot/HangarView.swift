@@ -59,6 +59,14 @@ struct HangarView: View {
                     // fetch per distinct icao24; idempotent. The @Query
                     // auto-refreshes the UI as fields fill and save().
                     await CatchBackfill.backfillAll(catches, in: modelContext)
+                    // One-time photo-focus recovery: derive the crop focus
+                    // from the baked bracket for catches that predate the
+                    // focus field (or whose bracket was re-healed), so the
+                    // Hangar centers the plane instead of center-cropping.
+                    // Version-gated, so it scans once (bytes + pixels off
+                    // the main actor). Runs after airframe backfill so the
+                    // save() coalesces with any field fills.
+                    await CatchBackfill.backfillPhotoFocus(catches, in: modelContext)
                 }
                 .navigationDestination(for: HangarRow.self) { row in
                     CatchDetailView(row: row)

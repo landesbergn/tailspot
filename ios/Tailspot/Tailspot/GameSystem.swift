@@ -84,6 +84,44 @@ nonisolated enum Rarity: String, CaseIterable, Equatable, Sendable {
     var ordinal: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 }
 
+// MARK: - ScoringBonuses
+
+/// Bonus FRACTIONS on top of a catch's base points — the iOS single source
+/// for bonus display math, mirroring the canonical `scoring-bonuses.json`
+/// (a SIBLING of `scoring-points.json`: shipped clients pin scoring-points
+/// as a strict {tier: points} map, so the bonuses live in their own file).
+/// `ScoringBonusesParityTests` here and the backend's `points.parity.test.ts`
+/// both pin their literals to that file, so client ledger math and the
+/// server's authoritative award can't drift (the 0.5 used to live as
+/// duplicate literals in points.ts and CatchRevealView — the exact drift
+/// class the points ladder escaped).
+///
+/// The AMOUNTS are display-side estimates of what the server awards: the
+/// server is authoritative (it verifies the guess and computes points);
+/// these fractions exist so the reveal ledger can show the bonus
+/// optimistically from local truth (plan D9).
+nonisolated enum ScoringBonuses {
+    /// First-ever catch of a typecode: +50% of base.
+    static let firstOfType = 0.5
+    /// Correct route guess (near coin-flip): +10% of base.
+    static let routeGuess = 0.1
+    /// Correct type call (the marquee skill test): +25% of base.
+    static let typeGuess = 0.25
+
+    /// Rounded bonus amounts. `.rounded()` (half away from zero) matches the
+    /// backend's `Math.round` for these always-positive bases.
+    static func firstOfTypeBonus(base: Int) -> Int {
+        Int((Double(base) * firstOfType).rounded())
+    }
+
+    static func guessBonus(base: Int, kind: GuessKind) -> Int {
+        switch kind {
+        case .route: return Int((Double(base) * routeGuess).rounded())
+        case .type:  return Int((Double(base) * typeGuess).rounded())
+        }
+    }
+}
+
 // MARK: - AircraftType
 
 nonisolated enum AircraftType: String, CaseIterable, Equatable, Sendable {

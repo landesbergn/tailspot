@@ -75,7 +75,17 @@ struct CompassCalibrationSheet: View {
             }
         }
         .onChange(of: accuracyIsGood) { _, isGood in
-            if isGood { calibratedThisSession = true }
+            if isGood, !calibratedThisSession {
+                calibratedThisSession = true
+                // Activation funnel: the user opened the sheet with a bad
+                // compass and moved it back under the good threshold — the
+                // coaching worked. (The onAppear seed below deliberately
+                // does NOT fire this: arriving already-good isn't a
+                // calibration.)
+                ActivationTelemetry.fireCompassCalibrated(
+                    headingAccuracyDeg: location.headingAccuracy
+                )
+            }
         }
         .onAppear {
             // Seed the latch — if the user opens the sheet when

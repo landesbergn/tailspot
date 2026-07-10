@@ -66,9 +66,11 @@ export interface BuildAppOptions {
    */
   routeEnricher?: RouteEnricher;
   /**
-   * Per-callsign route resolver for GET /v1/routes/{callsign} (tests inject a
-   * fake). Production defaults to the SAME AdsbLolRouteService instance as the
-   * enricher (shared cache); absent both → the endpoint isn't registered.
+   * Per-callsign route resolver for GET /v1/routes/{callsign} AND for
+   * POST /v1/catches route-guess verification (tests inject a fake). Production
+   * defaults to the SAME AdsbLolRouteService instance as the enricher (shared
+   * cache); absent both → the endpoint isn't registered and route guesses
+   * verify as incorrect (never blocking the catch).
    */
   routeResolver?: RouteResolver;
   /**
@@ -257,6 +259,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     identityStore: identity,
     catchStore: catchesStore,
     catchLimiter,
+    // Route-guess verification shares the /v1/routes resolver (same cache).
+    routeResolver,
     nowSeconds: options.nowSeconds,
   });
   registerLeaderboardRoute(app, { identityStore: identity, catchStore: catchesStore });

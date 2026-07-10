@@ -7,6 +7,12 @@
 //  has a matching parity test against the same file, so the two point ladders
 //  cannot silently drift (the profile-vs-leaderboard bug class).
 //
+//  Since game-layer PR2 the same discipline covers the bonus FRACTIONS via
+//  the SIBLING `scoring-bonuses.json` (a separate file because shipped
+//  clients decode scoring-points.json as a strict {tier: points} map —
+//  adding a `bonuses` key there would break old decoders). iOS
+//  `ScoringBonuses` and the backend's points.ts both pin to it.
+//
 
 import Testing
 import Foundation
@@ -32,5 +38,39 @@ struct ScoringPointsParityTests {
                 "Rarity.\(r.rawValue).basePoints (\(r.basePoints)) != scoring-points.json (\(canonical[r.rawValue].map(String.init) ?? "missing"))"
             )
         }
+    }
+}
+
+@Suite("Scoring bonuses — iOS ↔ canonical parity")
+struct ScoringBonusesParityTests {
+
+    @Test func bonusFractionsMatchCanonicalJSON() throws {
+        let url = try #require(
+            Bundle.main.url(forResource: "scoring-bonuses", withExtension: "json"),
+            "scoring-bonuses.json must be bundled (generated next to scoring-points.json)"
+        )
+        let canonical = try JSONDecoder().decode(
+            [String: Double].self, from: try Data(contentsOf: url)
+        )
+
+        // The canonical file carries exactly the three bonus fractions; every
+        // iOS constant matches it. The backend's points.parity.test.ts pins
+        // its literals to the SAME file, so a re-balance that edits only one
+        // side fails a parity test somewhere.
+        #expect(canonical.count == 3)
+        #expect(canonical["firstOfType"] == ScoringBonuses.firstOfType)
+        #expect(canonical["routeGuess"] == ScoringBonuses.routeGuess)
+        #expect(canonical["typeGuess"] == ScoringBonuses.typeGuess)
+    }
+
+    @Test func bonusRoundingMatchesBackendMathRound() {
+        // Backend: Math.round(base * fraction) — half rounds UP for the
+        // always-positive bases. The awkward case is typeGuess on the common
+        // base: 10 × 0.25 = 2.5 → 3, where Swift's banker's rounding would
+        // give 2. Pin the full ladder for each bonus.
+        let bases = Rarity.allCases.map(\.basePoints)          // 10 20 50 100 500
+        #expect(bases.map { ScoringBonuses.firstOfTypeBonus(base: $0) } == [5, 10, 25, 50, 250])
+        #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .route) } == [1, 2, 5, 10, 50])
+        #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type) } == [3, 5, 13, 25, 125])
     }
 }

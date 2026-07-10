@@ -2,8 +2,9 @@
  * Catch ingestion (WP 1.5).
  *
  *   POST /v1/catches   (auth required)
- *     body { catchUuid, icao24, callsign|null, caughtAt, observer{…}, aircraft{…} }
- *     → 201 { catchId, points, rarity, typecode, firstOfType, duplicate:false }
+ *     body { catchUuid, icao24, callsign|null, caughtAt, observer{…}, aircraft{…},
+ *            guess?: { kind: "route"|"type", value: string } }
+ *     → 201 { catchId, points, rarity, typecode, firstOfType, guessCorrect, duplicate:false }
  *       200 { …, duplicate:true }   when catchUuid was already ingested (replay)
  *       401 bad/absent token
  *       422 malformed body
@@ -12,12 +13,22 @@
  * typecode → rarity → points. The client sends NO points/rarity (deliberately);
  * we never trust client scoring.
  *
+ * The optional `guess` block (game-layer PR1) carries the bonus-round guess
+ * VALUE — the ICAO airport ident or typecode the user picked — never a verdict.
+ * The server verifies it against its OWN truth ("type" → the registry-resolved
+ * typecode for the icao24, the same resolution the scorer uses; "route" → the
+ * RouteResolver behind GET /v1/routes/:callsign, correct iff the value matches
+ * EITHER endpoint) and a correct guess earns +10% (route) / +25% (type) of the
+ * base via the canonical scorer. Verification failure (resolver down, no route
+ * on file, no callsign) scores the guess incorrect but NEVER fails the catch.
+ *
  * Anti-cheat is INSTRUMENTED, NEVER ENFORCED: we compute a plausibility verdict,
  * store it on the row, log a counter — but the response is byte-shape-identical
  * regardless of the verdict, so a cheater gets no oracle to probe the validator.
  */
 
 import type { FastifyInstance } from "fastify";
+import { type GuessKind, isGuessKind } from "../catches/points.js";
 import {
   type AircraftPosition,
   type ObserverPose,
@@ -27,12 +38,20 @@ import {
 import { resolveDevice } from "../identity/auth.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { CatchStore, IdentityStore } from "../identity/store.js";
+import type { RouteResolver } from "../providers/adsblolRoutes.js";
 
 export interface CatchesRouteOptions {
   identityStore: IdentityStore;
   catchStore: CatchStore;
   /** Per-device write limiter for catches. */
   catchLimiter: RateLimiter;
+  /**
+   * Route-guess verifier — the SAME resolver behind GET /v1/routes/:callsign
+   * (in production the adsb.lol standing-data lookup, shared cache). Optional:
+   * when absent (non-adsblol deployment, most tests), a route guess simply
+   * verifies as incorrect — the catch itself is never blocked.
+   */
+  routeResolver?: RouteResolver;
   /** Injectable clock (unix seconds) for deterministic validation in tests. */
   nowSeconds?: () => number;
 }
@@ -54,8 +73,12 @@ function numOrNull(v: unknown): number | null | undefined {
   return undefined; // signals malformed (present but not number|null)
 }
 
+/** Guess values are short idents (4-char ICAO airports, ≤4-char typecodes);
+ *  anything longer is garbage we refuse to store. */
+const GUESS_VALUE_MAX_LENGTH = 16;
+
 export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOptions): void {
-  const { identityStore, catchStore, catchLimiter } = opts;
+  const { identityStore, catchStore, catchLimiter, routeResolver } = opts;
   const nowSeconds = opts.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
 
   app.post("/v1/catches", async (request, reply) => {
@@ -152,6 +175,28 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       };
     }
 
+    // ── Optional guess block: the guess VALUE, never a verdict ──────────────
+    // Absent (or explicit null) = no guess. Present-but-malformed = 422, same
+    // posture as every other body field. The value is normalized to uppercase
+    // once here — both the verification compares and the stored audit copy use
+    // the normalized form.
+    const guessRaw = body.guess;
+    let guess: { kind: GuessKind; value: string } | null = null;
+    if (guessRaw !== undefined && guessRaw !== null) {
+      if (typeof guessRaw !== "object") {
+        return reply.code(422).send({ error: "guess must be an object" });
+      }
+      const g = guessRaw as Record<string, unknown>;
+      if (!isGuessKind(g.kind)) {
+        return reply.code(422).send({ error: 'guess.kind must be "route" or "type"' });
+      }
+      const value = typeof g.value === "string" ? g.value.trim().toUpperCase() : "";
+      if (value === "" || value.length > GUESS_VALUE_MAX_LENGTH) {
+        return reply.code(422).send({ error: "guess.value must be a short non-empty string" });
+      }
+      guess = { kind: g.kind, value };
+    }
+
     // ── Server-side scoring (typecode → rarity → points, regime-stamped) ────
     // First-of-type is server-authoritative (un-spoofable): resolve the typecode,
     // then check whether THIS device already holds a catch of it BEFORE inserting
@@ -162,8 +207,42 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     // single owner of the rarity→points mapping; the lookups are small + indexed.)
     const { typecode: resolvedTypecode } = await catchStore.resolveRarity(icao24);
     const firstOfType = await catchStore.isFirstOfType(device.id, resolvedTypecode);
+
+    // ── Verify the guess against SERVER truth (never the client's) ──────────
+    // "type": compare against the registry-resolved typecode — the same
+    // resolution path the scorer uses, so the guess is checked against exactly
+    // what the catch will be scored as. "route": resolve the callsign through
+    // the standing-data RouteResolver; correct iff the value matches EITHER
+    // endpoint (absorbs the asked-endpoint ambiguity — see the plan's §A4).
+    // Any verification gap — no resolver wired, no callsign, no route on file,
+    // resolver failure — scores the guess incorrect and NEVER blocks the catch.
+    let guessCorrect = false;
+    if (guess?.kind === "type") {
+      guessCorrect = resolvedTypecode !== null && guess.value === resolvedTypecode.toUpperCase();
+    } else if (guess?.kind === "route") {
+      if (routeResolver && callsign !== null) {
+        try {
+          const route = await routeResolver.resolve(callsign.toUpperCase());
+          // Either-endpoint match; the endpoints are optional on the wire type
+          // and guess.value is non-empty, so a missing endpoint never matches.
+          guessCorrect =
+            route !== null &&
+            (guess.value === route.originIcao?.toUpperCase() ||
+              guess.value === route.destIcao?.toUpperCase());
+        } catch (err) {
+          // Resolver transport failure: the bonus is forfeit (we can't verify,
+          // and we never trust the client), but the catch goes through. Logged
+          // for telemetry — a spike here means honest guesses are being eaten.
+          request.log.warn({ err, callsign, icao24 }, "route-guess verification failed");
+        }
+      } else {
+        request.log.info({ callsign, icao24 }, "route guess unverifiable (no resolver/callsign)");
+      }
+    }
+
     const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24, {
       firstOfType,
+      guess: guess ? { kind: guess.kind, correct: guessCorrect } : undefined,
     });
 
     // ── Instrumented anti-cheat (stored, never enforced) ────────────────────
@@ -193,6 +272,9 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       points,
       scoringVersion,
       firstOfType,
+      guessKind: guess?.kind ?? null,
+      guessValue: guess?.value ?? null,
+      guessCorrect,
       caughtAt: new Date(caughtAt * 1000),
       observerLat: obsLat,
       observerLon: obsLon,
@@ -215,6 +297,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       rarity: result.rarity,
       typecode: result.typecode,
       firstOfType: result.firstOfType,
+      guessCorrect: result.guessCorrect,
       duplicate,
     });
   });

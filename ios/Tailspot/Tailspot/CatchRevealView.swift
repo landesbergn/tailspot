@@ -190,12 +190,30 @@ nonisolated enum FocusFill {
         let origin: CGPoint
     }
 
+    /// How far past plain aspect-fill the crop may zoom to bring an
+    /// edge-of-frame plane toward center. The hero slot is short and wide,
+    /// so at pure fill a plane in the outer ~top/bottom band pins to the
+    /// edge (it can't slide far enough without exposing background). Zooming
+    /// in a little grows the overflow so the focus point can reach center;
+    /// capped so an extreme-edge plane doesn't crop the photo to a sliver.
+    /// Center-band planes need no zoom, so they're unaffected.
+    static let maxCenteringZoom: CGFloat = 1.6
+
     static func layout(imageSize: CGSize, frameSize: CGSize, focus: CGPoint) -> Layout {
         guard imageSize.width > 0, imageSize.height > 0,
               frameSize.width > 0, frameSize.height > 0
         else { return Layout(size: frameSize, origin: .zero) }
-        let s = max(frameSize.width / imageSize.width,
-                    frameSize.height / imageSize.height)
+        let fill = max(frameSize.width / imageSize.width,
+                       frameSize.height / imageSize.height)
+        // Scale needed for the focus point to reach the frame center on each
+        // axis: the scaled image must extend at least half a frame past the
+        // focus on the tighter side (`min(focus, 1−focus)`). Take the larger
+        // requirement, floored at fill and capped at the zoom limit.
+        let marginX = max(0.001, min(focus.x, 1 - focus.x))
+        let marginY = max(0.001, min(focus.y, 1 - focus.y))
+        let needX = frameSize.width / (2 * marginX * imageSize.width)
+        let needY = frameSize.height / (2 * marginY * imageSize.height)
+        let s = min(fill * maxCenteringZoom, max(fill, needX, needY))
         let size = CGSize(width: imageSize.width * s, height: imageSize.height * s)
         // Ideal: focus point at the frame center. Clamp between "image's
         // trailing edge flush with the frame" and "leading edge flush" so
@@ -312,7 +330,10 @@ struct CatchRevealView: View {
 
     private var base: Int { plane.rarity.basePoints }
     private var firstOfTypeBonus: Int {
-        plane.isFirstOfType && !isDuplicate ? Int((Double(base) * 0.5).rounded()) : 0
+        // Fraction via ScoringBonuses (pinned to scoring-bonuses.json by the
+        // parity test) — never a local literal, so the ledger can't drift
+        // from the server's award.
+        plane.isFirstOfType && !isDuplicate ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
     }
     private var finalTotal: Int { isDuplicate ? 0 : base + firstOfTypeBonus }
 
