@@ -755,10 +755,12 @@ struct ContentView: View {
                         guess.row.guessKind = guess.kind.rawValue
                         guess.row.guessValue = answeredValue
                         guess.row.guessCorrect = correct
-                        try? modelContext.save()
-                        CatchTelemetry.fireGuessRoundAnswered(
-                            kind: guess.kind, correct: correct, elapsedMs: elapsedMs)
-                    } else {
+                        if !guess.isSimulated {
+                            try? modelContext.save()
+                            CatchTelemetry.fireGuessRoundAnswered(
+                                kind: guess.kind, correct: correct, elapsedMs: elapsedMs)
+                        }
+                    } else if !guess.isSimulated {
                         CatchTelemetry.fireGuessRoundSkipped(
                             kind: guess.kind, elapsedMs: elapsedMs)
                     }
@@ -775,7 +777,9 @@ struct ContentView: View {
             .presentationBackground(.clear)
             .onAppear {
                 guessShownAt = Date()
-                CatchTelemetry.fireGuessRoundShown(kind: guess.kind)
+                if !guess.isSimulated {
+                    CatchTelemetry.fireGuessRoundShown(kind: guess.kind)
+                }
             }
         }
         // Post-catch confirm: one Keep/Discard question for the suspected
@@ -917,6 +921,9 @@ struct ContentView: View {
         let newCatches: [Catch]
         let duplicates: [String]
         let visibleByIcao: [String: ObservedAircraft]
+        /// DEBUG ✦ Catch simulation: full guess→reveal flow, but no
+        /// telemetry and no persistence (the row is transient).
+        var isSimulated: Bool = false
     }
 
     /// The `presentReveal` payload carried across the guess cover's dismissal.
@@ -1741,6 +1748,25 @@ struct ContentView: View {
             originIcao: s.origin, destIcao: s.dest,
             originName: s.originName, destName: s.destName
         )
+        // Route the simulation through the REAL guess→reveal seam whenever
+        // the preset carries a route and a question builds — the debug button
+        // is how the bonus-round pacing gets felt without field-catching.
+        // No telemetry, no persistence (isSimulated + transient row). The
+        // route-less presets (C172) still preview the plain reveal.
+        if let question = buildGuessQuestion(row: c) {
+            pendingGuess = PendingGuess(
+                question: question,
+                kind: .route,
+                photoURL: nil,
+                photoFocus: nil,
+                row: c,
+                newCatches: [c],
+                duplicates: [],
+                visibleByIcao: [:],
+                isSimulated: true
+            )
+            return
+        }
         pendingReveal = PendingReveal(
             plane: cardPlane(from: c, observed: nil),
             entryNumber: Set(catches.map(\.icao24)).count + 1,
