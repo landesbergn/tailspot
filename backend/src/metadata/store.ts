@@ -14,6 +14,7 @@
 
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client.js";
+import { withDbRetry } from "../db/retry.js";
 import { registry, typecodes } from "../db/schema.js";
 import { type RegistryFacts, type TypecodeFacts, mergeMetadata } from "./merge.js";
 
@@ -53,6 +54,12 @@ export class DrizzleMetadataStore implements MetadataStore {
   constructor(private readonly db: Database) {}
 
   async lookup(icao24: string): Promise<MetadataRecord | null> {
+    // Both queries are idempotent reads, so the whole lookup is safe to retry
+    // when a pooled connection dies mid-query (Sentry BROKEN-DARKNESS-5055-3).
+    return withDbRetry(() => this.lookupOnce(icao24));
+  }
+
+  private async lookupOnce(icao24: string): Promise<MetadataRecord | null> {
     const regRows = await this.db
       .select()
       .from(registry)

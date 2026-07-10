@@ -204,6 +204,13 @@ struct ContentView: View {
     /// plane within the widened 250 px search). Auto-clears after 1.0 s
     /// so the ripple doesn't linger.
     @State private var emptyRipple: (CGPoint, Date)? = nil
+    /// Timestamp of the active "that one's still parked" toast, or nil.
+    /// Set when an empty-sky tap's nearest in-data plane turns out to be a
+    /// GROUNDED one (the grounded easter egg) — the tap gets a playful
+    /// explanation instead of a reveal (parked planes are never catchable).
+    /// The timestamp guards the auto-clear against clearing a newer toast
+    /// (same pattern as `emptyRipple`).
+    @State private var groundedToastAt: Date? = nil
 
     var body: some View {
         ZStack {
@@ -253,9 +260,13 @@ struct ContentView: View {
                         // PLUS any tap-revealed plane (see `revealedIcao`). The
                         // revealed plane rides the existing pinned-plane path —
                         // labeled, lockable, catchable — without loosening the
-                        // ambient filter for everyone else.
+                        // ambient filter for everyone else. GROUNDED planes are
+                        // excluded even from the reveal clause: a parked plane
+                        // must never label, lock, or catch (the tap path never
+                        // reveals one — this guard is belt-and-suspenders).
                         let visible = adsb.observed.filter {
-                            $0.isLikelyVisibleToObserver || $0.aircraft.icao24 == revealedIcao
+                            $0.isLikelyVisibleToObserver
+                                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
                         }
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
@@ -392,7 +403,12 @@ struct ContentView: View {
                                 // a status pill anchored low so it
                                 // doesn't compete with the top-center
                                 // compass / zoom affordances.
-                                emptySkyOverlay(rawCount: adsb.observed.count)
+                                // Grounded planes are excluded from the "N
+                                // NEARBY" count — they're not below-horizon
+                                // or too-far traffic, they're parked.
+                                emptySkyOverlay(
+                                    rawCount: adsb.observed.filter { !$0.grounded }.count
+                                )
                                     .frame(width: geo.size.width, height: geo.size.height)
                                     .allowsHitTesting(false)
                             }
@@ -629,7 +645,8 @@ struct ContentView: View {
         // observation is a free in-memory hit.
         .task(id: visibleIcaoSignature) {
             let icaos = adsb.observed
-                .filter { $0.isLikelyVisibleToObserver || $0.aircraft.icao24 == revealedIcao }
+                .filter { $0.isLikelyVisibleToObserver
+                    || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
                 .map(\.aircraft.icao24)
             // Prune session-stale entries. `ambientMetadata` is a view-
             // local mirror of the bounded MetadataCache actor; without
@@ -665,6 +682,10 @@ struct ContentView: View {
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
         .overlay(alignment: .top) { indoorHintBanner }
+        // Parked-plane toast (grounded easter egg) — same slot as the indoor
+        // hint; the two can't realistically co-fire (one needs a not-sky
+        // frame, the other a tap that reached an in-data plane).
+        .overlay(alignment: .top) { groundedToastBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -833,7 +854,8 @@ struct ContentView: View {
     /// re-runs when membership actually changes.
     private var visibleIcaoSignature: String {
         adsb.observed
-            .filter { $0.isLikelyVisibleToObserver || $0.aircraft.icao24 == revealedIcao }
+            .filter { $0.isLikelyVisibleToObserver
+                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
             .map(\.aircraft.icao24)
             .sorted()
             .joined(separator: ",")
@@ -908,6 +930,45 @@ struct ContentView: View {
             .padding(.top, 60)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
+    }
+
+    /// Transient parked-plane toast (the grounded easter egg): shown when an
+    /// empty-sky tap's nearest in-data plane is on the ground. Same look as
+    /// `indoorHintBanner`; auto-dismisses (see `presentGroundedTapToast`).
+    /// Grounded planes stay visually hidden — this toast is the feature's
+    /// entire UI.
+    @ViewBuilder
+    private var groundedToastBanner: some View {
+        if groundedToastAt != nil {
+            Text("Tailspot only works with planes in the air")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+                .padding(.top, 60)
+                .padding(.horizontal, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Present the parked-plane toast for ~3 s, record the attempt for the
+    /// "Ground Stop" secret badge, and fire the one telemetry event. The
+    /// unlock check runs immediately after recording so the badge's moment
+    /// lands now, not on the next catch.
+    private func presentGroundedTapToast(icao24: String) {
+        let now = Date()
+        withAnimation(.easeInOut(duration: 0.2)) { groundedToastAt = now }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if groundedToastAt == now {
+                withAnimation(.easeInOut(duration: 0.3)) { groundedToastAt = nil }
+            }
+        }
+        TrophyEventStore().record(.groundedCatchAttempt)
+        CatchTelemetry.fireGroundedAttempt(icao24: icao24)
+        unlockCenter.enqueueNewUnlocks(from: catches)
     }
 
     @ViewBuilder
@@ -2490,9 +2551,10 @@ struct ContentView: View {
         // `isLikelyVisibleToObserver` offline with different cap/elevation
         // tuning; if we pre-filter here, every plane the live filter rejected
         // (e.g. a distant contrail) is absent from the file and can never be
-        // studied. `observed` already excludes on-ground/stale (dropped in
-        // annotate); it keeps below-horizon and far planes, which is exactly
-        // what offline filter tuning needs.
+        // studied. `observed` already excludes stale rows (dropped in
+        // annotate); it keeps below-horizon, far, and — since the grounded
+        // easter egg — on-ground planes (hidden tier, `grounded` flag),
+        // which is exactly what offline filter tuning needs.
         let annotated = adsb.observed
         let tick = ReplayEvent.Tick(
             timestamp: Date(),
@@ -2641,6 +2703,13 @@ struct ContentView: View {
             cameraElevationDeg: cameraElevationDeg,
             rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg, now: now
         )
+        // GROUNDED beats filtered: a parked plane is never revealed (never
+        // labeled, locked, or catchable) — the tap gets the playful toast
+        // instead, and the attempt feeds the "Ground Stop" secret badge.
+        if let d = diagnosis, d.reason == "grounded" {
+            presentGroundedTapToast(icao24: d.obs.aircraft.icao24)
+            return
+        }
         if let d = diagnosis, d.reason == "filtered" {
             let icao = d.obs.aircraft.icao24
             revealedIcao = icao
@@ -2704,10 +2773,13 @@ struct ContentView: View {
         }
 
         let reason: String
-        if let b = best, b.offsetDeg <= 40 {
-            if b.obs.visibilityTier == .hidden { reason = "filtered" }
-            else if !b.onScreen { reason = "off-frame" }
-            else { reason = "on-screen" }
+        if let b = best {
+            reason = classifyEmptySkyTapNearest(
+                offsetDeg: b.offsetDeg,
+                grounded: b.obs.grounded,
+                tier: b.obs.visibilityTier,
+                onScreen: b.onScreen
+            )
         } else {
             reason = "nothing-nearby"
         }
@@ -2748,6 +2820,44 @@ struct ContentView: View {
             }
         }
     }
+}
+
+// MARK: - Empty-sky-tap classification
+
+/// Angular radius (degrees off the tapped direction) inside which the
+/// nearest in-data plane counts as "what the user was pointing at" — the
+/// tap-reveal radius. Beyond it the tap is truly empty sky.
+let emptySkyTapMaxOffsetDeg: Double = 40
+
+/// Classify the nearest in-data plane found under an empty-sky tap.
+/// Extracted from `recordEmptySkyTapDiagnosis` so the branch that decides
+/// toast-vs-reveal-vs-ripple is unit-testable without a SwiftUI view
+/// (same free-function precedent as `resolveAROverlayRarity`).
+///
+///   - "grounded"       → parked plane under the tap: playful toast, never
+///                         a reveal (checked BEFORE the tier — a grounded
+///                         plane is also `.hidden`, and reveal must lose).
+///   - "filtered"        → airborne but hidden by the precision band:
+///                         tap-to-reveal (the FDX1268 affordance).
+///   - "off-frame"       → visible tier but projected outside the screen.
+///   - "on-screen"       → visible and on screen (tap just missed it).
+///   - "nothing-nearby"  → nearest plane is too far off the tap direction.
+///
+/// Deliberately NOT `nonisolated`: it consumes `visibilityTier`, whose
+/// enclosing types are MainActor-isolated (the repo default); every caller
+/// (the tap handler, tests) is already on the MainActor, so this costs
+/// nothing — the same trade `applyVisibilityHysteresis` documents.
+func classifyEmptySkyTapNearest(
+    offsetDeg: Double,
+    grounded: Bool,
+    tier: ObservedAircraft.VisibilityTier,
+    onScreen: Bool
+) -> String {
+    guard offsetDeg <= emptySkyTapMaxOffsetDeg else { return "nothing-nearby" }
+    if grounded { return "grounded" }
+    if tier == .hidden { return "filtered" }
+    if !onScreen { return "off-frame" }
+    return "on-screen"
 }
 
 // MARK: - AR-overlay rarity resolution
