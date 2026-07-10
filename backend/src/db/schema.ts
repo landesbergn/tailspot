@@ -184,6 +184,25 @@ export const catches = pgTable(
      * identity to be first of.
      */
     firstOfType: boolean("first_of_type").notNull().default(false),
+    /**
+     * Pre-reveal bonus-round guess (game-layer PR1, migration 0006). The wire
+     * carries the guess VALUE only — never a client verdict — and the server
+     * verifies it against its own truth (registry typecode for "type", the
+     * adsb.lol RouteResolver for "route") before freezing the outcome here.
+     *
+     * `guessKind` — "route" | "type" (plain text, not an enum: a future kind
+     *   like "airline" must not need a migration). Null = no guess offered/made.
+     * `guessValue` — the guessed ICAO airport ident or typecode, normalized
+     *   uppercase (audit trail + per-device accuracy telemetry).
+     * `guessCorrect` — the server's verdict, FROZEN like `first_of_type`: route
+     *   truth is standing data and can drift after the fact, and re-verifying at
+     *   rescore time could flip an honestly-earned bonus. Rescore READS this
+     *   flag (the bonus AMOUNT floats with the re-derived base); it never
+     *   re-verifies. Existing rows default false (no historical guesses).
+     */
+    guessKind: text("guess_kind"),
+    guessValue: text("guess_value"),
+    guessCorrect: boolean("guess_correct").notNull().default(false),
     /** When the client says it was caught. */
     caughtAt: timestamp("caught_at", { withTimezone: true }).notNull(),
     observerLat: doublePrecision("observer_lat").notNull(),

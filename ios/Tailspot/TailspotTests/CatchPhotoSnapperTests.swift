@@ -12,6 +12,7 @@
 
 import CoreGraphics
 import Testing
+import UIKit
 @testable import Tailspot
 
 @Suite("CatchPhotoSnapper gates")
@@ -85,5 +86,83 @@ struct CatchPhotoSnapperChoiceTests {
             #expect(dx == 0 || dx == CatchPhotoSnapper.ringOffset)
             #expect(dy == 0 || dy == CatchPhotoSnapper.ringOffset)
         }
+    }
+
+    @Test func explicitRadiusOverridesReferenceRadius() {
+        // A detection past the 700 px reference radius must be reachable
+        // when the caller passes a scaled radius (the fine pass at 12 MP).
+        let d = det(0, 1500)
+        #expect(CatchPhotoSnapper.choose(from: [d], predicted: .zero) == nil)
+        #expect(CatchPhotoSnapper.choose(from: [d], predicted: .zero,
+                                         snapRadius: 1960) == d)
+    }
+}
+
+@Suite("CatchPhotoSnapper resolution adaptation")
+struct CatchPhotoSnapperResolutionTests {
+
+    @Test func referenceAndLegacyPhotosKeepScaleOne() {
+        // The eval corpus width and anything narrower stay at 1×: shipped
+        // 1080-px behavior is exactly preserved.
+        #expect(CatchPhotoSnapper.resolutionScale(photoWidth: 1080) == 1)
+        #expect(CatchPhotoSnapper.resolutionScale(photoWidth: 640) == 1)
+    }
+
+    @Test func fullResPhotosScaleByWidthRatio() {
+        let s = CatchPhotoSnapper.resolutionScale(photoWidth: 3024)
+        #expect(abs(s - 2.8) < 0.001)
+        // The scaled snap radius stays proportionate to the frame: 700 px
+        // of a 1080 frame ≈ 1960 px of a 3024 frame.
+        #expect(abs(s * CatchPhotoSnapper.maxSnapRadiusPixels - 1960) < 1)
+    }
+
+    @Test func legacyWidthsSkipTheCoarsePass() {
+        // Coarse pass exists to restore angular coverage lost at native
+        // resolution; at ≤1.3× there is nothing to restore.
+        #expect(CatchPhotoSnapper.resolutionScale(photoWidth: 1080)
+                < CatchPhotoSnapper.coarsePassMinScale)
+        #expect(CatchPhotoSnapper.resolutionScale(photoWidth: 3024)
+                >= CatchPhotoSnapper.coarsePassMinScale)
+    }
+
+    @Test func uprightNormalizesEXIFRotatedImages() {
+        // Simulate a sensor-landscape capture (240×120) tagged .right —
+        // the shape AVFoundation actually hands us. The upright image
+        // must come out portrait (120×240): searching the raw cgImage
+        // instead would rotate the whole coordinate space 90°.
+        let landscape = solidCGImage(width: 240, height: 120)
+        let tagged = UIImage(cgImage: landscape, scale: 1, orientation: .right)
+        let upright = CatchPhotoSnapper.uprightCGImage(from: tagged)
+        #expect(upright?.width == 120)
+        #expect(upright?.height == 240)
+    }
+
+    @Test func uprightPassesThroughAlreadyUprightImages() {
+        // Legacy composed photos are orientation .up — no re-render.
+        let img = solidCGImage(width: 120, height: 240)
+        let upright = CatchPhotoSnapper.uprightCGImage(from: UIImage(cgImage: img))
+        #expect(upright?.width == 120)
+        #expect(upright?.height == 240)
+    }
+
+    @Test func downscalePreservesAspectAndSkipsNarrowImages() {
+        let big = solidCGImage(width: 3024, height: 4032)
+        let small = CatchPhotoSnapper.downscaled(big, toWidth: 1080)
+        #expect(small?.width == 1080)
+        #expect(small?.height == 1440)
+        // Already at/below the target width: returned untouched.
+        let narrow = solidCGImage(width: 1080, height: 1920)
+        #expect(CatchPhotoSnapper.downscaled(narrow, toWidth: 1080)?.width == 1080)
+    }
+
+    private func solidCGImage(width: Int, height: Int) -> CGImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let size = CGSize(width: width, height: height)
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            UIColor.black.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }.cgImage!
     }
 }

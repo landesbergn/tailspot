@@ -5,6 +5,100 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-09 — Card-art medium DECIDED: keep the current hero — docs only
+
+The §6.3 question (open since 2026-06-18) is closed. Noah compared the
+candidate mediums **on his own phone against his real catches** via a
+throwaway "Card Art Lab" spike (local branch `spike/card-art-mediums`,
+never merge): the production `CatchCardView` with the hero slot swapped
+across CURRENT / generative livery-silhouette / treated own-photo /
+real 3D models (FR24 glTF, converted 1.0→2.0 and pre-rendered via
+three.js; the license map on the record: FR24 = GPL-2.0 prototype-only,
+Sketchfab CC-BY = the shippable 3D path if ever revisited). Verdict:
+**none beat the current look — keep the own-photo/placeholder hero, no
+commissioning pipeline, no art spend.** PLAN §9 #5 retired; §6.3 marked
+resolved. Card excitement keeps improving through the chrome/reveal
+polish track (#6) instead. Decision materials: the decision-pack and
+catches-×-mediums comparison artifacts (2026-07-09 session).
+
+## 2026-07-09 — Catch card: flight number, plane-centered photo crop + focus backfill — branch `feat/catch-card-centering`
+
+Field feedback (Noah, 2026-07-08): the catch photo doesn't center on the
+plane ("especially for planes less close to the center of the frame"), and
+he wanted the **flight number** on the card. Also re-opened N415YX (RPA4343):
+the plane IS visible — my earlier "sub-floor speck" call was wrong; a
+targeted detector pass finds it at 15 px / 0.54 conf, so it re-heals.
+
+- **Flight number on `SettledCatchCard`**: the callsign (already carried on
+  `CardPlane`, never shown) now renders right-aligned on the tier line
+  (`● COMMON · AIR CANADA        ACA708`), truncating a long carrier before
+  itself. The detail card previously surfaced the tail number only, in the
+  fine-print footer.
+- **Photo now centers on the plane.** Root cause: 82/85 catches had no
+  `photoFocus`, so `FocusFill` center-cropped the tall photo and the plane
+  landed at the frame edge. Two fixes: (1) **`CatchPhotoFocusRecovery`**
+  (new) recovers focus from the cyan bracket already baked into each saved
+  JPEG (nearest-neighbor downsample + strict brand-cyan centroid, span-gated
+  against multi-catch) — the bracket IS the focus, so this is
+  correct-by-construction and follows the offline heal; wired as a
+  version-gated one-time pass in `CatchBackfill.backfillPhotoFocus`, run off
+  the Hangar `.task` (bytes + pixels off the MainActor). (2) **`FocusFill`
+  zoom-to-center**: the short/wide hero slot pins outer-band planes to the
+  edge even with correct focus, so the crop now zooms in just enough
+  (capped 1.6×) to bring an edge plane toward center — center-band planes
+  are untouched.
+- **N415YX re-healed** onto its detected plane (554,860) and pushed to the
+  device; the on-device focus backfill then centers it.
+- Verified with before/after `ImageRenderer` snapshots over four real
+  catch photos (`FocusCenteringSnapshotTests`); new `FocusFill` zoom +
+  `CatchPhotoFocusRecovery` orientation/centroid unit tests. Full
+  `TailspotTests` green.
+- **Follow-up (branch `feat/thumbnail-focus`):** the Hangar **list
+  thumbnail** (`TailCard`) had the same defect — a plain aspect-fill
+  `AsyncImage` center-cropping the tall photo. New `FocusThumbnail` crops
+  toward `photoFocus` via the shared `FocusFill` (so the 76 px thumbnail
+  and the big card frame the plane identically), decoding at thumbnail
+  size via ImageIO (`kCGImageSourceThumbnailMaxPixelSize` +
+  `…WithTransform` for upright pixels) off the MainActor with an
+  `NSCache` — a scrolling list can't decode full 12 MP stills per row.
+  `FocusedImage` split out so the crop renders synchronously for the
+  snapshot harness. New loader (downsample + orientation) tests.
+
+## 2026-07-09 — Bracket-snap follow-ups: full-res stills, orientation fix, off-frame drop + collection heal — branch `fix/bracket-snap-followups`
+
+Field trigger: Noah's RPA4343 / ACA708 / DAL405 catches (2026-07-08, Central
+Park) all had the bracket well off the plane — diagnosed as *the snapper never
+shipped* (TestFlight builds 79/80 predate PR #106; zero `catch_photo_snap`
+events ever). Fixing that surfaced more:
+
+- **Latent 90° orientation bug in `CatchPhotoSnapper`** (would have field-fired
+  on first ship): raw AVFoundation stills are sensor-landscape + EXIF
+  orientation 6, and the snapper searched the raw `cgImage` while the composer
+  draws in UIImage-oriented space. All search math now runs on
+  `uprightCGImage`; pinned by tests.
+- **Full-sensor stills** (`AVCapturePhotoOutput.maxPhotoDimensions` → ~12 MP,
+  `.speed` quality prioritization to keep shutter lag down): the root reason
+  RPA4343-class photos can't heal is that a distant plane is ~10 px in a
+  1080-wide photo, under the detector's ~15–20 px floor; at 12 MP it's ~28 px.
+  `CatchPhotoSnapper` became **resolution-adaptive**: fine native-res ring
+  (distance gates scaled by width/1080) then, for wide photos, a coarse
+  1080-equivalent pass (the exact eval-calibrated policy) + one native refine
+  crop. Saved photos cap at 3072 long side (`CatchPhotoComposer.savedPhotoSize`)
+  so the Hangar doesn't eat 12 MP decodes; bracket-less saves normalize through
+  `normalizedWithoutBracket`.
+- **Off-frame targets save bracket-free** (`catch_photo_snap` outcome
+  `offframe`): a re-projected prediction outside the frame with no detection
+  used to bake a clipped, pointing-at-nothing bracket (the ACA708 photo).
+- **Collection heal (offline, one-off):** all 80 on-device catch photos ran
+  through a full-frame detector sweep (`scratchpad heal_collection.py`, mask
+  out the baked glyph, nearest-within-700px, composer-style redraw after
+  inpaint). 11 healed + pushed back to the device (incl. ACA708 + DAL405);
+  2 candidate heals **vetoed by cross-checking the SwiftData row's recorded
+  slant** — the detector wanted gate/taxiing planes for targets ADS-B put at
+  38–62 km (the known airport wrong-plane mode). 40 fallbacks are the
+  sub-floor-speck class the 12 MP capture fixes going forward. Originals:
+  `~/Desktop/tailspot-catch-backup-2026-07-08/`; review doc sent to Noah.
+
 ## 2026-07-09 — Onboarding re-do phase 2: calibration step + denied-permission recovery — branch `feat/onboarding-calibration-redo`
 
 The design half of PLAN §9 #3 (phase 1 below instrumented it). **Compass
@@ -75,6 +169,116 @@ debug-overlay row toggles `[L4 SHADOW]` ↔ `[L4 ENFORCE]`
 stream shows in-envelope no-detections are cheats rather than recall misses.
 New pure `DetectorGate` + `DetectorGateTests`; suspicion precedence is now
 occluded > no_detection > too_far > indoor.
+
+## 2026-07-08 — Profile hub reorganized ("Direction A") — branch `feat/profile-standing-layout`
+
+Follow-on to the same-day cleanup below, answering Noah's "what is this page
+prioritizing?" Three questions drove it: medals-vs-trophies (one system, and
+this screen's MEDALS tile was the only surface not calling them Trophies),
+no clear information hierarchy, and a data-dishonest rarity strip (equal
+segments regardless of counts — the old code comment admitted it).
+
+Four divergent layouts were mocked in real SwiftUI (rendered via the
+snapshot harness; review artifact 2026-07-08) — A "Standing" scoreboard,
+B "Progression" quest log, C "Flight deck" instrument cluster, D "Boarding
+pass". **Noah picked A**; D's boarding-pass concept moved to the backlog as
+the share/invite artboard (PLAN §9 #10 "Spotter Pass").
+
+The shipped layout, in priority order: identity + points/rank hero → ONE
+quiet collection-stat strip (Catches · Unique · Rare+ · **Trophies**) → nav.
+The four stat tiles and the rarity strip are gone (census detail lives in
+the Hangar/references). Surfaces moved to iOS 26 Liquid Glass
+(`.glassEffect`) tinted to `bgElevated` — untinted glass resolves too
+bright over the fixed dark palette — over a backdrop with two faint radial
+glows so the glass has something to refract. `ProfileStats` is unchanged;
+only the view reorganized.
+
+**Field-review round 2 (Noah, 2026-07-08):** the Map's rarity filter strip
+no longer hyphen-wraps ("LEGENDAR-Y") — chips are lineLimit(1) + fixedSize
+inside a horizontal ScrollView, so overflow scrolls instead of wrapping.
+The profile gained the **BEST CATCH** card from the exploration's
+Direction B (highest-rarity airframe, most recent on ties; taps through to
+the catch detail via the Map screen's single-catch HangarRow pattern). The
+**Sets quick card** was removed (the Hangar's default segment IS Sets — a
+duplicate door), and the **Types reference** was cut entirely (link +
+screen — the Sets segment teaches the type buckets in context). The Rarity
+reference copy was sharpened to the current tiering: tiers = sky presence
+plus a scarcity layer (military/vintage/vanishing airliners), and
+unidentified planes default to Common. Its examples were already re-synced
+to `AircraftTypes.json` in the cleanup round below.
+
+**Share (same branch — iterated with Noah to deliberately minimal):** the
+toolbar Share got the brand CTA treatment (cyan disc, dark glyph — the
+page's one action) and is a DIRECT `ShareLink`: one tap → the system share
+sheet with **"Join me on Tailspot:" + https://tailspot.app** — nothing
+else. Messages renders the link as a rich preview from the site's OG tags.
+The old `ShareCardSheet` preview detour is deleted, and so is the
+in-between iteration: a rendered stat-card artboard (Direction-B language —
+points/rank hero, NEXT UP tier ring, best catch, challenge copy + a
+tailspot.app QR) was built, reviewed, and **cut as too much** — an invite
+should be a text and a link (Noah). The artboard lives in git history and
+the 2026-07-08 exploration artifact if the Spotter Pass work (PLAN §9 #10)
+wants to resurrect it as the share object. New `profile_share_opened`
+funnel event (simultaneous gesture — ShareLink exposes no tap callback;
+"opened", not "completed"). The **invite trophy** stays coupled to Spotter
+Pass: awarding it honestly needs joined-from-your-invite attribution.
+
+## 2026-07-08 — Profile/Settings legacy-artifact cleanup for v1 — branch `polish/settings-v1-cleanup`
+
+A pre-launch scrub of the Profile hub + Settings surface (PLAN §9 #6). Every
+change removes something stale or false rather than adding surface:
+
+- **Settings ABOUT told users the wrong data source** — "OpenSky Network",
+  dead since the 2026-06-21 cutover. Now "Live aircraft data · adsb.lol",
+  matching the attributions page; stale OpenSky/ODbL comments fixed too.
+- **Fake affordances removed**: the hardcoded `PUBLIC` pill on the Profile
+  header and onboarding's "Public profile / anyone can view your hangar"
+  toggle (wrote `tailspot.profile.public`, which controlled nothing — the
+  public hangar was cut in WP 1.7). Onboarding copy no longer promises a
+  public hangar.
+- **Notifications placeholder retired**: the Profile row + `NotificationsScreen`
+  ("coming after launch") deleted — push is post-GA (#9); re-add with the real
+  feature. `TrophiesScreen.swift` deleted too (orphaned wrapper, zero callsites
+  since trophies moved into the Hangar).
+- **Rarity reference re-synced to the 2026-07-01 economy**: example strings
+  had A330/787/777 at uncommon (now common), C-130/C-17 at rare (now epic),
+  A380 at epic (now rare), B-52 at epic (now legendary); footer copy now
+  mentions the first-of-type bonus. Verified each example against
+  `AircraftTypes.json` tiers.
+- **Settings/Notifications were the last two screens on system list chrome**
+  (white in light mode against the fixed dark Brand palette) — Settings now
+  uses the SetsScreen brand treatment (`scrollContentBackground(.hidden)` +
+  `bgPrimary` + `bgElevated` rows).
+- New `ProfileSettingsSnapshotTests` visual-pass suite (UIWindow +
+  `drawHierarchy`, since ImageRenderer renders List/NavigationStack blank).
+
+Known-but-deferred: `SpotterHandle.defaultPlaceholder == "spotter_42"` is a
+real user's claimed handle, but the string doubles as the "not claimed"
+sentinel in `HandleSyncer`/`AnalyticsIdentity` — changing it silently flips
+existing placeholder installs to "claimed", so it needs its own careful pass.
+
+## 2026-07-08 — Asia-Pacific operator gaps (APJ545 / BTK6143) — branch `fix/asia-pacific-operator-gaps`
+
+Field report: two 2026-07-03 catches (APJ545 — Peach Aviation, BTK6143 —
+Batik Air) showed "Operator unknown". Root cause: no upstream source supplies
+an operator (the backend metadata seam is intentionally null, the adsb.lol
+feed carries none), so the ONLY operator source is the client's hardcoded
+`Airlines.byICAO` callsign-prefix table — and its original seed was
+US/Europe-heavy with no Asia-Pacific LCC coverage.
+
+Fix, in two rounds the same day (Noah: "just compile a comprehensive list"):
+first ~45 hand-added Asia-Pacific designators, then the durable version —
+operator resolution is now TWO layers: the curated `byICAO` table survives
+only as a display-name override ("FedEx Express" over the legal "Federal
+Express"), and beneath it sits `airlines.json`, a bundled ~5,900-designator
+snapshot of the VRS standing-data airline list (CC0), regenerated by
+`tools/generate-airlines.py`. Coverage gaps are now dataset-refresh problems,
+not code problems. A shape-invariant test (keys must be 3 uppercase letters —
+lookup is `prefix(3)`) caught and removed an unreachable 4-char `"FDX2"`
+entry. No migration needed: `CatchBackfill.backfillAll`'s offline pass retries
+every `operatorName == nil` catch on Hangar open, so existing cards heal on
+first open after update. Per-airframe operator truth behind the backend's
+`operatorNameSeam` stays a later work package.
 
 ## 2026-07-07 — `first_plane_catch` activation event — branch `feat/first-catch-event`
 
