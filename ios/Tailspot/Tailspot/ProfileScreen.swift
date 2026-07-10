@@ -2,12 +2,21 @@
 //  ProfileScreen.swift
 //  Tailspot
 //
-//  The gamification hub: total points, global rank (placeholder
-//  pending backend), four-stat grid, rarity breakdown strip, plus
-//  navigation entries to Sets, Map, Leaderboard, Rarity / Types
-//  reference, Settings, and Share. Trophies have moved into the
-//  Hangar's Trophies segment (Spec § 4.2, § 7) and no longer have
-//  an entry on this screen.
+//  The gamification hub, reorganized 2026-07-08 ("Direction A" of the
+//  profile layout exploration — docs/reviews). Hierarchy, in priority
+//  order: identity + server-authoritative standing (points/rank hero),
+//  ONE quiet collection-stat strip, then navigation (Sets/Map/Leaders +
+//  reference/settings links). The four loud stat tiles and the rarity
+//  breakdown strip were removed — the census detail lives in the Hangar
+//  and the references; the strip was also data-dishonest (equal segments
+//  regardless of counts). Trophies live in the Hangar's Trophies segment
+//  and have no entry here; the stat strip says TROPHIES (the system's
+//  one user-facing name — "medals" was this screen's invention).
+//
+//  Surfaces are iOS 26 Liquid Glass (`.glassEffect`) tinted to the brand
+//  dark; untinted glass renders too bright against the fixed dark
+//  palette. The backdrop adds two faint radial glows so the glass has
+//  something to refract.
 //
 //  The HEADLINE total-points + global-rank read the server's authoritative
 //  standing (GET /v1/leaderboard `me`) so the profile and the public
@@ -26,7 +35,6 @@ struct ProfileScreen: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
-    @State private var showingShare = false
 
     /// Last server-authoritative standing, CACHED in app storage so the headline
     /// shows the known server points + rank INSTANTLY on every open (no flash from
@@ -52,10 +60,12 @@ struct ProfileScreen: View {
         let inputs = Trophies.inputs(from: catches)
         return NavigationStack {
             ScrollView {
-                VStack(spacing: 18) {
+                VStack(spacing: 16) {
                     identityHeader(stats: stats)
-                    statsRow(stats: stats, inputs: inputs)
-                    rarityStrip(stats: stats)
+                    statsStrip(stats: stats, inputs: inputs)
+                    if let best = Self.bestCatch(in: catches) {
+                        bestCatchCard(best)
+                    }
                     quickLinks
                     sectionLinks
                 }
@@ -63,7 +73,7 @@ struct ProfileScreen: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
-            .background(Brand.Color.bgPrimary.ignoresSafeArea())
+            .background(glassBackdrop)
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .task { await loadStanding() }
@@ -72,18 +82,44 @@ struct ProfileScreen: View {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingShare = true
-                    } label: {
+                    // Share is the page's one action, so it gets the brand's
+                    // CTA treatment (cyan disc, dark glyph) instead of the
+                    // bare system tint — same accent grammar as the reveal's
+                    // CTA and the planned Spotter Pass share (PLAN §9 #10).
+                    // A direct ShareLink, deliberately minimal (Noah,
+                    // 2026-07-08): one tap → the system share sheet with a
+                    // short invite + the tailspot.app link. Messages renders
+                    // the link as a rich preview from the site's OG tags; a
+                    // rendered stat-card image was tried and cut as too much.
+                    ShareLink(
+                        item: Self.inviteURL,
+                        message: Text("Join me on Tailspot:")
+                    ) {
                         Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Brand.Color.bgPrimary)
+                            .padding(7)
+                            .background(Brand.Color.cyan, in: .circle)
                     }
+                    .accessibilityLabel("Share profile")
+                    // ShareLink exposes no tap callback; a simultaneous
+                    // gesture gives the share-funnel signal (opened, not
+                    // necessarily completed — completion isn't observable).
+                    .simultaneousGesture(TapGesture().onEnded {
+                        Analytics.capture("profile_share_opened", [
+                            "points": .int(cachedServerPoints >= 0 ? cachedServerPoints : stats.totalPoints),
+                            "has_rank": .bool(cachedServerRank >= 1),
+                        ])
+                    })
                 }
-            }
-            .sheet(isPresented: $showingShare) {
-                ShareCardSheet(stats: stats, handle: handle)
             }
         }
     }
+
+    /// Where an invited friend lands. The site carries install instructions
+    /// now (TestFlight) and becomes the App Store pointer at GA. Real invite
+    /// attribution (per-user codes, the invite trophy) is PLAN §9 #10.
+    private static let inviteURL = URL(string: "https://tailspot.app")!
 
     // MARK: - Standing fetch
 
@@ -168,14 +204,6 @@ struct ProfileScreen: View {
                     }
                 }
                 Spacer()
-                Text("PUBLIC")
-                    .font(Brand.Font.mono(size: 9, weight: .bold))
-                    .tracking(1)
-                    .foregroundStyle(Brand.Color.alertNormal)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Brand.Color.alertNormal.opacity(0.14), in: .capsule)
-                    .overlay(Capsule().strokeBorder(Brand.Color.alertNormal.opacity(0.45), lineWidth: 1))
             }
             HStack(spacing: 16) {
                 VStack(spacing: 2) {
@@ -205,98 +233,132 @@ struct ProfileScreen: View {
         }
         .frame(maxWidth: .infinity)
         .padding(18)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 18))
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 20))
     }
 
-    // MARK: - Stats grid
+    // MARK: - Glass treatment
 
-    private func statsRow(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
-        // `inputs` is the precomputed value passed in — the filter closure now
-        // reads that single snapshot instead of re-deriving it per trophy.
-        let earnedMedals = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
-        return HStack(spacing: 8) {
-            statTile(value: stats.totalCatches, label: "Catches")
-            statTile(value: stats.uniqueAirframes, label: "Unique")
-            statTile(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
-            statTile(value: earnedMedals, label: "Medals")
+    /// Liquid Glass anchored to the brand's elevated dark tone. Untinted
+    /// `.regular` glass resolves too bright over `bgPrimary` and washes
+    /// out the fixed light-on-dark text palette.
+    private static let brandGlass: Glass = .regular.tint(Brand.Color.bgElevated.opacity(0.88))
+
+    /// Two faint radial glows under the glass surfaces — pure decoration,
+    /// but glass over a flat color has nothing to refract and reads matte.
+    private var glassBackdrop: some View {
+        ZStack {
+            Brand.Color.bgPrimary
+            RadialGradient(colors: [Brand.Color.cyan.opacity(0.10), .clear],
+                           center: .init(x: 0.85, y: 0.05), startRadius: 10, endRadius: 420)
+            RadialGradient(colors: [Brand.Color.alertAdvisory.opacity(0.05), .clear],
+                           center: .init(x: 0.1, y: 0.75), startRadius: 10, endRadius: 380)
         }
+        .ignoresSafeArea()
     }
 
-    private func statTile(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
+    // MARK: - Stats strip
+
+    /// One quiet row for the collection counts — deliberately smaller type
+    /// than the points/rank hero above it so the two never compete.
+    private func statsStrip(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
+        // `inputs` is the precomputed value passed in — the filter closure
+        // reads that single snapshot instead of re-deriving it per trophy.
+        let earnedTrophies = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
+        return HStack(spacing: 0) {
+            statCell(value: stats.totalCatches, label: "Catches")
+            statCell(value: stats.uniqueAirframes, label: "Unique")
+            statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
+            statCell(value: earnedTrophies, label: "Trophies")
+        }
+        .padding(.vertical, 12)
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 16))
+    }
+
+    private func statCell(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
         VStack(spacing: 3) {
             Text("\(value)")
-                .font(Brand.Font.mono(size: 22, weight: .bold))
+                .font(Brand.Font.mono(size: 20, weight: .bold))
                 .foregroundStyle(valueColor)
                 .monospacedDigit()
             Text(label.uppercased())
-                .font(Brand.Font.mono(size: 8, weight: .semibold))
-                .tracking(1)
-                .foregroundStyle(Brand.Color.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
-    }
-
-    // MARK: - Rarity strip
-
-    private func rarityStrip(stats: ProfileStats) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("BREAKDOWN BY RARITY")
                 .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
-            HStack(spacing: 0) {
-                ForEach(Rarity.allCases, id: \.self) { r in
-                    let count = stats.countsByRarity[r] ?? 0
-                    let proportion = stats.totalCatches == 0
-                        ? 0
-                        : Double(count) / Double(stats.totalCatches)
-                    Rectangle()
-                        .fill(count > 0 ? r.tint : Brand.Color.bgSurface)
-                        .frame(height: 8)
-                        .frame(maxWidth: .infinity)
-                        // Each tier carries its proportion of the row,
-                        // but we render equal segments to keep
-                        // empty tiers visible. A more honest layout
-                        // would weight by proportion — try that if you
-                        // want the strip to read as data.
-                        .overlay(alignment: .leading) {
-                            GeometryReader { geo in
-                                Rectangle()
-                                    .fill(r.tint.opacity(count == 0 ? 0 : 0.6))
-                                    .frame(width: geo.size.width * CGFloat(proportion))
-                            }
-                        }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            HStack {
-                ForEach(Rarity.allCases, id: \.self) { r in
-                    let count = stats.countsByRarity[r] ?? 0
-                    VStack(spacing: 1) {
-                        Text("\(count)")
-                            .font(Brand.Font.mono(size: 13, weight: .bold))
-                            .foregroundStyle(count > 0 ? r.tint : Brand.Color.textTertiary)
-                            .monospacedDigit()
-                        Text(r.label)
-                            .font(Brand.Font.mono(size: 7, weight: .semibold))
-                            .tracking(0.6)
-                            .foregroundStyle(Brand.Color.textTertiary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
         }
-        .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Best catch
+
+    /// The collection's proudest airframe (highest rarity, most recent on
+    /// ties) — the "Progression" element Noah kept from the layout
+    /// exploration's Direction B. Tapping opens the catch detail.
+    private struct BestCatch {
+        let top: Catch
+        let name: String
+        let rarity: Rarity
+    }
+
+    private static func bestCatch(in catches: [Catch]) -> BestCatch? {
+        guard let top = catches.max(by: {
+            ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
+                < ($1.resolvedRarity.ordinal, $1.caughtAt.timeIntervalSince1970)
+        }) else { return nil }
+        let canonical = AircraftNaming.canonical(
+            typecode: top.typecode,
+            manufacturer: top.manufacturer,
+            model: top.model
+        )
+        let name = canonical.displayName ?? top.callsign ?? top.icao24.uppercased()
+        return BestCatch(top: top, name: name, rarity: top.resolvedRarity)
+    }
+
+    private func bestCatchCard(_ best: BestCatch) -> some View {
+        NavigationLink {
+            // Single-catch row, the MapScreen pin-sheet pattern.
+            CatchDetailView(row: HangarRow(
+                icao24: best.top.icao24,
+                mostRecent: best.top,
+                count: 1,
+                allCatches: [best.top]
+            ))
+        } label: {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(best.rarity.tint)
+                    .frame(width: 4, height: 36)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("BEST CATCH")
+                        .font(Brand.Font.mono(size: 8, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                    Text(best.name)
+                        .font(Brand.Font.cardTitle)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .lineLimit(1)
+                    Text(best.rarity.label)
+                        .font(Brand.Font.mono(size: 9, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(best.rarity.tint)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Quick links
 
+    // "Sets" deliberately absent: the Hangar's default segment IS Sets, so
+    // the quick card was a duplicate door (Noah, 2026-07-08).
     private var quickLinks: some View {
         HStack(spacing: 10) {
-            quickLink(label: "Sets", glyph: "rectangle.stack") { SetsScreen() }
             quickLink(label: "Map", glyph: "map") { MapScreen() }
             quickLink(label: "Leaders", glyph: "list.number") { LeaderboardScreen() }
         }
@@ -316,7 +378,7 @@ struct ProfileScreen: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
+            .glassEffect(Self.brandGlass, in: .rect(cornerRadius: 14))
         }
         .buttonStyle(.plain)
     }
@@ -327,13 +389,9 @@ struct ProfileScreen: View {
         VStack(spacing: 0) {
             sectionLink(label: "Rarity reference", systemImage: "diamond") { RarityReferenceScreen() }
             divider
-            sectionLink(label: "Types reference", systemImage: "rectangle.3.group") { TypesReferenceScreen() }
-            divider
             sectionLink(label: "Settings", systemImage: "gear") { SettingsScreen() }
-            divider
-            sectionLink(label: "Notifications", systemImage: "bell") { NotificationsScreen() }
         }
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: 14))
     }
 
     private var divider: some View {

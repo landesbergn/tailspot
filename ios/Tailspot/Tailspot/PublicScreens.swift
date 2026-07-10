@@ -10,8 +10,9 @@
 //     Loading / error / empty states follow Brand patterns.
 //     Pull-to-refresh supported.
 //
-//   - ShareCardSheet — shareable card composed in SwiftUI, handed
-//     to ShareLink as an Image-renderable view.
+//  (The profile share is a plain text + tailspot.app link ShareLink in
+//  ProfileScreen — a rendered stat-card artboard was tried 2026-07-08 and
+//  cut as too much; see git history / PLAN §9 #10 Spotter Pass.)
 //
 //  PublicHangarScreen was removed (backend not ready; the NavigationLink
 //  it was reachable via has also been removed).
@@ -306,143 +307,8 @@ struct LeaderboardScreen: View {
     }
 }
 
-// MARK: - Share card
-
-struct ShareCardSheet: View {
-    let stats: ProfileStats
-    let handle: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 18) {
-                shareCardArtboard
-                    .padding(.top, 24)
-                Spacer()
-                ShareLink(
-                    item: shareImage,
-                    preview: SharePreview("Tailspot · @\(handle)", image: shareImage)
-                ) {
-                    Text("Share")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.85))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Brand.Color.cyan, in: .rect(cornerRadius: 12))
-                        .padding(.horizontal, 24)
-                }
-                .padding(.bottom, 24)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Brand.Color.bgPrimary.ignoresSafeArea())
-            .navigationTitle("Share")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                }
-            }
-        }
-    }
-
-    /// Pre-rendered Image of the share card. ImageRenderer runs on the
-    /// MainActor and stamps the live SwiftUI view into a UIImage, which
-    /// ShareLink can hand off to any share target.
-    private var shareImage: Image {
-        let renderer = ImageRenderer(content: shareCardArtboard.frame(width: 360, height: 540))
-        renderer.scale = 3
-        if let ui = renderer.uiImage {
-            return Image(uiImage: ui)
-        }
-        return Image(systemName: "airplane")
-    }
-
-    /// The shareable artboard itself — also rendered to screen
-    /// before sharing so the user previews exactly what they're
-    /// about to send.
-    private var shareCardArtboard: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Brand.Color.bgElevated, Brand.Color.bgSurface],
-                startPoint: .top, endPoint: .bottom
-            )
-            // Subtle cyan radial bloom.
-            RadialGradient(
-                gradient: Gradient(colors: [Brand.Color.cyan.opacity(0.20), .clear]),
-                center: UnitPoint(x: 0.5, y: 0.30),
-                startRadius: 0,
-                endRadius: 280
-            )
-            .blendMode(.screen)
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    Image(systemName: "airplane")
-                        .foregroundStyle(Brand.Color.cyan)
-                        .font(.system(size: 20))
-                    Text("TAILSPOT")
-                        .font(Brand.Font.mono(size: 18, weight: .bold))
-                        .tracking(2)
-                        .foregroundStyle(Brand.Color.textPrimary)
-                    Spacer()
-                    Text("@\(handle)")
-                        .font(Brand.Font.mono(size: 13, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan)
-                }
-                Spacer(minLength: 0)
-                Text(stats.totalPoints.formatted(.number))
-                    .font(Brand.Font.mono(size: 64, weight: .heavy))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .monospacedDigit()
-                Text("TOTAL POINTS")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Divider().background(Brand.Color.textTertiary.opacity(0.3))
-                HStack {
-                    statTile(label: "Catches", value: stats.totalCatches)
-                    Spacer()
-                    statTile(label: "Unique",  value: stats.uniqueAirframes)
-                    Spacer()
-                    statTile(label: "Rare+",   value: stats.rarePlusUnique, tint: Brand.Color.alertAdvisory)
-                }
-                Spacer(minLength: 0)
-                Text("Catch every plane you see. Build a hangar of them.")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-            }
-            .padding(22)
-        }
-        .frame(width: 320, height: 480)
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.4), radius: 18, y: 10)
-    }
-
-    private func statTile(label: String, value: Int, tint: Color = Brand.Color.textPrimary) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("\(value)")
-                .font(Brand.Font.mono(size: 22, weight: .heavy))
-                .foregroundStyle(tint)
-                .monospacedDigit()
-            Text(label.uppercased())
-                .font(Brand.Font.mono(size: 9, weight: .semibold))
-                .tracking(1)
-                .foregroundStyle(Brand.Color.textTertiary)
-        }
-    }
-}
-
 #Preview("Leaderboard") {
     NavigationStack { LeaderboardScreen() }
         .modelContainer(for: Catch.self, inMemory: true)
 }
 
-#Preview("Share") {
-    ShareCardSheet(
-        stats: ProfileStats(catches: []),
-        handle: "preview"
-    )
-}
