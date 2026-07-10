@@ -41,7 +41,9 @@ struct TrophyUnlockView: View {
             .ignoresSafeArea()
 
             if let recap = center.pendingRecap {
-                recapCard(recap)
+                // The one-time full-screen "trophy case" recap (its own
+                // composition, reveal-styled) — presented before the queue.
+                TrophyRecapView(recap: recap) { center.dismissRecap() }
             } else if let event = center.head {
                 eventCard(event)
             } else {
@@ -151,41 +153,6 @@ struct TrophyUnlockView: View {
             }
         }
         .padding(.top, 4)
-    }
-
-    // MARK: - Recap card
-
-    @ViewBuilder
-    private func recapCard(_ recap: TrophyRecap) -> some View {
-        VStack(spacing: 18) {
-            Text("YOUR TROPHY CASE")
-                .font(Brand.Font.mono(size: 12, weight: .bold))
-                .tracking(2)
-                .foregroundStyle(Brand.Color.cyan)
-            celebratoryHex("crown", size: 120)
-            Text("New: achievements now unlock with a moment.")
-                .font(Brand.Font.cardTitle)
-                .foregroundStyle(Brand.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 28)
-            Text("You've already earned \(recap.earned) achievement\(recap.earned == 1 ? "" : "s"). Keep catching to unlock more — some are hidden until you find them.")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Text("Tap to continue")
-                .font(Brand.Font.mono(size: 11, weight: .semibold))
-                .foregroundStyle(Brand.Color.textTertiary)
-                .padding(.top, 4)
-        }
-        .padding(.vertical, 40)
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .onTapGesture { center.dismissRecap() }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isModal)
-        .accessibilityLabel("Trophy case: \(recap.earned) achievements already earned. Achievements now unlock with a moment.")
-        .accessibilityAction(named: "Dismiss") { center.dismissRecap() }
     }
 
     // MARK: - Presentation

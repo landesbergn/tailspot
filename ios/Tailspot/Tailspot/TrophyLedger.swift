@@ -30,7 +30,7 @@ nonisolated struct UserDefaultsTrophyLedger {
     /// silently on next launch instead of flooding on the new ids.
     private let mapKey = "trophy.ledger.acknowledged.v2"
     private let seededKey = "trophy.ledger.seeded.v2"
-    private let recapKey = "trophy.ledger.recapShown.v2"
+    private let rosterVersionKey = "trophy.ledger.rosterVersion"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -59,9 +59,21 @@ nonisolated struct UserDefaultsTrophyLedger {
     var isSeeded: Bool { defaults.bool(forKey: seededKey) }
     func markSeeded() { defaults.set(true, forKey: seededKey) }
 
-    /// True once the one-time "trophy case" recap has been shown.
-    var recapShown: Bool { defaults.bool(forKey: recapKey) }
-    func markRecapShown() { defaults.set(true, forKey: recapKey) }
+    /// The roster GENERATION this ledger was last (re)seeded against
+    /// (`Trophies.rosterVersion`); 0 for any ledger stamped before roster
+    /// versioning existed (2026-07-10). A stored value behind the current
+    /// constant means the roster grew — the unlock center reseeds (silently
+    /// absorbing the would-be unlock flood for newly-added trophies) and
+    /// presents the one-time "trophy case" recap. This stamp replaced the
+    /// old boolean `recapShown`: a boolean can fire once ever, a version
+    /// stamp fires once per roster expansion.
+    var rosterVersion: Int { defaults.integer(forKey: rosterVersionKey) }
+
+    /// Stamp the roster generation. Monotonic, like `setAcknowledged` —
+    /// never lowers an existing stamp.
+    func markRosterVersion(_ version: Int) {
+        if version > rosterVersion { defaults.set(version, forKey: rosterVersionKey) }
+    }
 
     // MARK: - Storage
 
