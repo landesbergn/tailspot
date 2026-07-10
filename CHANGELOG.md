@@ -5,6 +5,51 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-10 — Polish sweep PR A — the mechanical ten — branch `polish/mechanical-sweep`
+
+Ten objective UX/UI fixes from the full-app UI survey (taste-level changes are
+a separate Noah-gated PR B):
+
+1. **Stale copy ×3** (`PublicScreens.swift`): "Settings → Identity" — a section
+   that no longer exists — rewritten to the real path, "Profile → Settings"
+   (the handle claim lives in Settings' SPOTTER section, reached from the
+   Profile hub).
+2. **Leaderboard List branded**: was the only List without
+   `.scrollContentBackground(.hidden)` + Brand background (system grouped
+   chrome flipped white in light mode, washing the handles out). Also gave the
+   error/empty/standing rows `Brand.Color.bgElevated` row backgrounds — same
+   fix Settings got on 2026-07-08.
+3. **AccentColor asset filled in**: the colorset was empty, so system-tinted
+   controls (alert buttons, share sheet) rendered iOS blue; now brand cyan
+   `0x00D4FF` (any + dark).
+4. **`Color.primary` leak** (`SettingsScreen.swift`): legal-link labels were
+   system-primary on the fixed-dark row — invisible in light mode — now
+   `Brand.Color.textPrimary`.
+5. **Accessibility labels** on `CatchDetailView`'s icon-only chrome pills:
+   "Back" / "Delete catch" / "Share catch".
+6. **44 pt hit targets**: the 36 pt chrome pills (`CatchDetailView`) and the
+   Hangar child-bar back chevron keep their visual size; the tappable region
+   grows via `contentShape(Rectangle().inset(by: -4))`.
+7. **Dead code deleted**: `ComingSoonPill.swift` (ComingSoonPill +
+   ComingSoonBanner, zero call sites).
+8. **Re-typed hexes routed through Brand** (pure indirection, zero pixel
+   drift — reveal snapshots byte-checked): new tokens `Brand.Color.ledgerGold`
+   (0xFBBF24, was `RP.gold`'s literal) and `Brand.Color.duplicateRose`
+   (0xE0556B, the reveal's ALREADY CAUGHT stamp); `Rarity.rare` now returns
+   `Brand.Color.cyan` instead of a duplicate 0x00D4FF literal.
+9. **Leaderboard section headers** restyled from the default system look to
+   the app-wide mono ALL-CAPS style ("YOUR STANDING", SettingsScreen pattern).
+10. **Reduce Motion coverage** (TrophyUnlockView template): the reveal's
+    split-flap tumble becomes a straight fade to the identical settled frame
+    (`FlapRow.reduceMotion`), bonus-round chips lose the scale pop,
+    `MultiCatchReveal` keeps its cadence (haptic/chime ladder) but lands cards
+    as plain fades, `Figure8Animation` renders a static path + steady dot, and
+    the empty-sky `EmptyPulse` dot holds steady.
+
+Also new for the visual pass: a DEBUG `LeaderboardScreen(_debugEntries:me:)`
+seam + `renderLeaderboard` snapshot, and a reduce-motion settled-reveal case in
+`RevealSnapshotTests`.
+
 ## 2026-07-10 — Trophy roster expansion + one-time trophy-case recap (game-layer PR4+PR6) — branch `feat/trophy-roster`
 
 One PR delivering the plan's PR4 (roster) and PR6 (recap) together, since the

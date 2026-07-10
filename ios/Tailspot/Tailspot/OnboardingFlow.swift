@@ -719,39 +719,53 @@ struct OnboardingFlow: View {
 /// CABasicAnimation needed; `TimelineView` ticks the dot's
 /// parametric position every frame. Used by both the onboarding
 /// calibration step and the in-app `CompassCalibrationSheet`.
+/// Reduce Motion: a static path illustration — the dashed figure-8
+/// with a steady dot, no TimelineView ticking.
 struct Figure8Animation: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
-            Canvas { ctx, size in
-                let w = size.width
-                let h = size.height
-                let centerX = w / 2
-                let centerY = h / 2
-                let scale = min(w, h) * 0.36
-                // Trace the underlying figure-8 (lemniscate-ish) as a
-                // dashed reference path.
-                var ref = Path()
-                let steps = 120
-                for i in 0...steps {
-                    let t = Double(i) / Double(steps) * .pi * 2
-                    let x = centerX + CGFloat(sin(t) * Double(scale))
-                    let y = centerY + CGFloat(sin(2 * t) * Double(scale * 0.5))
-                    if i == 0 { ref.move(to: .init(x: x, y: y)) }
-                    else { ref.addLine(to: .init(x: x, y: y)) }
-                }
-                ctx.stroke(
-                    ref,
-                    with: .color(Brand.Color.cyan.opacity(0.35)),
-                    style: .init(lineWidth: 1.4, dash: [3, 5])
-                )
+        if reduceMotion {
+            canvas(dotPhase: .pi / 4)   // a static, clearly on-path dot
+        } else {
+            TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
                 // Animated dot along the path. Period: 3.2s.
                 let now = context.date.timeIntervalSinceReferenceDate
                 let t = (now.truncatingRemainder(dividingBy: 3.2)) / 3.2 * .pi * 2
+                canvas(dotPhase: t)
+            }
+        }
+    }
+
+    /// The figure-8 illustration at a given dot position (parametric
+    /// angle 0…2π along the lemniscate).
+    private func canvas(dotPhase: Double) -> some View {
+        Canvas { ctx, size in
+            let w = size.width
+            let h = size.height
+            let centerX = w / 2
+            let centerY = h / 2
+            let scale = min(w, h) * 0.36
+            // Trace the underlying figure-8 (lemniscate-ish) as a
+            // dashed reference path.
+            var ref = Path()
+            let steps = 120
+            for i in 0...steps {
+                let t = Double(i) / Double(steps) * .pi * 2
                 let x = centerX + CGFloat(sin(t) * Double(scale))
                 let y = centerY + CGFloat(sin(2 * t) * Double(scale * 0.5))
-                let dot = Path(ellipseIn: CGRect(x: x - 6, y: y - 6, width: 12, height: 12))
-                ctx.fill(dot, with: .color(Brand.Color.cyan))
+                if i == 0 { ref.move(to: .init(x: x, y: y)) }
+                else { ref.addLine(to: .init(x: x, y: y)) }
             }
+            ctx.stroke(
+                ref,
+                with: .color(Brand.Color.cyan.opacity(0.35)),
+                style: .init(lineWidth: 1.4, dash: [3, 5])
+            )
+            let x = centerX + CGFloat(sin(dotPhase) * Double(scale))
+            let y = centerY + CGFloat(sin(2 * dotPhase) * Double(scale * 0.5))
+            let dot = Path(ellipseIn: CGRect(x: x - 6, y: y - 6, width: 12, height: 12))
+            ctx.fill(dot, with: .color(Brand.Color.cyan))
         }
     }
 }

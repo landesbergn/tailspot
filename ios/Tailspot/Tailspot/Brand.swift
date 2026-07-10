@@ -54,6 +54,15 @@ nonisolated enum Brand {
         static let podiumGold   = SwiftUI.Color(hex: 0xFFC74A)
         static let podiumSilver = SwiftUI.Color(hex: 0xC5D0DA)
         static let podiumBronze = SwiftUI.Color(hex: 0xC26B3F)
+
+        /// Reveal-ledger bonus gold (`RP.gold` in the reveal vocabulary) —
+        /// the FIRST OF TYPE / ROUTE BONUS ledger tint. Deliberately distinct
+        /// from `podiumGold` (medal) and `alertCaution` (FAA amber).
+        static let ledgerGold = SwiftUI.Color(hex: 0xFBBF24)
+
+        /// Muted rose for the reveal's "· ALREADY CAUGHT" duplicate stamp —
+        /// softer than `alertWarning` red, which is reserved for true warnings.
+        static let duplicateRose = SwiftUI.Color(hex: 0xE0556B)
     }
 
     // MARK: - Font

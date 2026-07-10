@@ -45,7 +45,10 @@ struct HangarChildBar: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Brand.Color.cyan)
                         .frame(width: 36, height: 36)
-                        .contentShape(Rectangle())
+                        // 44pt minimum hit target (HIG): keep the 36pt visual
+                        // footprint, grow the tappable region 4pt past every
+                        // edge via contentShape.
+                        .contentShape(Rectangle().inset(by: -4))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
