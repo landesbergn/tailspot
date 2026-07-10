@@ -37,6 +37,18 @@ struct ObservedAircraft: Identifiable, Sendable {
     /// track it (tests, one-off checks) gets the plain non-hysteretic gate.
     var wasShownLastFrame: Bool = false
 
+    /// True when the aircraft reported itself on the ground (taxiing /
+    /// parked). Grounded aircraft used to be DROPPED at `annotate`; since the
+    /// grounded easter egg (2026-07-09) they are annotated into the hidden
+    /// tier instead, so the empty-tap diagnosis can recognize "you pointed at
+    /// a parked plane" and answer with a toast. They must NEVER become
+    /// visible, catchable, or tap-to-revealable: `visibilityTier` pins them
+    /// `.hidden` unconditionally (before any distance/elevation math), which
+    /// keeps them out of the ambient overlay, out of `icaosInZone`
+    /// catchability, and out of the hysteresis shown set — the field-tuned
+    /// visibility curve itself is untouched.
+    var grounded: Bool = false
+
     var id: String { aircraft.icao24 }
 }
 
@@ -99,11 +111,16 @@ extension ObservedAircraft {
     /// the bearing/elevation/slant from the observer.
     ///
     /// Returns nil if:
-    ///   - The aircraft is reported on the ground (taxiing → no label).
     ///   - The last position update is older than `maxPositionAge` —
     ///     stale rows are usually planes that just landed, lost ADS-B
     ///     coverage, or otherwise dropped off radar. They show up as
     ///     "ghost labels" hovering where the plane used to be.
+    ///
+    /// On-ground aircraft are NOT dropped (they used to be): they annotate
+    /// with `grounded = true`, which pins them to the hidden visibility
+    /// tier. Keeping them in the observed set lets the empty-tap diagnosis
+    /// tell "you tapped a parked plane" apart from "nothing there" — the
+    /// grounded easter egg — without ever labeling or catching them.
     ///
     /// Centralized here so the replay analyzer can reuse the exact
     /// same geometry the live path uses.
@@ -113,7 +130,6 @@ extension ObservedAircraft {
         now: Date,
         maxPositionAge: TimeInterval = ObservedAircraft.maxPositionAge
     ) -> ObservedAircraft? {
-        guard !aircraft.onGround else { return nil }
         if let ts = aircraft.positionTimestamp,
            now.timeIntervalSince(ts) > maxPositionAge {
             return nil
@@ -142,7 +158,8 @@ extension ObservedAircraft {
             bearingDeg: bearing,
             elevationDeg: elev,
             groundDistanceMeters: ground,
-            slantDistanceMeters: slant
+            slantDistanceMeters: slant,
+            grounded: aircraft.onGround
         )
     }
 
@@ -202,6 +219,10 @@ extension ObservedAircraft {
     enum VisibilityTier: Equatable, Sendable { case full, faint, hidden }
 
     var visibilityTier: VisibilityTier {
+        // Grounded aircraft are hidden UNCONDITIONALLY — before any
+        // elevation/distance math, so no curve tuning (and no hysteresis
+        // stamp) can ever surface a parked plane. See `grounded`.
+        guard !grounded else { return .hidden }
         guard elevationDeg > Self.minVisibleElevationDeg else { return .hidden }
         let h = wasShownLastFrame ? Self.visibilityHysteresisFactor : 1.0
         let fullCap = visibilityCapMeters * h
@@ -655,8 +676,10 @@ final class ADSBManager: ObservableObject {
         var diag = VisibilityDiagnostic()
         diag.fetched = rawAircraft.count
 
-        // onGround + stale are dropped inside annotate(); re-derive their
-        // counts here from the raw set so the funnel adds up.
+        // stale is dropped inside annotate(); onGround now annotates into
+        // the hidden tier (grounded easter egg) but still counts here as its
+        // own funnel stage — grounded planes are never candidates for the
+        // overlay, so the belowElevation/tooFar columns below skip them.
         for ac in rawAircraft {
             if ac.onGround { diag.onGround += 1; continue }
             if let ts = ac.positionTimestamp, now.timeIntervalSince(ts) > maxAge {
@@ -667,7 +690,7 @@ final class ADSBManager: ObservableObject {
             }
         }
 
-        for obs in annotated {
+        for obs in annotated where !obs.grounded {
             let belowElev = obs.elevationDeg <= ObservedAircraft.minVisibleElevationDeg
             let tooFar = obs.slantDistanceMeters >= obs.visibilityCapMeters
             if belowElev { diag.belowElevation += 1 }

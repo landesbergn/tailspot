@@ -177,6 +177,12 @@ nonisolated struct TrophyProgressInputs: Sendable {
     let weekendDaysHit: Int         // distinct weekend days caught on (0–2)
     let hadDawnCatch: Bool          // a catch in the 4–7 AM window
     let hadConsecutiveSameOperator: Bool  // two time-adjacent catches, same airline
+    // Metrics added with the grounded easter egg (2026-07-09). The first
+    // EVENT-based input: no `Catch` row exists (tapping a parked plane
+    // rightly creates none), so it derives from `TrophyEventStore`, not the
+    // Hangar. Defaulted in the initializer — the established zero-churn
+    // pattern for existing call sites.
+    let triedGroundedCatch: Bool    // ever tapped a parked (on-ground) plane
 
     init(
         totalCatches: Int,
@@ -212,7 +218,8 @@ nonisolated struct TrophyProgressInputs: Sendable {
         distinctTypes: Int = 0,
         weekendDaysHit: Int = 0,
         hadDawnCatch: Bool = false,
-        hadConsecutiveSameOperator: Bool = false
+        hadConsecutiveSameOperator: Bool = false,
+        triedGroundedCatch: Bool = false
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -248,6 +255,7 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.weekendDaysHit = weekendDaysHit
         self.hadDawnCatch = hadDawnCatch
         self.hadConsecutiveSameOperator = hadConsecutiveSameOperator
+        self.triedGroundedCatch = triedGroundedCatch
     }
 
     static let zero = TrophyProgressInputs(
@@ -465,12 +473,25 @@ nonisolated enum Trophies {
         Achievement(id: "doubleheader", title: "Doubleheader", summary: "Two of the same airline in a row",
                     iconName: "twin", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.hadConsecutiveSameOperator ? 1 : 0 }),
+        // The grounded easter egg (wishlist #9): tapping a parked plane
+        // creates no Catch row (correctly), so this derives from the
+        // event-based `triedGroundedCatch` input, not the Hangar.
+        Achievement(id: "groundstop", title: "Ground Stop", summary: "Tried to catch a parked plane",
+                    iconName: "approach", tiers: [.init(tier: .gold, at: 1)], secret: true,
+                    progress: { $0.triedGroundedCatch ? 1 : 0 }),
     ]
 
     // MARK: - Evaluation
 
-    /// Compute the input totals from a flat list of catches.
-    static func inputs(from catches: [Catch]) -> TrophyProgressInputs {
+    /// Compute the input totals from a flat list of catches, plus the
+    /// event-based inputs from `events` (defaulted to the standard-defaults
+    /// store so the existing call sites — Profile, Hangar trophies, unlock
+    /// center — pick up event badges with zero churn; tests inject a
+    /// suite-scoped store).
+    static func inputs(
+        from catches: [Catch],
+        events: TrophyEventStore = TrophyEventStore()
+    ) -> TrophyProgressInputs {
         var unique = Set<String>()
         var rarePlusUnique = Set<String>()
         var operators = Set<String>()
@@ -600,7 +621,8 @@ nonisolated enum Trophies {
             distinctTypes: types.count,
             weekendDaysHit: weekendDays.count,
             hadDawnCatch: hadDawn,
-            hadConsecutiveSameOperator: consecutiveOp
+            hadConsecutiveSameOperator: consecutiveOp,
+            triedGroundedCatch: events.hasOccurred(.groundedCatchAttempt)
         )
     }
 

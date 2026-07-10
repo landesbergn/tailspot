@@ -34,13 +34,18 @@ final class TrophyUnlockCenter: ObservableObject {
 
     private let ledger: UserDefaultsTrophyLedger
     private let roster: [Achievement]
+    /// Event-based trophy inputs (e.g. the grounded easter egg's
+    /// `triedGroundedCatch`) — injectable so tests stay suite-isolated.
+    private let events: TrophyEventStore
 
     init(
         ledger: UserDefaultsTrophyLedger = UserDefaultsTrophyLedger(),
-        roster: [Achievement] = Trophies.roster
+        roster: [Achievement] = Trophies.roster,
+        events: TrophyEventStore = TrophyEventStore()
     ) {
         self.ledger = ledger
         self.roster = roster
+        self.events = events
     }
 
     var head: TrophyUnlockEvent? { pendingEvents.first }
@@ -54,7 +59,7 @@ final class TrophyUnlockCenter: ObservableObject {
     /// runs against an unseeded ledger. Callers should fire this once at app
     /// launch so the seed lands before the user's first crossing.
     func enqueueNewUnlocks(from catches: [Catch]) {
-        let inputs = Trophies.inputs(from: catches)
+        let inputs = Trophies.inputs(from: catches, events: events)
         guard ledger.isSeeded else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             queueRecapIfNeeded(inputs: inputs)

@@ -117,7 +117,12 @@ struct ADSBManagerTests {
 
     // MARK: - Filtering
 
-    @Test func filtersOutOnGroundAircraft() async {
+    /// On-ground aircraft are ANNOTATED (kept in `observed`) but pinned to
+    /// the hidden tier with `grounded = true` — the grounded easter egg's
+    /// data seam. Before 2026-07-09 they were dropped at annotate; keeping
+    /// them lets the empty-tap diagnosis say "that one's parked" while the
+    /// visibility gate still guarantees they never label.
+    @Test func onGroundAircraftAnnotatedIntoHiddenTier() async {
         let onGround = Self.aircraftAt(
             bearing: 90, distanceMeters: 5_000, altitudeMeters: 0,
             icao: "taxi", onGround: true
@@ -131,8 +136,14 @@ struct ADSBManagerTests {
 
         await manager.refresh(around: Self.observer())
 
-        #expect(manager.observed.count == 1)
-        #expect(manager.observed[0].aircraft.icao24 == "fly")
+        #expect(manager.observed.count == 2)
+        let taxi = manager.observed.first { $0.aircraft.icao24 == "taxi" }
+        let fly = manager.observed.first { $0.aircraft.icao24 == "fly" }
+        #expect(taxi?.grounded == true)
+        #expect(taxi?.visibilityTier == .hidden)
+        #expect(taxi?.isLikelyVisibleToObserver == false)
+        #expect(fly?.grounded == false)
+        #expect(fly?.isLikelyVisibleToObserver == true)
     }
 
     // MARK: - Ordering

@@ -161,7 +161,7 @@ struct ReplayAnalyzerTests {
         #expect(r.lockState == .idle)
     }
 
-    @Test func onGroundAircraftIsDroppedEntirely() {
+    @Test func onGroundAircraftIsAnnotatedButNeverVisible() {
         let grounded = ReplayEvent.AircraftSnapshot(
             icao24: "taxi01", callsign: nil,
             originCountry: "United States",
@@ -174,9 +174,11 @@ struct ReplayAnalyzerTests {
             .tick(tick(at: 0, from: t0, sensor: berkeleySensor(),
                        aircraft: [grounded]))
         ])
-        // annotate() returns nil for on-ground; the analyzer never
-        // sees an ObservedAircraft, so its summary row is also dropped.
-        #expect(report.ticks[0].aircraft.isEmpty)
+        // Grounded easter egg (2026-07-09): annotate() no longer drops
+        // on-ground aircraft — they carry `grounded = true` and pin to the
+        // hidden tier, so the summary row exists but is never visible.
+        #expect(report.ticks[0].aircraft.count == 1)
+        #expect(report.ticks[0].aircraft[0].isVisible == false)
         #expect(report.ticks[0].visibleCount == 0)
     }
 
