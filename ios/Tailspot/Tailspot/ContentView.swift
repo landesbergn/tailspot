@@ -178,16 +178,9 @@ struct ContentView: View {
     /// captures N≥2 planes from a single frame. Non-nil → full-screen
     /// `MultiCatchReveal` sheet is presented.
     @State private var pendingMultiReveal: PendingMultiReveal?
-    /// Carries the pre-reveal BONUS ROUND (game-layer PR3) when the scheduler
-    /// fires on a fresh single catch. Non-nil → the guess cover is up; on
-    /// resolve it stashes `pendingGuessReveal` and clears, and the guess
-    /// cover's `onDismiss` presents the reveal (a new cover can't present while
-    /// the guess one is still on screen).
-    @State private var pendingGuess: PendingGuess?
-    /// The reveal payload held across the guess cover's dismissal.
-    @State private var pendingGuessReveal: GuessRevealPayload?
-    /// When the current guess cover appeared — for the `_answered`/`_skipped`
-    /// elapsed-ms telemetry.
+    /// When the in-card BONUS ROUND's chips popped — the deliberation clock for
+    /// the `_answered`/`_skipped` elapsed-ms telemetry. Stamped by the reveal's
+    /// `onGuessShown` (chips-pop) callback, read by `onGuessResolved`.
     @State private var guessShownAt: Date?
     /// Bonus-round cadence + kind decider (game-layer PR3). Owns the persistent
     /// UserDefaults counters; one instance for the app's life. `@State` holds
@@ -684,15 +677,47 @@ struct ContentView: View {
                 onDismiss: {
                     pendingReveal = nil
                     captureInFlight = false
+                    guessShownAt = nil
                     presentSuspectReviewIfNeeded()
                 },
                 onViewInHangar: {
                     pendingReveal = nil
                     captureInFlight = false
+                    guessShownAt = nil
                     showHangar = true
                     presentSuspectReviewIfNeeded()
                 },
-                isDuplicate: reveal.isDuplicate
+                isDuplicate: reveal.isDuplicate,
+                // In-card BONUS ROUND (game-layer PR3; in-card per Noah
+                // 2026-07-10). The round is threaded INTO the reveal — no
+                // separate cover. Telemetry fires here: `shown` when the chips
+                // pop, `answered`/`skipped` on resolve; the ✦ Catch simulator
+                // keeps its `isSimulated` mute (no telemetry, transient row).
+                guess: reveal.guess,
+                onGuessShown: reveal.guess == nil ? nil : {
+                    guessShownAt = Date()
+                    if !reveal.isSimulated {
+                        CatchTelemetry.fireGuessRoundShown(kind: .route)
+                    }
+                },
+                onGuessResolved: reveal.guess == nil ? nil : { answeredValue, correct in
+                    let elapsedMs = guessShownAt.map { Int(Date().timeIntervalSince($0) * 1000) }
+                    // Freeze the outcome onto the row (like serverUuid — after
+                    // the row is born). A SKIP / dismiss (nil value) freezes
+                    // nothing, leaving all three guess fields nil.
+                    if let answeredValue, let row = reveal.row {
+                        row.guessKind = GuessKind.route.rawValue
+                        row.guessValue = answeredValue
+                        row.guessCorrect = correct
+                        if !reveal.isSimulated {
+                            try? modelContext.save()
+                            CatchTelemetry.fireGuessRoundAnswered(
+                                kind: .route, correct: correct, elapsedMs: elapsedMs)
+                        }
+                    } else if !reveal.isSimulated {
+                        CatchTelemetry.fireGuessRoundSkipped(kind: .route, elapsedMs: elapsedMs)
+                    }
+                }
             )
             .presentationBackground(.clear)
         }
@@ -718,69 +743,6 @@ struct ContentView: View {
                 }
             )
             .presentationBackground(.clear)
-        }
-        // Pre-reveal BONUS ROUND (game-layer PR3). Presented full-screen over
-        // the camera, then hands off to the reveal. The reveal is fired from
-        // this cover's `onDismiss` (fires AFTER the guess is fully off screen)
-        // because two fullScreenCovers can't be presented at once — presenting
-        // the reveal synchronously with dismissing the guess would drop it.
-        .fullScreenCover(item: $pendingGuess, onDismiss: {
-            guard let payload = pendingGuessReveal else {
-                // Dismissed without a resolved answer (shouldn't happen — the
-                // cover has no interactive dismiss) — don't soft-lock the button.
-                captureInFlight = false
-                return
-            }
-            pendingGuessReveal = nil
-            guessShownAt = nil
-            // `captureInFlight` stays true across the handoff (set at defer time
-            // in runCatch); the reveal's own dismiss callbacks clear it.
-            presentReveal(
-                newCatches: payload.newCatches,
-                duplicates: payload.duplicates,
-                visibleByIcao: payload.visibleByIcao
-            )
-        }) { guess in
-            GuessRoundView(
-                question: guess.question,
-                photoURL: guess.photoURL,
-                photoFocus: guess.photoFocus,
-                onComplete: { answeredValue, correct in
-                    let elapsedMs = guessShownAt.map {
-                        Int(Date().timeIntervalSince($0) * 1000)
-                    }
-                    // Freeze the outcome onto the row (like serverUuid — after
-                    // the row is born). A SKIP (nil value) leaves all three nil.
-                    if let answeredValue {
-                        guess.row.guessKind = guess.kind.rawValue
-                        guess.row.guessValue = answeredValue
-                        guess.row.guessCorrect = correct
-                        if !guess.isSimulated {
-                            try? modelContext.save()
-                            CatchTelemetry.fireGuessRoundAnswered(
-                                kind: guess.kind, correct: correct, elapsedMs: elapsedMs)
-                        }
-                    } else if !guess.isSimulated {
-                        CatchTelemetry.fireGuessRoundSkipped(
-                            kind: guess.kind, elapsedMs: elapsedMs)
-                    }
-                    // Stash the reveal payload, then dismiss the guess cover;
-                    // its onDismiss presents the reveal.
-                    pendingGuessReveal = GuessRevealPayload(
-                        newCatches: guess.newCatches,
-                        duplicates: guess.duplicates,
-                        visibleByIcao: guess.visibleByIcao
-                    )
-                    pendingGuess = nil
-                }
-            )
-            .presentationBackground(.clear)
-            .onAppear {
-                guessShownAt = Date()
-                if !guess.isSimulated {
-                    CatchTelemetry.fireGuessRoundShown(kind: guess.kind)
-                }
-            }
         }
         // Post-catch confirm: one Keep/Discard question for the suspected
         // rows of the catch that just revealed. Keep vouches (un-quarantines
@@ -884,14 +846,27 @@ struct ContentView: View {
     /// even if SwiftData state churns underneath.
     ///
     /// `isDuplicate` is set by `performCatch(mode:)` when the icao24
-    /// was already in the user's Hangar — T10 will render the
-    /// "ALREADY CAUGHT" stamp + quieter chrome based on this flag.
-    /// T8 just threads it through.
-    struct PendingReveal: Identifiable, Equatable {
+    /// was already in the user's Hangar → the "ALREADY CAUGHT" stamp +
+    /// quieter chrome.
+    ///
+    /// `guess`/`row`/`isSimulated` carry the in-card BONUS ROUND (game-layer
+    /// PR3; in-card per Noah 2026-07-10): when a fresh single catch fires a
+    /// round, the reveal is presented immediately WITH the question and the
+    /// fresh `row` to freeze the answer onto. Not `Equatable` (holds a SwiftData
+    /// row); `Identifiable` is all `.fullScreenCover(item:)` needs.
+    struct PendingReveal: Identifiable {
         let id = UUID()
         let plane: CardPlane
         let entryNumber: Int
         var isDuplicate: Bool = false
+        /// The in-card bonus-round question, or nil for a plain reveal.
+        var guess: GuessRoundQuestion? = nil
+        /// The fresh row the answer freezes onto (guessKind/Value/Correct). nil
+        /// for a plain reveal or the ✦ Catch simulation's transient row.
+        var row: Catch? = nil
+        /// ✦ Catch simulation — the in-card round plays, but no telemetry and no
+        /// persistence (transient row).
+        var isSimulated: Bool = false
     }
 
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
@@ -904,34 +879,6 @@ struct ContentView: View {
         let lastEntryNumber: Int
     }
 
-    /// Everything the pre-reveal BONUS ROUND (game-layer PR3) needs: the built
-    /// question + kind for the guess screen, the hero photo, the single fresh
-    /// `Catch` row to freeze the answer onto, and the reveal payload to hand
-    /// off once the guess resolves. Not `Equatable` (it holds SwiftData rows +
-    /// live observations); `Identifiable` is all `.fullScreenCover(item:)` needs.
-    struct PendingGuess: Identifiable {
-        let id = UUID()
-        let question: GuessRoundQuestion
-        let kind: GuessKind
-        let photoURL: URL?
-        let photoFocus: CGPoint?
-        /// The fresh row the answer is frozen onto (guessKind/Value/Correct).
-        let row: Catch
-        // The stashed `presentReveal` payload, replayed after the guess.
-        let newCatches: [Catch]
-        let duplicates: [String]
-        let visibleByIcao: [String: ObservedAircraft]
-        /// DEBUG ✦ Catch simulation: full guess→reveal flow, but no
-        /// telemetry and no persistence (the row is transient).
-        var isSimulated: Bool = false
-    }
-
-    /// The `presentReveal` payload carried across the guess cover's dismissal.
-    struct GuessRevealPayload {
-        let newCatches: [Catch]
-        let duplicates: [String]
-        let visibleByIcao: [String: ObservedAircraft]
-    }
 
     // MARK: - Top-center overlays
 
@@ -1623,13 +1570,14 @@ struct ContentView: View {
             }
             suspectAwaitingReview = suspected
 
-            // Pre-reveal BONUS ROUND (game-layer PR3). Only a fresh SINGLE catch
-            // is eligible — a duplicate awards no points to bonus and a
-            // multi-catch owns its own MultiCatchReveal, so those paths are
-            // untouched. The scheduler (cadence + kind) runs ONLY here, so its
-            // UserDefaults counters advance on exactly the catches that could
-            // host a round. When it fires AND an honest question builds, defer
-            // the reveal behind the guess cover; otherwise reveal as before.
+            // In-card BONUS ROUND (game-layer PR3; in-card per Noah 2026-07-10).
+            // Only a fresh SINGLE catch is eligible — a duplicate awards no
+            // points to bonus and a multi-catch owns its own MultiCatchReveal,
+            // so those paths are untouched. The scheduler (cadence + kind) runs
+            // ONLY here, so its UserDefaults counters advance on exactly the
+            // catches that could host a round. When it fires AND an honest
+            // question builds, the reveal is presented immediately WITH the
+            // question threaded in (no separate cover); otherwise, plain reveal.
             let firstFresh = newCatches.first
             let guessInputs = GuessRoundPlanner.inputs(
                 freshCount: newCatches.count,
@@ -1638,6 +1586,7 @@ struct ContentView: View {
                 originIcao: firstFresh?.originIcao,
                 destIcao: firstFresh?.destIcao
             )
+            var guessPayload: (question: GuessRoundQuestion, row: Catch)?
             if guessInputs.isFreshSingle, let row = firstFresh {
                 let kind = guessScheduler.decideForRecordedCatch(
                     isFreshSingle: true,
@@ -1645,26 +1594,13 @@ struct ContentView: View {
                     isSuspect: guessInputs.isSuspect,
                     routeAvailable: guessInputs.routeAvailable
                 )
-                if let kind, let question = buildGuessQuestion(row: row) {
-                    pendingGuess = PendingGuess(
-                        question: question,
-                        kind: kind,
-                        photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
-                        photoFocus: row.photoFocus,
-                        row: row,
-                        newCatches: newCatches,
-                        duplicates: duplicates,
-                        visibleByIcao: visibleByIcao
-                    )
-                    // Keep the in-flight latch alive across guess→reveal: the
-                    // guess cover is up, so the defer backstop must not clear it.
-                    revealPresented = true
-                    return
+                if kind != nil, let question = buildGuessQuestion(row: row) {
+                    guessPayload = (question, row)
                 }
             }
 
             presentReveal(newCatches: newCatches, duplicates: duplicates,
-                          visibleByIcao: visibleByIcao)
+                          visibleByIcao: visibleByIcao, guess: guessPayload)
             revealPresented = (pendingReveal != nil || pendingMultiReveal != nil)
         }
     }
@@ -1748,29 +1684,20 @@ struct ContentView: View {
             originIcao: s.origin, destIcao: s.dest,
             originName: s.originName, destName: s.destName
         )
-        // Route the simulation through the REAL guess→reveal seam whenever
-        // the preset carries a route and a question builds — the debug button
-        // is how the bonus-round pacing gets felt without field-catching.
-        // No telemetry, no persistence (isSimulated + transient row). The
-        // route-less presets (C172) still preview the plain reveal.
-        if let question = buildGuessQuestion(row: c) {
-            pendingGuess = PendingGuess(
-                question: question,
-                kind: .route,
-                photoURL: nil,
-                photoFocus: nil,
-                row: c,
-                newCatches: [c],
-                duplicates: [],
-                visibleByIcao: [:],
-                isSimulated: true
-            )
-            return
-        }
+        // Route the simulation through the REAL in-card guess seam whenever the
+        // preset carries a route and a question builds — the debug button is how
+        // the bonus-round pacing gets felt without field-catching. No telemetry,
+        // no persistence (isSimulated + transient row). The route-less presets
+        // (C172, and the B-52 with a nil destination + uncurated origin) still
+        // preview the plain reveal.
+        let question = buildGuessQuestion(row: c)
         pendingReveal = PendingReveal(
             plane: cardPlane(from: c, observed: nil),
             entryNumber: Set(catches.map(\.icao24)).count + 1,
-            isDuplicate: false
+            isDuplicate: false,
+            guess: question,
+            row: question != nil ? c : nil,
+            isSimulated: true
         )
     }
     #endif
@@ -1778,7 +1705,8 @@ struct ContentView: View {
     private func presentReveal(
         newCatches: [Catch],
         duplicates: [String],
-        visibleByIcao: [String: ObservedAircraft]
+        visibleByIcao: [String: ObservedAircraft],
+        guess: (question: GuessRoundQuestion, row: Catch)? = nil
     ) {
         let uniqueIcaoCount = Set(catches.map(\.icao24)).count
         let totalCount = newCatches.count + duplicates.count
@@ -1815,10 +1743,15 @@ struct ContentView: View {
         if let first = newCatches.first {
             let observed = visibleByIcao[first.icao24]
             let plane = cardPlane(from: first, observed: observed)
+            // A bonus round only ever rides a fresh single catch (the scheduler
+            // gate guarantees it, so `guess.row` is `first`); it's nil on every
+            // other path.
             pendingReveal = PendingReveal(
                 plane: plane,
                 entryNumber: uniqueIcaoCount,
-                isDuplicate: false
+                isDuplicate: false,
+                guess: guess?.question,
+                row: guess?.row
             )
             return
         }

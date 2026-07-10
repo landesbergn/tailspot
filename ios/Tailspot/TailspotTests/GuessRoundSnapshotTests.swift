@@ -2,12 +2,13 @@
 //  GuessRoundSnapshotTests.swift
 //  TailspotTests
 //
-//  Visual-pass harness for the pre-reveal ROUTE BONUS ROUND (game-layer PR3;
-//  route-only per Noah 2026-07-09), mirroring RevealSnapshotTests. Renders the
-//  route-question screen and a reveal WITH a "10% ROUTE BONUS" ledger line to
-//  PNGs via ImageRenderer so the layout can be eyeballed off-device. NOT an
-//  assertion test: it writes images to /private/tmp/tailspot_snaps and passes.
-//  Review the PNGs after running.
+//  Visual-pass harness for the IN-CARD ROUTE BONUS ROUND (game-layer PR3;
+//  in-card redesign per Noah 2026-07-10). The round now plays ON the reveal
+//  card (`CatchRevealView`), so this renders the three beats — chips popped +
+//  masked route, correct-answer settled (with the "10% ROUTE BONUS" ledger
+//  line + rolled-up TOTAL), wrong-answer settled (route revealed, no line) — as
+//  static frames via `_snapshotScreen(guessState:)`. NOT an assertion test: it
+//  writes PNGs to /private/tmp/tailspot_snaps and passes. Review the PNGs.
 //
 
 #if DEBUG
@@ -25,41 +26,67 @@ struct GuessRoundSnapshotTests {
     private let observerLat = 37.87
     private let observerLon = -122.27
 
-    @Test func renderGuessScreensAndBonusReveal() {
+    @Test func renderInCardBonusRoundBeats() {
         let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let screen = CGSize(width: 393, height: 852)
         let cardWidth = min(screen.width - 28, 420)
 
-        // 1 — route question ("Where's it headed?" · HKG among 4 chips).
-        if let route = routeQuestion() {
-            let view = GuessRoundView(
-                question: GuessRoundQuestion(route: route), photoURL: nil, photoFocus: nil,
-                onComplete: { _, _ in }
-            )._snapshotScreen(width: cardWidth, size: screen)
-            write(view, name: "guess_route_question", to: dir)
+        guard let route = routeQuestion() else {
+            Issue.record("route question fixture failed to build")
+            return
         }
-
-        // 2 — reveal WITH a correct route-guess bonus line (rare wide,
-        // first-of-type + a correct ROUTE call → both bonus lines + the
-        // count-up TOTAL that includes them; the guess line reads
-        // "10% ROUTE BONUS +N").
-        let base = Rarity.rare.basePoints
+        let question = GuessRoundQuestion(route: route)
+        // The catch under the round — rare + first-of-type so the ledger is rich
+        // (base + FIRST OF TYPE + the route bonus). guessKind is deliberately nil:
+        // the reveal drives the bonus live, exactly as at catch time.
         let plane = CardPlane(
             callsign: "UAL248", model: "Boeing 787-9", carrier: "United Airlines",
             rarity: .rare, type: .wide,
             altText: "37,004 ft", speedText: "478 kt", distText: "12.0 km",
-            originIcao: "KSFO", destIcao: "RJTT",
-            originName: "San Francisco", destName: "Tokyo Narita",
-            isFirstOfType: true,
-            guessKind: .route,
-            guessBonusPoints: ScoringBonuses.guessBonus(base: base, kind: .route)
+            originIcao: "SFO", destIcao: "HKG",
+            originName: "San Francisco", destName: "Hong Kong",
+            isFirstOfType: true
         )
-        let reveal = CatchRevealView(
-            plane: plane, entryNumber: 62, onDismiss: {}, onViewInHangar: {}
-        )._snapshotScreen(width: cardWidth, size: screen)
-        write(reveal, name: "reveal_with_guess_bonus", to: dir)
+
+        func reveal() -> CatchRevealView {
+            CatchRevealView(plane: plane, entryNumber: 62, onDismiss: {}, onViewInHangar: {},
+                            guess: question)
+        }
+
+        // (a) — chips popped in, route masked, TOTAL at the pre-bonus value.
+        let popped = CatchRevealView.GuessSnapshotState(
+            render: .init(question: question, resolution: nil, chipsInLayout: true, popClock: 1),
+            bt: 0
+        )
+        write(reveal()._snapshotScreen(width: cardWidth, size: screen, guessState: popped),
+              name: "guess_chips_popped", to: dir)
+
+        // (b) — correct answer settled: chips collapsed, real route, "10% ROUTE
+        // BONUS +N" in the ledger, TOTAL rolled up to include it (bt = 1).
+        let correct = CatchRevealView.GuessSnapshotState(
+            render: .init(
+                question: question,
+                resolution: .init(answeredValue: question.correctValue, correct: true),
+                chipsInLayout: false, popClock: 1),
+            bt: 1
+        )
+        write(reveal()._snapshotScreen(width: cardWidth, size: screen, guessState: correct),
+              name: "guess_correct_settled", to: dir)
+
+        // (c) — wrong answer settled: chips collapsed, real route revealed, NO
+        // bonus line, TOTAL at the pre-bonus value.
+        let wrongValue = question.options.first { $0.value != question.correctValue }?.value ?? ""
+        let wrong = CatchRevealView.GuessSnapshotState(
+            render: .init(
+                question: question,
+                resolution: .init(answeredValue: wrongValue, correct: false),
+                chipsInLayout: false, popClock: 1),
+            bt: 0
+        )
+        write(reveal()._snapshotScreen(width: cardWidth, size: screen, guessState: wrong),
+              name: "guess_wrong_settled", to: dir)
     }
 
     // MARK: - Fixtures

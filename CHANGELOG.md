@@ -5,6 +5,63 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-10 — Guess round, redesigned IN-CARD on the reveal (game-layer PR3) — branch `feat/guess-round-ui`
+
+Noah's 2026-07-10 direction reshaped the bonus round: **supersedes the separate
+pre-reveal "own screen, guess blind" design** (the 2026-07-09 `GuessRoundView`
+cover, itself descended from the 2026-06-29 economy mock). The round now plays
+**on the reveal card itself** — "more like the catch card: reveal the airline +
+make/model, then pop up an extra guessing opportunity for bonus points, and the
+answer resolves as correct/incorrect on the card." One fluid surface, no cover
+handoff. Four beats, all on `CatchRevealView`:
+
+1. **Normal reveal first.** The card runs its existing settle exactly as today
+   (split-flap make/model, tier line, ALT/SPD, count-up ledger) — never delayed.
+   The ROUTE slot renders **masked** from the moment it fades in (a gold
+   `BONUS ROUND · +10%` eyebrow + the cyan-mono `Where's it headed?` /
+   `Where's it coming from?` prompt keyed off `RouteQuestion.endpoint`), so the
+   real route is never spoiled before the guess.
+2. **The round pops.** ~0.2 s after the reveal settles, the four airport chips
+   spring in below the route section (staggered `easeOutBack` scale+fade;
+   reduced-motion → a plain fade) with a quiet SKIP. The photo hero shrinks while
+   the chips are up so the whole round + ledger clears the safe area, restoring to
+   full height on collapse. The ledger shows base (+ FIRST OF TYPE) and the TOTAL
+   settles to the **pre-bonus** value.
+3. **Resolve in place.** Tapping a chip locks the set: correct → the chip flashes
+   green + `.sensoryFeedback(.success)`; wrong → the chosen chip flashes red, the
+   right chip highlights green, `.sensoryFeedback(.error)`. Simultaneously the
+   masked panel **crossfades to the real route** (codes + city names, the normal
+   layout). On a correct call a gold **`10% ROUTE BONUS +N`** row animates into
+   the ledger and the TOTAL **counts up** to the new total (a second clock, `bt`,
+   reusing the reveal's count-up mechanism). No penalty for wrong — no rub-it-in
+   line; the route just settles.
+4. **Settle.** After a beat the chips collapse; the standard settled card remains
+   with the full route (+ bonus line if earned). SKIP / dismiss-mid-chips is a
+   wrong-minus-flash: chips collapse, route reveals, no line, freeze nothing.
+
+- **Threaded into the reveal, not a cover.** `CatchRevealView` gained
+  `guess: GuessRoundQuestion?` + `onGuessShown` / `onGuessResolved(answeredValue:correct:)`.
+  The whole `pendingGuess` / `pendingGuessReveal` / `GuessRevealPayload` cover
+  machinery is **deleted**; `PendingReveal` carries the question + the fresh
+  `Catch` row to freeze onto (+ an `isSimulated` flag). When the scheduler fires
+  in `runCatch`, the reveal is presented **immediately with** the payload — no
+  deferred present, no two-cover race. ContentView's `onGuessResolved` freezes the
+  outcome onto the row (`guessKind`/`guessValue`/`guessCorrect` + `save()`) and
+  fires `guess_round_shown` (chips-pop) / `_answered` / `_skipped` (kind always
+  `route`); the ✦ Catch simulator keeps its `isSimulated` mute (no telemetry, no
+  persistence). Eligibility/cadence unchanged — `GuessRoundPlanner` +
+  `GuessScheduler` still decide; the standalone `GuessRoundView` is gone (its chip
+  styling/logic moved into `CatchRevealView`; `GuessRoundQuestion` +
+  `GuessRoundPlanner` live on in the renamed `GuessRound.swift`). Multi-catch,
+  duplicate, and suspect-review sequencing are untouched (guess resolves before
+  dismiss; the B-52's nil-dest catch never offers a round).
+- **Card stays a pure function of its clocks** (`t`, count-up `bt`, chip
+  stagger `gt`) + an immutable `GuessRender`, so any beat renders as a static
+  frame. Tests: `GuessRoundSnapshotTests` rewritten to the three beats
+  (chips-popped · correct-settled · wrong-settled → `/private/tmp/tailspot_snaps`,
+  visual-pass reviewed); `GuessRoundPlannerTests` + `GuessSchedulerTests` +
+  telemetry-builder tests unchanged; full `TailspotTests` green.
+
 ## 2026-07-09 — Catch card: flight number, plane-centered photo crop + focus backfill — branch `feat/catch-card-centering`
 
 Field feedback (Noah, 2026-07-08): the catch photo doesn't center on the
@@ -49,6 +106,15 @@ targeted detector pass finds it at 15 px / 0.54 conf, so it re-heals.
   snapshot harness. New loader (downsample + orientation) tests.
 
 ## 2026-07-09 — Guess-round UI: the pre-reveal bonus round (game-layer PR3) — branch `feat/guess-round-ui`
+
+> **SUPERSEDED 2026-07-10 (same PR/branch) — the round moved IN-CARD.** The
+> separate pre-reveal `GuessRoundView` cover described below was replaced by the
+> in-card bonus round on `CatchRevealView` (see the 2026-07-10 entry above) per
+> Noah's direction — "more like the catch card." The `pendingGuess` cover
+> machinery, `GuessRoundView`, and the "guess blind before the reveal" flow are
+> gone. The `GuessScheduler` / `GuessOptions` / `GuessRoundPlanner` /
+> `CardPlane` / telemetry / freeze-on-answer pieces below survive; only the
+> presentation changed. The bullets below are retained for history.
 
 Third PR of the game-layer plan (`docs/plans/2026-07-09-001`, §9 #4). The data
 layer landed in PR1 (#115, backend) + PR2 (#118, iOS `GuessScheduler` /
