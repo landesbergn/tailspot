@@ -27,7 +27,20 @@ export function getDb(): Database {
   if (!url || url.trim() === "") {
     throw new Error("DATABASE_URL is not set — required for the production database connection.");
   }
-  sqlClient = postgres(url, { max: 10 });
+  sqlClient = postgres(url, {
+    max: 10,
+    // Recycle connections proactively. postgres.js defaults `idle_timeout` to
+    // null — idle connections are held for the process lifetime — but Fly's
+    // `.flycast` proxy and Postgres itself drop idle TCP connections. Without
+    // this, the next query on a server-closed socket dies with CONNECTION_CLOSED
+    // → a 500 (Sentry BROKEN-DARKNESS-5055-3). Close idle connections at 30s and
+    // hard-recycle every 5 min so we never hand a query a stale socket; the
+    // `withDbRetry` helper covers the residual race. `connect_timeout` fails
+    // fast if the DB is unreachable (default is 30s).
+    idle_timeout: 30,
+    max_lifetime: 60 * 5,
+    connect_timeout: 10,
+  });
   cached = drizzle(sqlClient, { schema });
   return cached;
 }
