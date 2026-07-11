@@ -158,7 +158,9 @@ describe("GET /v1/leaderboard", () => {
     expect(body.entries).toEqual([{ rank: 1, handle: "Named", points: 75, catches: 1 }]);
     // …but `me` reflects the TRUE rank: the ghost (750 pts) outranks Named, so
     // Named is rank 2 overall even though the ghost is hidden from entries.
-    expect(body.me).toEqual({ rank: 2, points: 75 });
+    // (weeklyWins/everToppedAllTime are the PR1 trophy counters — no weeks have
+    // closed with champions here, and the ghost, not Named, is all-time #1.)
+    expect(body.me).toEqual({ rank: 2, points: 75, weeklyWins: 0, everToppedAllTime: false });
   });
 
   it("hides handle-bearing devices with zero catches (drive-by onboarding claims)", async () => {
@@ -185,7 +187,14 @@ describe("GET /v1/leaderboard", () => {
       url: "/v1/leaderboard",
       headers: { authorization: `Bearer ${anon}` },
     });
-    expect(withToken.json().me).toEqual({ rank: 1, points: 15 });
+    // everToppedAllTime is true: this all-time request just observed anon at
+    // #1 and recorded it in the topper ledger before composing `me`.
+    expect(withToken.json().me).toEqual({
+      rank: 1,
+      points: 15,
+      weeklyWins: 0,
+      everToppedAllTime: true,
+    });
     // The anon device is NOT in entries (no handle).
     expect(withToken.json().entries).toEqual([]);
 
