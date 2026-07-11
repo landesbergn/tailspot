@@ -43,6 +43,10 @@ struct ProfileScreen: View {
     /// local Hangar total + "—" until the first fetch lands.
     @AppStorage("tailspot.standing.points") private var cachedServerPoints: Int = -1
     @AppStorage("tailspot.standing.rank") private var cachedServerRank: Int = 0
+    /// Weekly-champion crowns (dynamic-leaderboards L6), cached like the
+    /// standing so the laurel renders offline. 0 = none/never fetched — the
+    /// row simply doesn't render, so no sentinel dance is needed.
+    @AppStorage("tailspot.standing.weeklyWins") private var cachedWeeklyWins: Int = 0
     private let accountClient = TailspotAccountClient()
 
     var body: some View {
@@ -72,6 +76,9 @@ struct ProfileScreen: View {
                 GlassEffectContainer {
                     VStack(spacing: 16) {
                         identityHeader(stats: stats)
+                        if cachedWeeklyWins >= 1 {
+                            championLaurelRow
+                        }
                         statsStrip(stats: stats, inputs: inputs)
                         if let best = Self.bestCatch(in: catches) {
                             bestCatchCard(best)
@@ -140,10 +147,16 @@ struct ProfileScreen: View {
     /// this is best-effort, never an error state on the profile.
     private func loadStanding() async {
         do {
-            let response = try await accountClient.leaderboard(limit: 1)
+            // Explicit all-time window: the headline is lifetime points/rank
+            // (the windows-aware backend would otherwise pick its own default;
+            // the old backend ignores the param).
+            let response = try await accountClient.leaderboard(window: .all, limit: 1)
             if let me = response.me {
                 cachedServerPoints = me.points
                 cachedServerRank = me.rank
+                if let wins = me.weeklyWins {
+                    cachedWeeklyWins = wins
+                }
             }
         } catch {
             Log.ui.debug("ProfileScreen: standing fetch failed (keeping local fallback): \(error.localizedDescription, privacy: .public)")
@@ -285,6 +298,39 @@ struct ProfileScreen: View {
         .frame(maxWidth: .infinity)
         .padding(18)
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
+    }
+
+    // MARK: - Weekly-champion laurel (dynamic-leaderboards L6)
+
+    /// Quiet gold laurel under the identity header — renders only once the
+    /// device has at least one weekly-champion crown ("WEEKLY CHAMPION",
+    /// "WEEKLY CHAMPION ×3"…). Deliberately a flat non-glass row: a new
+    /// glass surface would have to live inside the GlassEffectContainer
+    /// above (the hit-testing lesson), and a trophy accent doesn't need to
+    /// refract anything.
+    private var championLaurelRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "laurel.leading")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Brand.Color.podiumGold)
+            Text(cachedWeeklyWins > 1
+                 ? "WEEKLY CHAMPION ×\(cachedWeeklyWins)"
+                 : "WEEKLY CHAMPION")
+                .font(Brand.Font.mono(size: 11, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.podiumGold)
+            Image(systemName: "laurel.trailing")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Brand.Color.podiumGold)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Brand.Color.podiumGold.opacity(0.10), in: .rect(cornerRadius: Brand.Radius.row))
+        .overlay(
+            RoundedRectangle(cornerRadius: Brand.Radius.row)
+                .strokeBorder(Brand.Color.podiumGold.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Glass treatment
