@@ -268,17 +268,122 @@ nonisolated struct LeaderboardEntry: Decodable, Identifiable {
     var id: String { handle }
 }
 
+/// Time window for GET /v1/leaderboard (dynamic-leaderboards PR2). Raw
+/// values are the wire values for the `window` query param. The pre-windows
+/// backend ignores the param and returns the all-time board — see
+/// `LeaderboardResponse.supportsWindows` for the fail-soft detection.
+nonisolated enum LeaderboardWindow: String, CaseIterable, Identifiable, Sendable {
+    case week, month, all
+
+    var id: String { rawValue }
+
+    /// Segmented-control label (mono ALL-CAPS style).
+    var label: String {
+        switch self {
+        case .week:  return "WEEK"
+        case .month: return "MONTH"
+        case .all:   return "ALL TIME"
+        }
+    }
+}
+
 /// The caller's own standing in GET /v1/leaderboard (`me` key).
+///
+/// `weeklyWins` / `everToppedAllTime` are ADDITIVE keys (dynamic-leaderboards
+/// backend PR1): old payloads simply lack them and `decodeIfPresent` makes
+/// them nil — same old-payload contract as `UploadCatchResponse.firstOfType`.
 nonisolated struct MyStanding: Decodable {
     let rank: Int
     let points: Int
+    /// How many weekly-champion crowns this device has accumulated — feeds
+    /// the Profile laurel ("WEEKLY CHAMPION ×3"). Nil on the old backend.
+    let weeklyWins: Int?
+    /// Whether this device has ever held #1 on the all-time board (fuel for
+    /// the PR3 winner trophies; decoded now so the contract is pinned).
+    let everToppedAllTime: Bool?
+
+    init(rank: Int, points: Int, weeklyWins: Int? = nil, everToppedAllTime: Bool? = nil) {
+        self.rank = rank
+        self.points = points
+        self.weeklyWins = weeklyWins
+        self.everToppedAllTime = everToppedAllTime
+    }
+}
+
+/// One crowned champion from last week (GET /v1/leaderboard `champions`).
+/// The array can carry MULTIPLE entries — a shared crown on a points tie.
+nonisolated struct LeaderboardChampion: Decodable {
+    /// Nil when the champion never claimed a handle → display
+    /// "anonymous spotter", never a bare "@".
+    let handle: String?
+    let points: Int
+    /// ISO calendar date ("2026-06-29") — the Monday the crowned week began.
+    let weekStart: String
+
+    init(handle: String?, points: Int, weekStart: String) {
+        self.handle = handle
+        self.points = points
+        self.weekStart = weekStart
+    }
 }
 
 /// Full leaderboard response.
+///
+/// `window` / `resetsAt` / `champions` are ADDITIVE (dynamic-leaderboards
+/// backend PR1). **Fail-soft rule:** when `window` is absent the backend
+/// predates windows — the tabs hide entirely and the board renders as the
+/// single all-time board it always was.
 nonisolated struct LeaderboardResponse: Decodable {
     let entries: [LeaderboardEntry]
     /// Present when a valid bearer token was sent, even handle-less.
     let me: MyStanding?
+    /// "week" | "month" | "all". Absent on the pre-windows backend.
+    let window: String?
+    /// ISO-8601 instant the current window resets. Null for all-time,
+    /// absent on the old backend. Kept as the raw wire string; use
+    /// `resetsAtDate` for display math.
+    let resetsAt: String?
+    /// Last completed week's champion(s). Semantics are three-valued:
+    /// nil = old backend or a non-week window (no banner at all);
+    /// empty = the week ended with zero catches (the quiet no-champion
+    /// line); one-or-more = crowned (shared crown when > 1).
+    let champions: [LeaderboardChampion]?
+
+    init(entries: [LeaderboardEntry],
+         me: MyStanding?,
+         window: String? = nil,
+         resetsAt: String? = nil,
+         champions: [LeaderboardChampion]? = nil) {
+        self.entries = entries
+        self.me = me
+        self.window = window
+        self.resetsAt = resetsAt
+        self.champions = champions
+    }
+
+    /// The fail-soft signal: the windows-aware backend always echoes
+    /// `window`; the old backend never sends it.
+    var supportsWindows: Bool { window != nil }
+
+    /// `resetsAt` parsed as an instant (fractional seconds per the pinned
+    /// contract, plain ISO-8601 accepted too). Nil when absent/null/unparseable.
+    var resetsAtDate: Date? {
+        guard let resetsAt else { return nil }
+        return Self.fractionalISO8601.date(from: resetsAt)
+            ?? Self.plainISO8601.date(from: resetsAt)
+    }
+
+    // ISO8601DateFormatter is documented thread-safe; shared statics are fine.
+    private static let fractionalISO8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let plainISO8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
 }
 
 // MARK: - Client
@@ -507,13 +612,20 @@ nonisolated struct TailspotAccountClient {
     // MARK: - leaderboard
 
     /// Fetch the global leaderboard. Passes the bearer token when available
-    /// (fills `me`); anonymous if not registered.
-    func leaderboard(limit: Int = 50) async throws -> LeaderboardResponse {
+    /// (fills `me`); anonymous if not registered. `window` scopes the board
+    /// (week/month/all) on the windows-aware backend; the old backend ignores
+    /// the param and returns the all-time board (fail-soft — see
+    /// `LeaderboardResponse.supportsWindows`). Nil sends no param at all.
+    func leaderboard(window: LeaderboardWindow? = nil, limit: Int = 50) async throws -> LeaderboardResponse {
         var comps = URLComponents(
             url: baseURL.appendingPathComponent("v1/leaderboard"),
             resolvingAgainstBaseURL: false
         )
-        comps?.queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if let window {
+            queryItems.append(URLQueryItem(name: "window", value: window.rawValue))
+        }
+        comps?.queryItems = queryItems
         guard let url = comps?.url else { throw AccountError.http(status: -1) }
 
         var request = URLRequest(url: url)
