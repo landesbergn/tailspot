@@ -53,6 +53,212 @@ PLAN §9 #8 updated (drafts done; remaining = hosting, the mask decision, two
 small code PRs, and Noah's App Store Connect steps); §6.6 region question
 closed as worldwide.
 
+## 2026-07-11 — Dynamic leaderboards PR2 — iOS board tabs + champion UI — branch `feat/leaderboard-tabs`
+
+The iOS half of the dynamic-leaderboards feature (PLAN §9 #12), built against
+the pinned backend-PR1 contract (`GET /v1/leaderboard?window=week|month|all`
+adding `window`/`resetsAt`/`champions` + `me.weeklyWins`/`everToppedAllTime`)
+with fixtures — the backend lands in parallel. Winner trophies (Top
+Flight/Dynasty/Chart Topper) are deliberately NOT here — that's PR3, after
+both sides land.
+
+1. **Board tabs.** `LeaderboardScreen` grew a WEEK (default) / MONTH /
+   ALL TIME segmented switcher — the `HangarSegmentedSwitcher` pattern
+   (Liquid Glass capsule track, matched-geometry pill, 40 pt full-segment
+   hits) restyled to the mono readout voice, sitting at the top of the List
+   content (the screen keeps its stock-but-branded system nav — utility
+   screen, per the Brand chrome rule). Per-window responses are cached in
+   `@State` for the screen's appearance: flipping back to a tab shows its
+   last board instantly while `.task(id: selectedWindow)` re-fetches and
+   swaps data in silently (the ProfileScreen cached-standing pattern; no
+   spinner churn), and a failed silent refresh keeps the stale board.
+2. **FAIL-SOFT against the old backend.** The pre-windows backend never
+   sends the `window` key → `LeaderboardResponse.supportsWindows` is false,
+   the tabs hide entirely, and the screen renders today's all-time board
+   unchanged (the old backend ignores the `window` query param). All new
+   DTO fields are optional decodes, pinned by old-payload regression tests
+   (the PR #65 pattern).
+3. **Reset countdown.** "RESETS MONDAY · 2D 14H LEFT" (week) / "RESETS
+   AUG 1" (month), mono caption under the switcher, computed by the pure
+   `LeaderboardCountdown` helpers in the DEVICE's locale + timezone (a
+   Monday-00:00-UTC reset honestly reads SUNDAY in California; never
+   "UTC"). Recomputed per render — no live ticking timer. Unit tests cover
+   day/hour floors, under-1H, past-due clamp, timezone weekday shift, and
+   month/year wrap.
+4. **Champion banner** (week tab only): gold-accented row above the podium —
+   laurel glyphs, "LAST WEEK'S CHAMPION" eyebrow, "@handle · 840 PTS".
+   Shared crowns render side by side ("@a & @b"), 3+ collapse to
+   "@a, @b +1 more", a null handle displays as "anonymous spotter", and an
+   empty champions array (the board reset with nobody on it) shows the
+   quiet "NO CHAMPION CROWNED — The sky was quiet last week." line. Copy
+   rules live in the pure `ChampionBanner` helper (`LeaderboardWindows.swift`).
+5. **Your standing, per window.** The standing section header names the race
+   ("YOUR STANDING · THIS WEEK" — the week tab's whole point is "you're #2
+   THIS WEEK"); the handle-less local-points hint only renders where it's
+   honest (all-time / old backend — local points are a lifetime number).
+   Fresh empty windows say "No catches this week yet / The sky's wide open."
+6. **Profile laurel (L6).** `ProfileScreen` shows a quiet gold
+   "WEEKLY CHAMPION ×3" laurel row under the identity header once
+   `me.weeklyWins ≥ 1` (no "×1" suffix for a single crown). Cached in
+   `@AppStorage("tailspot.standing.weeklyWins")` so it renders offline;
+   deliberately a flat non-glass row (a new glass surface would have to
+   join the GlassEffectContainer — the hit-testing lesson — and a trophy
+   accent doesn't need to refract). `loadStanding()` now requests
+   `window: .all` explicitly so the headline stays lifetime points/rank.
+7. **Client.** `TailspotAccountClient.leaderboard(window:limit:)` appends
+   the `window` param (nil = no param); new wire types `LeaderboardWindow` /
+   `LeaderboardChampion`; `MyStanding`/`LeaderboardResponse` extended with
+   the optional fields + `resetsAtDate` (fractional + plain ISO-8601).
+8. **Tests + visual pass.** `LeaderboardWindowTests` (decoding new/old/null
+   payloads, fail-soft, countdown math, champion copy 1/2/3+/anon/none) +
+   `LeaderboardWindowSnapshotTests` (window-hosted drawHierarchy renders of
+   all three tabs, four banner variants, fail-soft board, Profile laurel
+   ×1/×3 → `/private/tmp/tailspot_snaps/`, reviewed). Full suite green
+   (955 tests); device build green.
+## 2026-07-11 — Dynamic leaderboards PR1: backend windows + weekly champions — branch `feat/leaderboard-windows`
+
+The backend half of dynamic leaderboards (PLAN §9 #12): `GET /v1/leaderboard`
+grows a `window=week|month|all` param (absent/invalid → `all`, so old clients
+are untouched — the new top-level fields are additive-only), and closed weeks
+get frozen champions. Noah's locked design calls (L1–L6): **calendar** windows
+(not rolling), **UTC** boundaries (Mon 00:00 / 1st 00:00 — no DST), **no winner
+floor** (a 1-catch week still crowns), **shared crowns** on points ties (every
+tied device gets a `weekly_champions` row and a win), **all three trophies**
+(weekly-win count + ever-topped-all-time + last week's champions), **banner +
+laurel** presentation (iOS PR2/PR3).
+
+- **Response additions:** in-window `entries`/`me.rank`/`me.points`;
+  `me.weeklyWins` + `me.everToppedAllTime` (lifetime, on every window);
+  `resetsAt` (next boundary, null on all); `champions` (last CLOSED week's
+  winner(s), week window only — empty array for a zero-catch week, null handle
+  for an anonymous champion).
+- **Decide-on-read, lazy + idempotent** (`CatchStore.ensureWeeksDecided`): the
+  first week-window request after a Monday boundary crowns the previous week —
+  one atomic `INSERT…SELECT` per week with `ON CONFLICT DO NOTHING` (concurrent
+  double-decides are no-ops), backfilling every never-decided week since the
+  earliest catch (zero-catch weeks skipped). Fast path when the last closed
+  week is already decided = one point-read.
+- **All-time topper ledger** (`alltime_toppers`): every code path that computes
+  all-time #1 (`window=all` requests + week-decide) upserts the current #1;
+  first sighting wins, the flag never unsets. Anonymous devices can top/win —
+  they occupy real ranks.
+- **Migration `0007_leaderboard-windows.sql`** (`weekly_champions` composite-PK
+  week_start+device_id; `alltime_toppers`) — **generated, NOT applied to prod:
+  manual `drizzle-kit migrate` (or psql apply + journal insert) required before
+  the next backend deploy** (the standing backend-migration-drift trap).
+- New pure UTC window math in `src/identity/windows.ts` (Monday re-basing,
+  month lengths, year wraps — unit-tested). Windowing lives in the leaderboard
+  aggregates' JOIN condition so the "≥1 catch" entry ticket becomes "≥1
+  in-window catch" and `me` keeps a rank (0 pts) rather than vanishing.
+- Tests: 311 green (13 new route tests in `test/leaderboardWindows.route.test.ts`,
+  window-math units in `test/windows.test.ts`; existing leaderboard suite
+  updated for the additive `me` fields). Biome + tsc clean.
+
+iOS PR2 (window picker + champions banner) is being built against this exact
+contract in parallel; PR3 (trophies) consumes `weeklyWins`/`everToppedAllTime`.
+
+## 2026-07-10 — Polish sweep PR B — the taste calls — branch `polish/taste-calls`
+
+Noah's seven verdicts on the UI-survey taste questions. Four built, three
+recorded as deliberate keeps/rules:
+
+1. **D1 — App locked to dark.** `preferredColorScheme(.dark)` on the root
+   `RootView` in `TailspotApp.swift` — sets the window's style, so onboarding,
+   the main app, sheets/fullScreenCovers, alerts/confirmationDialogs, and the
+   share sheet all render dark regardless of the device setting. PR A's
+   light-mode compensations (branded List chrome etc.) stay as
+   belt-and-suspenders.
+2. **D2 — Radius token scale.** New `Brand.Radius` (chip 6 / row 12 / card 16 /
+   hero 26). **69 cornerRadius literals snapped** (44 value changes — 7→6, 8→12,
+   10→12, 11→12, 14→16, 18→16, 20→16 — and 25 same-value re-routes). Judgment
+   exceptions left literal: `CatchCardView`'s per-size dims table (12/14/16 —
+   radius proportional to card size), the reveal ledger's `11 * scale`, tiny
+   3–4 pt accents (rarity bars, `BadgeViews`, AR label chips, reveal flap — 6
+   turns them into pills), and the AR HUD brackets. Capsules stayed capsules.
+3. **D3 — One type rule.** `Brand.Font.display` (26 pt bold system) is now the
+   single prose-head size; converted the nine freelancing heads (onboarding ×4
+   incl. the 30 pt welcome, Hangar empty "Go outside." 28, rarity reference 26,
+   compass sheet 24, `ModelDetailScreen` empty head 17, `PermissionRecoveryCard`
+   title 18). Rule codified in `Brand.swift`: mono = readouts/data/labels,
+   system = human prose, heads use `.display`. Mono readouts and the reveal
+   card's established type untouched.
+4. **D6 — Dry voice.** Indoor hint "Maybe try looking outside 😉" → **"Not many
+   planes indoors."** (emoji-free, same clinical register as the grounded
+   toast). Unclaimed handle is now an honest designed state: the Profile header
+   shows a cyan mono **CLAIM YOUR HANDLE →** affordance (NavigationLink into
+   Settings' SPOTTER section) + a quiet person-glyph avatar instead of
+   "@spotter_42" with fake "SP" initials; Settings no longer prefills
+   "spotter_42" as the field's value for unclaimed users (empty draft → the
+   "handle" prompt shows). The leaderboard was already honest ("(you)" + claim
+   hint); the share card carries no handle. TextField placeholders keep
+   "spotter_42" as a format example — that usage is fine.
+5. **D4 — Profile Liquid Glass STAYS** (Noah's explicit keep; the glass +
+   radial-glow backdrop is the intended look).
+6. **D5 — Duplicate-catch haptic STAYS** as is.
+7. **D7 — Nav-chrome rule codified, no code:** custom chrome for game surfaces
+   (Hangar/cards/reveals), stock-but-branded system nav for utility screens
+   (Settings/Map/Leaderboard) — recorded in `Brand.swift`'s header + CLAUDE.md.
+
+Snapshot harness grew unclaimed-Profile/Settings + empty-state renders
+(`ProfileSettingsSnapshotTests`). Full `TailspotTests` green; before/after
+visual pass over the snapshot corpus reviewed by eye (radii/type-size shifts
+only; no layout breaks).
+
+## 2026-07-10 — Hangar restore-from-server (PLAN §9 #7, issue #58) — branch `feat/hangar-restore`
+
+The local-only Hangar's catastrophic-loss gap gets its restore path: catches
+already upload to the backend for scoring, the Keychain device id (#55)
+survives reinstall, so a fresh install can now pull the collection back.
+**Catch-data only — photos were never uploaded and cannot come back**; the
+prompt says so plainly. No schema change anywhere (no drizzle migration, no
+SwiftData field).
+
+- **Backend `GET /v1/catches`** (auth required — the bearer token both
+  authenticates and scopes; there's no deviceId param to probe): the device's
+  own catches, oldest-first, `limit`/`offset` paged (≤500/page; the biggest
+  real device is <100), with `total` always the full count. Rows carry what
+  the server actually stores — catchUuid, icao24, callsign, frozen scoring
+  facts (typecode/rarity/points/firstOfType), the guess triple, caughtAt,
+  observer lat/lon, aircraft altitude — plus two cheap LEFT joins:
+  `registration` from `registry`, clean `manufacturer`/`model` from
+  `typecodes`. New `CatchStore.listCatches`; 8 new route tests
+  (`test/catchesList.route.test.ts`): 401s, own-rows-only isolation,
+  pagination/ordering, null-heavy rows, param clamping, guess passthrough.
+- **iOS restore flow** (`HangarRestore.swift` + `HangarRestorePromptView.swift`):
+  once per launch, ContentView asks `HangarRestoreManager.checkIfNeeded` —
+  local Hangar empty → wait (bounded, no self-register: racing a second
+  `POST /v1/devices` is the #55/#76 duplicate-identity bug class) for the
+  launch registration → probe `fetchCatches(limit: 1)` → server total > 0
+  ⇒ a full-screen branded offer in the `TrophyUnlockView` chrome family:
+  "WELCOME BACK / N CATCHES FOUND", the photo caveat, RESTORE / NOT NOW
+  (declining stays quiet until next launch). Restore pages everything, maps
+  rows → `Catch` (`HangarRestore.makeCatch`), saves, and shows "N CATCHES
+  RESTORED"; failure gets a TRY AGAIN screen (re-runs are safe).
+- **Idempotency:** keyed on the upload idempotency uuid — `Catch.serverUuid`
+  == the server's `catchUuid` — compared case-folded (local UUIDs are
+  uppercase, Postgres returns lowercase), deduped against the store AND
+  within the batch, so re-running restore never duplicates.
+- **No re-upload, no re-toast, one event:** restored rows are born
+  `uploadedAt != nil` (the uploader's pending predicate can't see them; no
+  per-catch telemetry). After the bulk insert the trophy ledger is
+  **re-seeded** (`TrophyUnlockCenter.reseedAfterRestore` — the first-launch
+  silent-seed pattern) *before* ContentView's diff task can observe the new
+  rows, so trophies land in the trophy case without a celebration flood.
+  Analytics is exactly one `hangar_restored` event (`count`, `server_total`).
+- **Unknown-distance display:** the server never stored slant distance, so
+  restored rows carry the 0 sentinel — new `CardPlane.distText(fromMeters:)`
+  renders it as "—" instead of "0.0 km" (trophy math already treated 0 as
+  never-far). Restored placeName/country/route/operator heal via the existing
+  `CatchBackfill` passes on the next Hangar open, like any old row.
+- Tests: 10 new Swift tests (`HangarRestoreTests` — wire decode incl. nulls,
+  full + nil-field mapping, guessCorrect-nil rule, case-folded + intra-batch
+  idempotency, re-run inserts nothing, not-pending-upload, reseed queues no
+  celebrations) + `HangarRestoreSnapshotTests` (visual pass: offer N=1/62/500,
+  restoring, done, failed). Full `TailspotTests` green (910 test cases);
+  backend 290 green; Release device build clean. Visual pass fixed two
+  things: the system `ProgressView` (renders as a placeholder under
+  ImageRenderer, off-brand anyway) → a drawn cyan `RestoreSweep` arc, and a
+  mono-font apostrophe artifact ("COULDN' T") → "RESTORE FAILED".
 ## 2026-07-10 — Polish sweep PR A — the mechanical ten — branch `polish/mechanical-sweep`
 
 Ten objective UX/UI fixes from the full-app UI survey (taste-level changes are

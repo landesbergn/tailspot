@@ -62,6 +62,17 @@ struct TailspotApp: App {
             // directly on every subsequent launch.
             RootView()
                 .modelContainer(container)
+                // The app is locked to dark (Noah, 2026-07-10 polish
+                // sweep): the Brand palette is a fixed dark HUD and every
+                // light-mode rendering of it is a bug, not a mode.
+                // `preferredColorScheme` here sets the WINDOW's style, so
+                // onboarding, the main app, sheets/fullScreenCovers,
+                // alerts/confirmationDialogs, and the share sheet all
+                // inherit dark regardless of the device setting. The
+                // light-mode compensations sprinkled through views
+                // (`scrollContentBackground(.hidden)` + Brand backgrounds)
+                // stay as belt-and-suspenders.
+                .preferredColorScheme(.dark)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {

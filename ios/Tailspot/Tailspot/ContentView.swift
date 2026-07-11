@@ -193,6 +193,11 @@ struct ContentView: View {
     /// `@StateObject`, so a moment interrupted by backgrounding re-renders
     /// on return (the overlay is declarative, bound to `hasPending`).
     @StateObject private var unlockCenter = TrophyUnlockCenter()
+    /// Hangar restore-from-server (PLAN §9 #7, issue #58): checks once per
+    /// launch whether this (Keychain-surviving) device identity holds
+    /// catches on the backend while the local Hangar is empty — the
+    /// reinstall signature — and, if so, drives the restore prompt overlay.
+    @StateObject private var restoreManager = HangarRestoreManager()
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
@@ -330,6 +335,7 @@ struct ContentView: View {
                                                 in: geo.size,
                                                 visible: visible,
                                                 phoneHeadingDeg: heading,
+                                                phoneHeadingAccuracyDeg: location.headingAccuracy,
                                                 cameraElevationDeg: camEl,
                                                 rollDeg: roll,
                                                 hfovDeg: effectiveHfov,
@@ -597,11 +603,19 @@ struct ContentView: View {
             }
         }
         .overlay { trophyUnlockOverlay }
+        .overlay { hangarRestoreOverlay }
         // Seed at launch and re-diff on every new catch (idempotent +
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
         .task(id: catches.count) {
             unlockCenter.enqueueNewUnlocks(from: catches)
+        }
+        // Hangar restore check — once per launch, self-gating (empty local
+        // Hangar + registered identity + server catches > 0). It waits for
+        // TailspotApp's launch registration rather than registering itself,
+        // so a fresh install can't race two POST /v1/devices calls.
+        .task {
+            await restoreManager.checkIfNeeded(context: modelContext)
         }
         // When the Hangar closes, re-diff — a country backfill done inside
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
@@ -911,16 +925,16 @@ struct ContentView: View {
     /// Tap opens `CompassCalibrationSheet` for the figure-8
     /// instructions. Surfaces only after `compassBadDebounce` seconds
     /// of consistently-bad readings (see `updateCompassWarning`).
-    /// Transient "you're indoors" nudge shown when the authenticity gate
-    /// blocks a catch (enforcing + not-sky). Auto-dismisses; tone is
-    /// light, not scolding.
     /// Proactive ambient hint while the phone is pointed indoors — so the
     /// user knows to head outside before they even try to catch. Driven by
     /// the debounced `pointedIndoors`; auto-clears when aimed at sky.
+    /// Copy is the app's dry-clinical voice (Noah, 2026-07-10 — the
+    /// winking-emoji draft was off-voice), same register as the grounded
+    /// toast below.
     @ViewBuilder
     private var indoorHintBanner: some View {
         if pointedIndoors {
-            Text("Maybe try looking outside 😉")
+            Text("Not many planes indoors.")
                 .font(Brand.Font.mono(size: 12, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .padding(.horizontal, 14)
@@ -1054,9 +1068,30 @@ struct ContentView: View {
     private var trophyUnlockOverlay: some View {
         if unlockCenter.hasPending,
            pendingReveal == nil, pendingMultiReveal == nil,
-           !showHangar, !showProfile, !showCompassSheet {
+           !showHangar, !showProfile, !showCompassSheet,
+           !restoreManager.isPresenting {
             TrophyUnlockView(center: unlockCenter)
                 .transition(.opacity)
+        }
+    }
+
+    // MARK: - Hangar restore overlay
+
+    /// The restore-from-server prompt (offer → restoring → done), same gated-
+    /// overlay presentation as the trophy moment. In practice it only ever
+    /// appears on a just-reinstalled app with an empty Hangar, so the "nothing
+    /// else on top" gates are belt-and-suspenders.
+    @ViewBuilder
+    private var hangarRestoreOverlay: some View {
+        if restoreManager.isPresenting,
+           pendingReveal == nil, pendingMultiReveal == nil,
+           !showHangar, !showProfile, !showCompassSheet {
+            HangarRestorePromptView(
+                manager: restoreManager,
+                context: modelContext,
+                unlockCenter: unlockCenter
+            )
+            .transition(.opacity)
         }
     }
 
@@ -1982,10 +2017,10 @@ struct ContentView: View {
             showHangar = true
         } label: {
             ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: Brand.Radius.card)
                     .fill(Brand.Color.bgPrimary.opacity(0.7))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .strokeBorder(Brand.Color.textPrimary.opacity(0.08),
                                           lineWidth: 1)
                     )
@@ -2018,10 +2053,10 @@ struct ContentView: View {
             showProfile = true
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: Brand.Radius.card)
                     .fill(Brand.Color.bgPrimary.opacity(0.7))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .strokeBorder(Brand.Color.textPrimary.opacity(0.08),
                                           lineWidth: 1)
                     )
@@ -2154,9 +2189,9 @@ struct ContentView: View {
         // that the readout looked busy/ugly). Content is unchanged; it's useful
         // in shared screenshots.
         .padding(14)
-        .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         )
     }
@@ -2491,7 +2526,7 @@ struct ContentView: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: Brand.Radius.row)
                 .fill(recorder.isRecording
                       ? Brand.Color.alertWarning.opacity(0.18)
                       : Color.white.opacity(0.07))
@@ -2606,6 +2641,7 @@ struct ContentView: View {
         in screenSize: CGSize,
         visible: [ObservedAircraft],
         phoneHeadingDeg: Double,
+        phoneHeadingAccuracyDeg: Double?,
         cameraElevationDeg: Double,
         rollDeg: Double,
         hfovDeg: Double,
@@ -2690,16 +2726,21 @@ struct ContentView: View {
         // (4) No visible plane under the tap. Diagnose the nearest in-data
         // plane (ALL tiers, including hidden) and record the miss signal —
         // the frustrated tap is the most honest miss signal we have
-        // (2026-06-12, after three field misses). NEW 2026-06-19: if that
-        // nearest plane is FILTERED and near the tap, the user is pointing at
-        // a real plane the precision band deliberately hid (the FDX1268
-        // class — inseparable from the MLAT firehose, so it can't be
-        // ambient-labeled). The tap is the explicit intent the ambient filter
-        // lacks, so REVEAL it: pin + force-lock so it labels and becomes
-        // catchable, without loosening the filter for everyone else.
+        // (2026-06-12, after three field misses). If that nearest plane is one
+        // the tap should REVEAL (`shouldTapReveal`), pin + force-lock it so it
+        // labels and becomes catchable — the explicit tap is the intent the
+        // ambient filter/frame lacks, without loosening the filter for everyone:
+        //   - FILTERED (2026-06-19): airborne but hidden by the precision band
+        //     (the FDX1268 class, inseparable from the MLAT firehose).
+        //   - OFF-FRAME (2026-07-11): a visible-tier plane projected outside the
+        //     frame — typically a compass/heading error (or high zoom) rotated
+        //     the sky-model off where the plane visually sits, so no label drew
+        //     even though the user was pointed right at it (the DAL972 field
+        //     case: ~17° heading error at ±17° reported accuracy, 2.4× zoom).
         let diagnosis = recordEmptySkyTapDiagnosis(
             at: point, in: screenSize,
             phoneHeadingDeg: phoneHeadingDeg,
+            phoneHeadingAccuracyDeg: phoneHeadingAccuracyDeg,
             cameraElevationDeg: cameraElevationDeg,
             rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg, now: now
         )
@@ -2710,13 +2751,13 @@ struct ContentView: View {
             presentGroundedTapToast(icao24: d.obs.aircraft.icao24)
             return
         }
-        if let d = diagnosis, d.reason == "filtered" {
+        if let d = diagnosis, shouldTapReveal(reason: d.reason) {
             let icao = d.obs.aircraft.icao24
             revealedIcao = icao
             pinnedIcao = icao
             recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
             lockOn.forceLock(targetIcao24: icao, now: now)
-            Analytics.capture("tap_reveal", ["icao24": .string(icao)])
+            Analytics.capture("tap_reveal", ["icao24": .string(icao), "reason": .string(d.reason)])
             return
         }
 
@@ -2737,7 +2778,8 @@ struct ContentView: View {
     @discardableResult
     private func recordEmptySkyTapDiagnosis(
         at point: CGPoint, in screenSize: CGSize,
-        phoneHeadingDeg: Double, cameraElevationDeg: Double,
+        phoneHeadingDeg: Double, phoneHeadingAccuracyDeg: Double?,
+        cameraElevationDeg: Double,
         rollDeg: Double, hfovDeg: Double, vfovDeg: Double, now: Date
     ) -> (obs: ObservedAircraft, reason: String)? {
         let basis = Geo.cameraBasis(
@@ -2792,11 +2834,17 @@ struct ContentView: View {
             nearestSlantMeters: best?.obs.slantDistanceMeters,
             nearestElevationDeg: best?.obs.elevationDeg,
             nearestAngularOffsetDeg: best?.offsetDeg,
-            reason: reason
+            reason: reason,
+            headingAccuracyDeg: phoneHeadingAccuracyDeg
         )
         recorder.recordEmptyTap(tap)
 
         var props: [String: AnalyticsValue] = ["reason": .string(reason)]
+        // Compass quality at the miss — a large value marks a magnetic-error
+        // (off-frame) miss. -1 = OS says invalid; omit it then.
+        if let acc = phoneHeadingAccuracyDeg, acc >= 0 {
+            props["heading_accuracy_deg"] = .double(acc)
+        }
         if let b = best {
             props["nearest_icao24"] = .string(b.obs.aircraft.icao24)
             if let cs = b.obs.aircraft.callsign { props["nearest_callsign"] = .string(cs) }
@@ -2858,6 +2906,21 @@ func classifyEmptySkyTapNearest(
     if tier == .hidden { return "filtered" }
     if !onScreen { return "off-frame" }
     return "on-screen"
+}
+
+/// Whether an empty-sky tap should REVEAL its nearest in-data plane — pin +
+/// force-lock so it labels and becomes catchable, the explicit-intent escape
+/// hatch the ambient filter/frame lacks. Two `classifyEmptySkyTapNearest`
+/// reasons qualify:
+///   - "filtered"  → airborne but hidden by the precision band (FDX1268).
+///   - "off-frame" → a visible-tier plane projected outside the frame, usually
+///                   because a compass/heading error (or high zoom) rotated the
+///                   sky-model off where the plane visually sits (DAL972,
+///                   2026-07-11). The user is pointed at it; the tap grabs it.
+/// "grounded" is handled earlier (a parked plane is never revealed); "on-screen"
+/// and "nothing-nearby" fall through to the empty-tap ripple.
+func shouldTapReveal(reason: String) -> Bool {
+    reason == "filtered" || reason == "off-frame"
 }
 
 // MARK: - AR-overlay rarity resolution

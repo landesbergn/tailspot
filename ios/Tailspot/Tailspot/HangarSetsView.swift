@@ -64,7 +64,7 @@ private struct SetTile: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 7)
+                RoundedRectangle(cornerRadius: Brand.Radius.chip)
                     .fill(set.type.tint)
                 Text(set.type.glyph)
                     .font(Brand.Font.mono(size: 16, weight: .bold))
@@ -96,7 +96,7 @@ private struct SetTile: View {
             }
         }
         .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
         .opacity(isLocked ? 0.6 : 1.0)
     }
 }

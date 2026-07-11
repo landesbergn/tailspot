@@ -50,6 +50,13 @@
       "when": 1783543031474,
       "tag": "0006_tense_spitfire",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783775658458,
+      "tag": "0007_leaderboard-windows",
+      "breakpoints": true
     }
   ]
 }

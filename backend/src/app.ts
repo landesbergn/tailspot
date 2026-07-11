@@ -236,8 +236,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     scoreCatch: (icao, opts) => getCatchStore().scoreCatch(icao, opts),
     isFirstOfType: (deviceId, typecode) => getCatchStore().isFirstOfType(deviceId, typecode),
     insertOrGet: (c) => getCatchStore().insertOrGet(c),
-    leaderboard: (n) => getCatchStore().leaderboard(n),
-    myStanding: (id) => getCatchStore().myStanding(id),
+    listCatches: (id, limit, offset) => getCatchStore().listCatches(id, limit, offset),
+    leaderboard: (n, since) => getCatchStore().leaderboard(n, since),
+    myStanding: (id, since) => getCatchStore().myStanding(id, since),
+    ensureWeeksDecided: (now) => getCatchStore().ensureWeeksDecided(now),
+    champions: (weekStart) => getCatchStore().champions(weekStart),
+    weeklyWins: (id) => getCatchStore().weeklyWins(id),
+    everToppedAllTime: (id) => getCatchStore().everToppedAllTime(id),
+    recordAlltimeTopper: (now) => getCatchStore().recordAlltimeTopper(now),
   };
 
   // Rate limiters: in-memory token buckets (single-instance caveat documented in
@@ -263,7 +269,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     routeResolver,
     nowSeconds: options.nowSeconds,
   });
-  registerLeaderboardRoute(app, { identityStore: identity, catchStore: catchesStore });
+  // The leaderboard's window math shares the catch-validation clock
+  // (`nowSeconds`, unix seconds) so window tests are deterministic; production
+  // passes nothing and both fall back to wall time.
+  const nowSeconds = options.nowSeconds;
+  registerLeaderboardRoute(app, {
+    identityStore: identity,
+    catchStore: catchesStore,
+    now: nowSeconds ? () => new Date(nowSeconds() * 1000) : undefined,
+  });
 
   return app;
 }

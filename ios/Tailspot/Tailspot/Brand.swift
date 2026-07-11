@@ -17,6 +17,13 @@
 //  red is for true warnings (never as text on bg.primary), green is
 //  used sparingly for safe/acquired states.
 //
+//  Chrome rule (Noah, 2026-07-10 polish sweep): custom chrome for the
+//  GAME surfaces (Hangar, cards, reveals — they earn bespoke bars and
+//  transitions), stock-but-branded SYSTEM navigation for the UTILITY
+//  screens (Settings, Map, Leaderboard — inline nav titles, branded
+//  list chrome). Don't hand-roll nav bars on utility screens and don't
+//  put stock bars on game surfaces.
+//
 
 import SwiftUI
 
@@ -65,7 +72,34 @@ nonisolated enum Brand {
         static let duplicateRose = SwiftUI.Color(hex: 0xE0556B)
     }
 
+    // MARK: - Radius
+
+    /// Corner-radius scale (Noah, 2026-07-10 polish sweep). Four steps —
+    /// every rounded rectangle in the app snaps to one of these:
+    ///   chip  — small inline elements: glyph tiles, tags, tight chips
+    ///   row   — list rows, input fields, buttons, banners
+    ///   card  — cards, sheets-within-screens, grouped surfaces
+    ///   hero  — the biggest set pieces (reveal/settled catch card)
+    /// Exceptions stay literal: radii computed from a scale factor
+    /// (e.g. the reveal ledger's `11 * scale`), per-size design tables
+    /// (`CatchCardView` dims), tiny 3–4 pt accents on very small badges
+    /// (rounding them to 6 turns them into pills), and the AR HUD
+    /// brackets. Capsules stay capsules.
+    nonisolated enum Radius {
+        static let chip: CGFloat = 6
+        static let row:  CGFloat = 12
+        static let card: CGFloat = 16
+        static let hero: CGFloat = 26
+    }
+
     // MARK: - Font
+    //
+    // Type rule (Noah, 2026-07-10 polish sweep):
+    //   mono   = readouts, data, and ALL-CAPS labels (anything a pilot
+    //            would expect fixed-pitch: callsigns, headings, counts)
+    //   system = human prose (titles, body copy, buttons)
+    //   Prose heads use exactly ONE display size: `Brand.Font.display`.
+    //   Don't freelance `.system(size: 24…30, weight: .bold)` heads.
 
     nonisolated enum Font {
         /// Aviation-flavored monospace. B612 Mono is Airbus's cockpit
@@ -100,6 +134,13 @@ nonisolated enum Brand {
         static let wordmark    = mono(size: 24, weight: .bold)
         static let hudCallsign = mono(size: 13, weight: .bold)
         static let hudData     = mono(size: 10, weight: .regular)
+
+        /// The single prose-head size (see the type rule above). 26 pt
+        /// bold system — chosen against the pre-token heads (24/26/28/30):
+        /// big enough to lead a screen, small enough that the tightest
+        /// layouts (SE-height onboarding, the 320 pt PermissionRecoveryCard)
+        /// keep their line counts.
+        static let display = SwiftUI.Font.system(size: 26, weight: .bold)
 
         static let cardTitle    = SwiftUI.Font.system(size: 17, weight: .semibold, design: .default)
         static let cardSubtitle = SwiftUI.Font.system(size: 13, weight: .regular,  design: .default)

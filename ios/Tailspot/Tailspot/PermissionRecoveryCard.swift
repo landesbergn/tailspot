@@ -47,9 +47,14 @@ struct PermissionRecoveryCard: View {
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(Brand.Color.alertCaution)
             Text(title)
-                .font(.system(size: 18, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
+                // At display size the longer titles need a second line, but
+                // this Text truncated instead of wrapping (the container
+                // offers one line's height during measurement). Vertical
+                // fixedSize lets it take the height it needs.
+                .fixedSize(horizontal: false, vertical: true)
             Text(message)
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
@@ -71,9 +76,9 @@ struct PermissionRecoveryCard: View {
         }
         .padding(24)
         .frame(maxWidth: 320)
-        .background(Brand.Color.bgElevated.opacity(0.96), in: .rect(cornerRadius: 18))
+        .background(Brand.Color.bgElevated.opacity(0.96), in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.alertCaution.opacity(0.35), lineWidth: 1)
         )
     }

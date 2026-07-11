@@ -1,5 +1,16 @@
 /**
- * Catch ingestion (WP 1.5).
+ * Catch ingestion (WP 1.5) + catch listing for Hangar restore (issue #58).
+ *
+ *   GET /v1/catches?limit=500&offset=0   (auth required)
+ *     → 200 { total, catches: [{ catchUuid, icao24, callsign, typecode,
+ *              rarity, points, firstOfType, guessKind, guessValue,
+ *              guessCorrect, caughtAt, observerLat, observerLon,
+ *              aircraftAltitudeMeters, registration, manufacturer, model }…] }
+ *       401 bad/absent token
+ *     Returns ONLY the authenticated device's catches, oldest first. `total`
+ *     is the device's full count so the client can page (limit ≤ 500) and
+ *     size its restore prompt. Photos are not (and cannot be) included —
+ *     they were never uploaded.
  *
  *   POST /v1/catches   (auth required)
  *     body { catchUuid, icao24, callsign|null, caughtAt, observer{…}, aircraft{…},
@@ -77,9 +88,40 @@ function numOrNull(v: unknown): number | null | undefined {
  *  anything longer is garbage we refuse to store. */
 const GUESS_VALUE_MAX_LENGTH = 16;
 
+/** Page-size bounds for GET /v1/catches. A 500 cap comfortably covers the
+ *  biggest real device today (<100 catches) in one page while still bounding
+ *  a pathological request; the client pages by offset until it has `total`. */
+const LIST_DEFAULT_LIMIT = 500;
+const LIST_MAX_LIMIT = 500;
+
+/** Parse a non-negative int query param, with a default and an optional cap. */
+function intParam(v: unknown, fallback: number, max?: number): number {
+  const n = typeof v === "string" ? Number.parseInt(v, 10) : typeof v === "number" ? v : Number.NaN;
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  const floored = Math.floor(n);
+  return max === undefined ? floored : Math.min(floored, max);
+}
+
 export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOptions): void {
   const { identityStore, catchStore, catchLimiter, routeResolver } = opts;
   const nowSeconds = opts.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
+
+  // ── GET /v1/catches — the device's own catches, for Hangar restore ────────
+  // Auth REQUIRED (the bearer token both authenticates and scopes: a device
+  // can only ever list itself — there is no deviceId parameter to probe).
+  // No rate limiter, matching the read-only GET pattern (leaderboard).
+  app.get("/v1/catches", async (request, reply) => {
+    const device = await resolveDevice(identityStore, request.headers.authorization);
+    if (!device) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    const q = request.query as Record<string, unknown>;
+    const limit = Math.max(1, intParam(q.limit, LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT));
+    const offset = intParam(q.offset, 0);
+
+    const page = await catchStore.listCatches(device.id, limit, offset);
+    return reply.code(200).send(page);
+  });
 
   app.post("/v1/catches", async (request, reply) => {
     const device = await resolveDevice(identityStore, request.headers.authorization);

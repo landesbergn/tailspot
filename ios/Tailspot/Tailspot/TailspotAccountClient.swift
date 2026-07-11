@@ -219,6 +219,45 @@ nonisolated struct UploadCatchResponse: Decodable {
     let guessCorrect: Bool?
 }
 
+/// One catch record from GET /v1/catches — the server's copy of a catch this
+/// device uploaded, with the airframe joins (registration / clean names) the
+/// Hangar-restore path needs to rebuild a `Catch` row. Every optional here is
+/// a genuine server nullable (unresolved airframe, no callsign, no guess…);
+/// there is deliberately NO photo field — photos were never uploaded.
+nonisolated struct RestoredCatchRow: Decodable {
+    /// The idempotency uuid the uploader minted (`Catch.serverUuid`) — the
+    /// restore key: rows whose uuid already exists locally are skipped.
+    let catchUuid: String
+    let icao24: String
+    let callsign: String?
+    let typecode: String?
+    /// Server-resolved tier at upload time (audit value; display re-derives
+    /// live via `Catch.resolvedRarity`, same as organic catches).
+    let rarity: String?
+    let points: Int
+    let firstOfType: Bool
+    let guessKind: String?
+    let guessValue: String?
+    let guessCorrect: Bool
+    /// Unix seconds (same wire format the upload sent).
+    let caughtAt: Double
+    let observerLat: Double
+    let observerLon: Double
+    /// Null for nearly every row — the uploader sends `aircraft: null`.
+    let aircraftAltitudeMeters: Double?
+    let registration: String?
+    let manufacturer: String?
+    let model: String?
+}
+
+/// Response from GET /v1/catches.
+nonisolated struct RestoredCatchesResponse: Decodable {
+    /// The device's FULL catch count (not the page size) — sizes the restore
+    /// prompt and tells the pager when it has everything.
+    let total: Int
+    let catches: [RestoredCatchRow]
+}
+
 /// One row in GET /v1/leaderboard's `entries` array.
 nonisolated struct LeaderboardEntry: Decodable, Identifiable {
     let rank: Int
@@ -229,17 +268,122 @@ nonisolated struct LeaderboardEntry: Decodable, Identifiable {
     var id: String { handle }
 }
 
+/// Time window for GET /v1/leaderboard (dynamic-leaderboards PR2). Raw
+/// values are the wire values for the `window` query param. The pre-windows
+/// backend ignores the param and returns the all-time board — see
+/// `LeaderboardResponse.supportsWindows` for the fail-soft detection.
+nonisolated enum LeaderboardWindow: String, CaseIterable, Identifiable, Sendable {
+    case week, month, all
+
+    var id: String { rawValue }
+
+    /// Segmented-control label (mono ALL-CAPS style).
+    var label: String {
+        switch self {
+        case .week:  return "WEEK"
+        case .month: return "MONTH"
+        case .all:   return "ALL TIME"
+        }
+    }
+}
+
 /// The caller's own standing in GET /v1/leaderboard (`me` key).
+///
+/// `weeklyWins` / `everToppedAllTime` are ADDITIVE keys (dynamic-leaderboards
+/// backend PR1): old payloads simply lack them and `decodeIfPresent` makes
+/// them nil — same old-payload contract as `UploadCatchResponse.firstOfType`.
 nonisolated struct MyStanding: Decodable {
     let rank: Int
     let points: Int
+    /// How many weekly-champion crowns this device has accumulated — feeds
+    /// the Profile laurel ("WEEKLY CHAMPION ×3"). Nil on the old backend.
+    let weeklyWins: Int?
+    /// Whether this device has ever held #1 on the all-time board (fuel for
+    /// the PR3 winner trophies; decoded now so the contract is pinned).
+    let everToppedAllTime: Bool?
+
+    init(rank: Int, points: Int, weeklyWins: Int? = nil, everToppedAllTime: Bool? = nil) {
+        self.rank = rank
+        self.points = points
+        self.weeklyWins = weeklyWins
+        self.everToppedAllTime = everToppedAllTime
+    }
+}
+
+/// One crowned champion from last week (GET /v1/leaderboard `champions`).
+/// The array can carry MULTIPLE entries — a shared crown on a points tie.
+nonisolated struct LeaderboardChampion: Decodable {
+    /// Nil when the champion never claimed a handle → display
+    /// "anonymous spotter", never a bare "@".
+    let handle: String?
+    let points: Int
+    /// ISO calendar date ("2026-06-29") — the Monday the crowned week began.
+    let weekStart: String
+
+    init(handle: String?, points: Int, weekStart: String) {
+        self.handle = handle
+        self.points = points
+        self.weekStart = weekStart
+    }
 }
 
 /// Full leaderboard response.
+///
+/// `window` / `resetsAt` / `champions` are ADDITIVE (dynamic-leaderboards
+/// backend PR1). **Fail-soft rule:** when `window` is absent the backend
+/// predates windows — the tabs hide entirely and the board renders as the
+/// single all-time board it always was.
 nonisolated struct LeaderboardResponse: Decodable {
     let entries: [LeaderboardEntry]
     /// Present when a valid bearer token was sent, even handle-less.
     let me: MyStanding?
+    /// "week" | "month" | "all". Absent on the pre-windows backend.
+    let window: String?
+    /// ISO-8601 instant the current window resets. Null for all-time,
+    /// absent on the old backend. Kept as the raw wire string; use
+    /// `resetsAtDate` for display math.
+    let resetsAt: String?
+    /// Last completed week's champion(s). Semantics are three-valued:
+    /// nil = old backend or a non-week window (no banner at all);
+    /// empty = the week ended with zero catches (the quiet no-champion
+    /// line); one-or-more = crowned (shared crown when > 1).
+    let champions: [LeaderboardChampion]?
+
+    init(entries: [LeaderboardEntry],
+         me: MyStanding?,
+         window: String? = nil,
+         resetsAt: String? = nil,
+         champions: [LeaderboardChampion]? = nil) {
+        self.entries = entries
+        self.me = me
+        self.window = window
+        self.resetsAt = resetsAt
+        self.champions = champions
+    }
+
+    /// The fail-soft signal: the windows-aware backend always echoes
+    /// `window`; the old backend never sends it.
+    var supportsWindows: Bool { window != nil }
+
+    /// `resetsAt` parsed as an instant (fractional seconds per the pinned
+    /// contract, plain ISO-8601 accepted too). Nil when absent/null/unparseable.
+    var resetsAtDate: Date? {
+        guard let resetsAt else { return nil }
+        return Self.fractionalISO8601.date(from: resetsAt)
+            ?? Self.plainISO8601.date(from: resetsAt)
+    }
+
+    // ISO8601DateFormatter is documented thread-safe; shared statics are fine.
+    private static let fractionalISO8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let plainISO8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
 }
 
 // MARK: - Client
@@ -434,16 +578,54 @@ nonisolated struct TailspotAccountClient {
         }
     }
 
+    // MARK: - fetchCatches (Hangar restore)
+
+    /// Fetch one page of this device's server-stored catches (auth required —
+    /// the bearer token scopes the listing to exactly this device). Pages are
+    /// oldest-first; `total` on the response tells the caller when it has
+    /// everything. Powers the Hangar restore flow (issue #58).
+    func fetchCatches(limit: Int = 500, offset: Int = 0) async throws -> RestoredCatchesResponse {
+        guard let token = storedToken else { throw AccountError.notRegistered }
+
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("v1/catches"),
+            resolvingAgainstBaseURL: false
+        )
+        comps?.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "offset", value: String(offset)),
+        ]
+        guard let url = comps?.url else { throw AccountError.http(status: -1) }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let data = try await perform(request, expectedStatus: 200)
+        do {
+            return try JSONDecoder().decode(RestoredCatchesResponse.self, from: data)
+        } catch {
+            throw AccountError.decoding(error)
+        }
+    }
+
     // MARK: - leaderboard
 
     /// Fetch the global leaderboard. Passes the bearer token when available
-    /// (fills `me`); anonymous if not registered.
-    func leaderboard(limit: Int = 50) async throws -> LeaderboardResponse {
+    /// (fills `me`); anonymous if not registered. `window` scopes the board
+    /// (week/month/all) on the windows-aware backend; the old backend ignores
+    /// the param and returns the all-time board (fail-soft — see
+    /// `LeaderboardResponse.supportsWindows`). Nil sends no param at all.
+    func leaderboard(window: LeaderboardWindow? = nil, limit: Int = 50) async throws -> LeaderboardResponse {
         var comps = URLComponents(
             url: baseURL.appendingPathComponent("v1/leaderboard"),
             resolvingAgainstBaseURL: false
         )
-        comps?.queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if let window {
+            queryItems.append(URLQueryItem(name: "window", value: window.rawValue))
+        }
+        comps?.queryItems = queryItems
         guard let url = comps?.url else { throw AccountError.http(status: -1) }
 
         var request = URLRequest(url: url)

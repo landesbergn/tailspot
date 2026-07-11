@@ -97,7 +97,7 @@ struct SettingsScreen: View {
                     }
                     .padding(.vertical, 10)
                     .background(isDirty ? Brand.Color.cyan : Brand.Color.bgElevated,
-                                in: .rect(cornerRadius: 10))
+                                in: .rect(cornerRadius: Brand.Radius.row))
                     .foregroundStyle(isDirty ? Brand.Color.bgPrimary : Brand.Color.textTertiary)
                 }
                 .buttonStyle(.plain)
@@ -155,7 +155,16 @@ struct SettingsScreen: View {
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { handleDraft = handle }
+        // Prefill only a genuinely claimed handle. For an unclaimed user the
+        // stored value is still the "spotter_42" placeholder — prefilling it
+        // as the field's VALUE reads as "your handle is spotter_42", the same
+        // display-as-if-claimed leak the Profile header had. Empty draft →
+        // the field shows its "handle" prompt instead.
+        .onAppear {
+            handleDraft = AnalyticsIdentity.isClaimedHandle(
+                handle, placeholder: SpotterHandle.defaultPlaceholder
+            ) ? handle : ""
+        }
     }
 
     // MARK: - Handle claim

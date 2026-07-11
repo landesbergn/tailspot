@@ -243,7 +243,7 @@ struct OnboardingFlow: View {
             lockup
             stepLabel("STEP 1 / 4")
             Text("Spot every plane overhead.")
-                .font(.system(size: 30, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.leading)
             Text("Point your phone at the sky. Tailspot uses live ADS-B data to identify the aircraft you're looking at, then lets you catch it to your Hangar.")
@@ -282,7 +282,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 18) {
             stepLabel("STEP 2 / 4 · PERMISSIONS")
             Text("Three things we need to read the sky.")
-                .font(.system(size: 26, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
             VStack(spacing: 10) {
                 permissionRow(glyph: "location.fill",  title: "Location, while in use",
@@ -305,7 +305,7 @@ struct OnboardingFlow: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.cyan)
                 .frame(width: 28, height: 28)
-                .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: 6))
+                .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: Brand.Radius.chip))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
@@ -317,7 +317,7 @@ struct OnboardingFlow: View {
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
     }
 
     // MARK: - Step 3: Handle
@@ -326,7 +326,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 16) {
             stepLabel("STEP 3 / 4 · PUBLIC HANDLE")
             Text("Pick a handle.")
-                .font(.system(size: 28, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Shown on the global leaderboard. Real name stays private.")
                 .font(Brand.Font.body)
@@ -354,9 +354,9 @@ struct OnboardingFlow: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
+                .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: Brand.Radius.row)
                         .strokeBorder(
                             handleIsValid
                                 ? Brand.Color.alertNormal.opacity(0.35)
@@ -400,9 +400,9 @@ struct OnboardingFlow: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
-                            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+                            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: Brand.Radius.row)
                                     .strokeBorder(Brand.Color.cyan.opacity(0.20), lineWidth: 1)
                             )
                         }
@@ -429,7 +429,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 18) {
             stepLabel("FINAL STEP · COMPASS")
             Text(calibratedInFlow ? "Compass calibrated." : "Trace a figure-8 in the air.")
-                .font(.system(size: 26, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("iPhone compasses drift near metal and buildings. A quick figure-8 motion calibrates yours, so labels point at the plane you're actually looking at.")
                 .font(Brand.Font.body)
@@ -465,7 +465,7 @@ struct OnboardingFlow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
+            .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
         }
         .onChange(of: locationForPermissions.headingAccuracy) { _, acc in
             guard let acc, acc >= 0, acc <= 10 else { return }
@@ -559,7 +559,7 @@ struct OnboardingFlow: View {
             .foregroundStyle(primaryIsSubtle ? Brand.Color.textSecondary : .black.opacity(0.88))
             .background(
                 primaryIsSubtle ? Brand.Color.bgElevated : Brand.Color.cyan,
-                in: .rect(cornerRadius: 14)
+                in: .rect(cornerRadius: Brand.Radius.card)
             )
             .shadow(color: Brand.Color.cyan.opacity(primaryIsSubtle ? 0 : 0.30),
                     radius: 16, y: 6)

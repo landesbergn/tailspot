@@ -90,6 +90,21 @@ final class TrophyUnlockCenter: ObservableObject {
         }
     }
 
+    /// After a bulk Hangar restore, silently re-align the ledger with the
+    /// restored collection: acknowledge every currently-earned tier (the same
+    /// seed used on first launch) and drop anything queued, so the diff task
+    /// that fires when the restored rows land finds nothing to celebrate.
+    /// Restored trophies live in the trophy case — they were earned long ago
+    /// and must not re-toast one by one. Deliberately NO recap either: the
+    /// restore success screen is the moment; a second overlay would pile on.
+    func reseedAfterRestore(from catches: [Catch]) {
+        let inputs = Trophies.inputs(from: catches, events: events)
+        TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
+        // A restore only ever runs on an empty Hangar, so anything pending
+        // predates it and is now stale relative to the seeded state.
+        pendingEvents.removeAll()
+    }
+
     /// Commit-on-shown: the instant a celebration is presented, record its
     /// tier as acknowledged. A crash mid-celebration can then at worst
     /// re-show an in-progress moment — never re-fire a fully-seen one.

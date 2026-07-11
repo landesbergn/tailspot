@@ -40,7 +40,7 @@ struct RarityReferenceScreen: View {
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.cyan)
             Text("Every plane has a tier.")
-                .font(.system(size: 26, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Tiers track how much of a type is actually in the sky — plus a scarcity layer for military, vintage, and vanishing airliners.")
                 .font(Brand.Font.caption)
@@ -51,14 +51,14 @@ struct RarityReferenceScreen: View {
     private func rarityCard(_ r: Rarity) -> some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10).fill(r.tint.opacity(0.18))
+                RoundedRectangle(cornerRadius: Brand.Radius.row).fill(r.tint.opacity(0.18))
                 Text("\(r.basePoints)")
                     .font(Brand.Font.mono(size: 18, weight: .heavy))
                     .foregroundStyle(r.tint)
             }
             .frame(width: 64, height: 64)
             .overlay(
-                RoundedRectangle(cornerRadius: 10).strokeBorder(r.tint, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Brand.Radius.row).strokeBorder(r.tint, lineWidth: 1)
             )
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -76,7 +76,7 @@ struct RarityReferenceScreen: View {
             Spacer()
         }
         .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     // Examples must track the live tier table (AircraftTypes.json —

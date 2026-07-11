@@ -132,7 +132,7 @@ struct CatchDetailView: View {
             type: type,
             altText: CardPlane.altText(fromMeters: first.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: first.velocityMps),
-            distText: String(format: "%.1f km", first.slantDistanceMeters / 1000),
+            distText: CardPlane.distText(fromMeters: first.slantDistanceMeters),
             photoURL: photoURL,
             photoFocus: hasCatchPhoto ? first.photoFocus : nil,
             originIcao: first.displayOrigin,
@@ -182,7 +182,7 @@ struct CatchDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 10))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
     }
 
     private func airframeField(_ label: String, _ value: String) -> some View {

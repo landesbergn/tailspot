@@ -349,7 +349,7 @@ struct CatchCardView: View {
                 placeholderStripes
             }
             // Photo bevel — top highlight + bottom shadow vignette.
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: Brand.Radius.row)
                 .stroke(.white.opacity(0.06), lineWidth: 0.5)
             LinearGradient(
                 colors: [.clear, .black.opacity(0.35)],
@@ -357,7 +357,7 @@ struct CatchCardView: View {
             )
             .blendMode(.multiply)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
     }
 
     /// Striped placeholder in the rarity tint. Replaces the design's
@@ -430,6 +430,15 @@ extension CardPlane {
         v.map { "\(Int(($0 * 1.94384).rounded())) kt" }
     }
 
+    /// "12.3 km" from a slant distance — nil (→ the card's "—") when the
+    /// distance is the 0 unknown-sentinel. `Catch.slantDistanceMeters` is
+    /// non-optional, so rows the server restored (which never stored a
+    /// distance) carry 0 instead of nil; "0.0 km" would read as a plane
+    /// caught on your head.
+    static func distText(fromMeters m: Double) -> String? {
+        m > 0 ? String(format: "%.1f km", m / 1000) : nil
+    }
+
     /// Build a card from a persisted Catch. Reads the snapshotted
     /// rarity/type (or backfills via classifier when nil), resolves
     /// the model line to its canonical official name, and formats the
@@ -449,7 +458,7 @@ extension CardPlane {
             type: c.resolvedType,
             altText: Self.altText(fromMeters: c.altitudeMeters),
             speedText: Self.speedText(fromMps: c.velocityMps),
-            distText: String(format: "%.1f km", c.slantDistanceMeters / 1000),
+            distText: Self.distText(fromMeters: c.slantDistanceMeters),
             photoURL: c.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
         )
     }

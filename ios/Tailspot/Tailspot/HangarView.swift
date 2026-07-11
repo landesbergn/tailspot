@@ -211,7 +211,7 @@ struct HangarView: View {
             }
             .frame(width: 64, height: 64)
             Text("Go outside.")
-                .font(.system(size: 28, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Tailspot needs a clear view of the sky. Point your phone up, aim at a plane, then tap to catch it.")
                 .font(Brand.Font.body)
@@ -226,7 +226,7 @@ struct HangarView: View {
                     .foregroundStyle(Brand.Color.bgPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Brand.Color.cyan, in: .rect(cornerRadius: 12))
+                    .background(Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.row))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -253,7 +253,7 @@ struct HangarView: View {
     private func setPreviewRow(_ set: CardSet) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6).fill(set.type.tint.opacity(0.20))
+                RoundedRectangle(cornerRadius: Brand.Radius.chip).fill(set.type.tint.opacity(0.20))
                 Text(set.type.glyph)
                     .font(Brand.Font.mono(size: 14, weight: .bold))
                     .foregroundStyle(set.type.tint)
@@ -275,7 +275,7 @@ struct HangarView: View {
                 .monospacedDigit()
         }
         .padding(12)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 12))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
     }
 }
 
