@@ -159,9 +159,17 @@ struct LeaderboardCountdownTests {
     /// 2026-07-13T00:00:00Z is a Monday (the pinned contract's example reset).
     private let mondayResetUTC = ISO8601DateFormatter().date(from: "2026-07-13T00:00:00Z")!
 
+    /// Seconds are pre-typed Double so the interval arithmetic never sends
+    /// the type checker exploring Int/Double overload combinations — CI's
+    /// older toolchain timed out type-checking the inline expressions.
+    private func secondsBeforeReset(days: Double = 0, hours: Double = 0, minutes: Double = 0, seconds: Double = 0) -> Date {
+        let offset: TimeInterval = days * 86_400 + hours * 3_600 + minutes * 60 + seconds
+        return mondayResetUTC.addingTimeInterval(-offset)
+    }
+
     @Test func weekLabel_daysAndHours() {
         // 2 days, 14 hours, 30 minutes out → floors to 2D 14H.
-        let now = mondayResetUTC.addingTimeInterval(-(2 * 86_400 + 14 * 3_600 + 1_800))
+        let now = secondsBeforeReset(days: 2, hours: 14, minutes: 30)
         let label = LeaderboardCountdown.weekLabel(
             resetsAt: mondayResetUTC, now: now, locale: enUS, timeZone: utc)
         #expect(label == "RESETS MONDAY · 2D 14H LEFT")
@@ -170,7 +178,7 @@ struct LeaderboardCountdownTests {
     /// The weekday is the LOCAL weekday of the reset instant — Monday
     /// 00:00 UTC is still Sunday evening in California. Never "UTC".
     @Test func weekLabel_usesDeviceTimezoneForWeekday() {
-        let now = mondayResetUTC.addingTimeInterval(-(2 * 86_400 + 14 * 3_600))
+        let now = secondsBeforeReset(days: 2, hours: 14)
         let label = LeaderboardCountdown.weekLabel(
             resetsAt: mondayResetUTC, now: now, locale: enUS, timeZone: losAngeles)
         #expect(label == "RESETS SUNDAY · 2D 14H LEFT")
@@ -178,14 +186,14 @@ struct LeaderboardCountdownTests {
     }
 
     @Test func weekLabel_underOneDay() {
-        let now = mondayResetUTC.addingTimeInterval(-(14 * 3_600 + 60))
+        let now = secondsBeforeReset(hours: 14, minutes: 1)
         let label = LeaderboardCountdown.weekLabel(
             resetsAt: mondayResetUTC, now: now, locale: enUS, timeZone: utc)
         #expect(label == "RESETS MONDAY · 14H LEFT")
     }
 
     @Test func weekLabel_underOneHour() {
-        let now = mondayResetUTC.addingTimeInterval(-1_800)
+        let now = secondsBeforeReset(minutes: 30)
         let label = LeaderboardCountdown.weekLabel(
             resetsAt: mondayResetUTC, now: now, locale: enUS, timeZone: utc)
         #expect(label == "RESETS MONDAY · UNDER 1H LEFT")
@@ -194,7 +202,7 @@ struct LeaderboardCountdownTests {
     /// A reset instant already passed (stale cached response) must not go
     /// negative — clamps to the under-an-hour line.
     @Test func weekLabel_pastResetClamps() {
-        let now = mondayResetUTC.addingTimeInterval(3_600)
+        let now = secondsBeforeReset(hours: -1)
         let label = LeaderboardCountdown.weekLabel(
             resetsAt: mondayResetUTC, now: now, locale: enUS, timeZone: utc)
         #expect(label == "RESETS MONDAY · UNDER 1H LEFT")
