@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { AdsbLolRouteService, parseRoute } from "../src/providers/adsblolRoutes.js";
+import {
+  AdsbLolRouteService,
+  parseRoute,
+  parseRouteCandidates,
+} from "../src/providers/adsblolRoutes.js";
 import type { NormalizedAircraft } from "../src/providers/types.js";
 
 /** A minimal positioned aircraft with a given callsign. */
@@ -18,6 +22,18 @@ function plane(icao: string, callsign: string | null): NormalizedAircraft {
   };
 }
 
+/** A positioned aircraft with an explicit lat/lng and ground track — for the
+ *  round-trip leg-pick, which reads position + track. `track` null models a
+ *  feed with no reported track. */
+function planeAt(
+  callsign: string,
+  latitude: number,
+  longitude: number,
+  track: number | null,
+): NormalizedAircraft {
+  return { ...plane("aaf968", callsign), latitude, longitude, trackDeg: track };
+}
+
 /** A 200 response for `GET /api/0/route/<callsign>` — the single route object.
  *  (The enricher switched from the batch POST /routeset to the per-callsign GET
  *  when adsb.lol's routeset started returning empty; return the first row.) */
@@ -25,7 +41,14 @@ function routeset(
   rows: Array<{
     callsign: string;
     airport_codes: string;
-    _airports?: Array<{ icao?: string; name?: string; location?: string }>;
+    _airports?: Array<{
+      icao?: string;
+      iata?: string;
+      name?: string;
+      location?: string;
+      lat?: number;
+      lon?: number;
+    }>;
   }>,
 ): Response {
   return new Response(JSON.stringify(rows[0]), {
@@ -339,5 +362,119 @@ describe("AdsbLolRouteService", () => {
     const svc = new AdsbLolRouteService({ baseUrl: "https://example.test", fetchFn });
     svc.enrich([plane("a", null)]);
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("round-trip leg disambiguation (A ⇄ B filings)", () => {
+  // RPA5715's real adsb.lol filing: an out-and-back under one callsign. KPIT is
+  // ~330 mi west of KLGA, so the two legs are near-reciprocal — the plane's
+  // ground track cleanly separates outbound (westbound) from inbound (eastbound).
+  const RPA5715_ROW = {
+    callsign: "RPA5715",
+    airport_codes: "KLGA-KPIT-KLGA",
+    _airports: [
+      { icao: "KLGA", iata: "LGA", location: "New York", lat: 40.777199, lon: -73.872597 },
+      { icao: "KPIT", iata: "PIT", location: "Pittsburgh", lat: 40.491501, lon: -80.232903 },
+      { icao: "KLGA", iata: "LGA", location: "New York", lat: 40.777199, lon: -73.872597 },
+    ],
+  };
+
+  it("parseRouteCandidates yields a round trip with both legs + turnaround/home coords", () => {
+    expect(parseRouteCandidates(RPA5715_ROW.airport_codes, RPA5715_ROW._airports)).toEqual({
+      kind: "roundTrip",
+      away: {
+        originIcao: "KLGA",
+        destIcao: "KPIT",
+        originIata: "LGA",
+        destIata: "PIT",
+        originName: "New York",
+        destName: "Pittsburgh",
+      },
+      back: {
+        originIcao: "KPIT",
+        destIcao: "KLGA",
+        originIata: "PIT",
+        destIata: "LGA",
+        originName: "Pittsburgh",
+        destName: "New York",
+      },
+      awayDest: { lat: 40.491501, lon: -80.232903 },
+      backDest: { lat: 40.777199, lon: -73.872597 },
+    });
+  });
+
+  it("parseRoute still collapses a round trip to null (one-shot resolver contract)", () => {
+    expect(parseRoute(RPA5715_ROW.airport_codes, RPA5715_ROW._airports)).toBeNull();
+  });
+
+  it("an A-B-A without airport coordinates is not disambiguable → none", () => {
+    expect(parseRouteCandidates("KLGA-KPIT-KLGA")).toEqual({ kind: "none" });
+    expect(
+      parseRouteCandidates("KLGA-KPIT-KLGA", [
+        { icao: "KLGA", iata: "LGA" }, // no lat/lon
+        { icao: "KPIT", iata: "PIT" },
+      ]),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("a longer round trip (A-B-C-A) stays null — no single leg reduction", () => {
+    expect(
+      parseRouteCandidates("KLGA-KPIT-KORD-KLGA", [
+        { icao: "KLGA", lat: 40.78, lon: -73.87 },
+        { icao: "KPIT", lat: 40.49, lon: -80.23 },
+        { icao: "KORD", lat: 41.98, lon: -87.9 },
+      ]),
+    ).toEqual({ kind: "none" });
+  });
+
+  /** A service with RPA5715's round-trip filing already cached. */
+  async function warmService() {
+    const fetchFn = vi.fn(async () => routeset([RPA5715_ROW])) as unknown as typeof fetch;
+    const svc = new AdsbLolRouteService({ baseUrl: "https://example.test", fetchFn });
+    await svc.prefetch([{ callsign: "RPA5715", lat: 40.75, lng: -74.1 }]);
+    return svc;
+  }
+
+  it("enrich picks the outbound leg (LGA → PIT) for a westbound plane", async () => {
+    const svc = await warmService();
+    const ac = [planeAt("RPA5715", 40.75, -74.1, 260)]; // track points at PIT
+    svc.enrich(ac);
+    expect(ac[0].route).toMatchObject({ originIcao: "KLGA", destIcao: "KPIT", destIata: "PIT" });
+  });
+
+  it("enrich picks the inbound leg (PIT → LGA) for an eastbound plane", async () => {
+    const svc = await warmService();
+    const ac = [planeAt("RPA5715", 40.75, -74.5, 85)]; // track points back at LGA
+    svc.enrich(ac);
+    expect(ac[0].route).toMatchObject({ originIcao: "KPIT", destIcao: "KLGA", destIata: "LGA" });
+  });
+
+  it("enrich attaches nothing when the track points at neither end (ambiguous)", async () => {
+    const svc = await warmService();
+    const ac = [planeAt("RPA5715", 40.75, -74.3, 0)]; // northbound — neither airport
+    svc.enrich(ac);
+    expect(ac[0].route).toBeUndefined();
+  });
+
+  it("enrich attaches nothing when the feed reports no track", async () => {
+    const svc = await warmService();
+    const ac = [planeAt("RPA5715", 40.75, -74.1, null)];
+    svc.enrich(ac);
+    expect(ac[0].route).toBeUndefined();
+  });
+
+  it("resolve() (backfill, no live position) leaves a round trip null", async () => {
+    const svc = await warmService();
+    expect(await svc.resolve("RPA5715")).toBeNull();
+  });
+
+  it("the same cached round trip yields opposite legs as the plane turns around", async () => {
+    const svc = await warmService();
+    const outbound = [planeAt("RPA5715", 40.75, -74.1, 260)];
+    const inbound = [planeAt("RPA5715", 40.75, -74.5, 85)];
+    svc.enrich(outbound);
+    svc.enrich(inbound);
+    expect(outbound[0].route).toMatchObject({ destIcao: "KPIT" });
+    expect(inbound[0].route).toMatchObject({ destIcao: "KLGA" });
   });
 });

@@ -67,6 +67,47 @@ both sides land.
    all three tabs, four banner variants, fail-soft board, Profile laurel
    ×1/×3 → `/private/tmp/tailspot_snaps/`, reviewed). Full suite green
    (955 tests); device build green.
+## 2026-07-11 — Dynamic leaderboards PR1: backend windows + weekly champions — branch `feat/leaderboard-windows`
+
+The backend half of dynamic leaderboards (PLAN §9 #12): `GET /v1/leaderboard`
+grows a `window=week|month|all` param (absent/invalid → `all`, so old clients
+are untouched — the new top-level fields are additive-only), and closed weeks
+get frozen champions. Noah's locked design calls (L1–L6): **calendar** windows
+(not rolling), **UTC** boundaries (Mon 00:00 / 1st 00:00 — no DST), **no winner
+floor** (a 1-catch week still crowns), **shared crowns** on points ties (every
+tied device gets a `weekly_champions` row and a win), **all three trophies**
+(weekly-win count + ever-topped-all-time + last week's champions), **banner +
+laurel** presentation (iOS PR2/PR3).
+
+- **Response additions:** in-window `entries`/`me.rank`/`me.points`;
+  `me.weeklyWins` + `me.everToppedAllTime` (lifetime, on every window);
+  `resetsAt` (next boundary, null on all); `champions` (last CLOSED week's
+  winner(s), week window only — empty array for a zero-catch week, null handle
+  for an anonymous champion).
+- **Decide-on-read, lazy + idempotent** (`CatchStore.ensureWeeksDecided`): the
+  first week-window request after a Monday boundary crowns the previous week —
+  one atomic `INSERT…SELECT` per week with `ON CONFLICT DO NOTHING` (concurrent
+  double-decides are no-ops), backfilling every never-decided week since the
+  earliest catch (zero-catch weeks skipped). Fast path when the last closed
+  week is already decided = one point-read.
+- **All-time topper ledger** (`alltime_toppers`): every code path that computes
+  all-time #1 (`window=all` requests + week-decide) upserts the current #1;
+  first sighting wins, the flag never unsets. Anonymous devices can top/win —
+  they occupy real ranks.
+- **Migration `0007_leaderboard-windows.sql`** (`weekly_champions` composite-PK
+  week_start+device_id; `alltime_toppers`) — **generated, NOT applied to prod:
+  manual `drizzle-kit migrate` (or psql apply + journal insert) required before
+  the next backend deploy** (the standing backend-migration-drift trap).
+- New pure UTC window math in `src/identity/windows.ts` (Monday re-basing,
+  month lengths, year wraps — unit-tested). Windowing lives in the leaderboard
+  aggregates' JOIN condition so the "≥1 catch" entry ticket becomes "≥1
+  in-window catch" and `me` keeps a rank (0 pts) rather than vanishing.
+- Tests: 311 green (13 new route tests in `test/leaderboardWindows.route.test.ts`,
+  window-math units in `test/windows.test.ts`; existing leaderboard suite
+  updated for the additive `me` fields). Biome + tsc clean.
+
+iOS PR2 (window picker + champions banner) is being built against this exact
+contract in parallel; PR3 (trophies) consumes `weeklyWins`/`everToppedAllTime`.
 
 ## 2026-07-10 — Polish sweep PR B — the taste calls — branch `polish/taste-calls`
 
