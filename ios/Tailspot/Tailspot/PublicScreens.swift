@@ -42,6 +42,20 @@ struct LeaderboardScreen: View {
         case idle, loading, loaded, error(String)
     }
 
+    init() {}
+
+    #if DEBUG
+    /// Snapshot/visual-pass seam — start the screen pre-loaded with fixture
+    /// entries so the List renders without a live backend
+    /// (`ProfileSettingsSnapshotTests` pattern). DEBUG-only; production
+    /// always goes through the no-arg init + `load()`.
+    init(_debugEntries entries: [LeaderboardEntry], me: MyStanding?) {
+        _entries = State(initialValue: entries)
+        _me = State(initialValue: me)
+        _loadState = State(initialValue: .loaded)
+    }
+    #endif
+
     var body: some View {
         List {
             switch loadState {
@@ -66,6 +80,11 @@ struct LeaderboardScreen: View {
             }
         }
         .listStyle(.insetGrouped)
+        // Brand the list like SettingsScreen/SetsScreen — without this the
+        // List renders system grouped chrome, which flips white in light
+        // mode against the fixed dark Brand palette.
+        .scrollContentBackground(.hidden)
+        .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
@@ -131,6 +150,7 @@ struct LeaderboardScreen: View {
                 .foregroundStyle(Brand.Color.cyan)
             }
             .padding(.vertical, 6)
+            .listRowBackground(Brand.Color.bgElevated)
         }
     }
 
@@ -140,11 +160,12 @@ struct LeaderboardScreen: View {
                 Text("No handles yet")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
-                Text("Be the first to claim a handle in Settings → Identity to appear here.")
+                Text("Be the first to claim a handle in Profile → Settings to appear here.")
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
             }
             .padding(.vertical, 6)
+            .listRowBackground(Brand.Color.bgElevated)
         }
     }
 
@@ -281,12 +302,13 @@ struct LeaderboardScreen: View {
                 .padding(.vertical, 2)
                 .listRowBackground(Brand.Color.cyan.opacity(0.12))
                 if !hasHandle {
-                    Text("Claim a handle in Settings → Identity to appear in the list above.")
+                    Text("Claim a handle in Profile → Settings to appear in the list above.")
                         .font(Brand.Font.caption)
                         .foregroundStyle(Brand.Color.textSecondary)
+                        .listRowBackground(Brand.Color.bgElevated)
                 }
             } header: {
-                Text("Your standing")
+                sectionHeader("YOUR STANDING")
             }
         } else if !hasHandle {
             // Not registered yet or no handle — hint.
@@ -295,15 +317,26 @@ struct LeaderboardScreen: View {
                     Text("You have \(myLocalPoints.formatted(.number)) points locally")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Brand.Color.textPrimary)
-                    Text("Claim a handle in Settings → Identity to appear on the leaderboard.")
+                    Text("Claim a handle in Profile → Settings to appear on the leaderboard.")
                         .font(Brand.Font.caption)
                         .foregroundStyle(Brand.Color.textSecondary)
                 }
                 .padding(.vertical, 4)
+                .listRowBackground(Brand.Color.bgElevated)
             } header: {
-                Text("Your standing")
+                sectionHeader("YOUR STANDING")
             }
         }
+    }
+
+    /// Mono ALL-CAPS section header — the app-wide style (SettingsScreen's
+    /// SPOTTER/ABOUT headers), replacing the default system header look.
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(Brand.Font.mono(size: 10, weight: .semibold))
+            .tracking(1.2)
+            .foregroundStyle(Brand.Color.textTertiary)
+            .textCase(nil)
     }
 }
 

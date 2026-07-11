@@ -189,6 +189,9 @@ struct TrophyIcon: View {
             case "weekend":       SunIcon().style(color, lineWidth: 1.9 * scale)
             case "sunrise":       SunriseIcon().style(color, lineWidth: 1.9 * scale)
             case "twin":          TwinIcon().style(color, lineWidth: 1.8 * scale)
+            case "coin":          CoinIcon().style(color, lineWidth: 1.8 * scale)
+            case "crystal":       CrystalBallIcon().style(color, lineWidth: 1.9 * scale)
+            case "bolt":          BoltIcon().style(color, filled: true)
             default:              CatcherIcon().style(color, lineWidth: 2 * scale, dashed: true)
             }
         }
@@ -782,6 +785,59 @@ private struct SunriseIcon: Shape {
     }
 }
 
+/// Four Figures / High Roller — a poker chip (a pile of points).
+private struct CoinIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        let c = CGPoint(x: 16 * s, y: 16 * s)
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 4 * s, y: 4 * s, width: 24 * s, height: 24 * s))    // rim
+        p.addEllipse(in: CGRect(x: 9 * s, y: 9 * s, width: 14 * s, height: 14 * s))    // inner ring
+        for i in 0..<6 {                                                               // 6 edge slots
+            let a = Double(i) * .pi / 3 + .pi / 6
+            let inner = CGPoint(x: c.x + CGFloat(cos(a)) * 7 * s, y: c.y + CGFloat(sin(a)) * 7 * s)
+            let outer = CGPoint(x: c.x + CGFloat(cos(a)) * 12 * s, y: c.y + CGFloat(sin(a)) * 12 * s)
+            p.move(to: inner); p.addLine(to: outer)
+        }
+        return p
+    }
+}
+
+/// Called It / Clairvoyant — a crystal ball on its stand (you saw the route).
+private struct CrystalBallIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.addEllipse(in: CGRect(x: 7 * s, y: 4 * s, width: 18 * s, height: 18 * s))    // ball
+        // Inner gleam — a short arc following the upper-left of the ball.
+        p.move(to: pt(11, 9.5))
+        p.addQuadCurve(to: pt(14.5, 6.8), control: pt(12, 7.4))
+        // Stand: a shallow trapezoid under the ball.
+        p.move(to: pt(11, 23)); p.addLine(to: pt(9, 27)); p.addLine(to: pt(23, 27)); p.addLine(to: pt(21, 23))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Hot Streak — a lightning bolt (three in a row, no misses).
+private struct BoltIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(18, 3))
+        p.addLine(to: pt(8, 18))
+        p.addLine(to: pt(14.5, 18))
+        p.addLine(to: pt(12.5, 29))
+        p.addLine(to: pt(24, 13))
+        p.addLine(to: pt(17, 13))
+        p.addLine(to: pt(20.5, 3))
+        p.closeSubpath()
+        return p
+    }
+}
+
 /// Doubleheader — two overlapping cards (the same thing, twice).
 private struct TwinIcon: Shape {
     func path(in rect: CGRect) -> Path {
@@ -966,6 +1022,7 @@ let trophyIconNames = [
     "jumbo", "cargo", "bizjet", "prop", "star", "heli",
     "altitude", "speed", "stack", "clock",
     "approach", "grid", "home", "weekend", "sunrise", "twin",
+    "coin", "crystal", "bolt",
 ]
 
 #if DEBUG

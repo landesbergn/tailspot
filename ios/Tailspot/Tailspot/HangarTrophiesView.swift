@@ -52,17 +52,12 @@ nonisolated enum TrophyBoard {
 struct HangarTrophiesView: View {
     @Query private var catches: [Catch]
 
-    /// The single accent for an earned achievement hex — cyan-family metal,
-    /// chosen to sit apart from the rarity/type palettes (grey/green/cyan/
-    /// purple/gold pills) by shape + a consistent cool tone, not gold.
-    private let earnedTier: TrophyTier = .platinum
-
     var body: some View {
         let inputs = Trophies.inputs(from: catches)
         let items = TrophyBoard.visible(inputs: inputs)
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
-                ForEach(items) { card($0, inputs: inputs) }
+                ForEach(items) { TrophyCardRow(ach: $0, inputs: inputs) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -70,9 +65,22 @@ struct HangarTrophiesView: View {
         }
         .background(Brand.Color.bgPrimary)
     }
+}
 
-    @ViewBuilder
-    private func card(_ ach: Achievement, inputs: TrophyProgressInputs) -> some View {
+/// One trophy card — earned (cyan hex), locked-with-progress, or the masked
+/// `???` secret placeholder. A standalone view (not a private builder on
+/// HangarTrophiesView) so the snapshot harness can render the exact same
+/// cards in a plain non-lazy column, without a SwiftData container.
+struct TrophyCardRow: View {
+    let ach: Achievement
+    let inputs: TrophyProgressInputs
+
+    /// The single accent for an earned achievement hex — cyan-family metal,
+    /// chosen to sit apart from the rarity/type palettes (grey/green/cyan/
+    /// purple/gold pills) by shape + a consistent cool tone, not gold.
+    private let earnedTier: TrophyTier = .platinum
+
+    var body: some View {
         let earned = ach.isEarned(inputs: inputs)
         // Secret + locked → a `???` placeholder with no name or details, so it
         // exists in the list without spoiling what it is.

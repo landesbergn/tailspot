@@ -59,7 +59,7 @@ nonisolated enum Rarity: String, CaseIterable, Equatable, Sendable {
         switch self {
         case .common:    return Color(hex: 0x8595A5)
         case .uncommon:  return Color(hex: 0x4ECCA3)
-        case .rare:      return Color(hex: 0x00D4FF)
+        case .rare:      return Brand.Color.cyan    // same hex — rare IS brand cyan
         case .epic:      return Color(hex: 0x9B5DE5)
         case .legendary: return Color(hex: 0xFFB800)
         }

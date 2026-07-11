@@ -18,11 +18,16 @@
 import Foundation
 import Combine
 
-/// The one-time "trophy case" summary shown on first launch after this
-/// update, so existing testers learn the feature exists without a
-/// per-trophy celebration flood.
+/// The one-time "trophy case" recap shown on first launch after a roster
+/// expansion (or the very first seed), so existing testers get one
+/// celebratory moment instead of a per-trophy celebration flood. Carries
+/// the full earned set so the recap sheet can render the actual trophies,
+/// not just a count.
 nonisolated struct TrophyRecap: Equatable, Sendable {
-    let earned: Int
+    /// Every achievement earned under the CURRENT roster, in roster order
+    /// (earned secrets included — earning reveals them, house rule).
+    let achievements: [Achievement]
+    var earned: Int { achievements.count }
 }
 
 @MainActor
@@ -37,15 +42,20 @@ final class TrophyUnlockCenter: ObservableObject {
     /// Event-based trophy inputs (e.g. the grounded easter egg's
     /// `triedGroundedCatch`) — injectable so tests stay suite-isolated.
     private let events: TrophyEventStore
+    /// The roster generation this build ships (injectable for tests). See
+    /// `Trophies.rosterVersion` for the stamp/reseed/recap contract.
+    private let rosterVersion: Int
 
     init(
         ledger: UserDefaultsTrophyLedger = UserDefaultsTrophyLedger(),
         roster: [Achievement] = Trophies.roster,
-        events: TrophyEventStore = TrophyEventStore()
+        events: TrophyEventStore = TrophyEventStore(),
+        rosterVersion: Int = Trophies.rosterVersion
     ) {
         self.ledger = ledger
         self.roster = roster
         self.events = events
+        self.rosterVersion = rosterVersion
     }
 
     var head: TrophyUnlockEvent? { pendingEvents.first }
@@ -53,15 +63,24 @@ final class TrophyUnlockCenter: ObservableObject {
 
     /// Diff the Hangar against the ledger and queue newly-crossed trophies.
     ///
-    /// The FIRST call on an unseeded ledger **seeds instead of diffing** (and
-    /// may queue the one-time recap), so no path — catch flow or tab-open
-    /// fallback — can flood an existing tester. `pending()` therefore never
-    /// runs against an unseeded ledger. Callers should fire this once at app
-    /// launch so the seed lands before the user's first crossing.
+    /// Two paths bypass the diff and (re)seed instead:
+    ///  • an UNSEEDED ledger (first launch with the unlock machinery), so no
+    ///    path — catch flow or tab-open fallback — can flood an existing
+    ///    tester; `pending()` never runs against an unseeded ledger.
+    ///  • a STALE ROSTER STAMP (`ledger.rosterVersion < rosterVersion`): the
+    ///    roster grew since this device last seeded, so newly-added trophies
+    ///    the user already qualifies for (e.g. Four Figures on an existing
+    ///    2,000-point Hangar) are acknowledged silently and recapped as ONE
+    ///    "trophy case" moment instead of a toast flood.
+    /// Both stamp the current roster version and queue the recap only when
+    /// something is actually earned — a fresh install never sees it.
+    /// Callers should fire this once at app launch so the seed lands before
+    /// the user's first crossing.
     func enqueueNewUnlocks(from catches: [Catch]) {
         let inputs = Trophies.inputs(from: catches, events: events)
-        guard ledger.isSeeded else {
+        guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
+            ledger.markRosterVersion(rosterVersion)
             queueRecapIfNeeded(inputs: inputs)
             return
         }
@@ -116,24 +135,26 @@ final class TrophyUnlockCenter: ObservableObject {
         pendingEvents.removeAll()
     }
 
-    /// Dismiss the one-time recap (and never show it again).
+    /// Dismiss the one-time recap. One-time-ness lives in the roster-version
+    /// stamp (written at reseed time, before presentation) — a crash mid-recap
+    /// loses the moment rather than ever re-flooding, the same trade the
+    /// seeding path has always made.
     func dismissRecap() {
         if let recap = pendingRecap {
             Analytics.capture("trophy_recap_shown", [
                 "earned": .int(recap.earned),
+                "roster_version": .int(rosterVersion),
             ])
         }
-        ledger.markRecapShown()
         pendingRecap = nil
     }
 
     private func queueRecapIfNeeded(inputs: TrophyProgressInputs) {
-        guard !ledger.recapShown else { return }
-        let earnedCount = roster.filter { $0.isEarned(inputs: inputs) }.count
-        // Nothing earned (fresh install) → no recap; mark shown so we don't
-        // re-check on every launch.
-        guard earnedCount > 0 else { ledger.markRecapShown(); return }
-        pendingRecap = TrophyRecap(earned: earnedCount)
+        let earned = roster.filter { $0.isEarned(inputs: inputs) }
+        // Nothing earned (fresh install, or an install that never caught) →
+        // no recap; the version stamp is already written, so no re-check.
+        guard !earned.isEmpty else { return }
+        pendingRecap = TrophyRecap(achievements: earned)
     }
 
     #if DEBUG

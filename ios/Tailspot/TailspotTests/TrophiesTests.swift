@@ -639,3 +639,157 @@ struct TrophiesExpansionTests {
         #expect(Trophies.hasConsecutiveSameOperator([(t0.addingTimeInterval(120), "ual"), (t0, "ual")]))
     }
 }
+
+// MARK: - 2026-07-10 roster expansion (game-layer PR4)
+
+@Suite("Trophies — points + guess trophies (2026-07-10 expansion)")
+@MainActor
+struct TrophyRosterExpansionTests {
+
+    /// Base epoch for deterministic ordering; each catch offsets by minutes.
+    private let t0 = Date(timeIntervalSince1970: 1_716_000_000)
+
+    /// A catch at a known rarity via typecode (single-source rule): nil →
+    /// .common (10 pts), "B744" → .rare (50), "C17" → .epic (100),
+    /// "B2" → .legendary (500).
+    private func mk(typecode: String? = nil, minute: Int = 0) -> Catch {
+        Catch(
+            icao24: UUID().uuidString.prefix(6).lowercased(),
+            callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: t0.addingTimeInterval(Double(minute) * 60),
+            observerLat: 0, observerLon: 0, slantDistanceMeters: 1000,
+            typecode: typecode
+        )
+    }
+
+    /// A catch that ANSWERED the bonus round with the given verdict
+    /// (guessing is route-only; SKIP would leave all three fields nil).
+    private func guessed(_ correct: Bool, minute: Int) -> Catch {
+        let c = mk(minute: minute)
+        c.guessKind = GuessKind.route.rawValue
+        c.guessValue = "KSFO"
+        c.guessCorrect = correct
+        return c
+    }
+
+    private func ach(_ id: String) -> Achievement {
+        Trophies.roster.first { $0.id == id }!
+    }
+
+    // MARK: totalPoints (offline base-points approximation)
+
+    @Test func totalPointsSumsCurrentBasePoints() {
+        // common 10 + rare 50 + epic 100 + legendary 500 = 660.
+        let catches = [mk(), mk(typecode: "B744"), mk(typecode: "C17"), mk(typecode: "B2")]
+        #expect(Trophies.inputs(from: catches).totalPoints == 660)
+        #expect(Trophies.inputs(from: []).totalPoints == 0)
+    }
+
+    @Test func fourFiguresBoundaryAtExactlyOneThousand() {
+        // 99 commons = 990 → locked; 100 commons = 1000 → earned (>= threshold).
+        let ninetyNine = (0..<99).map { mk(minute: $0) }
+        #expect(ach("fourfigures").isEarned(inputs: Trophies.inputs(from: ninetyNine)) == false)
+        #expect(ach("fourfigures").isEarned(inputs: Trophies.inputs(from: ninetyNine + [mk(minute: 99)])))
+    }
+
+    @Test func highRollerAtFiveThousandChainedBehindFourFigures() {
+        #expect(ach("highroller").prerequisite == "fourfigures")
+        // 9 legendaries = 4500 → locked; 10 = 5000 → earned.
+        let nine = (0..<9).map { mk(typecode: "B2", minute: $0) }
+        #expect(ach("highroller").isEarned(inputs: Trophies.inputs(from: nine)) == false)
+        #expect(ach("highroller").isEarned(inputs: Trophies.inputs(from: nine + [mk(typecode: "B2", minute: 9)])))
+    }
+
+    @Test func pointsMilestonesAreVisibleNotSecret() {
+        #expect(ach("fourfigures").secret == false)
+        #expect(ach("highroller").secret == false)
+        #expect(ach("fourfigures").prerequisite == nil)
+    }
+
+    // MARK: correctGuesses / Called It / Clairvoyant
+
+    @Test func correctGuessesCountsOnlyAnsweredCorrectRows() {
+        let catches = [
+            guessed(true, minute: 0),
+            guessed(false, minute: 1),
+            guessed(true, minute: 2),
+            mk(minute: 3),               // no round → doesn't count
+        ]
+        #expect(Trophies.inputs(from: catches).correctGuesses == 2)
+    }
+
+    @Test func calledItEarnsOnFirstCorrectCallOnly() {
+        #expect(ach("calledit").isEarned(inputs: Trophies.inputs(from: [guessed(true, minute: 0)])))
+        // A wrong answer (or no round at all) earns nothing.
+        #expect(ach("calledit").isEarned(inputs: Trophies.inputs(from: [guessed(false, minute: 0)])) == false)
+        #expect(ach("calledit").isEarned(inputs: Trophies.inputs(from: [mk()])) == false)
+    }
+
+    @Test func clairvoyantBoundaryAtTenCorrect() {
+        #expect(ach("clairvoyant").prerequisite == "calledit")
+        let nine = (0..<9).map { guessed(true, minute: $0) }
+        #expect(ach("clairvoyant").isEarned(inputs: Trophies.inputs(from: nine)) == false)
+        #expect(ach("clairvoyant").isEarned(inputs: Trophies.inputs(from: nine + [guessed(true, minute: 9)])))
+        // Wrong answers never help: 9 correct + 5 wrong is still locked.
+        let mixed = nine + (10..<15).map { guessed(false, minute: $0) }
+        #expect(ach("clairvoyant").isEarned(inputs: Trophies.inputs(from: mixed)) == false)
+    }
+
+    // MARK: Hot Streak (secret; 3 correct in a row)
+
+    @Test func hotStreakNeedsThreeConsecutiveCorrect() {
+        // correct, correct, wrong, correct, correct → best run 2 → locked.
+        let broken = [guessed(true, minute: 0), guessed(true, minute: 1),
+                      guessed(false, minute: 2),
+                      guessed(true, minute: 3), guessed(true, minute: 4)]
+        #expect(Trophies.inputs(from: broken).bestGuessStreak == 2)
+        #expect(ach("hotstreak").isEarned(inputs: Trophies.inputs(from: broken)) == false)
+        // Append a third consecutive correct → earned.
+        let streak = broken + [guessed(true, minute: 5)]
+        #expect(Trophies.inputs(from: streak).bestGuessStreak == 3)
+        #expect(ach("hotstreak").isEarned(inputs: Trophies.inputs(from: streak)))
+    }
+
+    @Test func hotStreakUnbrokenByCatchesWithoutARound() {
+        // Plain catches (and SKIPs — same nil verdict) between correct calls
+        // don't reset the run; only a WRONG answer does.
+        let catches = [guessed(true, minute: 0), mk(minute: 1),
+                       guessed(true, minute: 2), mk(minute: 3),
+                       guessed(true, minute: 4)]
+        #expect(Trophies.inputs(from: catches).bestGuessStreak == 3)
+        #expect(ach("hotstreak").isEarned(inputs: Trophies.inputs(from: catches)))
+    }
+
+    @Test func hotStreakOrdersByCatchTimeNotArrayOrder() {
+        // Shuffled array order; caughtAt order is correct(0), wrong(1),
+        // correct(2), correct(3), correct(4) → best run 3.
+        let catches = [guessed(true, minute: 4), guessed(true, minute: 0),
+                       guessed(correctAt: 2), guessed(false, minute: 1),
+                       guessed(true, minute: 3)]
+        #expect(Trophies.inputs(from: catches).bestGuessStreak == 3)
+    }
+
+    /// Convenience overload so the shuffled test reads naturally.
+    private func guessed(correctAt minute: Int) -> Catch { guessed(true, minute: minute) }
+
+    @Test func hotStreakIsSecretAndBinary() {
+        #expect(ach("hotstreak").secret)
+        #expect(ach("hotstreak").tiers.count == 1)
+    }
+
+    // MARK: Roster generation
+
+    @Test func rosterVersionIsStampedAtTwo() {
+        // The 2026-07-10 expansion generation. Bumping this constant is what
+        // triggers the reseed + recap on devices stamped behind it — pin it
+        // so an accidental edit is loud.
+        #expect(Trophies.rosterVersion == 2)
+    }
+
+    @Test func newIdsPresentExactlyOnce() {
+        let ids = Trophies.roster.map(\.id)
+        for id in ["fourfigures", "highroller", "calledit", "clairvoyant", "hotstreak"] {
+            #expect(ids.filter { $0 == id }.count == 1, "\(id) missing or duplicated")
+        }
+    }
+}

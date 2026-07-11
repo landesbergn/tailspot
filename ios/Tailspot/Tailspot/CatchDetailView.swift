@@ -217,6 +217,7 @@ struct CatchDetailView: View {
         let img = shareImage
         return HStack {
             chromePill(icon: "chevron.left") { dismiss() }
+                .accessibilityLabel("Back")
             Spacer()
             Button {
                 showDeleteConfirm = true
@@ -224,6 +225,7 @@ struct CatchDetailView: View {
                 chromePillBody(icon: "trash", tint: Brand.Color.alertWarning)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Delete catch")
             .padding(.trailing, 8)
             // Share a polished card image (not just text) so friends get a
             // clean card instead of a screenshot; the text rides as the
@@ -232,6 +234,7 @@ struct CatchDetailView: View {
                 chromePillBody(icon: "square.and.arrow.up")
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Share catch")
         }
         .padding(.horizontal, 16)
     }
@@ -256,6 +259,9 @@ struct CatchDetailView: View {
             .frame(width: 36, height: 36)
             .background(.ultraThinMaterial, in: .circle)
             .overlay(Circle().strokeBorder(.white.opacity(0.10), lineWidth: 1))
+            // 44pt minimum hit target (HIG): the disc stays 36pt visually,
+            // the tappable region grows 4pt past every edge via contentShape.
+            .contentShape(Rectangle().inset(by: -4))
     }
 
     /// Free text for the iOS share sheet. No image attachment — keeps

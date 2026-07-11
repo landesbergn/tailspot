@@ -61,7 +61,7 @@ enum RP {
     static let muted = Color(hex: 0x8DA0B2)
     static let faint = Color(hex: 0x5F7284)
     static let rule = Color(hex: 0x232C38)
-    static let gold = Color(hex: 0xFBBF24)
+    static let gold = Brand.Color.ledgerGold
     static let flapFace = Color(hex: 0x131720)
     static let flapUnsettled = Color(hex: 0x6B7886)
 }
@@ -81,15 +81,23 @@ struct FlapRow: View {
     /// continuously across lines instead of restarting on each line.
     var indexOffset: Int = 0
     var totalCount: Int = 0
+    /// Reduce Motion: skip the tumbling random characters and fade the
+    /// settled text straight in over the same clock window, so the reveal
+    /// ends on the identical settled frame.
+    var reduceMotion: Bool = false
     let color: Color
 
     var body: some View {
         let chars = Array(text)
         let total = totalCount > 0 ? totalCount : chars.count
         let n = max(1, total - 1)
+        // Reduce-Motion fade progress across the row's settle window (guard
+        // spanT == 0 — SettledCatchCard renders the rested frame directly).
+        let fade = spanT > 0 ? ss(startT, startT + spanT, t) : 1
         HStack(spacing: gap) {
             ForEach(Array(chars.enumerated()), id: \.offset) { i, ch in
-                let isSettled = t >= startT + (Double(indexOffset + i) / Double(n)) * spanT
+                let isSettled = reduceMotion
+                    || t >= startT + (Double(indexOffset + i) / Double(n)) * spanT
                 let shown: Character = ch == " "
                     ? " "
                     : (isSettled ? ch : flapPool[abs(Int(t * 42) + i * 5) % flapPool.count])
@@ -100,6 +108,7 @@ struct FlapRow: View {
                     Text(String(shown))
                         .font(.system(size: fs, weight: .bold, design: .monospaced))
                         .foregroundColor(isSettled ? color : RP.flapUnsettled)
+                        .opacity(reduceMotion ? fade : 1)
                 }
                 .frame(width: ch == " " ? cw * 0.45 : cw, height: fs * 1.5)
                 .opacity(ch == " " ? 0 : 1)
@@ -338,7 +347,17 @@ struct CatchRevealView: View {
     /// outcome onto the row + fires `guess_round_answered`/`_skipped`.
     var onGuessResolved: ((_ answeredValue: String?, _ correct: Bool) -> Void)? = nil
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+
+    #if DEBUG
+    /// Snapshot/visual-pass seam — `accessibilityReduceMotion` is a read-only
+    /// environment key, so the render harness forces it here instead.
+    /// nil (production) = follow the system setting.
+    var _reduceMotionOverride: Bool? = nil
+    private var reduceMotion: Bool { _reduceMotionOverride ?? systemReduceMotion }
+    #else
+    private var reduceMotion: Bool { systemReduceMotion }
+    #endif
 
     /// Animation clock anchor. nil until `onAppear`; `t` is 0 until set.
     @State private var start: Date?
@@ -695,7 +714,8 @@ struct CatchRevealView: View {
                         ForEach(flapLines) { fl in
                             FlapRow(text: fl.text, t: t, startT: 0.24, spanT: 0.36,
                                     fs: fs, cw: cw, gap: flapGap,
-                                    indexOffset: fl.id, totalCount: totalFlapChars, color: RP.ink)
+                                    indexOffset: fl.id, totalCount: totalFlapChars,
+                                    reduceMotion: reduceMotion, color: RP.ink)
                         }
                     }
 
@@ -707,7 +727,7 @@ struct CatchRevealView: View {
                         if isDuplicate {
                             Text("· ALREADY CAUGHT")
                                 .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
-                                .tracking(1).foregroundColor(Color(hex: 0xE0556B))
+                                .tracking(1).foregroundColor(Brand.Color.duplicateRose)
                         }
                     }
                     .opacity(ss(0.56, 0.7, t))
@@ -910,7 +930,8 @@ struct CatchRevealView: View {
                 let pop = chipPop(idx: idx, gt: render.popClock)
                 answerChip(option, render: render, scale: scale)
                     .opacity(min(1, pop))
-                    .scaleEffect(0.82 + 0.18 * pop, anchor: .center)
+                    // Reduce Motion: plain fade, no scale pop.
+                    .scaleEffect(reduceMotion ? 1 : 0.82 + 0.18 * pop, anchor: .center)
             }
             // SKIP retires the instant the player commits.
             Button(action: skipBonusRound) {
