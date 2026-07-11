@@ -10,6 +10,16 @@
  * happen to share a database: `IdentityStore` owns devices + handles;
  * `CatchStore` owns catch ingestion + the leaderboard aggregate + the
  * typecode→rarity resolution catches need.
+ *
+ * **Transient-connection retry.** Every *idempotent* DB op below is wrapped in
+ * `withDbRetry` (same policy as `DrizzleMetadataStore`), so a pooled connection
+ * dropped mid-query — a Fly `.flycast` recycle, a brief DB restart — self-heals
+ * on a fresh connection instead of 500ing (Sentry BROKEN-DARKNESS-5055-7 hit the
+ * leaderboard reads, which had no retry). Only reads and ON CONFLICT DO NOTHING
+ * writes are wrapped; the two non-idempotent writes — `createDevice`'s plain
+ * INSERT and `claimHandle`'s UPDATE — are NOT, because a retried lost-ack could
+ * double-apply. Retry can't paper over a multi-second outage (that's a DB-
+ * capacity problem); it covers the sub-second blip.
  */
 
 import { and, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
@@ -21,6 +31,7 @@ import {
   pointsForRarity,
 } from "../catches/points.js";
 import type { Database } from "../db/client.js";
+import { withDbRetry } from "../db/retry.js";
 import {
   alltimeToppers,
   catches,
@@ -67,31 +78,40 @@ export class DrizzleIdentityStore implements IdentityStore {
   constructor(private readonly db: Database) {}
 
   async createDevice(tokenHash: string): Promise<{ id: string }> {
+    // NOT wrapped in withDbRetry: a plain INSERT is non-idempotent — a retry
+    // after a lost ack could mint two devices for one token.
     const rows = await this.db.insert(devices).values({ tokenHash }).returning({ id: devices.id });
     return { id: rows[0].id };
   }
 
   async findByTokenHash(tokenHash: string): Promise<DeviceIdentity | null> {
-    const rows = await this.db
-      .select({ id: devices.id, handle: devices.handle })
-      .from(devices)
-      .where(eq(devices.tokenHash, tokenHash))
-      .limit(1);
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({ id: devices.id, handle: devices.handle })
+        .from(devices)
+        .where(eq(devices.tokenHash, tokenHash))
+        .limit(1),
+    );
     return rows[0] ?? null;
   }
 
   async claimHandle(deviceId: string, handle: string): Promise<HandleClaimResult> {
     const lower = handle.toLowerCase();
-    // Is the lowercased handle held by a DIFFERENT device? (Re-claiming your own
-    // handle, even with different casing, is allowed.)
-    const conflict = await this.db
-      .select({ id: devices.id })
-      .from(devices)
-      .where(and(eq(sql`lower(${devices.handle})`, lower), sql`${devices.id} <> ${deviceId}`))
-      .limit(1);
+    // The conflict check is an idempotent read → retryable.
+    const conflict = await withDbRetry(() =>
+      this.db
+        .select({ id: devices.id })
+        .from(devices)
+        // Is the lowercased handle held by a DIFFERENT device? (Re-claiming your
+        // own handle, even with different casing, is allowed.)
+        .where(and(eq(sql`lower(${devices.handle})`, lower), sql`${devices.id} <> ${deviceId}`))
+        .limit(1),
+    );
     if (conflict.length > 0) {
       return { ok: false, reason: "taken" };
     }
+    // The UPDATE is deliberately NOT retried here — a dropped connection would
+    // reopen the taken-check race; the route's own error path is the safety net.
     await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
     return { ok: true, handle };
   }
@@ -99,10 +119,12 @@ export class DrizzleIdentityStore implements IdentityStore {
   async takenHandles(handles: string[]): Promise<Set<string>> {
     if (handles.length === 0) return new Set();
     const lowers = [...new Set(handles.map((h) => h.toLowerCase()))];
-    const rows = await this.db
-      .select({ handle: devices.handle })
-      .from(devices)
-      .where(and(isNotNull(devices.handle), inArray(sql`lower(${devices.handle})`, lowers)));
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({ handle: devices.handle })
+        .from(devices)
+        .where(and(isNotNull(devices.handle), inArray(sql`lower(${devices.handle})`, lowers))),
+    );
     return new Set(rows.map((r) => (r.handle as string).toLowerCase()));
   }
 }
@@ -361,19 +383,23 @@ export class DrizzleCatchStore implements CatchStore {
 
   async resolveRarity(icao24: string): Promise<RarityResolution> {
     // Same chain as the metadata store: registry → typecode → DOC 8643 rarity.
-    const regRows = await this.db
-      .select({ typecode: registry.typecode })
-      .from(registry)
-      .where(eq(registry.icao24, icao24))
-      .limit(1);
+    const regRows = await withDbRetry(() =>
+      this.db
+        .select({ typecode: registry.typecode })
+        .from(registry)
+        .where(eq(registry.icao24, icao24))
+        .limit(1),
+    );
     const typecode = regRows[0]?.typecode ?? null;
     if (!typecode) return { typecode: null, rarity: null };
 
-    const tcRows = await this.db
-      .select({ rarity: typecodes.rarity })
-      .from(typecodes)
-      .where(eq(typecodes.typecode, typecode))
-      .limit(1);
+    const tcRows = await withDbRetry(() =>
+      this.db
+        .select({ rarity: typecodes.rarity })
+        .from(typecodes)
+        .where(eq(typecodes.typecode, typecode))
+        .limit(1),
+    );
     return { typecode, rarity: tcRows[0]?.rarity ?? null };
   }
 
@@ -402,11 +428,13 @@ export class DrizzleCatchStore implements CatchStore {
   async isFirstOfType(deviceId: string, typecode: string | null): Promise<boolean> {
     // An unresolved airframe has no type identity — it can't be "first of type".
     if (typecode === null) return false;
-    const existing = await this.db
-      .select({ id: catches.id })
-      .from(catches)
-      .where(and(eq(catches.deviceId, deviceId), eq(catches.typecode, typecode)))
-      .limit(1);
+    const existing = await withDbRetry(() =>
+      this.db
+        .select({ id: catches.id })
+        .from(catches)
+        .where(and(eq(catches.deviceId, deviceId), eq(catches.typecode, typecode)))
+        .limit(1),
+    );
     return existing.length === 0;
   }
 
@@ -414,43 +442,46 @@ export class DrizzleCatchStore implements CatchStore {
     // Idempotency: the catch_uuid unique constraint makes ON CONFLICT DO NOTHING
     // a no-op for a replay; an empty `returning` then signals "already existed",
     // and we read the original row back. This is a single round-trip on the
-    // happy path and one extra SELECT only on a replay.
-    const inserted = await this.db
-      .insert(catches)
-      .values({
-        catchUuid: c.catchUuid,
-        deviceId: c.deviceId,
-        icao24: c.icao24,
-        callsign: c.callsign,
-        typecode: c.typecode,
-        rarity: c.rarity,
-        points: c.points,
-        scoringVersion: c.scoringVersion,
-        firstOfType: c.firstOfType,
-        guessKind: c.guessKind,
-        guessValue: c.guessValue,
-        guessCorrect: c.guessCorrect,
-        caughtAt: c.caughtAt,
-        observerLat: c.observerLat,
-        observerLon: c.observerLon,
-        headingDeg: c.headingDeg,
-        elevationDeg: c.elevationDeg,
-        headingAccuracyDeg: c.headingAccuracyDeg,
-        aircraftLat: c.aircraftLat,
-        aircraftLon: c.aircraftLon,
-        aircraftAltitudeMeters: c.aircraftAltitudeMeters,
-        aircraftPositionTimestamp: c.aircraftPositionTimestamp,
-        validation: c.validation,
-      })
-      .onConflictDoNothing({ target: [catches.deviceId, catches.catchUuid] })
-      .returning({
-        id: catches.id,
-        points: catches.points,
-        rarity: catches.rarity,
-        typecode: catches.typecode,
-        firstOfType: catches.firstOfType,
-        guessCorrect: catches.guessCorrect,
-      });
+    // happy path and one extra SELECT only on a replay. The ON CONFLICT DO
+    // NOTHING makes the insert idempotent, so a dropped-connection retry is safe.
+    const inserted = await withDbRetry(() =>
+      this.db
+        .insert(catches)
+        .values({
+          catchUuid: c.catchUuid,
+          deviceId: c.deviceId,
+          icao24: c.icao24,
+          callsign: c.callsign,
+          typecode: c.typecode,
+          rarity: c.rarity,
+          points: c.points,
+          scoringVersion: c.scoringVersion,
+          firstOfType: c.firstOfType,
+          guessKind: c.guessKind,
+          guessValue: c.guessValue,
+          guessCorrect: c.guessCorrect,
+          caughtAt: c.caughtAt,
+          observerLat: c.observerLat,
+          observerLon: c.observerLon,
+          headingDeg: c.headingDeg,
+          elevationDeg: c.elevationDeg,
+          headingAccuracyDeg: c.headingAccuracyDeg,
+          aircraftLat: c.aircraftLat,
+          aircraftLon: c.aircraftLon,
+          aircraftAltitudeMeters: c.aircraftAltitudeMeters,
+          aircraftPositionTimestamp: c.aircraftPositionTimestamp,
+          validation: c.validation,
+        })
+        .onConflictDoNothing({ target: [catches.deviceId, catches.catchUuid] })
+        .returning({
+          id: catches.id,
+          points: catches.points,
+          rarity: catches.rarity,
+          typecode: catches.typecode,
+          firstOfType: catches.firstOfType,
+          guessCorrect: catches.guessCorrect,
+        }),
+    );
 
     if (inserted.length > 0) {
       const row = inserted[0];
@@ -469,18 +500,20 @@ export class DrizzleCatchStore implements CatchStore {
 
     // Replay: return the ORIGINAL stored result (its server-resolved points,
     // rarity, typecode — not anything from this retry).
-    const existing = await this.db
-      .select({
-        id: catches.id,
-        points: catches.points,
-        rarity: catches.rarity,
-        typecode: catches.typecode,
-        firstOfType: catches.firstOfType,
-        guessCorrect: catches.guessCorrect,
-      })
-      .from(catches)
-      .where(and(eq(catches.deviceId, c.deviceId), eq(catches.catchUuid, c.catchUuid)))
-      .limit(1);
+    const existing = await withDbRetry(() =>
+      this.db
+        .select({
+          id: catches.id,
+          points: catches.points,
+          rarity: catches.rarity,
+          typecode: catches.typecode,
+          firstOfType: catches.firstOfType,
+          guessCorrect: catches.guessCorrect,
+        })
+        .from(catches)
+        .where(and(eq(catches.deviceId, c.deviceId), eq(catches.catchUuid, c.catchUuid)))
+        .limit(1),
+    );
     const row = existing[0];
     return {
       result: {
@@ -498,10 +531,12 @@ export class DrizzleCatchStore implements CatchStore {
   async listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage> {
     // Total first: the client sizes its restore prompt on this, and it must be
     // the device's FULL count even when the page window is smaller.
-    const totalRows = await this.db
-      .select({ n: sql<number>`count(*)` })
-      .from(catches)
-      .where(eq(catches.deviceId, deviceId));
+    const totalRows = await withDbRetry(() =>
+      this.db
+        .select({ n: sql<number>`count(*)` })
+        .from(catches)
+        .where(eq(catches.deviceId, deviceId)),
+    );
     const total = Number(totalRows[0]?.n ?? 0);
 
     // Page query with the two airframe joins. LEFT joins: a foreign airframe
@@ -509,33 +544,35 @@ export class DrizzleCatchStore implements CatchStore {
     // must still restore (the client's own backfill can heal names later).
     // Ordered oldest-first with the id as a total-order tiebreaker so pages
     // never overlap or skip rows even when timestamps collide.
-    const rows = await this.db
-      .select({
-        catchUuid: catches.catchUuid,
-        icao24: catches.icao24,
-        callsign: catches.callsign,
-        typecode: catches.typecode,
-        rarity: catches.rarity,
-        points: catches.points,
-        firstOfType: catches.firstOfType,
-        guessKind: catches.guessKind,
-        guessValue: catches.guessValue,
-        guessCorrect: catches.guessCorrect,
-        caughtAt: catches.caughtAt,
-        observerLat: catches.observerLat,
-        observerLon: catches.observerLon,
-        aircraftAltitudeMeters: catches.aircraftAltitudeMeters,
-        registration: registry.registration,
-        manufacturer: typecodes.manufacturer,
-        model: typecodes.model,
-      })
-      .from(catches)
-      .leftJoin(registry, eq(registry.icao24, catches.icao24))
-      .leftJoin(typecodes, eq(typecodes.typecode, catches.typecode))
-      .where(eq(catches.deviceId, deviceId))
-      .orderBy(catches.caughtAt, catches.id)
-      .limit(limit)
-      .offset(offset);
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({
+          catchUuid: catches.catchUuid,
+          icao24: catches.icao24,
+          callsign: catches.callsign,
+          typecode: catches.typecode,
+          rarity: catches.rarity,
+          points: catches.points,
+          firstOfType: catches.firstOfType,
+          guessKind: catches.guessKind,
+          guessValue: catches.guessValue,
+          guessCorrect: catches.guessCorrect,
+          caughtAt: catches.caughtAt,
+          observerLat: catches.observerLat,
+          observerLon: catches.observerLon,
+          aircraftAltitudeMeters: catches.aircraftAltitudeMeters,
+          registration: registry.registration,
+          manufacturer: typecodes.manufacturer,
+          model: typecodes.model,
+        })
+        .from(catches)
+        .leftJoin(registry, eq(registry.icao24, catches.icao24))
+        .leftJoin(typecodes, eq(typecodes.typecode, catches.typecode))
+        .where(eq(catches.deviceId, deviceId))
+        .orderBy(catches.caughtAt, catches.id)
+        .limit(limit)
+        .offset(offset),
+    );
 
     return {
       total,
@@ -576,24 +613,26 @@ export class DrizzleCatchStore implements CatchStore {
     const joinOn = since
       ? and(eq(catches.deviceId, devices.id), gte(catches.caughtAt, since))
       : eq(catches.deviceId, devices.id);
-    const rows = await this.db
-      .select({
-        handle: devices.handle,
-        points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("points"),
-        catches: sql<number>`count(${catches.id})`.as("catches"),
-        createdAt: devices.createdAt,
-      })
-      .from(devices)
-      .leftJoin(catches, joinOn)
-      .where(isNotNull(devices.handle))
-      .groupBy(devices.id, devices.handle, devices.createdAt)
-      // A claimed handle alone doesn't put you on the public board — onboarding
-      // mints handles for drive-by installs (suggestion chips), and those
-      // 0-point rows were padding the bottom of the leaderboard. One catch is
-      // the entry ticket.
-      .having(sql`count(${catches.id}) > 0`)
-      .orderBy(desc(sql`points`), devices.createdAt, devices.id)
-      .limit(limit);
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({
+          handle: devices.handle,
+          points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("points"),
+          catches: sql<number>`count(${catches.id})`.as("catches"),
+          createdAt: devices.createdAt,
+        })
+        .from(devices)
+        .leftJoin(catches, joinOn)
+        .where(isNotNull(devices.handle))
+        .groupBy(devices.id, devices.handle, devices.createdAt)
+        // A claimed handle alone doesn't put you on the public board — onboarding
+        // mints handles for drive-by installs (suggestion chips), and those
+        // 0-point rows were padding the bottom of the leaderboard. One catch is
+        // the entry ticket.
+        .having(sql`count(${catches.id}) > 0`)
+        .orderBy(desc(sql`points`), devices.createdAt, devices.id)
+        .limit(limit),
+    );
 
     return rows.map((r, i) => ({
       rank: i + 1,
@@ -612,16 +651,18 @@ export class DrizzleCatchStore implements CatchStore {
       : eq(catches.deviceId, devices.id);
 
     // The device's own total (in-window) points.
-    const mine = await this.db
-      .select({
-        points: sql<number>`coalesce(sum(${catches.points}), 0)`,
-        createdAt: devices.createdAt,
-      })
-      .from(devices)
-      .leftJoin(catches, joinOn)
-      .where(eq(devices.id, deviceId))
-      .groupBy(devices.id, devices.createdAt)
-      .limit(1);
+    const mine = await withDbRetry(() =>
+      this.db
+        .select({
+          points: sql<number>`coalesce(sum(${catches.points}), 0)`,
+          createdAt: devices.createdAt,
+        })
+        .from(devices)
+        .leftJoin(catches, joinOn)
+        .where(eq(devices.id, deviceId))
+        .groupBy(devices.id, devices.createdAt)
+        .limit(1),
+    );
     if (mine.length === 0) return null; // unknown device
     const myPoints = Number(mine[0].points);
     const myCreatedAt = mine[0].createdAt;
@@ -633,15 +674,17 @@ export class DrizzleCatchStore implements CatchStore {
     // tiebreaker keeps the order total even on identical timestamps). This counts
     // ALL devices (handle-less included), so the rank reflects true standing —
     // the leaderboard ENTRIES hide handle-less devices, but they still occupy ranks.
-    const ranked = await this.db
-      .select({
-        deviceId: devices.id,
-        points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("p"),
-        createdAt: devices.createdAt,
-      })
-      .from(devices)
-      .leftJoin(catches, joinOn)
-      .groupBy(devices.id, devices.createdAt);
+    const ranked = await withDbRetry(() =>
+      this.db
+        .select({
+          deviceId: devices.id,
+          points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("p"),
+          createdAt: devices.createdAt,
+        })
+        .from(devices)
+        .leftJoin(catches, joinOn)
+        .groupBy(devices.id, devices.createdAt),
+    );
 
     let ahead = 0;
     for (const r of ranked) {
@@ -666,25 +709,27 @@ export class DrizzleCatchStore implements CatchStore {
     // older undecided week too") guarantees nothing older is pending either.
     // (A zero-catch last week never gets rows, so it re-enters the slow path
     // each request — harmless: the loop below just finds nothing to insert.)
-    const already = await this.db
-      .select({ weekStart: weeklyChampions.weekStart })
-      .from(weeklyChampions)
-      .where(eq(weeklyChampions.weekStart, lastClosedIso))
-      .limit(1);
+    const already = await withDbRetry(() =>
+      this.db
+        .select({ weekStart: weeklyChampions.weekStart })
+        .from(weeklyChampions)
+        .where(eq(weeklyChampions.weekStart, lastClosedIso))
+        .limit(1),
+    );
     if (already.length > 0) return 0;
 
     // Backfill bound: the week of the earliest catch ever. No catches → no
     // weeks to decide.
-    const minRows = await this.db
-      .select({ min: sql<Date | string | null>`min(${catches.caughtAt})` })
-      .from(catches);
+    const minRows = await withDbRetry(() =>
+      this.db.select({ min: sql<Date | string | null>`min(${catches.caughtAt})` }).from(catches),
+    );
     const earliest = minRows[0]?.min;
     if (earliest === null || earliest === undefined) return 0;
 
     // Which weeks are already decided (row presence == decided)?
-    const decidedRows = await this.db
-      .selectDistinct({ weekStart: weeklyChampions.weekStart })
-      .from(weeklyChampions);
+    const decidedRows = await withDbRetry(() =>
+      this.db.selectDistinct({ weekStart: weeklyChampions.weekStart }).from(weeklyChampions),
+    );
     const decided = new Set(decidedRows.map((r) => r.weekStart));
 
     let decidedCount = 0;
@@ -700,11 +745,13 @@ export class DrizzleCatchStore implements CatchStore {
       // A zero-catch week has NO champion (the one champion-less case — there
       // is otherwise no winner floor). Checked explicitly so `decidedCount`
       // means "weeks that got champions".
-      const anyCatch = await this.db
-        .select({ id: catches.id })
-        .from(catches)
-        .where(and(gte(catches.caughtAt, ws), lt(catches.caughtAt, we)))
-        .limit(1);
+      const anyCatch = await withDbRetry(() =>
+        this.db
+          .select({ id: catches.id })
+          .from(catches)
+          .where(and(gte(catches.caughtAt, ws), lt(catches.caughtAt, we)))
+          .limit(1),
+      );
       if (anyCatch.length === 0) continue;
 
       // Crown the week in ONE atomic INSERT…SELECT: every device whose
@@ -722,7 +769,10 @@ export class DrizzleCatchStore implements CatchStore {
       // templates need strings.
       const wsIso = ws.toISOString();
       const weIso = we.toISOString();
-      await this.db.execute(sql`
+      // Idempotent (ON CONFLICT DO NOTHING) → safe to retry past a dropped
+      // connection.
+      await withDbRetry(() =>
+        this.db.execute(sql`
         insert into weekly_champions (week_start, device_id, points, catches, decided_at)
         select ${iso}::date, device_id, sum(points)::int, count(*)::int, ${now.toISOString()}::timestamptz
         from catches
@@ -737,7 +787,8 @@ export class DrizzleCatchStore implements CatchStore {
           ) as week_totals
         )
         on conflict (week_start, device_id) do nothing
-      `);
+      `),
+      );
       decidedCount += 1;
     }
 
@@ -751,33 +802,39 @@ export class DrizzleCatchStore implements CatchStore {
   async champions(weekStart: string): Promise<ChampionEntry[]> {
     // All champions share the winning points total, so the order among them is
     // cosmetic — createdAt/id keeps it deterministic (same data, same order).
-    const rows = await this.db
-      .select({
-        handle: devices.handle,
-        points: weeklyChampions.points,
-        weekStart: weeklyChampions.weekStart,
-      })
-      .from(weeklyChampions)
-      .innerJoin(devices, eq(devices.id, weeklyChampions.deviceId))
-      .where(eq(weeklyChampions.weekStart, weekStart))
-      .orderBy(devices.createdAt, devices.id);
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({
+          handle: devices.handle,
+          points: weeklyChampions.points,
+          weekStart: weeklyChampions.weekStart,
+        })
+        .from(weeklyChampions)
+        .innerJoin(devices, eq(devices.id, weeklyChampions.deviceId))
+        .where(eq(weeklyChampions.weekStart, weekStart))
+        .orderBy(devices.createdAt, devices.id),
+    );
     return rows.map((r) => ({ handle: r.handle, points: r.points, weekStart: r.weekStart }));
   }
 
   async weeklyWins(deviceId: string): Promise<number> {
-    const rows = await this.db
-      .select({ n: sql<number>`count(*)` })
-      .from(weeklyChampions)
-      .where(eq(weeklyChampions.deviceId, deviceId));
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({ n: sql<number>`count(*)` })
+        .from(weeklyChampions)
+        .where(eq(weeklyChampions.deviceId, deviceId)),
+    );
     return Number(rows[0]?.n ?? 0);
   }
 
   async everToppedAllTime(deviceId: string): Promise<boolean> {
-    const rows = await this.db
-      .select({ deviceId: alltimeToppers.deviceId })
-      .from(alltimeToppers)
-      .where(eq(alltimeToppers.deviceId, deviceId))
-      .limit(1);
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({ deviceId: alltimeToppers.deviceId })
+        .from(alltimeToppers)
+        .where(eq(alltimeToppers.deviceId, deviceId))
+        .limit(1),
+    );
     return rows.length > 0;
   }
 
@@ -786,23 +843,28 @@ export class DrizzleCatchStore implements CatchStore {
     // createdAt ASC, id ASC), over ALL devices — an anonymous device can top.
     // INNER join = at least one catch; with zero catches anywhere there is no
     // #1 to record.
-    const rows = await this.db
-      .select({
-        deviceId: devices.id,
-        points: sql<number>`sum(${catches.points})`.as("points"),
-      })
-      .from(devices)
-      .innerJoin(catches, eq(catches.deviceId, devices.id))
-      .groupBy(devices.id, devices.createdAt)
-      .orderBy(desc(sql`points`), devices.createdAt, devices.id)
-      .limit(1);
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({
+          deviceId: devices.id,
+          points: sql<number>`sum(${catches.points})`.as("points"),
+        })
+        .from(devices)
+        .innerJoin(catches, eq(catches.deviceId, devices.id))
+        .groupBy(devices.id, devices.createdAt)
+        .orderBy(desc(sql`points`), devices.createdAt, devices.id)
+        .limit(1),
+    );
     const top = rows[0];
     if (!top) return;
     // First observation wins: the ledger answers "ever topped", so a repeat
-    // sighting must not move `firstToppedAt`.
-    await this.db
-      .insert(alltimeToppers)
-      .values({ deviceId: top.deviceId, firstToppedAt: now })
-      .onConflictDoNothing();
+    // sighting must not move `firstToppedAt`. ON CONFLICT DO NOTHING → idempotent,
+    // so a dropped-connection retry is safe.
+    await withDbRetry(() =>
+      this.db
+        .insert(alltimeToppers)
+        .values({ deviceId: top.deviceId, firstToppedAt: now })
+        .onConflictDoNothing(),
+    );
   }
 }
