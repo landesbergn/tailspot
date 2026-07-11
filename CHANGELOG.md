@@ -5,6 +5,31 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-11 — Backend DB resilience: 1GB Postgres + transient-connection retry on every idempotent read — branch `db-retry-backoff`
+
+Prod hotfix after a `tailspot-db` OOM (Sentry BROKEN-DARKNESS-5055-7 and its
+query-split siblings -8…-D). The single `shared-cpu-1x:256MB` Postgres instance
+was OOM-killed (`oom_killed=true`, 17:13 UTC); while it thrashed and restarted,
+the API took `CONNECT_TIMEOUT tailspot-db.flycast:5432` bursts across every DB
+route (leaderboard *and* metadata). Two-part fix:
+
+1. **DB memory 256MB → 1GB** (`fly machine update … --vm-memory 1024`, applied
+   live 2026-07-11). 256MB is Fly's floor for postgres-flex and OOMs under real
+   load (300 `max_connections` on 256MB is a dangerous mismatch). This is the
+   root-cause fix — nothing at the app layer can paper over a multi-second DB
+   restart.
+2. **`withDbRetry` now backs off, and wraps every idempotent store read.** The
+   original `-3` retry fired all 3 attempts in <1 ms — zero time for a fresh
+   connection to open, so an ECONNRESET/CONNECT_TIMEOUT still surfaced (Sentry
+   -5/-7). It now waits a jittered exponential backoff (~50/100 ms) between
+   attempts. And the leaderboard / catches / devices idempotent reads + `ON
+   CONFLICT DO NOTHING` writes are wrapped like the metadata route already was —
+   previously *only* metadata had retry, so the others 500'd on a single blip.
+   The two non-idempotent writes (`createDevice`'s plain INSERT, `claimHandle`'s
+   UPDATE) are deliberately left unwrapped — a retried lost-ack could
+   double-apply. Backend-only; no iOS or wire-contract change. 325 tests green
+   (added a backoff-schedule test + a `DrizzleCatchStore` retry regression).
+
 ## 2026-07-11 — Dynamic leaderboards PR2 — iOS board tabs + champion UI — branch `feat/leaderboard-tabs`
 
 The iOS half of the dynamic-leaderboards feature (PLAN §9 #12), built against
