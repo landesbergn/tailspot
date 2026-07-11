@@ -5,6 +5,54 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-11 — GA-gate housekeeping drafts (PLAN §9 #8) — branch `docs/ga-housekeeping`
+
+Research + drafting round, docs only (no app code). Four deliverables in
+`docs/ga/`, every factual claim verified in source:
+
+1. **`privacy-policy.md` + `terms.md`** — GA revisions of the already-hosted
+   `tailspot.app/privacy.html` / `terms.html` (effective 2026-06-11), which
+   turned out to be **stale in four material ways**: the PostHog SDK is now
+   embedded with session replay (the hosted policy claims "no analytics SDKs
+   embedded"); location is used continuously while open (bounding-box
+   `/v1/aircraft` polls every ~10 s), not "only at the moment of a catch";
+   Hangar restore (PR #125) makes catch records server-recoverable (photos
+   stay unrecoverable); Apple geocoding + Planespotters image loads are
+   undisclosed processors. Biggest code finding: **nothing in the app is
+   `.postHogMask()`ed today** — the camera-preview mask was removed during the
+   all-black-replay diagnosis (`ContentView` "EXPERIMENT" comment) and never
+   re-added; the `PostHogSessionReplay.swift` header claiming the camera is
+   masked is stale. Flagged as a pre-GA open item (re-add scoped mask or
+   verify replays render the camera black), along with `maskAllImages=false`
+   meaning displayed catch photos appear in replay screenshots.
+2. **`licensing-review.md`** — Planespotters photo API terms (recovered via
+   Wayback, 2026-06-18 snapshot; the live page Cloudflare-403s): compliant on
+   6 of 7 requirements (no >24 h caching, original URLs, identifying UA,
+   photographer credit, free feature) — the one gap is that the terms want the
+   *thumbnail* linked back, and only the caption is tappable. **Verdict: keep,
+   with the small tap-target fix.** adsb.lol (ODbL 1.0): fully compliant —
+   Settings credit + the attributions page's ODbL statement. ICAO DOC 8643
+   re-check stays open (~30 min, Noah).
+3. **`appstore-listing.md`** — name/subtitle ("Tailspot: Catch Real Planes" /
+   "Catch the planes overhead"), description in the app voice with an honest
+   worldwide-coverage caveat, 98-char keywords, Games→Casual + Education, 4+,
+   and an honest nutrition-label table (location IS collected — observer
+   lat/lon uploads with catches; everything device-id-keyed marked Linked=Yes,
+   which the committed `PrivacyInfo.xcprivacy` currently contradicts — small
+   follow-up PR recommended). Region decided: **worldwide**. Full App Store
+   Connect click-through checklist for Noah, incl. review notes explaining the
+   app can't demo indoors.
+4. **`screenshot-plan.md`** — six 6.7" shots (AR catch → mid-flap reveal →
+   guess round → Sets grid → trophy case → leaderboard); capture all on the
+   real iPhone (sim has no camera/GPS), frame 1179×2556 → 1290×2796
+   composites; reveal/guess frames pulled from screen recordings; the
+   guess-round shot is gated on game-layer PR3 landing; Hangar shots use
+   Noah's real ~85-catch collection.
+
+PLAN §9 #8 updated (drafts done; remaining = hosting, the mask decision, two
+small code PRs, and Noah's App Store Connect steps); §6.6 region question
+closed as worldwide.
+
 ## 2026-07-10 — Polish sweep PR A — the mechanical ten — branch `polish/mechanical-sweep`
 
 Ten objective UX/UI fixes from the full-app UI survey (taste-level changes are
