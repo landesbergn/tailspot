@@ -26,11 +26,13 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   doublePrecision,
   index,
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -240,7 +242,77 @@ export const catches = pgTable(
   }),
 );
 
+/**
+ * Weekly champions (dynamic leaderboards PR1, migration 0007).
+ *
+ * One row per (closed week, champion device). Weeks are CALENDAR weeks on
+ * Monday 00:00 **UTC** boundaries; `week_start` is that Monday's date. Rows are
+ * written by the DECIDE-ON-READ path (`CatchStore.ensureWeeksDecided`): the
+ * first `window=week` leaderboard request after a week closes computes that
+ * week's top in-window points and freezes the champion(s) here. Design calls
+ * (Noah, 2026-07-09, all locked):
+ *
+ *   - NO winner floor — whoever is #1 when the week closes is champion, even
+ *     with a single 10-point catch. A week with ZERO catches has no champion
+ *     (no rows), which is the only champion-less case.
+ *   - SHARED crowns — if N devices tie on points, ALL N get a row (the
+ *     composite PK is what makes that representable), and each row counts
+ *     toward that device's weekly-win total (the PR3 trophy).
+ *   - Champions are decided by POINTS ONLY. The display leaderboard's
+ *     registration-time tie-break orders rows on screen; it does NOT break
+ *     champion ties.
+ *
+ * `points`/`catches` are frozen AT DECIDE TIME (they're the record of the win,
+ * not a live projection — a later rescore does not rewrite history), and
+ * `decided_at` records when the lazy decide actually ran (audit: it can be
+ * days after the boundary if nobody opened the board).
+ */
+export const weeklyChampions = pgTable(
+  "weekly_champions",
+  {
+    /** The Monday (UTC) the won week STARTED on. */
+    weekStart: date("week_start").notNull(),
+    deviceId: uuid("device_id")
+      .notNull()
+      .references(() => devices.id),
+    /** The device's total in-week points at decide time. */
+    points: integer("points").notNull(),
+    /** The device's in-week catch count at decide time. */
+    catches: integer("catches").notNull(),
+    /** When the decide-on-read pass froze this row. */
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    /** Composite PK: one crown per device per week; N rows on a shared crown. */
+    pk: primaryKey({ columns: [t.weekStart, t.deviceId] }),
+  }),
+);
+
+/**
+ * All-time-topper ledger (dynamic leaderboards PR1, migration 0007).
+ *
+ * One row per device that has EVER held all-time #1 — the data behind the
+ * "topped the all-time board" trophy (PR3). Append-only by construction:
+ * every code path that computes the all-time #1 (a `window=all` leaderboard
+ * request, and the week-decide pass) upserts the current #1 with
+ * ON CONFLICT DO NOTHING, so `first_topped_at` keeps the FIRST sighting and a
+ * device can never lose the flag. #1 here means the same total order the
+ * board uses (points DESC, created_at ASC, id ASC) over ALL devices —
+ * handle-less devices occupy real ranks and CAN top the board.
+ */
+export const alltimeToppers = pgTable("alltime_toppers", {
+  deviceId: uuid("device_id")
+    .primaryKey()
+    .references(() => devices.id),
+  /** When this device was FIRST observed at all-time #1. */
+  firstToppedAt: timestamp("first_topped_at", { withTimezone: true }).notNull(),
+});
+
 export type DeviceRow = typeof devices.$inferSelect;
 export type DeviceInsert = typeof devices.$inferInsert;
 export type CatchRow = typeof catches.$inferSelect;
 export type CatchInsert = typeof catches.$inferInsert;
+export type WeeklyChampionRow = typeof weeklyChampions.$inferSelect;
+export type WeeklyChampionInsert = typeof weeklyChampions.$inferInsert;
+export type AlltimeTopperRow = typeof alltimeToppers.$inferSelect;
+export type AlltimeTopperInsert = typeof alltimeToppers.$inferInsert;
