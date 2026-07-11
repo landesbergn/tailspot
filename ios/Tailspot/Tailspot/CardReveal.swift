@@ -262,7 +262,7 @@ struct CardReveal: View {
                         .foregroundStyle(Brand.Color.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: 12))
+                        .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: Brand.Radius.row))
                 }
                 .buttonStyle(.plain)
 
@@ -274,7 +274,7 @@ struct CardReveal: View {
                             .foregroundStyle(Brand.Color.textPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: 12))
+                            .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: Brand.Radius.row))
                     }
                     .buttonStyle(.plain)
                 }
@@ -288,7 +288,7 @@ struct CardReveal: View {
                     .foregroundStyle(.black.opacity(0.85))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Brand.Color.cyan, in: .rect(cornerRadius: 12))
+                    .background(Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.row))
                     .shadow(color: Brand.Color.cyan.opacity(0.35), radius: 14, y: 6)
             }
             .buttonStyle(.plain)

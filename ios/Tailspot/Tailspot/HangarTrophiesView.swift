@@ -104,10 +104,10 @@ struct TrophyCardRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             earned ? Brand.Color.bgElevated : Brand.Color.bgElevated.opacity(0.5),
-            in: .rect(cornerRadius: 14)
+            in: .rect(cornerRadius: Brand.Radius.card)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.textPrimary.opacity(earned ? 0.06 : 0.04), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)

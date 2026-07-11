@@ -85,7 +85,7 @@ struct SetDetailView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8).fill(set.type.tint)
+                RoundedRectangle(cornerRadius: Brand.Radius.row).fill(set.type.tint)
                 Text(set.type.glyph)
                     .font(Brand.Font.mono(size: 18, weight: .bold))
                     .foregroundStyle(.black.opacity(0.75))
@@ -169,7 +169,7 @@ struct SetDetailView: View {
         .overlay(alignment: .leading) {
             Rectangle().fill(set.type.tint).frame(width: 3)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
     }
 
     /// The group key is already the canonical display name; only the
@@ -191,7 +191,7 @@ struct SetDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 8))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
     }
 }
 

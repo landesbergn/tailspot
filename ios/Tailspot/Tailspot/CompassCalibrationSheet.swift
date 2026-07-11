@@ -106,7 +106,7 @@ struct CompassCalibrationSheet: View {
             Text(calibratedThisSession
                  ? "You're good to go."
                  : "Your heading is off by more than ±10°.")
-                .font(.system(size: 24, weight: .bold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
             Text(calibratedThisSession
                  ? "Brackets will now sit on the right plane. You can dismiss."
@@ -146,9 +146,9 @@ struct CompassCalibrationSheet: View {
             statusGlyph
         }
         .padding(16)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(tint.opacity(0.4), lineWidth: 1)
         )
         .animation(.easeInOut(duration: 0.25), value: accuracyIsGood)
@@ -172,7 +172,7 @@ struct CompassCalibrationSheet: View {
             Figure8Animation()
                 .frame(height: 200)
                 .padding(.vertical, 8)
-                .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+                .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
                 .opacity(calibratedThisSession ? 0.55 : 1)
         }
     }
@@ -214,7 +214,7 @@ struct CompassCalibrationSheet: View {
             .padding(.vertical, 14)
             .background(
                 (calibratedThisSession ? Brand.Color.alertNormal : Brand.Color.cyan),
-                in: .rect(cornerRadius: 14)
+                in: .rect(cornerRadius: Brand.Radius.card)
             )
             .shadow(color: (calibratedThisSession
                             ? Brand.Color.alertNormal
@@ -236,7 +236,7 @@ private struct ExplanationRow: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.cyan)
                 .frame(width: 28, height: 28)
-                .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: 6))
+                .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: Brand.Radius.chip))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))

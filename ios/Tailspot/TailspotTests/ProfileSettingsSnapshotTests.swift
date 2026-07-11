@@ -95,6 +95,45 @@ struct ProfileSettingsSnapshotTests {
         #expect(true)
     }
 
+    /// The unclaimed-handle designed state (2026-07-10 polish sweep D6):
+    /// Profile header must show the CLAIM YOUR HANDLE affordance, never
+    /// "@spotter_42" masquerading as a claimed identity.
+    @Test func renderProfileUnclaimed() throws {
+        let defaults = UserDefaults.standard
+        let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
+        let savedPoints = defaults.object(forKey: "tailspot.standing.points")
+        let savedRank = defaults.object(forKey: "tailspot.standing.rank")
+        defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
+        defaults.set(120, forKey: "tailspot.standing.points")
+        defaults.set(0, forKey: "tailspot.standing.rank")
+        defer {
+            defaults.set(savedHandle, forKey: SpotterHandle.storageKey)
+            defaults.set(savedPoints, forKey: "tailspot.standing.points")
+            defaults.set(savedRank, forKey: "tailspot.standing.rank")
+        }
+        let container = try seededContainer()
+        snapshot(ProfileScreen().modelContainer(container), as: "profile_hub_unclaimed")
+        // Settings with an unclaimed handle: the field must show its
+        // "handle" prompt, not a prefilled "spotter_42" value.
+        snapshot(NavigationStack { SettingsScreen() }, as: "settings_unclaimed")
+        #expect(true)
+    }
+
+    /// Empty-Hangar "Go outside." hero + a model-detail empty state — the
+    /// two empty-state heads converted to Brand.Font.display (D3).
+    @Test func renderEmptyStates() throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let empty = try ModelContainer(for: Catch.self, configurations: config)
+        snapshot(HangarView().modelContainer(empty), as: "hangar_empty")
+        if let entry = CardSets.all.first?.entries.first {
+            snapshot(
+                NavigationStack { ModelDetailScreen(entry: entry) }.modelContainer(empty),
+                as: "model_detail_empty"
+            )
+        }
+        #expect(true)
+    }
+
     @Test func renderLeaderboard() throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)

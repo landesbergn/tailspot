@@ -924,16 +924,16 @@ struct ContentView: View {
     /// Tap opens `CompassCalibrationSheet` for the figure-8
     /// instructions. Surfaces only after `compassBadDebounce` seconds
     /// of consistently-bad readings (see `updateCompassWarning`).
-    /// Transient "you're indoors" nudge shown when the authenticity gate
-    /// blocks a catch (enforcing + not-sky). Auto-dismisses; tone is
-    /// light, not scolding.
     /// Proactive ambient hint while the phone is pointed indoors — so the
     /// user knows to head outside before they even try to catch. Driven by
     /// the debounced `pointedIndoors`; auto-clears when aimed at sky.
+    /// Copy is the app's dry-clinical voice (Noah, 2026-07-10 — the
+    /// winking-emoji draft was off-voice), same register as the grounded
+    /// toast below.
     @ViewBuilder
     private var indoorHintBanner: some View {
         if pointedIndoors {
-            Text("Maybe try looking outside 😉")
+            Text("Not many planes indoors.")
                 .font(Brand.Font.mono(size: 12, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .padding(.horizontal, 14)
@@ -2016,10 +2016,10 @@ struct ContentView: View {
             showHangar = true
         } label: {
             ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: Brand.Radius.card)
                     .fill(Brand.Color.bgPrimary.opacity(0.7))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .strokeBorder(Brand.Color.textPrimary.opacity(0.08),
                                           lineWidth: 1)
                     )
@@ -2052,10 +2052,10 @@ struct ContentView: View {
             showProfile = true
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: Brand.Radius.card)
                     .fill(Brand.Color.bgPrimary.opacity(0.7))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .strokeBorder(Brand.Color.textPrimary.opacity(0.08),
                                           lineWidth: 1)
                     )
@@ -2188,9 +2188,9 @@ struct ContentView: View {
         // that the readout looked busy/ugly). Content is unchanged; it's useful
         // in shared screenshots.
         .padding(14)
-        .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         )
     }
@@ -2525,7 +2525,7 @@ struct ContentView: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: Brand.Radius.row)
                 .fill(recorder.isRecording
                       ? Brand.Color.alertWarning.opacity(0.18)
                       : Color.white.opacity(0.07))

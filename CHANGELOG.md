@@ -5,6 +5,53 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-10 — Polish sweep PR B — the taste calls — branch `polish/taste-calls`
+
+Noah's seven verdicts on the UI-survey taste questions. Four built, three
+recorded as deliberate keeps/rules:
+
+1. **D1 — App locked to dark.** `preferredColorScheme(.dark)` on the root
+   `RootView` in `TailspotApp.swift` — sets the window's style, so onboarding,
+   the main app, sheets/fullScreenCovers, alerts/confirmationDialogs, and the
+   share sheet all render dark regardless of the device setting. PR A's
+   light-mode compensations (branded List chrome etc.) stay as
+   belt-and-suspenders.
+2. **D2 — Radius token scale.** New `Brand.Radius` (chip 6 / row 12 / card 16 /
+   hero 26). **69 cornerRadius literals snapped** (44 value changes — 7→6, 8→12,
+   10→12, 11→12, 14→16, 18→16, 20→16 — and 25 same-value re-routes). Judgment
+   exceptions left literal: `CatchCardView`'s per-size dims table (12/14/16 —
+   radius proportional to card size), the reveal ledger's `11 * scale`, tiny
+   3–4 pt accents (rarity bars, `BadgeViews`, AR label chips, reveal flap — 6
+   turns them into pills), and the AR HUD brackets. Capsules stayed capsules.
+3. **D3 — One type rule.** `Brand.Font.display` (26 pt bold system) is now the
+   single prose-head size; converted the nine freelancing heads (onboarding ×4
+   incl. the 30 pt welcome, Hangar empty "Go outside." 28, rarity reference 26,
+   compass sheet 24, `ModelDetailScreen` empty head 17, `PermissionRecoveryCard`
+   title 18). Rule codified in `Brand.swift`: mono = readouts/data/labels,
+   system = human prose, heads use `.display`. Mono readouts and the reveal
+   card's established type untouched.
+4. **D6 — Dry voice.** Indoor hint "Maybe try looking outside 😉" → **"Not many
+   planes indoors."** (emoji-free, same clinical register as the grounded
+   toast). Unclaimed handle is now an honest designed state: the Profile header
+   shows a cyan mono **CLAIM YOUR HANDLE →** affordance (NavigationLink into
+   Settings' SPOTTER section) + a quiet person-glyph avatar instead of
+   "@spotter_42" with fake "SP" initials; Settings no longer prefills
+   "spotter_42" as the field's value for unclaimed users (empty draft → the
+   "handle" prompt shows). The leaderboard was already honest ("(you)" + claim
+   hint); the share card carries no handle. TextField placeholders keep
+   "spotter_42" as a format example — that usage is fine.
+5. **D4 — Profile Liquid Glass STAYS** (Noah's explicit keep; the glass +
+   radial-glow backdrop is the intended look).
+6. **D5 — Duplicate-catch haptic STAYS** as is.
+7. **D7 — Nav-chrome rule codified, no code:** custom chrome for game surfaces
+   (Hangar/cards/reveals), stock-but-branded system nav for utility screens
+   (Settings/Map/Leaderboard) — recorded in `Brand.swift`'s header + CLAUDE.md.
+
+Snapshot harness grew unclaimed-Profile/Settings + empty-state renders
+(`ProfileSettingsSnapshotTests`). Full `TailspotTests` green; before/after
+visual pass over the snapshot corpus reviewed by eye (radii/type-size shifts
+only; no layout breaks).
+
 ## 2026-07-10 — Hangar restore-from-server (PLAN §9 #7, issue #58) — branch `feat/hangar-restore`
 
 The local-only Hangar's catastrophic-loss gap gets its restore path: catches

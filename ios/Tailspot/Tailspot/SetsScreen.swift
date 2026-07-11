@@ -118,9 +118,9 @@ private struct SetCompletionCard: View {
         // Same card chrome as TailCard so the Sets browser and the Recent
         // feed read as one design language.
         .padding(12)
-        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: 14))
+        .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
         )
     }
@@ -275,7 +275,7 @@ struct ModelDetailScreen: View {
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Brand.Color.textTertiary)
             Text("No \(entry.canonicalName) yet")
-                .font(.system(size: 17, weight: .semibold))
+                .font(Brand.Font.display)
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Point, lock, and capture one to add it to your collection.")
                 .font(Brand.Font.caption)
