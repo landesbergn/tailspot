@@ -60,14 +60,25 @@ struct ProfileScreen: View {
         let inputs = Trophies.inputs(from: catches)
         return NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    identityHeader(stats: stats)
-                    statsStrip(stats: stats, inputs: inputs)
-                    if let best = Self.bestCatch(in: catches) {
-                        bestCatchCard(best)
+                // GlassEffectContainer is load-bearing, not cosmetic: each
+                // bare `.glassEffect` hosts its glass in a separate layer
+                // ABOVE the surrounding hierarchy, and those layers can
+                // swallow taps on non-glass siblings below them — the
+                // Rarity reference / Settings rows were untappable because
+                // the quickLinks' glass layers sat over them (field bug,
+                // 2026-07-10). The container merges every child glass
+                // surface into one coordinated layer with correct hit
+                // testing.
+                GlassEffectContainer {
+                    VStack(spacing: 16) {
+                        identityHeader(stats: stats)
+                        statsStrip(stats: stats, inputs: inputs)
+                        if let best = Self.bestCatch(in: catches) {
+                            bestCatchCard(best)
+                        }
+                        quickLinks
+                        sectionLinks
                     }
-                    quickLinks
-                    sectionLinks
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -460,6 +471,10 @@ struct ProfileScreen: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
+            // The Spacer gap between label and chevron is transparent and
+            // therefore not hit-testable by default — make the whole row
+            // one tap target.
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
