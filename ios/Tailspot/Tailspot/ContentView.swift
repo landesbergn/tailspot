@@ -193,6 +193,11 @@ struct ContentView: View {
     /// `@StateObject`, so a moment interrupted by backgrounding re-renders
     /// on return (the overlay is declarative, bound to `hasPending`).
     @StateObject private var unlockCenter = TrophyUnlockCenter()
+    /// Hangar restore-from-server (PLAN §9 #7, issue #58): checks once per
+    /// launch whether this (Keychain-surviving) device identity holds
+    /// catches on the backend while the local Hangar is empty — the
+    /// reinstall signature — and, if so, drives the restore prompt overlay.
+    @StateObject private var restoreManager = HangarRestoreManager()
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
@@ -597,11 +602,19 @@ struct ContentView: View {
             }
         }
         .overlay { trophyUnlockOverlay }
+        .overlay { hangarRestoreOverlay }
         // Seed at launch and re-diff on every new catch (idempotent +
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
         .task(id: catches.count) {
             unlockCenter.enqueueNewUnlocks(from: catches)
+        }
+        // Hangar restore check — once per launch, self-gating (empty local
+        // Hangar + registered identity + server catches > 0). It waits for
+        // TailspotApp's launch registration rather than registering itself,
+        // so a fresh install can't race two POST /v1/devices calls.
+        .task {
+            await restoreManager.checkIfNeeded(context: modelContext)
         }
         // When the Hangar closes, re-diff — a country backfill done inside
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
@@ -1054,9 +1067,30 @@ struct ContentView: View {
     private var trophyUnlockOverlay: some View {
         if unlockCenter.hasPending,
            pendingReveal == nil, pendingMultiReveal == nil,
-           !showHangar, !showProfile, !showCompassSheet {
+           !showHangar, !showProfile, !showCompassSheet,
+           !restoreManager.isPresenting {
             TrophyUnlockView(center: unlockCenter)
                 .transition(.opacity)
+        }
+    }
+
+    // MARK: - Hangar restore overlay
+
+    /// The restore-from-server prompt (offer → restoring → done), same gated-
+    /// overlay presentation as the trophy moment. In practice it only ever
+    /// appears on a just-reinstalled app with an empty Hangar, so the "nothing
+    /// else on top" gates are belt-and-suspenders.
+    @ViewBuilder
+    private var hangarRestoreOverlay: some View {
+        if restoreManager.isPresenting,
+           pendingReveal == nil, pendingMultiReveal == nil,
+           !showHangar, !showProfile, !showCompassSheet {
+            HangarRestorePromptView(
+                manager: restoreManager,
+                context: modelContext,
+                unlockCenter: unlockCenter
+            )
+            .transition(.opacity)
         }
     }
 

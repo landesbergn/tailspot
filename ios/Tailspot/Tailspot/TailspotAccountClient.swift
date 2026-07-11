@@ -219,6 +219,45 @@ nonisolated struct UploadCatchResponse: Decodable {
     let guessCorrect: Bool?
 }
 
+/// One catch record from GET /v1/catches — the server's copy of a catch this
+/// device uploaded, with the airframe joins (registration / clean names) the
+/// Hangar-restore path needs to rebuild a `Catch` row. Every optional here is
+/// a genuine server nullable (unresolved airframe, no callsign, no guess…);
+/// there is deliberately NO photo field — photos were never uploaded.
+nonisolated struct RestoredCatchRow: Decodable {
+    /// The idempotency uuid the uploader minted (`Catch.serverUuid`) — the
+    /// restore key: rows whose uuid already exists locally are skipped.
+    let catchUuid: String
+    let icao24: String
+    let callsign: String?
+    let typecode: String?
+    /// Server-resolved tier at upload time (audit value; display re-derives
+    /// live via `Catch.resolvedRarity`, same as organic catches).
+    let rarity: String?
+    let points: Int
+    let firstOfType: Bool
+    let guessKind: String?
+    let guessValue: String?
+    let guessCorrect: Bool
+    /// Unix seconds (same wire format the upload sent).
+    let caughtAt: Double
+    let observerLat: Double
+    let observerLon: Double
+    /// Null for nearly every row — the uploader sends `aircraft: null`.
+    let aircraftAltitudeMeters: Double?
+    let registration: String?
+    let manufacturer: String?
+    let model: String?
+}
+
+/// Response from GET /v1/catches.
+nonisolated struct RestoredCatchesResponse: Decodable {
+    /// The device's FULL catch count (not the page size) — sizes the restore
+    /// prompt and tells the pager when it has everything.
+    let total: Int
+    let catches: [RestoredCatchRow]
+}
+
 /// One row in GET /v1/leaderboard's `entries` array.
 nonisolated struct LeaderboardEntry: Decodable, Identifiable {
     let rank: Int
@@ -429,6 +468,37 @@ nonisolated struct TailspotAccountClient {
         let data = try await perform(request, expectedStatus: 201, alsoAccept: 200)
         do {
             return try JSONDecoder().decode(UploadCatchResponse.self, from: data)
+        } catch {
+            throw AccountError.decoding(error)
+        }
+    }
+
+    // MARK: - fetchCatches (Hangar restore)
+
+    /// Fetch one page of this device's server-stored catches (auth required —
+    /// the bearer token scopes the listing to exactly this device). Pages are
+    /// oldest-first; `total` on the response tells the caller when it has
+    /// everything. Powers the Hangar restore flow (issue #58).
+    func fetchCatches(limit: Int = 500, offset: Int = 0) async throws -> RestoredCatchesResponse {
+        guard let token = storedToken else { throw AccountError.notRegistered }
+
+        var comps = URLComponents(
+            url: baseURL.appendingPathComponent("v1/catches"),
+            resolvingAgainstBaseURL: false
+        )
+        comps?.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "offset", value: String(offset)),
+        ]
+        guard let url = comps?.url else { throw AccountError.http(status: -1) }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let data = try await perform(request, expectedStatus: 200)
+        do {
+            return try JSONDecoder().decode(RestoredCatchesResponse.self, from: data)
         } catch {
             throw AccountError.decoding(error)
         }
