@@ -5,6 +5,69 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-11 — Dynamic leaderboards PR2 — iOS board tabs + champion UI — branch `feat/leaderboard-tabs`
+
+The iOS half of the dynamic-leaderboards feature (PLAN §9 #12), built against
+the pinned backend-PR1 contract (`GET /v1/leaderboard?window=week|month|all`
+adding `window`/`resetsAt`/`champions` + `me.weeklyWins`/`everToppedAllTime`)
+with fixtures — the backend lands in parallel. Winner trophies (Top
+Flight/Dynasty/Chart Topper) are deliberately NOT here — that's PR3, after
+both sides land.
+
+1. **Board tabs.** `LeaderboardScreen` grew a WEEK (default) / MONTH /
+   ALL TIME segmented switcher — the `HangarSegmentedSwitcher` pattern
+   (Liquid Glass capsule track, matched-geometry pill, 40 pt full-segment
+   hits) restyled to the mono readout voice, sitting at the top of the List
+   content (the screen keeps its stock-but-branded system nav — utility
+   screen, per the Brand chrome rule). Per-window responses are cached in
+   `@State` for the screen's appearance: flipping back to a tab shows its
+   last board instantly while `.task(id: selectedWindow)` re-fetches and
+   swaps data in silently (the ProfileScreen cached-standing pattern; no
+   spinner churn), and a failed silent refresh keeps the stale board.
+2. **FAIL-SOFT against the old backend.** The pre-windows backend never
+   sends the `window` key → `LeaderboardResponse.supportsWindows` is false,
+   the tabs hide entirely, and the screen renders today's all-time board
+   unchanged (the old backend ignores the `window` query param). All new
+   DTO fields are optional decodes, pinned by old-payload regression tests
+   (the PR #65 pattern).
+3. **Reset countdown.** "RESETS MONDAY · 2D 14H LEFT" (week) / "RESETS
+   AUG 1" (month), mono caption under the switcher, computed by the pure
+   `LeaderboardCountdown` helpers in the DEVICE's locale + timezone (a
+   Monday-00:00-UTC reset honestly reads SUNDAY in California; never
+   "UTC"). Recomputed per render — no live ticking timer. Unit tests cover
+   day/hour floors, under-1H, past-due clamp, timezone weekday shift, and
+   month/year wrap.
+4. **Champion banner** (week tab only): gold-accented row above the podium —
+   laurel glyphs, "LAST WEEK'S CHAMPION" eyebrow, "@handle · 840 PTS".
+   Shared crowns render side by side ("@a & @b"), 3+ collapse to
+   "@a, @b +1 more", a null handle displays as "anonymous spotter", and an
+   empty champions array (the board reset with nobody on it) shows the
+   quiet "NO CHAMPION CROWNED — The sky was quiet last week." line. Copy
+   rules live in the pure `ChampionBanner` helper (`LeaderboardWindows.swift`).
+5. **Your standing, per window.** The standing section header names the race
+   ("YOUR STANDING · THIS WEEK" — the week tab's whole point is "you're #2
+   THIS WEEK"); the handle-less local-points hint only renders where it's
+   honest (all-time / old backend — local points are a lifetime number).
+   Fresh empty windows say "No catches this week yet / The sky's wide open."
+6. **Profile laurel (L6).** `ProfileScreen` shows a quiet gold
+   "WEEKLY CHAMPION ×3" laurel row under the identity header once
+   `me.weeklyWins ≥ 1` (no "×1" suffix for a single crown). Cached in
+   `@AppStorage("tailspot.standing.weeklyWins")` so it renders offline;
+   deliberately a flat non-glass row (a new glass surface would have to
+   join the GlassEffectContainer — the hit-testing lesson — and a trophy
+   accent doesn't need to refract). `loadStanding()` now requests
+   `window: .all` explicitly so the headline stays lifetime points/rank.
+7. **Client.** `TailspotAccountClient.leaderboard(window:limit:)` appends
+   the `window` param (nil = no param); new wire types `LeaderboardWindow` /
+   `LeaderboardChampion`; `MyStanding`/`LeaderboardResponse` extended with
+   the optional fields + `resetsAtDate` (fractional + plain ISO-8601).
+8. **Tests + visual pass.** `LeaderboardWindowTests` (decoding new/old/null
+   payloads, fail-soft, countdown math, champion copy 1/2/3+/anon/none) +
+   `LeaderboardWindowSnapshotTests` (window-hosted drawHierarchy renders of
+   all three tabs, four banner variants, fail-soft board, Profile laurel
+   ×1/×3 → `/private/tmp/tailspot_snaps/`, reviewed). Full suite green
+   (955 tests); device build green.
+
 ## 2026-07-10 — Polish sweep PR B — the taste calls — branch `polish/taste-calls`
 
 Noah's seven verdicts on the UI-survey taste questions. Four built, three
