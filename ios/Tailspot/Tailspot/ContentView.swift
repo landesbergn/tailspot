@@ -12,7 +12,6 @@ import SwiftData
 import AVFoundation
 import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
 import os
-import PostHog   // session-replay masking of the camera view
 
 struct ContentView: View {
     /// Camera FOV at 1× zoom (approximate for iPhone 16 main wide camera
@@ -225,11 +224,23 @@ struct ContentView: View {
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
                                   frameBridge: frameBridge)
                         .ignoresSafeArea()
-                        // EXPERIMENT (all-black replay diagnosis): the full-screen
-                        // .postHogMask() here masked the whole window on every
-                        // screen (sheets present over this root). Removed to test
-                        // whether SwiftUI captures at all + whether the camera
-                        // (a GPU surface) renders black on its own without a mask.
+                        // PRIVACY (GA posture, 2026-07-11): the live camera view
+                        // is excluded from PostHog session replay STRUCTURALLY,
+                        // not via .postHogMask(). Replay's screenshot capture
+                        // uses drawHierarchy(afterScreenUpdates:false), which
+                        // cannot read AVCaptureVideoPreviewLayer's out-of-process
+                        // video surface — the camera region records as black
+                        // (verified live in the 2026-06 replay-debugging round).
+                        // Do NOT re-add .postHogMask() here: this view spans the
+                        // whole window, and PostHog redacts by drawing each
+                        // masked view's rect over the flat screenshot — a
+                        // full-window rect blacks out EVERY replay frame,
+                        // including the AR overlays on top and the sheets
+                        // presented over this root (that was the all-black-replay
+                        // bug). The structural guarantee is pinned by
+                        // SessionReplayPrivacyTests: PreviewView must stay backed
+                        // by AVCaptureVideoPreviewLayer (never a drawable
+                        // image/Metal blit, which drawHierarchy WOULD capture).
                 } else {
                     Brand.Color.bgPrimary.ignoresSafeArea()
                 }

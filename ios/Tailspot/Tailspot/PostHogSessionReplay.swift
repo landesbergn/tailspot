@@ -38,11 +38,24 @@ enum PostHogSessionReplay {
         // sublayers instead of subviews, so wireframe traversal records blank
         // screens (posthog-ios#408). Declarative UI (SwiftUI, like Compose on
         // Android) therefore *requires* screenshot mode to record anything usable.
-        // Privacy is preserved by masking instead of by mode: the live camera /
-        // AR preview is explicitly excluded via `.postHogMask()` in ContentView
-        // (the AR overlays layered on top still record), and text inputs are
-        // masked below. Aircraft card art isn't sensitive, so images stay visible
-        // for useful recordings.
+        // Privacy in screenshot mode (GA posture, 2026-07-11):
+        //   - The LIVE CAMERA VIEW records as black STRUCTURALLY: screenshot
+        //     capture (drawHierarchy) cannot read AVCaptureVideoPreviewLayer's
+        //     out-of-process video surface, so camera frames never reach
+        //     PostHog. There is deliberately NO `.postHogMask()` on
+        //     CameraPreview — it spans the whole window, and PostHog redacts by
+        //     drawing masked-view rects over the flat screenshot, so a
+        //     full-window mask blacks every replay frame (the 2026-06
+        //     all-black-replay bug). The guarantee is pinned by
+        //     SessionReplayPrivacyTests + the note in ContentView.
+        //   - USER CATCH PHOTOS are masked with scoped `.postHogMask()` at
+        //     every render site: RevealPhoto (reveal + SettledCatchCard hero,
+        //     incl. the Hangar detail screen), CatchCardView's photo (card
+        //     reveal / multi-catch / model-slot detail), and FocusThumbnail
+        //     (Hangar list rows). Only the photo rect is redacted — the
+        //     surrounding card/UI chrome still records. Planespotters stock
+        //     photos (public airframe imagery, not user content) stay visible.
+        //   - Text inputs are unmasked below (non-sensitive game data).
         config.sessionReplayConfig.screenshotMode = true
         // On iOS this flag masks ALL text (labels, not just editable fields), so
         // leaving it on blacks out every label in the replay. Tailspot's on-screen
@@ -52,6 +65,10 @@ enum PostHogSessionReplay {
         // re-masking everything (and never a full-screen view — that blacks the
         // whole window; see the camera note in ContentView).
         config.sessionReplayConfig.maskAllTextInputs = false
+        // Keep false: images are masked SELECTIVELY (user catch photos carry a
+        // scoped .postHogMask(); see the privacy note above). Blanket image
+        // masking would also black out card art, badges, and icons — gutting
+        // replay usefulness without adding privacy.
         config.sessionReplayConfig.maskAllImages = false
         // Replay reliability. Snapshots ride the normal event queue, which only
         // flushes at flushAt (default 20) events, the flushIntervalSeconds (30s)

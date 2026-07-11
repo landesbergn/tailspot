@@ -33,6 +33,7 @@
 
 import SwiftUI
 import UIKit
+import PostHog   // .postHogMask() on the user's catch photo (session replay)
 
 // MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
 
@@ -163,26 +164,35 @@ struct RevealPhoto: View {
             // Both paths clip HERE: the fill overflow isn't reliably caught
             // by the caller's clipShape under ImageRenderer (share renders
             // showed the oversize image bleeding past the card).
-            if let focus {
-                GeometryReader { geo in
-                    let layout = FocusFill.layout(
-                        imageSize: image.size, frameSize: geo.size, focus: focus
-                    )
-                    Image(uiImage: image)
-                        .resizable()
-                        .frame(width: layout.size.width, height: layout.size.height)
-                        .offset(x: layout.origin.x, y: layout.origin.y)
-                }
-                .clipped()
-            } else {
-                Color.clear
-                    .overlay(
+            Group {
+                if let focus {
+                    GeometryReader { geo in
+                        let layout = FocusFill.layout(
+                            imageSize: image.size, frameSize: geo.size, focus: focus
+                        )
                         Image(uiImage: image)
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    )
+                            .frame(width: layout.size.width, height: layout.size.height)
+                            .offset(x: layout.origin.x, y: layout.origin.y)
+                    }
                     .clipped()
+                } else {
+                    Color.clear
+                        .overlay(
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        )
+                        .clipped()
+                }
             }
+            // PRIVACY: a local file URL here is always the user's own catch
+            // JPEG — mask it from PostHog session replay. The mask redacts
+            // only this photo's rect, so the surrounding card chrome still
+            // records. Inert under ImageRenderer (share/snapshot renders).
+            // The remote branch below is a Planespotters stock photo of the
+            // airframe (public imagery, not user content) — left visible.
+            .postHogMask()
         } else if let url, !url.isFileURL {
             // Remote hero (Planespotters thumbnail on catches with no local
             // photo). AsyncImage can't be waited on by ImageRenderer, so
