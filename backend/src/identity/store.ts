@@ -712,17 +712,27 @@ export class DrizzleCatchStore implements CatchStore {
       // points only — no display tie-break here). ON CONFLICT DO NOTHING makes
       // a concurrent double-decide of the same week a no-op, so no explicit
       // transaction/locking is needed.
+      //
+      // Params are ISO STRINGS with explicit casts, not Date objects: in a
+      // raw sql`` execute the postgres.js driver has no column type info and
+      // chokes serializing a Date ("must be of type string or Buffer …
+      // Received an instance of Date") — a prod-only crash the test harness's
+      // driver doesn't reproduce. Drizzle's typed query-builder paths (the
+      // gte/lt above, the toppers insert) serialize Dates fine; only raw
+      // templates need strings.
+      const wsIso = ws.toISOString();
+      const weIso = we.toISOString();
       await this.db.execute(sql`
         insert into weekly_champions (week_start, device_id, points, catches, decided_at)
-        select ${iso}::date, device_id, sum(points)::int, count(*)::int, ${now}
+        select ${iso}::date, device_id, sum(points)::int, count(*)::int, ${now.toISOString()}::timestamptz
         from catches
-        where caught_at >= ${ws} and caught_at < ${we}
+        where caught_at >= ${wsIso}::timestamptz and caught_at < ${weIso}::timestamptz
         group by device_id
         having sum(points) = (
           select max(total) from (
             select sum(points) as total
             from catches
-            where caught_at >= ${ws} and caught_at < ${we}
+            where caught_at >= ${wsIso}::timestamptz and caught_at < ${weIso}::timestamptz
             group by device_id
           ) as week_totals
         )
