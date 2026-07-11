@@ -95,6 +95,32 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
         let nearestElevationDeg: Double?
         let nearestAngularOffsetDeg: Double?
         let reason: String
+        /// Compass heading accuracy (± degrees) at the moment of the tap, or nil
+        /// on files recorded before 2026-07-11 (and -1 when the OS reports it
+        /// invalid). A large value flags a magnetic-interference miss: the plane
+        /// was where the user tapped, but the heading error projected its label
+        /// off the frame (the DAL972 `off-frame` reveal case). Optional + last
+        /// so old files still decode.
+        let headingAccuracyDeg: Double?
+
+        init(
+            timestamp: Date, x: Double, y: Double,
+            nearestIcao24: String?, nearestCallsign: String?,
+            nearestSlantMeters: Double?, nearestElevationDeg: Double?,
+            nearestAngularOffsetDeg: Double?, reason: String,
+            headingAccuracyDeg: Double? = nil
+        ) {
+            self.timestamp = timestamp
+            self.x = x
+            self.y = y
+            self.nearestIcao24 = nearestIcao24
+            self.nearestCallsign = nearestCallsign
+            self.nearestSlantMeters = nearestSlantMeters
+            self.nearestElevationDeg = nearestElevationDeg
+            self.nearestAngularOffsetDeg = nearestAngularOffsetDeg
+            self.reason = reason
+            self.headingAccuracyDeg = headingAccuracyDeg
+        }
     }
 
     struct TapPin: Codable, Equatable, Sendable {

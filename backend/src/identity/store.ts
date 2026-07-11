@@ -12,7 +12,7 @@
  * typecode→rarity resolution catches need.
  */
 
-import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import {
   CURRENT_SCORING_VERSION,
   type GuessKind,
@@ -21,7 +21,15 @@ import {
   pointsForRarity,
 } from "../catches/points.js";
 import type { Database } from "../db/client.js";
-import { catches, devices, registry, typecodes } from "../db/schema.js";
+import {
+  alltimeToppers,
+  catches,
+  devices,
+  registry,
+  typecodes,
+  weeklyChampions,
+} from "../db/schema.js";
+import { addDaysUtc, utcDateString, weekStartUtc } from "./windows.js";
 
 // ── Identity (devices + handles) ─────────────────────────────────────────────
 
@@ -244,6 +252,18 @@ export interface MyStanding {
   points: number;
 }
 
+/**
+ * One champion of a closed week, as the leaderboard response serves it.
+ * `handle` is null for an anonymous champion (a handle-less device CAN win —
+ * it occupies a real rank; the client renders "anonymous spotter").
+ * `weekStart` is the won week's Monday as "YYYY-MM-DD" (UTC calendar date).
+ */
+export interface ChampionEntry {
+  handle: string | null;
+  points: number;
+  weekStart: string;
+}
+
 export interface CatchStore {
   /**
    * Resolve typecode + rarity for an icao24 from the metadata tables. Returns
@@ -294,14 +314,46 @@ export interface CatchStore {
    * of the page bounds. Powers GET /v1/catches (Hangar restore, issue #58).
    */
   listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage>;
-  /** Top-N devices WITH a handle AND at least one catch, by total points. */
-  leaderboard(limit: number): Promise<LeaderboardEntry[]>;
+  /**
+   * Top-N devices WITH a handle AND at least one IN-WINDOW catch, by total
+   * in-window points. `since` scopes the window: only catches with
+   * `caughtAt >= since` count (omit for the all-time board — the pre-windows
+   * behavior, unchanged).
+   */
+  leaderboard(limit: number, since?: Date): Promise<LeaderboardEntry[]>;
   /**
    * The given device's rank + total points — computed over ALL devices
-   * (handle-less devices accrue points and occupy ranks invisibly). Null if the
-   * device has no catches (it has 0 points and no meaningful rank yet).
+   * (handle-less devices accrue points and occupy ranks invisibly). `since`
+   * scopes both my points AND everyone's, so the rank is the in-window rank.
+   * Null only for an unknown device id.
    */
-  myStanding(deviceId: string): Promise<MyStanding | null>;
+  myStanding(deviceId: string, since?: Date): Promise<MyStanding | null>;
+  /**
+   * DECIDE-ON-READ: make sure every closed week (Monday-00:00-UTC boundaries)
+   * since the earliest catch has its champion(s) frozen in `weekly_champions`.
+   * Called on every `window=week` request; the fast path (most recent closed
+   * week already decided) is a single point-read. When it does decide, ties
+   * share the crown (one row per tied device), a zero-catch week gets no rows,
+   * and each week's insert is one atomic INSERT…SELECT with ON CONFLICT DO
+   * NOTHING — concurrent requests double-deciding is harmless. Also records
+   * the current all-time #1 into the topper ledger (a decide is a natural
+   * observation point). Returns how many weeks were decided (0 on the fast
+   * path; >1 only on the first request after a backfill-worthy gap).
+   */
+  ensureWeeksDecided(now: Date): Promise<number>;
+  /** The champion(s) of the week starting `weekStart` ("YYYY-MM-DD"). Empty if none. */
+  champions(weekStart: string): Promise<ChampionEntry[]>;
+  /** Total weekly crowns this device has ever won (all weeks, shared crowns count). */
+  weeklyWins(deviceId: string): Promise<number>;
+  /** Whether this device has EVER held all-time #1 (per the topper ledger). */
+  everToppedAllTime(deviceId: string): Promise<boolean>;
+  /**
+   * Observe the CURRENT all-time #1 and upsert it into the topper ledger
+   * (first observation wins; ON CONFLICT DO NOTHING). Called by every
+   * `window=all` leaderboard request and by the week-decide pass. No-op while
+   * no device has a catch.
+   */
+  recordAlltimeTopper(now: Date): Promise<void>;
 }
 
 export class DrizzleCatchStore implements CatchStore {
@@ -510,13 +562,20 @@ export class DrizzleCatchStore implements CatchStore {
     };
   }
 
-  async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
+  async leaderboard(limit: number, since?: Date): Promise<LeaderboardEntry[]> {
     // Aggregate points + catch count per device — only those WITH a handle
     // AND at least one catch.
+    // Windowing lives in the JOIN condition, not a WHERE: a LEFT JOIN keeps
+    // every device row while only in-window catches contribute to the sums,
+    // so the `having count > 0` entry ticket naturally becomes "at least one
+    // catch IN THE WINDOW".
     // Ordering: points DESC, then created_at ASC, then device id ASC. The id is
     // the FINAL tiebreaker so the order is TOTAL and DETERMINISTIC even in the
     // (rare) case where two devices share a createdAt timestamp — the same data
     // always yields the same order. Rank is the 1-based row position.
+    const joinOn = since
+      ? and(eq(catches.deviceId, devices.id), gte(catches.caughtAt, since))
+      : eq(catches.deviceId, devices.id);
     const rows = await this.db
       .select({
         handle: devices.handle,
@@ -525,7 +584,7 @@ export class DrizzleCatchStore implements CatchStore {
         createdAt: devices.createdAt,
       })
       .from(devices)
-      .leftJoin(catches, eq(catches.deviceId, devices.id))
+      .leftJoin(catches, joinOn)
       .where(isNotNull(devices.handle))
       .groupBy(devices.id, devices.handle, devices.createdAt)
       // A claimed handle alone doesn't put you on the public board — onboarding
@@ -544,15 +603,22 @@ export class DrizzleCatchStore implements CatchStore {
     }));
   }
 
-  async myStanding(deviceId: string): Promise<MyStanding | null> {
-    // The device's own total points.
+  async myStanding(deviceId: string, since?: Date): Promise<MyStanding | null> {
+    // Windowing mirrors `leaderboard`: the filter lives in the LEFT JOIN so a
+    // device with no in-window catches still ranks (with 0 points) rather than
+    // vanishing.
+    const joinOn = since
+      ? and(eq(catches.deviceId, devices.id), gte(catches.caughtAt, since))
+      : eq(catches.deviceId, devices.id);
+
+    // The device's own total (in-window) points.
     const mine = await this.db
       .select({
         points: sql<number>`coalesce(sum(${catches.points}), 0)`,
         createdAt: devices.createdAt,
       })
       .from(devices)
-      .leftJoin(catches, eq(catches.deviceId, devices.id))
+      .leftJoin(catches, joinOn)
       .where(eq(devices.id, deviceId))
       .groupBy(devices.id, devices.createdAt)
       .limit(1);
@@ -574,7 +640,7 @@ export class DrizzleCatchStore implements CatchStore {
         createdAt: devices.createdAt,
       })
       .from(devices)
-      .leftJoin(catches, eq(catches.deviceId, devices.id))
+      .leftJoin(catches, joinOn)
       .groupBy(devices.id, devices.createdAt);
 
     let ahead = 0;
@@ -588,5 +654,145 @@ export class DrizzleCatchStore implements CatchStore {
       if (outranks) ahead += 1;
     }
     return { rank: ahead + 1, points: myPoints };
+  }
+
+  async ensureWeeksDecided(now: Date): Promise<number> {
+    // The most recent CLOSED week is the one before the week containing `now`.
+    const lastClosed = addDaysUtc(weekStartUtc(now), -7);
+    const lastClosedIso = utcDateString(lastClosed);
+
+    // FAST PATH (the every-request cost): the last closed week already has
+    // champion rows → the backfill invariant ("deciding always decides every
+    // older undecided week too") guarantees nothing older is pending either.
+    // (A zero-catch last week never gets rows, so it re-enters the slow path
+    // each request — harmless: the loop below just finds nothing to insert.)
+    const already = await this.db
+      .select({ weekStart: weeklyChampions.weekStart })
+      .from(weeklyChampions)
+      .where(eq(weeklyChampions.weekStart, lastClosedIso))
+      .limit(1);
+    if (already.length > 0) return 0;
+
+    // Backfill bound: the week of the earliest catch ever. No catches → no
+    // weeks to decide.
+    const minRows = await this.db
+      .select({ min: sql<Date | string | null>`min(${catches.caughtAt})` })
+      .from(catches);
+    const earliest = minRows[0]?.min;
+    if (earliest === null || earliest === undefined) return 0;
+
+    // Which weeks are already decided (row presence == decided)?
+    const decidedRows = await this.db
+      .selectDistinct({ weekStart: weeklyChampions.weekStart })
+      .from(weeklyChampions);
+    const decided = new Set(decidedRows.map((r) => r.weekStart));
+
+    let decidedCount = 0;
+    for (
+      let ws = weekStartUtc(new Date(earliest));
+      ws.getTime() <= lastClosed.getTime();
+      ws = addDaysUtc(ws, 7)
+    ) {
+      const iso = utcDateString(ws);
+      if (decided.has(iso)) continue;
+      const we = addDaysUtc(ws, 7);
+
+      // A zero-catch week has NO champion (the one champion-less case — there
+      // is otherwise no winner floor). Checked explicitly so `decidedCount`
+      // means "weeks that got champions".
+      const anyCatch = await this.db
+        .select({ id: catches.id })
+        .from(catches)
+        .where(and(gte(catches.caughtAt, ws), lt(catches.caughtAt, we)))
+        .limit(1);
+      if (anyCatch.length === 0) continue;
+
+      // Crown the week in ONE atomic INSERT…SELECT: every device whose
+      // in-week sum equals the week's max gets a row (ties → shared crowns,
+      // points only — no display tie-break here). ON CONFLICT DO NOTHING makes
+      // a concurrent double-decide of the same week a no-op, so no explicit
+      // transaction/locking is needed.
+      await this.db.execute(sql`
+        insert into weekly_champions (week_start, device_id, points, catches, decided_at)
+        select ${iso}::date, device_id, sum(points)::int, count(*)::int, ${now}
+        from catches
+        where caught_at >= ${ws} and caught_at < ${we}
+        group by device_id
+        having sum(points) = (
+          select max(total) from (
+            select sum(points) as total
+            from catches
+            where caught_at >= ${ws} and caught_at < ${we}
+            group by device_id
+          ) as week_totals
+        )
+        on conflict (week_start, device_id) do nothing
+      `);
+      decidedCount += 1;
+    }
+
+    // A decide is a natural observation point for the all-time board too —
+    // record the current #1 so the topper ledger can't miss an era where
+    // nobody ever requested `window=all`.
+    if (decidedCount > 0) await this.recordAlltimeTopper(now);
+    return decidedCount;
+  }
+
+  async champions(weekStart: string): Promise<ChampionEntry[]> {
+    // All champions share the winning points total, so the order among them is
+    // cosmetic — createdAt/id keeps it deterministic (same data, same order).
+    const rows = await this.db
+      .select({
+        handle: devices.handle,
+        points: weeklyChampions.points,
+        weekStart: weeklyChampions.weekStart,
+      })
+      .from(weeklyChampions)
+      .innerJoin(devices, eq(devices.id, weeklyChampions.deviceId))
+      .where(eq(weeklyChampions.weekStart, weekStart))
+      .orderBy(devices.createdAt, devices.id);
+    return rows.map((r) => ({ handle: r.handle, points: r.points, weekStart: r.weekStart }));
+  }
+
+  async weeklyWins(deviceId: string): Promise<number> {
+    const rows = await this.db
+      .select({ n: sql<number>`count(*)` })
+      .from(weeklyChampions)
+      .where(eq(weeklyChampions.deviceId, deviceId));
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  async everToppedAllTime(deviceId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ deviceId: alltimeToppers.deviceId })
+      .from(alltimeToppers)
+      .where(eq(alltimeToppers.deviceId, deviceId))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async recordAlltimeTopper(now: Date): Promise<void> {
+    // The current all-time #1 under the board's total order (points DESC,
+    // createdAt ASC, id ASC), over ALL devices — an anonymous device can top.
+    // INNER join = at least one catch; with zero catches anywhere there is no
+    // #1 to record.
+    const rows = await this.db
+      .select({
+        deviceId: devices.id,
+        points: sql<number>`sum(${catches.points})`.as("points"),
+      })
+      .from(devices)
+      .innerJoin(catches, eq(catches.deviceId, devices.id))
+      .groupBy(devices.id, devices.createdAt)
+      .orderBy(desc(sql`points`), devices.createdAt, devices.id)
+      .limit(1);
+    const top = rows[0];
+    if (!top) return;
+    // First observation wins: the ledger answers "ever topped", so a repeat
+    // sighting must not move `firstToppedAt`.
+    await this.db
+      .insert(alltimeToppers)
+      .values({ deviceId: top.deviceId, firstToppedAt: now })
+      .onConflictDoNothing();
   }
 }

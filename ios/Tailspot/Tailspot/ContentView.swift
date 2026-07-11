@@ -335,6 +335,7 @@ struct ContentView: View {
                                                 in: geo.size,
                                                 visible: visible,
                                                 phoneHeadingDeg: heading,
+                                                phoneHeadingAccuracyDeg: location.headingAccuracy,
                                                 cameraElevationDeg: camEl,
                                                 rollDeg: roll,
                                                 hfovDeg: effectiveHfov,
@@ -2640,6 +2641,7 @@ struct ContentView: View {
         in screenSize: CGSize,
         visible: [ObservedAircraft],
         phoneHeadingDeg: Double,
+        phoneHeadingAccuracyDeg: Double?,
         cameraElevationDeg: Double,
         rollDeg: Double,
         hfovDeg: Double,
@@ -2724,16 +2726,21 @@ struct ContentView: View {
         // (4) No visible plane under the tap. Diagnose the nearest in-data
         // plane (ALL tiers, including hidden) and record the miss signal —
         // the frustrated tap is the most honest miss signal we have
-        // (2026-06-12, after three field misses). NEW 2026-06-19: if that
-        // nearest plane is FILTERED and near the tap, the user is pointing at
-        // a real plane the precision band deliberately hid (the FDX1268
-        // class — inseparable from the MLAT firehose, so it can't be
-        // ambient-labeled). The tap is the explicit intent the ambient filter
-        // lacks, so REVEAL it: pin + force-lock so it labels and becomes
-        // catchable, without loosening the filter for everyone else.
+        // (2026-06-12, after three field misses). If that nearest plane is one
+        // the tap should REVEAL (`shouldTapReveal`), pin + force-lock it so it
+        // labels and becomes catchable — the explicit tap is the intent the
+        // ambient filter/frame lacks, without loosening the filter for everyone:
+        //   - FILTERED (2026-06-19): airborne but hidden by the precision band
+        //     (the FDX1268 class, inseparable from the MLAT firehose).
+        //   - OFF-FRAME (2026-07-11): a visible-tier plane projected outside the
+        //     frame — typically a compass/heading error (or high zoom) rotated
+        //     the sky-model off where the plane visually sits, so no label drew
+        //     even though the user was pointed right at it (the DAL972 field
+        //     case: ~17° heading error at ±17° reported accuracy, 2.4× zoom).
         let diagnosis = recordEmptySkyTapDiagnosis(
             at: point, in: screenSize,
             phoneHeadingDeg: phoneHeadingDeg,
+            phoneHeadingAccuracyDeg: phoneHeadingAccuracyDeg,
             cameraElevationDeg: cameraElevationDeg,
             rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg, now: now
         )
@@ -2744,13 +2751,13 @@ struct ContentView: View {
             presentGroundedTapToast(icao24: d.obs.aircraft.icao24)
             return
         }
-        if let d = diagnosis, d.reason == "filtered" {
+        if let d = diagnosis, shouldTapReveal(reason: d.reason) {
             let icao = d.obs.aircraft.icao24
             revealedIcao = icao
             pinnedIcao = icao
             recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
             lockOn.forceLock(targetIcao24: icao, now: now)
-            Analytics.capture("tap_reveal", ["icao24": .string(icao)])
+            Analytics.capture("tap_reveal", ["icao24": .string(icao), "reason": .string(d.reason)])
             return
         }
 
@@ -2771,7 +2778,8 @@ struct ContentView: View {
     @discardableResult
     private func recordEmptySkyTapDiagnosis(
         at point: CGPoint, in screenSize: CGSize,
-        phoneHeadingDeg: Double, cameraElevationDeg: Double,
+        phoneHeadingDeg: Double, phoneHeadingAccuracyDeg: Double?,
+        cameraElevationDeg: Double,
         rollDeg: Double, hfovDeg: Double, vfovDeg: Double, now: Date
     ) -> (obs: ObservedAircraft, reason: String)? {
         let basis = Geo.cameraBasis(
@@ -2826,11 +2834,17 @@ struct ContentView: View {
             nearestSlantMeters: best?.obs.slantDistanceMeters,
             nearestElevationDeg: best?.obs.elevationDeg,
             nearestAngularOffsetDeg: best?.offsetDeg,
-            reason: reason
+            reason: reason,
+            headingAccuracyDeg: phoneHeadingAccuracyDeg
         )
         recorder.recordEmptyTap(tap)
 
         var props: [String: AnalyticsValue] = ["reason": .string(reason)]
+        // Compass quality at the miss — a large value marks a magnetic-error
+        // (off-frame) miss. -1 = OS says invalid; omit it then.
+        if let acc = phoneHeadingAccuracyDeg, acc >= 0 {
+            props["heading_accuracy_deg"] = .double(acc)
+        }
         if let b = best {
             props["nearest_icao24"] = .string(b.obs.aircraft.icao24)
             if let cs = b.obs.aircraft.callsign { props["nearest_callsign"] = .string(cs) }
@@ -2892,6 +2906,21 @@ func classifyEmptySkyTapNearest(
     if tier == .hidden { return "filtered" }
     if !onScreen { return "off-frame" }
     return "on-screen"
+}
+
+/// Whether an empty-sky tap should REVEAL its nearest in-data plane — pin +
+/// force-lock so it labels and becomes catchable, the explicit-intent escape
+/// hatch the ambient filter/frame lacks. Two `classifyEmptySkyTapNearest`
+/// reasons qualify:
+///   - "filtered"  → airborne but hidden by the precision band (FDX1268).
+///   - "off-frame" → a visible-tier plane projected outside the frame, usually
+///                   because a compass/heading error (or high zoom) rotated the
+///                   sky-model off where the plane visually sits (DAL972,
+///                   2026-07-11). The user is pointed at it; the tap grabs it.
+/// "grounded" is handled earlier (a parked plane is never revealed); "on-screen"
+/// and "nothing-nearby" fall through to the empty-tap ripple.
+func shouldTapReveal(reason: String) -> Bool {
+    reason == "filtered" || reason == "off-frame"
 }
 
 // MARK: - AR-overlay rarity resolution

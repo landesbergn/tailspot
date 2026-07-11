@@ -184,9 +184,12 @@ source + each one's focused test file — they're not restated here.
   data in `ADSBManager.swift`, not a single km cap). A reported "missing plane
   label" is usually the filter doing its job — check below-horizon / too-far first.
   Genuinely-visible-but-filtered planes are reachable via **tap-to-reveal**
-  (`revealedIcao`: a tap surfaces the single nearest in-data plane even if
-  filtered). **Don't loosen the ambient filter to chase one** — it resurfaces the
-  MLAT clutter the precision lean kills (see the `FieldReplays` regression).
+  (`revealedIcao`: a tap pins + force-locks the single nearest in-data plane when
+  `shouldTapReveal` says so — reason `filtered` (hidden by the band) **or**
+  `off-frame` (a visible-tier plane projected off-screen, usually a compass/heading
+  error; DAL972, 2026-07-11); `grounded` never reveals). **Don't loosen the ambient
+  filter to chase one** — it resurfaces the MLAT clutter the precision lean kills
+  (see the `FieldReplays` regression).
 - **Sensor concurrency.** Sensor wrappers are `ObservableObject` classes owned via
   `@StateObject`. All `@Published` mutations on the main thread — background
   callbacks (CMMotion/AVCapture queues, URLSession) hop `DispatchQueue.main.async`
