@@ -63,7 +63,10 @@ nonisolated struct PlanespottersClient: Sendable {
     /// `MyFlightTracker/1.2 (+https://example.com/contact)`.
     /// Bumping the version number here is fine if/when the integration
     /// changes shape.
-    static let defaultUserAgent = "Tailspot/0.1 (+https://github.com/landesbergn/tailspot)"
+    /// Version tracks MARKETING_VERSION at integration-shape changes
+    /// (1.0 = App Store launch); contact URL is the public site per the
+    /// licensing review (2026-07-11).
+    static let defaultUserAgent = "Tailspot/1.0 (+https://tailspot.app)"
 
     init(session: URLSession = .shared,
          baseURL: URL = URL(string: "https://api.planespotters.net/pub/photos/hex/")!,

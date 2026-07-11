@@ -61,7 +61,12 @@ struct CatchDetailView: View {
                     SettledCatchCard(
                         plane: detailPlane,
                         isFirstOfType: wasFirstOfType,
-                        width: min(geo.size.width - 36, 420)
+                        width: min(geo.size.width - 36, 420),
+                        // Planespotters TOS: the photo thumbnail itself must
+                        // link to the photo's Planespotters page (licensing
+                        // review 2026-07-11) — the tappable caption below
+                        // stays as the visible credit.
+                        onPhotoTap: heroPhotoLink.map { url in { openURL(url) } }
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
@@ -141,6 +146,13 @@ struct CatchDetailView: View {
             destName: first.destName,
             isFirstOfType: wasFirstOfType
         )
+    }
+
+    /// The Planespotters photo-page URL when — and only when — the card
+    /// hero is a Planespotters image (no user catch photo). nil keeps the
+    /// hero inert (user photo or placeholder).
+    private var heroPhotoLink: URL? {
+        hasCatchPhoto ? nil : planespottersPhoto?.link
     }
 
     /// Historical first-of-type: no catch of this typecode predates the
@@ -276,7 +288,10 @@ struct CatchDetailView: View {
     // MARK: - Attribution
 
     /// Planespotters TOS: any UI that displays one of their photos must
-    /// link the photo page and credit the photographer. Hidden when
+    /// credit the photographer and link the photo page — and the photo
+    /// THUMBNAIL itself must carry that link (licensing review 2026-07-11;
+    /// wired via `SettledCatchCard.onPhotoTap` above). This caption stays
+    /// as the visible "© photographer" credit, also tappable. Hidden when
     /// we're not actually showing a Planespotters image (catch photo or
     /// nothing-found).
     private func attribution(_ photo: PlanePhoto) -> some View {
