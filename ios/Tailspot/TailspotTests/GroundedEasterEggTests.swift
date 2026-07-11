@@ -180,6 +180,23 @@ struct GroundedEasterEggTests {
         ) == "nothing-nearby")
     }
 
+    @Test func tapRevealFiresForFilteredAndOffFrame() {
+        // The explicit-intent escape hatch surfaces a real plane the ambient
+        // filter/frame hid: a precision-band-FILTERED plane (FDX1268) and —
+        // 2026-07-11 — a visible plane pushed OFF-FRAME by compass error (the
+        // DAL972 field miss: pointed right at it, label projected off-screen).
+        #expect(shouldTapReveal(reason: "filtered"))
+        #expect(shouldTapReveal(reason: "off-frame"))
+    }
+
+    @Test func tapRevealNeverFiresForGroundedOrHits() {
+        // Grounded is routed to the toast BEFORE this gate (belt-and-suspenders
+        // here too); on-screen / nothing-nearby are ordinary misses. None reveal.
+        #expect(!shouldTapReveal(reason: "grounded"))
+        #expect(!shouldTapReveal(reason: "on-screen"))
+        #expect(!shouldTapReveal(reason: "nothing-nearby"))
+    }
+
     // MARK: - TrophyEventStore
 
     @Test func eventStoreRecordsAndPersistsAcrossInstances() {
