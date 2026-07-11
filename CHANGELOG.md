@@ -5,6 +5,61 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-11 — Launch readiness — v1.0.0 — branch `feat/launch-readiness`
+
+Closes every code-level gap from the GA audit (PLAN §9 #8; audit docs land
+separately as PR #128). Noah approved launching to the App Store.
+
+1. **Session-replay privacy (the launch-blocking item).** User catch photos
+   now carry a scoped `.postHogMask()` at every render site — `RevealPhoto`
+   (reveal + `SettledCatchCard` hero, incl. the Hangar detail),
+   `CatchCardView`'s photo (`.postHogMask(url.isFileURL)` — card reveal,
+   multi-catch, model-slot detail), and `FocusThumbnail` (Hangar rows) — so
+   only the photo rect is redacted and the card/UI chrome still replays.
+   Planespotters stock photos stay visible (public imagery, not user
+   content). The **live camera view is excluded STRUCTURALLY, not by mask**:
+   replay's screenshot capture (`drawHierarchy`) cannot read
+   `AVCaptureVideoPreviewLayer`'s out-of-process surface, so camera frames
+   never reach PostHog — and a `.postHogMask()` on the full-window
+   `CameraPreview` is exactly the 2026-06 all-black-replay bug (PostHog
+   redacts by drawing masked-view RECTS over the flat screenshot; a
+   full-window rect blacks every frame, sheets included). That guarantee is
+   now pinned by **`SessionReplayPrivacyTests`** (PreviewView must stay
+   backed by `AVCaptureVideoPreviewLayer`); the stale "camera is masked"
+   header comment in `PostHogSessionReplay.swift` and the EXPERIMENT
+   comment in `ContentView` were rewritten to describe the real posture.
+   `maskAllImages` stays false (masking is selective by design).
+2. **Planespotters attribution fix** (licensing review): the photo
+   THUMBNAIL itself now links to the photo's Planespotters page — new
+   optional `SettledCatchCard.onPhotoTap`, passed by `CatchDetailView` only
+   when the hero is Planespotters imagery; the tappable caption stays.
+   UA bumped to `Tailspot/1.0 (+https://tailspot.app)`.
+3. **PrivacyInfo.xcprivacy truthed up:** all declared data types flip to
+   **Linked = true** (everything is keyed to the server device-id —
+   pseudonymous is still "linked" in Apple's sense); the Photos/Videos
+   declaration is REMOVED (photos never leave the device and replay now
+   masks them — not "collected" per Apple's definition). Manifest header
+   rewritten for the single-SDK-pipeline reality. Nutrition label is a
+   manual App Store Connect step (Noah).
+4. **Export compliance:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption =
+   NO` in both Tailspot target configs (standard HTTPS only → exempt);
+   verified in the built product's Info.plist.
+5. **MARKETING_VERSION 0.5.0 → 1.0.0** (the App Store launch is the "major
+   change worth flagging"); `CURRENT_PROJECT_VERSION` stays 1 (CI bumps).
+6. **Real privacy policy + terms published to source** (`web/public/
+   privacy.html`, `terms.html`) from the GA-audit drafts — kills the false
+   "no analytics SDKs embedded" / "location only at the moment of a catch"
+   claims; replay section reflects this round's masking (camera excluded,
+   catch photos masked); effective date 2026-07-11, what-changed note up
+   top per the policy's own §10. **Deploy is a separate Fly app**
+   (`tailspot-www`, nginx static): `cd web && flyctl deploy --remote-only`
+   — NOT deployed in this round; Noah's call.
+
+Full `TailspotTests` green (958 pass, incl. all snapshot suites — the mask
+modifier is inert under ImageRenderer, zero pixel drift) + device build
+verified. App Store Connect steps that remain manual: nutrition label sync,
+the TestFlight/App Store build itself.
+
 ## 2026-07-11 — Dynamic leaderboards PR2 — iOS board tabs + champion UI — branch `feat/leaderboard-tabs`
 
 The iOS half of the dynamic-leaderboards feature (PLAN §9 #12), built against
