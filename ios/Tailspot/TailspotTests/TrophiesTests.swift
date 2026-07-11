@@ -779,17 +779,142 @@ struct TrophyRosterExpansionTests {
 
     // MARK: Roster generation
 
-    @Test func rosterVersionIsStampedAtTwo() {
-        // The 2026-07-10 expansion generation. Bumping this constant is what
-        // triggers the reseed + recap on devices stamped behind it — pin it
-        // so an accidental edit is loud.
-        #expect(Trophies.rosterVersion == 2)
+    @Test func rosterVersionIsStampedAtThree() {
+        // The 2026-07-11 leaderboard-winner generation. Bumping this constant
+        // is what triggers the reseed + recap on devices stamped behind it —
+        // pin it so an accidental edit is loud.
+        #expect(Trophies.rosterVersion == 3)
     }
 
     @Test func newIdsPresentExactlyOnce() {
         let ids = Trophies.roster.map(\.id)
-        for id in ["fourfigures", "highroller", "calledit", "clairvoyant", "hotstreak"] {
+        for id in ["fourfigures", "highroller", "calledit", "clairvoyant", "hotstreak",
+                   "topflight", "dynasty", "charttopper"] {
             #expect(ids.filter { $0 == id }.count == 1, "\(id) missing or duplicated")
         }
+    }
+}
+
+// MARK: - Leaderboard winner trophies (dynamic-leaderboards PR3)
+
+@Suite("Trophies — leaderboard winner trophies")
+@MainActor
+struct TrophiesWinnerTests {
+
+    private func ach(_ id: String) -> Achievement {
+        Trophies.roster.first { $0.id == id }!
+    }
+
+    /// Suite-isolated standing cache pre-loaded via the same `update(from:)`
+    /// path the screens use — so these tests also exercise the write side.
+    private func standing(wins: Int = 0, topped: Bool = false) -> LeaderboardStandingCache {
+        let cache = LeaderboardStandingCache(
+            defaults: UserDefaults(suiteName: "trophies.standing.\(UUID().uuidString)")!)
+        cache.update(from: MyStanding(rank: 1, points: 0,
+                                      weeklyWins: wins, everToppedAllTime: topped))
+        return cache
+    }
+
+    private func inputs(wins: Int = 0, topped: Bool = false) -> TrophyProgressInputs {
+        Trophies.inputs(from: [], standing: standing(wins: wins, topped: topped))
+    }
+
+    // MARK: Inputs plumbing
+
+    @Test func serverFactInputsDefaultToZero() {
+        // The zero-churn contract: call sites (and fixtures) that don't pass
+        // the new params get locked-state values.
+        #expect(TrophyProgressInputs.zero.weeklyWins == 0)
+        #expect(TrophyProgressInputs.zero.everToppedAllTime == false)
+        // And a fresh install with no server contact reads the same.
+        let fresh = inputs()
+        #expect(fresh.weeklyWins == 0)
+        #expect(fresh.everToppedAllTime == false)
+    }
+
+    @Test func inputsReadServerFactsFromStandingCache() {
+        let i = inputs(wins: 2, topped: true)
+        #expect(i.weeklyWins == 2)
+        #expect(i.everToppedAllTime)
+    }
+
+    @Test func hangarAloneNeverEarnsWinnerTrophies() {
+        // Server truth only: a huge Hangar with no server-credited wins
+        // leaves all three locked — the app must never infer a win locally.
+        let catches = (0..<100).map { i in
+            Catch(icao24: String(UUID().uuidString.prefix(6)), callsign: nil,
+                  model: nil, manufacturer: nil,
+                  caughtAt: Date(timeIntervalSince1970: 1_716_000_000 + Double(i) * 60),
+                  observerLat: 0, observerLon: 0, slantDistanceMeters: 0)
+        }
+        let i = Trophies.inputs(from: catches, standing: standing())
+        for id in ["topflight", "dynasty", "charttopper"] {
+            #expect(ach(id).isEarned(inputs: i) == false, "\(id) must stay locked without server facts")
+        }
+    }
+
+    // MARK: Earn boundaries
+
+    @Test func topFlightEarnsAtOneWin() {
+        let t = ach("topflight")
+        #expect(t.secret == false)
+        #expect(t.isEarned(inputs: inputs(wins: 0)) == false)
+        #expect(t.isEarned(inputs: inputs(wins: 1)))
+        #expect(t.isEarned(inputs: inputs(wins: 3)))
+    }
+
+    @Test func dynastyEarnsAtThreeWins() {
+        let t = ach("dynasty")
+        #expect(t.isEarned(inputs: inputs(wins: 0)) == false)
+        #expect(t.isEarned(inputs: inputs(wins: 1)) == false)
+        #expect(t.isEarned(inputs: inputs(wins: 2)) == false)
+        #expect(t.isEarned(inputs: inputs(wins: 3)))
+    }
+
+    @Test func chartTopperTracksEverToppedFlag() {
+        let t = ach("charttopper")
+        #expect(t.secret == false)
+        #expect(t.isEarned(inputs: inputs(topped: false)) == false)
+        #expect(t.isEarned(inputs: inputs(topped: true)))
+    }
+
+    // MARK: Dynasty secrecy
+
+    @Test func dynastyIsSecretMaskedUntilEarned() {
+        let t = ach("dynasty")
+        #expect(t.secret)
+        #expect(t.tiers.count == 1)
+        // No prereq chain: TrophyBoard ignores prerequisites for secrets
+        // (always listed, masked), so chaining behind Top Flight would be
+        // a silent no-op — pin the deliberate nil.
+        #expect(t.prerequisite == nil)
+        // Locked → present in the board (rendered as the masked "???" row).
+        let locked = TrophyBoard.visible(inputs: inputs(wins: 1))
+        #expect(locked.contains { $0.id == "dynasty" })
+        // Earned → sorts into the earned block with the others.
+        let earned = TrophyBoard.visible(inputs: inputs(wins: 3, topped: true))
+        let earnedIds = earned.prefix(3).map(\.id)
+        #expect(earnedIds.contains("dynasty") && earnedIds.contains("topflight")
+                && earnedIds.contains("charttopper"))
+    }
+
+    // MARK: Cache semantics
+
+    @Test func standingCacheMirrorsWinsAndLatchesTopped() {
+        let cache = LeaderboardStandingCache(
+            defaults: UserDefaults(suiteName: "trophies.standing.\(UUID().uuidString)")!)
+        // Old-backend payload (nil fields) writes nothing.
+        cache.update(from: MyStanding(rank: 5, points: 100))
+        #expect(cache.weeklyWins == 0)
+        #expect(cache.everToppedAllTime == false)
+        // Server facts land.
+        cache.update(from: MyStanding(rank: 1, points: 900, weeklyWins: 2, everToppedAllTime: true))
+        #expect(cache.weeklyWins == 2)
+        #expect(cache.everToppedAllTime)
+        // Wins mirror the server as-is (it may correct the count)…
+        cache.update(from: MyStanding(rank: 1, points: 900, weeklyWins: 1, everToppedAllTime: false))
+        #expect(cache.weeklyWins == 1)
+        // …but the monotonic "ever topped" flag never un-latches.
+        #expect(cache.everToppedAllTime)
     }
 }
