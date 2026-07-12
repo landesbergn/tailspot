@@ -208,7 +208,7 @@ extension ReplayAnalyzer {
         var seen = Set(alreadyMissed.filter { $0.mode == .missedPlane }
             .map { "\($0.tickIndex)|\($0.icao24 ?? "")" })
         var out: [FailureModeFinding] = []
-        let ordered = events.sorted { eventTimestamp($0) < eventTimestamp($1) }
+        let ordered = events.sorted { $0.timestamp < $1.timestamp }
         for case .emptyTap(let tap) in ordered {
             guard tap.reason == "filtered", let icao = tap.nearestIcao24 else { continue }
             let ti = tickIndex(at: tap.timestamp, in: tickTimes)
@@ -238,7 +238,7 @@ extension ReplayAnalyzer {
     /// Walks events in the same timestamp order `analyze` uses, so index i
     /// aligns with `report.ticks[i]`.
     private static func pinStatePerTick(_ events: [ReplayEvent]) -> [(icao: String, x: Double?, y: Double?)?] {
-        let ordered = events.sorted { eventTimestamp($0) < eventTimestamp($1) }
+        let ordered = events.sorted { $0.timestamp < $1.timestamp }
         var current: (icao: String, x: Double?, y: Double?)?
         var perTick: [(icao: String, x: Double?, y: Double?)?] = []
         for event in ordered {
@@ -258,13 +258,4 @@ extension ReplayAnalyzer {
         return nil
     }
 
-    private static func eventTimestamp(_ event: ReplayEvent) -> Date {
-        switch event {
-        case .sessionStart(let s): return s.timestamp
-        case .tick(let t):         return t.timestamp
-        case .tapPin(let p):       return p.timestamp
-        case .unpin(let u):        return u.timestamp
-        case .emptyTap(let e):     return e.timestamp
-        }
-    }
 }

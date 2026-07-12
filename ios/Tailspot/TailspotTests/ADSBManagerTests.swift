@@ -266,8 +266,6 @@ struct ADSBManagerTests {
         }
     }
 
-    // MARK: - Live/mock toggle integration
-
     // MARK: - Forward-extrapolation
 
     @Test func extrapolationMovesAircraftAlongTrack() {
