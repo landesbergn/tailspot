@@ -82,9 +82,11 @@ nonisolated enum ReplayEvent: Equatable, Sendable {
     /// a tap matches no label (added 2026-06-12 after three field misses;
     /// the user's frustrated tap is the most honest miss signal we have).
     /// `nearestIcao24`/`reason` carry the app's own diagnosis at tap time:
-    /// reason ∈ "filtered" (in data, hidden tier), "off-frame" (visible
-    /// tier, outside the current FOV), "on-screen" (projected on screen
-    /// but farther than the tap radius), "nothing-nearby".
+    /// reason ∈ "filtered" (in data, hidden tier, within reveal reach),
+    /// "filtered-far" (hidden AND beyond plausible reveal reach — never
+    /// revealed; 2026-07-12), "grounded" (parked plane, toast), "off-frame"
+    /// (visible tier, outside the current FOV), "on-screen" (projected on
+    /// screen but farther than the tap radius), "nothing-nearby".
     struct EmptyTap: Codable, Equatable, Sendable {
         let timestamp: Date
         let x: Double

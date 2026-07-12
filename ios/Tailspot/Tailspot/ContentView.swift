@@ -215,6 +215,11 @@ struct ContentView: View {
     /// The timestamp guards the auto-clear against clearing a newer toast
     /// (same pattern as `emptyRipple`).
     @State private var groundedToastAt: Date? = nil
+    /// Beyond-eyeshot hint: (shown-at, distance) of the last "filtered-far"
+    /// tap — the nearest in-data plane was too far to plausibly see, so the
+    /// tap reveals nothing and this toast says why. Same lifecycle as
+    /// `groundedToastAt`.
+    @State private var farTapToast: (at: Date, slantMeters: Double)? = nil
 
     var body: some View {
         ZStack {
@@ -719,6 +724,7 @@ struct ContentView: View {
         // hint; the two can't realistically co-fire (one needs a not-sky
         // frame, the other a tap that reached an in-data plane).
         .overlay(alignment: .top) { groundedToastBanner }
+        .overlay(alignment: .top) { farTapToastBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -984,6 +990,39 @@ struct ContentView: View {
                 .padding(.top, 60)
                 .padding(.horizontal, 24)
                 .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Transient beyond-eyeshot toast: shown when an empty-sky tap's nearest
+    /// in-data plane is past plausible reveal reach ("filtered-far"). Honest
+    /// about WHY nothing revealed — in dense airspace there is almost always
+    /// *something* in the data, and silently ignoring the tap reads as broken.
+    /// Same look/lifecycle as `groundedToastBanner`.
+    @ViewBuilder
+    private var farTapToastBanner: some View {
+        if let toast = farTapToast {
+            Text("Nearest plane is \(Int((toast.slantMeters / 1000).rounded())) km out — beyond eyeshot")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+                .padding(.top, 60)
+                .padding(.horizontal, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Present the beyond-eyeshot toast for ~3 s.
+    private func presentFarTapToast(slantMeters: Double) {
+        let now = Date()
+        withAnimation(.easeInOut(duration: 0.2)) { farTapToast = (now, slantMeters) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if farTapToast?.at == now {
+                withAnimation(.easeInOut(duration: 0.3)) { farTapToast = nil }
+            }
         }
     }
 
@@ -2770,6 +2809,14 @@ struct ContentView: View {
             presentGroundedTapToast(icao24: d.obs.aircraft.icao24)
             return
         }
+        // FILTERED-FAR (2026-07-12): airborne and hidden, but past plausible
+        // reveal reach (or below the horizon) — the NYC couch case, where 110
+        // in-data planes meant every tap "found" something 27–76 km away.
+        // No reveal, no lock: an honest toast with the distance instead.
+        if let d = diagnosis, d.reason == "filtered-far" {
+            presentFarTapToast(slantMeters: d.obs.slantDistanceMeters)
+            return
+        }
         if let d = diagnosis, shouldTapReveal(reason: d.reason) {
             let icao = d.obs.aircraft.icao24
             revealedIcao = icao
@@ -2839,7 +2886,8 @@ struct ContentView: View {
                 offsetDeg: b.offsetDeg,
                 grounded: b.obs.grounded,
                 tier: b.obs.visibilityTier,
-                onScreen: b.onScreen
+                onScreen: b.onScreen,
+                plausiblyRevealable: b.obs.isPlausiblyRevealable
             )
         } else {
             reason = "nothing-nearby"
@@ -2904,8 +2952,15 @@ let emptySkyTapMaxOffsetDeg: Double = 40
 ///   - "grounded"       → parked plane under the tap: playful toast, never
 ///                         a reveal (checked BEFORE the tier — a grounded
 ///                         plane is also `.hidden`, and reveal must lose).
-///   - "filtered"        → airborne but hidden by the precision band:
-///                         tap-to-reveal (the FDX1268 affordance).
+///   - "filtered"        → airborne, hidden by the precision band, but within
+///                         plausible reveal reach: tap-to-reveal (the FDX1268
+///                         affordance).
+///   - "filtered-far"    → airborne and hidden, but beyond
+///                         `revealReachMeters` (or below the horizon) — not
+///                         plausibly visible from here, so the tap gets the
+///                         beyond-eyeshot hint instead of a reveal (the NYC
+///                         couch session, 2026-07-12: 110 planes in data,
+///                         nearest-tap planes 27–76 km out).
 ///   - "off-frame"       → visible tier but projected outside the screen.
 ///   - "on-screen"       → visible and on screen (tap just missed it).
 ///   - "nothing-nearby"  → nearest plane is too far off the tap direction.
@@ -2918,11 +2973,12 @@ func classifyEmptySkyTapNearest(
     offsetDeg: Double,
     grounded: Bool,
     tier: ObservedAircraft.VisibilityTier,
-    onScreen: Bool
+    onScreen: Bool,
+    plausiblyRevealable: Bool
 ) -> String {
     guard offsetDeg <= emptySkyTapMaxOffsetDeg else { return "nothing-nearby" }
     if grounded { return "grounded" }
-    if tier == .hidden { return "filtered" }
+    if tier == .hidden { return plausiblyRevealable ? "filtered" : "filtered-far" }
     if !onScreen { return "off-frame" }
     return "on-screen"
 }
@@ -2936,8 +2992,11 @@ func classifyEmptySkyTapNearest(
 ///                   because a compass/heading error (or high zoom) rotated the
 ///                   sky-model off where the plane visually sits (DAL972,
 ///                   2026-07-11). The user is pointed at it; the tap grabs it.
-/// "grounded" is handled earlier (a parked plane is never revealed); "on-screen"
-/// and "nothing-nearby" fall through to the empty-tap ripple.
+/// "grounded" is handled earlier (a parked plane is never revealed);
+/// "filtered-far" gets the beyond-eyeshot hint (a hidden plane past plausible
+/// reveal reach must NOT become catchable — the NYC couch session caught a
+/// Piper 75.8 km away through a wall); "on-screen" and "nothing-nearby" fall
+/// through to the empty-tap ripple.
 func shouldTapReveal(reason: String) -> Bool {
     reason == "filtered" || reason == "off-frame"
 }
