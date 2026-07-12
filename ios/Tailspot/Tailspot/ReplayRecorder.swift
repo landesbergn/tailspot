@@ -232,6 +232,20 @@ nonisolated extension ReplayEvent.AircraftSnapshot {
     }
 }
 
+nonisolated extension ReplayEvent {
+    /// Every case's payload carries its capture time; exposed once here so
+    /// sorting/scoring code doesn't each re-switch over the cases.
+    var timestamp: Date {
+        switch self {
+        case .sessionStart(let s): return s.timestamp
+        case .tick(let t):         return t.timestamp
+        case .tapPin(let p):       return p.timestamp
+        case .unpin(let u):        return u.timestamp
+        case .emptyTap(let e):     return e.timestamp
+        }
+    }
+}
+
 // MARK: - JSONL coding
 
 nonisolated extension ReplayEvent: Codable {
