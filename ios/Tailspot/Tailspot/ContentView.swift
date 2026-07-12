@@ -278,17 +278,15 @@ struct ContentView: View {
                     TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
                         let now = context.date
                         // Interactive-visible set: the ambient visibility tier
-                        // PLUS any tap-revealed plane (see `revealedIcao`). The
+                        // (suppressed while `pointedIndoors`) PLUS any
+                        // tap-revealed plane — see `interactiveVisible`. The
                         // revealed plane rides the existing pinned-plane path —
                         // labeled, lockable, catchable — without loosening the
                         // ambient filter for everyone else. GROUNDED planes are
                         // excluded even from the reveal clause: a parked plane
                         // must never label, lock, or catch (the tap path never
                         // reveals one — this guard is belt-and-suspenders).
-                        let visible = adsb.observed.filter {
-                            $0.isLikelyVisibleToObserver
-                                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
-                        }
+                        let visible = interactiveVisible(adsb.observed)
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
                         // Camera roll from the gravity vector (robust at the
@@ -682,9 +680,7 @@ struct ContentView: View {
         // of an icao24 fires a single OpenSky request and every later
         // observation is a free in-memory hit.
         .task(id: visibleIcaoSignature) {
-            let icaos = adsb.observed
-                .filter { $0.isLikelyVisibleToObserver
-                    || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
+            let icaos = interactiveVisible(adsb.observed)
                 .map(\.aircraft.icao24)
             // Prune session-stale entries. `ambientMetadata` is a view-
             // local mirror of the bounded MetadataCache actor; without
@@ -846,7 +842,10 @@ struct ContentView: View {
         // Activation funnel: the first time any plane label is actually
         // visible (post-filter), the user has something to catch. ~1 Hz
         // re-annotation cadence; once-per-install latch inside the fire.
+        // Skipped while pointedIndoors — no label rendered means the user
+        // did NOT see a plane, and this latch fires once per install.
         .onReceive(adsb.$observed) { observed in
+            guard !pointedIndoors else { return }
             let visible = observed.filter(\.isLikelyVisibleToObserver)
             guard !visible.isEmpty else { return }
             ActivationTelemetry.fireFirstPlaneSeenOnce(visibleCount: visible.count)
@@ -886,15 +885,34 @@ struct ContentView: View {
         )
     }
 
+    /// The interactive-visible set: the ambient visibility tier PLUS any
+    /// tap-revealed plane. One definition for the label render loop, the
+    /// metadata prefetch, and its signature — they must agree or labels
+    /// render without their metadata.
+    ///
+    /// The ambient tier is suppressed entirely while `pointedIndoors`
+    /// (2026-07-12, NYC couch session): the geometric band can't know about
+    /// walls, and dense airspace (Manhattan: river-corridor GA at 2–3 km,
+    /// LGA finals at 8 km) keeps planes inside the band that are plainly
+    /// invisible from indoors. When the whole frame reads not-sky for the
+    /// sustained streak, no ambient label renders; the tap-revealed plane
+    /// survives (explicit intent — and dropping it would fight the lock).
+    /// Same 5 s-debounced signal as the "Not many planes indoors." hint, so
+    /// the labels disappear exactly when that hint explains why.
+    private func interactiveVisible(_ observed: [ObservedAircraft]) -> [ObservedAircraft] {
+        observed.filter {
+            ($0.isLikelyVisibleToObserver && !pointedIndoors)
+                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
+        }
+    }
+
     /// Content-keyed signature of the currently-visible icao24 set,
     /// used as the id on the ambient-metadata prefetch task. Sorting
     /// + joining ensures the value is stable across observed-array
     /// re-orderings (which happen on every fetch) so the task only
     /// re-runs when membership actually changes.
     private var visibleIcaoSignature: String {
-        adsb.observed
-            .filter { $0.isLikelyVisibleToObserver
-                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
+        interactiveVisible(adsb.observed)
             .map(\.aircraft.icao24)
             .sorted()
             .joined(separator: ",")
