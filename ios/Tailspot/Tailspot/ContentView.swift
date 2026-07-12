@@ -622,6 +622,14 @@ struct ContentView: View {
         .onChange(of: showHangar) { _, isShowing in
             if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
         }
+        // Same on Profile close — the leaderboard fetches inside that sheet
+        // (ProfileScreen standing + LeaderboardScreen boards) refresh the
+        // cached server facts, and a Monday crown can cross Top Flight /
+        // Dynasty / Chart Topper while it's open. Re-diffing here makes the
+        // FIRST live crossing celebrate as soon as the sheet dismisses.
+        .onChange(of: showProfile) { _, isShowing in
+            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
+        }
         .sheet(isPresented: $showHangar) {
             HangarView()
         }

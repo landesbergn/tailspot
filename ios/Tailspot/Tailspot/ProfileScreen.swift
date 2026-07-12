@@ -45,8 +45,11 @@ struct ProfileScreen: View {
     @AppStorage("tailspot.standing.rank") private var cachedServerRank: Int = 0
     /// Weekly-champion crowns (dynamic-leaderboards L6), cached like the
     /// standing so the laurel renders offline. 0 = none/never fetched — the
-    /// row simply doesn't render, so no sentinel dance is needed.
-    @AppStorage("tailspot.standing.weeklyWins") private var cachedWeeklyWins: Int = 0
+    /// row simply doesn't render, so no sentinel dance is needed. READ-only
+    /// here since PR3: writes flow through `LeaderboardStandingCache`
+    /// (same key — @AppStorage observes the change), which also feeds the
+    /// Top Flight / Dynasty trophies.
+    @AppStorage(LeaderboardStandingCache.weeklyWinsKey) private var cachedWeeklyWins: Int = 0
     private let accountClient = TailspotAccountClient()
 
     var body: some View {
@@ -154,9 +157,11 @@ struct ProfileScreen: View {
             if let me = response.me {
                 cachedServerPoints = me.points
                 cachedServerRank = me.rank
-                if let wins = me.weeklyWins {
-                    cachedWeeklyWins = wins
-                }
+                // Server-fact cache (weeklyWins + everToppedAllTime) — the
+                // shared helper LeaderboardScreen's fetches also call. It
+                // writes the same defaults key the laurel's @AppStorage
+                // observes, so `cachedWeeklyWins` updates through it.
+                LeaderboardStandingCache().update(from: me)
             }
         } catch {
             Log.ui.debug("ProfileScreen: standing fetch failed (keeping local fallback): \(error.localizedDescription, privacy: .public)")

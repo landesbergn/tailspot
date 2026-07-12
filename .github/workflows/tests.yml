@@ -12,15 +12,19 @@ concurrency:
 jobs:
   test:
     name: Unit tests
-    runs-on: macos-latest
+    # macos-26 explicitly, NOT macos-latest: the -latest alias serves a mixed
+    # pool (macos-15-arm64 vs macos-26-arm64 within one day, seen 2026-07-11
+    # and again 2026-07-12), and only the macos-26 image carries the Xcode
+    # pinned below — on a macos-15 runner the pin fails the job before any
+    # test runs. Image and Xcode must be bumped together.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
-      # PINNED, not latest-stable: 'macos-latest' images roll out gradually,
-      # so 'latest-stable' resolved to different Xcodes on different runs
-      # (26.6 vs 26.3 within one day, 2026-07-11) — and the older compiler
-      # type-checked differently than local dev. Pin to the version Noah
-      # builds with locally; bump this deliberately alongside local Xcode
+      # PINNED, not latest-stable: even within one image, 'latest-stable'
+      # resolved to different Xcodes on different runs — and the older
+      # compiler type-checked differently than local dev. Pin to the version
+      # Noah builds with locally; bump deliberately alongside local Xcode
       # upgrades. If the runner image lacks this version the job fails
       # loudly here (better than silent drift) — bump or wait for the image.
       - name: Select Xcode (pinned to local dev version)
