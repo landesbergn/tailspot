@@ -192,6 +192,9 @@ struct TrophyIcon: View {
             case "coin":          CoinIcon().style(color, lineWidth: 1.8 * scale)
             case "crystal":       CrystalBallIcon().style(color, lineWidth: 1.9 * scale)
             case "bolt":          BoltIcon().style(color, filled: true)
+            case "laurel":        LaurelStarIcon(color: color, size: size)
+            case "crowns":        CrownsIcon().style(color, lineWidth: 1.8 * scale)
+            case "summit":        SummitIcon().style(color, lineWidth: 1.9 * scale)
             default:              CatcherIcon().style(color, lineWidth: 2 * scale, dashed: true)
             }
         }
@@ -838,6 +841,102 @@ private struct BoltIcon: Shape {
     }
 }
 
+/// Top Flight — laurel branches wreathing a bold FILLED champion's star
+/// (you won the week). Composed rather than a single `Shape` so the star
+/// fills while the branches stroke — the CenturionIcon pattern; a stroked
+/// star at this radius collapses into a dot at badge size.
+private struct LaurelStarIcon: View {
+    let color: Color
+    let size: CGFloat
+    var body: some View {
+        let s = size / 32
+        ZStack {
+            LaurelBranches()
+                .stroke(color.opacity(0.75), style: .init(lineWidth: 1.7 * s, lineCap: .round))
+            LaurelStar()
+                .fill(color)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// Four laurel arcs — the CenturionLaurels geometry (left + right branches,
+/// open at top and bottom), shared visual language for "victory".
+private struct LaurelBranches: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        p.move(to: pt(4, 16));  p.addQuadCurve(to: pt(12, 5),  control: pt(4, 9))
+        p.move(to: pt(28, 16)); p.addQuadCurve(to: pt(20, 5),  control: pt(28, 9))
+        p.move(to: pt(4, 18));  p.addQuadCurve(to: pt(12, 29), control: pt(4, 25))
+        p.move(to: pt(28, 18)); p.addQuadCurve(to: pt(20, 29), control: pt(28, 25))
+        return p
+    }
+}
+
+/// Five-point star sized to sit inside the wreath (smaller than the
+/// full-frame military StarIcon).
+private struct LaurelStar: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        let c = CGPoint(x: 16 * s, y: 17 * s)
+        let outer = 8 * s, inner = 3.2 * s
+        var p = Path()
+        for i in 0..<10 {
+            let r = i.isMultiple(of: 2) ? outer : inner
+            let a = -Double.pi / 2 + Double(i) * .pi / 5
+            let point = CGPoint(x: c.x + CGFloat(cos(a)) * r, y: c.y + CGFloat(sin(a)) * r)
+            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Dynasty — two stacked crowns (win after win after win).
+private struct CrownsIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        // Small crown on top.
+        p.move(to: pt(11, 11))
+        p.addLine(to: pt(10, 5)); p.addLine(to: pt(13.5, 8))
+        p.addLine(to: pt(16, 4)); p.addLine(to: pt(18.5, 8))
+        p.addLine(to: pt(22, 5)); p.addLine(to: pt(21, 11))
+        p.closeSubpath()
+        // Wide crown below.
+        p.move(to: pt(8, 27))
+        p.addLine(to: pt(6, 16)); p.addLine(to: pt(11.5, 21))
+        p.addLine(to: pt(16, 14)); p.addLine(to: pt(20.5, 21))
+        p.addLine(to: pt(26, 16)); p.addLine(to: pt(24, 27))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Chart Topper — a summit with a flag planted on the highest peak
+/// (#1 on the all-time board).
+private struct SummitIcon: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = rect.width / 32
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { .init(x: x * s, y: y * s) }
+        var p = Path()
+        // Two-peak ridge; closeSubpath draws the baseline back to the start.
+        p.move(to: pt(3, 26))
+        p.addLine(to: pt(12, 11))
+        p.addLine(to: pt(17, 19))
+        p.addLine(to: pt(22, 12))
+        p.addLine(to: pt(29, 26))
+        p.closeSubpath()
+        // Flag on the highest peak (pole + pennant, the WorldwideIcon motif).
+        p.move(to: pt(12, 11)); p.addLine(to: pt(12, 3))
+        p.move(to: pt(12, 3)); p.addLine(to: pt(17.5, 4.8)); p.addLine(to: pt(12, 6.6))
+        return p
+    }
+}
+
 /// Doubleheader — two overlapping cards (the same thing, twice).
 private struct TwinIcon: Shape {
     func path(in rect: CGRect) -> Path {
@@ -1023,6 +1122,7 @@ let trophyIconNames = [
     "altitude", "speed", "stack", "clock",
     "approach", "grid", "home", "weekend", "sunrise", "twin",
     "coin", "crystal", "bolt",
+    "laurel", "crowns", "summit",
 ]
 
 #if DEBUG

@@ -141,11 +141,22 @@ struct TrophyRecapSnapshotTests {
     /// won't draw at all (render-server limit), which is why this doesn't go
     /// through the window-host helper. A curated sub-roster keeps each image
     /// readable while still covering every visual state.
-    private func cardColumn(roster: [Achievement], catches: [Catch]) -> some View {
-        // Suite-isolated event store so a stray `groundedCatchAttempt` on the
-        // host app's standard defaults can't flip the Ground Stop row.
-        let events = TrophyEventStore(defaults: UserDefaults(suiteName: "snap.\(UUID().uuidString)")!)
-        let inputs = Trophies.inputs(from: catches, events: events)
+    private func cardColumn(
+        roster: [Achievement], catches: [Catch],
+        weeklyWins: Int = 0, everToppedAllTime: Bool = false
+    ) -> some View {
+        // Suite-isolated event + standing stores so a stray
+        // `groundedCatchAttempt` (or a cached weekly win) on the host app's
+        // standard defaults can't flip the Ground Stop / winner rows. The
+        // winner-trophy states are driven by the parameters, written through
+        // the same `update(from:)` path the screens use.
+        let suite = UserDefaults(suiteName: "snap.\(UUID().uuidString)")!
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        standing.update(from: MyStanding(rank: 1, points: 0,
+                                         weeklyWins: weeklyWins,
+                                         everToppedAllTime: everToppedAllTime))
+        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
         let items = TrophyBoard.visible(roster: roster, inputs: inputs)
         return VStack(alignment: .leading, spacing: 10) {
             ForEach(items) { TrophyCardRow(ach: $0, inputs: inputs) }
@@ -182,6 +193,27 @@ struct TrophyRecapSnapshotTests {
         snapshotColumn(
             cardColumn(roster: roster, catches: []),
             as: "trophy_list_fresh_secrets_masked"
+        )
+    }
+
+    /// Winner-trophy rows (dynamic-leaderboards PR3) across their states:
+    /// locked (fresh install, Dynasty masked), first crown (Top Flight
+    /// earned, Dynasty STILL masked), and server facts maxed (all earned,
+    /// Dynasty revealed). Earned rows sort first — the order flip between
+    /// images is TrophyBoard working, not a bug.
+    @Test func renderWinnerTrophyStates() {
+        let winners = ["topflight", "charttopper", "dynasty"].map(real)
+        snapshotColumn(
+            cardColumn(roster: winners, catches: []),
+            as: "trophy_winners_locked_dynasty_masked"
+        )
+        snapshotColumn(
+            cardColumn(roster: winners, catches: [], weeklyWins: 1),
+            as: "trophy_winners_first_crown"
+        )
+        snapshotColumn(
+            cardColumn(roster: winners, catches: [], weeklyWins: 3, everToppedAllTime: true),
+            as: "trophy_winners_all_earned"
         )
     }
 }

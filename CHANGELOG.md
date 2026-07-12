@@ -52,6 +52,79 @@ Research + drafting round, docs only (no app code). Four deliverables in
 PLAN §9 #8 updated (drafts done; remaining = hosting, the mask decision, two
 small code PRs, and Noah's App Store Connect steps); §6.6 region question
 closed as worldwide.
+## 2026-07-11 — Dynamic leaderboards PR3 — winner trophies — branch `feat/leaderboard-trophies`
+
+The payoff half of dynamic leaderboards (PLAN §9 #12): winning a board now
+mints trophies. Three additions to the roster, all **server-truth** — the
+backend alone decides wins (UTC Monday crowning, shared crowns count each
+sharer, no winner floor; L3–L5 of the locked design) and the app never infers
+a win locally.
+
+1. **The trophies.** **Top Flight** (visible) — win a weekly leaderboard
+   (`weeklyWins >= 1`), laurel-wreathed-star hex. **Dynasty** (SECRET, masked
+   `???` until earned, the Hot Streak treatment) — win 3 weekly boards,
+   stacked-crowns hex; deliberately NOT prereq-chained behind Top Flight
+   (`TrophyBoard` ignores prerequisites for secrets — always listed masked —
+   so the chain would be a silent no-op; the 3-win threshold subsumes it).
+   **Chart Topper** (visible) — ever hold #1 on the all-time board
+   (`everToppedAllTime`), summit-flag hex. Icons follow the existing
+   custom-`Shape` stroke style in `TrophyView.swift`; Top Flight composes a
+   stroked wreath around a FILLED star (the CenturionIcon pattern — a stroked
+   star collapses into a dot at badge size, caught in the snapshot pass).
+2. **Server facts → trophy inputs.** `TrophyProgressInputs` gained
+   `weeklyWins: Int` / `everToppedAllTime: Bool` as defaulted params (the
+   zero-churn pattern). They're fed by the new `LeaderboardStandingCache` — a
+   `TrophyEventStore`-shaped nonisolated UserDefaults wrapper owning the
+   existing `tailspot.standing.weeklyWins` key (the Profile laurel's
+   @AppStorage reads the same key, so laurel and trophies can never disagree)
+   plus a new `everToppedAllTime` key. Writes happen ONLY in the screens'
+   fetch completions (ProfileScreen `loadStanding`, LeaderboardScreen `load`)
+   via `update(from: me)` — every leaderboard response that carries the
+   additive fields updates the cache; the client/network layer stays
+   side-effect free. `weeklyWins` mirrors the server as-is; the monotonic
+   `everToppedAllTime` only latches true. Offline degradation falls out of
+   the storage: cached values persist, fresh installs read 0/false → all
+   three locked.
+3. **Recap, not a toast storm.** `Trophies.rosterVersion` 2 → 3, so an
+   existing device whose server facts already carry wins (e.g. Noah's
+   historical crown backfill) reseeds silently and gets ONE trophy-case recap
+   absorbing all pre-earned winner trophies. Live crossings still fire
+   normally afterwards — and since the facts only ever change inside the
+   Profile sheet (standing + leaderboard fetches live there), ContentView now
+   re-diffs on Profile-sheet close (the existing Hangar-close pattern), so a
+   Monday-crowning crossing celebrates as soon as the sheet dismisses.
+4. **Tests + visual pass.** `TrophiesWinnerTests` (earn boundaries 0/1/3 wins
+   + topper flag, inputs defaulting, hangar-alone-never-earns, cache
+   mirror/latch semantics, Dynasty secrecy/board masking),
+   `TrophyUnlockCenterTests` additions (version-bump reseed absorbs
+   server-earned trophies into the recap without a flood; live crossings fire
+   once each), and `renderWinnerTrophyStates` snapshots (locked/masked, first
+   crown, all earned) reviewed as PNGs. Full suite green (967 tests); review
+   doc `docs/reviews/2026-07-11-winner-trophies.html`.
+## 2026-07-11 — Backend DB resilience: 1GB Postgres + transient-connection retry on every idempotent read — branch `db-retry-backoff`
+
+Prod hotfix after a `tailspot-db` OOM (Sentry BROKEN-DARKNESS-5055-7 and its
+query-split siblings -8…-D). The single `shared-cpu-1x:256MB` Postgres instance
+was OOM-killed (`oom_killed=true`, 17:13 UTC); while it thrashed and restarted,
+the API took `CONNECT_TIMEOUT tailspot-db.flycast:5432` bursts across every DB
+route (leaderboard *and* metadata). Two-part fix:
+
+1. **DB memory 256MB → 1GB** (`fly machine update … --vm-memory 1024`, applied
+   live 2026-07-11). 256MB is Fly's floor for postgres-flex and OOMs under real
+   load (300 `max_connections` on 256MB is a dangerous mismatch). This is the
+   root-cause fix — nothing at the app layer can paper over a multi-second DB
+   restart.
+2. **`withDbRetry` now backs off, and wraps every idempotent store read.** The
+   original `-3` retry fired all 3 attempts in <1 ms — zero time for a fresh
+   connection to open, so an ECONNRESET/CONNECT_TIMEOUT still surfaced (Sentry
+   -5/-7). It now waits a jittered exponential backoff (~50/100 ms) between
+   attempts. And the leaderboard / catches / devices idempotent reads + `ON
+   CONFLICT DO NOTHING` writes are wrapped like the metadata route already was —
+   previously *only* metadata had retry, so the others 500'd on a single blip.
+   The two non-idempotent writes (`createDevice`'s plain INSERT, `claimHandle`'s
+   UPDATE) are deliberately left unwrapped — a retried lost-ack could
+   double-apply. Backend-only; no iOS or wire-contract change. 325 tests green
+   (added a backoff-schedule test + a `DrizzleCatchStore` retry regression).
 
 ## 2026-07-11 — Dynamic leaderboards PR2 — iOS board tabs + champion UI — branch `feat/leaderboard-tabs`
 
