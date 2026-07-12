@@ -5,6 +5,47 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-12 — Pre-v1 cleanup round: dead code, stale docs, repo organization — branches `chore/v1-backend-cleanup` · `chore/v1-ios-cleanup` · `chore/v1-docs-cleanup`
+
+A three-PR housekeeping sweep ahead of the v1 launch, driven by a full-repo
+dead-code/staleness audit. No behavior changes.
+
+1. **Backend** (`chore/v1-backend-cleanup`): deleted the unreachable OpenSky
+   provider (`POSITION_PROVIDER=opensky` — prod never sets it and nothing
+   provisions its OAuth secrets since the 2026-06-21 cutover) + its test and
+   fixture; dropped 10 unused drizzle type exports; `isRarity` un-exported;
+   `@electric-sql/pglite` → devDependencies (the prod image was shipping a
+   WASM Postgres); esbuild override + vite refresh — **backend `npm audit`
+   now 0 vulnerabilities** (was 3 open Dependabot alerts); README provider
+   docs match the real default (adsb.lol + airplanes.live composite).
+2. **iOS** (`chore/v1-ios-cleanup`): the audit's headline is that the app
+   target is clean — no orphaned files (ReferenceScreens/PublicScreens/
+   LogCapture are live; FailureMode/ReplayRedaction are test-bench
+   infrastructure). Removed the empty "Live/mock toggle" test MARK; extracted
+   the triplicated `ReplayEvent` timestamp switch into one computed property
+   (`ReplayAnalyzer`/`ReplayRedaction`/`FailureMode` now share it); fixed
+   stale comments (Geo's "mock ADS-B source" attribution, two light-mode
+   rationales outdated by the dark lock). 957 tests green.
+3. **Docs/repo** (`chore/v1-docs-cleanup`): new `docs/archive/` holds the
+   historical material (superpowers tree, shipped dated plans, review
+   HTML artifacts, brainstorms, backend-handoff) with living-doc references
+   updated; README rewritten to current reality (was "Friday POC, backend
+   planned"); PLAN §8 backend row + §9 merged-status drift fixed (rows #4/#7/
+   #12 "in review" → merged #124/#125/#131/#132/#135; pending-table dupes and
+   the obsolete OpenSky-secret row retired); CLAUDE.md's `bin/log-tail`
+   "no-op stub" claim corrected (it streams the device syslog via
+   `idevicesyslog`; app-side `os_log` is the remaining gap) and its "visual
+   confirmation dormant" line updated (it ships enabled; L2 enforcing, L4 in
+   shadow); CONTRIBUTING's "Current state"/OpenSky-secret references fixed;
+   spent one-off generators (`generate-icon-options.swift`,
+   `generate-hangar-options.swift`) deleted; onnx eval-tool pin bumped to
+   1.22.0 (clears the last 2 Dependabot alerts).
+
+Also outside the tree: pruned 15 merged-PR worktrees + 20 merged local/remote
+branches (each tip verified against its merged PR head first). Kept:
+`fix/skywatcher-bugs` (unmerged 2026-06-28 content, likely superseded by
+#100 — Noah's call) and `spike/card-art-mediums` (kept for the record).
+
 ## 2026-07-11 — GA-gate housekeeping drafts (PLAN §9 #8) — branch `docs/ga-housekeeping`
 
 Research + drafting round, docs only (no app code). Four deliverables in

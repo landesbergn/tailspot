@@ -63,7 +63,7 @@ Merging and shipping are now **decoupled**: merge freely; ship a batch when you 
 - Keep `MARKETING_VERSION` the same for routine builds — Apple clears builds under an already-approved version faster. Bump it (in `ios/Tailspot/Tailspot.xcodeproj/project.pbxproj`) only for notable releases worth flagging to testers.
 - Build numbers auto-increment in CI (`ci_pre_xcodebuild.sh`). Never edit `CURRENT_PROJECT_VERSION` by hand.
 - Tag notable releases on `main`: `git tag v0.3.0 && git push origin v0.3.0`. Tags don't trigger builds — they're a git anchor per version.
-- Update docs (CLAUDE.md "Current state", PLAN.md §9) **in the feature's PR**, so code and docs land on `main` together.
+- Update docs (PLAN.md §9 status; CHANGELOG.md for the round) **in the feature's PR**, so code and docs land on `main` together. CLAUDE.md changes only when durable guidance changes.
 
 ## Emergency override
 If GitHub Actions is down and you must ship a hotfix, lift protection, push, then restore it:
@@ -92,5 +92,5 @@ Caveat: `bin/deploy` uses one fixed build directory, so deploy from one worktree
 
 ## What runs where
 - **GitHub Actions** (`.github/workflows/tests.yml`) — runs `TailspotTests` on every PR to `main`. Free, no secrets.
-- **Xcode Cloud** — archives `main` → external TestFlight **on a manual Start Build** (the Branch-Changes start condition was removed 2026-06-16 so merges don't auto-ship). Reads OpenSky + PostHog secrets from workflow env vars (see CLAUDE.md `ci_post_clone.sh`). Configured in App Store Connect, not the repo.
+- **Xcode Cloud** — archives `main` → external TestFlight **on a manual Start Build** (the Branch-Changes start condition was removed 2026-06-16 so merges don't auto-ship). Reads the optional PostHog key from workflow env vars (see `ci_scripts/ci_post_clone.sh`). Configured in App Store Connect, not the repo.
 - **`bin/deploy`** — your local device loop, any branch.

@@ -17,7 +17,7 @@
 //  one overhead. Newness is NOT rarity (a 737 MAX is common); low-activity
 //  airframes rank up (a parked-most-of-the-time bizjet is uncommon). We use
 //  global presence, not local hub frequency, so a 747 stays special even at
-//  a hub. See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
+//  a hub. See docs/archive/superpowers/specs/2026-06-08-activity-rarity-design.md.
 //
 //  SINGLE RARITY SOURCE: rarity resolves ONLY from the ICAO typecode via
 //  `AircraftNaming.rarity(forTypecode:)` (the generated AircraftTypes.json

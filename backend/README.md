@@ -5,7 +5,7 @@ Node 22 + TypeScript (strict, ESM) + Fastify backend for the Tailspot iOS app.
 ## What this service becomes
 
 This scaffold is Work Package 1.1 of the Track 1 data-backbone programme
-(`docs/superpowers/plans/2026-06-10-track1-data-backbone.md`). Subsequent work
+(`docs/archive/superpowers/plans/2026-06-10-track1-data-backbone.md`). Subsequent work
 packages add: a **position proxy** (`GET /v1/aircraft?bbox=…`) that polls
 adsb.lol server-side so OpenSky credentials are no longer baked into the iOS
 binary; a **metadata service** (`GET /v1/metadata/{icao24}`) merging the FAA

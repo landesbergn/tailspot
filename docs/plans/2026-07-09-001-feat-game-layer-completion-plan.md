@@ -2,7 +2,7 @@
 
 **Plan** `2026-07-09-001` · type: feat · PLAN §9 #4 (Bet B · Collection) · est. ~2.5–3.5d across 6 PRs
 **Closes out:** the 2026-06-29 economy plan's deferred Decision 3 + Phase 2's remaining route-guess piece; absorbs wishlist #1 (guessing), #9 (grounded-plane easter egg), #10d (medal/threshold review).
-**Authority:** locked design in `docs/plans/2026-06-29-001-feat-economy-d2-reveal-prototype.html` (route-guess round is fully specified there); STRATEGY.md Bet B; CLAUDE.md conventions. User preference overrides docs on conflict.
+**Authority:** locked design in `docs/archive/plans/2026-06-28-005-feat-economy-d2-reveal.html` (route-guess round is fully specified there); STRATEGY.md Bet B; CLAUDE.md conventions. User preference overrides docs on conflict.
 
 ---
 

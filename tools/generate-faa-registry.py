@@ -32,7 +32,7 @@ STALENESS: this is a snapshot. The FAA registry updates ~daily; new or
 re-registered aircraft after a regen won't be found until the next
 regen. Acceptable for a ~1.6%-of-catches fallback; the strategic home
 for this data is the backend (see
-docs/superpowers/research/2026-06-07-adsb-metadata-sources.md).
+docs/archive/superpowers/research/2026-06-07-adsb-metadata-sources.md).
 
 Usage:
   python3 tools/generate-faa-registry.py            # download + build
