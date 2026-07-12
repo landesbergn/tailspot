@@ -197,6 +197,14 @@ nonisolated struct TrophyProgressInputs: Sendable {
     // fields nil, so skipped rounds neither count nor break a streak).
     let correctGuesses: Int         // rows with guessCorrect == true
     let bestGuessStreak: Int        // longest caughtAt-ordered run of correct answers
+    // SERVER-fact metrics (dynamic-leaderboards PR3, 2026-07-11). Unlike
+    // every input above, these are NOT derived from the Hangar — they're the
+    // backend's word (weekly crowning / all-time-#1 ledger), read from the
+    // `LeaderboardStandingCache` snapshot of the last leaderboard fetch.
+    // The app never infers a win locally. Defaulted (zero-churn pattern):
+    // fresh installs and offline devices read the cached (or zero) values.
+    let weeklyWins: Int             // weekly-champion crowns (server count)
+    let everToppedAllTime: Bool     // ever held #1 on the all-time board
 
     init(
         totalCatches: Int,
@@ -236,7 +244,9 @@ nonisolated struct TrophyProgressInputs: Sendable {
         triedGroundedCatch: Bool = false,
         totalPoints: Int = 0,
         correctGuesses: Int = 0,
-        bestGuessStreak: Int = 0
+        bestGuessStreak: Int = 0,
+        weeklyWins: Int = 0,
+        everToppedAllTime: Bool = false
     ) {
         self.totalCatches = totalCatches
         self.uniqueAirframes = uniqueAirframes
@@ -276,6 +286,8 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.totalPoints = totalPoints
         self.correctGuesses = correctGuesses
         self.bestGuessStreak = bestGuessStreak
+        self.weeklyWins = weeklyWins
+        self.everToppedAllTime = everToppedAllTime
     }
 
     static let zero = TrophyProgressInputs(
@@ -300,10 +312,13 @@ nonisolated enum Trophies {
     ///
     /// History: 0 = never stamped (any ledger written before this existed),
     /// 1 = reserved for the original 2026-06-20 binary roster, 2 = the
-    /// 2026-07-10 expansion (points milestones + guess trophies). Bump this
+    /// 2026-07-10 expansion (points milestones + guess trophies), 3 = the
+    /// 2026-07-11 leaderboard-winner trophies (Top Flight / Dynasty / Chart
+    /// Topper — a device whose server facts already carry wins, e.g. the
+    /// historical crown backfill, absorbs them into ONE recap). Bump this
     /// whenever a roster change should be absorbed-and-recapped rather than
     /// celebrated one toast at a time.
-    static let rosterVersion = 2
+    static let rosterVersion = 3
 
     /// Full achievement roster. Every achievement is BINARY — earned or not,
     /// no tier ramp (the single `.gold` tier only drives the uniform hex
@@ -348,6 +363,21 @@ nonisolated enum Trophies {
         Achievement(id: "clairvoyant", title: "Clairvoyant", summary: "Nail 10 route calls",
                     iconName: "crystal", tiers: [.init(tier: .gold, at: 10)],
                     prerequisite: "calledit", progress: { $0.correctGuesses }),
+
+        // ── Leaderboard wins (dynamic-leaderboards PR3, 2026-07-11) ──
+        // SERVER-truth trophies: progress reads the cached facts from the
+        // last leaderboard fetch (`TrophyProgressInputs.weeklyWins` /
+        // `.everToppedAllTime` ← `LeaderboardStandingCache`) — the backend
+        // alone decides wins (UTC Monday crowning, shared crowns count each
+        // sharer, no winner floor). Offline the cache persists; a fresh
+        // install with no server contact shows both locked. Dynasty (3 wins,
+        // secret) lives in the secrets block below.
+        Achievement(id: "topflight", title: "Top Flight", summary: "Win a weekly leaderboard",
+                    iconName: "laurel", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { min(1, $0.weeklyWins) }),
+        Achievement(id: "charttopper", title: "Chart Topper", summary: "Hold #1 on the all-time board",
+                    iconName: "summit", tiers: [.init(tier: .gold, at: 1)],
+                    progress: { $0.everToppedAllTime ? 1 : 0 }),
 
         // ── Wide-body ──
         Achievement(id: "heavy", title: "Wide Awake", summary: "Catch 10 wide-bodies",
@@ -534,6 +564,15 @@ nonisolated enum Trophies {
         Achievement(id: "hotstreak", title: "Hot Streak", summary: "Three correct route calls in a row",
                     iconName: "bolt", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.bestGuessStreak >= 3 ? 1 : 0 }),
+        // Dynasty (dynamic-leaderboards PR3): three weekly crowns, off the
+        // same server-fact input as Top Flight. Secret — masked `???` until
+        // earned, the Hot Streak treatment. Deliberately NO `prerequisite`
+        // chain behind Top Flight: `TrophyBoard.visible` ignores prereqs for
+        // secret achievements (they're always listed, masked), and the 3-win
+        // threshold subsumes the 1-win gate anyway.
+        Achievement(id: "dynasty", title: "Dynasty", summary: "Win 3 weekly leaderboards",
+                    iconName: "crowns", tiers: [.init(tier: .gold, at: 3)], secret: true,
+                    progress: { $0.weeklyWins }),
         // The grounded easter egg (wishlist #9): tapping a parked plane
         // creates no Catch row (correctly), so this derives from the
         // event-based `triedGroundedCatch` input, not the Hangar.
@@ -545,13 +584,15 @@ nonisolated enum Trophies {
     // MARK: - Evaluation
 
     /// Compute the input totals from a flat list of catches, plus the
-    /// event-based inputs from `events` (defaulted to the standard-defaults
-    /// store so the existing call sites — Profile, Hangar trophies, unlock
-    /// center — pick up event badges with zero churn; tests inject a
-    /// suite-scoped store).
+    /// event-based inputs from `events` and the server-fact inputs from
+    /// `standing` (both defaulted to their standard-defaults stores so the
+    /// existing call sites — Profile, Hangar trophies, unlock center — pick
+    /// up event badges and leaderboard-win facts with zero churn; tests
+    /// inject suite-scoped stores).
     static func inputs(
         from catches: [Catch],
-        events: TrophyEventStore = TrophyEventStore()
+        events: TrophyEventStore = TrophyEventStore(),
+        standing: LeaderboardStandingCache = LeaderboardStandingCache()
     ) -> TrophyProgressInputs {
         var unique = Set<String>()
         var rarePlusUnique = Set<String>()
@@ -694,7 +735,9 @@ nonisolated enum Trophies {
             triedGroundedCatch: events.hasOccurred(.groundedCatchAttempt),
             totalPoints: totalPoints,
             correctGuesses: guessTimeline.filter(\.1).count,
-            bestGuessStreak: bestGuessStreak(guessTimeline)
+            bestGuessStreak: bestGuessStreak(guessTimeline),
+            weeklyWins: standing.weeklyWins,
+            everToppedAllTime: standing.everToppedAllTime
         )
     }
 

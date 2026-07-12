@@ -5,6 +5,168 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-12 — Pre-v1 cleanup round: dead code, stale docs, repo organization — branches `chore/v1-backend-cleanup` · `chore/v1-ios-cleanup` · `chore/v1-docs-cleanup`
+
+A three-PR housekeeping sweep ahead of the v1 launch, driven by a full-repo
+dead-code/staleness audit. No behavior changes.
+
+1. **Backend** (`chore/v1-backend-cleanup`): deleted the unreachable OpenSky
+   provider (`POSITION_PROVIDER=opensky` — prod never sets it and nothing
+   provisions its OAuth secrets since the 2026-06-21 cutover) + its test and
+   fixture; dropped 10 unused drizzle type exports; `isRarity` un-exported;
+   `@electric-sql/pglite` → devDependencies (the prod image was shipping a
+   WASM Postgres); esbuild override + vite refresh — **backend `npm audit`
+   now 0 vulnerabilities** (was 3 open Dependabot alerts); README provider
+   docs match the real default (adsb.lol + airplanes.live composite).
+2. **iOS** (`chore/v1-ios-cleanup`): the audit's headline is that the app
+   target is clean — no orphaned files (ReferenceScreens/PublicScreens/
+   LogCapture are live; FailureMode/ReplayRedaction are test-bench
+   infrastructure). Removed the empty "Live/mock toggle" test MARK; extracted
+   the triplicated `ReplayEvent` timestamp switch into one computed property
+   (`ReplayAnalyzer`/`ReplayRedaction`/`FailureMode` now share it); fixed
+   stale comments (Geo's "mock ADS-B source" attribution, two light-mode
+   rationales outdated by the dark lock). 957 tests green.
+3. **Docs/repo** (`chore/v1-docs-cleanup`): new `docs/archive/` holds the
+   historical material (superpowers tree, shipped dated plans, review
+   HTML artifacts, brainstorms, backend-handoff) with living-doc references
+   updated; README rewritten to current reality (was "Friday POC, backend
+   planned"); PLAN §8 backend row + §9 merged-status drift fixed (rows #4/#7/
+   #12 "in review" → merged #124/#125/#131/#132/#135; pending-table dupes and
+   the obsolete OpenSky-secret row retired); CLAUDE.md's `bin/log-tail`
+   "no-op stub" claim corrected (it streams the device syslog via
+   `idevicesyslog`; app-side `os_log` is the remaining gap) and its "visual
+   confirmation dormant" line updated (it ships enabled; L2 enforcing, L4 in
+   shadow); CONTRIBUTING's "Current state"/OpenSky-secret references fixed;
+   spent one-off generators (`generate-icon-options.swift`,
+   `generate-hangar-options.swift`) deleted; onnx eval-tool pin bumped to
+   1.22.0 (clears the last 2 Dependabot alerts).
+
+Also outside the tree: pruned 15 merged-PR worktrees + 20 merged local/remote
+branches (each tip verified against its merged PR head first). Kept:
+`fix/skywatcher-bugs` (unmerged 2026-06-28 content, likely superseded by
+#100 — Noah's call) and `spike/card-art-mediums` (kept for the record).
+
+## 2026-07-11 — GA-gate housekeeping drafts (PLAN §9 #8) — branch `docs/ga-housekeeping`
+
+Research + drafting round, docs only (no app code). Four deliverables in
+`docs/ga/`, every factual claim verified in source:
+
+1. **`privacy-policy.md` + `terms.md`** — GA revisions of the already-hosted
+   `tailspot.app/privacy.html` / `terms.html` (effective 2026-06-11), which
+   turned out to be **stale in four material ways**: the PostHog SDK is now
+   embedded with session replay (the hosted policy claims "no analytics SDKs
+   embedded"); location is used continuously while open (bounding-box
+   `/v1/aircraft` polls every ~10 s), not "only at the moment of a catch";
+   Hangar restore (PR #125) makes catch records server-recoverable (photos
+   stay unrecoverable); Apple geocoding + Planespotters image loads are
+   undisclosed processors. Biggest code finding: **nothing in the app is
+   `.postHogMask()`ed today** — the camera-preview mask was removed during the
+   all-black-replay diagnosis (`ContentView` "EXPERIMENT" comment) and never
+   re-added; the `PostHogSessionReplay.swift` header claiming the camera is
+   masked is stale. Flagged as a pre-GA open item (re-add scoped mask or
+   verify replays render the camera black), along with `maskAllImages=false`
+   meaning displayed catch photos appear in replay screenshots.
+2. **`licensing-review.md`** — Planespotters photo API terms (recovered via
+   Wayback, 2026-06-18 snapshot; the live page Cloudflare-403s): compliant on
+   6 of 7 requirements (no >24 h caching, original URLs, identifying UA,
+   photographer credit, free feature) — the one gap is that the terms want the
+   *thumbnail* linked back, and only the caption is tappable. **Verdict: keep,
+   with the small tap-target fix.** adsb.lol (ODbL 1.0): fully compliant —
+   Settings credit + the attributions page's ODbL statement. ICAO DOC 8643
+   re-check stays open (~30 min, Noah).
+3. **`appstore-listing.md`** — name/subtitle ("Tailspot: Catch Real Planes" /
+   "Catch the planes overhead"), description in the app voice with an honest
+   worldwide-coverage caveat, 98-char keywords, Games→Casual + Education, 4+,
+   and an honest nutrition-label table (location IS collected — observer
+   lat/lon uploads with catches; everything device-id-keyed marked Linked=Yes,
+   which the committed `PrivacyInfo.xcprivacy` currently contradicts — small
+   follow-up PR recommended). Region decided: **worldwide**. Full App Store
+   Connect click-through checklist for Noah, incl. review notes explaining the
+   app can't demo indoors.
+4. **`screenshot-plan.md`** — six 6.7" shots (AR catch → mid-flap reveal →
+   guess round → Sets grid → trophy case → leaderboard); capture all on the
+   real iPhone (sim has no camera/GPS), frame 1179×2556 → 1290×2796
+   composites; reveal/guess frames pulled from screen recordings; the
+   guess-round shot is gated on game-layer PR3 landing; Hangar shots use
+   Noah's real ~85-catch collection.
+
+PLAN §9 #8 updated (drafts done; remaining = hosting, the mask decision, two
+small code PRs, and Noah's App Store Connect steps); §6.6 region question
+closed as worldwide.
+## 2026-07-11 — Dynamic leaderboards PR3 — winner trophies — branch `feat/leaderboard-trophies`
+
+The payoff half of dynamic leaderboards (PLAN §9 #12): winning a board now
+mints trophies. Three additions to the roster, all **server-truth** — the
+backend alone decides wins (UTC Monday crowning, shared crowns count each
+sharer, no winner floor; L3–L5 of the locked design) and the app never infers
+a win locally.
+
+1. **The trophies.** **Top Flight** (visible) — win a weekly leaderboard
+   (`weeklyWins >= 1`), laurel-wreathed-star hex. **Dynasty** (SECRET, masked
+   `???` until earned, the Hot Streak treatment) — win 3 weekly boards,
+   stacked-crowns hex; deliberately NOT prereq-chained behind Top Flight
+   (`TrophyBoard` ignores prerequisites for secrets — always listed masked —
+   so the chain would be a silent no-op; the 3-win threshold subsumes it).
+   **Chart Topper** (visible) — ever hold #1 on the all-time board
+   (`everToppedAllTime`), summit-flag hex. Icons follow the existing
+   custom-`Shape` stroke style in `TrophyView.swift`; Top Flight composes a
+   stroked wreath around a FILLED star (the CenturionIcon pattern — a stroked
+   star collapses into a dot at badge size, caught in the snapshot pass).
+2. **Server facts → trophy inputs.** `TrophyProgressInputs` gained
+   `weeklyWins: Int` / `everToppedAllTime: Bool` as defaulted params (the
+   zero-churn pattern). They're fed by the new `LeaderboardStandingCache` — a
+   `TrophyEventStore`-shaped nonisolated UserDefaults wrapper owning the
+   existing `tailspot.standing.weeklyWins` key (the Profile laurel's
+   @AppStorage reads the same key, so laurel and trophies can never disagree)
+   plus a new `everToppedAllTime` key. Writes happen ONLY in the screens'
+   fetch completions (ProfileScreen `loadStanding`, LeaderboardScreen `load`)
+   via `update(from: me)` — every leaderboard response that carries the
+   additive fields updates the cache; the client/network layer stays
+   side-effect free. `weeklyWins` mirrors the server as-is; the monotonic
+   `everToppedAllTime` only latches true. Offline degradation falls out of
+   the storage: cached values persist, fresh installs read 0/false → all
+   three locked.
+3. **Recap, not a toast storm.** `Trophies.rosterVersion` 2 → 3, so an
+   existing device whose server facts already carry wins (e.g. Noah's
+   historical crown backfill) reseeds silently and gets ONE trophy-case recap
+   absorbing all pre-earned winner trophies. Live crossings still fire
+   normally afterwards — and since the facts only ever change inside the
+   Profile sheet (standing + leaderboard fetches live there), ContentView now
+   re-diffs on Profile-sheet close (the existing Hangar-close pattern), so a
+   Monday-crowning crossing celebrates as soon as the sheet dismisses.
+4. **Tests + visual pass.** `TrophiesWinnerTests` (earn boundaries 0/1/3 wins
+   + topper flag, inputs defaulting, hangar-alone-never-earns, cache
+   mirror/latch semantics, Dynasty secrecy/board masking),
+   `TrophyUnlockCenterTests` additions (version-bump reseed absorbs
+   server-earned trophies into the recap without a flood; live crossings fire
+   once each), and `renderWinnerTrophyStates` snapshots (locked/masked, first
+   crown, all earned) reviewed as PNGs. Full suite green (967 tests); review
+   doc `docs/reviews/2026-07-11-winner-trophies.html`.
+## 2026-07-11 — Backend DB resilience: 1GB Postgres + transient-connection retry on every idempotent read — branch `db-retry-backoff`
+
+Prod hotfix after a `tailspot-db` OOM (Sentry BROKEN-DARKNESS-5055-7 and its
+query-split siblings -8…-D). The single `shared-cpu-1x:256MB` Postgres instance
+was OOM-killed (`oom_killed=true`, 17:13 UTC); while it thrashed and restarted,
+the API took `CONNECT_TIMEOUT tailspot-db.flycast:5432` bursts across every DB
+route (leaderboard *and* metadata). Two-part fix:
+
+1. **DB memory 256MB → 1GB** (`fly machine update … --vm-memory 1024`, applied
+   live 2026-07-11). 256MB is Fly's floor for postgres-flex and OOMs under real
+   load (300 `max_connections` on 256MB is a dangerous mismatch). This is the
+   root-cause fix — nothing at the app layer can paper over a multi-second DB
+   restart.
+2. **`withDbRetry` now backs off, and wraps every idempotent store read.** The
+   original `-3` retry fired all 3 attempts in <1 ms — zero time for a fresh
+   connection to open, so an ECONNRESET/CONNECT_TIMEOUT still surfaced (Sentry
+   -5/-7). It now waits a jittered exponential backoff (~50/100 ms) between
+   attempts. And the leaderboard / catches / devices idempotent reads + `ON
+   CONFLICT DO NOTHING` writes are wrapped like the metadata route already was —
+   previously *only* metadata had retry, so the others 500'd on a single blip.
+   The two non-idempotent writes (`createDevice`'s plain INSERT, `claimHandle`'s
+   UPDATE) are deliberately left unwrapped — a retried lost-ack could
+   double-apply. Backend-only; no iOS or wire-contract change. 325 tests green
+   (added a backoff-schedule test + a `DrizzleCatchStore` retry regression).
+
 ## 2026-07-11 — Launch readiness — v1.0.0 — branch `feat/launch-readiness`
 
 Closes every code-level gap from the GA audit (PLAN §9 #8; audit docs land

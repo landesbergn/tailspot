@@ -6,7 +6,7 @@
 //  Every color or font value used across the app routes through
 //  here so a one-file edit re-themes the whole app.
 //
-//  Design spec: docs/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md
+//  Design spec: docs/archive/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md
 //
 //  Two contexts share one brand:
 //    - AR view  → clinical pilot HUD (cyan, mono, restraint)

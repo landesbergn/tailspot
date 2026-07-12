@@ -40,7 +40,7 @@ nonisolated enum ReplayRedaction {
     /// preserved/broken contract.
     static func redact(_ events: [ReplayEvent]) -> [ReplayEvent] {
         let lonShift = -(firstObserverLongitude(events) ?? 0)
-        let firstTime = events.map(timestamp).min() ?? timeAnchor
+        let firstTime = events.map(\.timestamp).min() ?? timeAnchor
         let icaoIndex = icaoIndexMap(events)
         return events.map { event($0, lonShift: lonShift, firstTime: firstTime, icaoIndex: icaoIndex) }
     }
@@ -139,13 +139,4 @@ nonisolated enum ReplayRedaction {
         return map
     }
 
-    private static func timestamp(_ e: ReplayEvent) -> Date {
-        switch e {
-        case .sessionStart(let s): return s.timestamp
-        case .tick(let t):         return t.timestamp
-        case .tapPin(let p):       return p.timestamp
-        case .unpin(let u):        return u.timestamp
-        case .emptyTap(let t):     return t.timestamp
-        }
-    }
 }

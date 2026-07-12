@@ -119,8 +119,8 @@ struct LeaderboardScreen: View {
         }
         .listStyle(.insetGrouped)
         // Brand the list like SettingsScreen/SetsScreen — without this the
-        // List renders system grouped chrome, which flips white in light
-        // mode against the fixed dark Brand palette.
+        // List renders system grouped chrome instead of the fixed dark
+        // Brand palette.
         .scrollContentBackground(.hidden)
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Leaderboard")
@@ -160,6 +160,14 @@ struct LeaderboardScreen: View {
             responses[window] = response
             errors[window] = nil
             windowsSupported = response.supportsWindows
+            // Absorb the server-fact fields (weeklyWins/everToppedAllTime)
+            // from EVERY response that carries them — they're window-
+            // independent lifetime facts, and this screen may be the only
+            // fetch that runs (the Profile laurel + the Top Flight/Dynasty/
+            // Chart Topper trophies all read this cache).
+            if let me = response.me {
+                LeaderboardStandingCache().update(from: me)
+            }
         } catch {
             // Keep stale data when we have it — a failed silent refresh must
             // not blank a board the user is looking at.
