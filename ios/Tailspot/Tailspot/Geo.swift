@@ -263,8 +263,8 @@ nonisolated enum Geo {
 
     /// Inverse of `bearing`/`distance`: given a starting point, an
     /// initial true-north bearing, and a ground distance, return the
-    /// destination point. Used by the mock ADS-B source to place fake
-    /// aircraft at known angular positions relative to the observer.
+    /// destination point. Used by forward-extrapolation
+    /// (`Aircraft.extrapolatedPosition`) to glide planes between fetches.
     static func project(
         fromLat lat: Double, lon: Double,
         bearingDeg: Double,

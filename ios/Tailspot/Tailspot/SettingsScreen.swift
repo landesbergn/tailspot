@@ -222,8 +222,8 @@ struct SettingsScreen: View {
         } label: {
             HStack {
                 // Brand token, not Color.primary — the row background is the
-                // fixed dark palette, so system-primary flips to near-black
-                // (invisible) when the device is in light mode.
+                // fixed dark palette, so a semantic system color could render
+                // near-black (invisible) if the environment ever reported light.
                 Text(label)
                     .foregroundStyle(Brand.Color.textPrimary)
                 Spacer()

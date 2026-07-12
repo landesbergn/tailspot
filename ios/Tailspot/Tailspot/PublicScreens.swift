@@ -119,8 +119,8 @@ struct LeaderboardScreen: View {
         }
         .listStyle(.insetGrouped)
         // Brand the list like SettingsScreen/SetsScreen — without this the
-        // List renders system grouped chrome, which flips white in light
-        // mode against the fixed dark Brand palette.
+        // List renders system grouped chrome instead of the fixed dark
+        // Brand palette.
         .scrollContentBackground(.hidden)
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Leaderboard")
