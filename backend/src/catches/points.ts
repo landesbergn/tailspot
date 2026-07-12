@@ -53,7 +53,7 @@ export const UNKNOWN_RARITY_POINTS = 10;
 export const CURRENT_SCORING_VERSION = 3;
 
 /** Type guard for a known rarity tier string. */
-export function isRarity(value: string | null | undefined): value is Rarity {
+function isRarity(value: string | null | undefined): value is Rarity {
   return (
     value === "common" ||
     value === "uncommon" ||

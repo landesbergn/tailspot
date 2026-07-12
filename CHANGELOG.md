@@ -46,6 +46,102 @@ branches (each tip verified against its merged PR head first). Kept:
 `fix/skywatcher-bugs` (unmerged 2026-06-28 content, likely superseded by
 #100 — Noah's call) and `spike/card-art-mediums` (kept for the record).
 
+## 2026-07-11 — GA-gate housekeeping drafts (PLAN §9 #8) — branch `docs/ga-housekeeping`
+
+Research + drafting round, docs only (no app code). Four deliverables in
+`docs/ga/`, every factual claim verified in source:
+
+1. **`privacy-policy.md` + `terms.md`** — GA revisions of the already-hosted
+   `tailspot.app/privacy.html` / `terms.html` (effective 2026-06-11), which
+   turned out to be **stale in four material ways**: the PostHog SDK is now
+   embedded with session replay (the hosted policy claims "no analytics SDKs
+   embedded"); location is used continuously while open (bounding-box
+   `/v1/aircraft` polls every ~10 s), not "only at the moment of a catch";
+   Hangar restore (PR #125) makes catch records server-recoverable (photos
+   stay unrecoverable); Apple geocoding + Planespotters image loads are
+   undisclosed processors. Biggest code finding: **nothing in the app is
+   `.postHogMask()`ed today** — the camera-preview mask was removed during the
+   all-black-replay diagnosis (`ContentView` "EXPERIMENT" comment) and never
+   re-added; the `PostHogSessionReplay.swift` header claiming the camera is
+   masked is stale. Flagged as a pre-GA open item (re-add scoped mask or
+   verify replays render the camera black), along with `maskAllImages=false`
+   meaning displayed catch photos appear in replay screenshots.
+2. **`licensing-review.md`** — Planespotters photo API terms (recovered via
+   Wayback, 2026-06-18 snapshot; the live page Cloudflare-403s): compliant on
+   6 of 7 requirements (no >24 h caching, original URLs, identifying UA,
+   photographer credit, free feature) — the one gap is that the terms want the
+   *thumbnail* linked back, and only the caption is tappable. **Verdict: keep,
+   with the small tap-target fix.** adsb.lol (ODbL 1.0): fully compliant —
+   Settings credit + the attributions page's ODbL statement. ICAO DOC 8643
+   re-check stays open (~30 min, Noah).
+3. **`appstore-listing.md`** — name/subtitle ("Tailspot: Catch Real Planes" /
+   "Catch the planes overhead"), description in the app voice with an honest
+   worldwide-coverage caveat, 98-char keywords, Games→Casual + Education, 4+,
+   and an honest nutrition-label table (location IS collected — observer
+   lat/lon uploads with catches; everything device-id-keyed marked Linked=Yes,
+   which the committed `PrivacyInfo.xcprivacy` currently contradicts — small
+   follow-up PR recommended). Region decided: **worldwide**. Full App Store
+   Connect click-through checklist for Noah, incl. review notes explaining the
+   app can't demo indoors.
+4. **`screenshot-plan.md`** — six 6.7" shots (AR catch → mid-flap reveal →
+   guess round → Sets grid → trophy case → leaderboard); capture all on the
+   real iPhone (sim has no camera/GPS), frame 1179×2556 → 1290×2796
+   composites; reveal/guess frames pulled from screen recordings; the
+   guess-round shot is gated on game-layer PR3 landing; Hangar shots use
+   Noah's real ~85-catch collection.
+
+PLAN §9 #8 updated (drafts done; remaining = hosting, the mask decision, two
+small code PRs, and Noah's App Store Connect steps); §6.6 region question
+closed as worldwide.
+## 2026-07-11 — Dynamic leaderboards PR3 — winner trophies — branch `feat/leaderboard-trophies`
+
+The payoff half of dynamic leaderboards (PLAN §9 #12): winning a board now
+mints trophies. Three additions to the roster, all **server-truth** — the
+backend alone decides wins (UTC Monday crowning, shared crowns count each
+sharer, no winner floor; L3–L5 of the locked design) and the app never infers
+a win locally.
+
+1. **The trophies.** **Top Flight** (visible) — win a weekly leaderboard
+   (`weeklyWins >= 1`), laurel-wreathed-star hex. **Dynasty** (SECRET, masked
+   `???` until earned, the Hot Streak treatment) — win 3 weekly boards,
+   stacked-crowns hex; deliberately NOT prereq-chained behind Top Flight
+   (`TrophyBoard` ignores prerequisites for secrets — always listed masked —
+   so the chain would be a silent no-op; the 3-win threshold subsumes it).
+   **Chart Topper** (visible) — ever hold #1 on the all-time board
+   (`everToppedAllTime`), summit-flag hex. Icons follow the existing
+   custom-`Shape` stroke style in `TrophyView.swift`; Top Flight composes a
+   stroked wreath around a FILLED star (the CenturionIcon pattern — a stroked
+   star collapses into a dot at badge size, caught in the snapshot pass).
+2. **Server facts → trophy inputs.** `TrophyProgressInputs` gained
+   `weeklyWins: Int` / `everToppedAllTime: Bool` as defaulted params (the
+   zero-churn pattern). They're fed by the new `LeaderboardStandingCache` — a
+   `TrophyEventStore`-shaped nonisolated UserDefaults wrapper owning the
+   existing `tailspot.standing.weeklyWins` key (the Profile laurel's
+   @AppStorage reads the same key, so laurel and trophies can never disagree)
+   plus a new `everToppedAllTime` key. Writes happen ONLY in the screens'
+   fetch completions (ProfileScreen `loadStanding`, LeaderboardScreen `load`)
+   via `update(from: me)` — every leaderboard response that carries the
+   additive fields updates the cache; the client/network layer stays
+   side-effect free. `weeklyWins` mirrors the server as-is; the monotonic
+   `everToppedAllTime` only latches true. Offline degradation falls out of
+   the storage: cached values persist, fresh installs read 0/false → all
+   three locked.
+3. **Recap, not a toast storm.** `Trophies.rosterVersion` 2 → 3, so an
+   existing device whose server facts already carry wins (e.g. Noah's
+   historical crown backfill) reseeds silently and gets ONE trophy-case recap
+   absorbing all pre-earned winner trophies. Live crossings still fire
+   normally afterwards — and since the facts only ever change inside the
+   Profile sheet (standing + leaderboard fetches live there), ContentView now
+   re-diffs on Profile-sheet close (the existing Hangar-close pattern), so a
+   Monday-crowning crossing celebrates as soon as the sheet dismisses.
+4. **Tests + visual pass.** `TrophiesWinnerTests` (earn boundaries 0/1/3 wins
+   + topper flag, inputs defaulting, hangar-alone-never-earns, cache
+   mirror/latch semantics, Dynasty secrecy/board masking),
+   `TrophyUnlockCenterTests` additions (version-bump reseed absorbs
+   server-earned trophies into the recap without a flood; live crossings fire
+   once each), and `renderWinnerTrophyStates` snapshots (locked/masked, first
+   crown, all earned) reviewed as PNGs. Full suite green (967 tests); review
+   doc `docs/reviews/2026-07-11-winner-trophies.html`.
 ## 2026-07-11 — Backend DB resilience: 1GB Postgres + transient-connection retry on every idempotent read — branch `db-retry-backoff`
 
 Prod hotfix after a `tailspot-db` OOM (Sentry BROKEN-DARKNESS-5055-7 and its
