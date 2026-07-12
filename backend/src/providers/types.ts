@@ -122,7 +122,7 @@ export interface ProviderSnapshot {
  * aircraft returns an empty array, not an error.
  */
 export interface PositionProvider {
-  /** Human-readable name for logs ("adsblol", "opensky"). */
+  /** Human-readable name for logs ("adsblol", "airplaneslive"). */
   readonly name: string;
   aircraftInBbox(bbox: Bbox): Promise<ProviderSnapshot>;
 }

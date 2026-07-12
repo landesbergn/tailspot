@@ -12,11 +12,11 @@ primary_region = "sjc"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Keep one machine always warm: the iOS app makes the backend its default
-  # ADS-B source, so a scale-to-zero cold start made the first fetch fail over
-  # to OpenSky (8s timeout → "Request timed out" for testers). One always-on
-  # shared-cpu machine (~$2/mo) removes that cold-start path. The second
-  # machine still auto-stops/starts for scale.
+  # Keep one machine always warm: the iOS app's only ADS-B source is this
+  # backend, so a scale-to-zero cold start surfaced as a failed first fetch
+  # ("Request timed out" for testers). One always-on shared-cpu machine
+  # (~$2/mo) removes that cold-start path. The second machine still
+  # auto-stops/starts for scale.
   auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 1
