@@ -49,9 +49,10 @@ reprioritizing work.
   `os_log` console).
 - The **iOS Simulator can't provide GPS, compass, or camera** — the iPhone is
   required for any runtime / field testing.
-- `bin/log-tail` is currently a **no-op stub** (the host `log` binary won't take
-  `--device <UDID>`); until that's fixed (PLAN §9), read runtime logs via Xcode's
-  Console / `os_log` viewer.
+- `bin/log-start` / `bin/log-tail` stream the device syslog via `idevicesyslog`
+  — that captures system-emitted lines *about* the app, but **not** the app's own
+  `os_log` output (libimobiledevice doesn't expose `os_trace_relay`). For app
+  logs, use Xcode's Console / `os_log` viewer.
 
 **Failure modes that need Noah, not a retry:**
 - `devicectl install` fails ("developer disk image could not be mounted") → unlock
@@ -250,9 +251,10 @@ source + each one's focused test file — they're not restated here.
 
 - **Identification is geometric, not visual** — GPS + true-north heading + camera
   elevation correlated against ADS-B positions; not ML object detection. *Visual
-  confirmation* (Vision + COCO `airplane`) is planned **only** to snap the reticle
-  onto the actual plane image (compass wobble), scaffolded but dormant — PLAN §1.1a
-  / §9.
+  confirmation* (bundled YOLOX detector) is live **only** to snap the reticle /
+  catch-photo bracket onto the actual plane image and feed the catch-time gates
+  (L2 sky gate enforcing; L4 detector gate in shadow) — never to identify. PLAN
+  §1.1a / §9.
 - **The Tailspot backend is the sole ADS-B provider** (`api.tailspot.app`,
   adsb.lol + MLAT), abstracted behind `ADSBSource` so adding/swapping a provider is
   one file.

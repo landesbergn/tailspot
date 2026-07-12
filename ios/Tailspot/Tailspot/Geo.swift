@@ -121,7 +121,7 @@ nonisolated enum Geo {
     // proper 3D pinhole: build the camera's orthonormal basis in a local
     // ENU frame (East/North/Up), project each target's unit vector through
     // it, perspective-divide. See
-    // docs/superpowers/specs/2026-06-08-3d-pinhole-projection-design.md.
+    // docs/archive/superpowers/specs/2026-06-08-3d-pinhole-projection-design.md.
 
     /// The camera's orientation as three world-space (ENU) unit vectors.
     /// Precompute once per frame and reuse across every aircraft — the

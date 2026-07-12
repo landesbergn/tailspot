@@ -820,10 +820,10 @@ def aircraft_type(tc, info):
 # EXCEPTIONS belong here — things the default already gets right (e.g.
 # military workhorses → mil → rare) are omitted. Keyed on the ICAO
 # designator; absent designators simply never match (harmless).
-# See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
+# See docs/archive/superpowers/specs/2026-06-08-activity-rarity-design.md.
 RARITY_OVERRIDES = {
     # ── legendary — icons / extinct / sole-example / no civil signal ──
-    # (grounded in 2025-26 fleet data — see docs/plans/2026-06-29-002 plan §R1)
+    # (grounded in 2025-26 fleet data — see docs/archive/plans/2026-06-29-002 plan §R1)
     "VC25": "legendary",  # Air Force One (VC-25A)
     "B2":   "legendary",  # B-2 Spirit (no ADS-B — aspirational)
     "U2":   "legendary",  # U-2 Dragon Lady (no ADS-B)
@@ -917,7 +917,7 @@ def aircraft_rarity(tc, info, type_str):
     is a curated approximation: a category default from the DOC 8643 fields
     plus the RARITY_OVERRIDES table for named exceptions. Returns one of
     common/uncommon/rare/epic/legendary.
-    See docs/superpowers/specs/2026-06-08-activity-rarity-design.md.
+    See docs/archive/superpowers/specs/2026-06-08-activity-rarity-design.md.
     """
     if tc in RARITY_OVERRIDES:
         return RARITY_OVERRIDES[tc]
