@@ -71,6 +71,12 @@ private struct SetTile: View {
                     .foregroundStyle(.black.opacity(0.7))
             }
             .frame(width: 38, height: 38)
+            // The locked treatment dims only this decorative tile — the
+            // text stays at full opacity because 0.6 × textTertiary
+            // composites below AA contrast, and a locked tile is exactly
+            // the one inviting the user to go catch that type.
+            .opacity(isLocked ? 0.55 : 1.0)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(set.title)
@@ -78,7 +84,7 @@ private struct SetTile: View {
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(set.type.summary)
                     .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
+                    .foregroundStyle(isLocked ? Brand.Color.textSecondary : Brand.Color.textTertiary)
                     .lineLimit(1)
             }
 
@@ -86,18 +92,19 @@ private struct SetTile: View {
 
             VStack(alignment: .trailing, spacing: 0) {
                 Text("\(tailCount)")
-                    .font(Brand.Font.mono(size: 24, weight: .bold))
+                    .font(Brand.Font.mono(size: 24, weight: .bold, relativeTo: .title2))
                     .monospacedDigit()
                     .foregroundStyle(isLocked ? Brand.Color.textTertiary : set.type.tint)
                 Text("caught")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)
             }
         }
         .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
-        .opacity(isLocked ? 0.6 : 1.0)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(set.title), \(tailCount) caught")
     }
 }
 

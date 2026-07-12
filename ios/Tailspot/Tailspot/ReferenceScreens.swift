@@ -36,7 +36,7 @@ struct RarityReferenceScreen: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("FIVE TIERS")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.cyan)
             Text("Every plane has a tier.")
@@ -52,6 +52,8 @@ struct RarityReferenceScreen: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: Brand.Radius.row).fill(r.tint.opacity(0.18))
+                // Fixed size: a numeral inside the fixed 64 pt tile; the
+                // combined label below speaks the points.
                 Text("\(r.basePoints)")
                     .font(Brand.Font.mono(size: 18, weight: .heavy))
                     .foregroundStyle(r.tint)
@@ -64,12 +66,13 @@ struct RarityReferenceScreen: View {
                 HStack(spacing: 6) {
                     RarityBadge(rarity: r, size: .md)
                 }
+                // Docs screen — let examples wrap at large text sizes
+                // rather than truncate.
                 Text(examples(for: r))
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
-                    .lineLimit(2)
                 Text("Base \(r.basePoints) pt")
-                    .font(Brand.Font.mono(size: 10, weight: .bold))
+                    .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .tracking(0.6)
             }
@@ -77,6 +80,8 @@ struct RarityReferenceScreen: View {
         }
         .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(r.label) tier, base \(r.basePoints) points. Examples: \(examples(for: r))")
     }
 
     // Examples must track the live tier table (AircraftTypes.json —

@@ -46,6 +46,9 @@ struct PermissionRecoveryCard: View {
             Image(systemName: glyph)
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(Brand.Color.alertCaution)
+                // The title restates the denied capability; keep VoiceOver
+                // from reading the raw SF Symbol name.
+                .accessibilityHidden(true)
             Text(title)
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -69,6 +72,7 @@ struct PermissionRecoveryCard: View {
                     .foregroundStyle(.black.opacity(0.88))
                     .padding(.horizontal, 26)
                     .padding(.vertical, 12)
+                    .frame(minHeight: 44)
                     .background(Brand.Color.cyan, in: Capsule())
             }
             .buttonStyle(.plain)

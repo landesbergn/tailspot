@@ -101,10 +101,11 @@ private struct SetCompletionCard: View {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 13))
                             .foregroundStyle(Brand.Color.alertNormal)
+                            .accessibilityHidden(true)
                     }
                 }
                 Text("\(progress.caught) of \(progress.total) variants")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold))
+                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()
             }
@@ -114,6 +115,7 @@ private struct SetCompletionCard: View {
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
+                .accessibilityHidden(true)
         }
         // Same card chrome as TailCard so the Sets browser and the Recent
         // feed read as one design language.
@@ -122,6 +124,12 @@ private struct SetCompletionCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
+        )
+        // One sentence per card — otherwise the ring percentage, title,
+        // count, and the raw symbol names read as five fragments.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(set.title), \(progress.caught) of \(progress.total) variants, \(Int((frac * 100).rounded())) percent complete\(complete ? ", complete" : "")"
         )
     }
 }
@@ -156,7 +164,7 @@ struct SetDetailScreen: View {
                     }
                 } header: {
                     Text("MODELS")
-                        .font(Brand.Font.mono(size: 10, weight: .semibold))
+                        .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
@@ -198,13 +206,22 @@ struct SetDetailScreen: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Text(entry.canonicalName)
-                        .font(.system(size: 16, weight: .semibold))
+                        // .callout == 16 pt at the default setting, but
+                        // scales with Dynamic Type (a bare size: 16 doesn't).
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(caught ? Brand.Color.textPrimary : Brand.Color.textTertiary)
                         .lineLimit(1)
+                        // The sparkle below is hidden from VoiceOver (it
+                        // reads as the junk word "sparkles"), so the rarity
+                        // it signals rides on the name instead.
+                        .accessibilityLabel(entry.rarity.isNotable
+                            ? "\(entry.canonicalName), rare"
+                            : entry.canonicalName)
                     if entry.rarity.isNotable {
                         Image(systemName: "sparkles")
                             .font(.system(size: 10))
                             .foregroundStyle(entry.rarity.tint)
+                            .accessibilityHidden(true)
                     }
                 }
                 if caught, let mostRecent {
@@ -304,6 +321,8 @@ struct CompletionRing: View {
     var tint: Color = Brand.Color.cyan
     var lineWidth: CGFloat = 7
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
             Circle()
@@ -317,7 +336,7 @@ struct CompletionRing: View {
                 .foregroundStyle(Brand.Color.textPrimary)
                 .monospacedDigit()
         }
-        .animation(.easeInOut(duration: 0.3), value: progress)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: progress)
     }
 }
 

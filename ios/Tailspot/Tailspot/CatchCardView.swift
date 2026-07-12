@@ -190,6 +190,23 @@ struct CatchCardView: View {
         .shadow(color: .black.opacity(0.55), radius: 20, x: 0, y: 14)
         .shadow(color: plane.rarity.tint.opacity(0.25), radius: 18, x: 0, y: 0)
         .rotationEffect(rotation)
+        // The card is one collectible: read it as a single element instead
+        // of walking callsign / badge / photo / chips / points separately
+        // (the hero image and placeholder are decoration inside it).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilitySummary))
+    }
+
+    /// One-line VoiceOver summary of the card's face.
+    private var accessibilitySummary: String {
+        var parts: [String] = []
+        if let callsign = plane.callsign, !callsign.isEmpty { parts.append(callsign) }
+        parts.append(plane.model ?? "Unknown aircraft")
+        if let carrier = plane.carrier, !carrier.isEmpty { parts.append(carrier) }
+        parts.append(plane.rarity.label)
+        parts.append(plane.type.label.capitalized)
+        parts.append("\(plane.rarity.basePoints) points")
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Card layers
@@ -288,6 +305,7 @@ struct CatchCardView: View {
                     .font(Brand.Font.mono(size: dims.titleFont, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 RarityBadge(rarity: plane.rarity, size: dims.badge)
             }
@@ -303,6 +321,7 @@ struct CatchCardView: View {
                     .font(.system(size: dims.titleFont, weight: .semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 if let carrier = plane.carrier?.trimmedNonEmpty {
                     Text(carrier)
                         .font(.system(size: dims.modelFont, weight: .regular))

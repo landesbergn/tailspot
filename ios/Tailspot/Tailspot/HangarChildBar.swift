@@ -31,7 +31,9 @@ struct HangarChildBar: View {
             // Centered title via overlay so it doesn't shift when the
             // back button width changes (e.g., during a transition).
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                // .subheadline == 15 pt at the default setting, but scales
+                // with Dynamic Type (a bare size: 15 doesn't).
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)

@@ -91,7 +91,7 @@ struct ModelSlotDetailView: View {
                     size: .lg
                 )
                 Text("FIRST CAUGHT")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
             }
@@ -119,7 +119,7 @@ struct ModelSlotDetailView: View {
             }
         } header: {
             Text("TAILS (\(group.distinctTailCount))")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
         }
@@ -151,15 +151,15 @@ struct ModelSlotDetailView: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 2) {
                 Text(cs)
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
+                    .font(Brand.Font.mono(size: 12, weight: .bold, relativeTo: .caption))
                     .foregroundStyle(Brand.Color.cyan)
                 Text("\(tailIdentifier(row)) · \(row.mostRecent.operatorName ?? "—")")
-                    .font(Brand.Font.mono(size: 10, weight: .regular))
+                    .font(Brand.Font.mono(size: 10, weight: .regular, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
             }
             Spacer()
             Text(row.firstCatch.caughtAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
-                .font(Brand.Font.mono(size: 10, weight: .regular))
+                .font(Brand.Font.mono(size: 10, weight: .regular, relativeTo: .caption2))
                 .foregroundStyle(Brand.Color.textTertiary)
         }
         // System `List` + `NavigationLink` supplies the native trailing
@@ -168,6 +168,17 @@ struct ModelSlotDetailView: View {
         .padding(.trailing, 12)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.chip))
         .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.chip))
+        // One spoken line per tail; the rarity rail is decorative and the
+        // "·" would otherwise read as "middle dot".
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(tailRowA11yLabel(row, callsign: cs)))
+    }
+
+    private func tailRowA11yLabel(_ row: HangarRow, callsign: String) -> String {
+        var parts = [callsign, tailIdentifier(row)]
+        if let op = row.mostRecent.operatorName, !op.isEmpty { parts.append(op) }
+        parts.append("caught \(row.firstCatch.caughtAt.formatted(date: .abbreviated, time: .omitted))")
+        return parts.joined(separator: ", ")
     }
 }
 
