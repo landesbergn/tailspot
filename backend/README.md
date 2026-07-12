@@ -101,11 +101,10 @@ and tests inject a PGlite-backed store. See **Database & ingestion** below.
 
 | Var | Default | Meaning |
 |---|---|---|
-| `POSITION_PROVIDER` | `adsblol` | `adsblol` (primary) or `opensky` (OAuth2 fallback). Read once at startup. |
+| `POSITION_PROVIDER` | — (composite) | Unset: adsb.lol primary with airplanes.live failover. `adsblol` or `airplaneslive`: that provider only. Read once at startup. |
 | `CACHE_TTL_SECONDS` | `10` | Fresh-cache window. |
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
-| `OPENSKY_CLIENT_ID` / `OPENSKY_CLIENT_SECRET` | — | Required only when `POSITION_PROVIDER=opensky`. |
 | `DATABASE_URL` | — | Postgres connection string. Required for `/v1/metadata` and the ingest jobs; read lazily (the position-only endpoints don't need it). |
 
 **Providers.** The primary is **adsb.lol** (`https://api.adsb.lol`), whose only
@@ -114,8 +113,8 @@ in NM) — so the adapter fetches the smallest circle covering the bbox and
 filters back to the rectangle. readsb feeds report feet / knots and don't carry
 `origin_country`, so the adapter converts to meters / m·s⁻¹ and derives the
 country from the icao24 via the ICAO Annex 10 24-bit allocation table. The
-**OpenSky** fallback (`/api/states/all`, OAuth2 client-credentials) is already
-SI and supplies `origin_country` directly.
+**airplanes.live** failover speaks the same readsb dialect (same adapter,
+different host) and kicks in when adsb.lol errors.
 
 ## Running locally
 

@@ -135,6 +135,5 @@ describe("selectProvider", () => {
   it("still selects single providers explicitly", () => {
     expect(selectProvider({ POSITION_PROVIDER: "adsblol" }).name).toBe("adsblol");
     expect(selectProvider({ POSITION_PROVIDER: "airplaneslive" }).name).toBe("airplaneslive");
-    expect(selectProvider({ POSITION_PROVIDER: "opensky" }).name).toBe("opensky");
   });
 });
