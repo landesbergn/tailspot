@@ -42,6 +42,9 @@ final class TrophyUnlockCenter: ObservableObject {
     /// Event-based trophy inputs (e.g. the grounded easter egg's
     /// `triedGroundedCatch`) — injectable so tests stay suite-isolated.
     private let events: TrophyEventStore
+    /// Server-fact trophy inputs (weekly wins / ever-topped-all-time, cached
+    /// from leaderboard fetches) — injectable for the same suite isolation.
+    private let standing: LeaderboardStandingCache
     /// The roster generation this build ships (injectable for tests). See
     /// `Trophies.rosterVersion` for the stamp/reseed/recap contract.
     private let rosterVersion: Int
@@ -50,11 +53,13 @@ final class TrophyUnlockCenter: ObservableObject {
         ledger: UserDefaultsTrophyLedger = UserDefaultsTrophyLedger(),
         roster: [Achievement] = Trophies.roster,
         events: TrophyEventStore = TrophyEventStore(),
+        standing: LeaderboardStandingCache = LeaderboardStandingCache(),
         rosterVersion: Int = Trophies.rosterVersion
     ) {
         self.ledger = ledger
         self.roster = roster
         self.events = events
+        self.standing = standing
         self.rosterVersion = rosterVersion
     }
 
@@ -77,7 +82,7 @@ final class TrophyUnlockCenter: ObservableObject {
     /// Callers should fire this once at app launch so the seed lands before
     /// the user's first crossing.
     func enqueueNewUnlocks(from catches: [Catch]) {
-        let inputs = Trophies.inputs(from: catches, events: events)
+        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
         guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
@@ -98,7 +103,7 @@ final class TrophyUnlockCenter: ObservableObject {
     /// and must not re-toast one by one. Deliberately NO recap either: the
     /// restore success screen is the moment; a second overlay would pile on.
     func reseedAfterRestore(from catches: [Catch]) {
-        let inputs = Trophies.inputs(from: catches, events: events)
+        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
         // predates it and is now stale relative to the seeded state.
