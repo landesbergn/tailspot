@@ -243,7 +243,7 @@ struct OnboardingFlow: View {
             lockup
             stepLabel("STEP 1 / 4")
             Text("Spot every plane overhead.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.leading)
             Text("Point your phone at the sky. Tailspot uses live ADS-B data to identify the aircraft you're looking at, then lets you catch it to your Hangar.")
@@ -282,7 +282,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 18) {
             stepLabel("STEP 2 / 4 · PERMISSIONS")
             Text("Three things we need to read the sky.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             VStack(spacing: 10) {
                 permissionRow(glyph: "location.fill",  title: "Location, while in use",
@@ -326,7 +326,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 16) {
             stepLabel("STEP 3 / 4 · PUBLIC HANDLE")
             Text("Pick a handle.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Shown on the global leaderboard. Real name stays private.")
                 .font(Brand.Font.body)
@@ -429,7 +429,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 18) {
             stepLabel("FINAL STEP · COMPASS")
             Text(calibratedInFlow ? "Compass calibrated." : "Trace a figure-8 in the air.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("iPhone compasses drift near metal and buildings. A quick figure-8 motion calibrates yours, so labels point at the plane you're actually looking at.")
                 .font(Brand.Font.body)

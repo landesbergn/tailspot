@@ -47,7 +47,7 @@ struct PermissionRecoveryCard: View {
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(Brand.Color.alertCaution)
             Text(title)
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 // At display size the longer titles need a second line, but

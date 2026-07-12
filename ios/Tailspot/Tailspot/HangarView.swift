@@ -211,7 +211,7 @@ struct HangarView: View {
             }
             .frame(width: 64, height: 64)
             Text("Go outside.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Tailspot needs a clear view of the sky. Point your phone up, aim at a plane, then tap to catch it.")
                 .font(Brand.Font.body)

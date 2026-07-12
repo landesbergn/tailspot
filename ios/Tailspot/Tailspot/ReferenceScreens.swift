@@ -40,7 +40,7 @@ struct RarityReferenceScreen: View {
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.cyan)
             Text("Every plane has a tier.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Tiers track how much of a type is actually in the sky — plus a scarcity layer for military, vintage, and vanishing airliners.")
                 .font(Brand.Font.caption)

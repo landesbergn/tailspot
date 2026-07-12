@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!--
-		Standard bundle keys. $(VAR) is Xcode build-setting substitution
-		— resolved at build time from xcconfig + project settings.
-	-->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>
@@ -22,44 +18,23 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-
-	<!-- Permission strings (shown in iOS permission prompts). -->
 	<key>NSCameraUsageDescription</key>
 	<string>Tailspot uses your camera to show planes and the sky behind aircraft labels.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Tailspot uses your location to identify aircraft you're pointing at by matching your viewing angle against live flight positions.</string>
-
-	<!--
-		Supported orientations — PORTRAIT ONLY (2026-06-26). The app is
-		hard-pinned to upright portrait: LocationManager.headingOrientation is
-		.portrait and camera elevation derives from pitch assuming a portrait
-		hold (CLAUDE.md), so landscape — and upside-down — would break the
-		heading/elevation math the identify engine relies on.
-
-		The app is iPhone-only (TARGETED_DEVICE_FAMILY = 1), so there's no
-		~ipad orientation set to maintain. IMPORTANT LESSON (2026-06-28): a
-		portrait-only build that ALSO targets iPad ("1,2") without
-		UIRequiresFullScreen=YES *builds and runs on a device fine* but FAILS
-		App Store Connect validation — surfacing as "Preparing build for App
-		Store Connect failed" in Xcode Cloud (the iPad multitasking rule
-		demands all orientations or full-screen). GitHub Actions unit-test CI
-		never catches it. Going iPhone-only sidesteps the rule entirely;
-		UIRequiresFullScreen is deprecated/ignored on the iOS 26.2 floor anyway.
-	-->
-	<key>UISupportedInterfaceOrientations</key>
+	<key>PostHogAPIKey</key>
+	<string>$(POSTHOG_API_KEY)</string>
+	<key>UIAppFonts</key>
 	<array>
-		<string>UIInterfaceOrientationPortrait</string>
+		<string>B612Mono-Regular.ttf</string>
+		<string>B612Mono-Bold.ttf</string>
+		<string>B612Mono-Italic.ttf</string>
+		<string>B612Mono-BoldItalic.ttf</string>
 	</array>
-
-	<!--
-		Generated launch screen + scene manifest — match the
-		INFOPLIST_KEY_UILaunchScreen_Generation / SceneManifest_Generation
-		build settings the project previously used.
-	-->
-	<key>UILaunchScreen</key>
-	<dict/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -67,46 +42,14 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-
-	<!--
-		Export compliance — declares the app uses no non-exempt
-		encryption. Skips the App Store Connect export compliance
-		questionnaire on every TestFlight upload. We use only
-		standard HTTPS (URLSession) which is exempt under
-		EAR 740.17(b)(1) (mass-market software using publicly
-		available standards).
-	-->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-
-	<!--
-		PostHog project API key for anonymous product analytics.
-		$(VAR) is substituted from xcconfig at build time. When absent
-		or empty, Analytics.swift is a silent no-op. Value comes from
-		POSTHOG_API_KEY in Tailspot.secrets.xcconfig (gitignored; never
-		committed). This is the ONLY remaining build-time secret — the
-		OpenSky OAuth credentials were removed in the 2026-06-21 cutover,
-		so the shipped binary no longer carries any extractable API secret.
-	-->
-	<key>PostHogAPIKey</key>
-	<string>$(POSTHOG_API_KEY)</string>
-
-	<!--
-		Bundled custom fonts. B612 Mono is open source (SIL OFL 1.1)
-		and was designed by Airbus for cockpit MFD displays — used
-		throughout the app for callsigns, ICAO codes, headings, and
-		HUD readouts so the typography reads "aviation" rather than
-		"generic monospace."
-
-		Files live in Tailspot/Fonts/. Reference by PostScript name
-		via SwiftUI Font.custom(_:size:); see Brand.Font.mono(...).
-	-->
-	<key>UIAppFonts</key>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
 	<array>
-		<string>B612Mono-Regular.ttf</string>
-		<string>B612Mono-Bold.ttf</string>
-		<string>B612Mono-Italic.ttf</string>
-		<string>B612Mono-BoldItalic.ttf</string>
+		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 </dict>
 </plist>

@@ -1745,7 +1745,7 @@ struct ContentView: View {
 
     /// Picks the right reveal payload based on what landed.
     ///
-    /// - Single (1 fresh OR 1 dup) → `CardReveal` via `pendingReveal`.
+    /// - Single (1 fresh OR 1 dup) → `CatchRevealView` via `pendingReveal`.
     /// - Multi (≥2 combined fresh + dup) → `MultiCatchReveal` via
     ///   `pendingMultiReveal`. Fresh and dup entries are interleaved
     ///   in the same order they were captured; the reveal renders

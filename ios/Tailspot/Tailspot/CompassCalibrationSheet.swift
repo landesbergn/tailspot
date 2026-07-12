@@ -106,7 +106,7 @@ struct CompassCalibrationSheet: View {
             Text(calibratedThisSession
                  ? "You're good to go."
                  : "Your heading is off by more than ±10°.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text(calibratedThisSession
                  ? "Brackets will now sit on the right plane. You can dismiss."

@@ -275,7 +275,7 @@ struct ModelDetailScreen: View {
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Brand.Color.textTertiary)
             Text("No \(entry.canonicalName) yet")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Point, lock, and capture one to add it to your collection.")
                 .font(Brand.Font.caption)
