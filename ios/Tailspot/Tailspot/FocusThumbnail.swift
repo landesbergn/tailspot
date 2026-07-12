@@ -24,6 +24,7 @@
 import SwiftUI
 import UIKit
 import ImageIO
+import PostHog   // .postHogMask() on catch-photo thumbnails (session replay)
 
 /// Thumbnail decoder + tiny in-memory cache. Decodes an orientation-baked
 /// thumbnail (`kCGImageSourceCreateThumbnailWithTransform`) so the pixels
@@ -71,6 +72,11 @@ struct FocusThumbnail: View {
     private var content: some View {
         if let image {
             FocusedImage(image: image, focus: focus)
+                // PRIVACY: these thumbnails are always the user's own catch
+                // photos (CatchPhotoStore file URLs) — mask them from PostHog
+                // session replay. Scoped to the image rect; the row's text
+                // still records. Inert under ImageRenderer (snapshot tests).
+                .postHogMask()
         } else {
             SlotPlaceholder()
         }

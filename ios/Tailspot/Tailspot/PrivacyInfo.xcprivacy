@@ -10,25 +10,33 @@
 		user data we collect, what we do with it, and whether we link
 		it to identity or use it for tracking.
 
-		REVIEWED 2026-06-24 for the catch-confirmation telemetry
-		(catch_performed / catch_deleted / catch_confirmed / catch_denied):
-		these are Product Interaction events on the existing SDK-free REST
-		pipeline plus the anonymous device id — both already declared below,
-		so no new collected-data type or required-reason API is added (the
-		Catch.confirmed flag is stored locally and never uploaded).
+		REVIEWED 2026-07-11 for the App Store launch (GA audit):
+		  - Every declared type is now Linked = TRUE. Apple's "linked to
+		    the user's identity" includes pseudonymous identifiers: all
+		    collection is keyed to the server device-id (backend catches/
+		    leaderboard via the per-device bearer token; PostHog events +
+		    session replay + MetricKit summaries via the same id as
+		    distinct_id). "Anonymous" in the marketing sense (no name/
+		    email/account) is NOT "not linked" in Apple's sense.
+		  - Photos/Videos declaration REMOVED: catch photos are stored
+		    on-device only and never transmitted (not "collected" per
+		    Apple's definition), and session replay masks them
+		    (.postHogMask() on every catch-photo view; the live camera
+		    view never reaches replay — see PostHogSessionReplay.swift).
 		MANUAL STEP (Noah, App Store Connect): keep the privacy "nutrition
 		label" in sync before the next build — this manifest and the label
 		are separate surfaces; the manifest does not auto-populate the label.
 
-		Current data flows (no longer the v0 "all on-device" posture):
+		Current data flows:
 		  - Backend (api.tailspot.app): device registration, handle
-		    claim, catch upload, leaderboard. Auth via a per-device
-		    bearer token.
-		  - PostHog: product-analytics events via an SDK-free REST
-		    pipeline (Analytics.swift) + the PostHog SDK for session
-		    replay and person-property $set. distinct_id is an
-		    anonymous, Keychain-persistent device id (not linked to a
-		    real-world identity).
+		    claim, catch upload (incl. observer GPS coordinates),
+		    leaderboard, Hangar restore. Auth via a per-device bearer
+		    token.
+		  - PostHog SDK (the single analytics pipeline since 2026-06-27):
+		    product events, session replay (screenshot mode, catch photos
+		    masked), person-property $set. distinct_id is the anonymous,
+		    Keychain-persistent server device id (pseudonymous — no
+		    real-world identity, but linked in Apple's sense).
 		  - MetricKit: on-device diagnostics (crash counts, hang rate,
 		    peak memory) summarized into PostHog events.
 
@@ -74,25 +82,14 @@
 
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
-		<!-- Precise location: matches heading + GPS to ADS-B positions. -->
+		<!-- Precise location: matches heading + GPS to ADS-B positions;
+		     catch coordinates are uploaded with the catch, keyed to the
+		     device id → linked. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePreciseLocation</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypeTracking</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypePurposes</key>
-			<array>
-				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-			</array>
-		</dict>
-		<!-- Photos: the JPEG snapped when catching a plane (stored on-device). -->
-		<dict>
-			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
-			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
@@ -101,12 +98,13 @@
 			</array>
 		</dict>
 		<!-- Anonymous device id (PostHog distinct_id + backend device id),
-		     Keychain-persistent. Not linked to a real-world identity. -->
+		     Keychain-persistent. Pseudonymous, but it IS the identifier
+		     everything else is keyed to → linked in Apple's sense. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeDeviceID</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
@@ -115,12 +113,13 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- Product interaction: PostHog product events + session replay. -->
+		<!-- Product interaction: PostHog product events + session replay,
+		     keyed to the device id → linked. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
@@ -128,12 +127,13 @@
 				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
 			</array>
 		</dict>
-		<!-- Crash data: MetricKit crash counts → PostHog. -->
+		<!-- Crash data: MetricKit crash counts → PostHog, keyed to the
+		     device id → linked. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeCrashData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
@@ -142,12 +142,13 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- Performance data: MetricKit hang rate, peak memory → PostHog. -->
+		<!-- Performance data: MetricKit hang rate, peak memory → PostHog,
+		     keyed to the device id → linked. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypePerformanceData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>

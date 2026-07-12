@@ -28,6 +28,13 @@ struct SettledCatchCard: View {
     /// Card width in points; every internal metric scales off it exactly
     /// like the reveal (the prototype's sizes were tuned for 300 pt).
     let width: CGFloat
+    /// Planespotters TOS (licensing review 2026-07-11): when the hero is a
+    /// Planespotters photo, the THUMBNAIL itself must link back to the
+    /// photo's Planespotters page — the caption below the card alone isn't
+    /// enough. CatchDetailView passes an open-the-photo-page action when
+    /// (and only when) the hero is Planespotters imagery; nil — user photo,
+    /// placeholder, or the share/ImageRenderer path — keeps the hero inert.
+    var onPhotoTap: (() -> Void)? = nil
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0 }
@@ -57,16 +64,29 @@ struct SettledCatchCard: View {
             }
         }()
 
+        let hero = RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
+            .frame(height: 168 * scale)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+            .overlay(
+                RoundedRectangle(cornerRadius: Brand.Radius.card)
+                    .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
+            )
+
         return VStack(alignment: .leading, spacing: 0) {
-            RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
-                .frame(height: 168 * scale)
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Brand.Radius.card)
-                        .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
-                )
-                .padding(18 * scale)
+            Group {
+                if let onPhotoTap {
+                    // Same pixels, wrapped in a plain button so the thumbnail
+                    // itself opens the Planespotters photo page (TOS: "the
+                    // thumbnail linked back to the original page").
+                    Button(action: onPhotoTap) { hero }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("View photo on Planespotters.net")
+                } else {
+                    hero
+                }
+            }
+            .padding(18 * scale)
 
             VStack(alignment: .leading, spacing: 11 * scale) {
                 VStack(alignment: .leading, spacing: 4 * scale) {
