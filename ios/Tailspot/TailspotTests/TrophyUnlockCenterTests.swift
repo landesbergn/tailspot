@@ -207,6 +207,85 @@ struct TrophyUnlockCenterTests {
         #expect(new.head?.newTier == .silver)
     }
 
+    // MARK: - Winner trophies (server facts — dynamic-leaderboards PR3)
+
+    /// A suite-isolated defaults so host-app standing/event state can't leak
+    /// into these real-roster tests.
+    private func isolatedSuite() -> UserDefaults {
+        UserDefaults(suiteName: "test.standing.\(UUID().uuidString)")!
+    }
+
+    /// The rosterVersion 2→3 upgrade on a device whose server facts already
+    /// carry wins (e.g. Noah's historical crown backfill): the reseed must
+    /// silently absorb Top Flight + Dynasty + Chart Topper into the ONE
+    /// recap — never a per-trophy toast flood.
+    @Test func versionBumpAbsorbsServerEarnedWinnerTrophies() {
+        let ledger = freshLedger()
+        let suite = isolatedSuite()
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let events = TrophyEventStore(defaults: suite)
+        standing.update(from: MyStanding(rank: 1, points: 2755,
+                                         weeklyWins: 3, everToppedAllTime: true))
+
+        // Yesterday's build: version-2 roster WITHOUT the winner trophies
+        // (they didn't exist), seeded and stamped at 2.
+        let oldRoster = Trophies.roster.filter {
+            !["topflight", "dynasty", "charttopper"].contains($0.id)
+        }
+        let old = TrophyUnlockCenter(ledger: ledger, roster: oldRoster,
+                                     events: events, standing: standing, rosterVersion: 2)
+        old.enqueueNewUnlocks(from: [])
+        #expect(ledger.rosterVersion == 2)
+
+        // Today's build: full roster, version 3, wins already banked server-side.
+        let new = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
+        new.enqueueNewUnlocks(from: [])
+        #expect(new.pendingEvents.isEmpty, "reseed must absorb pre-earned server trophies, not flood")
+        #expect(new.pendingRecap?.achievements.map(\.id).sorted()
+                == ["charttopper", "dynasty", "topflight"])
+        #expect(ledger.rosterVersion == Trophies.rosterVersion)
+
+        // And after the recap, re-diffing the same facts stays quiet.
+        new.dismissRecap()
+        new.enqueueNewUnlocks(from: [])
+        #expect(new.pendingEvents.isEmpty)
+        #expect(new.pendingRecap == nil)
+    }
+
+    /// Live crossings on an already-seeded device: each threshold fires its
+    /// own moment exactly once as leaderboard fetches move the cached facts
+    /// (the Monday-board-refresh path).
+    @Test func liveWeeklyWinCrossingsFireOnceEach() {
+        let ledger = freshLedger()
+        let suite = isolatedSuite()
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let events = TrophyEventStore(defaults: suite)
+        let center = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
+        center.enqueueNewUnlocks(from: [])   // fresh install: seed, nothing earned
+        #expect(center.pendingEvents.isEmpty)
+        #expect(center.pendingRecap == nil)
+
+        // First crown lands → Top Flight fires (once).
+        standing.update(from: MyStanding(rank: 1, points: 100, weeklyWins: 1))
+        center.enqueueNewUnlocks(from: [])
+        #expect(center.pendingEvents.map(\.achievementID) == ["topflight"])
+        #expect(center.head?.kind == .badgeEarned)
+        center.markShown(center.head!)
+        center.advance()
+
+        // Third crown → Dynasty (the secret) fires; Top Flight stays quiet.
+        standing.update(from: MyStanding(rank: 1, points: 300, weeklyWins: 3))
+        center.enqueueNewUnlocks(from: [])
+        #expect(center.pendingEvents.map(\.achievementID) == ["dynasty"])
+        center.markShown(center.head!)
+        center.advance()
+
+        // Ever-topped flag flips → Chart Topper fires.
+        standing.update(from: MyStanding(rank: 1, points: 300, everToppedAllTime: true))
+        center.enqueueNewUnlocks(from: [])
+        #expect(center.pendingEvents.map(\.achievementID) == ["charttopper"])
+    }
+
     /// The real-roster late-backfill case (U6): Mr. Worldwide doesn't cross
     /// until `country` is stamped post-save, so the second enqueue (fired by
     /// ContentView's post-geocode task) must pick it up.

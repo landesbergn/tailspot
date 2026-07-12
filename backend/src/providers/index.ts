@@ -1,14 +1,12 @@
 import { AdsbLolProvider } from "./adsblol.js";
 import { AirplanesLiveProvider } from "./airplaneslive.js";
 import { FallbackProvider, type FallbackProviderOptions } from "./fallback.js";
-import { OpenSkyProvider } from "./opensky.js";
 import type { PositionProvider } from "./types.js";
 
 export * from "./types.js";
 export { AdsbLolProvider, normalizeAdsbLol } from "./adsblol.js";
 export { AirplanesLiveProvider } from "./airplaneslive.js";
 export { FallbackProvider } from "./fallback.js";
-export { OpenSkyProvider, normalizeOpenSky } from "./opensky.js";
 export { countryForIcao24 } from "./icaoCountry.js";
 export {
   validateBbox,
@@ -26,7 +24,6 @@ export {
  *   (default)                        — adsb.lol primary, airplanes.live fallback
  *   POSITION_PROVIDER=adsblol       — adsb.lol only (pre-2026-07 behavior)
  *   POSITION_PROVIDER=airplaneslive — airplanes.live only (debugging a feed)
- *   POSITION_PROVIDER=opensky       — OAuth2 legacy
  */
 export function selectProvider(
   env: NodeJS.ProcessEnv = process.env,
@@ -34,8 +31,6 @@ export function selectProvider(
 ): PositionProvider {
   const choice = (env.POSITION_PROVIDER ?? "").toLowerCase();
   switch (choice) {
-    case "opensky":
-      return new OpenSkyProvider();
     case "adsblol":
       return new AdsbLolProvider();
     case "airplaneslive":

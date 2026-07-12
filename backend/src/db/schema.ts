@@ -78,9 +78,7 @@ export const typecodes = pgTable("typecodes", {
   rarity: text("rarity"),
 });
 
-export type RegistryRow = typeof registry.$inferSelect;
 export type RegistryInsert = typeof registry.$inferInsert;
-export type TypecodeRow = typeof typecodes.$inferSelect;
 export type TypecodeInsert = typeof typecodes.$inferInsert;
 
 /**
@@ -307,12 +305,3 @@ export const alltimeToppers = pgTable("alltime_toppers", {
   /** When this device was FIRST observed at all-time #1. */
   firstToppedAt: timestamp("first_topped_at", { withTimezone: true }).notNull(),
 });
-
-export type DeviceRow = typeof devices.$inferSelect;
-export type DeviceInsert = typeof devices.$inferInsert;
-export type CatchRow = typeof catches.$inferSelect;
-export type CatchInsert = typeof catches.$inferInsert;
-export type WeeklyChampionRow = typeof weeklyChampions.$inferSelect;
-export type WeeklyChampionInsert = typeof weeklyChampions.$inferInsert;
-export type AlltimeTopperRow = typeof alltimeToppers.$inferSelect;
-export type AlltimeTopperInsert = typeof alltimeToppers.$inferInsert;
