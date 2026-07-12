@@ -35,6 +35,17 @@ always *something*, so explicit intent alone stopped meaning "I can see it".
   couch session's 11 reveals + the 75.8 km Cherokee are all refused, as is
   the below-horizon N383TA (6.4 km @ −0.45°). OFF-FRAME reveal is untouched
   (it already requires visible tier).
+- **Indoors = no ambient labels** (second half of the report, Noah's call:
+  "if the frame reads as not sky — don't show labels"). The band was also
+  passing planes that ARE outdoor-visible from that location (river-corridor
+  GA at 2–3 km, LGA finals at 8 km; 9 passed at a live check) — the
+  geometric filter can't know about walls. `interactiveVisible(_:)` is now
+  the one definition of the label set (render loop + metadata prefetch +
+  signature, previously three copies): the ambient tier is suppressed while
+  `pointedIndoors` (the existing 5 s-debounced SkyCheck streak behind the
+  "Not many planes indoors." hint), the tap-revealed plane survives, and
+  zone catchability/lock/taps consume the same gated set. The
+  `first_plane_seen` activation latch skips while indoors.
 
 ## 2026-07-12 — Pre-v1 cleanup round: dead code, stale docs, repo organization — branches `chore/v1-backend-cleanup` · `chore/v1-ios-cleanup` · `chore/v1-docs-cleanup`
 
