@@ -1390,6 +1390,22 @@ struct ContentView: View {
             // actually went up.
             var revealPresented = false
             defer { if !revealPresented { captureInFlight = false } }
+            // Catch-time route resolve (see CatchBackfill.resolveCatchTimeRoute):
+            // the backend attaches routes a poll LATE, so a freshly-caught
+            // plane usually froze a route-less row and the bonus round couldn't
+            // fire. Kick the resolve NOW — concurrently with the shutter/detector
+            // below — for the single-catch path (the only guess-eligible one),
+            // and only when the live feed carried no route to begin with. Awaited
+            // just before the row is built; because it overlaps the ~19-pass
+            // detector snap it adds no perceptible latency to the reveal.
+            let routeResolve: Task<BackendAircraft.Route?, Never>? = {
+                guard icaos.count == 1, let icao = icaos.first,
+                      let obs = visibleByIcao[icao],
+                      obs.aircraft.originIcao == nil, obs.aircraft.destIcao == nil
+                else { return nil }
+                let callsign = obs.aircraft.callsign
+                return Task { await CatchBackfill.resolveCatchTimeRoute(callsign: callsign) }
+            }()
             // One JPEG, reused for every new row in this catch. If the
             // camera isn't ready (auth denied, session not running),
             // `captureJPEG` returns nil — Catches are still valid
@@ -1509,6 +1525,15 @@ struct ContentView: View {
             var newCatches: [Catch] = []
             var duplicates: [String] = []
 
+            // Await the catch-time route resolve kicked off above (nil unless
+            // this was a single catch whose live feed carried no route). It ran
+            // during the shutter/detector work, so this is usually already done.
+            // Merged onto the fresh row below — equivalent to the Hangar
+            // backfill's per-callsign heal, just applied AT catch so the bonus
+            // round can render. Only the fully-nil-route case is filled (never
+            // a one-sided as-observed route — see the row's route comment).
+            let resolvedRoute = await routeResolve?.value
+
             for icao in icaos {
                 if Catch.exists(icao24: icao, in: modelContext) {
                     duplicates.append(icao)
@@ -1594,12 +1619,16 @@ struct ContentView: View {
                     // the feed; nil when the feed had none. A fully-nil route
                     // may later heal via CatchBackfill's per-callsign lookup
                     // (2026-07-04) — a one-sided as-observed route never does.
-                    originIcao: observed?.aircraft.originIcao,
-                    destIcao: observed?.aircraft.destIcao,
-                    originIata: observed?.aircraft.originIata,
-                    destIata: observed?.aircraft.destIata,
-                    originName: observed?.aircraft.originName,
-                    destName: observed?.aircraft.destName,
+                    // `resolvedRoute` is that SAME lookup pulled forward to
+                    // catch time (single-catch, feed-had-no-route path) so the
+                    // bonus round can render; it's a complete origin+dest pair
+                    // or nil, so it never fabricates a one-sided journey.
+                    originIcao: observed?.aircraft.originIcao ?? resolvedRoute?.originIcao,
+                    destIcao: observed?.aircraft.destIcao ?? resolvedRoute?.destIcao,
+                    originIata: observed?.aircraft.originIata ?? resolvedRoute?.originIata,
+                    destIata: observed?.aircraft.destIata ?? resolvedRoute?.destIata,
+                    originName: observed?.aircraft.originName ?? resolvedRoute?.originName,
+                    destName: observed?.aircraft.destName ?? resolvedRoute?.destName,
                     // Post-catch confirm: a gate-suspected row is born
                     // quarantined (skipped by CatchUploader) until the
                     // post-reveal review clears or deletes it.

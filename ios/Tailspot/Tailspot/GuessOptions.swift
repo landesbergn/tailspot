@@ -8,15 +8,19 @@
 //  this emits.
 //
 //  ROUTE — "Where's it coming from?" / "Where's it headed?":
-//    The question asks about the route endpoint FARTHER from the observer
-//    (locked 2026-06-29 design). The correct airport plus 3 distractors from
-//    the bundled `airports.json` (~294 curated major airports derived from
-//    public-domain OurAirports data — tools/generate-airports.py). Distractor
-//    quality is the plan's risk #5, so distractors are (a) from the same
-//    broad region (OurAirports continent code) as the correct answer and
-//    (b) plausibility-weighted: airports whose distance-from-observer is
-//    close to the correct airport's are preferred, so a plane 11,000 km out
-//    of SFO gets "HKG / ICN / SIN / NRT", not "HKG / OAK / LAS / SJC".
+//    The question prefers the MAJOR (recognizable) endpoint, and among ties
+//    the one FARTHER from the observer (locked 2026-06-29 design). The correct
+//    airport plus 3 distractors from the bundled `airports.json`
+//    (tools/generate-airports.py, public-domain OurAirports data). That table
+//    plays two roles split by the `major` flag: EVERY row — including
+//    comprehensive US regional coverage — resolves a route endpoint so a round
+//    can fire, but only `major` rows (curated worldwide hubs + US large
+//    airports) are sampled as distractors. Distractor quality is the plan's
+//    risk #5, so distractors are (a) major, (b) from the same broad region
+//    (OurAirports continent code) as the correct answer, and (c)
+//    plausibility-weighted: airports whose distance-from-observer is close to
+//    the correct airport's are preferred, so a plane 11,000 km out of SFO gets
+//    "HKG / ICN / SIN / NRT", not "HKG / OAK / LAS / SJC".
 //
 //  The option set contains the correct answer and 4 unique display
 //  strings, shuffled with the injectable RNG (SeededRNG in tests).
@@ -29,12 +33,18 @@ import Foundation
 
 // MARK: - Airport table
 
-/// One row of the bundled `airports.json` — a curated major airport.
-nonisolated struct GuessAirport: Decodable, Equatable, Sendable {
+/// One row of the bundled `airports.json` (tools/generate-airports.py).
+///
+/// The table plays two roles and `major` splits them: EVERY row resolves a
+/// route endpoint (so a round can fire and the correct chip renders), but
+/// only `major` rows are sampled as distractors — see `major`.
+nonisolated struct GuessAirport: Equatable, Sendable {
     /// 4-letter ICAO ident ("VHHH") — the wire value the server verifies
-    /// against the route resolver's endpoints.
+    /// against the route resolver's endpoints. (US idents like "KMRY" come
+    /// from the OurAirports `ident` column.)
     let icao: String
     /// 3-letter IATA code ("HKG") — what travelers read; leads the chip.
+    /// EMPTY for many small US resolution-only fields (see `display`).
     let iata: String
     /// Traveler-recognizable city name ("Hong Kong").
     let city: String
@@ -43,9 +53,38 @@ nonisolated struct GuessAirport: Decodable, Equatable, Sendable {
     /// OurAirports two-letter continent code (AF AS EU NA OC SA) — the
     /// "same broad region" bucket for distractor sampling.
     let continent: String
+    /// `true` for recognizable airports (curated worldwide hubs + US large
+    /// airports) — the ONLY rows sampled as wrong-answer distractors. `false`
+    /// for US medium/small resolution-only fields: they resolve routes and
+    /// render the correct chip, but must never surface as an obscure wrong
+    /// answer. Decodes as `true` when absent (an old-shape row stays a valid
+    /// distractor rather than silently vanishing from the pool).
+    let major: Bool
 
-    /// Chip text, matching the locked design's "HKG · Hong Kong" shape.
-    var display: String { "\(iata) · \(city)" }
+    /// Chip text, matching the locked design's "HKG · Hong Kong" shape. Small
+    /// resolution-only fields often have no IATA — lead with the ICAO ident
+    /// then ("KMRY · Monterey"), never a bare "· City".
+    var display: String { iata.isEmpty ? "\(icao) · \(city)" : "\(iata) · \(city)" }
+}
+
+nonisolated extension GuessAirport: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case icao, iata, city, lat, lon, continent, major
+    }
+
+    /// Hand-rolled so `major` is decode-optional (defaults `true`): the
+    /// airports.json shape gained `major` in the comprehensive-US-coverage
+    /// pass, and a row without it must still load as a usable distractor.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        icao = try c.decode(String.self, forKey: .icao)
+        iata = try c.decode(String.self, forKey: .iata)
+        city = try c.decode(String.self, forKey: .city)
+        lat = try c.decode(Double.self, forKey: .lat)
+        lon = try c.decode(Double.self, forKey: .lon)
+        continent = try c.decode(String.self, forKey: .continent)
+        major = try c.decodeIfPresent(Bool.self, forKey: .major) ?? true
+    }
 }
 
 // MARK: - GuessOptions
@@ -78,10 +117,12 @@ nonisolated enum GuessOptions {
         let correctValue: String
     }
 
-    /// The curated airport pool, ICAO-sorted (the JSON is generated sorted;
-    /// array order matters for seeded determinism). Missing/corrupt resource
-    /// degrades to an empty pool — route questions become unavailable, never
-    /// a crash (same posture as AircraftNaming.table).
+    /// The full airport table, ICAO-sorted (the JSON is generated sorted;
+    /// array order matters for seeded determinism). Both resolution rows and
+    /// distractor-eligible (`major`) rows live here — filter on `major` when
+    /// sampling distractors. Missing/corrupt resource degrades to an empty
+    /// pool — route questions become unavailable, never a crash (same posture
+    /// as AircraftNaming.table).
     static let airports: [GuessAirport] = {
         guard let url = Bundle.main.url(forResource: "airports", withExtension: "json"),
               let data = try? Data(contentsOf: url),
@@ -116,10 +157,11 @@ nonisolated enum GuessOptions {
     /// honest option set can be built (endpoint not in the curated pool,
     /// degenerate route, pool exhausted).
     ///
-    /// The asked endpoint is the one FARTHER from the observer, among the
-    /// endpoints that resolve in the curated table — if only one endpoint is
-    /// known (small regional field on the other end), the question gracefully
-    /// asks about the known one.
+    /// The asked endpoint is chosen among the endpoints that resolve in the
+    /// table: prefer a MAJOR (recognizable) one, then, among ties, the one
+    /// FARTHER from the observer. If only one endpoint resolves (small regional
+    /// field on the other end) the question gracefully asks about it; a
+    /// resolution-only field is asked about only when it's the sole resolver.
     static func routeQuestion(
         originIcao: String?,
         destIcao: String?,
@@ -134,7 +176,15 @@ nonisolated enum GuessOptions {
         var candidates: [(endpoint: RouteEndpoint, airport: GuessAirport)] = []
         if let a = originIdent.flatMap({ airportsByIcao[$0] }) { candidates.append((.origin, a)) }
         if let a = destIdent.flatMap({ airportsByIcao[$0] }) { candidates.append((.destination, a)) }
-        guard let asked = candidates.max(by: {
+        // Prefer asking about a MAJOR (recognizable) endpoint — a KSFO→small-
+        // field route asks about SFO, not the small field. Fall back to a
+        // non-major endpoint only when it's the only one that resolves. Among
+        // the preferred set, ask the one FARTHER from the observer (locked
+        // 2026-06-29 design).
+        let preferred = candidates.contains { $0.airport.major }
+            ? candidates.filter { $0.airport.major }
+            : candidates
+        guard let asked = preferred.max(by: {
             distanceMeters(from: observerLat, observerLon, to: $0.airport)
                 < distanceMeters(from: observerLat, observerLon, to: $1.airport)
         }) else { return nil }
@@ -146,16 +196,22 @@ nonisolated enum GuessOptions {
         // drift. Excluded by ident even when it's not in the curated pool.
         let otherIdent = asked.endpoint == .origin ? destIdent : originIdent
 
+        // Distractors are sampled ONLY from `major` airports: the recognizable
+        // hubs. The comprehensive US resolution-only fields (major == false)
+        // resolve routes but must never surface as an obscure wrong answer —
+        // "plausibly wrong" beats "obscurely wrong".
         func pool(sameRegionOnly: Bool) -> [GuessAirport] {
             airports.filter {
-                $0.icao != correct.icao
+                $0.major
+                    && $0.icao != correct.icao
                     && $0.icao != otherIdent
                     && (!sameRegionOnly || $0.continent == correct.continent)
             }
         }
-        // Same broad region as the correct answer; a thin region (shouldn't
-        // happen with the curated pool — every continent has ≥16 entries)
-        // widens to the whole pool rather than failing the round.
+        // Same broad region as the correct answer; a thin MAJOR region
+        // (shouldn't happen — every continent has ≥16 major entries) widens to
+        // major-anywhere rather than failing the round. A non-major airport is
+        // never sampled as a distractor at either width.
         var candidatePool = pool(sameRegionOnly: true)
         if candidatePool.count < optionCount - 1 {
             candidatePool = pool(sameRegionOnly: false)
