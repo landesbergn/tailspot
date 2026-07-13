@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 import os
 
 @main
@@ -51,6 +52,21 @@ struct TailspotApp: App {
         // unit tests for the same reason as the register above.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             PostHogSessionReplay.start()
+        }
+        // Seed the Bold Text mirror for B612 Mono (custom fonts get no
+        // automatic Bold Text adaptation — Brand.Font.mono maps every
+        // weight to the Bold face while this is true) and keep it fresh
+        // if the user flips the setting mid-session. System-text-style
+        // tokens adapt on their own and don't consult this.
+        Brand.Font.boldTextPreferred = UIAccessibility.isBoldTextEnabled
+        NotificationCenter.default.addObserver(
+            forName: UIAccessibility.boldTextStatusDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                Brand.Font.boldTextPreferred = UIAccessibility.isBoldTextEnabled
+            }
         }
     }
 

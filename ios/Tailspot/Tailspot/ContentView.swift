@@ -414,6 +414,25 @@ struct ContentView: View {
                                             || obs.visibilityTier == .faint,
                                         metadata: metaForPlane
                                     )
+                                    // VoiceOver path into the pin loop. The
+                                    // label stays `.allowsHitTesting(false)`
+                                    // for touch (taps hit-test screen geometry
+                                    // on the gesture layer), but accessibility
+                                    // activation needs no geometry — the
+                                    // element itself names the plane. Nearest
+                                    // plane reads first via sort priority.
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(planeAccessibilityLabel(
+                                        obs, metadata: metaForPlane))
+                                    .accessibilityAddTraits(
+                                        isPinned ? [.isButton, .isSelected] : .isButton)
+                                    .accessibilityHint(
+                                        isPinned ? "Unpins this plane."
+                                                 : "Pins this plane for capture.")
+                                    .accessibilitySortPriority(-obs.slantDistanceMeters)
+                                    .accessibilityAction {
+                                        accessibilityTogglePin(icao: icao)
+                                    }
                                 }
                             }
 
@@ -540,7 +559,14 @@ struct ContentView: View {
                                     screenSize: geo.size,
                                     positions: onScreenPositions
                                 )
-                                .padding(.bottom, 28)
+                                // Clear the home-indicator gesture zone: pad
+                                // from the safe-area bottom when there is one
+                                // (`geo` sits inside .ignoresSafeArea(), so the
+                                // proxy still reports the insets the expansion
+                                // crossed). Falls back to the original 28 pt on
+                                // home-button devices — and if the proxy ever
+                                // reports zero, behavior is exactly pre-change.
+                                .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 12))
                             }
                             .frame(width: geo.size.width,
                                    height: geo.size.height)
@@ -1075,13 +1101,17 @@ struct ContentView: View {
                         .fill(Brand.Color.alertCaution)
                         .frame(width: 5, height: 5)
                     Text("COMPASS \(formatHeadingAccuracyShort())")
-                        .font(Brand.Font.mono(size: 10, weight: .bold))
+                        .font(Brand.Font.mono(size: 11, weight: .bold))
                         .tracking(1.0)
                         .foregroundStyle(Brand.Color.alertCaution)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+                // The visible capsule stays slim; the inset expands the
+                // HIT region to the 44 pt HIG minimum (the badge is the
+                // only in-AR path to compass calibration).
+                .contentShape(Rectangle().inset(by: -12))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Tap to calibrate.")
@@ -1128,6 +1158,8 @@ struct ContentView: View {
                 .padding(8)
                 .background(Brand.Color.bgPrimary.opacity(showDebug ? 0.45 : 0.20), in: .circle)
                 .shadow(color: .black.opacity(0.5), radius: 2)
+                // 32 pt visible disc; inset expands the hit region to 44.
+                .contentShape(Rectangle().inset(by: -6))
         }
         .accessibilityLabel(showDebug ? "Hide debug overlays" : "Show debug overlays")
     }
@@ -1802,7 +1834,7 @@ struct ContentView: View {
 
     /// Picks the right reveal payload based on what landed.
     ///
-    /// - Single (1 fresh OR 1 dup) → `CardReveal` via `pendingReveal`.
+    /// - Single (1 fresh OR 1 dup) → `CatchRevealView` via `pendingReveal`.
     /// - Multi (≥2 combined fresh + dup) → `MultiCatchReveal` via
     ///   `pendingMultiReveal`. Fresh and dup entries are interleaved
     ///   in the same order they were captured; the reveal renders
@@ -2692,6 +2724,52 @@ struct ContentView: View {
 
     // MARK: - Tap-to-ID
 
+    /// VoiceOver's route into pin/unpin — the same effect as a direct tap
+    /// on a labeled plane (`handleTap` branch 1) minus the screen-geometry
+    /// hit-test, which accessibility activation doesn't need: the element
+    /// the user activated already names the plane.
+    private func accessibilityTogglePin(icao: String) {
+        let now = Date()
+        if icao == pinnedIcao {
+            recorder.recordUnpin(at: now)
+            pinnedIcao = nil
+            revealedIcao = nil
+            lockOn.unpin()
+        } else {
+            pinnedIcao = icao
+            revealedIcao = nil   // a normal pin is a visible plane, not a reveal
+            recorder.recordTapPin(icao24: icao, at: now)
+            lockOn.forceLock(targetIcao24: icao, now: now)
+        }
+    }
+
+    /// Spoken summary for a plane's AR label: callsign, airframe model
+    /// when the metadata cache has it, rarity tier, and slant distance.
+    private func planeAccessibilityLabel(
+        _ obs: ObservedAircraft,
+        metadata: AircraftMetadata?
+    ) -> String {
+        let callsign = obs.aircraft.callsign?
+            .trimmingCharacters(in: .whitespaces)
+            .nonEmpty
+            ?? obs.aircraft.icao24.uppercased()
+        let rarity = resolveAROverlayRarity(
+            typecode: metadata?.typecode,
+            manufacturer: metadata?.manufacturerName,
+            model: metadata?.model,
+            operatorName: metadata?.operatorName
+        )
+        let km = obs.slantDistanceMeters / 1000
+        let distance = km < 9.95
+            ? String(format: "%.1f", km)
+            : String(Int(km.rounded()))
+        var parts = [callsign]
+        if let model = metadata?.model?.nonEmpty { parts.append(model) }
+        parts.append(rarity.label.capitalized)
+        parts.append("\(distance) kilometers away")
+        return parts.joined(separator: ", ")
+    }
+
     /// Tap handler for the AR overlay. Three outcomes:
     ///   - Tapped on (or very near) the currently-pinned plane → toggle
     ///     off, fall back to center-driven lock.
@@ -3089,12 +3167,18 @@ private struct PlaneLabel: View {
         // keeps the bracket legible against a bright sky.
         let bracketLineWidth: CGFloat = isPinned ? 3.5 : 2.0
         let bracketOpacity: Double = isPinned ? 1.0 : 0.55
+        // Dim applies to FOREGROUND strokes/text only — never to the pill's
+        // dark scrim or the brackets' halo. A whole-view .opacity multiplied
+        // the 0.55 scrim down to ~0.19, leaving dimmed 8–9 pt cyan text
+        // nearly scrim-less over a bright sky (and defeated the halo's
+        // "held at full opacity" design).
+        let dimFactor: Double = isDimmed ? 0.35 : 1.0
 
         VStack(spacing: 2) {
             LockBrackets(
                 boxSize: bracketBoxSize,
                 color: Brand.Color.cyan,
-                opacity: bracketOpacity,
+                opacity: bracketOpacity * dimFactor,
                 lineWidth: bracketLineWidth
             )
             HStack(spacing: 4) {
@@ -3111,13 +3195,15 @@ private struct PlaneLabel: View {
                         .foregroundStyle(rarity.tint)
                 }
             }
+            // Opacity BEFORE the background so only the text fades; the
+            // scrim drawn behind it stays at its full 0.55.
+            .opacity(dimFactor)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Brand.Color.bgPrimary.opacity(0.55),
                         in: .rect(cornerRadius: 4))
         }
         .position(position)
-        .opacity(isDimmed ? 0.35 : 1.0)
         .allowsHitTesting(false)
     }
 }
@@ -3236,26 +3322,43 @@ private struct EmptyPulse: ViewModifier {
 private struct EmptyTapRippleView: View {
     let at: CGPoint
     let since: Date
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation) { ctx in
-            let dt = ctx.date.timeIntervalSince(since)
-            let progress = min(1.0, dt / 0.8)
+        if reduceMotion {
+            // Reduce Motion: no expanding ring — a static ring + caption
+            // at the tap point; the parent's 1 s auto-clear still removes it.
             ZStack {
                 Circle()
-                    .stroke(Brand.Color.cyan.opacity(1.0 - progress),
-                            lineWidth: 1.5)
-                    .frame(width: CGFloat(20 + progress * 80),
-                           height: CGFloat(20 + progress * 80))
-                if progress < 0.95 {
-                    Text("NO AIRCRAFT HERE")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.cyan.opacity(1.0 - progress))
-                        .padding(.top, 60)
-                }
+                    .stroke(Brand.Color.cyan.opacity(0.7), lineWidth: 1.5)
+                    .frame(width: 44, height: 44)
+                Text("NO AIRCRAFT HERE")
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.cyan.opacity(0.9))
+                    .padding(.top, 60)
             }
             .position(at)
+        } else {
+            TimelineView(.animation) { ctx in
+                let dt = ctx.date.timeIntervalSince(since)
+                let progress = min(1.0, dt / 0.8)
+                ZStack {
+                    Circle()
+                        .stroke(Brand.Color.cyan.opacity(1.0 - progress),
+                                lineWidth: 1.5)
+                        .frame(width: CGFloat(20 + progress * 80),
+                               height: CGFloat(20 + progress * 80))
+                    if progress < 0.95 {
+                        Text("NO AIRCRAFT HERE")
+                            .font(Brand.Font.mono(size: 9, weight: .semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(Brand.Color.cyan.opacity(1.0 - progress))
+                            .padding(.top, 60)
+                    }
+                }
+                .position(at)
+            }
         }
     }
 }

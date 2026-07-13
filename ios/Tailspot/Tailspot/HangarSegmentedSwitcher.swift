@@ -28,6 +28,7 @@ enum HangarSegment: String, CaseIterable, Identifiable {
 struct HangarSegmentedSwitcher: View {
     @Binding var selection: HangarSegment
     @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
@@ -39,11 +40,30 @@ struct HangarSegmentedSwitcher: View {
         // used withAnimation { selection = ... }, which animated the whole
         // downstream content swap (Sets/Recent/Trophies rebuild) — that's what
         // felt slow/laggy. Here the content swaps instantly; just the pill slides.
-        .animation(.snappy(duration: 0.22), value: selection)
+        // Under Reduce Motion the pill jumps instead of sliding.
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: selection)
         .padding(5)
         .glassEffect(.regular, in: .capsule)   // iOS 26 Liquid Glass track
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        // Container semantics so VoiceOver users can also step segments
+        // with the adjustable swipe (the per-button .isSelected traits
+        // stay for element-by-element navigation).
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Hangar section")
+        .accessibilityValue(selection.label)
+        .accessibilityAdjustableAction { direction in
+            let all = HangarSegment.allCases
+            guard let idx = all.firstIndex(of: selection) else { return }
+            switch direction {
+            case .increment:
+                if idx < all.count - 1 { selection = all[idx + 1] }
+            case .decrement:
+                if idx > 0 { selection = all[idx - 1] }
+            @unknown default:
+                break
+            }
+        }
     }
 
     private func segmentButton(_ seg: HangarSegment) -> some View {

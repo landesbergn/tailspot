@@ -185,7 +185,7 @@ struct LeaderboardScreen: View {
                 LeaderboardWindowSwitcher(selection: $selectedWindow)
                 if let line = countdownLine {
                     Text(line)
-                        .font(Brand.Font.mono(size: 10, weight: .semibold))
+                        .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                         .padding(.bottom, 2)
@@ -222,9 +222,10 @@ struct LeaderboardScreen: View {
                     Image(systemName: "laurel.leading")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Brand.Color.textTertiary)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(ChampionBanner.noChampionTitle)
-                            .font(Brand.Font.mono(size: 11, weight: .bold))
+                            .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
                             .tracking(1.0)
                             .foregroundStyle(Brand.Color.textSecondary)
                         Text(ChampionBanner.noChampionSubtitle)
@@ -235,29 +236,33 @@ struct LeaderboardScreen: View {
                 }
                 .padding(.vertical, 4)
                 .listRowBackground(Brand.Color.bgElevated)
+                .accessibilityElement(children: .combine)
             } else {
                 HStack(spacing: 10) {
                     Image(systemName: "laurel.leading")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Brand.Color.podiumGold)
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(ChampionBanner.eyebrow(count: champions.count))
-                            .font(Brand.Font.mono(size: 9, weight: .semibold))
+                            .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                             .tracking(1.2)
                             .foregroundStyle(Brand.Color.podiumGold)
                         (Text(ChampionBanner.names(champions))
                             .foregroundStyle(Brand.Color.textPrimary)
                          + Text(" · \(champions[0].points.formatted(.number)) PTS")
                             .foregroundStyle(Brand.Color.podiumGold))
-                            .font(Brand.Font.mono(size: 13, weight: .bold))
+                            .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                     }
                     Spacer()
                     Image(systemName: "laurel.trailing")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Brand.Color.podiumGold)
+                        .accessibilityHidden(true)
                 }
                 .padding(.vertical, 6)
                 .listRowBackground(Brand.Color.podiumGold.opacity(0.12))
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -281,7 +286,7 @@ struct LeaderboardScreen: View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Couldn't load leaderboard", systemImage: "wifi.slash")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Brand.Font.body.weight(.semibold))
                     .foregroundStyle(Brand.Color.alertCaution)
                 Text(msg)
                     .font(Brand.Font.caption)
@@ -290,8 +295,11 @@ struct LeaderboardScreen: View {
                     errors[selectedWindow] = nil
                     Task { await load(selectedWindow) }
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .font(Brand.Font.body.weight(.semibold))
                 .foregroundStyle(Brand.Color.cyan)
+                // Text-only button — the expanded hit shape carries the
+                // 44 pt target without growing the error card.
+                .contentShape(Rectangle().inset(by: -12))
             }
             .padding(.vertical, 6)
             .listRowBackground(Brand.Color.bgElevated)
@@ -309,7 +317,7 @@ struct LeaderboardScreen: View {
                     Text(selectedWindow == .week
                          ? "No catches this week yet"
                          : "No catches this month yet")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(Brand.Font.body.weight(.semibold))
                         .foregroundStyle(Brand.Color.textPrimary)
                     Text("The sky's wide open.")
                         .font(Brand.Font.caption)
@@ -320,7 +328,7 @@ struct LeaderboardScreen: View {
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("No handles yet")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(Brand.Font.body.weight(.semibold))
                         .foregroundStyle(Brand.Color.textPrimary)
                     Text("Be the first to claim a handle in Profile → Settings to appear here.")
                         .font(Brand.Font.caption)
@@ -357,17 +365,20 @@ struct LeaderboardScreen: View {
         return VStack(spacing: 6) {
             if let entry {
                 Text("@\(entry.handle)")
-                    .font(Brand.Font.mono(size: 10, weight: .bold))
+                    .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .lineLimit(1)
                 Text("\(entry.points.formatted(.number))")
-                    .font(Brand.Font.mono(size: 13, weight: .heavy))
+                    .font(Brand.Font.mono(size: 13, weight: .heavy, relativeTo: .footnote))
                     .foregroundStyle(tint)
                     .monospacedDigit()
             }
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: Brand.Radius.chip).fill(tint.opacity(0.18))
                     .overlay(RoundedRectangle(cornerRadius: Brand.Radius.chip).strokeBorder(tint, lineWidth: 1))
+                // The big numeral stays fixed — it's a graphic inside the
+                // fixed-height podium block, and the rank is already spoken
+                // via the combined label below.
                 Text("\(rank)")
                     .font(Brand.Font.mono(size: 28, weight: .heavy))
                     .foregroundStyle(tint)
@@ -376,6 +387,10 @@ struct LeaderboardScreen: View {
             .frame(height: height)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(entry.map {
+            "Rank \(rank), \($0.handle), \($0.points) points"
+        } ?? "Rank \(rank), empty")
     }
 
     /// Full ranked list.
@@ -396,23 +411,28 @@ struct LeaderboardScreen: View {
         let isMe = isMeEntry(entry)
         return HStack(spacing: 12) {
             Text("\(entry.rank)")
-                .font(Brand.Font.mono(size: 14, weight: .bold))
+                .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
                 .foregroundStyle(isMe ? Brand.Color.cyan : Brand.Color.textTertiary)
                 .monospacedDigit()
                 .frame(width: 30, alignment: .leading)
             Text("@\(entry.handle)")
-                .font(Brand.Font.mono(size: 14, weight: isMe ? .bold : .regular))
+                .font(Brand.Font.mono(size: 14, weight: isMe ? .bold : .regular, relativeTo: .subheadline))
                 .foregroundStyle(Brand.Color.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(entry.points.formatted(.number))")
-                    .font(Brand.Font.mono(size: 13, weight: .bold))
+                    .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                     .foregroundStyle(isMe ? Brand.Color.cyan : Brand.Color.textPrimary)
                     .monospacedDigit()
                 Text("\(entry.catches) catch\(entry.catches == 1 ? "" : "es")")
-                    .font(Brand.Font.mono(size: 10))
+                    .font(Brand.Font.mono(size: 10, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
             }
+            // The points column never yields to a long handle — the handle
+            // shrinks/truncates instead (its minimumScaleFactor above).
+            .layoutPriority(1)
             if isMe {
                 Text("YOU")
                     .font(Brand.Font.mono(size: 9, weight: .bold))
@@ -425,6 +445,14 @@ struct LeaderboardScreen: View {
         .listRowBackground(isMe
             ? Brand.Color.cyan.opacity(0.12)
             : Color.clear)
+        // One element per row; the fragments ("3", "@handle", "245"…) mean
+        // nothing read separately.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Rank \(entry.rank), \(entry.handle), \(entry.points) points, "
+            + "\(entry.catches) catch\(entry.catches == 1 ? "" : "es")"
+            + (isMe ? ", you" : "")
+        )
     }
 
     /// True when this entry is for the current user's handle.
@@ -455,18 +483,21 @@ struct LeaderboardScreen: View {
             Section {
                 HStack(spacing: 12) {
                     Text("\(meStanding.rank)")
-                        .font(Brand.Font.mono(size: 14, weight: .bold))
+                        .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
                         .foregroundStyle(Brand.Color.cyan)
                         .monospacedDigit()
                         .frame(width: 30, alignment: .leading)
                     Text(hasHandle ? "@\(localHandle)" : "(you)")
-                        .font(Brand.Font.mono(size: 14, weight: .bold))
+                        .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
                         .foregroundStyle(Brand.Color.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     Spacer()
                     Text("\(meStanding.points.formatted(.number))")
-                        .font(Brand.Font.mono(size: 13, weight: .bold))
+                        .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                         .foregroundStyle(Brand.Color.cyan)
                         .monospacedDigit()
+                        .layoutPriority(1)
                     Text("YOU")
                         .font(Brand.Font.mono(size: 9, weight: .bold))
                         .foregroundStyle(.black.opacity(0.85))
@@ -475,6 +506,11 @@ struct LeaderboardScreen: View {
                 }
                 .padding(.vertical, 2)
                 .listRowBackground(Brand.Color.cyan.opacity(0.12))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(
+                    "Your standing: rank \(meStanding.rank), "
+                    + "\(meStanding.points) points"
+                )
                 if !hasHandle {
                     Text("Claim a handle in Profile → Settings to appear in the list above.")
                         .font(Brand.Font.caption)
@@ -492,7 +528,7 @@ struct LeaderboardScreen: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if windowsSupported != true || selectedWindow == .all {
                         Text("You have \(myLocalPoints.formatted(.number)) points locally")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(Brand.Font.body.weight(.semibold))
                             .foregroundStyle(Brand.Color.textPrimary)
                     }
                     Text("Claim a handle in Profile → Settings to appear on the leaderboard.")
@@ -511,7 +547,7 @@ struct LeaderboardScreen: View {
     /// SPOTTER/ABOUT headers), replacing the default system header look.
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(Brand.Font.mono(size: 10, weight: .semibold))
+            .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
             .tracking(1.2)
             .foregroundStyle(Brand.Color.textTertiary)
             .textCase(nil)
@@ -528,6 +564,7 @@ struct LeaderboardScreen: View {
 struct LeaderboardWindowSwitcher: View {
     @Binding var selection: LeaderboardWindow
     @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
@@ -536,8 +573,9 @@ struct LeaderboardWindowSwitcher: View {
             }
         }
         // Animate ONLY the pill (the Hangar switcher lesson): the board
-        // content swaps instantly; just the selection pill slides.
-        .animation(.snappy(duration: 0.22), value: selection)
+        // content swaps instantly; just the selection pill slides. Under
+        // Reduce Motion the pill re-fills in place instead of sliding.
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: selection)
         .padding(4)
         .glassEffect(.regular, in: .capsule)
         .padding(.bottom, 4)
@@ -549,7 +587,7 @@ struct LeaderboardWindowSwitcher: View {
             selection = window
         } label: {
             Text(window.label)
-                .font(Brand.Font.mono(size: 12, weight: isSelected ? .bold : .regular))
+                .font(Brand.Font.mono(size: 12, weight: isSelected ? .bold : .regular, relativeTo: .caption))
                 .tracking(0.8)
                 .foregroundStyle(isSelected ? Brand.Color.bgPrimary : Brand.Color.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 40)
@@ -560,7 +598,9 @@ struct LeaderboardWindowSwitcher: View {
                             .matchedGeometryEffect(id: "lbWindowPill", in: pill)
                     }
                 }
-                .contentShape(.capsule)   // full-segment hit area
+                // Full-segment hit area; the 2 pt inset tops the visible
+                // 40 pt segment up to the 44 pt HIG target.
+                .contentShape(Rectangle().inset(by: -2))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

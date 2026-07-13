@@ -43,6 +43,10 @@ struct RarityBadge: View {
                 .strokeBorder(rarity.tint, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 4))
+        // The legendary "★" would read as "star" — the tier name is the
+        // whole meaning, so speak exactly that.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(rarity.label.capitalized))
     }
 }
 
@@ -60,6 +64,9 @@ struct TypeBadge: View {
                 .foregroundStyle(.white.opacity(0.95))
                 .frame(width: m.glyphSize, height: m.glyphSize)
                 .background(.black.opacity(0.22), in: .circle)
+                // The circled single letter duplicates the label ("W" then
+                // "WIDE") — decoration to VoiceOver.
+                .accessibilityHidden(true)
             Text(type.label)
                 .font(.system(size: m.fontSize, weight: .bold))
                 .tracking(0.4)

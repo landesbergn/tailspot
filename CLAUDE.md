@@ -204,8 +204,12 @@ source + each one's focused test file — they're not restated here.
   to **`Brand.Radius`** (chip 6 / row 12 / card 16 / hero 26; computed radii,
   per-size dims tables, tiny 3–4 pt badge accents, and the AR HUD brackets stay
   literal). Type rule: **mono = readouts/data/labels; system = human prose; prose
-  heads use exactly `Brand.Font.display`** — don't freelance `.system(size: 24…30)`
-  heads. Chrome rule: custom chrome for game surfaces (Hangar/cards/reveals),
+  heads use exactly `.brandDisplayFont()`** (the 26 pt head became a ViewModifier
+  in the 2026-07-12 HIG pass so it scales via `@ScaledMetric`) — don't freelance
+  `.system(size: 24…30)` heads. **Dynamic Type:** Brand system tokens ride the
+  built-in text styles and `Brand.Font.mono(…, relativeTo:)` anchors mono in
+  scrollable surfaces; AR HUD readouts + card artboards stay fixed BY CHOICE —
+  don't "fix" them, and don't add a bare `.system(size:)` to a prose surface. Chrome rule: custom chrome for game surfaces (Hangar/cards/reveals),
   stock-but-branded system nav for utility screens (Settings/Map/Leaderboard).
 - **Logging through `Log.swift`, never `print(...)`.** `os.Logger` instances by
   category (`adsb`, `location`, `motion`, `ui`, `analytics`, `metrics`); subsystem

@@ -98,6 +98,12 @@ struct SettledCatchCard: View {
                                 indexOffset: fl.id, totalCount: totalFlapChars, color: RP.ink)
                     }
                 }
+                // The wrapped flap lines read as one name (FlapRow flattens
+                // its own cells, but each line is still a separate fragment
+                // — and this hero is the persistent Hangar detail view, hit
+                // on every visit, not a one-shot reveal).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(plane.model ?? "Unknown aircraft"))
 
                 HStack(spacing: 7 * scale) {
                     Circle().fill(accent).frame(width: 6 * scale, height: 6 * scale)
@@ -140,6 +146,10 @@ struct SettledCatchCard: View {
             }
             .padding(.horizontal, hPad)
             .padding(.bottom, 22 * scale)
+            // Everything below the hero reads as one card (name, tier,
+            // stats, route, ledger). The hero stays OUTSIDE the combine so
+            // its Planespotters link remains an actionable element.
+            .accessibilityElement(children: .combine)
         }
         .background(RP.bg)
         .frame(width: width)

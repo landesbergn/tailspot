@@ -121,6 +121,11 @@ struct ProfileScreen: View {
                             .foregroundStyle(Brand.Color.bgPrimary)
                             .padding(7)
                             .background(Brand.Color.cyan, in: .circle)
+                            // The disc renders ~27 pt; the transparent frame
+                            // carries the 44 pt HIG hit target so the visual
+                            // stays a slim accent.
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .accessibilityLabel("Share profile")
                     // ShareLink exposes no tap callback; a simultaneous
@@ -231,15 +236,18 @@ struct ProfileScreen: View {
                         Image(systemName: "person")
                             .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(Brand.Color.textTertiary)
+                            .accessibilityHidden(true)
                     }
                 }
                 .frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 2) {
                     if isHandleClaimed {
                         Text("@\(handle)")
-                            .font(Brand.Font.mono(size: 20, weight: .bold))
+                            .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
                             .tracking(0.4)
                             .foregroundStyle(Brand.Color.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         if let joined = joinedDateLabel {
                             Text(joined)
                                 .font(Brand.Font.caption)
@@ -258,13 +266,18 @@ struct ProfileScreen: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Text("CLAIM YOUR HANDLE")
-                                    .font(Brand.Font.mono(size: 13, weight: .bold))
+                                    .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                                     .tracking(1.2)
                                     .foregroundStyle(Brand.Color.cyan)
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(Brand.Color.cyan.opacity(0.7))
+                                    .accessibilityHidden(true)
                             }
+                            // The row is ~16 pt tall; growing it to 44 would
+                            // shift the whole identity header, so the HIG hit
+                            // target comes from an expanded hit shape instead.
+                            .contentShape(Rectangle().inset(by: -14))
                         }
                         .buttonStyle(.plain)
                         Text("shown on the global leaderboard")
@@ -277,27 +290,33 @@ struct ProfileScreen: View {
             HStack(spacing: 16) {
                 VStack(spacing: 2) {
                     Text(displayPoints.formatted(.number))
-                        .font(Brand.Font.mono(size: 32, weight: .heavy))
+                        .font(Brand.Font.mono(size: 32, weight: .heavy, relativeTo: .title2))
                         .foregroundStyle(Brand.Color.cyan)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                     Text("TOTAL POINTS")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
+                .accessibilityElement(children: .combine)
                 Rectangle()
                     .fill(Brand.Color.bgPrimary.opacity(0.55))
                     .frame(width: 1, height: 40)
                 VStack(spacing: 2) {
                     Text(rankLabel)
-                        .font(Brand.Font.mono(size: 32, weight: .heavy))
+                        .font(Brand.Font.mono(size: 32, weight: .heavy, relativeTo: .title2))
                         .foregroundStyle(Brand.Color.textPrimary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                     Text("GLOBAL RANK")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
+                        .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
         .frame(maxWidth: .infinity)
@@ -318,15 +337,17 @@ struct ProfileScreen: View {
             Image(systemName: "laurel.leading")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.podiumGold)
+                .accessibilityHidden(true)
             Text(cachedWeeklyWins > 1
                  ? "WEEKLY CHAMPION ×\(cachedWeeklyWins)"
                  : "WEEKLY CHAMPION")
-                .font(Brand.Font.mono(size: 11, weight: .bold))
+                .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.podiumGold)
             Image(systemName: "laurel.trailing")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.podiumGold)
+                .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
@@ -379,15 +400,18 @@ struct ProfileScreen: View {
     private func statCell(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
         VStack(spacing: 3) {
             Text("\(value)")
-                .font(Brand.Font.mono(size: 20, weight: .bold))
+                .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
                 .foregroundStyle(valueColor)
                 .monospacedDigit()
             Text(label.uppercased())
-                .font(Brand.Font.mono(size: 9, weight: .semibold))
+                .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
         }
         .frame(maxWidth: .infinity)
+        // One VoiceOver element per cell ("12, CATCHES"), not value and
+        // label as disconnected fragments.
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Best catch
@@ -431,7 +455,7 @@ struct ProfileScreen: View {
                     .frame(width: 4, height: 36)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("BEST CATCH")
-                        .font(Brand.Font.mono(size: 8, weight: .semibold))
+                        .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                     Text(best.name)
@@ -439,7 +463,7 @@ struct ProfileScreen: View {
                         .foregroundStyle(Brand.Color.textPrimary)
                         .lineLimit(1)
                     Text(best.rarity.label)
-                        .font(Brand.Font.mono(size: 9, weight: .bold))
+                        .font(Brand.Font.mono(size: 9, weight: .bold, relativeTo: .caption2))
                         .tracking(0.8)
                         .foregroundStyle(best.rarity.tint)
                 }
@@ -447,6 +471,7 @@ struct ProfileScreen: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -474,8 +499,9 @@ struct ProfileScreen: View {
                 Image(systemName: glyph)
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Brand.Color.cyan)
+                    .accessibilityHidden(true)
                 Text(label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(Brand.Font.caption.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
             }
             .frame(maxWidth: .infinity)
@@ -512,6 +538,7 @@ struct ProfileScreen: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Brand.Color.cyan)
                     .frame(width: 22)
+                    .accessibilityHidden(true)
                 Text(label)
                     .font(Brand.Font.body)
                     .foregroundStyle(Brand.Color.textPrimary)
@@ -519,6 +546,7 @@ struct ProfileScreen: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)

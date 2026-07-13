@@ -98,10 +98,30 @@ nonisolated enum Brand {
     //   mono   = readouts, data, and ALL-CAPS labels (anything a pilot
     //            would expect fixed-pitch: callsigns, headings, counts)
     //   system = human prose (titles, body copy, buttons)
-    //   Prose heads use exactly ONE display size: `Brand.Font.display`.
+    //   Prose heads use exactly ONE display treatment: `.brandDisplayFont()`.
     //   Don't freelance `.system(size: 24…30, weight: .bold)` heads.
+    //
+    // Dynamic Type rule (2026-07-12 HIG pass): tokens that render prose or
+    // reflowable list content scale with the user's text-size setting —
+    // the system tokens map onto built-in text styles whose default sizes
+    // exactly match the old fixed sizes (so nothing moves at the default
+    // setting), and `mono` takes an optional `relativeTo:` anchor for data
+    // that lives in scrollable screens. Two surfaces stay fixed BY CHOICE,
+    // not omission: the AR HUD readouts (`hudCallsign`/`hudData` — density
+    // over the camera is the point) and the card artboards whose type
+    // scales off canvas width (the reveal/settled cards, CatchShareCard).
 
     nonisolated enum Font {
+        /// Mirror of `UIAccessibility.isBoldTextEnabled`, set at launch and
+        /// on the bold-text change notification (see `TailspotApp.init`).
+        /// Cached because the UIKit getter is MainActor-only and font
+        /// tokens are built from nonisolated contexts; a stale read is a
+        /// Bool-sized cosmetic race, refreshed on the next body evaluation.
+        /// The system-text-style tokens below don't need it (built-in
+        /// styles track Bold Text on their own) — it exists for B612 Mono,
+        /// which is a custom font and gets no automatic adaptation.
+        nonisolated(unsafe) static var boldTextPreferred = false
+
         /// Aviation-flavored monospace. B612 Mono is Airbus's cockpit
         /// display font (SIL OFL 1.1, bundled via UIAppFonts in Info.plist).
         /// Used for callsigns, ICAO codes, headings, badge labels, and the
@@ -111,16 +131,26 @@ nonisolated enum Brand {
         /// weight requests map down: regular/medium/light → Regular face;
         /// semibold/bold/heavy/black → Bold face. Italic is bundled but
         /// callers must select it explicitly via `mono(size:weight:italic:)`.
+        /// When the user turns on Bold Text, every request maps to the Bold
+        /// face — the whole of our mono bold-text adaptation (there is no
+        /// heavier face to step up to).
+        ///
+        /// `relativeTo:` opts a call site into Dynamic Type scaling; nil
+        /// (the default) keeps the fixed cockpit-instrument size. Rule of
+        /// thumb: mono in a ScrollView/List passes an anchor, mono over
+        /// the camera or on a fixed card canvas doesn't.
         static func mono(size: CGFloat,
                          weight: SwiftUI.Font.Weight = .regular,
-                         italic: Bool = false) -> SwiftUI.Font {
-            let isBold: Bool
+                         italic: Bool = false,
+                         relativeTo textStyle: SwiftUI.Font.TextStyle? = nil) -> SwiftUI.Font {
+            var isBold: Bool
             switch weight {
             case .ultraLight, .thin, .light, .regular, .medium:
                 isBold = false
             default:
                 isBold = true
             }
+            if boldTextPreferred { isBold = true }
             let name: String
             switch (isBold, italic) {
             case (false, false): name = "B612Mono-Regular"
@@ -128,25 +158,59 @@ nonisolated enum Brand {
             case (false, true):  name = "B612Mono-Italic"
             case (true,  true):  name = "B612Mono-BoldItalic"
             }
+            if let textStyle {
+                return .custom(name, size: size, relativeTo: textStyle)
+            }
             return .custom(name, size: size)
         }
 
-        static let wordmark    = mono(size: 24, weight: .bold)
-        static let hudCallsign = mono(size: 13, weight: .bold)
-        static let hudData     = mono(size: 10, weight: .regular)
+        // Computed (not `static let`) so a Bold Text toggle mid-session is
+        // picked up the next time a view body evaluates.
+        static var wordmark:    SwiftUI.Font { mono(size: 24, weight: .bold) }
+        static var hudCallsign: SwiftUI.Font { mono(size: 13, weight: .bold) }
+        static var hudData:     SwiftUI.Font { mono(size: 10, weight: .regular) }
 
-        /// The single prose-head size (see the type rule above). 26 pt
-        /// bold system — chosen against the pre-token heads (24/26/28/30):
-        /// big enough to lead a screen, small enough that the tightest
-        /// layouts (SE-height onboarding, the 320 pt PermissionRecoveryCard)
-        /// keep their line counts.
-        static let display = SwiftUI.Font.system(size: 26, weight: .bold)
+        // System prose tokens, mapped onto the built-in text styles whose
+        // default (Large) metrics are IDENTICAL to the old fixed sizes —
+        // 17/semibold=headline, 13=footnote, 11=caption2, 15=subheadline,
+        // 12=caption — which buys Dynamic Type scaling AND automatic Bold
+        // Text adaptation with zero visual change at default settings.
+        // (`display`, the old 26 pt head, matches no built-in style; it
+        // became the `.brandDisplayFont()` view modifier below.)
+        static var cardTitle:    SwiftUI.Font { .headline }
+        static var cardSubtitle: SwiftUI.Font { .footnote }
+        static var label:        SwiftUI.Font { SwiftUI.Font.caption2.weight(.semibold) }
+        static var body:         SwiftUI.Font { .subheadline }
+        static var caption:      SwiftUI.Font { .caption }
+    }
+}
 
-        static let cardTitle    = SwiftUI.Font.system(size: 17, weight: .semibold, design: .default)
-        static let cardSubtitle = SwiftUI.Font.system(size: 13, weight: .regular,  design: .default)
-        static let label        = SwiftUI.Font.system(size: 11, weight: .semibold, design: .default)
-        static let body         = SwiftUI.Font.system(size: 15, weight: .regular,  design: .default)
-        static let caption      = SwiftUI.Font.system(size: 12, weight: .regular,  design: .default)
+/// The single prose-head treatment (see the type rule above). 26 pt bold
+/// system — chosen against the pre-token heads (24/26/28/30): big enough
+/// to lead a screen, small enough that the tightest layouts (SE-height
+/// onboarding, the 320 pt PermissionRecoveryCard) keep their line counts.
+///
+/// A ViewModifier rather than a `Font` constant because 26 pt matches no
+/// built-in text style and `Font.system(size:weight:)` has no `relativeTo:`
+/// overload — `@ScaledMetric(relativeTo: .title)` is SwiftUI's way to
+/// scale a custom-size system font with Dynamic Type. Reads
+/// `legibilityWeight` for Bold Text (custom-size system fonts don't adapt
+/// on their own).
+struct BrandDisplayFontModifier: ViewModifier {
+    @ScaledMetric(relativeTo: .title) private var size: CGFloat = 26
+    @Environment(\.legibilityWeight) private var legibilityWeight
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size,
+                             weight: legibilityWeight == .bold ? .heavy : .bold))
+    }
+}
+
+extension View {
+    /// Prose-head font: the one sanctioned display size (was
+    /// `Brand.Font.display`). Scales with Dynamic Type, anchored to `.title`.
+    func brandDisplayFont() -> some View {
+        modifier(BrandDisplayFontModifier())
     }
 }
 

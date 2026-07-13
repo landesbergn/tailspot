@@ -141,6 +141,24 @@ struct HangarView: View {
                     .background(Brand.Color.cyan.opacity(0.16), in: .capsule)
                     .fixedSize()
             }
+            // Visible dismiss for the sheet (HIG: sheets need an explicit
+            // way out — swipe-down alone is undiscoverable). Quiet chrome
+            // so it doesn't fight the wordmark; the empty state instead
+            // dismisses via its "Open AR view" CTA.
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .frame(width: 30, height: 30)
+                    .background(Brand.Color.bgElevated, in: .circle)
+                    // 44pt minimum hit target (HIG): the disc stays 30pt
+                    // visually, the tappable region grows past every edge.
+                    .contentShape(Rectangle().inset(by: -7))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close hangar")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -210,8 +228,9 @@ struct HangarView: View {
                     .foregroundStyle(Brand.Color.cyan)
             }
             .frame(width: 64, height: 64)
+            .accessibilityHidden(true)
             Text("Go outside.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Tailspot needs a clear view of the sky. Point your phone up, aim at a plane, then tap to catch it.")
                 .font(Brand.Font.body)
@@ -222,7 +241,9 @@ struct HangarView: View {
                 dismiss()
             } label: {
                 Text("Open AR view")
-                    .font(.system(size: 15, weight: .bold))
+                    // .subheadline == 15 pt at the default setting, but
+                    // scales with Dynamic Type (a bare size: 15 doesn't).
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(Brand.Color.bgPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -239,7 +260,7 @@ struct HangarView: View {
         }
         return VStack(alignment: .leading, spacing: 10) {
             Text("SETS TO COLLECT")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
             VStack(spacing: 8) {
@@ -259,6 +280,7 @@ struct HangarView: View {
                     .foregroundStyle(set.type.tint)
             }
             .frame(width: 30, height: 36)
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(set.title)
                     .font(.system(size: 14, weight: .semibold))
@@ -270,12 +292,16 @@ struct HangarView: View {
             }
             Spacer(minLength: 4)
             Text("0 / \(set.entries.count)")
-                .font(Brand.Font.mono(size: 12, weight: .bold))
+                .font(Brand.Font.mono(size: 12, weight: .bold, relativeTo: .caption))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .monospacedDigit()
         }
         .padding(12)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
+        // One coherent VoiceOver element per row — otherwise the glyph
+        // character and the split "0 / N" read as disconnected fragments.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(set.title), 0 of \(set.entries.count) caught")
     }
 }
 

@@ -172,6 +172,9 @@ struct TrophyRecapView: View {
                     .padding(.horizontal, 26)
                     .padding(.vertical, 12)
                     .background(Capsule().fill(RP.gold))
+                    // The gold capsule renders ~37 pt tall; the expanded hit
+                    // shape tops it up to the 44 pt target.
+                    .contentShape(Rectangle().inset(by: -4))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Continue")
