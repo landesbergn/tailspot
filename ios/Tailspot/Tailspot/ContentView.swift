@@ -215,6 +215,11 @@ struct ContentView: View {
     /// The timestamp guards the auto-clear against clearing a newer toast
     /// (same pattern as `emptyRipple`).
     @State private var groundedToastAt: Date? = nil
+    /// Beyond-eyeshot hint: (shown-at, distance) of the last "filtered-far"
+    /// tap — the nearest in-data plane was too far to plausibly see, so the
+    /// tap reveals nothing and this toast says why. Same lifecycle as
+    /// `groundedToastAt`.
+    @State private var farTapToast: (at: Date, slantMeters: Double)? = nil
 
     var body: some View {
         ZStack {
@@ -273,17 +278,15 @@ struct ContentView: View {
                     TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
                         let now = context.date
                         // Interactive-visible set: the ambient visibility tier
-                        // PLUS any tap-revealed plane (see `revealedIcao`). The
+                        // (suppressed while `pointedIndoors`) PLUS any
+                        // tap-revealed plane — see `interactiveVisible`. The
                         // revealed plane rides the existing pinned-plane path —
                         // labeled, lockable, catchable — without loosening the
                         // ambient filter for everyone else. GROUNDED planes are
                         // excluded even from the reveal clause: a parked plane
                         // must never label, lock, or catch (the tap path never
                         // reveals one — this guard is belt-and-suspenders).
-                        let visible = adsb.observed.filter {
-                            $0.isLikelyVisibleToObserver
-                                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
-                        }
+                        let visible = interactiveVisible(adsb.observed)
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
                         // Camera roll from the gravity vector (robust at the
@@ -677,9 +680,7 @@ struct ContentView: View {
         // of an icao24 fires a single OpenSky request and every later
         // observation is a free in-memory hit.
         .task(id: visibleIcaoSignature) {
-            let icaos = adsb.observed
-                .filter { $0.isLikelyVisibleToObserver
-                    || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
+            let icaos = interactiveVisible(adsb.observed)
                 .map(\.aircraft.icao24)
             // Prune session-stale entries. `ambientMetadata` is a view-
             // local mirror of the bounded MetadataCache actor; without
@@ -719,6 +720,7 @@ struct ContentView: View {
         // hint; the two can't realistically co-fire (one needs a not-sky
         // frame, the other a tap that reached an in-data plane).
         .overlay(alignment: .top) { groundedToastBanner }
+        .overlay(alignment: .top) { farTapToastBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -840,7 +842,10 @@ struct ContentView: View {
         // Activation funnel: the first time any plane label is actually
         // visible (post-filter), the user has something to catch. ~1 Hz
         // re-annotation cadence; once-per-install latch inside the fire.
+        // Skipped while pointedIndoors — no label rendered means the user
+        // did NOT see a plane, and this latch fires once per install.
         .onReceive(adsb.$observed) { observed in
+            guard !pointedIndoors else { return }
             let visible = observed.filter(\.isLikelyVisibleToObserver)
             guard !visible.isEmpty else { return }
             ActivationTelemetry.fireFirstPlaneSeenOnce(visibleCount: visible.count)
@@ -880,15 +885,34 @@ struct ContentView: View {
         )
     }
 
+    /// The interactive-visible set: the ambient visibility tier PLUS any
+    /// tap-revealed plane. One definition for the label render loop, the
+    /// metadata prefetch, and its signature — they must agree or labels
+    /// render without their metadata.
+    ///
+    /// The ambient tier is suppressed entirely while `pointedIndoors`
+    /// (2026-07-12, NYC couch session): the geometric band can't know about
+    /// walls, and dense airspace (Manhattan: river-corridor GA at 2–3 km,
+    /// LGA finals at 8 km) keeps planes inside the band that are plainly
+    /// invisible from indoors. When the whole frame reads not-sky for the
+    /// sustained streak, no ambient label renders; the tap-revealed plane
+    /// survives (explicit intent — and dropping it would fight the lock).
+    /// Same 5 s-debounced signal as the "Not many planes indoors." hint, so
+    /// the labels disappear exactly when that hint explains why.
+    private func interactiveVisible(_ observed: [ObservedAircraft]) -> [ObservedAircraft] {
+        observed.filter {
+            ($0.isLikelyVisibleToObserver && !pointedIndoors)
+                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
+        }
+    }
+
     /// Content-keyed signature of the currently-visible icao24 set,
     /// used as the id on the ambient-metadata prefetch task. Sorting
     /// + joining ensures the value is stable across observed-array
     /// re-orderings (which happen on every fetch) so the task only
     /// re-runs when membership actually changes.
     private var visibleIcaoSignature: String {
-        adsb.observed
-            .filter { $0.isLikelyVisibleToObserver
-                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
+        interactiveVisible(adsb.observed)
             .map(\.aircraft.icao24)
             .sorted()
             .joined(separator: ",")
@@ -984,6 +1008,39 @@ struct ContentView: View {
                 .padding(.top, 60)
                 .padding(.horizontal, 24)
                 .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Transient beyond-eyeshot toast: shown when an empty-sky tap's nearest
+    /// in-data plane is past plausible reveal reach ("filtered-far"). Honest
+    /// about WHY nothing revealed — in dense airspace there is almost always
+    /// *something* in the data, and silently ignoring the tap reads as broken.
+    /// Same look/lifecycle as `groundedToastBanner`.
+    @ViewBuilder
+    private var farTapToastBanner: some View {
+        if let toast = farTapToast {
+            Text("Nearest plane is \(Int((toast.slantMeters / 1000).rounded())) km out — beyond eyeshot")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+                .padding(.top, 60)
+                .padding(.horizontal, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Present the beyond-eyeshot toast for ~3 s.
+    private func presentFarTapToast(slantMeters: Double) {
+        let now = Date()
+        withAnimation(.easeInOut(duration: 0.2)) { farTapToast = (now, slantMeters) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if farTapToast?.at == now {
+                withAnimation(.easeInOut(duration: 0.3)) { farTapToast = nil }
+            }
         }
     }
 
@@ -2799,6 +2856,14 @@ struct ContentView: View {
             presentGroundedTapToast(icao24: d.obs.aircraft.icao24)
             return
         }
+        // FILTERED-FAR (2026-07-12): airborne and hidden, but past plausible
+        // reveal reach (or below the horizon) — the NYC couch case, where 110
+        // in-data planes meant every tap "found" something 27–76 km away.
+        // No reveal, no lock: an honest toast with the distance instead.
+        if let d = diagnosis, d.reason == "filtered-far" {
+            presentFarTapToast(slantMeters: d.obs.slantDistanceMeters)
+            return
+        }
         if let d = diagnosis, shouldTapReveal(reason: d.reason) {
             let icao = d.obs.aircraft.icao24
             revealedIcao = icao
@@ -2868,7 +2933,8 @@ struct ContentView: View {
                 offsetDeg: b.offsetDeg,
                 grounded: b.obs.grounded,
                 tier: b.obs.visibilityTier,
-                onScreen: b.onScreen
+                onScreen: b.onScreen,
+                plausiblyRevealable: b.obs.isPlausiblyRevealable
             )
         } else {
             reason = "nothing-nearby"
@@ -2933,8 +2999,15 @@ let emptySkyTapMaxOffsetDeg: Double = 40
 ///   - "grounded"       → parked plane under the tap: playful toast, never
 ///                         a reveal (checked BEFORE the tier — a grounded
 ///                         plane is also `.hidden`, and reveal must lose).
-///   - "filtered"        → airborne but hidden by the precision band:
-///                         tap-to-reveal (the FDX1268 affordance).
+///   - "filtered"        → airborne, hidden by the precision band, but within
+///                         plausible reveal reach: tap-to-reveal (the FDX1268
+///                         affordance).
+///   - "filtered-far"    → airborne and hidden, but beyond
+///                         `revealReachMeters` (or below the horizon) — not
+///                         plausibly visible from here, so the tap gets the
+///                         beyond-eyeshot hint instead of a reveal (the NYC
+///                         couch session, 2026-07-12: 110 planes in data,
+///                         nearest-tap planes 27–76 km out).
 ///   - "off-frame"       → visible tier but projected outside the screen.
 ///   - "on-screen"       → visible and on screen (tap just missed it).
 ///   - "nothing-nearby"  → nearest plane is too far off the tap direction.
@@ -2947,11 +3020,12 @@ func classifyEmptySkyTapNearest(
     offsetDeg: Double,
     grounded: Bool,
     tier: ObservedAircraft.VisibilityTier,
-    onScreen: Bool
+    onScreen: Bool,
+    plausiblyRevealable: Bool
 ) -> String {
     guard offsetDeg <= emptySkyTapMaxOffsetDeg else { return "nothing-nearby" }
     if grounded { return "grounded" }
-    if tier == .hidden { return "filtered" }
+    if tier == .hidden { return plausiblyRevealable ? "filtered" : "filtered-far" }
     if !onScreen { return "off-frame" }
     return "on-screen"
 }
@@ -2965,8 +3039,11 @@ func classifyEmptySkyTapNearest(
 ///                   because a compass/heading error (or high zoom) rotated the
 ///                   sky-model off where the plane visually sits (DAL972,
 ///                   2026-07-11). The user is pointed at it; the tap grabs it.
-/// "grounded" is handled earlier (a parked plane is never revealed); "on-screen"
-/// and "nothing-nearby" fall through to the empty-tap ripple.
+/// "grounded" is handled earlier (a parked plane is never revealed);
+/// "filtered-far" gets the beyond-eyeshot hint (a hidden plane past plausible
+/// reveal reach must NOT become catchable — the NYC couch session caught a
+/// Piper 75.8 km away through a wall); "on-screen" and "nothing-nearby" fall
+/// through to the empty-tap ripple.
 func shouldTapReveal(reason: String) -> Bool {
     reason == "filtered" || reason == "off-frame"
 }

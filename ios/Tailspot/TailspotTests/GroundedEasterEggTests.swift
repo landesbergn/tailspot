@@ -150,33 +150,39 @@ struct GroundedEasterEggTests {
         // A grounded plane is ALSO tier-hidden; "grounded" must win over
         // "filtered" or the tap-reveal path would surface a parked plane.
         let reason = classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: true, tier: .hidden, onScreen: false
+            offsetDeg: 10, grounded: true, tier: .hidden, onScreen: false,
+            plausiblyRevealable: false
         )
         #expect(reason == "grounded")
     }
 
     @Test func classifierKeepsTapRevealForAirborneFilteredPlanes() {
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .hidden, onScreen: false
+            offsetDeg: 10, grounded: false, tier: .hidden, onScreen: false,
+            plausiblyRevealable: true
         ) == "filtered")
     }
 
     @Test func classifierIgnoresGroundedPlaneOutsideTapRadius() {
         #expect(classifyEmptySkyTapNearest(
             offsetDeg: emptySkyTapMaxOffsetDeg + 1,
-            grounded: true, tier: .hidden, onScreen: false
+            grounded: true, tier: .hidden, onScreen: false,
+            plausiblyRevealable: false
         ) == "nothing-nearby")
     }
 
     @Test func classifierPreservesLegacyReasons() {
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .full, onScreen: false
+            offsetDeg: 10, grounded: false, tier: .full, onScreen: false,
+            plausiblyRevealable: true
         ) == "off-frame")
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .full, onScreen: true
+            offsetDeg: 10, grounded: false, tier: .full, onScreen: true,
+            plausiblyRevealable: true
         ) == "on-screen")
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 41, grounded: false, tier: .full, onScreen: true
+            offsetDeg: 41, grounded: false, tier: .full, onScreen: true,
+            plausiblyRevealable: true
         ) == "nothing-nearby")
     }
 
