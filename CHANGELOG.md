@@ -5,6 +5,33 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-13 — Lone plane stays catchable (Portland field report) — branch `fix/lone-plane-catchable`
+
+A tester in Portland ME hit a dead CAPTURE button: a plane plainly in frame,
+its reticle drawn but dull/passive, yet the shutter wouldn't fire. Root cause
+was not the tester's guess (2D-vs-3D tracking loss / angular rate) — it's that
+the reticle only goes "active/bright" for the tap-**pinned** lock target (no
+auto-acquire), and the CAPTURE button, when nothing is pinned, only enables for
+planes inside the tight **100 pt central catch zone** (the L1 "aim, don't spray"
+anti-cheat). A visible plane that's off-centre and never tapped therefore falls
+to `.disabled` — the exact symptom.
+
+Fix: the anti-cheat exists to stop *dense-airspace spray* — catching a fistful
+by tapping a crowded sky. With exactly **one** visible plane in the whole frame
+there's nothing to disambiguate and no fistful to grab, so it now stays
+catchable even off-centre / moving fast / untapped. Two+ planes on frame still
+require aim or a tap, so the spray hole stays shut. This also **restores spec
+§3.2's documented "lone visible plane → single" case**, which the central-zone
+change had silently dropped.
+
+The per-frame `CaptureMode` derivation moved out of the `ContentView` body into
+a pure, static `CaptureMode.resolve(pinnedOnScreen:catchable:onScreen:)`
+(precedence: tap-pin → central zone → lone-frame fallback → disabled), now
+covered by `CaptureModeTests` (8 cases, incl. the dense-sky no-spray guard).
+Extracting it also trims the body's type-check load. Tests green
+(CaptureMode/CatchZone/LockOnEngine/ClosestTarget). No visual/layout change —
+only the button's enabled state for a lone off-centre plane.
+
 ## 2026-07-12 — Pre-v1 cleanup round: dead code, stale docs, repo organization — branches `chore/v1-backend-cleanup` · `chore/v1-ios-cleanup` · `chore/v1-docs-cleanup`
 
 A three-PR housekeeping sweep ahead of the v1 launch, driven by a full-repo

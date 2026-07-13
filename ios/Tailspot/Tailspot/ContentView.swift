@@ -514,22 +514,13 @@ struct ContentView: View {
                                 zoneRadius: Self.catchZoneRadius
                             )
                             let pinForCapture = lockOn.state.targetIcao24
-                            let mode: CaptureMode = {
-                                // An explicit tap-pin is a deliberate choice — it
-                                // stays catchable while on screen even if the user
-                                // has drifted slightly off it.
-                                if let pin = pinForCapture,
-                                   onScreenIcaos.contains(pin) {
-                                    return .single(pin)
-                                }
-                                if catchableIcaos.isEmpty {
-                                    return .disabled
-                                }
-                                if catchableIcaos.count == 1 {
-                                    return .single(catchableIcaos[0])
-                                }
-                                return .multi(catchableIcaos)
-                            }()
+                            let mode = CaptureMode.resolve(
+                                pinnedOnScreen: pinForCapture.flatMap {
+                                    onScreenIcaos.contains($0) ? $0 : nil
+                                },
+                                catchable: catchableIcaos,
+                                onScreen: onScreenIcaos
+                            )
                             VStack {
                                 Spacer()
                                 captureBar(
@@ -1122,13 +1113,15 @@ struct ContentView: View {
     /// from the visible aircraft set + tap-pin so the button stays
     /// in sync without any extra plumbing.
     ///
-    /// Spec § 3.2:
-    /// - `.disabled` when no aircraft are visible (button faded).
-    /// - `.single(icao)` for either (a) an explicitly tap-pinned plane
-    ///   that is still visible, or (b) the lone visible plane.
-    /// - `.multi(icaos)` when ≥2 planes are visible and no pin is set;
-    ///   the unified button shows a magenta `×N` corner badge.
-    private enum CaptureMode {
+    /// Spec § 3.2, with the anti-cheat L1 central zone layered on
+    /// (resolution rules live in `resolve` below):
+    /// - `.single(icao)` for (a) a tap-pinned plane still on frame, (b) a
+    ///   single plane inside the tight central catch zone, or (c) the lone
+    ///   visible plane in the whole frame when the central zone is empty.
+    /// - `.multi(icaos)` when ≥2 planes sit in the central catch zone and
+    ///   no pin is set; the unified button shows a magenta `×N` corner badge.
+    /// - `.disabled` only when the frame has no catchable plane at all.
+    enum CaptureMode: Equatable {
         case disabled
         case single(String)        // icao24
         case multi([String])       // icao24 list
@@ -1140,6 +1133,41 @@ struct ContentView: View {
             case .single(let i):   return [i]
             case .multi(let list): return list
             }
+        }
+
+        /// Pure resolver for the capture button — side-effect-free and
+        /// static so the catch-eligibility rules are unit-testable (the view
+        /// body just feeds it the current frame's projections).
+        ///
+        /// Precedence:
+        ///  1. An explicit tap-pin still on screen → `.single`. A deliberate
+        ///     choice stays catchable anywhere on frame, even drifted off.
+        ///  2. The TIGHT central catch zone (anti-cheat L1 — "aim, don't
+        ///     spray"): one → `.single`, several → `.multi`.
+        ///  3. Central zone empty but exactly ONE plane in the whole frame →
+        ///     `.single`. Nothing to disambiguate and no fistful to spray, so
+        ///     a lone plane that's plainly in frame stays catchable even when
+        ///     it's off-centre / moving fast and was never tapped (restores
+        ///     spec § 3.2's "lone visible plane" case that the central zone
+        ///     had dropped — the Portland field report: reticle passive,
+        ///     plane right there, shutter dead). Two+ on frame still require
+        ///     aim or a tap, so the dense-airspace spray exploit stays closed.
+        ///
+        /// - Parameters:
+        ///   - pinnedOnScreen: the tap-pinned icao IF it still projects on
+        ///     frame; nil otherwise.
+        ///   - catchable: icaos inside the central catch zone, nearest-first.
+        ///   - onScreen: every visible icao projecting anywhere on frame.
+        static func resolve(
+            pinnedOnScreen: String?,
+            catchable: [String],
+            onScreen: [String]
+        ) -> CaptureMode {
+            if let pin = pinnedOnScreen { return .single(pin) }
+            if catchable.count == 1 { return .single(catchable[0]) }
+            if catchable.count >= 2 { return .multi(catchable) }
+            if onScreen.count == 1 { return .single(onScreen[0]) }
+            return .disabled
         }
     }
 
