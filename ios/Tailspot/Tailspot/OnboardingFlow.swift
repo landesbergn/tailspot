@@ -243,7 +243,7 @@ struct OnboardingFlow: View {
             lockup
             stepLabel("STEP 1 / 4")
             Text("Spot every plane overhead.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.leading)
             Text("Point your phone at the sky. Tailspot uses live ADS-B data to identify the aircraft you're looking at, then lets you catch it to your Hangar.")
@@ -282,7 +282,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 18) {
             stepLabel("STEP 2 / 4 · PERMISSIONS")
             Text("Three things we need to read the sky.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             VStack(spacing: 10) {
                 permissionRow(glyph: "location.fill",  title: "Location, while in use",
@@ -306,18 +306,22 @@ struct OnboardingFlow: View {
                 .foregroundStyle(Brand.Color.cyan)
                 .frame(width: 28, height: 28)
                 .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: Brand.Radius.chip))
+                // The title restates the glyph; keep VoiceOver from
+                // reading the raw SF Symbol name.
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(body)
-                    .font(.system(size: 12))
+                    .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
             }
             Spacer(minLength: 0)
         }
         .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Step 3: Handle
@@ -326,7 +330,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 16) {
             stepLabel("STEP 3 / 4 · PUBLIC HANDLE")
             Text("Pick a handle.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("Shown on the global leaderboard. Real name stays private.")
                 .font(Brand.Font.body)
@@ -342,11 +346,13 @@ struct OnboardingFlow: View {
                     Text("@")
                         .font(Brand.Font.mono(size: 22, weight: .bold))
                         .foregroundStyle(Brand.Color.textTertiary)
+                        .accessibilityHidden(true)
                     TextField("spotter_42", text: $draftHandle)
                         .font(Brand.Font.mono(size: 22, weight: .bold))
                         .foregroundStyle(Brand.Color.textPrimary)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .accessibilityLabel("Handle")
                         .onChange(of: draftHandle) { _, _ in handleTakenError = nil }
                     if !draftHandle.isEmpty {
                         availabilityPill
@@ -405,6 +411,10 @@ struct OnboardingFlow: View {
                                 RoundedRectangle(cornerRadius: Brand.Radius.row)
                                     .strokeBorder(Brand.Color.cyan.opacity(0.20), lineWidth: 1)
                             )
+                            // Visible chip stays ~36 pt; the frame grows the
+                            // HIT region to the 44 pt HIG minimum.
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -429,7 +439,7 @@ struct OnboardingFlow: View {
         VStack(alignment: .leading, spacing: 18) {
             stepLabel("FINAL STEP · COMPASS")
             Text(calibratedInFlow ? "Compass calibrated." : "Trace a figure-8 in the air.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text("iPhone compasses drift near metal and buildings. A quick figure-8 motion calibrates yours, so labels point at the plane you're actually looking at.")
                 .font(Brand.Font.body)
@@ -517,9 +527,19 @@ struct OnboardingFlow: View {
             progressBar
             primaryButton
             if step > 0 {
-                Button("Back") { withAnimation { step -= 1 } }
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
+                // textSecondary (not tertiary) — a primary navigation
+                // affordance shouldn't sit at the lowest contrast tier;
+                // the 44 pt frame gives it a full-height hit target.
+                Button {
+                    withAnimation { step -= 1 }
+                } label: {
+                    Text("Back")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -552,6 +572,7 @@ struct OnboardingFlow: View {
                 if step < totalSteps - 1 {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 14, weight: .bold))
+                        .accessibilityHidden(true)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -698,6 +719,7 @@ struct OnboardingFlow: View {
             Image(systemName: "airplane")
                 .font(.system(size: 22))
                 .foregroundStyle(Brand.Color.cyan)
+                .accessibilityHidden(true)
             Text("TAILSPOT")
                 .font(Brand.Font.mono(size: 22, weight: .bold))
                 .tracking(3)

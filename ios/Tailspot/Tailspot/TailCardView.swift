@@ -34,10 +34,18 @@ struct TailCard: View {
         row.mostRecent.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
     }
 
-    /// Dimmed middle-dot used between fields on a line.
+    /// Dimmed middle-dot used between fields on a line. `.footnote` is
+    /// exactly the old fixed 13 pt at the default setting, and scales.
     private var separator: some View {
-        Text("·").font(.system(size: 13, weight: .regular)).foregroundStyle(Brand.Color.textTertiary)
+        Text("·").font(.footnote).foregroundStyle(Brand.Color.textTertiary)
     }
+
+    /// Scaled metrics for the row sizes with no exact built-in text style
+    /// (14 hero / 20 points / 9 PTS caption) — identical at the default
+    /// setting, scaling with the user's text size like the styled text.
+    @ScaledMetric(relativeTo: .subheadline) private var modelFontSize: CGFloat = 14
+    @ScaledMetric(relativeTo: .title3) private var pointsFontSize: CGFloat = 20
+    @ScaledMetric(relativeTo: .caption2) private var ptsCaptionSize: CGFloat = 9
 
     /// The reveal's route row, list-sized: mono ICAO codes in secondary ink
     /// with the arrow in the rarity tint (CatchRevealView's `routeCell`
@@ -45,16 +53,16 @@ struct TailCard: View {
     /// destination-only filing) — never a dangling arrow.
     @ViewBuilder
     private func routeLine(origin: String?, dest: String?, tint: Color) -> some View {
-        let codeFont = Brand.Font.mono(size: 13, weight: .semibold)
+        let codeFont = Brand.Font.mono(size: 13, weight: .semibold, relativeTo: .footnote)
         HStack(spacing: 5) {
             if let origin {
                 Text(origin).font(codeFont).foregroundStyle(Brand.Color.textSecondary)
                 if let dest {
-                    Text("→").font(Brand.Font.mono(size: 12, weight: .semibold)).foregroundStyle(tint)
+                    Text("→").font(Brand.Font.mono(size: 12, weight: .semibold, relativeTo: .caption)).foregroundStyle(tint)
                     Text(dest).font(codeFont).foregroundStyle(Brand.Color.textSecondary)
                 }
             } else if let dest {
-                Text("→").font(Brand.Font.mono(size: 12, weight: .semibold)).foregroundStyle(tint)
+                Text("→").font(Brand.Font.mono(size: 12, weight: .semibold, relativeTo: .caption)).foregroundStyle(tint)
                 Text(dest).font(codeFont).foregroundStyle(Brand.Color.textSecondary)
             }
         }
@@ -80,6 +88,27 @@ struct TailCard: View {
             typecode: c.typecode, manufacturer: c.manufacturer, model: c.model
         ).displayName
 
+        // One spoken line for the whole row — otherwise VoiceOver walks the
+        // fragments and reads the "·" separators as "middle dot" and the
+        // route arrow as "right arrow".
+        let a11yLabel: String = {
+            var parts = [tailNumber, airline]
+            if showPoints, let model { parts.append(model) }
+            if showPoints, c.displayOrigin != nil || c.displayDest != nil {
+                switch (c.displayOrigin, c.displayDest) {
+                case let (o?, d?): parts.append("route \(o) to \(d)")
+                case let (o?, nil): parts.append("from \(o)")
+                case let (nil, d?): parts.append("to \(d)")
+                default: break
+                }
+            } else if let place {
+                parts.append(place)
+            }
+            parts.append(c.caughtAt.formatted(date: .abbreviated, time: .omitted))
+            if showPoints { parts.append("\(row.rarity.basePoints) points") }
+            return parts.joined(separator: ", ")
+        }()
+
         return HStack(spacing: 12) {
             // Crop toward the plane (Catch.photoFocus), same as the big card —
             // not a plain center-crop that hides an edge-of-frame plane. Decoded
@@ -92,13 +121,13 @@ struct TailCard: View {
                 // identifier (never truncated); a long airline tail-truncates.
                 HStack(spacing: 6) {
                     Text(tailNumber)
-                        .font(Brand.Font.mono(size: 15, weight: .bold))
+                        .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
                         .foregroundStyle(Brand.Color.cyan)
                         .fixedSize()
                         .layoutPriority(1)
                     separator
                     Text(airline)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.footnote)
                         .foregroundStyle(Brand.Color.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -110,7 +139,7 @@ struct TailCard: View {
                 // resolves.
                 if showPoints, let model {
                     Text(model)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: modelFontSize, weight: .semibold))
                         .foregroundStyle(Brand.Color.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -128,7 +157,7 @@ struct TailCard: View {
                         routeLine(origin: origin, dest: dest, tint: row.rarity.tint)
                         separator
                         Text(c.caughtAt.formatted(.dateTime.month().day())).fixedSize()
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.footnote)
                             .foregroundStyle(Brand.Color.textTertiary)
                     }
                 } else {
@@ -137,7 +166,7 @@ struct TailCard: View {
                         separator
                         Text(place ?? "Location unknown").lineLimit(1).truncationMode(.tail)
                     }
-                    .font(.system(size: 13, weight: .regular))
+                    .font(.footnote)
                     .foregroundStyle(Brand.Color.textTertiary)
                 }
             }
@@ -151,11 +180,11 @@ struct TailCard: View {
                 // row.rarity (resolved live); String() keeps them ungrouped.
                 VStack(alignment: .trailing, spacing: -1) {
                     Text(String(row.rarity.basePoints))
-                        .font(Brand.Font.mono(size: 20, weight: .bold))
+                        .font(Brand.Font.mono(size: pointsFontSize, weight: .bold))
                         .foregroundStyle(row.rarity.tint)
                         .monospacedDigit()
                     Text("PTS")
-                        .font(.system(size: 9, weight: .heavy))
+                        .font(.system(size: ptsCaptionSize, weight: .heavy))
                         .tracking(1.5)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
@@ -172,6 +201,8 @@ struct TailCard: View {
             RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.textPrimary.opacity(0.06), lineWidth: 1)
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(a11yLabel))
     }
 }
 

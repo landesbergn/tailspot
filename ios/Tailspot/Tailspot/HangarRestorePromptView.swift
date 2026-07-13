@@ -101,6 +101,10 @@ struct HangarRestorePromptView: View {
                 .foregroundStyle(Brand.Color.textSecondary)
         }
         .padding(.vertical, 40)
+        // One element like the offer/done cards, so VoiceOver reads the
+        // state as a sentence instead of eyebrow/sweep/headline fragments.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Restoring. Pulling your catches from the tower.")
     }
 
     @ViewBuilder
@@ -132,6 +136,7 @@ struct HangarRestorePromptView: View {
                 .font(.system(size: 44, weight: .medium))
                 .foregroundStyle(Brand.Color.alertCaution)
                 .padding(.vertical, 8)
+                .accessibilityHidden(true)
             // No apostrophes in mono headlines: B612 Mono gives the mark a
             // full fixed-width advance, which reads as "COULDN' T".
             Text("RESTORE FAILED")
@@ -149,6 +154,10 @@ struct HangarRestorePromptView: View {
             .padding(.top, 8)
         }
         .padding(.vertical, 40)
+        // One element like the offer/done cards (the buttons surface as
+        // custom actions, matching the offer card's behavior).
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Restore failed. Couldn't reach Tailspot. Your catches are safe on the server — try again in a moment.")
     }
 
     // MARK: - Pieces
@@ -193,6 +202,10 @@ struct HangarRestorePromptView: View {
                 .padding(.horizontal, 28)
                 .padding(.vertical, 13)
                 .background(Capsule().fill(Brand.Color.cyan))
+                // 44pt minimum hit target (HIG): the capsule renders ~43pt
+                // tall; the tappable region grows past the stroke instead
+                // of thickening the visible button.
+                .contentShape(Rectangle().inset(by: -2))
         }
         .buttonStyle(.plain)
     }
@@ -206,6 +219,9 @@ struct HangarRestorePromptView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 9)
                 .overlay(Capsule().strokeBorder(Brand.Color.textTertiary.opacity(0.4), lineWidth: 1))
+                // 44pt minimum hit target (HIG): the quiet capsule is ~33pt
+                // tall visually; expand the hit region rather than the chrome.
+                .contentShape(Rectangle().inset(by: -6))
         }
         .buttonStyle(.plain)
     }

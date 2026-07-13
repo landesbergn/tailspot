@@ -5,7 +5,7 @@
 //  The share artboard — rendered to an Image via ImageRenderer and handed
 //  to ShareLink, so a friend receives a clean card instead of a manual
 //  screenshot. Surfaced from CatchDetailView (the share pill) and the
-//  post-catch CardReveal.
+//  post-catch reveal.
 //
 //  Since Direction B (2026-07-05) the artboard IS the settled reveal card
 //  — `SettledCatchCard`, the same view the Hangar detail frames — wrapped

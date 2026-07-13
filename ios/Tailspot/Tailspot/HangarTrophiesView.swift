@@ -95,7 +95,9 @@ struct TrophyCardRow: View {
                 Text(masked ? "Hidden achievement" : ach.summary)
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
-                    .lineLimit(1)
+                    // Two lines, not one: at larger Dynamic Type sizes a
+                    // one-line cap truncates the goal text mid-sentence.
+                    .lineLimit(2)
                 footer(masked: masked, earned: earned, ach: ach, progress: progress)
             }
             Spacer(minLength: 0)
@@ -126,7 +128,7 @@ struct TrophyCardRow: View {
             let frac = Double(min(progress, ach.threshold)) / Double(ach.threshold)
             HStack(spacing: 6) {
                 Text("\(min(progress, ach.threshold)) / \(ach.threshold)")
-                    .font(Brand.Font.mono(size: 11, weight: .semibold))
+                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
                     .monospacedDigit()
                 Spacer(minLength: 6)
@@ -136,7 +138,7 @@ struct TrophyCardRow: View {
             .padding(.top, 1)
         } else {
             Label("LOCKED", systemImage: "lock.fill")
-                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
                 .tracking(0.8)
                 .foregroundStyle(Brand.Color.textTertiary)
                 .padding(.top, 1)

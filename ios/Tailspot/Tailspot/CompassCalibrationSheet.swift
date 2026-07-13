@@ -106,7 +106,7 @@ struct CompassCalibrationSheet: View {
             Text(calibratedThisSession
                  ? "You're good to go."
                  : "Your heading is off by more than ±10°.")
-                .font(Brand.Font.display)
+                .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text(calibratedThisSession
                  ? "Brackets will now sit on the right plane. You can dismiss."
@@ -152,6 +152,14 @@ struct CompassCalibrationSheet: View {
                 .strokeBorder(tint.opacity(0.4), lineWidth: 1)
         )
         .animation(.easeInOut(duration: 0.25), value: accuracyIsGood)
+        // One element with a live value, so VoiceOver users get the same
+        // coaching feedback the visual ±° tick-down provides.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Compass accuracy")
+        .accessibilityValue(
+            "Heading \(headingText), accuracy \(accuracyText)"
+            + (accuracyIsGood ? ", good" : ", needs calibration")
+        )
     }
 
     private var statusGlyph: some View {
@@ -160,6 +168,8 @@ struct CompassCalibrationSheet: View {
               : "exclamationmark.triangle.fill")
             .font(.system(size: 22, weight: .bold))
             .foregroundStyle(accuracyIsGood ? Brand.Color.alertNormal : Brand.Color.alertCaution)
+            // State is already spoken via the readout card's value.
+            .accessibilityHidden(true)
     }
 
     private var animationBlock: some View {
@@ -237,16 +247,20 @@ private struct ExplanationRow: View {
                 .foregroundStyle(Brand.Color.cyan)
                 .frame(width: 28, height: 28)
                 .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: Brand.Radius.chip))
+                // The title carries the meaning; keep VoiceOver from
+                // reading the raw SF Symbol name.
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(detail)
-                    .font(.system(size: 12))
+                    .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
             }
             Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 

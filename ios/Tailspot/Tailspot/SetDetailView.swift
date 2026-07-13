@@ -91,12 +91,15 @@ struct SetDetailView: View {
                     .foregroundStyle(.black.opacity(0.75))
             }
             .frame(width: 40, height: 40)
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(set.title)
-                    .font(.system(size: 20, weight: .bold))
+                    // .title3 == 20 pt at the default setting, but scales
+                    // with Dynamic Type (a bare size: 20 doesn't).
+                    .font(.title3.weight(.bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(tailCountLine)
-                    .font(Brand.Font.mono(size: 11, weight: .semibold))
+                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption2))
                     .tracking(0.4)
                     .foregroundStyle(tailCount > 0 ? set.type.tint : Brand.Color.textTertiary)
                     .monospacedDigit()
@@ -138,7 +141,7 @@ struct SetDetailView: View {
             }
         } header: {
             Text("MODELS")
-                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
         }
@@ -149,14 +152,17 @@ struct SetDetailView: View {
             Text(displayModel(group.model))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
+                // Long model names wrap instead of crowding the count
+                // column at larger text sizes.
+                .lineLimit(2)
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 0) {
                 Text("×\(group.distinctTailCount)")
-                    .font(Brand.Font.mono(size: 16, weight: .bold))
+                    .font(Brand.Font.mono(size: 16, weight: .bold, relativeTo: .body))
                     .monospacedDigit()
                     .foregroundStyle(set.type.tint)
                 Text(group.distinctTailCount == 1 ? "tail" : "tails")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                     .tracking(0.8)
                     .foregroundStyle(Brand.Color.textTertiary)
             }
