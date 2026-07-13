@@ -268,6 +268,39 @@ extension ObservedAircraft {
     /// ANA179 19.2 km, GTI9648 16.6 km, all full-tier anyway). Tunable.
     static let faintCeilingMeters: Double = 35_000
 
+    /// Tap-to-reveal plausibility bound (2026-07-12, the NYC couch session,
+    /// replay-2026-07-12T150351Z): reveal is the explicit-intent escape hatch
+    /// for planes the ambient band hides (FDX1268, 10.9 km @ 3.6°), but with
+    /// NO bound it turns dense airspace into a catch-anything button — from a
+    /// Manhattan couch, 11 consecutive empty taps revealed planes 27–72 km
+    /// out at 0.4–9.6° elevation (and caught a Piper at 75.8 km), all
+    /// correctly hidden by the band and none remotely visible. The reveal
+    /// reach is the faint band relaxed by this factor — generous enough for
+    /// every confirmed-visible marginal field case (FDX1268 10.9 km @ 3.6° →
+    /// reach ~15.8 km; SKW5480 18 km @ 12.1° → ~23 km; N21866 5.8 km @ 5°
+    /// small → ~8.5 km), tight enough to refuse the whole couch session.
+    /// Tunable.
+    static let revealBandFactor: Double = 1.5
+
+    /// How far out a tap may still reveal THIS aircraft: the faint band
+    /// (elevation-aware curve × `faintBandFactor`, capped by the absolute
+    /// ceiling) relaxed by `revealBandFactor`. No hysteresis term — reveal is
+    /// a one-shot decision, not a per-frame gate that can flicker.
+    var revealReachMeters: Double {
+        min(visibilityCapMeters * Self.faintBandFactor, Self.faintCeilingMeters)
+            * Self.revealBandFactor
+    }
+
+    /// Whether an explicit tap may plausibly reveal this aircraft. Strictly
+    /// below the horizon is never revealable (behind terrain/buildings by
+    /// definition); the 0–1° skyline gray zone stays revealable — the ambient
+    /// floor (`minVisibleElevationDeg` = 1°) keeps it unlabeled, but a tap is
+    /// explicit intent. Grounded planes are refused earlier (toast path), and
+    /// `visibilityTier` pins them hidden regardless.
+    var isPlausiblyRevealable: Bool {
+        !grounded && elevationDeg > 0 && slantDistanceMeters < revealReachMeters
+    }
+
     /// The effective distance cap for THIS aircraft: the elevation curve,
     /// halved for small airframes. Field data 2026-06-06: N3001B (a GA
     /// single at 4.8 km / 8°) was confirmed invisible while airliners at
