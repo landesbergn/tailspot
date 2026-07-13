@@ -68,6 +68,45 @@ enum CatchBackfill {
         return noRoute || fullRouteNoIata
     }
 
+    /// Catch-TIME route resolve (2026-07-12). The backend enriches routes
+    /// opportunistically: adsb.lol carries a plane's position but not its
+    /// route, so the backend looks the route up in a SEPARATE call and caches
+    /// it by callsign — the first time it sees a callsign, `/v1/aircraft`
+    /// ships WITHOUT the route and the value only rides a later poll (~1 poll,
+    /// ~10–20 s). Since you spot-and-catch fast, the catch frequently freezes
+    /// a route-less row, and the route-guess bonus round (which decides on the
+    /// route present AT catch) never fires. This resolves the route right at
+    /// catch — the SAME per-callsign `/v1/routes` lookup the Hangar backfill
+    /// uses — so a fresh catch can carry its route immediately. Best-effort:
+    /// nil on a miss, a round-trip (the resolver has no live track to pick a
+    /// leg), or any transport error. Overlap it with the shutter so it adds
+    /// no perceptible latency to the reveal.
+    /// Bounded so a slow adsb.lol lookup can never stall the reveal (which is
+    /// instant by design). The lookup overlaps the shutter/detector work at
+    /// the call site, so this deadline caps only the ADDITIONAL wait past that;
+    /// on a miss the row still heals later via the Hangar backfill, just
+    /// without a round this time.
+    static func resolveCatchTimeRoute(
+        callsign: String?,
+        timeout: Duration = .milliseconds(1500)
+    ) async -> BackendAircraft.Route? {
+        guard let cs = callsign?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !cs.isEmpty else { return nil }
+        // Capture the Sendable client into a local so the @Sendable task-group
+        // children don't reach back into MainActor-isolated static state.
+        let client = routeClient
+        return await withTaskGroup(of: BackendAircraft.Route?.self) { group in
+            group.addTask { (try? await client.route(forCallsign: cs)) ?? nil }
+            group.addTask { try? await Task.sleep(for: timeout); return nil }
+            // First to finish wins — a fast route (hit OR a definite miss)
+            // returns immediately; if the network is slow, the sleep fires and
+            // we proceed route-less. Cancel the loser either way.
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+    }
+
     /// Fill route facts onto `catches` (all sharing one callsign) from a
     /// complete origin+dest answer (a half route is worse than none on the
     /// card). Two cases, both fill-only-if-nil:

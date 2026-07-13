@@ -1,24 +1,45 @@
 #!/usr/bin/env python3
 """
-Generate ios/Tailspot/Tailspot/airports.json — the curated airport pool
-behind the route-guess bonus round's option chips (game-layer PR2).
+Generate ios/Tailspot/Tailspot/airports.json — the airport table behind
+the route-guess bonus round (game-layer PR2).
 
 Source: OurAirports (https://ourairports.com/data/), released into the
-PUBLIC DOMAIN by its maintainers — no licensing pass needed. We join a
-hand-curated list of ~250 IATA codes (the world's major passenger
-airports, spread across every continent) against the OurAirports CSV so
-the coordinates / ICAO idents / city names are authoritative rather
-than from-memory.
+PUBLIC DOMAIN by its maintainers — no licensing pass needed.
 
-Why curated instead of "all large airports": OurAirports marks ~1,150
-airports "large"; bundling them all would make distractor chips drift
-toward airports nobody has heard of ("plausibly wrong" beats "obscurely
-wrong" for a guessing game). ~250 keeps every option recognizable and
-the asset ~30 KB.
+TWO ROLES, ONE TABLE (the `major` flag splits them):
+  The table plays two distinct roles for GuessOptions.swift, and a row's
+  `major` flag says which it may serve:
+    (a) RESOLUTION — an endpoint must resolve here for a round to fire
+        (`routeAvailable`) and to render the correct chip. This wants
+        COMPREHENSIVE coverage: every airport that can realistically be a
+        route endpoint. ALL rows (major and not) serve this role.
+    (b) DISTRACTORS — the wrong-answer chips are sampled from the table.
+        This wants RECOGNIZABLE airports only ("plausibly wrong" beats
+        "obscurely wrong"). ONLY `major` rows serve this role.
+
+  So we bundle two overlapping sets:
+    • a hand-curated worldwide IATA list (~250 major passenger airports,
+      spread across every continent — route guesses happen wherever Noah
+      and testers travel, Berkeley to Bali) — all `major: true`; and
+    • EVERY US airport (iso_country == "US") that can plausibly be a route
+      endpoint: type large/medium, or a small field with scheduled
+      service or an IATA code. This closes the "route round never fires
+      on a US regional field" gap. US large airports (recognizable hubs)
+      are `major: true`; US medium/small resolution-only fields are
+      `major: false` so they never surface as distractors.
+
+  The ~13k US heliports / closed / tiny private strips that never appear
+  in route data are excluded so the asset stays a few hundred KB.
+
+US ICAO idents: OurAirports leaves `icao_code` blank for most US rows but
+carries the K/P-prefixed ident in the `ident` column, so US rows key on
+`ident` (the curated worldwide pass keys on `icao_code`, unchanged). We do
+NOT filter on the K/P prefix — `iso_country == "US"` is the selector.
 
 Output shape (consumed by GuessOptions.swift):
   [ { "icao": "VHHH", "iata": "HKG", "city": "Hong Kong",
-      "lat": 22.3089, "lon": 113.9146, "continent": "AS" }, … ]
+      "lat": 22.3089, "lon": 113.9146, "continent": "AS",
+      "major": true }, … ]
 
 `continent` is OurAirports' two-letter code (AF AN AS EU NA OC SA) and
 is the "same broad region" bucket for distractor sampling.
@@ -136,6 +157,32 @@ def load_rows(path: str | None) -> list[dict]:
     return list(csv.DictReader(io.StringIO(text)))
 
 
+def _city(r: dict, iata: str) -> str:
+    """Traveler-recognizable city: pinned override → municipality → name."""
+    return CITY_OVERRIDES.get(iata, (r.get("municipality") or r["name"]).strip())
+
+
+def _valid_latlon(r: dict) -> bool:
+    try:
+        float(r["latitude_deg"])
+        float(r["longitude_deg"])
+        return True
+    except (TypeError, ValueError, KeyError):
+        return False
+
+
+def _row(icao: str, iata: str, r: dict, major: bool) -> dict:
+    return {
+        "icao": icao,
+        "iata": iata,
+        "city": _city(r, iata),
+        "lat": round(float(r["latitude_deg"]), 4),
+        "lon": round(float(r["longitude_deg"]), 4),
+        "continent": r["continent"].strip(),
+        "major": major,
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", help="local OurAirports airports.csv (skip fetch)")
@@ -155,34 +202,60 @@ def main() -> None:
 
     wanted = set(CURATED_IATA)
     assert len(wanted) == len(CURATED_IATA), "duplicate IATA in curated list"
-    out, missing = [], []
+
+    # Keyed by emitted ICAO so the two passes dedupe: a US airport already
+    # covered by the curated list keeps its curated (major=true) row.
+    out: dict[str, dict] = {}
+
+    # ── Pass 1: curated worldwide (keys on icao_code, always major) ──
+    missing = []
     for iata in CURATED_IATA:
         r = by_iata.get(iata)
         icao = (r.get("icao_code") or "").strip().upper() if r else ""
         if not r or not icao:
             missing.append(iata)
             continue
-        out.append(
-            {
-                "icao": icao,
-                "iata": iata,
-                "city": CITY_OVERRIDES.get(
-                    iata, (r.get("municipality") or r["name"]).strip()
-                ),
-                "lat": round(float(r["latitude_deg"]), 4),
-                "lon": round(float(r["longitude_deg"]), 4),
-                "continent": r["continent"].strip(),
-            }
-        )
+        out[icao] = _row(icao, iata, r, major=True)
 
     if missing:
         print(f"WARNING: no OurAirports match for: {', '.join(missing)}", file=sys.stderr)
 
-    out.sort(key=lambda a: a["icao"])
+    # ── Pass 2: comprehensive US coverage (keys on `ident`) ──
+    # Every US airport that can realistically be a route endpoint: large or
+    # medium, or a small field with scheduled service or an IATA code. Skips
+    # the ~13k US heliports / closed / tiny private strips absent from route
+    # data. Curated rows already present win the dedupe (their major=true
+    # stands). `major` for a fresh US row: large hub, or a curated IATA that
+    # somehow only resolved here → true; medium/small resolution-only → false.
+    us_added = 0
+    for r in rows:
+        if r.get("iso_country") != "US":
+            continue
+        icao = (r.get("ident") or "").strip().upper()
+        if not icao or not _valid_latlon(r):
+            continue
+        t = r["type"]
+        iata = (r.get("iata_code") or "").strip().upper()
+        eligible = t in ("large_airport", "medium_airport") or (
+            t == "small_airport" and (r["scheduled_service"] == "yes" or iata)
+        )
+        if not eligible or icao in out:
+            continue
+        major = t == "large_airport" or iata in wanted
+        out[icao] = _row(icao, iata, r, major=major)
+        us_added += 1
+
+    airports = sorted(out.values(), key=lambda a: a["icao"])
     OUT_PATH.write_text(
-        json.dumps(out, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(airports, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    print(f"wrote {len(out)} airports → {OUT_PATH}", file=sys.stderr)
+    major_count = sum(1 for a in airports if a["major"])
+    print(
+        f"wrote {len(airports)} airports → {OUT_PATH}\n"
+        f"  major: {major_count}  non-major: {len(airports) - major_count}\n"
+        f"  (curated worldwide + {us_added} US resolution-only rows)",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":
