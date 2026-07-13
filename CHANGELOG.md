@@ -5,6 +5,48 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-12 — Tap-reveal plausibility bound: dense airspace stops being a catch-anything button — branch `fix/tap-reveal-plausibility`
+
+Field report (Noah, on a couch in Manhattan, replay-2026-07-12T150351Z): with
+**110 airborne planes** in the NYC data (EWR/LGA/JFK + GA), the ambient band
+correctly hid ALL of them — but **tap-to-reveal has no distance bound**, so
+all 11 empty taps revealed and force-locked planes 27–72 km out at 0.4–9.6°
+elevation, through a wall, and a Piper Cherokee was caught at **75.8 km**
+(the post-catch gates did their job: flagged suspect, Noah discarded). The
+reveal was built for the Berkeley cases where the tapped plane is genuinely
+visible (FDX1268, DAL972); in dense airspace "nearest in-data plane" is
+always *something*, so explicit intent alone stopped meaning "I can see it".
+
+- **`ObservedAircraft.isPlausiblyRevealable`** bounds the FILTERED reveal:
+  reveal reach = the faint band (elevation curve × `faintBandFactor`, capped
+  at 35 km) relaxed by **`revealBandFactor = 1.5`**, and strictly-below-
+  horizon planes are never revealable (behind terrain by definition; the
+  0–1° skyline gray zone stays revealable — ambient floor still 1°). No
+  hysteresis term: reveal is a one-shot decision.
+- The empty-tap classifier splits hidden-tier into **"filtered"** (within
+  reach → reveals, unchanged) and **"filtered-far"** (beyond reach → an
+  honest beyond-eyeshot toast with the distance, no reveal, no lock). The
+  new reason flows through replay recordings + `empty_sky_tap` telemetry;
+  `FailureMode`'s missedPlane scorer keys on "filtered", so implausible
+  couch taps stop inflating the miss bench.
+- **The confirmed-visible marginal cases the reveal exists for still pass**
+  (pinned by `TapRevealPlausibilityTests`): FDX1268 10.9 km @ 3.6° (reach
+  ~15.8 km), SKW5480 18 km @ 12.1°, N21866 5.8 km @ 5° small-airframe. The
+  couch session's 11 reveals + the 75.8 km Cherokee are all refused, as is
+  the below-horizon N383TA (6.4 km @ −0.45°). OFF-FRAME reveal is untouched
+  (it already requires visible tier).
+- **Indoors = no ambient labels** (second half of the report, Noah's call:
+  "if the frame reads as not sky — don't show labels"). The band was also
+  passing planes that ARE outdoor-visible from that location (river-corridor
+  GA at 2–3 km, LGA finals at 8 km; 9 passed at a live check) — the
+  geometric filter can't know about walls. `interactiveVisible(_:)` is now
+  the one definition of the label set (render loop + metadata prefetch +
+  signature, previously three copies): the ambient tier is suppressed while
+  `pointedIndoors` (the existing 5 s-debounced SkyCheck streak behind the
+  "Not many planes indoors." hint), the tap-revealed plane survives, and
+  zone catchability/lock/taps consume the same gated set. The
+  `first_plane_seen` activation latch skips while indoors.
+
 ## 2026-07-12 — Pre-v1 cleanup round: dead code, stale docs, repo organization — branches `chore/v1-backend-cleanup` · `chore/v1-ios-cleanup` · `chore/v1-docs-cleanup`
 
 A three-PR housekeeping sweep ahead of the v1 launch, driven by a full-repo
