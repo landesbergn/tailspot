@@ -5,6 +5,47 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-13 — The compass warning made LOUD: broken-compass misID diagnosed at SFO — branch `fix/loud-compass-warning`
+
+Field report (Noah, watching arrivals at SFO): **UAL195, a Boeing 777-222(ER)
+on final (reg N225UA, MUC→SFO), was identified as a Cessna 172.** Pulled the
+on-device replay (`replay-2026-07-13T214656Z`, 2:46 PM PDT, Noah at the SFO
+terminals) and it's unambiguous — **the compass was 35–40° off true north** for
+the whole session (`headingAccuracyDeg` 35–40; the reported heading snapped
+**90°→339°** in one tick at 21:47:12 as it finally recalibrated, without Noah
+rotating the phone — direct proof the earlier north was ~100°+ wrong). Standing
+amid the terminal's steel/jet-bridges = severe magnetic interference. With north
+that far out every projection is garbage: both tap-pins in the window landed on
+distant *filtered* planes (a King Air at **46 km**, N824AK at **31 km**), never
+the 777 — which was `onGround` the whole window (grounded → `.hidden`), so it was
+never what got labeled. The "Cessna 172" happened a minute earlier on final,
+same broken compass, same failure — a real distant GA plane in the 130-aircraft
+feed garbage-projecting under the 777's apparent position.
+
+**Ruled out** (so we fixed the right thing): the source data is correct
+(adsb.lol reports N225UA as `t:B772`/heavy), there is **no C172 fallback** (a
+typeless plane resolves to nil, never a Cessna), and this is **not** the
+lone-plane capture rule. Root cause is purely the compass; no selection logic
+can help when north itself is wrong.
+
+**The gap:** the app already detects this (`compassBadThreshold = 25°`, debounced
+4 s → `showCompassWarning`) but the warning was a **deliberately-quiet, advisory
+corner capsule** — invisible when you're locked onto a landing 777, and it gated
+nothing. The telemetry comment in the code already called it "the suspected
+silent killer of 'label points the wrong way' first sessions." Caught red-handed.
+
+**The fix (Noah's call — warn loudly, keep the shutter live; IDs/catches are NOT
+gated):** `ContentView.cautionBadge` is now a **loud filled-amber banner** — a
+pulsing warning glyph, the live `COMPASS OFF ±N°` readout, and a plain
+`Labels may be wrong — tap to calibrate` line (dark-on-amber, amber glow so it
+lifts off the live camera, slides in from the top). A **one-shot warning haptic**
+fires the moment the compass latches bad (declarative `.sensoryFeedback` on the
+top-center stack; recovery is silent) — a felt cue since you may be watching the
+plane, not the HUD. Tap still opens `CompassCalibrationSheet`. New
+`CompassWarningSnapshotTests` (visual pass, day-sky + dark backdrops); full suite
+green. Distinct from `fix/lone-plane-catchable` — separate branch, separate
+cause.
+
 ## 2026-07-12 — Tap-reveal plausibility bound: dense airspace stops being a catch-anything button — branch `fix/tap-reveal-plausibility`
 
 Field report (Noah, on a couch in Manhattan, replay-2026-07-12T150351Z): with

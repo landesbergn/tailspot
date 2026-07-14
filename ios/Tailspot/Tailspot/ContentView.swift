@@ -586,8 +586,17 @@ struct ContentView: View {
                     Spacer()
                 }
                 .padding(.top, 12)
+                // Keep the loud compass banner off the screen edges.
+                .padding(.horizontal, 16)
                 .animation(.easeInOut(duration: 0.2), value: isHeadingAccuracyBad)
                 .animation(.easeInOut(duration: 0.2), value: zoom > 1.01)
+                // One-shot warning haptic the moment the compass latches
+                // bad — a felt cue so the banner isn't purely visual (you
+                // may be staring at the plane, not the HUD). Fires only on
+                // the false→true edge; recovery is silent.
+                .sensoryFeedback(trigger: showCompassWarning) { _, isBad in
+                    isBad ? .warning : nil
+                }
 
                 // Debug overlays — hidden by default; revealed by the
                 // wrench toggle below.
@@ -988,12 +997,6 @@ struct ContentView: View {
     // MARK: - Top-center overlays
 
 
-    /// Compass-bad caution badge. Slim capsule with an amber dot +
-    /// "COMPASS ±N°" — quieter than the prior amber-bordered card so
-    /// it doesn't dominate the AR view when readings are mediocre.
-    /// Tap opens `CompassCalibrationSheet` for the figure-8
-    /// instructions. Surfaces only after `compassBadDebounce` seconds
-    /// of consistently-bad readings (see `updateCompassWarning`).
     /// Proactive ambient hint while the phone is pointed indoors — so the
     /// user knows to head outside before they even try to catch. Driven by
     /// the debounced `pointedIndoors`; auto-clears when aimed at sky.
@@ -1087,6 +1090,20 @@ struct ContentView: View {
         unlockCenter.enqueueNewUnlocks(from: catches)
     }
 
+    /// Compass-bad caution banner. Surfaces only after
+    /// `compassBadDebounce` s of readings past `compassBadThreshold`
+    /// (latched via `updateCompassWarning`), then shouts: a filled-amber
+    /// banner with a pulsing warning glyph, the live "COMPASS OFF ±N°"
+    /// readout, and a plain line that the on-screen labels can't be
+    /// trusted until it's fixed. Tap opens `CompassCalibrationSheet`.
+    ///
+    /// Deliberately LOUD — the prior slim translucent capsule was too
+    /// easy to miss with a plane in frame, which is exactly how the SFO
+    /// field misID slipped through (2026-07-13: a ~40°-off compass
+    /// mis-projected every plane, so a huge 777 read as a distant
+    /// Cessna). A one-shot warning haptic fires when it first appears
+    /// (the `.sensoryFeedback` on the top-center stack). It does NOT
+    /// gate catching — warn loudly, keep the shutter live (Noah's call).
     @ViewBuilder
     private var cautionBadge: some View {
         if isHeadingAccuracyBad {
@@ -1096,26 +1113,38 @@ struct ContentView: View {
                     headingAccuracyDeg: location.headingAccuracy
                 )
             } label: {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Brand.Color.alertCaution)
-                        .frame(width: 5, height: 5)
-                    Text("COMPASS \(formatHeadingAccuracyShort())")
-                        .font(Brand.Font.mono(size: 11, weight: .bold))
-                        .tracking(1.0)
-                        .foregroundStyle(Brand.Color.alertCaution)
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .symbolEffect(.pulse, options: .repeating)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("COMPASS OFF \(formatHeadingAccuracyShort())")
+                            .font(Brand.Font.mono(size: 14, weight: .bold))
+                            .tracking(1.0)
+                        Text("Labels may be wrong — tap to calibrate")
+                            .font(Brand.Font.mono(size: 10, weight: .regular))
+                            .opacity(0.85)
+                    }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
-                // The visible capsule stays slim; the inset expands the
-                // HIT region to the 44 pt HIG minimum (the badge is the
-                // only in-AR path to compass calibration).
-                .contentShape(Rectangle().inset(by: -12))
+                // Dark text/glyph on amber — the classic caution read,
+                // and the only high-contrast pairing (amber-on-dark is
+                // reserved for the quieter data HUD).
+                .foregroundStyle(Brand.Color.bgSurface)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Brand.Color.alertCaution,
+                            in: RoundedRectangle(cornerRadius: Brand.Radius.row))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Brand.Radius.row)
+                        .strokeBorder(Brand.Color.bgSurface.opacity(0.15), lineWidth: 1)
+                )
+                // Amber glow so it lifts off the live camera behind it.
+                .shadow(color: Brand.Color.alertCaution.opacity(0.5), radius: 12, y: 2)
+                .contentShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Tap to calibrate.")
-            .transition(.opacity)
+            .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Labels may be wrong. Tap to calibrate.")
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
