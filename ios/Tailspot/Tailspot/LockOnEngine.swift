@@ -233,3 +233,128 @@ func icaosInZone(
     }
     return hits.sorted { $0.1 < $1.1 }.map(\.0)
 }
+
+// MARK: - Plausibility-weighted catch target (2026-07-13)
+//
+// The catch bug behind this: target selection ranked candidates by SCREEN
+// distance to the crosshair alone, with zero preference for the closer / lower
+// / larger plane. In dense airspace under a poor compass that bagged a 12.9 km
+// cruise A319 (nearly overhead) instead of the closer, lower plane the user was
+// aiming at (NYC field mis-catch, 2026-07-13). These pure helpers add two
+// things, both validated by an offline spike over the replay corpus:
+//   1. dominantAimTarget — when one in-zone plane is far more visually
+//      prominent than the rest, catch just it (single) instead of multi-bagging
+//      the cluster. Reduces to the old behavior in sparse sky (~1% of ticks
+//      changed in the corpus, always toward the closer/bigger plane).
+//   2. aimConfidence — a post-catch (never blocking) flag for a center catch
+//      that is off-crosshair AND small AND made under a poor compass: the
+//      hallmark of "wrong plane," surfaced as a Keep/Discard question.
+
+/// One in-zone catch candidate with the geometry the plausibility layer needs
+/// — a superset of `icaosInZone` membership carrying the fields selection and
+/// the aim-confidence flag consume.
+nonisolated struct CatchCandidate: Equatable, Sendable {
+    let icao24: String
+    let offsetDeg: Double        // angular separation from the crosshair (bore-sight)
+    let offsetPx: CGFloat        // screen-pixel separation (what zone membership uses)
+    let arcmin: Double           // apparent angular size
+    let slantMeters: Double
+}
+
+/// In-zone visible planes with full geometry, sorted by pixel offset — the
+/// same membership as `icaosInZone`, carrying the angular offset + apparent
+/// size the plausibility selection and the aim-confidence flag need.
+@MainActor
+func catchCandidates(
+    in observed: [ObservedAircraft],
+    at point: CGPoint? = nil,
+    phoneHeadingDeg: Double,
+    cameraElevationDeg: Double,
+    rollDeg: Double = 0,
+    screenSize: CGSize,
+    hfovDeg: Double = 56,
+    vfovDeg: Double = 72,
+    zoneRadius: CGFloat = 100
+) -> [CatchCandidate] {
+    let anchor = point ?? CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
+    let basis = Geo.cameraBasis(
+        headingDeg: phoneHeadingDeg, cameraElevationDeg: cameraElevationDeg, rollDeg: rollDeg
+    )
+    var out: [CatchCandidate] = []
+    for obs in observed where obs.isLikelyVisibleToObserver {
+        guard let pos = obs.screenPosition(
+            basis: basis, in: screenSize, hfovDeg: hfovDeg, vfovDeg: vfovDeg
+        ) else { continue }
+        let dx = pos.x - anchor.x, dy = pos.y - anchor.y
+        let px = (dx*dx + dy*dy).squareRoot()
+        guard px <= zoneRadius else { continue }
+        let v = Geo.cameraFrameVector(
+            targetBearingDeg: obs.bearingDeg, targetElevationDeg: obs.elevationDeg, basis: basis
+        )
+        let offDeg = v.z <= 0 ? 180.0 : atan2((v.x*v.x + v.y*v.y).squareRoot(), v.z) * 180 / .pi
+        out.append(CatchCandidate(
+            icao24: obs.aircraft.icao24, offsetDeg: offDeg, offsetPx: px,
+            arcmin: obs.apparentSizeArcminutes, slantMeters: obs.slantDistanceMeters
+        ))
+    }
+    return out.sorted { $0.offsetPx < $1.offsetPx }
+}
+
+/// σ (degrees) for the crosshair proximity term, clamped from the logged
+/// compass accuracy. A trusted compass (small σ) makes centrality decisive
+/// (≈ nearest-crosshair); a poor one widens tolerance so prominence can break
+/// the tie — which is exactly when nearest-crosshair picks the wrong plane.
+nonisolated func aimSigmaDeg(_ headingAccuracyDeg: Double?) -> Double {
+    let acc = headingAccuracyDeg ?? 8
+    return min(max(acc < 0 ? 8 : acc, 4), 25)
+}
+
+/// Prominence score for choosing the single dominant target: crosshair
+/// proximity (compass-scaled) × apparent size. Size enters multiplicatively so
+/// a big close plane can outrank a smaller one slightly nearer the crosshair
+/// when the compass is unreliable.
+nonisolated func aimProminence(offsetDeg: Double, arcmin: Double, headingAccuracyDeg: Double?) -> Double {
+    let sigma = aimSigmaDeg(headingAccuracyDeg)
+    return exp(-(offsetDeg*offsetDeg) / (2*sigma*sigma)) * max(arcmin, 0)
+}
+
+/// The single in-zone plane whose aim-prominence dominates the runner-up by at
+/// least `dominanceRatio`, else nil — nil means "no clear winner," so the
+/// caller keeps the existing single/multi logic (a genuine formation/approach
+/// pair of comparable planes still multi-catches). Empty or one-element inputs
+/// return nil too (the one-candidate case is already `.single`).
+nonisolated func dominantAimTarget(
+    _ candidates: [CatchCandidate],
+    headingAccuracyDeg: Double?,
+    dominanceRatio: Double = 2.5
+) -> String? {
+    guard candidates.count >= 2 else { return nil }
+    let scored = candidates
+        .map { ($0.icao24, aimProminence(offsetDeg: $0.offsetDeg, arcmin: $0.arcmin, headingAccuracyDeg: headingAccuracyDeg)) }
+        .sorted { $0.1 > $1.1 }
+    let (topIcao, top) = scored[0]
+    let runnerUp = scored[1].1
+    guard top > 0, runnerUp <= 0 || top / runnerUp >= dominanceRatio else { return nil }
+    return topIcao
+}
+
+/// Confidence (0…1) that a center (non-tapped) catch is the plane the user
+/// meant — LOW when the compass is untrusted, the target sits off the
+/// crosshair, or it's too small to resolve. Unlike `aimProminence`, the
+/// crosshair tolerance here is FIXED (`reticleToleranceDeg`) and a poor compass
+/// lowers confidence outright (`compassTrust`), because for the flag an
+/// unreliable reticle makes *any* center catch less certain. Drives the
+/// post-catch `uncertainAim` question; an explicit tap is exempt.
+nonisolated func aimConfidence(
+    offsetDeg: Double,
+    arcmin: Double,
+    headingAccuracyDeg: Double?,
+    goodAccuracyDeg: Double = 15,
+    reticleToleranceDeg: Double = 7
+) -> Double {
+    let acc = headingAccuracyDeg ?? goodAccuracyDeg
+    let compassTrust = acc < 0 ? 0.5 : min(1.0, goodAccuracyDeg / max(acc, 1))
+    let centrality = exp(-(offsetDeg*offsetDeg) / (2*reticleToleranceDeg*reticleToleranceDeg))
+    let resolv = min(1.0, max(arcmin, 0) / 10.0)   // saturate at ~10′ (clearly resolved)
+    return compassTrust * centrality * (0.4 + 0.6 * resolv)
+}

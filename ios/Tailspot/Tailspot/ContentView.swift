@@ -525,7 +525,7 @@ struct ContentView: View {
                             // "tap anywhere, bag a fistful" exploit. `onScreen*`
                             // above still spans the full frame for bracket
                             // rendering; only catchability narrows here.
-                            let catchableIcaos = icaosInZone(
+                            let candidates = catchCandidates(
                                 in: visible,
                                 phoneHeadingDeg: heading,
                                 cameraElevationDeg: camEl,
@@ -544,13 +544,33 @@ struct ContentView: View {
                                    onScreenIcaos.contains(pin) {
                                     return .single(pin)
                                 }
-                                if catchableIcaos.isEmpty {
+                                if candidates.isEmpty {
+                                    // Central catch zone empty, but a LONE plane
+                                    // anywhere on frame stays catchable
+                                    // (fix/lone-plane-catchable #145, Portland
+                                    // field report: reticle passive, the plane
+                                    // plainly in frame, shutter dead). Two+ on
+                                    // frame still require aim or a tap, so the
+                                    // dense-airspace spray exploit stays closed.
+                                    if onScreenIcaos.count == 1 {
+                                        return .single(onScreenIcaos[0])
+                                    }
                                     return .disabled
                                 }
-                                if catchableIcaos.count == 1 {
-                                    return .single(catchableIcaos[0])
+                                if candidates.count == 1 {
+                                    return .single(candidates[0].icao24)
                                 }
-                                return .multi(catchableIcaos)
+                                // Multiple in-zone: if one plane is far more
+                                // visually prominent than the rest (a close/big
+                                // plane beside a distant speck), catch just it —
+                                // the A319-class fix. A cluster of comparable
+                                // planes (formation / approach pair) still multis.
+                                if let dominant = dominantAimTarget(
+                                    candidates, headingAccuracyDeg: location.headingAccuracy
+                                ) {
+                                    return .single(dominant)
+                                }
+                                return .multi(candidates.map(\.icao24))
                             }()
                             VStack {
                                 Spacer()
@@ -1270,6 +1290,14 @@ struct ContentView: View {
     /// plane with mild compass drift still qualifies. Tunable in field test.
     private static let catchZoneRadius: CGFloat = 100
 
+    /// Aim-confidence floor for the uncertain-aim flag (Gate 5). Below this, a
+    /// CENTER (non-tapped) catch made under a poor compass, off the crosshair,
+    /// and on a small target is flagged as maybe-the-wrong-plane → Keep/Discard
+    /// after the reveal (never blocks). Conservative so it flags only clearly
+    /// marginal catches (fail-open); tune up from `catch_uncertain_aim`
+    /// telemetry. See `aimConfidence`.
+    private static let uncertainAimConfidenceFloor: Double = 0.3
+
     /// Payload for the post-catch Keep/Discard review dialog: the suspected
     /// rows of the just-revealed catch and the one question asked about them.
     private struct SuspectReview {
@@ -1373,6 +1401,47 @@ struct ContentView: View {
     /// Re-entry is guarded by `captureInFlight`; the flag clears in
     /// the reveal's dismiss callbacks (and on the fall-through where
     /// no reveal is presented).
+    /// Build the capture-time targeting diagnostics blob for one caught plane
+    /// (pure debugging — see `CatchCaptureDiagnostics`). Rounds values for a
+    /// compact JSON; the caught plane's offset is computed directly from its
+    /// observation so it's present even if it drifted out of the catch zone by
+    /// capture time.
+    private func buildCaptureDiagnostics(
+        for icao: String,
+        observed: ObservedAircraft?,
+        candidates: [CatchCandidate],
+        basis: Geo.CameraBasis,
+        wasTapped: Bool
+    ) -> String? {
+        func r1(_ x: Double) -> Double { (x * 10).rounded() / 10 }
+        let targetOffset: Double? = observed.map { obs in
+            let v = Geo.cameraFrameVector(
+                targetBearingDeg: obs.bearingDeg, targetElevationDeg: obs.elevationDeg, basis: basis
+            )
+            return v.z <= 0 ? 180.0 : atan2((v.x*v.x + v.y*v.y).squareRoot(), v.z) * 180 / .pi
+        }
+        let alts = candidates.filter { $0.icao24 != icao }.prefix(4).map {
+            CatchCaptureDiagnostics.Alternative(
+                icao24: $0.icao24, offsetDeg: r1($0.offsetDeg),
+                slantKm: r1($0.slantMeters / 1000), arcmin: r1($0.arcmin)
+            )
+        }
+        let diag = CatchCaptureDiagnostics(
+            headingDeg: location.heading.map(r1),
+            cameraElevationDeg: r1(motion.cameraElevationDeg),
+            rollDeg: r1(Geo.rollDeg(gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ)),
+            zoom: (Double(zoom) * 100).rounded() / 100,
+            headingAccuracyDeg: location.headingAccuracy.map(r1),
+            targetOffsetDeg: targetOffset.map(r1),
+            targetArcmin: observed.map { r1($0.apparentSizeArcminutes) },
+            wasTapped: wasTapped,
+            candidateCount: candidates.count,
+            alternatives: alts.isEmpty ? nil : Array(alts),
+            selector: "prominence-v1"
+        )
+        return diag.jsonString()
+    }
+
     private func performCatch(
         mode: CaptureMode,
         screenSize: CGSize,
@@ -1440,6 +1509,41 @@ struct ContentView: View {
                 if wouldBlock, enforcing {
                     suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .occluded)
                 }
+            }
+        }
+
+        // Gate 5 — uncertain aim (2026-07-13). A CENTER (non-tapped) catch
+        // whose target sits off the crosshair AND is too small to resolve, made
+        // under a POOR compass, may be the WRONG plane — the reticle can't be
+        // trusted to say which plane you meant (the A319 field mis-catch:
+        // bagged a 12.9 km cruise jet instead of a closer, lower plane). Flag,
+        // never block: the reveal proceeds, then one Keep/Discard question. An
+        // explicit tap (`lockOn.state.targetIcao24`) is a deliberate choice and
+        // is exempt.
+        if let acc = location.headingAccuracy, acc >= Self.compassGoodThreshold,
+           let heading = location.heading {
+            let roll = Geo.rollDeg(
+                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+            )
+            let basis = Geo.cameraBasis(
+                headingDeg: heading, cameraElevationDeg: motion.cameraElevationDeg, rollDeg: roll
+            )
+            for icao in icaos where icao != lockOn.state.targetIcao24 {
+                guard let obs = observedByIcao[icao] else { continue }
+                let v = Geo.cameraFrameVector(
+                    targetBearingDeg: obs.bearingDeg, targetElevationDeg: obs.elevationDeg, basis: basis
+                )
+                let offsetDeg = v.z <= 0 ? 180.0
+                    : atan2((v.x*v.x + v.y*v.y).squareRoot(), v.z) * 180 / .pi
+                let conf = aimConfidence(
+                    offsetDeg: offsetDeg, arcmin: obs.apparentSizeArcminutes, headingAccuracyDeg: acc
+                )
+                guard conf < Self.uncertainAimConfidenceFloor else { continue }
+                CatchTelemetry.fireUncertainAim(
+                    offsetDeg: offsetDeg, arcmin: obs.apparentSizeArcminutes,
+                    headingAccuracyDeg: acc, confidence: conf
+                )
+                suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .uncertainAim)
             }
         }
 
@@ -1640,6 +1744,25 @@ struct ContentView: View {
                 FetchDescriptor<Catch>()
             )) ?? 0
 
+            // Capture-time targeting diagnostics (pure debugging — never gates
+            // or scores). Snapshot the pose + in-zone candidate set NOW so a
+            // "wrong plane" mis-catch is diagnosable from the row without a
+            // live replay (the A319 field case, 2026-07-13).
+            let diagRoll = Geo.rollDeg(
+                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+            )
+            let diagBasis = Geo.cameraBasis(
+                headingDeg: location.heading ?? 0,
+                cameraElevationDeg: motion.cameraElevationDeg, rollDeg: diagRoll
+            )
+            let diagCandidates = catchCandidates(
+                in: adsb.observed, phoneHeadingDeg: location.heading ?? 0,
+                cameraElevationDeg: motion.cameraElevationDeg, rollDeg: diagRoll,
+                screenSize: screenSize,
+                hfovDeg: Self.baseHfovDeg / zoom, vfovDeg: Self.baseVfovDeg / zoom,
+                zoneRadius: Self.catchZoneRadius
+            )
+
             var newCatches: [Catch] = []
             var duplicates: [String] = []
 
@@ -1753,6 +1876,10 @@ struct ContentView: View {
                     suspectReason: suspicions[icao]?.rawValue,
                     photoFocusX: photoFocus.map { Double($0.x) },
                     photoFocusY: photoFocus.map { Double($0.y) }
+                )
+                row.captureDiagnosticsJSON = buildCaptureDiagnostics(
+                    for: icao, observed: observed, candidates: diagCandidates,
+                    basis: diagBasis, wasTapped: icao == lockOn.state.targetIcao24
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
