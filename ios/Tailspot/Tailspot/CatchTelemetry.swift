@@ -44,6 +44,10 @@ nonisolated enum CatchTelemetry {
     // pre-2026-07-04 blocking era; the *_override events retired with it.
     static let blockedOutdoorsEvent = "catch_blocked_outdoors"
     static let blockedSizeEvent = "catch_blocked_size"
+    // Uncertain-aim flag (2026-07-13). Fires when a center catch is flagged as
+    // maybe-the-wrong-plane (off-crosshair + small under a poor compass) — the
+    // calibration stream for the confidence floor.
+    static let uncertainAimEvent = "catch_uncertain_aim"
     // Lever 2 (localized sky gate). `catch_local_gate` fires on EVERY catch
     // (shadow + enforce) with the per-target verdict + features — the
     // calibration stream for the on-device texture threshold.
@@ -389,6 +393,20 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
+    /// Fired when a center (non-tapped) catch is flagged uncertain-aim: the
+    /// target's crosshair offset, apparent size, compass accuracy, and the
+    /// computed confidence — so the floor can be tuned from real flags.
+    static func fireUncertainAim(
+        offsetDeg: Double, arcmin: Double, headingAccuracyDeg: Double, confidence: Double
+    ) {
+        Analytics.capture(uncertainAimEvent, [
+            "offset_deg": .double(offsetDeg),
+            "angular_size_arcmin": .double(arcmin),
+            "heading_accuracy_deg": .double(headingAccuracyDeg),
+            "confidence": .double(confidence),
+        ])
+    }
+
     /// Properties for the localized-sky-gate events (L2): the verdict + the
     /// patch features + whether it would block and whether enforcement is on,
     /// so the on-device texture threshold can be calibrated from real catches.
@@ -529,11 +547,12 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
     case occluded            // L2: the patch under the bracket reads building/tree
     case noDetection = "no_detection"  // L4: camera should have seen it, didn't
     case tooFar = "too_far"  // L3: below the angular-size floor
+    case uncertainAim = "uncertain_aim"  // center catch off-crosshair + small under a poor compass → maybe the wrong plane
     case indoor              // whole-frame SkyCheck: not pointed at open sky
 
     /// Precedence when several gates fire on one target — the most specific,
     /// most actionable reason wins the review copy
-    /// (occluded > noDetection > tooFar > indoor).
+    /// (occluded > noDetection > tooFar > uncertainAim > indoor).
     static func preferred(_ current: CatchSuspicion?, _ new: CatchSuspicion) -> CatchSuspicion {
         guard let current else { return new }
         return current.priority >= new.priority ? current : new
@@ -541,9 +560,10 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
 
     private var priority: Int {
         switch self {
-        case .occluded: return 4
-        case .noDetection: return 3
-        case .tooFar: return 2
+        case .occluded: return 5
+        case .noDetection: return 4
+        case .tooFar: return 3
+        case .uncertainAim: return 2
         case .indoor: return 1
         }
     }
@@ -561,6 +581,8 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
                 return "That one was \(Int(km.rounded())) km out — could you really see it?"
             }
             return "That one was a long way out — could you really see it?"
+        case .uncertainAim:
+            return "Your compass was off and that one wasn't dead-center — is it the plane you meant?"
         case .indoor:
             return "Looks like you were indoors — did you really see it?"
         }

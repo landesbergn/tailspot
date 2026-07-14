@@ -5,6 +5,44 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-13 — Catch-target plausibility: stop bagging the wrong plane in dense sky — branch `fix/catch-target-plausibility`
+
+Field mis-catch (Noah, NYC): a 12.9 km cruise A319 at ~70° elevation (nearly
+overhead) was caught instead of the closer, lower plane he aimed at. Root
+cause: catch-target selection ranked candidates by SCREEN-PIXEL distance to the
+crosshair alone — zero preference for the closer / lower / larger / more-obvious
+plane — so whichever labelable ADS-B plane projected nearest the reticle won,
+which under a poor compass (his sessions log ±12–20°) is often not the plane the
+eye is on. Three changes, an offline spike over all 44 replay sessions guiding
+the design (`tools/target-selection/target_spike.py`):
+
+- **Prominence-weighted single selection** (`LockOnEngine.catchCandidates` +
+  `dominantAimTarget`): when several planes sit in the catch zone and ONE is far
+  more visually prominent (crosshair-proximity × apparent size, proximity scaled
+  by the logged compass σ), catch just it instead of multi-bagging the cluster.
+  A comparable formation/approach pair still multi-catches. σ ties the weighting
+  to compass quality, so a trusted compass reduces it to the old
+  nearest-crosshair behavior — the corpus changed only ~1% of target-bearing
+  ticks, always toward the closer/bigger plane.
+- **Uncertain-aim flag** (`CatchSuspicion.uncertainAim` + `aimConfidence`): a
+  CENTER (non-tapped) catch that's off-crosshair AND too small to resolve AND
+  made under a poor compass is flagged — flag, never block (2026-07-04 doctrine)
+  → one Keep/Discard question after the reveal, `catch_uncertain_aim` telemetry
+  to tune the floor. An explicit tap is exempt (deliberate choice). Honest
+  limit, pinned as a test: a resolvable-but-wrong jet near the compass-rotated
+  center still reads high-confidence — selection + metadata own that case, not
+  the flag.
+- **Catch capture metadata** (`CatchCaptureDiagnostics` → additive
+  `Catch.captureDiagnosticsJSON`): pose (heading/elevation/roll/zoom), compass
+  accuracy, the caught plane's crosshair offset + size, tap-vs-center, and the
+  OTHER in-zone candidates the selector passed over — so the next mis-catch is
+  diagnosable from the row itself (this one needed reconstruction because replay
+  recording wasn't running). Pure debugging; never gates or scores.
+
+`TargetSelectionTests` pins the A319 geometry (bad compass → closer/bigger
+plane; good compass → unchanged; the limitations as tests). Full suite 980
+green.
+
 ## 2026-07-12 — Pre-v1 cleanup round: dead code, stale docs, repo organization — branches `chore/v1-backend-cleanup` · `chore/v1-ios-cleanup` · `chore/v1-docs-cleanup`
 
 A three-PR housekeeping sweep ahead of the v1 launch, driven by a full-repo

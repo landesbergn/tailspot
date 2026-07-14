@@ -170,6 +170,15 @@ final class Catch {
     /// rare drift is accepted (plan §A4, D9 optimistic). Same
     /// lifecycle/migration as `guessKind`.
     var guessCorrect: Bool?
+    /// Capture-time targeting context as a JSON `CatchCaptureDiagnostics`
+    /// blob: the camera pose, compass accuracy, the caught plane's crosshair
+    /// offset, and the other candidates the selector passed over. PURE
+    /// DEBUGGING — never read by scoring/display/gates; lets a "wrong plane"
+    /// mis-catch be diagnosed from the row (the A319 field case, 2026-07-13)
+    /// without a live replay. Written once at catch time, like `serverUuid`
+    /// not exposed on the init. Added 2026-07-13 — optional + nil-default for
+    /// SwiftData lightweight migration; old rows simply have nil.
+    var captureDiagnosticsJSON: String?
 
     init(
         icao24: String,
