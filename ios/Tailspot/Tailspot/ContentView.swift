@@ -215,6 +215,11 @@ struct ContentView: View {
     /// The timestamp guards the auto-clear against clearing a newer toast
     /// (same pattern as `emptyRipple`).
     @State private var groundedToastAt: Date? = nil
+    /// Beyond-eyeshot hint: (shown-at, distance) of the last "filtered-far"
+    /// tap — the nearest in-data plane was too far to plausibly see, so the
+    /// tap reveals nothing and this toast says why. Same lifecycle as
+    /// `groundedToastAt`.
+    @State private var farTapToast: (at: Date, slantMeters: Double)? = nil
 
     var body: some View {
         ZStack {
@@ -273,17 +278,15 @@ struct ContentView: View {
                     TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
                         let now = context.date
                         // Interactive-visible set: the ambient visibility tier
-                        // PLUS any tap-revealed plane (see `revealedIcao`). The
+                        // (suppressed while `pointedIndoors`) PLUS any
+                        // tap-revealed plane — see `interactiveVisible`. The
                         // revealed plane rides the existing pinned-plane path —
                         // labeled, lockable, catchable — without loosening the
                         // ambient filter for everyone else. GROUNDED planes are
                         // excluded even from the reveal clause: a parked plane
                         // must never label, lock, or catch (the tap path never
                         // reveals one — this guard is belt-and-suspenders).
-                        let visible = adsb.observed.filter {
-                            $0.isLikelyVisibleToObserver
-                                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
-                        }
+                        let visible = interactiveVisible(adsb.observed)
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
                         // Camera roll from the gravity vector (robust at the
@@ -411,6 +414,25 @@ struct ContentView: View {
                                             || obs.visibilityTier == .faint,
                                         metadata: metaForPlane
                                     )
+                                    // VoiceOver path into the pin loop. The
+                                    // label stays `.allowsHitTesting(false)`
+                                    // for touch (taps hit-test screen geometry
+                                    // on the gesture layer), but accessibility
+                                    // activation needs no geometry — the
+                                    // element itself names the plane. Nearest
+                                    // plane reads first via sort priority.
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(planeAccessibilityLabel(
+                                        obs, metadata: metaForPlane))
+                                    .accessibilityAddTraits(
+                                        isPinned ? [.isButton, .isSelected] : .isButton)
+                                    .accessibilityHint(
+                                        isPinned ? "Unpins this plane."
+                                                 : "Pins this plane for capture.")
+                                    .accessibilitySortPriority(-obs.slantDistanceMeters)
+                                    .accessibilityAction {
+                                        accessibilityTogglePin(icao: icao)
+                                    }
                                 }
                             }
 
@@ -547,7 +569,14 @@ struct ContentView: View {
                                     screenSize: geo.size,
                                     positions: onScreenPositions
                                 )
-                                .padding(.bottom, 28)
+                                // Clear the home-indicator gesture zone: pad
+                                // from the safe-area bottom when there is one
+                                // (`geo` sits inside .ignoresSafeArea(), so the
+                                // proxy still reports the insets the expansion
+                                // crossed). Falls back to the original 28 pt on
+                                // home-button devices — and if the proxy ever
+                                // reports zero, behavior is exactly pre-change.
+                                .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 12))
                             }
                             .frame(width: geo.size.width,
                                    height: geo.size.height)
@@ -567,8 +596,17 @@ struct ContentView: View {
                     Spacer()
                 }
                 .padding(.top, 12)
+                // Keep the loud compass banner off the screen edges.
+                .padding(.horizontal, 16)
                 .animation(.easeInOut(duration: 0.2), value: isHeadingAccuracyBad)
                 .animation(.easeInOut(duration: 0.2), value: zoom > 1.01)
+                // One-shot warning haptic the moment the compass latches
+                // bad — a felt cue so the banner isn't purely visual (you
+                // may be staring at the plane, not the HUD). Fires only on
+                // the false→true edge; recovery is silent.
+                .sensoryFeedback(trigger: showCompassWarning) { _, isBad in
+                    isBad ? .warning : nil
+                }
 
                 // Debug overlays — hidden by default; revealed by the
                 // wrench toggle below.
@@ -687,9 +725,7 @@ struct ContentView: View {
         // of an icao24 fires a single OpenSky request and every later
         // observation is a free in-memory hit.
         .task(id: visibleIcaoSignature) {
-            let icaos = adsb.observed
-                .filter { $0.isLikelyVisibleToObserver
-                    || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
+            let icaos = interactiveVisible(adsb.observed)
                 .map(\.aircraft.icao24)
             // Prune session-stale entries. `ambientMetadata` is a view-
             // local mirror of the bounded MetadataCache actor; without
@@ -729,6 +765,7 @@ struct ContentView: View {
         // hint; the two can't realistically co-fire (one needs a not-sky
         // frame, the other a tap that reached an in-data plane).
         .overlay(alignment: .top) { groundedToastBanner }
+        .overlay(alignment: .top) { farTapToastBanner }
         .sensoryFeedback(.success, trigger: catchHaptic)
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -850,7 +887,10 @@ struct ContentView: View {
         // Activation funnel: the first time any plane label is actually
         // visible (post-filter), the user has something to catch. ~1 Hz
         // re-annotation cadence; once-per-install latch inside the fire.
+        // Skipped while pointedIndoors — no label rendered means the user
+        // did NOT see a plane, and this latch fires once per install.
         .onReceive(adsb.$observed) { observed in
+            guard !pointedIndoors else { return }
             let visible = observed.filter(\.isLikelyVisibleToObserver)
             guard !visible.isEmpty else { return }
             ActivationTelemetry.fireFirstPlaneSeenOnce(visibleCount: visible.count)
@@ -890,15 +930,34 @@ struct ContentView: View {
         )
     }
 
+    /// The interactive-visible set: the ambient visibility tier PLUS any
+    /// tap-revealed plane. One definition for the label render loop, the
+    /// metadata prefetch, and its signature — they must agree or labels
+    /// render without their metadata.
+    ///
+    /// The ambient tier is suppressed entirely while `pointedIndoors`
+    /// (2026-07-12, NYC couch session): the geometric band can't know about
+    /// walls, and dense airspace (Manhattan: river-corridor GA at 2–3 km,
+    /// LGA finals at 8 km) keeps planes inside the band that are plainly
+    /// invisible from indoors. When the whole frame reads not-sky for the
+    /// sustained streak, no ambient label renders; the tap-revealed plane
+    /// survives (explicit intent — and dropping it would fight the lock).
+    /// Same 5 s-debounced signal as the "Not many planes indoors." hint, so
+    /// the labels disappear exactly when that hint explains why.
+    private func interactiveVisible(_ observed: [ObservedAircraft]) -> [ObservedAircraft] {
+        observed.filter {
+            ($0.isLikelyVisibleToObserver && !pointedIndoors)
+                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
+        }
+    }
+
     /// Content-keyed signature of the currently-visible icao24 set,
     /// used as the id on the ambient-metadata prefetch task. Sorting
     /// + joining ensures the value is stable across observed-array
     /// re-orderings (which happen on every fetch) so the task only
     /// re-runs when membership actually changes.
     private var visibleIcaoSignature: String {
-        adsb.observed
-            .filter { $0.isLikelyVisibleToObserver
-                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao) }
+        interactiveVisible(adsb.observed)
             .map(\.aircraft.icao24)
             .sorted()
             .joined(separator: ",")
@@ -948,12 +1007,6 @@ struct ContentView: View {
     // MARK: - Top-center overlays
 
 
-    /// Compass-bad caution badge. Slim capsule with an amber dot +
-    /// "COMPASS ±N°" — quieter than the prior amber-bordered card so
-    /// it doesn't dominate the AR view when readings are mediocre.
-    /// Tap opens `CompassCalibrationSheet` for the figure-8
-    /// instructions. Surfaces only after `compassBadDebounce` seconds
-    /// of consistently-bad readings (see `updateCompassWarning`).
     /// Proactive ambient hint while the phone is pointed indoors — so the
     /// user knows to head outside before they even try to catch. Driven by
     /// the debounced `pointedIndoors`; auto-clears when aimed at sky.
@@ -997,6 +1050,39 @@ struct ContentView: View {
         }
     }
 
+    /// Transient beyond-eyeshot toast: shown when an empty-sky tap's nearest
+    /// in-data plane is past plausible reveal reach ("filtered-far"). Honest
+    /// about WHY nothing revealed — in dense airspace there is almost always
+    /// *something* in the data, and silently ignoring the tap reads as broken.
+    /// Same look/lifecycle as `groundedToastBanner`.
+    @ViewBuilder
+    private var farTapToastBanner: some View {
+        if let toast = farTapToast {
+            Text("Nearest plane is \(Int((toast.slantMeters / 1000).rounded())) km out — beyond eyeshot")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+                .padding(.top, 60)
+                .padding(.horizontal, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Present the beyond-eyeshot toast for ~3 s.
+    private func presentFarTapToast(slantMeters: Double) {
+        let now = Date()
+        withAnimation(.easeInOut(duration: 0.2)) { farTapToast = (now, slantMeters) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if farTapToast?.at == now {
+                withAnimation(.easeInOut(duration: 0.3)) { farTapToast = nil }
+            }
+        }
+    }
+
     /// Present the parked-plane toast for ~3 s, record the attempt for the
     /// "Ground Stop" secret badge, and fire the one telemetry event. The
     /// unlock check runs immediately after recording so the badge's moment
@@ -1014,6 +1100,20 @@ struct ContentView: View {
         unlockCenter.enqueueNewUnlocks(from: catches)
     }
 
+    /// Compass-bad caution banner. Surfaces only after
+    /// `compassBadDebounce` s of readings past `compassBadThreshold`
+    /// (latched via `updateCompassWarning`), then shouts: a filled-amber
+    /// banner with a pulsing warning glyph, the live "COMPASS OFF ±N°"
+    /// readout, and a plain line that the on-screen labels can't be
+    /// trusted until it's fixed. Tap opens `CompassCalibrationSheet`.
+    ///
+    /// Deliberately LOUD — the prior slim translucent capsule was too
+    /// easy to miss with a plane in frame, which is exactly how the SFO
+    /// field misID slipped through (2026-07-13: a ~40°-off compass
+    /// mis-projected every plane, so a huge 777 read as a distant
+    /// Cessna). A one-shot warning haptic fires when it first appears
+    /// (the `.sensoryFeedback` on the top-center stack). It does NOT
+    /// gate catching — warn loudly, keep the shutter live (Noah's call).
     @ViewBuilder
     private var cautionBadge: some View {
         if isHeadingAccuracyBad {
@@ -1023,22 +1123,38 @@ struct ContentView: View {
                     headingAccuracyDeg: location.headingAccuracy
                 )
             } label: {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Brand.Color.alertCaution)
-                        .frame(width: 5, height: 5)
-                    Text("COMPASS \(formatHeadingAccuracyShort())")
-                        .font(Brand.Font.mono(size: 10, weight: .bold))
-                        .tracking(1.0)
-                        .foregroundStyle(Brand.Color.alertCaution)
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .symbolEffect(.pulse, options: .repeating)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("COMPASS OFF \(formatHeadingAccuracyShort())")
+                            .font(Brand.Font.mono(size: 14, weight: .bold))
+                            .tracking(1.0)
+                        Text("Labels may be wrong — tap to calibrate")
+                            .font(Brand.Font.mono(size: 10, weight: .regular))
+                            .opacity(0.85)
+                    }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+                // Dark text/glyph on amber — the classic caution read,
+                // and the only high-contrast pairing (amber-on-dark is
+                // reserved for the quieter data HUD).
+                .foregroundStyle(Brand.Color.bgSurface)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Brand.Color.alertCaution,
+                            in: RoundedRectangle(cornerRadius: Brand.Radius.row))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Brand.Radius.row)
+                        .strokeBorder(Brand.Color.bgSurface.opacity(0.15), lineWidth: 1)
+                )
+                // Amber glow so it lifts off the live camera behind it.
+                .shadow(color: Brand.Color.alertCaution.opacity(0.5), radius: 12, y: 2)
+                .contentShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Tap to calibrate.")
-            .transition(.opacity)
+            .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Labels may be wrong. Tap to calibrate.")
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
@@ -1081,6 +1197,8 @@ struct ContentView: View {
                 .padding(8)
                 .background(Brand.Color.bgPrimary.opacity(showDebug ? 0.45 : 0.20), in: .circle)
                 .shadow(color: .black.opacity(0.5), radius: 2)
+                // 32 pt visible disc; inset expands the hit region to 44.
+                .contentShape(Rectangle().inset(by: -6))
         }
         .accessibilityLabel(showDebug ? "Hide debug overlays" : "Show debug overlays")
     }
@@ -1484,6 +1602,22 @@ struct ContentView: View {
             // actually went up.
             var revealPresented = false
             defer { if !revealPresented { captureInFlight = false } }
+            // Catch-time route resolve (see CatchBackfill.resolveCatchTimeRoute):
+            // the backend attaches routes a poll LATE, so a freshly-caught
+            // plane usually froze a route-less row and the bonus round couldn't
+            // fire. Kick the resolve NOW — concurrently with the shutter/detector
+            // below — for the single-catch path (the only guess-eligible one),
+            // and only when the live feed carried no route to begin with. Awaited
+            // just before the row is built; because it overlaps the ~19-pass
+            // detector snap it adds no perceptible latency to the reveal.
+            let routeResolve: Task<BackendAircraft.Route?, Never>? = {
+                guard icaos.count == 1, let icao = icaos.first,
+                      let obs = visibleByIcao[icao],
+                      obs.aircraft.originIcao == nil, obs.aircraft.destIcao == nil
+                else { return nil }
+                let callsign = obs.aircraft.callsign
+                return Task { await CatchBackfill.resolveCatchTimeRoute(callsign: callsign) }
+            }()
             // One JPEG, reused for every new row in this catch. If the
             // camera isn't ready (auth denied, session not running),
             // `captureJPEG` returns nil — Catches are still valid
@@ -1622,6 +1756,15 @@ struct ContentView: View {
             var newCatches: [Catch] = []
             var duplicates: [String] = []
 
+            // Await the catch-time route resolve kicked off above (nil unless
+            // this was a single catch whose live feed carried no route). It ran
+            // during the shutter/detector work, so this is usually already done.
+            // Merged onto the fresh row below — equivalent to the Hangar
+            // backfill's per-callsign heal, just applied AT catch so the bonus
+            // round can render. Only the fully-nil-route case is filled (never
+            // a one-sided as-observed route — see the row's route comment).
+            let resolvedRoute = await routeResolve?.value
+
             for icao in icaos {
                 if Catch.exists(icao24: icao, in: modelContext) {
                     duplicates.append(icao)
@@ -1707,12 +1850,16 @@ struct ContentView: View {
                     // the feed; nil when the feed had none. A fully-nil route
                     // may later heal via CatchBackfill's per-callsign lookup
                     // (2026-07-04) — a one-sided as-observed route never does.
-                    originIcao: observed?.aircraft.originIcao,
-                    destIcao: observed?.aircraft.destIcao,
-                    originIata: observed?.aircraft.originIata,
-                    destIata: observed?.aircraft.destIata,
-                    originName: observed?.aircraft.originName,
-                    destName: observed?.aircraft.destName,
+                    // `resolvedRoute` is that SAME lookup pulled forward to
+                    // catch time (single-catch, feed-had-no-route path) so the
+                    // bonus round can render; it's a complete origin+dest pair
+                    // or nil, so it never fabricates a one-sided journey.
+                    originIcao: observed?.aircraft.originIcao ?? resolvedRoute?.originIcao,
+                    destIcao: observed?.aircraft.destIcao ?? resolvedRoute?.destIcao,
+                    originIata: observed?.aircraft.originIata ?? resolvedRoute?.originIata,
+                    destIata: observed?.aircraft.destIata ?? resolvedRoute?.destIata,
+                    originName: observed?.aircraft.originName ?? resolvedRoute?.originName,
+                    destName: observed?.aircraft.destName ?? resolvedRoute?.destName,
                     // Post-catch confirm: a gate-suspected row is born
                     // quarantined (skipped by CatchUploader) until the
                     // post-reveal review clears or deletes it.
@@ -1862,7 +2009,7 @@ struct ContentView: View {
 
     /// Picks the right reveal payload based on what landed.
     ///
-    /// - Single (1 fresh OR 1 dup) → `CardReveal` via `pendingReveal`.
+    /// - Single (1 fresh OR 1 dup) → `CatchRevealView` via `pendingReveal`.
     /// - Multi (≥2 combined fresh + dup) → `MultiCatchReveal` via
     ///   `pendingMultiReveal`. Fresh and dup entries are interleaved
     ///   in the same order they were captured; the reveal renders
@@ -2752,6 +2899,52 @@ struct ContentView: View {
 
     // MARK: - Tap-to-ID
 
+    /// VoiceOver's route into pin/unpin — the same effect as a direct tap
+    /// on a labeled plane (`handleTap` branch 1) minus the screen-geometry
+    /// hit-test, which accessibility activation doesn't need: the element
+    /// the user activated already names the plane.
+    private func accessibilityTogglePin(icao: String) {
+        let now = Date()
+        if icao == pinnedIcao {
+            recorder.recordUnpin(at: now)
+            pinnedIcao = nil
+            revealedIcao = nil
+            lockOn.unpin()
+        } else {
+            pinnedIcao = icao
+            revealedIcao = nil   // a normal pin is a visible plane, not a reveal
+            recorder.recordTapPin(icao24: icao, at: now)
+            lockOn.forceLock(targetIcao24: icao, now: now)
+        }
+    }
+
+    /// Spoken summary for a plane's AR label: callsign, airframe model
+    /// when the metadata cache has it, rarity tier, and slant distance.
+    private func planeAccessibilityLabel(
+        _ obs: ObservedAircraft,
+        metadata: AircraftMetadata?
+    ) -> String {
+        let callsign = obs.aircraft.callsign?
+            .trimmingCharacters(in: .whitespaces)
+            .nonEmpty
+            ?? obs.aircraft.icao24.uppercased()
+        let rarity = resolveAROverlayRarity(
+            typecode: metadata?.typecode,
+            manufacturer: metadata?.manufacturerName,
+            model: metadata?.model,
+            operatorName: metadata?.operatorName
+        )
+        let km = obs.slantDistanceMeters / 1000
+        let distance = km < 9.95
+            ? String(format: "%.1f", km)
+            : String(Int(km.rounded()))
+        var parts = [callsign]
+        if let model = metadata?.model?.nonEmpty { parts.append(model) }
+        parts.append(rarity.label.capitalized)
+        parts.append("\(distance) kilometers away")
+        return parts.joined(separator: ", ")
+    }
+
     /// Tap handler for the AR overlay. Three outcomes:
     ///   - Tapped on (or very near) the currently-pinned plane → toggle
     ///     off, fall back to center-driven lock.
@@ -2887,6 +3080,14 @@ struct ContentView: View {
             presentGroundedTapToast(icao24: d.obs.aircraft.icao24)
             return
         }
+        // FILTERED-FAR (2026-07-12): airborne and hidden, but past plausible
+        // reveal reach (or below the horizon) — the NYC couch case, where 110
+        // in-data planes meant every tap "found" something 27–76 km away.
+        // No reveal, no lock: an honest toast with the distance instead.
+        if let d = diagnosis, d.reason == "filtered-far" {
+            presentFarTapToast(slantMeters: d.obs.slantDistanceMeters)
+            return
+        }
         if let d = diagnosis, shouldTapReveal(reason: d.reason) {
             let icao = d.obs.aircraft.icao24
             revealedIcao = icao
@@ -2956,7 +3157,8 @@ struct ContentView: View {
                 offsetDeg: b.offsetDeg,
                 grounded: b.obs.grounded,
                 tier: b.obs.visibilityTier,
-                onScreen: b.onScreen
+                onScreen: b.onScreen,
+                plausiblyRevealable: b.obs.isPlausiblyRevealable
             )
         } else {
             reason = "nothing-nearby"
@@ -3021,8 +3223,15 @@ let emptySkyTapMaxOffsetDeg: Double = 40
 ///   - "grounded"       → parked plane under the tap: playful toast, never
 ///                         a reveal (checked BEFORE the tier — a grounded
 ///                         plane is also `.hidden`, and reveal must lose).
-///   - "filtered"        → airborne but hidden by the precision band:
-///                         tap-to-reveal (the FDX1268 affordance).
+///   - "filtered"        → airborne, hidden by the precision band, but within
+///                         plausible reveal reach: tap-to-reveal (the FDX1268
+///                         affordance).
+///   - "filtered-far"    → airborne and hidden, but beyond
+///                         `revealReachMeters` (or below the horizon) — not
+///                         plausibly visible from here, so the tap gets the
+///                         beyond-eyeshot hint instead of a reveal (the NYC
+///                         couch session, 2026-07-12: 110 planes in data,
+///                         nearest-tap planes 27–76 km out).
 ///   - "off-frame"       → visible tier but projected outside the screen.
 ///   - "on-screen"       → visible and on screen (tap just missed it).
 ///   - "nothing-nearby"  → nearest plane is too far off the tap direction.
@@ -3035,11 +3244,12 @@ func classifyEmptySkyTapNearest(
     offsetDeg: Double,
     grounded: Bool,
     tier: ObservedAircraft.VisibilityTier,
-    onScreen: Bool
+    onScreen: Bool,
+    plausiblyRevealable: Bool
 ) -> String {
     guard offsetDeg <= emptySkyTapMaxOffsetDeg else { return "nothing-nearby" }
     if grounded { return "grounded" }
-    if tier == .hidden { return "filtered" }
+    if tier == .hidden { return plausiblyRevealable ? "filtered" : "filtered-far" }
     if !onScreen { return "off-frame" }
     return "on-screen"
 }
@@ -3053,8 +3263,11 @@ func classifyEmptySkyTapNearest(
 ///                   because a compass/heading error (or high zoom) rotated the
 ///                   sky-model off where the plane visually sits (DAL972,
 ///                   2026-07-11). The user is pointed at it; the tap grabs it.
-/// "grounded" is handled earlier (a parked plane is never revealed); "on-screen"
-/// and "nothing-nearby" fall through to the empty-tap ripple.
+/// "grounded" is handled earlier (a parked plane is never revealed);
+/// "filtered-far" gets the beyond-eyeshot hint (a hidden plane past plausible
+/// reveal reach must NOT become catchable — the NYC couch session caught a
+/// Piper 75.8 km away through a wall); "on-screen" and "nothing-nearby" fall
+/// through to the empty-tap ripple.
 func shouldTapReveal(reason: String) -> Bool {
     reason == "filtered" || reason == "off-frame"
 }
@@ -3129,12 +3342,18 @@ private struct PlaneLabel: View {
         // keeps the bracket legible against a bright sky.
         let bracketLineWidth: CGFloat = isPinned ? 3.5 : 2.0
         let bracketOpacity: Double = isPinned ? 1.0 : 0.55
+        // Dim applies to FOREGROUND strokes/text only — never to the pill's
+        // dark scrim or the brackets' halo. A whole-view .opacity multiplied
+        // the 0.55 scrim down to ~0.19, leaving dimmed 8–9 pt cyan text
+        // nearly scrim-less over a bright sky (and defeated the halo's
+        // "held at full opacity" design).
+        let dimFactor: Double = isDimmed ? 0.35 : 1.0
 
         VStack(spacing: 2) {
             LockBrackets(
                 boxSize: bracketBoxSize,
                 color: Brand.Color.cyan,
-                opacity: bracketOpacity,
+                opacity: bracketOpacity * dimFactor,
                 lineWidth: bracketLineWidth
             )
             HStack(spacing: 4) {
@@ -3151,13 +3370,15 @@ private struct PlaneLabel: View {
                         .foregroundStyle(rarity.tint)
                 }
             }
+            // Opacity BEFORE the background so only the text fades; the
+            // scrim drawn behind it stays at its full 0.55.
+            .opacity(dimFactor)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(Brand.Color.bgPrimary.opacity(0.55),
                         in: .rect(cornerRadius: 4))
         }
         .position(position)
-        .opacity(isDimmed ? 0.35 : 1.0)
         .allowsHitTesting(false)
     }
 }
@@ -3276,26 +3497,43 @@ private struct EmptyPulse: ViewModifier {
 private struct EmptyTapRippleView: View {
     let at: CGPoint
     let since: Date
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation) { ctx in
-            let dt = ctx.date.timeIntervalSince(since)
-            let progress = min(1.0, dt / 0.8)
+        if reduceMotion {
+            // Reduce Motion: no expanding ring — a static ring + caption
+            // at the tap point; the parent's 1 s auto-clear still removes it.
             ZStack {
                 Circle()
-                    .stroke(Brand.Color.cyan.opacity(1.0 - progress),
-                            lineWidth: 1.5)
-                    .frame(width: CGFloat(20 + progress * 80),
-                           height: CGFloat(20 + progress * 80))
-                if progress < 0.95 {
-                    Text("NO AIRCRAFT HERE")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.cyan.opacity(1.0 - progress))
-                        .padding(.top, 60)
-                }
+                    .stroke(Brand.Color.cyan.opacity(0.7), lineWidth: 1.5)
+                    .frame(width: 44, height: 44)
+                Text("NO AIRCRAFT HERE")
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.cyan.opacity(0.9))
+                    .padding(.top, 60)
             }
             .position(at)
+        } else {
+            TimelineView(.animation) { ctx in
+                let dt = ctx.date.timeIntervalSince(since)
+                let progress = min(1.0, dt / 0.8)
+                ZStack {
+                    Circle()
+                        .stroke(Brand.Color.cyan.opacity(1.0 - progress),
+                                lineWidth: 1.5)
+                        .frame(width: CGFloat(20 + progress * 80),
+                               height: CGFloat(20 + progress * 80))
+                    if progress < 0.95 {
+                        Text("NO AIRCRAFT HERE")
+                            .font(Brand.Font.mono(size: 9, weight: .semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(Brand.Color.cyan.opacity(1.0 - progress))
+                            .padding(.top, 60)
+                    }
+                }
+                .position(at)
+            }
         }
     }
 }

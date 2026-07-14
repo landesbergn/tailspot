@@ -46,7 +46,8 @@ struct SettingsScreen: View {
                             .multilineTextAlignment(.trailing)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                            .font(Brand.Font.mono(size: 17))
+                            .font(Brand.Font.mono(size: 17, relativeTo: .body))
+                            .accessibilityLabel("Handle")
                             .onChange(of: handleDraft) { _, _ in
                                 handleTakenError = nil
                                 savedHandleSuccess = nil
@@ -91,7 +92,7 @@ struct SettingsScreen: View {
                             ProgressView().scaleEffect(0.85).tint(Brand.Color.bgPrimary)
                         } else {
                             Text("Save handle")
-                                .font(Brand.Font.mono(size: 15, weight: .bold))
+                                .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
                         }
                         Spacer()
                     }
@@ -99,6 +100,10 @@ struct SettingsScreen: View {
                     .background(isDirty ? Brand.Color.cyan : Brand.Color.bgElevated,
                                 in: .rect(cornerRadius: Brand.Radius.row))
                     .foregroundStyle(isDirty ? Brand.Color.bgPrimary : Brand.Color.textTertiary)
+                    // The filled capsule renders ~35 pt; the frame carries
+                    // the 44 pt hit target without inflating the row visual.
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!isDirty || isSavingHandle)
@@ -109,7 +114,7 @@ struct SettingsScreen: View {
 
             } header: {
                 Text("SPOTTER")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                     .textCase(nil)
@@ -136,7 +141,7 @@ struct SettingsScreen: View {
 
             } header: {
                 Text("ABOUT")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                     .textCase(nil)
@@ -230,9 +235,13 @@ struct SettingsScreen: View {
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Brand.Color.textTertiary)
+                    .accessibilityHidden(true)
             }
         }
         .buttonStyle(.plain)
+        // The glyph is hidden above, so the "leaves the app" cue it carries
+        // visually comes through here instead.
+        .accessibilityHint("Opens in browser")
     }
 
     // MARK: - Version footer
@@ -250,11 +259,13 @@ struct SettingsScreen: View {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
                 Text(Bundle.main.tailspotVersionLine)
-                    .font(Brand.Font.mono(size: 11, weight: .regular))
+                    .font(Brand.Font.mono(size: 11, weight: .regular, relativeTo: .caption2))
                     .foregroundStyle(Brand.Color.textTertiary)
+                // Full textTertiary, no extra opacity — tertiary × 0.6 fell
+                // below readable contrast for an interactive hint.
                 Text(" · tap to copy")
-                    .font(Brand.Font.mono(size: 11, weight: .regular))
-                    .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
+                    .font(Brand.Font.mono(size: 11, weight: .regular, relativeTo: .caption2))
+                    .foregroundStyle(Brand.Color.textTertiary)
                 Spacer(minLength: 0)
             }
             .padding(.top, 6)

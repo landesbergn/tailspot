@@ -51,6 +51,53 @@ struct GuessAirportTableTests {
         #expect(!GuessOptions.routeAvailable(originIcao: "K0X9", destIcao: "K1X1"))
         #expect(!GuessOptions.routeAvailable(originIcao: "KSFO", destIcao: "KSFO"))
     }
+
+    @Test func majorFlagSplitsResolutionFromDistractors() {
+        // The table now serves two roles: comprehensive US resolution rows
+        // (major == false) plus recognizable distractor-eligible hubs
+        // (major == true). Both populations must be non-empty.
+        let airports = GuessOptions.airports
+        let major = airports.filter(\.major)
+        let resolutionOnly = airports.filter { !$0.major }
+        #expect(major.count > 200, "curated hubs + US large airports")
+        #expect(!resolutionOnly.isEmpty, "US regional coverage should exist")
+        // A hub is major; a regional field near the test base is resolution-only.
+        #expect(GuessOptions.airportsByIcao["KSFO"]?.major == true)
+        #expect(GuessOptions.airportsByIcao["KMRY"]?.major == false)
+        // Every continent's MAJOR bucket is deep enough to source 3 distractors
+        // (the distractor pool is major-only).
+        let majorByContinent = Dictionary(grouping: major, by: \.continent)
+        for (continent, group) in majorByContinent {
+            #expect(group.count >= GuessOptions.optionCount - 1,
+                    "major continent \(continent) too thin (\(group.count))")
+        }
+    }
+
+    @Test func regionalUsFieldsNowResolve() {
+        // The coverage gap this change closes: a non-curated US regional field
+        // (KMRY / Monterey) — previously absent, so KMRY-only routes could
+        // never fire a round — now resolves.
+        #expect(GuessOptions.airportsByIcao["KMRY"] != nil)
+        #expect(GuessOptions.routeAvailable(originIcao: "KMRY", destIcao: nil))
+        #expect(GuessOptions.routeAvailable(originIcao: "KSFO", destIcao: "KMRY"))
+        // Generally: every resolution-only (non-major) field resolves a route.
+        let sample = GuessOptions.airports.first { !$0.major }
+        if let sample {
+            #expect(GuessOptions.routeAvailable(originIcao: sample.icao, destIcao: "KSFO"))
+        }
+    }
+
+    @Test func emptyIataDisplayHasNoLeadingSeparator() {
+        // Many small resolution-only fields carry no IATA — the chip must lead
+        // with the ICAO ident, never a bare "· City".
+        let kmry = GuessOptions.airportsByIcao["KMRY"]
+        #expect(kmry?.display == "MRY · Monterey")
+        for airport in GuessOptions.airports where airport.iata.isEmpty {
+            #expect(airport.display == "\(airport.icao) · \(airport.city)")
+            #expect(!airport.display.hasPrefix("·"))
+            #expect(!airport.display.hasPrefix(" "))
+        }
+    }
 }
 
 @Suite("GuessOptions — route questions")
@@ -150,6 +197,60 @@ struct GuessOptionsRouteTests {
         let chosenMeanDelta = chosenDeltas.reduce(0, +) / Double(chosenDeltas.count)
         #expect(chosenMeanDelta < poolMeanDelta * 0.8,
                 "weighted mean Δ \(chosenMeanDelta) not clearly under pool mean \(poolMeanDelta)")
+    }
+
+    @Test func distractorsAreAllMajorAirports() throws {
+        // Distractors are sampled ONLY from major (recognizable) airports —
+        // the comprehensive US resolution-only fields must never surface as an
+        // obscure wrong answer. Covers an international correct answer (VHHH,
+        // AS) and a US one (KSFO, NA).
+        for (origin, dest) in [("KSFO", "VHHH"), ("KMRY", "KSFO")] {
+            for seed in UInt64(1)...20 {
+                let q = try #require(question(origin: origin, dest: dest, seed: seed))
+                for option in q.options where option.value != q.correctValue {
+                    let airport = try #require(GuessOptions.airportsByIcao[option.value])
+                    #expect(airport.major,
+                            "distractor \(option.value) is not major (\(origin)→\(dest))")
+                }
+            }
+        }
+    }
+
+    @Test func asksAboutTheMajorEndpoint() throws {
+        // KMRY (non-major, ~145 km from Berkeley) → KSFO (major, ~28 km). The
+        // OLD rule (farther endpoint) would ask about KMRY; the major
+        // preference must win and ask about SFO instead.
+        for seed in UInt64(1)...20 {
+            let q = try #require(question(origin: "KMRY", dest: "KSFO", seed: seed))
+            #expect(q.endpoint == .destination)
+            #expect(q.correctValue == "KSFO")
+            let correct = try #require(GuessOptions.airportsByIcao[q.correctValue])
+            #expect(correct.major)
+        }
+    }
+
+    @Test func allNonMajorEndpointsStillBuildAQuestion() throws {
+        // Both endpoints are non-major US regional fields (KMRY, KAPC). A round
+        // can still fire: the correct chip is the (non-major) asked endpoint,
+        // and the 3 distractors are drawn from the major pool.
+        for seed in UInt64(1)...20 {
+            let q = try #require(question(origin: "KMRY", dest: "KAPC", seed: seed))
+            #expect(q.options.count == GuessOptions.optionCount)
+            #expect(["KMRY", "KAPC"].contains(q.correctValue))
+            let correct = try #require(GuessOptions.airportsByIcao[q.correctValue])
+            #expect(!correct.major, "the asked endpoint is a resolution-only field")
+            let other = q.correctValue == "KMRY" ? "KAPC" : "KMRY"
+            #expect(!q.options.contains { $0.value == other })
+            for option in q.options where option.value != q.correctValue {
+                let airport = try #require(GuessOptions.airportsByIcao[option.value])
+                #expect(airport.major)
+            }
+        }
+    }
+
+    @Test func degenerateNonMajorRouteReturnsNil() {
+        // Same non-major field both ends → no honest question, graceful nil.
+        #expect(question(origin: "KMRY", dest: "KMRY") == nil)
     }
 
     @Test func singleKnownEndpointDegradesToAskingAboutIt() throws {

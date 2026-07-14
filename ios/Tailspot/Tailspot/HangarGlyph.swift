@@ -32,6 +32,11 @@ struct HangarGlyph: View {
             .resizable()
             .scaledToFit()
             .foregroundStyle(tint)
+            // Decorative at every call site (always paired with a text
+            // label) — hidden here so VoiceOver never reads the raw
+            // symbol name; a caller that ever needs it spoken can
+            // override with its own accessibilityLabel.
+            .accessibilityHidden(true)
     }
 }
 

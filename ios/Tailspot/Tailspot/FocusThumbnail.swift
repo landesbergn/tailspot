@@ -65,6 +65,9 @@ struct FocusThumbnail: View {
         content
             .frame(width: side, height: side)
             .clipped()
+            // Decorative in every current call site — the row's text names
+            // the catch; a bare "image" announcement adds nothing.
+            .accessibilityHidden(true)
             .task(id: url?.path) { await load() }
     }
 

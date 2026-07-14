@@ -5,7 +5,7 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-07-13 — Catch-target plausibility: stop bagging the wrong plane in dense sky — branch `fix/catch-target-plausibility`
+## 2026-07-13 — Catch-target plausibility (+ lone-plane catchable): stop bagging the wrong plane in dense sky — branch `fix/catch-target-plausibility`
 
 Field mis-catch (Noah, NYC): a 12.9 km cruise A319 at ~70° elevation (nearly
 overhead) was caught instead of the closer, lower plane he aimed at. Root
@@ -40,8 +40,99 @@ the design (`tools/target-selection/target_spike.py`):
   recording wasn't running). Pure debugging; never gates or scores.
 
 `TargetSelectionTests` pins the A319 geometry (bad compass → closer/bigger
-plane; good compass → unchanged; the limitations as tests). Full suite 980
-green.
+plane; good compass → unchanged; the limitations as tests).
+
+**Folded in from `fix/lone-plane-catchable` (#145, Portland field report) on
+merge:** the same capture-mode block also needed a **lone-plane whole-frame
+fallback** — when the tight central catch zone is empty but exactly ONE plane
+is visible anywhere on frame, it stays catchable (`.single`), so a lone
+off-centre / fast-moving plane that was never tapped isn't a dead shutter.
+Two+ on frame still require aim or a tap (the dense-airspace spray exploit
+stays closed). #145 closed as absorbed. Both edge cases now live in one
+resolver; full suite green.
+
+## 2026-07-13 — The compass warning made LOUD: broken-compass misID diagnosed at SFO — branch `fix/loud-compass-warning`
+
+Field report (Noah, watching arrivals at SFO): **UAL195, a Boeing 777-222(ER)
+on final (reg N225UA, MUC→SFO), was identified as a Cessna 172.** Pulled the
+on-device replay (`replay-2026-07-13T214656Z`, 2:46 PM PDT, Noah at the SFO
+terminals) and it's unambiguous — **the compass was 35–40° off true north** for
+the whole session (`headingAccuracyDeg` 35–40; the reported heading snapped
+**90°→339°** in one tick at 21:47:12 as it finally recalibrated, without Noah
+rotating the phone — direct proof the earlier north was ~100°+ wrong). Standing
+amid the terminal's steel/jet-bridges = severe magnetic interference. With north
+that far out every projection is garbage: both tap-pins in the window landed on
+distant *filtered* planes (a King Air at **46 km**, N824AK at **31 km**), never
+the 777 — which was `onGround` the whole window (grounded → `.hidden`), so it was
+never what got labeled. The "Cessna 172" happened a minute earlier on final,
+same broken compass, same failure — a real distant GA plane in the 130-aircraft
+feed garbage-projecting under the 777's apparent position.
+
+**Ruled out** (so we fixed the right thing): the source data is correct
+(adsb.lol reports N225UA as `t:B772`/heavy), there is **no C172 fallback** (a
+typeless plane resolves to nil, never a Cessna), and this is **not** the
+lone-plane capture rule. Root cause is purely the compass; no selection logic
+can help when north itself is wrong.
+
+**The gap:** the app already detects this (`compassBadThreshold = 25°`, debounced
+4 s → `showCompassWarning`) but the warning was a **deliberately-quiet, advisory
+corner capsule** — invisible when you're locked onto a landing 777, and it gated
+nothing. The telemetry comment in the code already called it "the suspected
+silent killer of 'label points the wrong way' first sessions." Caught red-handed.
+
+**The fix (Noah's call — warn loudly, keep the shutter live; IDs/catches are NOT
+gated):** `ContentView.cautionBadge` is now a **loud filled-amber banner** — a
+pulsing warning glyph, the live `COMPASS OFF ±N°` readout, and a plain
+`Labels may be wrong — tap to calibrate` line (dark-on-amber, amber glow so it
+lifts off the live camera, slides in from the top). A **one-shot warning haptic**
+fires the moment the compass latches bad (declarative `.sensoryFeedback` on the
+top-center stack; recovery is silent) — a felt cue since you may be watching the
+plane, not the HUD. Tap still opens `CompassCalibrationSheet`. New
+`CompassWarningSnapshotTests` (visual pass, day-sky + dark backdrops); full suite
+green. Distinct from `fix/lone-plane-catchable` — separate branch, separate
+cause.
+
+## 2026-07-12 — Tap-reveal plausibility bound: dense airspace stops being a catch-anything button — branch `fix/tap-reveal-plausibility`
+
+Field report (Noah, on a couch in Manhattan, replay-2026-07-12T150351Z): with
+**110 airborne planes** in the NYC data (EWR/LGA/JFK + GA), the ambient band
+correctly hid ALL of them — but **tap-to-reveal has no distance bound**, so
+all 11 empty taps revealed and force-locked planes 27–72 km out at 0.4–9.6°
+elevation, through a wall, and a Piper Cherokee was caught at **75.8 km**
+(the post-catch gates did their job: flagged suspect, Noah discarded). The
+reveal was built for the Berkeley cases where the tapped plane is genuinely
+visible (FDX1268, DAL972); in dense airspace "nearest in-data plane" is
+always *something*, so explicit intent alone stopped meaning "I can see it".
+
+- **`ObservedAircraft.isPlausiblyRevealable`** bounds the FILTERED reveal:
+  reveal reach = the faint band (elevation curve × `faintBandFactor`, capped
+  at 35 km) relaxed by **`revealBandFactor = 1.5`**, and strictly-below-
+  horizon planes are never revealable (behind terrain by definition; the
+  0–1° skyline gray zone stays revealable — ambient floor still 1°). No
+  hysteresis term: reveal is a one-shot decision.
+- The empty-tap classifier splits hidden-tier into **"filtered"** (within
+  reach → reveals, unchanged) and **"filtered-far"** (beyond reach → an
+  honest beyond-eyeshot toast with the distance, no reveal, no lock). The
+  new reason flows through replay recordings + `empty_sky_tap` telemetry;
+  `FailureMode`'s missedPlane scorer keys on "filtered", so implausible
+  couch taps stop inflating the miss bench.
+- **The confirmed-visible marginal cases the reveal exists for still pass**
+  (pinned by `TapRevealPlausibilityTests`): FDX1268 10.9 km @ 3.6° (reach
+  ~15.8 km), SKW5480 18 km @ 12.1°, N21866 5.8 km @ 5° small-airframe. The
+  couch session's 11 reveals + the 75.8 km Cherokee are all refused, as is
+  the below-horizon N383TA (6.4 km @ −0.45°). OFF-FRAME reveal is untouched
+  (it already requires visible tier).
+- **Indoors = no ambient labels** (second half of the report, Noah's call:
+  "if the frame reads as not sky — don't show labels"). The band was also
+  passing planes that ARE outdoor-visible from that location (river-corridor
+  GA at 2–3 km, LGA finals at 8 km; 9 passed at a live check) — the
+  geometric filter can't know about walls. `interactiveVisible(_:)` is now
+  the one definition of the label set (render loop + metadata prefetch +
+  signature, previously three copies): the ambient tier is suppressed while
+  `pointedIndoors` (the existing 5 s-debounced SkyCheck streak behind the
+  "Not many planes indoors." hint), the tap-revealed plane survives, and
+  zone catchability/lock/taps consume the same gated set. The
+  `first_plane_seen` activation latch skips while indoors.
 
 ## 2026-07-12 — Pre-v1 cleanup round: dead code, stale docs, repo organization — branches `chore/v1-backend-cleanup` · `chore/v1-ios-cleanup` · `chore/v1-docs-cleanup`
 

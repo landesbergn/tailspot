@@ -69,12 +69,15 @@ struct MapScreen: View {
         .onAppear { fitToCatches() }
         .sheet(item: $selectedCatch) { c in
             NavigationStack {
+                // presentedModally: this is a sheet, so the detail's chrome
+                // shows a close (X) affordance instead of the push-style
+                // back chevron.
                 CatchDetailView(row: HangarRow(
                     icao24: c.icao24,
                     mostRecent: c,
                     count: 1,
                     allCatches: [c]
-                ))
+                ), presentedModally: true)
             }
         }
     }
@@ -96,6 +99,14 @@ struct MapScreen: View {
                     .frame(width: 30, height: 30)
             }
         }
+        // The dot stays 16 pt (30 with halo) and centered on the
+        // coordinate; the transparent 44 pt frame is the HIG tap target.
+        // Rarity is color-only on screen, so the label carries it for
+        // VoiceOver.
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel("\(c.callsign ?? c.icao24.uppercased()), \(c.resolvedRarity.label)")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Filter strip
@@ -116,7 +127,10 @@ struct MapScreen: View {
                     }
                 }
             }
-            .padding(8)
+            // Chips carry a 44 pt hit frame (below), so the strip needs
+            // almost no vertical padding of its own to stay a slim capsule.
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
         }
         .background(.thinMaterial, in: .capsule)
         .clipShape(.capsule)
@@ -125,7 +139,9 @@ struct MapScreen: View {
     private func filterChip(label: String, tint: Color, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(Brand.Font.mono(size: 9, weight: .bold))
+                // 11 pt is the HIG text floor; these are interactive labels,
+                // not decorative eyebrows.
+                .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
                 .tracking(0.8)
                 .lineLimit(1)
                 .fixedSize()
@@ -133,8 +149,12 @@ struct MapScreen: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(active ? tint : .clear, in: .capsule)
+                // The visible capsule stays slim; the frame is the hit area.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     // MARK: - Summary panel
@@ -157,17 +177,18 @@ struct MapScreen: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(unique)")
-                    .font(Brand.Font.mono(size: 18, weight: .heavy))
+                    .font(Brand.Font.mono(size: 18, weight: .heavy, relativeTo: .title3))
                     .foregroundStyle(Brand.Color.cyan)
                     .monospacedDigit()
                 Text("UNIQUE")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)
             }
         }
         .padding(14)
         .background(.thinMaterial, in: .rect(cornerRadius: Brand.Radius.card))
+        .accessibilityElement(children: .combine)
     }
 
     private var dateSpanText: String? {

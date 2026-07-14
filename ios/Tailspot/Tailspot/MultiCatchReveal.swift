@@ -167,7 +167,26 @@ struct MultiCatchReveal: View {
                 }
                 try? await Task.sleep(for: .seconds(Self.stagger))
             }
+            // The stagger + receipt carry no accessible narration of their
+            // own, so the combo result is announced once the run completes.
+            AccessibilityNotification.Announcement(comboAnnouncement).post()
         }
+    }
+
+    /// One-sentence VoiceOver summary of the whole multi-catch, posted when
+    /// the last card lands (mirrors the receipt's math).
+    private var comboAnnouncement: String {
+        let totalBase = entries
+            .filter { !$0.isDuplicate }
+            .reduce(0) { $0 + $1.plane.rarity.basePoints }
+        let multiplier = Self.comboMultiplier(for: totalFresh)
+        let totalAwarded = Int((Double(totalBase) * multiplier).rounded())
+        let dupCount = entries.filter(\.isDuplicate).count
+        var parts = ["\(totalFresh) planes caught"]
+        if dupCount > 0 { parts.append("\(dupCount) already in hangar") }
+        if totalFresh >= 2 { parts.append("combo times \(formatMultiplier(multiplier))") }
+        parts.append("\(totalAwarded) points awarded")
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Backdrop
@@ -214,6 +233,8 @@ struct MultiCatchReveal: View {
         .padding(.vertical, 6)
         .background(Brand.Color.bgPrimary.opacity(0.75), in: .capsule)
         .overlay(Capsule().strokeBorder(Brand.Color.alertAdvisory.opacity(0.55), lineWidth: 1))
+        // One element — the glowing dot is decorative next to the text.
+        .accessibilityElement(children: .combine)
     }
 
     private func formatMultiplier(_ x: Double) -> String {
@@ -330,6 +351,9 @@ struct MultiCatchReveal: View {
             )
             .rotationEffect(.degrees(-18))
             .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 1)
+            // Parity with the full-size stamp: read as a phrase, not as
+            // two shouted lines split by the hard wrap.
+            .accessibilityLabel("Already caught")
     }
 
     // MARK: - Receipt (final state)
@@ -394,6 +418,8 @@ struct MultiCatchReveal: View {
                 .strokeBorder(Brand.Color.alertAdvisory.opacity(0.30), lineWidth: 1)
         )
         .frame(maxWidth: 360)
+        // The ledger reads as one receipt, not eight loose fragments.
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Buttons

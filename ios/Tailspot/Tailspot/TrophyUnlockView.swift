@@ -112,6 +112,7 @@ struct TrophyUnlockView: View {
                 .font(Brand.Font.mono(size: 24, weight: .heavy))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.7)
 
             Text(event.achievement.summary)
                 .font(Brand.Font.caption)
@@ -148,6 +149,10 @@ struct TrophyUnlockView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
                         .overlay(Capsule().strokeBorder(Brand.Color.textTertiary.opacity(0.4), lineWidth: 1))
+                        // The pill renders ~25 pt tall; the expanded hit
+                        // shape carries the 44 pt target without changing
+                        // the ceremony's composition.
+                        .contentShape(Rectangle().inset(by: -10))
                 }
                 .buttonStyle(.plain)
             }

@@ -24,6 +24,11 @@ import os
 
 struct CatchDetailView: View {
     let row: HangarRow
+    /// True when this detail is the root of a sheet (MapScreen's pin
+    /// detail) rather than a push. A back chevron inside a modal reads
+    /// as push navigation, so the chrome pill renders an X instead —
+    /// same dismiss, honest affordance.
+    var presentedModally: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -181,11 +186,11 @@ struct CatchDetailView: View {
             Rectangle().fill(Brand.Color.textPrimary.opacity(0.07)).frame(height: 1)
             VStack(alignment: .leading, spacing: 2) {
                 Text("CAUGHT")
-                    .font(Brand.Font.mono(size: 8, weight: .semibold))
+                    .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
                     .tracking(0.6)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Text("\(first.caughtAt.formatted(date: .abbreviated, time: .shortened)) · \(first.placeName ?? observerCoordText)")
-                    .font(Brand.Font.mono(size: 12, weight: .regular))
+                    .font(Brand.Font.mono(size: 12, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(Brand.Color.textSecondary)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -195,16 +200,18 @@ struct CatchDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
+        // One quiet block, one read: REG/ICAO/TYPE + the caught line.
+        .accessibilityElement(children: .combine)
     }
 
     private func airframeField(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(Brand.Font.mono(size: 8, weight: .semibold))
+                .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
                 .tracking(0.6)
                 .foregroundStyle(Brand.Color.textTertiary)
             Text(value)
-                .font(Brand.Font.mono(size: 13, weight: .bold))
+                .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                 .foregroundStyle(Brand.Color.textPrimary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -228,8 +235,8 @@ struct CatchDetailView: View {
         // this view isn't on a hot render path).
         let img = shareImage
         return HStack {
-            chromePill(icon: "chevron.left") { dismiss() }
-                .accessibilityLabel("Back")
+            chromePill(icon: presentedModally ? "xmark" : "chevron.left") { dismiss() }
+                .accessibilityLabel(presentedModally ? "Close" : "Back")
             Spacer()
             Button {
                 showDeleteConfirm = true
@@ -295,12 +302,17 @@ struct CatchDetailView: View {
     /// we're not actually showing a Planespotters image (catch photo or
     /// nothing-found).
     private func attribution(_ photo: PlanePhoto) -> some View {
+        // 11 pt secondary (not 10 pt tertiary): this is an interactive
+        // credit link the TOS requires people to be able to find and tap —
+        // it has to clear the HIG text floor and read as tappable. The
+        // inset grows the one-line label to a ≥44 pt hit target.
         Button {
             openURL(photo.link)
         } label: {
             Text("© \(photo.photographer) · planespotters.net")
-                .font(.system(size: 10, weight: .regular))
-                .foregroundStyle(Brand.Color.textTertiary)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(Brand.Color.textSecondary)
+                .contentShape(Rectangle().inset(by: -15))
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .center)

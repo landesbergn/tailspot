@@ -22,11 +22,17 @@ struct TrophyView: View {
     var locked: Bool = false
 
     var body: some View {
-        if locked {
-            lockedHex
-        } else {
-            unlockedHex
+        Group {
+            if locked {
+                lockedHex
+            } else {
+                unlockedHex
+            }
         }
+        // Pure iconography — every call site pairs the badge with its own
+        // labeled text (recap cells, unlock card, Hangar trophy cards), so
+        // the badge itself stays silent for VoiceOver.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Unlocked

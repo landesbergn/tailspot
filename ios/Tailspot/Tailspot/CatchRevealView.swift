@@ -115,6 +115,11 @@ struct FlapRow: View {
                 .opacity(ch == " " ? 0 : 1)
             }
         }
+        // One element per row, labelled with the settled text — without this
+        // VoiceOver walks the per-character cells and spells the name out
+        // letter by letter (every FlapRow host inherits the fix).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(text))
     }
 }
 
@@ -493,8 +498,14 @@ struct CatchRevealView: View {
             }
             // Pop the bonus round the moment the reveal settles — whether it
             // settled naturally or the user tapped to skip the animation.
+            // The settle is also the one VoiceOver beat that matters: the
+            // flap animation carries no accessible content, so announce the
+            // result here (model, tier, points) or the payoff is silent.
             .onChange(of: settled) { _, isSettled in
-                if isSettled { popBonusRoundIfEligible() }
+                if isSettled {
+                    popBonusRoundIfEligible()
+                    AccessibilityNotification.Announcement(settleAnnouncement).post()
+                }
             }
             .sensoryFeedback(.success, trigger: settled)
             .sensoryFeedback(.success, trigger: successBeat)
@@ -520,7 +531,20 @@ struct CatchRevealView: View {
         }
         VStack(spacing: 0) {
             Spacer(minLength: 0)
+            // While the chips are up the card holds real controls, so its
+            // children must stay exposed to VoiceOver (FlapRow flattens the
+            // name itself); at rest the card collapses to a single element
+            // with the full result read in one pass. Both states flow through
+            // the SAME modifier chain (dynamic arguments, no if/else) — a
+            // branch here would give the two states different structural
+            // identities and SwiftUI would rebuild the card subtree when the
+            // chips pop, resetting the ledger count-up mid-ceremony.
             card(t: t, bt: bt, width: width, render: render)
+                .accessibilityElement(children: render?.chipsInLayout == true
+                                                ? .contain : .ignore)
+                .accessibilityLabel(render?.chipsInLayout == true
+                                    ? Text("Catch result")
+                                    : Text(cardAccessibilityLabel))
                 // The card is normally tap-through (taps fall to the dismiss
                 // catcher behind). While the chips are up it must capture taps
                 // so the chips + SKIP are interactive; margin taps still reach
@@ -534,6 +558,43 @@ struct CatchRevealView: View {
                 .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - VoiceOver copy
+
+    /// Announced once when the reveal settles (see `.onChange(of: settled)`).
+    private var settleAnnouncement: String {
+        let model = plane.model ?? "Unknown aircraft"
+        if isDuplicate {
+            return "Caught \(model), \(plane.rarity.label), already in hangar, no points"
+        }
+        var parts = ["Caught \(model)", plane.rarity.label]
+        if firstOfTypeBonus > 0 { parts.append("first of type") }
+        parts.append("\(revealTargetTotal) points")
+        return parts.joined(separator: ", ")
+    }
+
+    /// The settled card, read as one element (model + tier + stats + route +
+    /// total). Mirrors what's on screen at rest — the live bonus (if earned)
+    /// is folded into the total the same way the ledger shows it.
+    private var cardAccessibilityLabel: String {
+        var parts = [plane.model ?? "Unknown aircraft", plane.rarity.label]
+        if isDuplicate { parts.append("already caught") }
+        if let alt = plane.altText { parts.append("altitude \(alt)") }
+        if let spd = plane.speedText { parts.append("speed \(spd)") }
+        if let o = plane.originIcao, let d = plane.destIcao {
+            parts.append("route \(o) to \(d)")
+        } else if let o = plane.originIcao {
+            parts.append("from \(o)")
+        } else if let d = plane.destIcao {
+            parts.append("to \(d)")
+        }
+        if !isDuplicate {
+            let bonus = (resolution?.correct == true) ? routeBonus : 0
+            parts.append("\(revealTargetTotal + bonus) points")
+        }
+        parts.append("entry number \(entryNumber)")
+        return parts.joined(separator: ", ")
     }
 
     private func advanceOrDismiss() {
@@ -915,15 +976,22 @@ struct CatchRevealView: View {
 
     private var ctaRow: some View {
         HStack(spacing: 18) {
-            Text("tap to continue")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .tracking(1.2).foregroundColor(RP.faint)
-                .contentShape(Rectangle())
-                .onTapGesture { resolveAsSkipIfNeeded(); onDismiss() }
+            // A real Button (not a bare tap gesture) so VoiceOver/Switch
+            // Control get a dismiss control; the inset contentShape grows the
+            // ~13 pt text to a ≥44 pt hit area without moving the layout.
+            Button(action: { resolveAsSkipIfNeeded(); onDismiss() }) {
+                Text("tap to continue")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .tracking(1.2).foregroundColor(RP.faint)
+                    .contentShape(Rectangle().inset(by: -16))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Continue")
             Button(action: { resolveAsSkipIfNeeded(); onViewInHangar() }) {
                 Text("View in Hangar ›")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .tracking(0.5).foregroundColor(plane.rarity.tint)
+                    .contentShape(Rectangle().inset(by: -16))
             }
             .buttonStyle(.plain)
         }
@@ -943,7 +1011,9 @@ struct CatchRevealView: View {
                     // Reduce Motion: plain fade, no scale pop.
                     .scaleEffect(reduceMotion ? 1 : 0.82 + 0.18 * pop, anchor: .center)
             }
-            // SKIP retires the instant the player commits.
+            // SKIP retires the instant the player commits. The inset grows
+            // the ~25 pt padded label to a ≥44 pt hit area (HIG minimum)
+            // without changing what's drawn.
             Button(action: skipBonusRound) {
                 Text("SKIP")
                     .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
@@ -951,7 +1021,7 @@ struct CatchRevealView: View {
                     .foregroundStyle(RP.faint)
                     .padding(.vertical, 6 * scale)
                     .padding(.horizontal, 18 * scale)
-                    .contentShape(Rectangle())
+                    .contentShape(Rectangle().inset(by: -10))
             }
             .buttonStyle(.plain)
             .disabled(render.resolution != nil)
@@ -977,10 +1047,12 @@ struct CatchRevealView: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12 * scale, weight: .bold))
                         .foregroundStyle(Brand.Color.alertNormal)
+                        .accessibilityLabel("Correct")
                 case .wrong:
                     Image(systemName: "xmark")
                         .font(.system(size: 12 * scale, weight: .bold))
                         .foregroundStyle(Brand.Color.alertWarning)
+                        .accessibilityLabel("Incorrect")
                 case .idle, .dimmed:
                     EmptyView()
                 }
