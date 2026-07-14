@@ -545,6 +545,16 @@ struct ContentView: View {
                                     return .single(pin)
                                 }
                                 if candidates.isEmpty {
+                                    // Central catch zone empty, but a LONE plane
+                                    // anywhere on frame stays catchable
+                                    // (fix/lone-plane-catchable #145, Portland
+                                    // field report: reticle passive, the plane
+                                    // plainly in frame, shutter dead). Two+ on
+                                    // frame still require aim or a tap, so the
+                                    // dense-airspace spray exploit stays closed.
+                                    if onScreenIcaos.count == 1 {
+                                        return .single(onScreenIcaos[0])
+                                    }
                                     return .disabled
                                 }
                                 if candidates.count == 1 {
