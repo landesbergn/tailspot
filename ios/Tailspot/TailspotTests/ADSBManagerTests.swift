@@ -18,6 +18,7 @@
 
 import Testing
 import Foundation
+import Combine
 import CoreLocation
 @testable import Tailspot
 
@@ -264,6 +265,105 @@ struct ADSBManagerTests {
         } else {
             Issue.record("lastFetched should be set after a successful refresh")
         }
+    }
+
+    // MARK: - Publish guards + pausable re-annotation (perf, 2026-07-17)
+
+    /// The 1 Hz re-annotation republished `diagnostic` every tick even when the
+    /// funnel was byte-for-byte identical — waking SwiftUI for nothing. The
+    /// guard only assigns on a real change; verify an unchanged second refresh
+    /// emits nothing new on the `$diagnostic` publisher.
+    @Test func diagnosticDoesNotRepublishWhenUnchanged() async {
+        let plane = Self.aircraftAt(
+            bearing: 90, distanceMeters: 10_000, altitudeMeters: 10_000, icao: "abc"
+        )
+        let manager = ADSBManager(source: FixedSource([plane]))
+        let observer = Self.observer()
+
+        var emissions: [VisibilityDiagnostic] = []
+        let cancellable = manager.$diagnostic.sink { emissions.append($0) }
+        defer { cancellable.cancel() }
+
+        // Subscription delivers the initial default value synchronously.
+        await manager.refresh(around: observer)   // funnel changes → one emission
+        let afterFirst = emissions.count
+        #expect(afterFirst >= 2)                   // initial default + the change
+
+        await manager.refresh(around: observer)    // identical funnel → guarded
+        #expect(emissions.count == afterFirst)     // no wasted republish
+    }
+
+    /// `lastError` is cleared on every successful poll — but a nil→nil assign
+    /// still fires `@Published`. The guard clears only when there's an error to
+    /// clear; a steady stream of successes must not churn the publisher.
+    @Test func lastErrorClearGuardedWhenAlreadyNil() async {
+        let manager = ADSBManager(source: FixedSource([]))
+        let observer = Self.observer()
+
+        var emissions: [String?] = []
+        let cancellable = manager.$lastError.sink { emissions.append($0) }
+        defer { cancellable.cancel() }
+
+        await manager.refresh(around: observer)   // already nil → stays nil, no republish
+        await manager.refresh(around: observer)
+        // Only the initial subscription value; no nil→nil republishes.
+        #expect(emissions == [nil])
+    }
+
+    /// Pausing re-annotation must NOT touch the poll path — the two loops are
+    /// decoupled by design (CLAUDE.md). A direct `refresh` still annotates
+    /// while re-annotation is paused.
+    @Test func pauseReAnnotationLeavesRefreshWorking() async {
+        let plane = Self.aircraftAt(
+            bearing: 90, distanceMeters: 10_000, altitudeMeters: 10_000, icao: "abc"
+        )
+        let manager = ADSBManager(source: FixedSource([plane]))
+        let observer = Self.observer()
+
+        manager.start { observer }
+        manager.pauseReAnnotation()
+        await manager.refresh(around: observer)
+        #expect(manager.observed.count == 1)
+        manager.stop()
+    }
+
+    /// pause/resume are idempotent in any order — pause-when-paused is a no-op,
+    /// resume-when-running must not double-spawn. Exercised by hammering the
+    /// pair; the manager stays healthy (a refresh still annotates afterwards).
+    @Test func pauseResumeReAnnotationIsIdempotent() async {
+        let plane = Self.aircraftAt(
+            bearing: 90, distanceMeters: 10_000, altitudeMeters: 10_000, icao: "abc"
+        )
+        let manager = ADSBManager(source: FixedSource([plane]))
+        let observer = Self.observer()
+
+        manager.start { observer }
+        manager.pauseReAnnotation()
+        manager.pauseReAnnotation()    // already paused → no-op
+        manager.resumeReAnnotation()
+        manager.resumeReAnnotation()   // already running → must not double-spawn
+        manager.pauseReAnnotation()
+        manager.stop()
+
+        await manager.refresh(around: observer)
+        #expect(manager.observed.count == 1)
+    }
+
+    /// `start` is idempotent: a second call (e.g. scenePhase `.active`
+    /// re-entry) while already polling must not crash or double-start.
+    @Test func startIsIdempotent() async {
+        let plane = Self.aircraftAt(
+            bearing: 90, distanceMeters: 10_000, altitudeMeters: 10_000, icao: "abc"
+        )
+        let manager = ADSBManager(source: FixedSource([plane]))
+        let observer = Self.observer()
+
+        manager.start { observer }
+        manager.start { observer }   // second call → guarded no-op
+        manager.stop()
+
+        await manager.refresh(around: observer)
+        #expect(manager.observed.count == 1)
     }
 
     // MARK: - Forward-extrapolation

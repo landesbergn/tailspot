@@ -36,8 +36,11 @@ struct SetsBrowser: View {
     // sides of every comparison (~10× the work); precomputing keeps the
     // body cheap, which matters now that the segment is kept alive.
     private var scored: [(set: CardSet, progress: (caught: Int, total: Int))] {
-        CardSets.families
-            .map { (set: $0, progress: CardSets.progress(of: $0, against: catches)) }
+        // Derive per-catch match keys once and share them across all ~30
+        // families — the [Catch] overload would rebuild them per family.
+        let keys = CardSets.matchKeys(for: catches)
+        return CardSets.families
+            .map { (set: $0, progress: CardSets.progress(of: $0, againstKeys: keys)) }
             .sorted { a, b in
                 let fa = a.progress.total == 0 ? 0 : Double(a.progress.caught) / Double(a.progress.total)
                 let fb = b.progress.total == 0 ? 0 : Double(b.progress.caught) / Double(b.progress.total)

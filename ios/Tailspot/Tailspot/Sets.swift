@@ -724,52 +724,124 @@ nonisolated enum CardSets {
         case caught(catchedExample: Catch)
     }
 
-    /// True when the catch's model matches any of the entry's
-    /// `modelTokens` — checked against BOTH the raw OpenSky model
-    /// string AND the canonical name (typecode-resolved). Union, not
-    /// replacement: membership can only gain from canonicalization,
-    /// never lose. Single source of truth for Catch → CardSetEntry.
-    nonisolated static func matches(catch c: Catch, entry: CardSetEntry) -> Bool {
-        // Precise path (added for family sets, 2026-06-15): exact ICAO
-        // typecode equality. Family lenses distinguish variants the model
-        // string can't (A320 vs A320neo, 777-300 vs 777-300ER) — the typecode
-        // is the unambiguous variant identity, and the backend resolves it for
-        // virtually every airliner. This is a UNION with the token path below
-        // (membership can only gain), so existing type-set behavior is
-        // unchanged for token-matched catches.
+    /// A catch with its three match-relevant strings derived ONCE, up front.
+    ///
+    /// Why this exists (perf): matching is called for EVERY (catch, entry)
+    /// pair — ~60 families × ~5 entries × N catches — and most entries are
+    /// locked forever, so each one used to rescan the whole catch list. The
+    /// old per-pair `matches(catch:entry:)` re-derived the same per-catch
+    /// strings on every one of those scans: an `AircraftNaming.canonical()`
+    /// lookup plus a few `.lowercased()` allocations, all of which depend
+    /// only on the catch, not the entry. Precomputing them once per catch
+    /// (see `matchKeys(for:)`) and reusing the key across every family/entry
+    /// collapses tens of thousands of `canonical()` calls into N.
+    ///
+    /// Holds the `Catch` so `status` can still hand back the filling example.
+    /// Deliberately NOT `Sendable` — it wraps a MainActor-bound `Catch`, same
+    /// as `SlotStatus.caught` above; it's a within-actor scratch value, never
+    /// crosses an actor boundary.
+    struct CatchMatchKey {
+        /// The catch this key was derived from — returned as the filling
+        /// example when a slot matches.
+        let source: Catch
+        /// Raw `c.typecode`, UNMODIFIED. The precise path compares it with
+        /// `caseInsensitiveCompare`, so we keep the original casing and let
+        /// the comparison normalize — bit-for-bit as the per-pair path did.
+        let typecode: String?
+        /// `c.model?.lowercased() ?? ""` — the lowercased raw model string.
+        let rawModelLowercased: String
+        /// `AircraftNaming.canonical(...).displayName?.lowercased() ?? ""`.
+        let canonicalLowercased: String
+    }
+
+    /// Derive a `CatchMatchKey` for one catch — the single place the per-catch
+    /// strings are computed. `matches(catch:entry:)` and `matchKeys(for:)` both
+    /// route through this, so there's exactly one copy of the derivation.
+    nonisolated static func matchKey(for c: Catch) -> CatchMatchKey {
+        CatchMatchKey(
+            source: c,
+            typecode: c.typecode,
+            rawModelLowercased: c.model?.lowercased() ?? "",
+            canonicalLowercased: AircraftNaming.canonical(
+                typecode: c.typecode,
+                manufacturer: c.manufacturer,
+                model: c.model
+            ).displayName?.lowercased() ?? ""
+        )
+    }
+
+    /// Derive the match keys for a whole catch list in ONE pass. Order is
+    /// preserved (a plain `map`), so the keyed `status` below reproduces the
+    /// same first-match-wins result as scanning `catches` directly.
+    nonisolated static func matchKeys(for catches: [Catch]) -> [CatchMatchKey] {
+        catches.map(matchKey(for:))
+    }
+
+    /// Keyed twin of `matches(catch:entry:)` — the actual decision, reading
+    /// the precomputed strings instead of re-deriving them per pair. Semantics
+    /// are bit-for-bit identical to the legacy `[Catch]` path.
+    ///
+    /// Precise path (added for family sets, 2026-06-15): exact ICAO typecode
+    /// equality. Family lenses distinguish variants the model string can't
+    /// (A320 vs A320neo, 777-300 vs 777-300ER) — the typecode is the
+    /// unambiguous variant identity, and the backend resolves it for virtually
+    /// every airliner. This is a UNION with the token path below (membership
+    /// can only gain), so existing type-set behavior is unchanged for
+    /// token-matched catches.
+    nonisolated static func matches(key: CatchMatchKey, entry: CardSetEntry) -> Bool {
         if let tc = entry.representativeTypecode,
-           let ctc = c.typecode,
+           let ctc = key.typecode,
            !ctc.isEmpty,
            tc.caseInsensitiveCompare(ctc) == .orderedSame {
             return true
         }
-        let raw = c.model?.lowercased() ?? ""
-        let canonical = AircraftNaming.canonical(
-            typecode: c.typecode,
-            manufacturer: c.manufacturer,
-            model: c.model
-        ).displayName?.lowercased() ?? ""
-        guard !raw.isEmpty || !canonical.isEmpty else { return false }
+        guard !key.rawModelLowercased.isEmpty || !key.canonicalLowercased.isEmpty else { return false }
         return entry.modelTokens.contains { token in
             let t = token.lowercased()
-            return raw.contains(t) || canonical.contains(t)
+            return key.rawModelLowercased.contains(t) || key.canonicalLowercased.contains(t)
         }
     }
 
-    /// Walk a single set's entries and resolve each against the
-    /// caught planes. First matching catch (by `modelTokens`
-    /// substring on `c.model`) fills the slot.
-    static func status(of set: CardSet, against catches: [Catch]) -> [(CardSetEntry, SlotStatus)] {
+    /// True when the catch's model matches any of the entry's `modelTokens` —
+    /// checked against BOTH the raw OpenSky model string AND the canonical name
+    /// (typecode-resolved). Union, not replacement: membership can only gain
+    /// from canonicalization, never lose. Single source of truth for Catch →
+    /// CardSetEntry. Thin wrapper: builds a one-catch key, then delegates to
+    /// `matches(key:entry:)` (the decision lives there).
+    nonisolated static func matches(catch c: Catch, entry: CardSetEntry) -> Bool {
+        matches(key: matchKey(for: c), entry: entry)
+    }
+
+    /// Walk a single set's entries against precomputed keys. First matching
+    /// key (in key order) fills the slot — same first-match-wins rule as the
+    /// `[Catch]` overload, since `matchKeys(for:)` preserves order.
+    static func status(of set: CardSet, againstKeys keys: [CatchMatchKey]) -> [(CardSetEntry, SlotStatus)] {
         set.entries.map { entry in
-            let hit = catches.first { matches(catch: $0, entry: entry) }
-            return (entry, hit.map(SlotStatus.caught) ?? .locked)
+            let hit = keys.first { matches(key: $0, entry: entry) }
+            return (entry, hit.map { SlotStatus.caught(catchedExample: $0.source) } ?? .locked)
         }
     }
 
-    /// "N caught out of M" for the set browser tile.
-    static func progress(of set: CardSet, against catches: [Catch]) -> (caught: Int, total: Int) {
-        let s = status(of: set, against: catches)
+    /// "N caught out of M" from precomputed keys.
+    static func progress(of set: CardSet, againstKeys keys: [CatchMatchKey]) -> (caught: Int, total: Int) {
+        let s = status(of: set, againstKeys: keys)
         return (s.filter { if case .caught = $0.1 { return true } else { return false } }.count, s.count)
+    }
+
+    /// Walk a single set's entries and resolve each against the caught planes.
+    /// First matching catch (by `modelTokens` substring on `c.model`) fills the
+    /// slot. Thin wrapper over the keyed overload — fine for one-off callers;
+    /// callers that evaluate MANY sets against the SAME catches should build
+    /// `matchKeys(for:)` once and use `status(of:againstKeys:)` to avoid
+    /// rederiving per-catch strings for each set.
+    static func status(of set: CardSet, against catches: [Catch]) -> [(CardSetEntry, SlotStatus)] {
+        status(of: set, againstKeys: matchKeys(for: catches))
+    }
+
+    /// "N caught out of M" for the set browser tile. Thin wrapper — see the
+    /// note on `status(of:against:)` about batching many sets via keys.
+    static func progress(of set: CardSet, against catches: [Catch]) -> (caught: Int, total: Int) {
+        progress(of: set, againstKeys: matchKeys(for: catches))
     }
 
     /// The set list for a given browser lens.

@@ -32,9 +32,14 @@ struct MapScreen: View {
     }
 
     var body: some View {
-        ZStack {
+        // Evaluate the rarity filter once per body eval, not the 4–5 times the
+        // Map builder + summary panel each re-read it (each is an O(n)
+        // resolvedRarity scan over every catch). Threaded into the panel/date
+        // helpers below so they share this one pass.
+        let visible = visibleCatches
+        return ZStack {
             Map(position: $position, selection: $selectedCatch) {
-                ForEach(visibleCatches) { c in
+                ForEach(visible) { c in
                     Annotation(c.callsign ?? c.icao24, coordinate: c.coordinate) {
                         pin(for: c)
                             .onTapGesture { selectedCatch = c }
@@ -49,7 +54,7 @@ struct MapScreen: View {
             VStack {
                 filterStrip
                 Spacer()
-                summaryPanel
+                summaryPanel(visible)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 24)
@@ -85,7 +90,10 @@ struct MapScreen: View {
     // MARK: - Pins
 
     private func pin(for c: Catch) -> some View {
-        let tint = c.resolvedRarity.tint
+        // resolvedRarity re-derives on every read; compute it once and reuse
+        // for the tint, the legendary halo test, and the VoiceOver label.
+        let rarity = c.resolvedRarity
+        let tint = rarity.tint
         return ZStack {
             Circle()
                 .fill(tint)
@@ -93,7 +101,7 @@ struct MapScreen: View {
                 .overlay(Circle().strokeBorder(.white.opacity(0.9), lineWidth: 2))
                 .shadow(color: tint.opacity(0.6), radius: 6)
             // Legendary gets a halo so it pops at low zoom.
-            if c.resolvedRarity == .legendary {
+            if rarity == .legendary {
                 Circle()
                     .strokeBorder(tint.opacity(0.6), lineWidth: 1)
                     .frame(width: 30, height: 30)
@@ -105,7 +113,7 @@ struct MapScreen: View {
         // VoiceOver.
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
-        .accessibilityLabel("\(c.callsign ?? c.icao24.uppercased()), \(c.resolvedRarity.label)")
+        .accessibilityLabel("\(c.callsign ?? c.icao24.uppercased()), \(rarity.label)")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -159,10 +167,10 @@ struct MapScreen: View {
 
     // MARK: - Summary panel
 
-    private var summaryPanel: some View {
-        let total = visibleCatches.count
-        let unique = Set(visibleCatches.map(\.icao24)).count
-        let span = dateSpanText
+    private func summaryPanel(_ visible: [Catch]) -> some View {
+        let total = visible.count
+        let unique = Set(visible.map(\.icao24)).count
+        let span = dateSpanText(for: visible)
         return HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(total) sightings")
@@ -191,9 +199,9 @@ struct MapScreen: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var dateSpanText: String? {
-        guard let oldest = visibleCatches.map(\.caughtAt).min(),
-              let newest = visibleCatches.map(\.caughtAt).max()
+    private func dateSpanText(for visible: [Catch]) -> String? {
+        guard let oldest = visible.map(\.caughtAt).min(),
+              let newest = visible.map(\.caughtAt).max()
         else { return nil }
         let days = Calendar.current.dateComponents([.day], from: oldest, to: newest).day ?? 0
         if days <= 0 { return "today" }

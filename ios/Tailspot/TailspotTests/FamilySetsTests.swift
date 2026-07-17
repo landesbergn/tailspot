@@ -110,4 +110,56 @@ struct FamilySetsTests {
             #expect(!set.entries.isEmpty, "family '\(set.id)' has no entries")
         }
     }
+
+    // MARK: (d) Keyed overload equivalence
+
+    /// The precomputed-key path (`matchKeys` + `matches(key:entry:)` +
+    /// `status/progress(...againstKeys:)`) is a perf restructure only — it must
+    /// produce BIT-FOR-BIT the same result as the legacy `[Catch]` path. This
+    /// exercises a deliberately mixed fixture across BOTH lenses: precise
+    /// typecode catches, catches whose canonical name differs from the raw
+    /// model, token-only catches with no typecode, an unknown typecode that
+    /// falls through to the token path, an all-nil catch, and a catch that
+    /// matches nothing.
+    @Test func keyedOverloadMatchesLegacyPath() {
+        let catches: [Catch] = [
+            mk(typecode: "B738", model: "738"),        // precise + canonical-token ("737-800")
+            mk(typecode: "A20N", model: "A320neo"),    // precise neo (no classic bleed)
+            mk(typecode: "A320", model: "A320"),       // precise classic
+            mk(typecode: nil,   model: "Boeing 747-8"),// token-only, no typecode
+            mk(typecode: nil,   model: "cessna 172"),  // token-only GA
+            mk(typecode: "ZZZZ", model: "SR22"),       // unknown typecode → token path
+            mk(typecode: nil,   model: nil),           // all-nil → matches nothing
+            mk(typecode: nil,   model: "Zorpjet 9000"),// matches nothing
+        ]
+        let keys = CardSets.matchKeys(for: catches)
+        #expect(keys.count == catches.count)
+
+        let lenses = CardSets.all + CardSets.families
+
+        // (1) Per-(catch, entry) pair: the keyed matcher agrees with the legacy
+        // per-catch matcher everywhere.
+        for set in lenses {
+            for entry in set.entries {
+                for (i, c) in catches.enumerated() {
+                    #expect(CardSets.matches(key: keys[i], entry: entry)
+                            == CardSets.matches(catch: c, entry: entry),
+                            "keyed matcher diverged for entry '\(entry.id)' / catch #\(i)")
+                }
+            }
+        }
+
+        // (2) Per-set: keyed status + progress equal the legacy path (same slot
+        // statuses, including the SAME filling-example instance, and the same
+        // caught/total counts).
+        for set in lenses {
+            let keyedStatus = CardSets.status(of: set, againstKeys: keys).map(\.1)
+            let legacyStatus = CardSets.status(of: set, against: catches).map(\.1)
+            #expect(keyedStatus == legacyStatus, "status diverged for set '\(set.id)'")
+
+            let keyedProgress = CardSets.progress(of: set, againstKeys: keys)
+            let legacyProgress = CardSets.progress(of: set, against: catches)
+            #expect(keyedProgress == legacyProgress, "progress diverged for set '\(set.id)'")
+        }
+    }
 }

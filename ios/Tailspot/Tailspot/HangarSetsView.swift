@@ -22,14 +22,15 @@ import SwiftData
 struct HangarSetsView: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
-    /// One flat dedup'd row list (Recent mode collapses by icao24).
-    /// Each tile then filters to its own type.
-    private var rows: [HangarRow] {
-        HangarGrouping.group(catches, by: .recent).first?.rows ?? []
-    }
-
     var body: some View {
-        ScrollView {
+        // One flat dedup'd row list (Recent mode collapses by icao24); each
+        // tile then filters to its own type. Hoisted to a single `let` here:
+        // `HangarGrouping.group` runs a dictionary group + sorts over every
+        // catch, and reading it inside the ForEach ran that full pass 7× per
+        // body eval (once per set tile) — in a view the Hangar's paged TabView
+        // keeps alive. Same hoist as the PR #85 Profile fix.
+        let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+        return ScrollView {
             VStack(spacing: 10) {
                 ForEach(CardSets.all) { set in
                     let tailCount = rows.filter { $0.aircraftType == set.type }.count

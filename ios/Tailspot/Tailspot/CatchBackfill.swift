@@ -31,6 +31,28 @@ enum CatchBackfill {
     /// backfill concern and deliberately NOT part of the ADSBSource seam.
     static let routeClient = TailspotBackendClient()
 
+    // MARK: - Per-launch negative cache
+    //
+    // In-memory only, NO persistence — deliberately the zero-risk version.
+    // Rows for airframes the backend has no record of (foreign GA — e.g.
+    // Noah's Bali catches) and callsigns whose route lookup keeps answering
+    // null stay `needsMetadata` / `needsRoute` forever, so `backfillAll` used
+    // to re-fire the same doomed network lookups on EVERY Hangar open. Once a
+    // key is attempted THIS launch and comes back a definite miss (not a
+    // transport error — those still retry next open), we record it here and
+    // skip it on later same-launch passes. A relaunch starts empty and
+    // re-attempts everything, so first-pass-of-launch behavior is unchanged.
+    // MainActor-isolated (default isolation), so no locking is needed.
+    private static var unresolvedIcaos: Set<String> = []
+    private static var unresolvedCallsigns: Set<String> = []
+
+    /// Test-only reset for the per-launch negative caches — they are process
+    /// static, so tests must clear them to stay independent of each other.
+    static func _resetNegativeCacheForTesting() {
+        unresolvedIcaos.removeAll()
+        unresolvedCallsigns.removeAll()
+    }
+
     /// Fill nil airframe fields on `catches` (all sharing one icao24)
     /// from `meta`. Pure given the inputs — no I/O. Returns true if it
     /// changed anything. alt/speed/place are NOT touched here.
@@ -188,7 +210,11 @@ enum CatchBackfill {
     /// fetch metadata ONCE per distinct icao24 and fill. Bounded,
     /// idempotent, swallows errors. Saves once at the end. Runs in the
     /// background off a Hangar `.task`; never blocks UI.
-    static func backfillAll(_ catches: [Catch], in context: ModelContext) async {
+    static func backfillAll(
+        _ catches: [Catch],
+        in context: ModelContext,
+        source: ADSBSource = CatchBackfill.client
+    ) async {
         var changedAny = false
         // Offline operator backfill: resolve the airline from the callsign's
         // ICAO prefix for any catch missing an operator (the feed often supplies
@@ -206,14 +232,34 @@ enum CatchBackfill {
         for (icao, rows) in byIcao {
             let trimmed = icao.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
-            if let meta = (try? await client.aircraftMetadata(icao24: trimmed)) ?? nil {
-                if applyMetadata(meta, to: rows) { changedAny = true }
+            // Per-launch negative cache: skip an icao24 already attempted this
+            // launch that came back a definite miss (foreign-GA airframes the
+            // backend has no record of — e.g. Noah's Bali catches — stay
+            // needsMetadata forever, so without this every Hangar open re-fetches
+            // them). Cleared on relaunch.
+            if unresolvedIcaos.contains(trimmed) { continue }
+            var transportError = false
+            do {
+                if let meta = try await source.aircraftMetadata(icao24: trimmed) {
+                    if applyMetadata(meta, to: rows) { changedAny = true }
+                }
+            } catch {
+                // Transient (502/offline): a real attempt but NOT a definite
+                // miss — leave it out of the cache so a later open retries.
+                transportError = true
             }
             // FAA fallback: if OpenSky gave nothing (typecode + model still
             // nil after the metadata attempt), try the bundled FAA snapshot.
             let needsFAA = rows.contains { $0.typecode == nil && $0.model == nil }
             if needsFAA {
                 if applyFAAFallback(to: rows, icao24: trimmed) { changedAny = true }
+            }
+            // Record a definite miss so later same-launch passes skip it. A
+            // full resolve drops out of `needsMetadata` on its own (never
+            // cached); a partial fill that still needs data IS cached — we've
+            // already asked the backend everything it knows this launch.
+            if !transportError && rows.contains(where: needsMetadata) {
+                unresolvedIcaos.insert(trimmed)
             }
             if Task.isCancelled { break }
         }
@@ -236,9 +282,24 @@ enum CatchBackfill {
         }
         for (callsign, rows) in byCallsign where !callsign.isEmpty {
             if Task.isCancelled { break }
-            guard let route = (try? await routeClient.route(forCallsign: callsign)) ?? nil
-            else { continue }
-            if applyRoute(route, to: rows) { changedAny = true }
+            // Same per-launch negative cache for routes: a callsign whose
+            // lookup answers null keeps answering null, so skip it after the
+            // first definite miss this launch instead of re-fetching every open.
+            if unresolvedCallsigns.contains(callsign) { continue }
+            do {
+                if let route = try await routeClient.route(forCallsign: callsign) {
+                    if applyRoute(route, to: rows) { changedAny = true }
+                }
+                // A definite answer (a null route, or one we couldn't use) that
+                // leaves the rows still needing a route won't ever resolve —
+                // negative-cache the callsign. A successful fill drops out of
+                // `needsRoute` on its own and is never cached.
+                if rows.contains(where: needsRoute) {
+                    unresolvedCallsigns.insert(callsign)
+                }
+            } catch {
+                // Transport error: transient — a later Hangar open retries.
+            }
         }
 
         if changedAny { try? context.save() }

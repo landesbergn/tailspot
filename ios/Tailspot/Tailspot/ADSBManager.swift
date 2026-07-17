@@ -569,6 +569,8 @@ final class ADSBManager: ObservableObject {
     /// fetch the latest user location — passing it as a closure (rather
     /// than holding a strong reference to LocationManager) keeps the two
     /// classes loosely coupled.
+    /// Idempotent: a scenePhase `.active` re-call while already polling is a
+    /// no-op (the `guard pollTask == nil` below). Starts BOTH loops.
     func start(locationProvider: @escaping @MainActor () -> CLLocation?) {
         guard pollTask == nil else { return }
         self.locationProvider = locationProvider
@@ -587,12 +589,22 @@ final class ADSBManager: ObservableObject {
             }
         }
 
-        // Smoothness loop: every reAnnotationInterval, re-extrapolate
-        // the raw aircraft positions to "now" using the current
-        // observer location, recompute angular positions, publish.
-        // This is what makes the AR boxes glide smoothly with each
-        // plane's motion instead of jumping whenever new ADS-B data
-        // arrives.
+        startReAnnotationLoop()
+    }
+
+    /// (Re)start the 1 Hz smoothness loop, idempotently. Extracted from
+    /// `start` so `resumeReAnnotation()` can recreate it verbatim; the guard
+    /// makes a resume-when-already-running (or a start-then-resume) a no-op
+    /// rather than a double-spawn.
+    ///
+    /// Smoothness loop: every reAnnotationInterval, re-extrapolate the raw
+    /// aircraft positions to "now" using the current observer location,
+    /// recompute angular positions, publish. This is what makes the AR boxes
+    /// glide smoothly with each plane's motion instead of jumping whenever
+    /// new ADS-B data arrives. Kept DECOUPLED from the poll loop by design
+    /// (see CLAUDE.md) — pausing it leaves the poll untouched.
+    private func startReAnnotationLoop() {
+        guard reAnnotationTask == nil else { return }
         let tick = reAnnotationInterval
         reAnnotationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -602,6 +614,22 @@ final class ADSBManager: ObservableObject {
                 try? await Task.sleep(for: .seconds(tick))
             }
         }
+    }
+
+    /// Pause ONLY the 1 Hz re-annotation loop (e.g. while an opaque sheet
+    /// hides the AR view). The 10 s `pollTask` keeps running so data stays
+    /// fresh — and `refresh()` itself calls `reAnnotate()` once per poll, so
+    /// `observed` stays warm at ~0.1 Hz while paused. Idempotent: pause when
+    /// already paused is a no-op.
+    func pauseReAnnotation() {
+        reAnnotationTask?.cancel()
+        reAnnotationTask = nil
+    }
+
+    /// Resume the 1 Hz re-annotation loop after `pauseReAnnotation()`.
+    /// Idempotent (won't double-spawn if it's already running).
+    func resumeReAnnotation() {
+        startReAnnotationLoop()
     }
 
     func stop() {
@@ -640,7 +668,10 @@ final class ADSBManager: ObservableObject {
             // (not on the 1 Hz smoothness tick) so the field log isn't spammed.
             self.reAnnotate(observer: location, now: Date(), verbose: true)
 
-            self.lastError = nil
+            // Guard the clear: `@Published` republishes on every set, so a
+            // nil→nil assignment each successful poll would wake SwiftUI for
+            // nothing. Only clear when there's actually an error to clear.
+            if self.lastError != nil { self.lastError = nil }
             self.consecutiveFetchFailures = 0
             self.lastFetched = Date()
         } catch {
@@ -736,7 +767,12 @@ final class ADSBManager: ObservableObject {
         }
 
         diag.shown = annotated.filter(\.isLikelyVisibleToObserver).count
-        self.diagnostic = diag
+        // Guard the republish: this runs at 1 Hz but the funnel is usually
+        // identical tick-to-tick, and `@Published` fires on every set (not
+        // just on change). `VisibilityDiagnostic` is Equatable, so only
+        // assign when it actually changed — sparing ContentView a body eval
+        // each second the sky is steady.
+        if diag != diagnostic { self.diagnostic = diag }
 
         if diag != lastLoggedDiagnostic {
             Log.adsb.info("visibility funnel: fetched=\(diag.fetched) onGround=\(diag.onGround) stale=\(diag.stale) lowElev=\(diag.belowElevation) tooFar=\(diag.tooFar) → shown=\(diag.shown)")

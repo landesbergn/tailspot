@@ -40,6 +40,12 @@ struct ContentView: View {
     private static let compassBadDebounce: TimeInterval = 4.0
 
     @Environment(\.modelContext) private var modelContext
+    /// Drives lifecycle teardown: when the app resigns active we stop the
+    /// motion + ADS-B loops (no one's looking, no network worth running);
+    /// on return to active we restart them. See the `.onChange(of:
+    /// scenePhase)` handler below. (The app-level scenePhase handler in
+    /// TailspotApp owns the upload/sync-on-foreground side, separately.)
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
@@ -220,6 +226,21 @@ struct ContentView: View {
     /// tap reveals nothing and this toast says why. Same lifecycle as
     /// `groundedToastAt`.
     @State private var farTapToast: (at: Date, slantMeters: Double)? = nil
+    /// Cached content signature of the currently-visible icao24 set — the id
+    /// that keys the ambient-metadata prefetch `.task(id:)`. CACHED (not a
+    /// computed var) so `body` doesn't rebuild it (map+sort+join over all
+    /// observed) on every 30 Hz frame; it's recomputed only when `observed`
+    /// republishes (~1 Hz) in `.onReceive(adsb.$observed)`. Membership-change
+    /// semantics are unchanged — the string only differs when the set does.
+    @State private var visibleIcaoSignature = ""
+    /// Session latch for the "first plane seen" activation telemetry. The fire
+    /// itself is once-per-install (persisted), but this short-circuits the
+    /// per-tick filter work in `.onReceive(adsb.$observed)` after it's latched.
+    @State private var firstPlaneSeenLatched = false
+    /// Cached most-recent replay recording for the debug `analyzeRow`, so that
+    /// row doesn't do a FileManager directory scan on every body eval. Refreshed
+    /// when the debug panel opens and after a recording is toggled off.
+    @State private var latestRecordingURL: URL?
 
     var body: some View {
         ZStack {
@@ -275,7 +296,13 @@ struct ContentView: View {
                     let effectiveHfov = Self.baseHfovDeg / zoom
                     let effectiveVfov = Self.baseVfovDeg / zoom
 
-                    TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
+                    // `paused: arOccluded` freezes this 30 Hz render loop
+                    // while an opaque sheet covers the AR view — no point
+                    // re-projecting labels the user can't see. It resumes the
+                    // instant the sheet dismisses. The clear-background catch
+                    // reveals deliberately DON'T set arOccluded (they show the
+                    // live AR behind the card), so labels keep gliding there.
+                    TimelineView(.animation(minimumInterval: 1.0/30.0, paused: arOccluded)) { context in
                         let now = context.date
                         // Interactive-visible set: the ambient visibility tier
                         // (suppressed while `pointedIndoors`) PLUS any
@@ -446,7 +473,10 @@ struct ContentView: View {
                                 // NEARBY" count — they're not below-horizon
                                 // or too-far traffic, they're parked.
                                 emptySkyOverlay(
-                                    rawCount: adsb.observed.filter { !$0.grounded }.count
+                                    // count(where:) tallies without allocating
+                                    // the intermediate filtered array (hot path,
+                                    // every empty-sky frame).
+                                    rawCount: adsb.observed.count(where: { !$0.grounded })
                                 )
                                     .frame(width: geo.size.width, height: geo.size.height)
                                     .allowsHitTesting(false)
@@ -510,8 +540,14 @@ struct ContentView: View {
                             // the current lock target is predicted to be.
                             // Lock-only write (safe inside body); the
                             // detector picks it up on its next frame.
+                            // `arOccluded` guard: a PAUSED TimelineView still
+                            // re-renders on external state changes (poll
+                            // publishes, SwiftData saves), and an unguarded
+                            // write here would re-arm the detector behind an
+                            // open sheet right after the occlusion handler
+                            // cleared it.
                             let _ = visualConfirm.updateTarget(
-                                lockOn.state.targetIcao24.flatMap { icao in
+                                arOccluded ? nil : lockOn.state.targetIcao24.flatMap { icao in
                                     onScreenPositions[icao].map {
                                         .init(icao24: icao, predictedScreen: $0,
                                               screenSize: geo.size)
@@ -717,6 +753,58 @@ struct ContentView: View {
             motion.start()
             adsb.start { location.cllocation }
         }
+        // Occlusion gating: while an opaque sheet covers the AR view, stop the
+        // 30 Hz motion feed and the 1 Hz re-annotation, and clear the detector
+        // target (a nil target makes the pipeline skip inference). The 10 s
+        // ADS-B poll keeps running so data stays fresh. Resume all three when
+        // the sheet dismisses — the render loop re-establishes the detector
+        // target on its next tick (visualConfirm.updateTarget in the
+        // TimelineView body). Clear-background reveals never flip arOccluded,
+        // so they don't reach here (see `arOccluded`).
+        .onChange(of: arOccluded) { _, occluded in
+            if occluded {
+                motion.stop()
+                adsb.pauseReAnnotation()
+                visualConfirm.updateTarget(nil)
+            } else {
+                motion.start()
+                adsb.resumeReAnnotation()
+            }
+        }
+        // Lifecycle teardown: when the app resigns active nobody's looking, so
+        // stop the motion feed and BOTH ADS-B loops (no network worth running
+        // between resign-active and suspension) and drop the detector target.
+        // On return to active, restart the ADS-B loops (idempotent) and the
+        // motion feed — but only if the AR is actually on screen. If a sheet is
+        // still up we also re-pause re-annotation, since arOccluded didn't
+        // change across the background trip so its onChange won't fire. The
+        // first-launch startup runs in the `.task` above (scenePhase starts
+        // `.active`, and onChange fires only on CHANGES) so the two don't
+        // double-start. LocationManager is intentionally left untouched here
+        // (GPS lifecycle is out of scope).
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                adsb.start { location.cllocation }
+                if arOccluded {
+                    adsb.pauseReAnnotation()
+                } else {
+                    motion.start()
+                }
+            case .inactive, .background:
+                motion.stop()
+                adsb.stop()
+                visualConfirm.updateTarget(nil)
+            @unknown default:
+                break
+            }
+        }
+        // Refresh the cached most-recent recording when the debug panel opens
+        // (and see `toggleRecording`) so `analyzeRow` doesn't scan the replays
+        // directory on every body eval.
+        .onChange(of: showDebug) { _, isShowing in
+            if isShowing { latestRecordingURL = ReplayRecorder.mostRecentRecording() }
+        }
         // Re-runs whenever the lock engine switches to (or away from)
         // a target icao. Hits ADSBManager.metadata(for:) — instant on
         // a cache hit, single OpenSky call on miss.
@@ -735,18 +823,11 @@ struct ContentView: View {
         // of an icao24 fires a single OpenSky request and every later
         // observation is a free in-memory hit.
         .task(id: visibleIcaoSignature) {
-            let icaos = interactiveVisible(adsb.observed)
-                .map(\.aircraft.icao24)
-            // Prune session-stale entries. `ambientMetadata` is a view-
-            // local mirror of the bounded MetadataCache actor; without
-            // this filter the dict would grow unboundedly over a long
-            // session as planes leave + re-enter the visible set.
-            let currentSet = Set(icaos)
-            ambientMetadata = ambientMetadata.filter { currentSet.contains($0.key) }
-            for icao in icaos where ambientMetadata[icao] == nil {
-                let value = await adsb.metadata(for: icao)
-                ambientMetadata[icao] = value
-            }
+            // Body extracted to a method: the inline task-group closure made
+            // this one expression too complex for the type checker (compile
+            // error), and a named function with explicit types is clearer
+            // anyway.
+            await prefetchAmbientMetadata()
         }
         // Pin housekeeping. If the engine moved off the pinned plane
         // (target left visibility → sticky → idle, or center-driven
@@ -900,10 +981,25 @@ struct ContentView: View {
         // Skipped while pointedIndoors — no label rendered means the user
         // did NOT see a plane, and this latch fires once per install.
         .onReceive(adsb.$observed) { observed in
+            // Recompute the prefetch-task signature HERE (~1 Hz, on each
+            // `observed` publish) instead of in `body` on every 30 Hz frame.
+            // Must run before the latch's early-return below, or the signature
+            // would freeze once the activation telemetry latches.
+            visibleIcaoSignature = interactiveVisible(observed)
+                .map(\.aircraft.icao24)
+                .sorted()
+                .joined(separator: ",")
+
+            // Activation funnel: fire once when the first plane is actually
+            // visible (post-filter). The fire is once-per-install (persisted);
+            // `firstPlaneSeenLatched` short-circuits the per-tick filter work
+            // for the rest of this session once we've reached that point.
+            guard !firstPlaneSeenLatched else { return }
             guard !pointedIndoors else { return }
             let visible = observed.filter(\.isLikelyVisibleToObserver)
             guard !visible.isEmpty else { return }
             ActivationTelemetry.fireFirstPlaneSeenOnce(visibleCount: visible.count)
+            firstPlaneSeenLatched = true
         }
         // Ambient indoor hint: poll the gate verdict ~1 Hz off the
         // already-computed sky features (no extra camera work) and
@@ -961,16 +1057,74 @@ struct ContentView: View {
         }
     }
 
-    /// Content-keyed signature of the currently-visible icao24 set,
-    /// used as the id on the ambient-metadata prefetch task. Sorting
-    /// + joining ensures the value is stable across observed-array
-    /// re-orderings (which happen on every fetch) so the task only
-    /// re-runs when membership actually changes.
-    private var visibleIcaoSignature: String {
-        interactiveVisible(adsb.observed)
-            .map(\.aircraft.icao24)
-            .sorted()
-            .joined(separator: ",")
+    /// True when an OPAQUE modal fully covers the camera / AR view — the
+    /// standard sheets: Hangar, Profile, compass calibration, the DEBUG
+    /// trophy-icon gallery, and the replay report. While occluded we power
+    /// down the sensors + the 30 Hz render loop the user can't see (see
+    /// `.onChange(of: arOccluded)` and the `paused:` TimelineView).
+    ///
+    /// The catch-reveal covers (`pendingReveal` / `pendingMultiReveal`) are
+    /// DELIBERATELY EXCLUDED: they present with `.presentationBackground(.clear)`
+    /// so the live AR shows THROUGH the card — pausing labels/motion under
+    /// them would visibly freeze the sky behind the reveal (a regression).
+    /// Only fully-opaque presentations belong here. (`showIconGallery` and
+    /// `replayURL` are only ever set in DEBUG, but their state exists in all
+    /// builds, so reading them here compiles everywhere and stays false in
+    /// Release.)
+    private var arOccluded: Bool {
+        showHangar
+            || showProfile
+            || showCompassSheet
+            || showIconGallery
+            || replayURL != nil
+    }
+
+    /// Ambient-label metadata prefetch body (the `.task(id: visibleIcaoSignature)`
+    /// above). Prunes session-stale entries — `ambientMetadata` is a view-local
+    /// mirror of the bounded MetadataCache actor; without the filter the dict
+    /// would grow unboundedly over a long session as planes leave + re-enter
+    /// the visible set — then fetches the not-yet-known icaos with a BOUNDED
+    /// number of lookups in flight (was a serial loop — 15 fresh planes ≈ 3 s
+    /// to fully label at ~200 ms/lookup; 3-wide cuts that to ~1 s without
+    /// stampeding the backend). Cancellation propagates: `.task(id:)` cancels
+    /// this when the signature changes or the view disappears; each child bails
+    /// early on `Task.isCancelled`, and the loop stops feeding new work once
+    /// cancelled. Results apply as they arrive, so labels still populate
+    /// incrementally like the old loop.
+    private func prefetchAmbientMetadata() async {
+        let icaos: [String] = interactiveVisible(adsb.observed).map(\.aircraft.icao24)
+        let currentSet = Set(icaos)
+        ambientMetadata = ambientMetadata.filter { currentSet.contains($0.key) }
+
+        let pending: [String] = icaos.filter { ambientMetadata[$0] == nil }
+        guard !pending.isEmpty else { return }
+
+        // Bind the manager to a local so the child tasks capture the
+        // (MainActor-isolated, hence Sendable) manager, not `self`.
+        let manager = adsb
+        let maxConcurrent = 3
+        typealias Lookup = (icao: String, value: AircraftMetadata?)
+        await withTaskGroup(of: Lookup?.self) { group in
+            var iterator = pending.makeIterator()
+            var inFlight = 0
+
+            func addNext() {
+                guard let icao = iterator.next() else { return }
+                inFlight += 1
+                group.addTask {
+                    guard !Task.isCancelled else { return nil }
+                    return (icao, await manager.metadata(for: icao))
+                }
+            }
+
+            for _ in 0..<maxConcurrent { addNext() }
+            while inFlight > 0, let result = await group.next() {
+                inFlight -= 1
+                if let result { ambientMetadata[result.icao] = result.value }
+                if Task.isCancelled { break }
+                addNext()
+            }
+        }
     }
 
     // MARK: - Catch reveal payloads
@@ -2834,6 +2988,9 @@ struct ContentView: View {
         if recorder.isRecording {
             recorder.stop()
             logCapture.stop()
+            // A just-finished recording becomes the newest on disk — refresh
+            // the cache so `analyzeRow` points at it without a per-frame scan.
+            latestRecordingURL = ReplayRecorder.mostRecentRecording()
         } else {
             do {
                 let url = try recorder.start()
@@ -2849,10 +3006,12 @@ struct ContentView: View {
 
     /// Debug-overlay row that loads the most recent recording from
     /// `Documents/replays/` and presents `ReplayReportView`. Disabled
-    /// (greyed) when there are no recordings on disk — a one-off
-    /// FileManager check on every body eval is cheap enough.
+    /// (greyed) when there are no recordings on disk. Reads the CACHED
+    /// `latestRecordingURL` (refreshed when the debug panel opens and after
+    /// `toggleRecording`) rather than scanning the replays directory on every
+    /// body eval — the debug panel re-renders often (sensor readout).
     private var analyzeRow: some View {
-        let latest = ReplayRecorder.mostRecentRecording()
+        let latest = latestRecordingURL
         return HStack(spacing: 8) {
             Image(systemName: "doc.text.magnifyingglass")
                 .foregroundStyle(latest == nil ? Brand.Color.textTertiary : Brand.Color.textPrimary.opacity(0.85))

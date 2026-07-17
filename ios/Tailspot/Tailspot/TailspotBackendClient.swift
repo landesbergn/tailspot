@@ -157,10 +157,26 @@ nonisolated struct TailspotBackendClient: ADSBSource {
     let baseURL: URL
     private let session: URLSession
 
+    /// Dedicated session with a BOUNDED request timeout. `URLSession.shared`
+    /// carries the default 60 s request timeout, so a hung `/v1/aircraft`
+    /// poll would stall freshness for a full minute — even though the next
+    /// 10 s tick supersedes it anyway. 10 s caps that stall; the resource
+    /// timeout is left at its default. A `static let` on this nonisolated
+    /// struct is lazily initialized, immutable, and safely shared across all
+    /// clients (no `nonisolated(unsafe)` needed — it's never mutated).
+    private static let boundedSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        return URLSession(configuration: config)
+    }()
+
+    /// `session` is optional so the private `boundedSession` can stay the
+    /// production default (a private static can't be a default-arg value for
+    /// an internal init); tests still inject their own via the label.
     init(baseURL: URL = TailspotBackendClient.defaultBaseURL,
-         session: URLSession = .shared) {
+         session: URLSession? = nil) {
         self.baseURL = baseURL
-        self.session = session
+        self.session = session ?? TailspotBackendClient.boundedSession
     }
 
     func aircraftInBbox(
