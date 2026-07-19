@@ -51,10 +51,34 @@ nonisolated enum TrophyBoard {
 
 struct HangarTrophiesView: View {
     @Query private var catches: [Catch]
+    /// Memoizes the inputs + board so segment switches (which re-eval this
+    /// kept-alive page's body) render from cache — see HangarDerivedCache.
+    @State private var cache = DerivedCacheBox<(inputs: TrophyProgressInputs, items: [Achievement])>()
+
+    /// Trophy inputs also read the two UserDefaults-backed stores (grounded
+    /// easter-egg events, leaderboard standing), so fold their scalars into
+    /// the token — they're a handful of cached-defaults reads, still cheap
+    /// per body eval.
+    private var token: Int {
+        var hasher = Hasher()
+        hasher.combine(CatchFingerprint.of(catches))
+        let events = TrophyEventStore()
+        for event in TrophyEventStore.Event.allCases {
+            hasher.combine(events.count(of: event))
+        }
+        let standing = LeaderboardStandingCache()
+        hasher.combine(standing.weeklyWins)
+        hasher.combine(standing.everToppedAllTime)
+        return hasher.finalize()
+    }
 
     var body: some View {
-        let inputs = Trophies.inputs(from: catches)
-        let items = TrophyBoard.visible(inputs: inputs)
+        let derived = cache.value(for: token) {
+            let inputs = Trophies.inputs(from: catches)
+            return (inputs: inputs, items: TrophyBoard.visible(inputs: inputs))
+        }
+        let inputs = derived.inputs
+        let items = derived.items
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
                 ForEach(items) { TrophyCardRow(ach: $0, inputs: inputs) }

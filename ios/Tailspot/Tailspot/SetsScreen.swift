@@ -28,14 +28,20 @@ import SwiftData
 
 struct SetsBrowser: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
+    /// Memoizes the scored list across body evals — Hangar segment switches
+    /// re-eval this kept-alive page every time. See HangarDerivedCache.
+    @State private var cache = DerivedCacheBox<[(set: CardSet, progress: (caught: Int, total: Int))]>()
 
-    // Each set's progress is computed ONCE here (single pass over the
-    // families), then we sort by % complete — closest-to-done first, so the
-    // sets you're most likely to finish bubble to the top. The previous
-    // version sorted with a comparator that recomputed progress for both
-    // sides of every comparison (~10× the work); precomputing keeps the
-    // body cheap, which matters now that the segment is kept alive.
+    // Each set's progress is computed ONCE per DATA change (fingerprint-keyed
+    // cache, not per body eval), then sorted by % complete — closest-to-done
+    // first, so the sets you're most likely to finish bubble to the top. The
+    // previous version sorted with a comparator that recomputed progress for
+    // both sides of every comparison (~10× the work).
     private var scored: [(set: CardSet, progress: (caught: Int, total: Int))] {
+        cache.value(for: CatchFingerprint.of(catches)) { computeScored() }
+    }
+
+    private func computeScored() -> [(set: CardSet, progress: (caught: Int, total: Int))] {
         // Derive per-catch match keys once and share them across all ~30
         // families — the [Catch] overload would rebuild them per family.
         let keys = CardSets.matchKeys(for: catches)

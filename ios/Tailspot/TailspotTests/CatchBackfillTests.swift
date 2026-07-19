@@ -511,7 +511,11 @@ struct CatchBackfillNegativeCacheTests {
     @Test func skipsUnresolvedIcaoOnSecondPass() async throws {
         CatchBackfill._resetNegativeCacheForTesting()
         defer { CatchBackfill._resetNegativeCacheForTesting() }
-        let context = ModelContext(try makeContainer())
+        // Retain the container for the test's lifetime — SwiftData traps on a
+        // change-notification timer if it deallocates under a live context.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        defer { _ = container }
         let c = makeCatch(icao24: "71c575", in: context)   // no FAA record
         let src = CountingSource()                          // returns nil
 
@@ -529,7 +533,11 @@ struct CatchBackfillNegativeCacheTests {
     @Test func resolvedIcaoIsNotReattempted() async throws {
         CatchBackfill._resetNegativeCacheForTesting()
         defer { CatchBackfill._resetNegativeCacheForTesting() }
-        let context = ModelContext(try makeContainer())
+        // Retain the container for the test's lifetime — SwiftData traps on a
+        // change-notification timer if it deallocates under a live context.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        defer { _ = container }
         let c = makeCatch(icao24: "abcabc", in: context)
         let src = CountingSource()
         src.result = makeMeta(icao24: "abcabc", registration: "N123", typecode: "B738")
