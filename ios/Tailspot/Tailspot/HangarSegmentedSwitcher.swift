@@ -57,37 +57,46 @@ struct HangarSegmentedSwitcher: View {
             let minX = Self.trackPadding + segmentWidth / 2
             let thumbX = dragX.map { min(max($0, minX), geo.size.width - minX) } ?? restX
 
-            // One container so the track and thumb read as a single liquid
-            // surface (and so the glass thumb doesn't swallow taps for
-            // non-glass siblings — the Profile-bug lesson, PR #127).
-            GlassEffectContainer {
-                ZStack {
-                    // The sliding thumb: brand-cyan glass. `.interactive()`
-                    // is what gives the liquid press/stretch response.
-                    Capsule()
-                        .fill(.clear)
-                        .frame(width: segmentWidth, height: Self.segmentHeight)
-                        .glassEffect(
-                            .regular.tint(Brand.Color.cyan.opacity(0.85)).interactive(),
-                            in: .capsule
-                        )
-                        .position(x: thumbX, y: Self.controlHeight / 2)
-
-                    HStack(spacing: 0) {
-                        ForEach(segments) { seg in
-                            Text(seg.label)
-                                .font(.system(size: 15, weight: selection == seg ? .semibold : .medium))
-                                .foregroundStyle(
-                                    selection == seg ? Brand.Color.bgPrimary : Brand.Color.textSecondary
-                                )
-                                .frame(maxWidth: .infinity, minHeight: Self.segmentHeight)
-                        }
+            // Glass shapes are lifted into their OWN layer composited above
+            // the container's content — ZStack order can't put ordinary
+            // views over them (field screenshot 2026-07-19: the thumb
+            // covered the selected label). So the container holds ONLY the
+            // glass (track + thumb, which also blend into one liquid
+            // surface, and container-wrapping keeps the glass from
+            // swallowing sibling taps — the PR #127 lesson); the labels sit
+            // OUTSIDE it, compositing above the glass.
+            ZStack {
+                GlassEffectContainer {
+                    ZStack {
+                        // The track.
+                        Capsule()
+                            .fill(.clear)
+                            .glassEffect(.regular, in: .capsule)
+                        // The sliding thumb: brand-cyan glass. `.interactive()`
+                        // is what gives the liquid press/stretch response.
+                        Capsule()
+                            .fill(.clear)
+                            .frame(width: segmentWidth, height: Self.segmentHeight)
+                            .glassEffect(
+                                .regular.tint(Brand.Color.cyan.opacity(0.85)).interactive(),
+                                in: .capsule
+                            )
+                            .position(x: thumbX, y: Self.controlHeight / 2)
                     }
-                    .padding(.horizontal, Self.trackPadding)
                 }
-            }
-            .background {
-                Capsule().fill(.clear).glassEffect(.regular, in: .capsule)
+
+                HStack(spacing: 0) {
+                    ForEach(segments) { seg in
+                        Text(seg.label)
+                            .font(.system(size: 15, weight: selection == seg ? .semibold : .medium))
+                            .foregroundStyle(
+                                selection == seg ? Brand.Color.bgPrimary : Brand.Color.textSecondary
+                            )
+                            .frame(maxWidth: .infinity, minHeight: Self.segmentHeight)
+                    }
+                }
+                .padding(.horizontal, Self.trackPadding)
+                .allowsHitTesting(false)   // the drag gesture below owns input
             }
             // Animating the continuously-retargeted thumb x is deliberate:
             // the spring re-aims every frame, so the thumb TRAILS the finger

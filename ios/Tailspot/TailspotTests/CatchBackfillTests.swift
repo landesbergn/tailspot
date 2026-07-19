@@ -478,11 +478,22 @@ struct CatchBackfillNegativeCacheTests {
         }
     }
 
+    /// Containers are retained for the PROCESS lifetime, not the test body.
+    /// These tests are the suite's only ones that `context.save()` (via
+    /// `backfillAll`) — a save schedules SwiftData's coalesced change-notify
+    /// timer, and if the container has deallocated when it fires, SwiftData
+    /// traps and kills the whole parallel test run (three crashed suite runs
+    /// on 2026-07-19, random victims each time). Leaking a couple of tiny
+    /// in-memory stores is the standard workaround.
+    private static var retainedContainers: [ModelContainer] = []
+
     private func makeContainer() throws -> ModelContainer {
-        try ModelContainer(
+        let container = try ModelContainer(
             for: Catch.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
+        Self.retainedContainers.append(container)
+        return container
     }
 
     /// A route-less, airframe-fact-less catch (no callsign → route path is a
