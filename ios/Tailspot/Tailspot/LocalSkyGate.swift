@@ -58,14 +58,33 @@ nonisolated struct LocalSkyGate {
         /// At/below this the patch is "smooth" (open sky — day/night/overcast).
         /// Confirmed on-device by the 2026-07 shadow telemetry: real sky
         /// verdicts max out at 0.0116, first occluders appear at 0.0153 —
-        /// the dial sits in the gap, so the offline value transfers.
+        /// the dial sits in the gap, so the offline value transfers. Still
+        /// the CONFIDENT-SKY bar (and the sky-fraction tile test) — but no
+        /// longer the occluder bar; see `texOccluder`.
         var texSmooth: Double = 0.014
+        /// At/above this a cool patch is confidently an OCCLUDER (building /
+        /// tree clutter). Split from `texSmooth` on 2026-07-20 (GA
+        /// moderation): 30 days of enforcing telemetry showed the answered
+        /// occluded flags 70% overridden (22 Keep vs 9 Discard), and the
+        /// false flags cluster at texture 0.02–0.09, cool, with sky in frame
+        /// — CLOUD/HAZE under the bracket, which the single 0.014 bar read
+        /// as a building. True occluders (the NYC cheat frames, warm-lit
+        /// facades) read ~0.10+ texture or 0.13+ warmth. Between the two
+        /// bars the patch is `uncertain` (allow, no flag) — the cool
+        /// mild-texture cheat class this gives up is queued for the L4
+        /// detector gate (in shadow) to own. Re-scored on the 30-day
+        /// telemetry: flags drop 39 → 8, removing 17 of the 22 Keep-answered
+        /// false flags while every high-texture/warm true block survives.
+        var texOccluder: Double = 0.10
         /// Warm artificial light, trusted only with enough light to believe
         /// white balance. Sky is cool (warmth < this) so it never blocks.
         /// 0.04 → 0.07 (2026-07-04 shadow calibration): golden-hour skies
         /// read 0.045–0.06 warm — the same false-block `SkyCheck` hit in the
         /// field, fixed the same way (its warmThreshold moved 0.04 → 0.07).
-        var warmThreshold: Double = 0.07
+        /// 0.07 → 0.10 (2026-07-20 GA moderation, in lockstep with
+        /// `SkyCheck.warmThreshold` — same telemetry basis: outdoor-warm
+        /// scenes read 0.04–0.096, real warm-lit occluders/interiors 0.11+).
+        var warmThreshold: Double = 0.10
         /// Below this luminance neither colour NOR texture is trustworthy —
         /// see the night guard in `verdict`.
         var luminanceForColorTrust: Double = 0.12
@@ -99,10 +118,14 @@ nonisolated struct LocalSkyGate {
         // block itself. Fail open. (2026-07-04 shadow telemetry: night
         // catches at lum ≈ 0.05 with sky_fraction ≈ 0.8 were would-blocks.)
         guard colorTrustworthy else { return .uncertain }
-        // Textured + cool → an occluder, but only confidently so when there's
-        // clearly sky elsewhere to contrast against. A featureless frame (fog,
-        // or a wall filling the view) has no sky reference → fail open.
-        if f.skyFraction >= thresholds.minSkyFraction {
+        // Clearly-cluttered + cool → an occluder, but only confidently so
+        // when there's clearly sky elsewhere to contrast against. A
+        // featureless frame (fog, or a wall filling the view) has no sky
+        // reference → fail open. Texture between `texSmooth` and
+        // `texOccluder` — the cloud/haze band the 2026-07-20 telemetry
+        // retune carved out — is ambiguous, not an occluder.
+        if f.patchTexture >= thresholds.texOccluder,
+           f.skyFraction >= thresholds.minSkyFraction {
             return .notSky
         }
         return .uncertain

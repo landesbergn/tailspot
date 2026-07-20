@@ -5,6 +5,49 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-20 — Authenticity-gate moderation for GA: warm bar 0.07→0.10, occluded texture bar split — branch `tune/gate-moderation`
+
+Noah's pre-GA report: the "go outside" state and the "did you really see
+it?" question both fire too aggressively. 30 days of enforcing telemetry
+agreed, and located both problems in two specific dials:
+
+- **Indoor gate (`SkyCheck.warmThreshold` 0.07 → 0.10).** The ambient
+  `pointedIndoors` state ("Not many planes indoors." + total ambient-label
+  suppression) blocks on warm light at 0.07 — but 30 of 36 field `notSky`
+  blocks sat at warmth **0.04–0.096**, the outdoor evening/golden band,
+  while the clearly-indoor cluster reads **0.11–0.19** (corpus warm
+  ceilings ~0.13+). The threshold sat directly on top of outdoor warm
+  light. Raised to 0.10 (same bump in `LocalSkyGate.warmThreshold`, in
+  lockstep as before).
+- **Occluded gate (`LocalSkyGate`: new `texOccluder = 0.10`, split from
+  `texSmooth = 0.014`).** The "did you really see it?" question fired on
+  ~15% of catches and, where answered, was overridden with Keep **22 of 31
+  times (~70% false)**. Joining every flag to its recorded patch features:
+  the false flags cluster at texture 0.02–0.09, cool, with sky in frame —
+  **cloud/haze under the bracket**, which the single smooth-sky bar
+  (calibrated on clear sky) read as a building. True occluders (NYC cheat
+  frames, warm-lit facades) read ~0.10+ texture or 0.13+ warmth. The cool
+  branch now blocks only at `texOccluder`+; between the bars is
+  `uncertain` (allow, silently). `texSmooth` still owns the confident-sky
+  verdict and the sky-fraction tile test, unchanged.
+
+**Validation.** The original labeled corpus images are no longer on disk;
+the field telemetry replaced them (and is better for this change — both
+edits only *shrink* the block set, so the only question is whether frames
+that should still block stay above the new bars; they do). Re-scored on the
+30 days: occluded flags drop **39 → 8** (17 of the 22 Keep-answered false
+flags removed, every high-texture/warm true block kept). Nothing that
+previously passed changes behavior. `tools/authenticity-gate/
+score_local_gate.py` + CALIBRATION.md updated to match. North-star note:
+this *improves* catch-confirmation signal — a 70%-wrong question trains
+Keep-mashing.
+
+**Deliberate costs** (both owned by backlogged successors): mildly-warm
+interiors (0.07–0.10) now slip the indoor gate like cool-lit ones always
+have — the learned indoor/outdoor classifier is the real fix; cool
+mild-texture occluders (gray building, overcast) slip the occluded gate —
+queued for the L4 detector gate (in shadow) to own.
+
 ## 2026-07-20 — Empty-sky-tap honesty: far-toast subject rescue + literal toast + starved-poll retry — branch `fix/far-toast-diagnosis`
 
 Field report (Noah, 2026-07-19, driving the Dumbarton bridge watching SFO

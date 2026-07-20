@@ -40,9 +40,17 @@ import numpy as np
 from PIL import Image
 
 TEX_SMOOTH = 0.014
+# 2026-07-20 (GA moderation): the occluder bar split from TEX_SMOOTH. 30 days
+# of enforcing telemetry showed 70% of answered occluded flags overridden with
+# Keep; the false flags cluster at texture 0.02-0.09 cool (cloud/haze under
+# the bracket), true occluders at ~0.10+ texture or 0.13+ warmth. Between the
+# bars -> UNCERTAIN (allow).
+TEX_OCCLUDER = 0.10
 # 0.040 -> 0.070 (2026-07-04): golden-hour skies read 0.045-0.06 warm in the
 # shadow telemetry -- the same false-block SkyCheck hit in the field.
-WARM_THRESH = 0.070
+# 0.070 -> 0.100 (2026-07-20): field notSky blocks sat at 0.04-0.096 warmth
+# (outdoor evening light); real warm-lit occluders/interiors read 0.11+.
+WARM_THRESH = 0.100
 LUM_TRUST = 0.120
 MIN_SKY_FRACTION = 0.20
 GRID = 16
@@ -122,7 +130,9 @@ def verdict(tex, warm, lum, skyfrac):
     # noise and the plane's OWN lights read as texture. Fail open.
     if lum < LUM_TRUST:
         return UNCERTAIN
-    if skyfrac >= MIN_SKY_FRACTION:
+    # Only CLEARLY-cluttered cool patches are occluders (2026-07-20); the
+    # texSmooth..texOccluder band is ambiguous cloud/haze -> allow.
+    if tex >= TEX_OCCLUDER and skyfrac >= MIN_SKY_FRACTION:
         return NOT_SKY
     return UNCERTAIN
 
