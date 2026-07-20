@@ -53,10 +53,23 @@ struct SkyCheckVerdictTests {
     @Test func smoothWarmCeilingIsNotSky() {
         // Field case (2026-06-25): a blank ceiling reads SMOOTH (e0.02),
         // identical to sky in structure — only the room's warm light tells
-        // them apart. Blocking on warmth catches it. (warmth 0.13 ≥ 0.04,
-        // lum 0.20 ≥ 0.12 → warm → notSky.)
+        // them apart. Blocking on warmth catches it. (warmth 0.13 ≥ 0.10,
+        // lum 0.20 ≥ 0.12 → warm → notSky.) 0.13 is the corpus's warm-
+        // ceiling floor — it must stay above the threshold through retunes.
         let ceiling = SkyFeatures(edgeDensity: 0.02, tileVariance: 0.01, warmth: 0.13, meanLuminance: 0.20)
         #expect(gate.verdict(features: ceiling, gpsAccuracyMeters: 19) == .notSky)
+    }
+
+    @Test func warmEveningOutdoorsIsNotBlocked() {
+        // The 2026-07-20 GA-moderation retune: 30 of 36 field `notSky`
+        // blocks sat at warmth 0.04–0.096 — warm evening/golden outdoor
+        // light, reported as false "Not many planes indoors." nags (which
+        // also suppress every ambient label). Below the 0.10 bar they must
+        // not block; the clearly-indoor cluster (0.11–0.19) still does.
+        let evening = SkyFeatures(edgeDensity: 0.13, tileVariance: 0.05, warmth: 0.08, meanLuminance: 0.50)
+        #expect(gate.verdict(features: evening, gpsAccuracyMeters: 10) != .notSky)
+        let smoothGolden = SkyFeatures(edgeDensity: 0.03, tileVariance: 0.01, warmth: 0.09, meanLuminance: 0.60)
+        #expect(gate.verdict(features: smoothGolden, gpsAccuracyMeters: 10) == .sky)
     }
 
     @Test func warmIndoorBlocksRegardlessOfGps() {

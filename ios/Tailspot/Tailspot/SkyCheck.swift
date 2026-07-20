@@ -78,10 +78,15 @@ nonisolated struct SkyCheck {
         /// Raised 0.04 → 0.07 on 2026-07-01 after a field report that the
         /// indoor warnings were over-eager: mildly-warm outdoor scenes
         /// (horizon, warm buildings, hazy/golden sky) sat just above 0.04 and
-        /// false-tripped. 0.07 still blocks clear interiors (the corpus's
-        /// warm ceilings read ~0.13+) — full corpus re-validation is a
-        /// follow-up (tools/authenticity-gate).
-        var warmThreshold: Double = 0.07
+        /// false-tripped. Raised 0.07 → 0.10 on 2026-07-20 (GA moderation):
+        /// 30 days of `catch_blocked_outdoors` telemetry put 30 of 36 blocks
+        /// at warmth 0.04–0.096 — the outdoor-warm band (evening/golden
+        /// light), reported as false "indoors" nags with label suppression —
+        /// while the clearly-indoor cluster reads 0.11–0.19 (corpus warm
+        /// ceilings ~0.13+). Cost: mildly-warm interiors join the cool-lit
+        /// ones that already slip through — the learned classifier
+        /// (backlogged) remains the real fix for both.
+        var warmThreshold: Double = 0.10
         var luminanceForColorTrust: Double = 0.12
 
         static let `default` = Thresholds()

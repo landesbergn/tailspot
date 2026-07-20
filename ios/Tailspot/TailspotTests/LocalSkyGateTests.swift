@@ -33,9 +33,22 @@ struct LocalSkyGateTests {
         #expect(gate.verdict(feat(tex: 0.005, warm: -0.30, lum: 0.08)) == .sky)
     }
 
-    @Test func texturedPatchWithSkyAvailableIsOccluded() {
-        // Tree / building + clear sky elsewhere in frame → block.
-        #expect(gate.verdict(feat(tex: 0.05, warm: -0.05, sky: 0.40)) == .notSky)
+    @Test func clearlyClutteredPatchWithSkyAvailableIsOccluded() {
+        // Tree / building clutter + clear sky elsewhere in frame → block.
+        // 0.12 sits above the `texOccluder` bar (true occluders in the
+        // corpus and telemetry read ~0.10+).
+        #expect(gate.verdict(feat(tex: 0.12, warm: -0.05, sky: 0.40)) == .notSky)
+    }
+
+    @Test func cloudUnderBracketIsNotAnOccluder() {
+        // The 2026-07-20 GA-moderation retune: 30 days of enforcing
+        // telemetry put the FALSE occluded flags (70% of answered flags
+        // overridden with Keep) at texture 0.02–0.09, cool, with sky in
+        // frame — cloud/haze under the bracket, not a building. Between
+        // `texSmooth` and `texOccluder` the verdict is uncertain (allow).
+        #expect(gate.verdict(feat(tex: 0.02, warm: -0.13, sky: 0.63)) == .uncertain)
+        #expect(gate.verdict(feat(tex: 0.05, warm: -0.05, sky: 0.40)) == .uncertain)
+        #expect(gate.verdict(feat(tex: 0.09, warm: -0.15, sky: 0.60)) == .uncertain)
     }
 
     @Test func warmLitPatchIsOccluded() {
@@ -51,12 +64,14 @@ struct LocalSkyGateTests {
     }
 
     @Test func goldenHourSkyIsNotReadAsWarmOccluder() {
-        // 2026-07-04 calibration: golden-hour skies read 0.045–0.06 warm but
-        // are smooth — below the 0.07 warm threshold they must stay sky (the
-        // same false-block SkyCheck hit in the field). Strongly-warm lit
-        // structure (≥ 0.07) still blocks — see warmLitPatchIsOccluded.
+        // 2026-07-04 calibration + 2026-07-20 moderation: outdoor warm light
+        // reads 0.045–0.096 (golden hour through warm evening scenes) and
+        // must stay sky — the telemetry put real warm-lit occluders at
+        // 0.11+. Strongly-warm lit structure (≥ 0.10) still blocks — see
+        // warmLitPatchIsOccluded.
         #expect(gate.verdict(feat(tex: 0.006, warm: 0.055, lum: 0.70)) == .sky)
-        #expect(gate.verdict(feat(tex: 0.006, warm: 0.08, lum: 0.70)) == .notSky)
+        #expect(gate.verdict(feat(tex: 0.006, warm: 0.08, lum: 0.70)) == .sky)
+        #expect(gate.verdict(feat(tex: 0.006, warm: 0.12, lum: 0.70)) == .notSky)
     }
 
     @Test func nightTexturedPatchFailsOpen() {
@@ -82,7 +97,7 @@ struct LocalSkyGateTests {
         var tex = [Double](repeating: 0, count: g * g)
         let warm = [Double](repeating: -0.30, count: g * g)
         let lum = [Double](repeating: 0.60, count: g * g)
-        for y in 0..<g { for x in 0..<g { tex[y * g + x] = x < 2 ? 0.10 : 0.001 } }
+        for y in 0..<g { for x in 0..<g { tex[y * g + x] = x < 2 ? 0.15 : 0.001 } }
         let grid = LocalSkyGrid(grid: g, lum: lum, warmth: warm, texture: tex,
                                 bufferSize: CGSize(width: 400, height: 400))
         let size = CGSize(width: 400, height: 400)
