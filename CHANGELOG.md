@@ -5,6 +5,56 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-19 — Wrong-route fix: multi-leg leg picking + stale-filing corridor gate + on-device repair — branch `fix/route-leg-picking`
+
+Field reports (Noah, SFO arrival path): UAL1375 carded "ONT → ORD" while
+FR24 showed ONT → SFO; SWA1067 carded "MAF → DAL" while actually flying
+BWI → SFO. Two distinct root causes in the adsb.lol route enrichment, one
+shared symptom (a confidently wrong journey on the card):
+
+- **Multi-leg filings were collapsed to first → last.** UAL1375 is filed
+  `KONT-KSFO-KORD`; the parser's "multi-leg collapses to first → last" rule
+  produced ONT → ORD — a pair nobody flies. Fix (backend
+  `adsblolRoutes.ts`): a filing with 3+ codes now parses into one leg per
+  consecutive pair (generalizing the 2026-07-11 A-B-A round-trip pick), and
+  `enrich` picks the leg the plane is ON — corridor plausibility (near the
+  leg's great-circle segment, tolerance `max(250 km, 15% of leg)` mid-leg /
+  250 km past an endpoint) then track alignment (points at the leg's
+  destination within 55°, beating the runner-up by 40°). One plausible leg +
+  no track is accepted; ambiguity stays null (never fabricate a journey).
+- **Stale filings served verbatim.** adsb.lol's route DB is keyed by
+  callsign and can hold another day's routing (Southwest reuses flight
+  numbers): SWA1067 was on file as `KMAF-KDAL`. Fix: the SAME corridor
+  check now gates plain two-code routes per-plane — a plane 1,900 km off
+  the filed corridor gets no route rather than a wrong one.
+- **`GET /v1/routes/:callsign` gained optional `lat`/`lng`/`track`** so the
+  position-less paths get the same picks: catch-time resolve passes the
+  plane's live position + track; the Hangar backfill passes the catch's
+  observer position (within slant range of the plane). Malformed params
+  degrade to a position-less resolve (never a 400). Without a position a
+  multi-leg filing resolves to null — the first→last collapse is dead
+  everywhere. Backfill also went per-row (was per-callsign groups): two
+  catches sharing a callsign can be different flights on different legs;
+  deduped by callsign + ~11 km position bucket.
+- **On-device repair for already-wrong rows** (`CatchBackfill.
+  clearImplausibleRoutes`, runs in every `backfillAll` pass): a stored
+  route whose corridor the OBSERVER was nowhere near (checked offline
+  against bundled `airports.json` coords, server tolerance + slant-distance
+  slack so a server-approved route can never flap) is cleared back into the
+  fill-nil pool, where the position-aware lookup re-fills it correctly or
+  honestly leaves it routeless. Frozen-moment carve-out #3, documented in
+  the file header: these values were bad enrichment, not observations.
+  Noah's two bad rows: SWA1067 clears and stays routeless (BWI → SFO was
+  never on file); UAL1375 clears and stays routeless too (near SFO both
+  legs are plausible and old rows recorded no plane track — honest null
+  beats a guess).
+
+Tests: backend 49 route tests green (new: UAL1375/SWA1067 fixture suites,
+endpoint param passthrough/degradation); iOS full suite green (new: repair
++ corridor-geometry cases). One mid-run SwiftData `SIGTRAP` (notification
+timer, no Tailspot frames) reproduced identical pre-existing crashes from
+07-13/07-14 — sim flake, passed clean on re-run.
+
 ## 2026-07-13 — Catch-target plausibility (+ lone-plane catchable): stop bagging the wrong plane in dense sky — branch `fix/catch-target-plausibility`
 
 Field mis-catch (Noah, NYC): a 12.9 km cruise A319 at ~70° elevation (nearly

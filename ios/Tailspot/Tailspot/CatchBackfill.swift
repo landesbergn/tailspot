@@ -14,7 +14,10 @@
 //  operatorName, and — since 2026-07-04 (Noah's call: backfill old cards)
 //  — the route (origin → destination by callsign, `GET /v1/routes`).
 //  Scheduled callsigns keep their city pair for their scheduled life, so
-//  the current filing is almost always the flown route.
+//  the current filing is almost always the flown route. A THIRD carve-out
+//  (2026-07-19): a stored route provably implausible for where the catch
+//  happened (`clearImplausibleRoutes`) is cleared and re-resolved — those
+//  values were bad enrichment, not observations.
 //
 
 import Foundation
@@ -88,6 +91,9 @@ enum CatchBackfill {
     /// without a round this time.
     static func resolveCatchTimeRoute(
         callsign: String?,
+        lat: Double? = nil,
+        lng: Double? = nil,
+        track: Double? = nil,
         timeout: Duration = .milliseconds(1500)
     ) async -> BackendAircraft.Route? {
         guard let cs = callsign?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -96,7 +102,12 @@ enum CatchBackfill {
         // children don't reach back into MainActor-isolated static state.
         let client = routeClient
         return await withTaskGroup(of: BackendAircraft.Route?.self) { group in
-            group.addTask { (try? await client.route(forCallsign: cs)) ?? nil }
+            // The plane's live position + track ride along (2026-07-19) so the
+            // server can pick the current leg of a multi-leg filing and reject
+            // a stale one — see `TailspotBackendClient.route(forCallsign:)`.
+            group.addTask {
+                (try? await client.route(forCallsign: cs, lat: lat, lng: lng, track: track)) ?? nil
+            }
             group.addTask { try? await Task.sleep(for: timeout); return nil }
             // First to finish wins — a fast route (hit OR a definite miss)
             // returns immediately; if the network is slow, the sleep fires and
@@ -168,6 +179,91 @@ enum CatchBackfill {
         return changed
     }
 
+    /// Repair for IMPLAUSIBLE stored routes (2026-07-19, SFO-arrival field
+    /// reports): two backend bugs wrote routes the catch was nowhere near —
+    /// a multi-leg filing collapsed to first → last (UAL1375 "ONT → ORD" on
+    /// an ONT → SFO arrival), and a stale per-callsign filing served verbatim
+    /// (SWA1067 "MAF → DAL" on a BWI → SFO flight). Both leave the same
+    /// signature: the observer (who was within slant range of the plane) is
+    /// far from the stored route's great-circle corridor. Clearing the route
+    /// returns the row to the fill-nil pool, where the now position-aware
+    /// lookup re-fills it correctly — or honestly leaves it routeless.
+    ///
+    /// Deliberately LOOSER than the server's corridor gate (its tolerance
+    /// plus the catch's slant distance): a route the server judged plausible
+    /// for the PLANE must never be re-cleared here against the OBSERVER.
+    /// A route with an endpoint missing from the bundled airport table can't
+    /// be judged and is left alone. Returns true if anything changed.
+    static func clearImplausibleRoutes(_ catches: [Catch]) -> Bool {
+        var changed = false
+        for c in catches {
+            guard let o = c.originIcao?.trimmedNonEmpty?.uppercased(),
+                  let d = c.destIcao?.trimmedNonEmpty?.uppercased(),
+                  let origin = GuessOptions.airportsByIcao[o],
+                  let dest = GuessOptions.airportsByIcao[d] else { continue }
+            let slackKm = c.slantDistanceMeters / 1000
+            guard !isPlausiblyOnCorridor(
+                lat: c.observerLat, lon: c.observerLon,
+                fromLat: origin.lat, fromLon: origin.lon,
+                toLat: dest.lat, toLon: dest.lon,
+                extraToleranceKm: slackKm
+            ) else { continue }
+            c.originIcao = nil
+            c.destIcao = nil
+            c.originIata = nil
+            c.destIata = nil
+            c.originName = nil
+            c.destName = nil
+            changed = true
+        }
+        return changed
+    }
+
+    /// Corridor plausibility, mirroring the backend's gate (`isOnCorridor` in
+    /// adsblolRoutes.ts): the point must lie within a tolerance of the
+    /// great-circle SEGMENT origin → destination. Mid-corridor the tolerance
+    /// scales with leg length (long-haul routings bow off the great circle);
+    /// beyond an endpoint only the base tolerance applies. `extraToleranceKm`
+    /// widens both (the observer-to-plane slant, see caller).
+    static func isPlausiblyOnCorridor(
+        lat: Double, lon: Double,
+        fromLat: Double, fromLon: Double,
+        toLat: Double, toLon: Double,
+        extraToleranceKm: Double = 0
+    ) -> Bool {
+        let baseKm = 250.0
+        let legFraction = 0.15
+        let legKm = Geo.distance(fromLat: fromLat, lon: fromLon, toLat: toLat, lon: toLon) / 1000
+
+        let d12 = legKm * 1000 / Geo.earthRadiusMeters // angular leg length
+        if d12 == 0 {
+            let toOrigin = Geo.distance(fromLat: lat, lon: lon, toLat: fromLat, lon: fromLon) / 1000
+            return toOrigin <= baseKm + extraToleranceKm
+        }
+        let d13 = Geo.distance(fromLat: fromLat, lon: fromLon, toLat: lat, lon: lon)
+            / Geo.earthRadiusMeters
+        let θ12 = Geo.bearing(fromLat: fromLat, lon: fromLon, toLat: toLat, lon: toLon) * .pi / 180
+        let θ13 = Geo.bearing(fromLat: fromLat, lon: fromLon, toLat: lat, lon: lon) * .pi / 180
+        let crossTrack = asin(sin(d13) * sin(θ13 - θ12))
+        let alongTrack = acos(min(1, max(-1, cos(d13) / max(cos(crossTrack), 1e-12))))
+            * (cos(θ13 - θ12) < 0 ? -1 : 1)
+
+        let distanceKm: Double
+        let onSegment: Bool
+        if alongTrack < 0 {
+            distanceKm = Geo.distance(fromLat: lat, lon: lon, toLat: fromLat, lon: fromLon) / 1000
+            onSegment = false
+        } else if alongTrack > d12 {
+            distanceKm = Geo.distance(fromLat: lat, lon: lon, toLat: toLat, lon: toLon) / 1000
+            onSegment = false
+        } else {
+            distanceKm = abs(crossTrack) * Geo.earthRadiusMeters / 1000
+            onSegment = true
+        }
+        let tolKm = (onSegment ? max(baseKm, legFraction * legKm) : baseKm) + extraToleranceKm
+        return distanceKm <= tolKm
+    }
+
     /// FAA-registry fallback for US aircraft OpenSky has no record of.
     /// Fills make/model/aircraftType/registration (fill-only-if-nil) from
     /// the bundled snapshot. Returns true if it changed anything.
@@ -224,21 +320,43 @@ enum CatchBackfill {
         // now answers null). No network; must run BEFORE needsRoute filters.
         if clearDegenerateRoutes(catches) { changedAny = true }
 
-        // Route backfill (2026-07-04): once per DISTINCT callsign, fill
-        // origin → destination onto catches that predate route capture —
-        // and, since 2026-07-05, IATA display codes onto rows that have an
-        // ICAO route but predate the IATA fields. Errors are swallowed per
+        // Implausible-route repair (2026-07-19): a stored route whose corridor
+        // the catch was nowhere near (the stale-filing / first→last-collapse
+        // bugs) gets cleared, dropping the row into the fill pool below where
+        // the position-aware lookup re-answers correctly or honestly nil.
+        if clearImplausibleRoutes(catches) { changedAny = true }
+
+        // Route backfill (2026-07-04): fill origin → destination onto catches
+        // that predate route capture — and, since 2026-07-05, IATA display
+        // codes onto rows that have an ICAO route but predate the IATA
+        // fields. PER ROW since 2026-07-19, because the lookup now carries
+        // the catch's observer position (the plane was within slant range of
+        // it) so the server can pick the leg of a multi-leg filing and gate a
+        // stale one — and two catches sharing a callsign can be different
+        // flights on different legs. Deduped by callsign + coarse position so
+        // same-spot rows still cost one lookup. Errors are swallowed per
         // lookup (a 502/offline just means a later Hangar open retries); a
         // null route is a real answer we stop on for this pass.
-        let routeNeeding = catches.filter(needsRoute)
-        let byCallsign = Dictionary(grouping: routeNeeding) {
-            ($0.callsign ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        }
-        for (callsign, rows) in byCallsign where !callsign.isEmpty {
+        var routeCache: [String: BackendAircraft.Route?] = [:]
+        for c in catches.filter(needsRoute) {
             if Task.isCancelled { break }
-            guard let route = (try? await routeClient.route(forCallsign: callsign)) ?? nil
-            else { continue }
-            if applyRoute(route, to: rows) { changedAny = true }
+            let callsign = (c.callsign ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !callsign.isEmpty else { continue }
+            // ~0.1° bucket (≈11 km) — catches from one spotting session share
+            // a lookup; a different day's catch elsewhere gets its own.
+            let key = "\(callsign)|\(Int(c.observerLat * 10))|\(Int(c.observerLon * 10))"
+            let route: BackendAircraft.Route?
+            if let cached = routeCache[key] {
+                route = cached
+            } else {
+                guard let fetched = try? await routeClient.route(
+                    forCallsign: callsign, lat: c.observerLat, lng: c.observerLon
+                ) else { continue } // transport error → retry next pass, don't cache
+                routeCache[key] = fetched
+                route = fetched
+            }
+            guard let route else { continue }
+            if applyRoute(route, to: [c]) { changedAny = true }
         }
 
         if changedAny { try? context.save() }

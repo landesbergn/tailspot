@@ -448,4 +448,110 @@ struct CatchBackfillTests {
         #expect(c.displayOrigin == "RJTT")
         #expect(c.displayDest == "KSFO")
     }
+
+    // MARK: - Implausible-route repair (2026-07-19, SFO-arrival field reports)
+
+    /// A catch made near Fremont, CA (the real 2026-07-19 field-test spot)
+    /// with an already-stored route.
+    private func makeFremontCatch(
+        callsign: String, origin: String, dest: String,
+        originIata: String? = nil, destIata: String? = nil,
+        in context: ModelContext
+    ) -> Catch {
+        let c = Catch(
+            icao24: "a41743", callsign: callsign, model: nil, manufacturer: nil,
+            caughtAt: Date(timeIntervalSince1970: 1_752_950_000),
+            observerLat: 37.53, observerLon: -121.97, slantDistanceMeters: 24_000,
+            originIcao: origin, destIcao: dest,
+            originIata: originIata, destIata: destIata
+        )
+        context.insert(c)
+        return c
+    }
+
+    @Test func clearImplausibleRoutesDropsFirstLastCollapse() throws {
+        // UAL1375: filed KONT-KSFO-KORD, old backend collapsed it to
+        // "ONT → ORD" — whose corridor passes nowhere near the Bay Area.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeFremontCatch(
+            callsign: "UAL1375", origin: "KONT", dest: "KORD",
+            originIata: "ONT", destIata: "ORD", in: context
+        )
+
+        #expect(CatchBackfill.clearImplausibleRoutes([c]))
+        #expect(c.originIcao == nil)
+        #expect(c.destIcao == nil)
+        #expect(c.originIata == nil)
+        #expect(c.destIata == nil)
+    }
+
+    @Test func clearImplausibleRoutesDropsStaleFiling() throws {
+        // SWA1067: on file as MAF → DAL (a Texas hop ~2,400 km away) while
+        // the plane was descending into SFO.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeFremontCatch(callsign: "SWA1067", origin: "KMAF", dest: "KDAL", in: context)
+
+        #expect(CatchBackfill.clearImplausibleRoutes([c]))
+        #expect(c.originIcao == nil)
+        #expect(c.destIcao == nil)
+    }
+
+    @Test func clearImplausibleRoutesKeepsPlausibleRoutes() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        // The CORRECT UAL1375 leg: Fremont is on the ONT → SFO corridor.
+        let arrival = makeFremontCatch(callsign: "UAL1375", origin: "KONT", dest: "KSFO", in: context)
+        // A long-haul into SFO caught near its destination endpoint.
+        let longHaul = makeFremontCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)
+        // A Tokyo-area catch of the same filing, near the ORIGIN endpoint.
+        let nearOrigin = makeRoutedCatch(callsign: "ANA858", origin: "RJTT", dest: "KSFO", in: context)
+
+        #expect(!CatchBackfill.clearImplausibleRoutes([arrival, longHaul, nearOrigin]))
+        #expect(arrival.originIcao == "KONT")
+        #expect(arrival.destIcao == "KSFO")
+        #expect(longHaul.originIcao == "RJTT")
+        #expect(nearOrigin.destIcao == "KSFO")
+    }
+
+    @Test func clearImplausibleRoutesLeavesUnknownAirportsAlone() throws {
+        // An endpoint missing from the bundled table can't be judged — the
+        // stored route must survive untouched.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let c = makeFremontCatch(callsign: "XYZ123", origin: "ZZZZ", dest: "KORD", in: context)
+
+        #expect(!CatchBackfill.clearImplausibleRoutes([c]))
+        #expect(c.originIcao == "ZZZZ")
+        #expect(c.destIcao == "KORD")
+    }
+
+    @Test func corridorPlausibilityGeometry() {
+        // Mid-corridor: Fresno-ish sits on the ONT → SFO great circle.
+        #expect(CatchBackfill.isPlausiblyOnCorridor(
+            lat: 36.2, lon: -119.8,
+            fromLat: 34.056, fromLon: -117.601, toLat: 37.619, toLon: -122.375
+        ))
+        // Far off-corridor: the Bay Area vs a Texas hop.
+        #expect(!CatchBackfill.isPlausiblyOnCorridor(
+            lat: 37.53, lon: -121.97,
+            fromLat: 31.942, fromLon: -102.202, toLat: 32.847, toLon: -96.852
+        ))
+        // Near an endpoint: within the base tolerance past the destination.
+        #expect(CatchBackfill.isPlausiblyOnCorridor(
+            lat: 37.87, lon: -122.27,
+            fromLat: 34.056, fromLon: -117.601, toLat: 37.619, toLon: -122.375
+        ))
+        // extraToleranceKm widens the band (the slant-distance slack).
+        #expect(!CatchBackfill.isPlausiblyOnCorridor(
+            lat: 40.0, lon: -124.5,
+            fromLat: 34.056, fromLon: -117.601, toLat: 37.619, toLon: -122.375
+        ))
+        #expect(CatchBackfill.isPlausiblyOnCorridor(
+            lat: 40.0, lon: -124.5,
+            fromLat: 34.056, fromLon: -117.601, toLat: 37.619, toLon: -122.375,
+            extraToleranceKm: 200
+        ))
+    }
 }

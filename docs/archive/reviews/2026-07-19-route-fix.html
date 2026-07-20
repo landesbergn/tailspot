@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route fix review — 2026-07-19</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#0b0e14; color:#d8dee9; font-family: -apple-system, "Helvetica Neue", sans-serif;
+         margin:0; padding:32px 20px 80px; line-height:1.55; }
+  main { max-width: 860px; margin:0 auto; }
+  h1 { font-size:26px; letter-spacing:-0.01em; }
+  h2 { font-size:19px; margin-top:2.2em; border-bottom:1px solid #1e2633; padding-bottom:6px; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:0.92em; color:#8be9fd; }
+  .card { background:#111623; border:1px solid #1e2633; border-radius:16px; padding:18px 20px; margin:14px 0; }
+  .bad { color:#ff6b81; } .good { color:#50fa7b; } .dim { color:#7a8494; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; font-size:14px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #1e2633; vertical-align:top; }
+  th { color:#7a8494; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.08em; }
+  .route { font-family: ui-monospace, Menlo, monospace; font-weight:700; font-size:16px; }
+  .arrow { color:#7a8494; }
+  ul { padding-left:1.2em; } li { margin:6px 0; }
+  .pill { display:inline-block; border:1px solid #2a3446; border-radius:6px; padding:1px 8px;
+          font-size:11px; letter-spacing:0.06em; color:#9fb0c8; font-family:ui-monospace,Menlo,monospace; }
+</style>
+</head>
+<body>
+<main>
+<h1>Wrong-route fix — review</h1>
+<p class="dim">2026-07-19 · branch <code>fix/route-leg-picking</code> · PR #149 · backend + iOS, no visual/layout changes — this is a behavior review.</p>
+
+<h2>What you reported</h2>
+<div class="card">
+  <table>
+    <tr><th>Flight</th><th>Card said</th><th>Actually flew</th><th>Why</th></tr>
+    <tr>
+      <td class="mono">UAL1375</td>
+      <td class="route bad">ONT <span class="arrow">→</span> ORD</td>
+      <td class="route good">ONT <span class="arrow">→</span> SFO</td>
+      <td>adsb.lol files it as <code>KONT-KSFO-KORD</code> (a through-flight). Our parser collapsed
+          any multi-leg filing to first→last — a city pair <em>nobody flies</em>.</td>
+    </tr>
+    <tr>
+      <td class="mono">SWA1067</td>
+      <td class="route bad">MAF <span class="arrow">→</span> DAL</td>
+      <td class="route good">BWI <span class="arrow">→</span> SFO</td>
+      <td>adsb.lol's route DB simply holds another day's routing for the callsign
+          (Southwest reuses flight numbers across unrelated leg sets). No bug in our parsing —
+          stale upstream data served verbatim.</td>
+    </tr>
+  </table>
+</div>
+
+<h2>The fix, in one idea</h2>
+<p><strong>A route is only attached if the plane could actually be flying it.</strong>
+Every candidate route (or leg of a multi-leg filing) is now checked against the plane's
+observed position and track:</p>
+<ul>
+  <li><span class="pill">CORRIDOR</span> the plane must be near the leg's great-circle path
+      (within <code>max(250 km, 15% of leg length)</code> mid-leg; 250 km past an endpoint).
+      A plane over Fremont is not flying Midland→Dallas — SWA1067's stale filing now yields
+      <em>no route</em> instead of a wrong one.</li>
+  <li><span class="pill">TRACK</span> among plausible legs, the plane's ground track must point
+      at the leg's destination (within 55°, decisively beating the runner-up by 40°).
+      Your UAL1375 — descending over Fremont, tracking ~300° at SFO — picks
+      <span class="route good">ONT → SFO</span>; the same plane climbing out northeast later
+      picks <span class="route">SFO → ORD</span>.</li>
+  <li>Ambiguity → <strong>honest null</strong>. Never fabricate a journey no one observed
+      (same doctrine as the round-trip work from 07-11, which this generalizes).</li>
+</ul>
+
+<h2>Where it applies</h2>
+<ul>
+  <li><strong>Live feed</strong> (<code>/v1/aircraft</code> enrichment): every plane, every poll — new catches get the right leg.</li>
+  <li><strong>Catch-time resolve</strong>: now sends the plane's live position + track to <code>/v1/routes</code>.</li>
+  <li><strong>Hangar backfill</strong>: sends the catch's observer position (you were within slant range of the plane),
+      and runs per-row now — two catches sharing a callsign can be different flights on different legs.</li>
+</ul>
+
+<h2>Repairing your existing catches</h2>
+<div class="card">
+<p>On next Hangar open, <code>CatchBackfill.clearImplausibleRoutes</code> checks every stored route
+offline (bundled <code>airports.json</code> coords) against where you caught it. A route whose corridor
+you were nowhere near gets cleared and re-resolved with position. Guardrails:</p>
+<ul>
+  <li>Tolerance = the server's gate <em>plus</em> the catch's slant distance — a route the server
+      approves can never be re-cleared (no flapping).</li>
+  <li>Endpoints missing from the bundled table → row left alone (can't judge, don't touch).</li>
+  <li>One-sided as-observed routes stay untouchable moment-data, as before.</li>
+</ul>
+<p><strong>Expected on your two rows:</strong></p>
+<ul>
+  <li><span class="mono">SWA1067</span>: <span class="bad">MAF → DAL</span> clears → stays routeless.
+      BWI → SFO was never on file upstream, so the honest answer is no route.</li>
+  <li><span class="mono">UAL1375</span>: <span class="bad">ONT → ORD</span> clears → also stays routeless.
+      Near SFO <em>both</em> filed legs (ONT→SFO arriving, SFO→ORD departing) are plausible by position,
+      and old rows recorded no plane track to break the tie. A new catch of the same flight
+      would card <span class="good">ONT → SFO</span> from its live track.</li>
+</ul>
+</div>
+
+<h2>What to look for in the field</h2>
+<ul>
+  <li>Arrivals into SFO with through-flight filings should card the <em>arrival</em> leg.</li>
+  <li>Some previously-routed cards will go routeless — that's the corridor gate working; a missing
+      route is now much more trustworthy than before.</li>
+  <li>If a plainly-visible route is missing on a plane mid-corridor, that's worth a report — the
+      tolerance may need widening.</li>
+</ul>
+
+<p class="dim">Tests: 49 backend route tests (UAL1375/SWA1067 fixtures included) + full iOS suite green.</p>
+</main>
+</body>
+</html>

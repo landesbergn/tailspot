@@ -1626,7 +1626,18 @@ struct ContentView: View {
                       obs.aircraft.originIcao == nil, obs.aircraft.destIcao == nil
                 else { return nil }
                 let callsign = obs.aircraft.callsign
-                return Task { await CatchBackfill.resolveCatchTimeRoute(callsign: callsign) }
+                // The plane's live position + track ride along so the server
+                // can pick the current LEG of a multi-leg filing (ONT–SFO–ORD
+                // → "ONT → SFO" on the arrival) and reject a stale filing the
+                // plane is nowhere near (2026-07-19).
+                let lat = obs.aircraft.latitude
+                let lng = obs.aircraft.longitude
+                let track = obs.aircraft.trackDeg
+                return Task {
+                    await CatchBackfill.resolveCatchTimeRoute(
+                        callsign: callsign, lat: lat, lng: lng, track: track
+                    )
+                }
             }()
             // One JPEG, reused for every new row in this catch. If the
             // camera isn't ready (auth denied, session not running),

@@ -240,10 +240,14 @@ source + each one's focused test file — they're not restated here.
   may backfill **nil-only airframe** fields (registration, typecode, manufacturer,
   model, placeName, operator) but never overwrites recorded values or backfills
   moment-data. Deliberate exceptions: `Catch.resolvedRarity` re-derives live (so
-  re-tiering corrects old catches on read, no migration), and a **fully-nil route**
+  re-tiering corrects old catches on read, no migration), a **fully-nil route**
   heals via `CatchBackfill`'s per-callsign `GET /v1/routes` lookup (2026-07-04 —
-  current filing, best-effort like operatorName; a one-sided as-observed route is
-  moment-data and is never touched).
+  current filing, best-effort like operatorName; since 2026-07-19 the lookup
+  carries a position so the server can leg-pick a multi-leg filing and reject a
+  stale one; a one-sided as-observed route is moment-data and is never touched),
+  and an **implausible stored route** (its corridor nowhere near the catch —
+  the first→last-collapse / stale-filing bugs, 2026-07-19) is cleared by
+  `CatchBackfill.clearImplausibleRoutes` back into the fill pool.
 - **Permission strings** (`NSCameraUsageDescription`,
   `NSLocationWhenInUseUsageDescription`) live in the target's **Info** tab in
   Xcode, not in any tracked source file. Adding one is a **manual Xcode step Claude
