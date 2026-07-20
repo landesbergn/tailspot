@@ -1013,7 +1013,14 @@ struct ContentView: View {
         // already-computed sky features (no extra camera work) and
         // debounce a sustained not-sky read into `pointedIndoors`.
         .task {
+            // Sleep FIRST: SwiftUI runs a `.task` body synchronously inside
+            // the view update that attaches it, up to the first suspension —
+            // so a compute-then-sleep loop mutates @State (`indoorStreak`)
+            // mid-update on its first tick ("Modifying state during view
+            // update", 2026-07-20). The streak needs 5 ticks before anything
+            // shows, so a first-tick delay changes nothing observable.
             while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
                 let verdict = computeOutdoorVerdict(
                     features: visualConfirm.latestSkyFeatures,
                     gps: location.horizontalAccuracy
@@ -1022,7 +1029,6 @@ struct ContentView: View {
                 let indoors = indoorStreak >= 5   // ~5 s sustained (was 3 —
                                                   // the ambient nag was too eager, 2026-07-01)
                 if indoors != pointedIndoors { withAnimation { pointedIndoors = indoors } }
-                try? await Task.sleep(for: .seconds(1))
             }
         }
         .sheet(isPresented: replaySheetPresented) {
