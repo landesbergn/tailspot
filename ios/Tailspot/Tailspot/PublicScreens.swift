@@ -89,43 +89,35 @@ struct LeaderboardScreen: View {
     #endif
 
     var body: some View {
-        List {
+        // Windows-aware backend → the Hangar pager structure (2026-07-19,
+        // Noah: the leaderboard toggle felt different from the Hangar's —
+        // it was: content swapped in-place inside one List, which both
+        // hitched the slider thumb with a full-List relayout and gave no
+        // page swipe). Now the switcher is a fixed header and each window
+        // is its own List inside a paged TabView — the kept-alive pages
+        // swap via UIKit's page view (smooth next to the thumb animation)
+        // and swiping between boards comes free, matching the Hangar.
+        // Fail-soft (old backend / nothing loaded yet): one plain board,
+        // no switcher, no pager — exactly the pre-windows rendering.
+        Group {
             if windowsSupported == true {
-                switcherSection
-            }
-            if let response = responses[selectedWindow] {
-                if selectedWindow == .week, windowsSupported == true,
-                   let champions = response.champions {
-                    championSection(champions)
-                }
-                if response.entries.isEmpty {
-                    emptySection
-                } else {
-                    if response.entries.count >= 3 {
-                        Section {
-                            podium(entries: response.entries)
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
+                VStack(spacing: 0) {
+                    switcherHeader
+                    TabView(selection: $selectedWindow) {
+                        ForEach(LeaderboardWindow.allCases) { window in
+                            windowList(window)
+                                .tag(window)
                         }
                     }
-                    rankSection(entries: response.entries)
-                    meHintSection(me: response.me)
+                    .tabViewStyle(.page(indexDisplayMode: .never))
                 }
-            } else if let msg = errors[selectedWindow] {
-                errorSection(msg)
             } else {
-                loadingSection
+                windowList(selectedWindow)
             }
         }
-        .listStyle(.insetGrouped)
-        // Brand the list like SettingsScreen/SetsScreen — without this the
-        // List renders system grouped chrome instead of the fixed dark
-        // Brand palette.
-        .scrollContentBackground(.hidden)
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load(selectedWindow) }
         // Runs on appear AND whenever the selected tab changes: a fresh tab
         // fetches (spinner — it has no data yet); a cached tab re-fetches
         // silently behind its stale board.
@@ -177,23 +169,67 @@ struct LeaderboardScreen: View {
         }
     }
 
+    // MARK: - Per-window board
+
+    /// One window's full board as its own List — a kept-alive page in the
+    /// body's TabView. Sections are unchanged from the pre-pager rendering;
+    /// each page pulls from its OWN window's cache/error slot, so a swipe
+    /// shows the neighbor's last data instantly while `.task(id:
+    /// selectedWindow)` refreshes it.
+    private func windowList(_ window: LeaderboardWindow) -> some View {
+        List {
+            if let response = responses[window] {
+                if window == .week, windowsSupported == true,
+                   let champions = response.champions {
+                    championSection(champions)
+                }
+                if response.entries.isEmpty {
+                    emptySection
+                } else {
+                    if response.entries.count >= 3 {
+                        Section {
+                            podium(entries: response.entries)
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                        }
+                    }
+                    rankSection(entries: response.entries)
+                    meHintSection(me: response.me)
+                }
+            } else if let msg = errors[window] {
+                errorSection(msg)
+            } else {
+                loadingSection
+            }
+        }
+        .listStyle(.insetGrouped)
+        // Brand the list like SettingsScreen/SetsScreen — without this the
+        // List renders system grouped chrome instead of the fixed dark
+        // Brand palette.
+        .scrollContentBackground(.hidden)
+        .refreshable { await load(window) }
+    }
+
     // MARK: - Window switcher + countdown
 
-    private var switcherSection: some View {
-        Section {
-            VStack(spacing: 6) {
-                LeaderboardWindowSwitcher(selection: $selectedWindow)
-                if let line = countdownLine {
-                    Text(line)
-                        .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                        .padding(.bottom, 2)
-                }
+    /// The slider + countdown as a fixed header ABOVE the pager (no longer
+    /// a List Section — the slider shouldn't scroll away with the board,
+    /// and outside the List its drag gesture no longer competes with the
+    /// List's scroll pan). Horizontal padding matches the inset-grouped
+    /// row margins so the track aligns with the cards below.
+    private var switcherHeader: some View {
+        VStack(spacing: 6) {
+            LeaderboardWindowSwitcher(selection: $selectedWindow)
+            if let line = countdownLine {
+                Text(line)
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .padding(.bottom, 2)
             }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     /// "RESETS MONDAY · 2D 14H LEFT" (week) / "RESETS AUG 1" (month), in the

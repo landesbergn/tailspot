@@ -209,11 +209,16 @@ final class PreviewView: UIView {
 
     /// Start or stop the capture session. Stopping powers down the ISP +
     /// the 30 fps frame delivery while an opaque sheet covers the AR view
-    /// (see `CameraPreview.isActive`); the preview layer keeps its last
-    /// frame, so there's nothing to see even if a sliver were visible.
+    /// (see `CameraPreview.isActive`). The preview layer is DETACHED while
+    /// stopped: a stopped layer otherwise freezes on its last frame, which
+    /// peeked out around sheet edges and through the dismiss animation
+    /// (Noah, 2026-07-19 — wants plain black). Detached, the layer clears
+    /// to the view's black; on reactivation it stays black until the first
+    /// live frame lands, so there's no frozen-frame flash either.
     func setSessionActive(_ wanted: Bool) {
         guard wanted != wantsRunning else { return }
         wantsRunning = wanted
+        previewLayer.session = wanted ? session : nil   // main-thread layer work
         sessionQueue.async { [session] in
             if wanted {
                 if !session.isRunning { session.startRunning() }
