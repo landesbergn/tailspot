@@ -3687,7 +3687,10 @@ private extension String {
 /// Four L-shaped corner brackets around a center point, sized to
 /// boxSize. Drawn as four separate strokes so the arms have round
 /// caps and don't render a closed-rectangle look.
-private struct LockBrackets: View {
+/// Internal (not private): `OnboardingFlow`'s welcome-step AR mock renders
+/// the REAL bracket so the first thing a new user sees matches the HUD
+/// (2026-07-20 onboarding feedback).
+struct LockBrackets: View {
     let boxSize: CGFloat
     let color: Color
     let opacity: Double
@@ -3723,9 +3726,9 @@ private struct LockBrackets: View {
     }
 }
 
-private enum BracketCorner { case topLeft, topRight, bottomLeft, bottomRight }
+enum BracketCorner { case topLeft, topRight, bottomLeft, bottomRight }
 
-private struct CornerBracket: Shape {
+struct CornerBracket: Shape {
     let armLength: CGFloat
     let corner: BracketCorner
 
