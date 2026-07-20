@@ -52,14 +52,23 @@ before retrying (flaky bridge cellular made that window long). The poll
 loop now retries in 2 s while failing AND data-starved; a healthy poll
 keeps the 10 s cadence (`/v1/aircraft` has no rate limit).
 
-**Evidence caveat.** The drive's own analytics never reached PostHog (the
-phone's entire session is absent — likely connectivity loss; the other
-tester's concurrent SFO session arrived fine), so the root cause is
-code-derived plus Noah's corroboration (toasts claimed 30–90 km; app
-long-running, not freshly opened). The on-device replay recording from the
-drive should confirm the diagnosis (`EmptyTap` events carry reason /
-nearest slant / offset / `headingAccuracyDeg`) — pull it when the phone is
-reachable and re-check before trusting the rescue thresholds further.
+**Confirmed against the field recording (same day).** The drive's own
+analytics never reached PostHog (the phone's entire session is absent —
+likely connectivity loss), but the on-device replay
+(`replay-2026-07-19T221714Z`, Oakland, 3.85× zoom) captured six taps at a
+visible plane: **all six recorded `filtered-far`** — SKW3789 (hidden,
+~28 km, only 7–11° off the tap) and N20230 (10 km GA, beyond its
+small-airframe reveal reach) — while the data simultaneously held
+close/visible planes (SWA3087 at 5.6 km *visible tier*, N562AC/N52275 at
+~1.5 km) that the sky model placed **74–153° away** from the tap: a
+~75°+ real heading error under an OS-reported ±10° accuracy. Under the
+fix, the rescue reveals N553TP (7 km, ~30° off, revealable) and the guard
+vetoes every toast. The recording is bundled as the local-tier fixture
+`local-fartoast-2026-07-19.jsonl` with a pinned regression
+(`FarToastRegressionTests`): the old selection must keep reproducing
+`filtered-far` on all six taps, and the fixed pipeline must never toast
+while an actionable plane is in data (skips on CI, like
+`FailureModeRegressionTests`).
 
 ## 2026-07-19 — Wrong-route fix: multi-leg leg picking + stale-filing corridor gate + on-device repair — branch `fix/route-leg-picking`
 
