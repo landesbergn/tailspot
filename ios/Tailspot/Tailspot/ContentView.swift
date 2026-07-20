@@ -247,8 +247,16 @@ struct ContentView: View {
             // Main AR view and overlays (camera, lock brackets, debug panels, etc.)
             ZStack {
                 if cameraAuthorized {
+                    // isActive: the capture session powers down while an
+                    // opaque sheet covers the AR view or the app resigns
+                    // active — the ISP + 30 fps frame delivery were the
+                    // biggest controllable battery drain (audit HIGH;
+                    // Noah green-lit the camera lever 2026-07-19). Clear-
+                    // background reveals don't occlude, so the live sky
+                    // stays visible behind them.
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
-                                  frameBridge: frameBridge)
+                                  frameBridge: frameBridge,
+                                  isActive: scenePhase == .active && !arOccluded)
                         .ignoresSafeArea()
                         // PRIVACY (GA posture, 2026-07-11): the live camera view
                         // is excluded from PostHog session replay STRUCTURALLY,
