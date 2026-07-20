@@ -188,7 +188,13 @@ source + each one's focused test file — they're not restated here.
   (`revealedIcao`: a tap pins + force-locks the single nearest in-data plane when
   `shouldTapReveal` says so — reason `filtered` (hidden by the band) **or**
   `off-frame` (a visible-tier plane projected off-screen, usually a compass/heading
-  error; DAL972, 2026-07-11); `grounded` never reveals). **Don't loosen the ambient
+  error; DAL972, 2026-07-11); `grounded` never reveals). The tap's subject is NOT
+  simply the angular-nearest in-data plane: a `filtered-far` winner is rescued by
+  the nearest actionable plane in the cone, and the beyond-eyeshot toast only
+  shows when nothing in data is within reveal reach — quoting the
+  distance-nearest slant (`chooseEmptySkyTapSubject` / `farTapToastSlantMeters`;
+  the Dumbarton drive, 2026-07-20 — a car-corrupted compass let a 50 km stranger
+  beat the visible arrival on angle). **Don't loosen the ambient
   filter to chase one** — it resurfaces the MLAT clutter the precision lean kills
   (see the `FieldReplays` regression).
 - **Sensor concurrency.** Sensor wrappers are `ObservableObject` classes owned via

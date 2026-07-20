@@ -5,6 +5,62 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-20 — Empty-sky-tap honesty: far-toast subject rescue + literal toast + starved-poll retry — branch `fix/far-toast-diagnosis`
+
+Field report (Noah, 2026-07-19, driving the Dumbarton bridge watching SFO
+arrivals): repeated **"Nearest plane is 30–90 km out — beyond eyeshot"**
+toasts while an arrival was plainly in sight — and close in the debug list.
+
+**Root cause.** The empty-sky-tap diagnosis picked its subject by angular
+offset alone, blind to tier. In a moving car the compass error rotates the
+sky model tens of degrees (car-body magnetism; sustained acceleration also
+tilts the gravity estimate feeding camera elevation), so the close visible
+plane projects far from the tap — sometimes behind the camera, where the
+diagnosis assigns a synthetic 180° offset that loses to anything in front.
+Near SFO the 50 km data bbox always holds a far, low, hidden-tier plane
+within the 40° tap cone; that stranger won the angular contest, classified
+`filtered-far`, and the toast printed *its* distance as "nearest" — false
+both by sight and by the distance-sorted debug list.
+
+**Fix, two layers (both free functions, `EmptySkyTapSubjectTests`):**
+
+- **`chooseEmptySkyTapSubject` — the rescue.** If the angular-nearest plane
+  classifies `filtered-far`, the subject switches to the angular-nearest
+  *actionable* plane in the cone — airborne AND (visible-tier OR plausibly
+  revealable) — which then classifies and routes normally (`filtered` /
+  `off-frame` reveal, `on-screen` ripple). The `empty_sky_tap` analytics
+  event gains a `rescued: true` flag on that path. Deliberately NOT
+  rescued: a `grounded` primary (the parked-plane toast + Ground Stop
+  easter egg must win) and the NYC couch case (nothing revealable in the
+  cone → `filtered-far` stands, PR #142's protection intact).
+- **`farTapToastSlantMeters` — the honesty guard.** The toast now only
+  shows when NO airborne in-data plane anywhere is within plausible reveal
+  reach, and it reports the **distance**-nearest slant (what "nearest"
+  means to a reader), never the angular winner's. A gross heading error
+  can defeat the rescue (the visible plane computes behind the camera,
+  outside the cone) — but it can't defeat this guard, because the lie
+  requires a close plane in data, which the guard sees regardless of
+  angles. When the guard vetoes, the tap falls back to the plain
+  NO AIRCRAFT HERE ripple.
+
+**Adjacent fix (`ADSBManager`): starved-poll fast retry.** Both Noah's and
+another Bay Area tester's driving sessions show taps seconds after
+foregrounding hitting a completely EMPTY `observed` — after a background
+trip every cached row is stale (dropped by `maxPositionAge` on annotate),
+and a *failed* first fetch used to sleep out the full 10 s poll interval
+before retrying (flaky bridge cellular made that window long). The poll
+loop now retries in 2 s while failing AND data-starved; a healthy poll
+keeps the 10 s cadence (`/v1/aircraft` has no rate limit).
+
+**Evidence caveat.** The drive's own analytics never reached PostHog (the
+phone's entire session is absent — likely connectivity loss; the other
+tester's concurrent SFO session arrived fine), so the root cause is
+code-derived plus Noah's corroboration (toasts claimed 30–90 km; app
+long-running, not freshly opened). The on-device replay recording from the
+drive should confirm the diagnosis (`EmptyTap` events carry reason /
+nearest slant / offset / `headingAccuracyDeg`) — pull it when the phone is
+reachable and re-check before trusting the rescue thresholds further.
+
 ## 2026-07-19 — Wrong-route fix: multi-leg leg picking + stale-filing corridor gate + on-device repair — branch `fix/route-leg-picking`
 
 Field reports (Noah, SFO arrival path): UAL1375 carded "ONT → ORD" while

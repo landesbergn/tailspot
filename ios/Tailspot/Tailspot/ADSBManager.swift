@@ -580,7 +580,21 @@ final class ADSBManager: ObservableObject {
             while !Task.isCancelled {
                 if let loc = self?.locationProvider?() {
                     await self?.refresh(around: loc)
-                    try? await Task.sleep(for: .seconds(self?.pollInterval ?? 10))
+                    // A failed fetch while the sky is EMPTY retries fast
+                    // instead of sleeping out the full poll interval. After a
+                    // background trip every cached row is stale (dropped by
+                    // `maxPositionAge` on annotate), so until a fetch lands
+                    // the user taps at visible planes and gets "no aircraft"
+                    // — on flaky cellular (the Dumbarton drive, 2026-07-20)
+                    // that window stretched well past one poll. Bounded: fast
+                    // only while failing AND data-starved (`/v1/aircraft` has
+                    // no rate limit; a healthy poll keeps the 10 s cadence).
+                    let starved = self.map {
+                        $0.observed.isEmpty && $0.consecutiveFetchFailures > 0
+                    } ?? false
+                    try? await Task.sleep(for: .seconds(
+                        starved ? 2 : (self?.pollInterval ?? 10)
+                    ))
                 } else {
                     // Location not yet available — short retry so we
                     // fetch as soon as the first GPS fix arrives.

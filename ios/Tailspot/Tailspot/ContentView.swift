@@ -3272,8 +3272,21 @@ struct ContentView: View {
         // reveal reach (or below the horizon) — the NYC couch case, where 110
         // in-data planes meant every tap "found" something 27–76 km away.
         // No reveal, no lock: an honest toast with the distance instead.
+        // Honest means honest (2026-07-20, the Dumbarton drive): the toast
+        // only shows when NOTHING airborne in data is within reveal reach,
+        // and it quotes the distance-nearest plane, not the angular winner —
+        // otherwise a heading error in a moving car turns it into "nearest
+        // plane is 52 km out" with a 6 km arrival plainly in sight.
         if let d = diagnosis, d.reason == "filtered-far" {
-            presentFarTapToast(slantMeters: d.obs.slantDistanceMeters)
+            let airborne = adsb.observed
+                .filter { !$0.grounded }
+                .map { (slantMeters: $0.slantDistanceMeters,
+                        plausiblyRevealable: $0.isPlausiblyRevealable) }
+            if let slant = farTapToastSlantMeters(airborne: airborne) {
+                presentFarTapToast(slantMeters: slant)
+            } else {
+                showEmptyTapRipple(at: point)
+            }
             return
         }
         if let d = diagnosis, shouldTapReveal(reason: d.reason) {
@@ -3291,13 +3304,14 @@ struct ContentView: View {
         showEmptyTapRipple(at: point)
     }
 
-    /// Build + record the empty-sky-tap diagnosis: find the nearest
-    /// in-data aircraft to the tapped direction across ALL observed
-    /// aircraft (including hidden tiers — that is the point), classify
-    /// why it wasn't taprable, write a replay event (when recording) and
+    /// Build + record the empty-sky-tap diagnosis: score EVERY in-data
+    /// aircraft (including hidden tiers — that is the point) by angular
+    /// offset from the tapped direction, pick the subject via
+    /// `chooseEmptySkyTapSubject` (angular-nearest, with the filtered-far
+    /// rescue), classify it, write a replay event (when recording) and
     /// an analytics event (always; angles + ids only, no location).
     ///
-    /// Returns the nearest plane + its classification so the caller can act
+    /// Returns the chosen plane + its classification so the caller can act
     /// on it (tap-to-reveal a `filtered` plane). Returns nil only when no
     /// aircraft are in data at all.
     @discardableResult
@@ -3316,8 +3330,9 @@ struct ContentView: View {
         let tapAzDeg = (Double(point.x) / Double(screenSize.width) - 0.5) * hfovDeg
         let tapElDeg = (0.5 - Double(point.y) / Double(screenSize.height)) * vfovDeg
 
-        var best: (obs: ObservedAircraft, offsetDeg: Double, onScreen: Bool)? = nil
-        for obs in adsb.observed {
+        var candidates: [EmptySkyTapCandidate] = []
+        candidates.reserveCapacity(adsb.observed.count)
+        for (i, obs) in adsb.observed.enumerated() {
             let v = Geo.cameraFrameVector(
                 targetBearingDeg: obs.bearingDeg,
                 targetElevationDeg: obs.elevationDeg,
@@ -3331,26 +3346,23 @@ struct ContentView: View {
                 ? 180.0
                 : ((azDeg - tapAzDeg) * (azDeg - tapAzDeg)
                     + (elDeg - tapElDeg) * (elDeg - tapElDeg)).squareRoot()
-            if best == nil || off < best!.offsetDeg {
-                let onScreen = obs.screenPosition(
+            candidates.append(EmptySkyTapCandidate(
+                index: i,
+                offsetDeg: off,
+                onScreen: obs.screenPosition(
                     basis: basis, in: screenSize, hfovDeg: hfovDeg, vfovDeg: vfovDeg
-                ) != nil
-                best = (obs, off, onScreen)
-            }
+                ) != nil,
+                grounded: obs.grounded,
+                tier: obs.visibilityTier,
+                plausiblyRevealable: obs.isPlausiblyRevealable
+            ))
         }
 
-        let reason: String
-        if let b = best {
-            reason = classifyEmptySkyTapNearest(
-                offsetDeg: b.offsetDeg,
-                grounded: b.obs.grounded,
-                tier: b.obs.visibilityTier,
-                onScreen: b.onScreen,
-                plausiblyRevealable: b.obs.isPlausiblyRevealable
-            )
-        } else {
-            reason = "nothing-nearby"
+        let choice = chooseEmptySkyTapSubject(candidates)
+        let best = choice.map {
+            (obs: adsb.observed[$0.candidate.index], offsetDeg: $0.candidate.offsetDeg)
         }
+        let reason = choice?.reason ?? "nothing-nearby"
 
         let tap = ReplayEvent.EmptyTap(
             timestamp: now,
@@ -3366,6 +3378,11 @@ struct ContentView: View {
         recorder.recordEmptyTap(tap)
 
         var props: [String: AnalyticsValue] = ["reason": .string(reason)]
+        // True when the angular-nearest plane classified filtered-far but a
+        // revealable/visible plane also sat in the tap cone and took over as
+        // the subject — the Dumbarton-drive signature (a car-corrupted
+        // heading letting a 50 km stranger beat the 6 km plane in sight).
+        if choice?.rescued == true { props["rescued"] = .bool(true) }
         // Compass quality at the miss — a large value marks a magnetic-error
         // (off-frame) miss. -1 = OS says invalid; omit it then.
         if let acc = phoneHeadingAccuracyDeg, acc >= 0 {
@@ -3419,7 +3436,10 @@ let emptySkyTapMaxOffsetDeg: Double = 40
 ///                         plausibly visible from here, so the tap gets the
 ///                         beyond-eyeshot hint instead of a reveal (the NYC
 ///                         couch session, 2026-07-12: 110 planes in data,
-///                         nearest-tap planes 27–76 km out).
+///                         nearest-tap planes 27–76 km out). Subject to the
+///                         `chooseEmptySkyTapSubject` rescue and the
+///                         `farTapToastSlantMeters` honesty guard — see both
+///                         (the Dumbarton drive, 2026-07-20).
 ///   - "off-frame"       → visible tier but projected outside the screen.
 ///   - "on-screen"       → visible and on screen (tap just missed it).
 ///   - "nothing-nearby"  → nearest plane is too far off the tap direction.
@@ -3440,6 +3460,87 @@ func classifyEmptySkyTapNearest(
     if tier == .hidden { return plausiblyRevealable ? "filtered" : "filtered-far" }
     if !onScreen { return "off-frame" }
     return "on-screen"
+}
+
+/// Per-plane snapshot for empty-sky-tap subject selection — the minimal
+/// facts `chooseEmptySkyTapSubject` needs, extracted from `ObservedAircraft`
+/// so the selection rule is unit-testable without building full observations
+/// (same free-function precedent as `classifyEmptySkyTapNearest`).
+struct EmptySkyTapCandidate {
+    /// Caller's index into its source array (`adsb.observed`).
+    let index: Int
+    /// Angular offset from the tapped direction; 180 = behind the camera.
+    let offsetDeg: Double
+    let onScreen: Bool
+    let grounded: Bool
+    let tier: ObservedAircraft.VisibilityTier
+    let plausiblyRevealable: Bool
+}
+
+/// Pick the plane an empty-sky tap is ABOUT. Normally the angular-nearest —
+/// but selection is no longer blind to tier (the Dumbarton-drive bug,
+/// 2026-07-20): in a moving car the compass error rotates the sky model tens
+/// of degrees, so the 6 km arrival the user is looking at can project far
+/// from the tap while some 50 km hidden-tier stranger lands angularly
+/// nearer. Picking the stranger produced a "Nearest plane is 52 km out"
+/// toast with a plane plainly in sight.
+///
+/// Rule: take the angular-nearest; if (and only if) it classifies
+/// `filtered-far`, look for the angular-nearest plane in the tap cone that
+/// the tap could actually act on — airborne AND (visible-tier OR plausibly
+/// revealable) — and make THAT the subject instead (`rescued: true`). Its
+/// own classification then drives the normal branch: `filtered`/`off-frame`
+/// reveal, `on-screen` ripples.
+///
+/// Deliberately NOT rescued:
+///   - "grounded" primary — the parked-plane toast/easter egg must win
+///     (a deliberate tap on a parked plane shouldn't reveal a plane 30°
+///     away).
+///   - The NYC couch case — nothing revealable in the cone, so the rescue
+///     finds no alternative and `filtered-far` stands.
+func chooseEmptySkyTapSubject(
+    _ candidates: [EmptySkyTapCandidate]
+) -> (candidate: EmptySkyTapCandidate, reason: String, rescued: Bool)? {
+    func classify(_ c: EmptySkyTapCandidate) -> String {
+        classifyEmptySkyTapNearest(
+            offsetDeg: c.offsetDeg, grounded: c.grounded, tier: c.tier,
+            onScreen: c.onScreen, plausiblyRevealable: c.plausiblyRevealable
+        )
+    }
+    guard let primary = candidates.min(by: { $0.offsetDeg < $1.offsetDeg }) else {
+        return nil
+    }
+    let primaryReason = classify(primary)
+    guard primaryReason == "filtered-far" else {
+        return (primary, primaryReason, false)
+    }
+    let alt = candidates
+        .filter {
+            $0.offsetDeg <= emptySkyTapMaxOffsetDeg && !$0.grounded
+                && ($0.tier != .hidden || $0.plausiblyRevealable)
+        }
+        .min(by: { $0.offsetDeg < $1.offsetDeg })
+    guard let alt else { return (primary, primaryReason, false) }
+    return (alt, classify(alt), true)
+}
+
+/// Whether the beyond-eyeshot toast may show, and with what distance.
+/// The toast claims "Nearest plane is X km out" — so it must only appear
+/// when that is literally TRUE of the whole in-data sky: no airborne plane
+/// anywhere (any direction, not just the tap cone) is within plausible
+/// reveal reach. When one is, the honest response to a far-only tap
+/// direction is the plain empty ripple — asserting "nearest is 52 km"
+/// while a 6 km plane sits in the data (and usually in the debug list the
+/// user is cross-checking) reads as a bug, because it is one.
+///
+/// Returns the DISTANCE-nearest airborne slant (what "nearest" means to a
+/// reader), never the angular winner's — or nil when the toast must not
+/// show. `airborne` is the non-grounded in-data set.
+func farTapToastSlantMeters(
+    airborne: [(slantMeters: Double, plausiblyRevealable: Bool)]
+) -> Double? {
+    guard !airborne.contains(where: \.plausiblyRevealable) else { return nil }
+    return airborne.map(\.slantMeters).min()
 }
 
 /// Whether an empty-sky tap should REVEAL its nearest in-data plane — pin +
