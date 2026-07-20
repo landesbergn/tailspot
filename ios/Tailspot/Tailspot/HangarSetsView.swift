@@ -21,15 +21,20 @@ import SwiftData
 
 struct HangarSetsView: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
-
-    /// One flat dedup'd row list (Recent mode collapses by icao24).
-    /// Each tile then filters to its own type.
-    private var rows: [HangarRow] {
-        HangarGrouping.group(catches, by: .recent).first?.rows ?? []
-    }
+    /// Memoizes the grouped rows across body evals (segment switches re-eval
+    /// this kept-alive page). See HangarDerivedCache.
+    @State private var cache = DerivedCacheBox<[HangarRow]>()
 
     var body: some View {
-        ScrollView {
+        // One flat dedup'd row list (Recent mode collapses by icao24); each
+        // tile then filters to its own type. Computed once per DATA change
+        // (fingerprint-keyed cache), not per body eval — and read into a
+        // single `let` so the ForEach doesn't re-enter it per tile (the
+        // pre-cache version ran the full group pass 7×/eval, the PR #85 bug).
+        let rows = cache.value(for: CatchFingerprint.of(catches)) {
+            HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+        }
+        return ScrollView {
             VStack(spacing: 10) {
                 ForEach(CardSets.all) { set in
                     let tailCount = rows.filter { $0.aircraftType == set.type }.count

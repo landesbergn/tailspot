@@ -75,6 +75,17 @@ struct CameraPreview: UIViewRepresentable {
     /// video-frame delivery (the output isn't even added to the session).
     var frameBridge: CameraFrameBridge?
 
+    /// Whether the capture session should be running. ContentView drives
+    /// this from occlusion + scene state (2026-07-19 field report: the
+    /// camera kept the ISP hot at 1080p/30 fps — plus a per-frame BGRA
+    /// conversion — the whole time a Hangar/Profile sheet covered the AR
+    /// view; the audit rated it the biggest controllable battery drain).
+    /// While false the preview freezes on its last frame (invisible behind
+    /// an opaque sheet); restarting takes ~0.3–0.5 s, mostly masked by the
+    /// sheet's dismiss animation because SwiftUI flips this the moment the
+    /// sheet state changes, before the animation finishes.
+    var isActive: Bool = true
+
     /// Supported zoom range. Wide-camera digital zoom past ~5× shows
     /// mostly compression noise for the distances we care about.
     static let zoomRange: ClosedRange<CGFloat> = 1.0...5.0
@@ -95,6 +106,7 @@ struct CameraPreview: UIViewRepresentable {
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
         uiView.setZoom(zoomFactor)
+        uiView.setSessionActive(isActive)
     }
 }
 
@@ -184,6 +196,35 @@ final class PreviewView: UIView {
             // the session queue; writes also go through that queue.
             DispatchQueue.main.async { self.device = device }
             session.startRunning()
+        }
+    }
+
+    /// Desired running state, tracked on MAIN so `updateUIView`'s ~30 Hz
+    /// calls no-op on the cheap path without a queue hop; actual
+    /// start/stop transitions dispatch to the session queue (never main —
+    /// startRunning/stopRunning block). The serial queue also orders a
+    /// stop queued during initial configuration correctly AFTER the
+    /// config block's startRunning.
+    private var wantsRunning = true
+
+    /// Start or stop the capture session. Stopping powers down the ISP +
+    /// the 30 fps frame delivery while an opaque sheet covers the AR view
+    /// (see `CameraPreview.isActive`). The preview layer is DETACHED while
+    /// stopped: a stopped layer otherwise freezes on its last frame, which
+    /// peeked out around sheet edges and through the dismiss animation
+    /// (Noah, 2026-07-19 — wants plain black). Detached, the layer clears
+    /// to the view's black; on reactivation it stays black until the first
+    /// live frame lands, so there's no frozen-frame flash either.
+    func setSessionActive(_ wanted: Bool) {
+        guard wanted != wantsRunning else { return }
+        wantsRunning = wanted
+        previewLayer.session = wanted ? session : nil   // main-thread layer work
+        sessionQueue.async { [session] in
+            if wanted {
+                if !session.isRunning { session.startRunning() }
+            } else if session.isRunning {
+                session.stopRunning()
+            }
         }
     }
 

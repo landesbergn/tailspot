@@ -17,9 +17,15 @@ struct HangarRecentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @State private var rowToDelete: HangarRow?
+    /// Memoizes the grouped rows across body evals — this body used to run
+    /// the full HangarGrouping pass TWICE per eval (isEmpty + ForEach), on
+    /// every segment switch. See HangarDerivedCache.
+    @State private var cache = DerivedCacheBox<[HangarRow]>()
 
     private var rows: [HangarRow] {
-        HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+        cache.value(for: CatchFingerprint.of(catches)) {
+            HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+        }
     }
 
     var body: some View {

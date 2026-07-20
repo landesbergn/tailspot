@@ -555,3 +555,115 @@ struct CatchBackfillTests {
         ))
     }
 }
+
+// MARK: - Per-launch negative cache
+//
+// backfillAll's metadata path re-fired network lookups on every Hangar open
+// for airframes that can never resolve. The per-launch negative cache stops
+// that. Serialized because the cache is process-static; each test resets it.
+// Catches carry no callsign, so the route path (concrete routeClient) never
+// touches the network — only the injected metadata source is exercised.
+
+@Suite("CatchBackfill per-launch negative cache", .serialized)
+@MainActor
+struct CatchBackfillNegativeCacheTests {
+
+    /// Counts metadata calls and returns a configurable result, so a test can
+    /// assert the second same-launch pass skips the re-fetch.
+    private final class CountingSource: ADSBSource, @unchecked Sendable {
+        private(set) var metadataCallCount = 0
+        var result: AircraftMetadata?
+
+        func aircraftInBbox(
+            lamin: Double, lomin: Double, lamax: Double, lomax: Double
+        ) async throws -> [Aircraft] { [] }
+
+        func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
+            metadataCallCount += 1
+            return result
+        }
+    }
+
+    /// Containers are retained for the PROCESS lifetime, not the test body.
+    /// These tests are the suite's only ones that `context.save()` (via
+    /// `backfillAll`) — a save schedules SwiftData's coalesced change-notify
+    /// timer, and if the container has deallocated when it fires, SwiftData
+    /// traps and kills the whole parallel test run (three crashed suite runs
+    /// on 2026-07-19, random victims each time). Leaking a couple of tiny
+    /// in-memory stores is the standard workaround.
+    private static var retainedContainers: [ModelContainer] = []
+
+    private func makeContainer() throws -> ModelContainer {
+        let container = try ModelContainer(
+            for: Catch.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        Self.retainedContainers.append(container)
+        return container
+    }
+
+    /// A route-less, airframe-fact-less catch (no callsign → route path is a
+    /// no-op; nil typecode+registration → needsMetadata true).
+    private func makeCatch(icao24: String, in context: ModelContext) -> Catch {
+        let c = Catch(
+            icao24: icao24, callsign: nil, model: nil, manufacturer: nil,
+            caughtAt: Date(timeIntervalSince1970: 1_700_000_000),
+            observerLat: 37.87, observerLon: -122.27, slantDistanceMeters: 5000
+        )
+        context.insert(c)
+        return c
+    }
+
+    private func makeMeta(icao24: String, registration: String, typecode: String) -> AircraftMetadata {
+        AircraftMetadata(
+            icao24: icao24, registration: registration,
+            manufacturerName: nil, manufacturerIcao: nil,
+            model: nil, typecode: typecode, operatorName: nil
+        )
+    }
+
+    /// An unresolvable airframe (foreign icao with no FAA record, source
+    /// returns nil) is fetched once, then SKIPPED on the next same-launch
+    /// pass — the fix for re-fetching e.g. Noah's Bali catches on every open.
+    @Test func skipsUnresolvedIcaoOnSecondPass() async throws {
+        CatchBackfill._resetNegativeCacheForTesting()
+        defer { CatchBackfill._resetNegativeCacheForTesting() }
+        // Retain the container for the test's lifetime — SwiftData traps on a
+        // change-notification timer if it deallocates under a live context.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        defer { _ = container }
+        let c = makeCatch(icao24: "71c575", in: context)   // no FAA record
+        let src = CountingSource()                          // returns nil
+
+        await CatchBackfill.backfillAll([c], in: context, source: src)
+        #expect(src.metadataCallCount == 1)                 // first pass fetches
+        #expect(CatchBackfill.needsMetadata(c))             // still unresolved
+
+        await CatchBackfill.backfillAll([c], in: context, source: src)
+        #expect(src.metadataCallCount == 1)                 // skipped, no re-fetch
+        #expect(CatchBackfill.needsMetadata(c))
+    }
+
+    /// A row that fully resolves is never added to the cache; it simply drops
+    /// out of needsMetadata, so the next pass has nothing left to fetch.
+    @Test func resolvedIcaoIsNotReattempted() async throws {
+        CatchBackfill._resetNegativeCacheForTesting()
+        defer { CatchBackfill._resetNegativeCacheForTesting() }
+        // Retain the container for the test's lifetime — SwiftData traps on a
+        // change-notification timer if it deallocates under a live context.
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        defer { _ = container }
+        let c = makeCatch(icao24: "abcabc", in: context)
+        let src = CountingSource()
+        src.result = makeMeta(icao24: "abcabc", registration: "N123", typecode: "B738")
+
+        await CatchBackfill.backfillAll([c], in: context, source: src)
+        #expect(src.metadataCallCount == 1)
+        #expect(!CatchBackfill.needsMetadata(c))            // resolved
+
+        await CatchBackfill.backfillAll([c], in: context, source: src)
+        #expect(src.metadataCallCount == 1)                 // nothing needs it now
+    }
+}

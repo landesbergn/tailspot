@@ -89,43 +89,35 @@ struct LeaderboardScreen: View {
     #endif
 
     var body: some View {
-        List {
+        // Windows-aware backend → the Hangar pager structure (2026-07-19,
+        // Noah: the leaderboard toggle felt different from the Hangar's —
+        // it was: content swapped in-place inside one List, which both
+        // hitched the slider thumb with a full-List relayout and gave no
+        // page swipe). Now the switcher is a fixed header and each window
+        // is its own List inside a paged TabView — the kept-alive pages
+        // swap via UIKit's page view (smooth next to the thumb animation)
+        // and swiping between boards comes free, matching the Hangar.
+        // Fail-soft (old backend / nothing loaded yet): one plain board,
+        // no switcher, no pager — exactly the pre-windows rendering.
+        Group {
             if windowsSupported == true {
-                switcherSection
-            }
-            if let response = responses[selectedWindow] {
-                if selectedWindow == .week, windowsSupported == true,
-                   let champions = response.champions {
-                    championSection(champions)
-                }
-                if response.entries.isEmpty {
-                    emptySection
-                } else {
-                    if response.entries.count >= 3 {
-                        Section {
-                            podium(entries: response.entries)
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
+                VStack(spacing: 0) {
+                    switcherHeader
+                    TabView(selection: $selectedWindow) {
+                        ForEach(LeaderboardWindow.allCases) { window in
+                            windowList(window)
+                                .tag(window)
                         }
                     }
-                    rankSection(entries: response.entries)
-                    meHintSection(me: response.me)
+                    .tabViewStyle(.page(indexDisplayMode: .never))
                 }
-            } else if let msg = errors[selectedWindow] {
-                errorSection(msg)
             } else {
-                loadingSection
+                windowList(selectedWindow)
             }
         }
-        .listStyle(.insetGrouped)
-        // Brand the list like SettingsScreen/SetsScreen — without this the
-        // List renders system grouped chrome instead of the fixed dark
-        // Brand palette.
-        .scrollContentBackground(.hidden)
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load(selectedWindow) }
         // Runs on appear AND whenever the selected tab changes: a fresh tab
         // fetches (spinner — it has no data yet); a cached tab re-fetches
         // silently behind its stale board.
@@ -177,23 +169,67 @@ struct LeaderboardScreen: View {
         }
     }
 
+    // MARK: - Per-window board
+
+    /// One window's full board as its own List — a kept-alive page in the
+    /// body's TabView. Sections are unchanged from the pre-pager rendering;
+    /// each page pulls from its OWN window's cache/error slot, so a swipe
+    /// shows the neighbor's last data instantly while `.task(id:
+    /// selectedWindow)` refreshes it.
+    private func windowList(_ window: LeaderboardWindow) -> some View {
+        List {
+            if let response = responses[window] {
+                if window == .week, windowsSupported == true,
+                   let champions = response.champions {
+                    championSection(champions)
+                }
+                if response.entries.isEmpty {
+                    emptySection
+                } else {
+                    if response.entries.count >= 3 {
+                        Section {
+                            podium(entries: response.entries)
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                        }
+                    }
+                    rankSection(entries: response.entries)
+                    meHintSection(me: response.me)
+                }
+            } else if let msg = errors[window] {
+                errorSection(msg)
+            } else {
+                loadingSection
+            }
+        }
+        .listStyle(.insetGrouped)
+        // Brand the list like SettingsScreen/SetsScreen — without this the
+        // List renders system grouped chrome instead of the fixed dark
+        // Brand palette.
+        .scrollContentBackground(.hidden)
+        .refreshable { await load(window) }
+    }
+
     // MARK: - Window switcher + countdown
 
-    private var switcherSection: some View {
-        Section {
-            VStack(spacing: 6) {
-                LeaderboardWindowSwitcher(selection: $selectedWindow)
-                if let line = countdownLine {
-                    Text(line)
-                        .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
-                        .tracking(1.2)
-                        .foregroundStyle(Brand.Color.textTertiary)
-                        .padding(.bottom, 2)
-                }
+    /// The slider + countdown as a fixed header ABOVE the pager (no longer
+    /// a List Section — the slider shouldn't scroll away with the board,
+    /// and outside the List its drag gesture no longer competes with the
+    /// List's scroll pan). Horizontal padding matches the inset-grouped
+    /// row margins so the track aligns with the cards below.
+    private var switcherHeader: some View {
+        VStack(spacing: 6) {
+            LeaderboardWindowSwitcher(selection: $selectedWindow)
+            if let line = countdownLine {
+                Text(line)
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .padding(.bottom, 2)
             }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     /// "RESETS MONDAY · 2D 14H LEFT" (week) / "RESETS AUG 1" (month), in the
@@ -556,54 +592,31 @@ struct LeaderboardScreen: View {
 
 // MARK: - Window switcher
 
-/// WEEK / MONTH / ALL TIME segmented control — the HangarSegmentedSwitcher
-/// pattern (Liquid Glass track, matched-geometry pill, full-segment hit
-/// areas) restyled to the leaderboard's mono readout voice. Lives at the top
-/// of the List content; the screen keeps its stock-but-branded system nav
-/// (Leaderboard is a UTILITY screen — see the Brand chrome rule).
+/// WEEK / MONTH / ALL TIME segmented control — the shared
+/// GlassSegmentedSlider (glass thumb tracks the finger; see that file's
+/// construction notes) restyled to the leaderboard's mono readout voice.
+/// Lives at the top of the List content; the screen keeps its
+/// stock-but-branded system nav (Leaderboard is a UTILITY screen — see the
+/// Brand chrome rule). The 40 pt segments + 4 pt track padding give a 48 pt
+/// control, clearing the 44 pt HIG target.
 struct LeaderboardWindowSwitcher: View {
     @Binding var selection: LeaderboardWindow
-    @Namespace private var pill
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(LeaderboardWindow.allCases) { window in
-                segmentButton(window)
-            }
-        }
-        // Animate ONLY the pill (the Hangar switcher lesson): the board
-        // content swaps instantly; just the selection pill slides. Under
-        // Reduce Motion the pill re-fills in place instead of sliding.
-        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: selection)
-        .padding(4)
-        .glassEffect(.regular, in: .capsule)
-        .padding(.bottom, 4)
-    }
-
-    private func segmentButton(_ window: LeaderboardWindow) -> some View {
-        let isSelected = selection == window
-        return Button {
-            selection = window
-        } label: {
+        GlassSegmentedSlider(
+            selection: $selection,
+            segments: LeaderboardWindow.allCases,
+            segmentHeight: 40,
+            trackPadding: 4,
+            accessibilityTitle: "Leaderboard window",
+            segmentTitle: { $0.label }
+        ) { window, isSelected in
             Text(window.label)
                 .font(Brand.Font.mono(size: 12, weight: isSelected ? .bold : .regular, relativeTo: .caption))
                 .tracking(0.8)
                 .foregroundStyle(isSelected ? Brand.Color.bgPrimary : Brand.Color.textSecondary)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(Brand.Color.cyan)
-                            .matchedGeometryEffect(id: "lbWindowPill", in: pill)
-                    }
-                }
-                // Full-segment hit area; the 2 pt inset tops the visible
-                // 40 pt segment up to the 44 pt HIG target.
-                .contentShape(Rectangle().inset(by: -2))
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .padding(.bottom, 4)
     }
 }
 

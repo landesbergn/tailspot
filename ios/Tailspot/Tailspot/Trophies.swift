@@ -692,8 +692,14 @@ nonisolated enum Trophies {
         let consecutiveOp = hasConsecutiveSameOperator(opTimeline)
 
         // Fully-collected make/model families — drives the Set Master trophy.
+        // Derive the per-catch match keys ONCE and share them across every
+        // family: without this, each family re-derived the same per-catch
+        // strings (canonical()/lowercased()) while scanning all catches for
+        // its mostly-locked entries — tens of thousands of allocations per
+        // `inputs()` call. `progress(of:againstKeys:)` reuses the single pass.
+        let catchKeys = CardSets.matchKeys(for: catches)
         let completedSets = CardSets.families.reduce(into: 0) { acc, set in
-            let p = CardSets.progress(of: set, against: catches)
+            let p = CardSets.progress(of: set, againstKeys: catchKeys)
             if p.total > 0 && p.caught == p.total { acc += 1 }
         }
 

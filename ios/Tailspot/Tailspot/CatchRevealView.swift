@@ -46,6 +46,26 @@ private func ss(_ a: Double, _ b: Double, _ x: Double) -> Double {
 }
 private func easeOut(_ x: Double) -> Double { let u = revClamp(x); return 1 - (1 - u) * (1 - u) }
 
+/// The instant the LAST of the reveal's three animation clocks finishes,
+/// across whichever anchors are currently set — `start` drives the reveal
+/// clock `t` over `duration`, `chipsStart` drives the chip pop `gt` over
+/// `chipPopDuration`, `bonusStart` drives the route-bonus count-up `bt` over
+/// `bonusCountUpDuration`. Returns nil when no clock has started. `pad`
+/// pushes the deadline a hair past every clamp so the TimelineView's final
+/// (pausing) tick lands squarely on the settled frame, never a frame short.
+/// Pure — unit-tested without a view tree.
+nonisolated func revealSettleDeadline(
+    start: Date?, chipsStart: Date?, bonusStart: Date?,
+    duration: Double, chipPopDuration: Double, bonusCountUpDuration: Double,
+    pad: Double = 0.1
+) -> Date? {
+    [
+        start.map { $0.addingTimeInterval(duration + pad) },
+        chipsStart.map { $0.addingTimeInterval(chipPopDuration + pad) },
+        bonusStart.map { $0.addingTimeInterval(bonusCountUpDuration + pad) },
+    ].compactMap { $0 }.max()
+}
+
 /// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
 let flapPool = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789-")
 
@@ -164,8 +184,34 @@ struct RevealPhoto: View {
     /// nil (pre-focus catches, Planespotters photos) → plain center fill.
     var focus: CGPoint? = nil
 
+    /// Decoded-image cache, keyed by file path. `UIImage(contentsOfFile:)`
+    /// synchronously decodes a full ~12 MP catch JPEG on the main thread —
+    /// and `body` re-runs it on every structural change (chip pop, collapse)
+    /// and once per ImageRenderer pass for shares. The decode MUST stay
+    /// synchronous (ImageRenderer can't await a `.task`/async load — it'd
+    /// snapshot an empty frame, like the AsyncImage branch below), so instead
+    /// we decode once and reuse. Catch photos are immutable files → no
+    /// invalidation needed; NSCache evicts on its own under memory pressure.
+    /// Small `countLimit` because these are full-size images.
+    private static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 8
+        return c
+    }()
+
+    /// Cache-checked synchronous decode. nil (no file at `path`, e.g. a
+    /// remote URL) falls through to the AsyncImage / placeholder branches,
+    /// exactly as the raw `UIImage(contentsOfFile:)` did.
+    private func decodedImage(at url: URL) -> UIImage? {
+        let key = url.path as NSString
+        if let cached = Self.cache.object(forKey: key) { return cached }
+        guard let image = UIImage(contentsOfFile: url.path) else { return nil }
+        Self.cache.setObject(image, forKey: key)
+        return image
+    }
+
     var body: some View {
-        if let image = url.flatMap({ UIImage(contentsOfFile: $0.path) }) {
+        if let image = url.flatMap({ decodedImage(at: $0) }) {
             // Both paths clip HERE: the fill overflow isn't reliably caught
             // by the caller's clipShape under ImageRenderer (share renders
             // showed the oversize image bleeding past the card).
@@ -380,6 +426,20 @@ struct CatchRevealView: View {
     /// gating the dismiss CTAs and the success haptic.
     @State private var settled = false
 
+    /// Pauses the reveal's `TimelineView` once every animation clock has
+    /// clamped. `TimelineView(.animation)` ticks at the display's native rate
+    /// (up to 120 Hz) for as long as it's mounted — so without this it keeps
+    /// rebuilding the whole card tree (word-wrap, split-flap rows, ledger)
+    /// every frame while the user just reads the card or plays the guess
+    /// round, even though the layout is static. Any clock (re)starting flips
+    /// it back to false so the count-up / chip pop / bonus count-up still
+    /// animate. (Mirrors TrophyRecapView's settled gate.)
+    @State private var animationSettled = false
+    /// The pending "pause the clocks" task, re-armed on every clock restart.
+    /// Cancelling the prior one first is load-bearing: a later clock must not
+    /// be frozen mid-animation by an earlier clock's settle task firing.
+    @State private var settleTask: Task<Void, Never>?
+
     // MARK: In-card bonus round state
 
     /// Chip lifecycle: `.hidden` during the reveal, `.shown` once the round pops
@@ -482,7 +542,11 @@ struct CatchRevealView: View {
                     .onTapGesture { advanceOrDismiss() }
                     .ignoresSafeArea()
 
-                TimelineView(.animation) { context in
+                // Paused once all three clocks settle (see `animationSettled`);
+                // any clock restarting un-pauses it. On the pausing transition
+                // the view re-evaluates once more with the current date — and
+                // since t/bt/gt all clamp, that final tick is the settled frame.
+                TimelineView(.animation(paused: animationSettled)) { context in
                     let t = start.map { revClamp(context.date.timeIntervalSince($0) / duration) } ?? 0
                     let bt = bonusStart.map { revClamp(context.date.timeIntervalSince($0) / bonusCountUpDuration) } ?? 0
                     let gt = chipsStart.map { revClamp(context.date.timeIntervalSince($0) / chipPopDuration) }
@@ -507,6 +571,13 @@ struct CatchRevealView: View {
                     AccessibilityNotification.Announcement(settleAnnouncement).post()
                 }
             }
+            // Re-arm the TimelineView pause whenever any clock (re)starts: the
+            // initial reveal (`start`), the chip pop-in (`chipsStart`), and the
+            // correct-answer bonus count-up (`bonusStart`).
+            .onChange(of: start) { _, _ in rearmAnimationSettle() }
+            .onChange(of: chipsStart) { _, _ in rearmAnimationSettle() }
+            .onChange(of: bonusStart) { _, _ in rearmAnimationSettle() }
+            .onDisappear { settleTask?.cancel() }
             .sensoryFeedback(.success, trigger: settled)
             .sensoryFeedback(.success, trigger: successBeat)
             .sensoryFeedback(.error, trigger: missBeat)
@@ -606,6 +677,26 @@ struct CatchRevealView: View {
             // Skip the animation straight to its final frame.
             start = Date().addingTimeInterval(-duration)
             withAnimation(.easeOut(duration: 0.25)) { settled = true }
+        }
+    }
+
+    /// Un-pause the reveal's TimelineView and schedule it to re-pause once the
+    /// currently-running clocks have all clamped. Called on every clock
+    /// (re)start; cancelling the prior task first ensures an earlier clock's
+    /// pending pause can't fire while a later clock is still animating.
+    private func rearmAnimationSettle() {
+        animationSettled = false
+        settleTask?.cancel()
+        guard let deadline = revealSettleDeadline(
+            start: start, chipsStart: chipsStart, bonusStart: bonusStart,
+            duration: duration, chipPopDuration: chipPopDuration,
+            bonusCountUpDuration: bonusCountUpDuration
+        ) else { return }
+        settleTask = Task { @MainActor in
+            let delay = deadline.timeIntervalSinceNow
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            guard !Task.isCancelled else { return }
+            animationSettled = true
         }
     }
 

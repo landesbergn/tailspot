@@ -16,6 +16,26 @@ import Combine
 import CoreMotion
 import os
 
+/// One CoreMotion sample's worth of attitude + gravity, bundled so the
+/// whole sample publishes as a SINGLE value. Angles in radians.
+///
+/// Coalescing rationale: the old shape wrote six separate `@Published`
+/// properties per 30 Hz sample, so each sample fired `objectWillChange`
+/// six times (~180/sec), and every one invalidated ContentView's entire
+/// body. Bundling them into one struct assigned once per sample drops
+/// that to a single invalidation signal per sample.
+///
+/// `nonisolated` + `Sendable` so it can be built on the CoreMotion
+/// background queue and handed across to the main-thread publish hop.
+nonisolated struct MotionSample: Sendable {
+    var pitch: Double = 0      // tilt forward / back
+    var roll: Double = 0       // tilt left / right
+    var yaw: Double = 0        // rotation around vertical
+    var gravityX: Double = 0
+    var gravityY: Double = 0
+    var gravityZ: Double = 0
+}
+
 final class MotionManager: ObservableObject {
     private let manager = CMMotionManager()
     private let queue: OperationQueue = {
@@ -25,18 +45,25 @@ final class MotionManager: ObservableObject {
         return q
     }()
 
-    // All angles in radians; convert to degrees in the view.
-    @Published var pitch: Double = 0   // tilt forward / back
-    @Published var roll: Double = 0    // tilt left / right
-    @Published var yaw: Double = 0     // rotation around vertical
+    /// The latest coalesced sample — the ONE `@Published` this manager now
+    /// mutates per CoreMotion tick (see `MotionSample`). `private(set)` so
+    /// only the CoreMotion callback writes it.
+    @Published private(set) var sample = MotionSample()
+
+    // Forwarding accessors so every existing call site (`motion.pitch`,
+    // `motion.gravityX`, …) keeps compiling unchanged — they now read the
+    // one coalesced sample instead of six separate stored @Published vars.
+    var pitch: Double { sample.pitch }   // tilt forward / back
+    var roll: Double { sample.roll }     // tilt left / right
+    var yaw: Double { sample.yaw }       // rotation around vertical
 
     // Gravity vector in the device reference frame (CMDeviceMotion.gravity),
     // ~1 g in magnitude. Camera elevation is derived from this rather than
     // from `pitch`, because gravity has no gimbal-lock singularity at the
     // portrait hold (see `cameraElevationDeg`).
-    @Published var gravityX: Double = 0
-    @Published var gravityY: Double = 0
-    @Published var gravityZ: Double = 0
+    var gravityX: Double { sample.gravityX }
+    var gravityY: Double { sample.gravityY }
+    var gravityZ: Double { sample.gravityZ }
 
     func start() {
         guard manager.isDeviceMotionAvailable else {
@@ -47,15 +74,21 @@ final class MotionManager: ObservableObject {
 
         manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { [weak self] motion, error in
             guard let self, let motion else { return }
-            // CMMotionManager fires on our background queue; @Published mutations
-            // must hop back to main for SwiftUI to consume them safely.
+            // CMMotionManager fires on our background queue. Build the
+            // Sendable sample here, then publish it in a SINGLE assignment on
+            // main — one `objectWillChange` per sample instead of six (see
+            // `MotionSample`). @Published mutations must hop back to main for
+            // SwiftUI to consume them safely.
+            let next = MotionSample(
+                pitch: motion.attitude.pitch,
+                roll: motion.attitude.roll,
+                yaw: motion.attitude.yaw,
+                gravityX: motion.gravity.x,
+                gravityY: motion.gravity.y,
+                gravityZ: motion.gravity.z
+            )
             DispatchQueue.main.async {
-                self.pitch = motion.attitude.pitch
-                self.roll = motion.attitude.roll
-                self.yaw = motion.attitude.yaw
-                self.gravityX = motion.gravity.x
-                self.gravityY = motion.gravity.y
-                self.gravityZ = motion.gravity.z
+                self.sample = next
             }
         }
     }
