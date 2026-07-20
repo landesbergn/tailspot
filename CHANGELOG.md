@@ -5,6 +5,28 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-20 — Warning sweep: Swift 6 isolation, deprecated Text `+`, publish-during-view-update — branch `fix/build-warnings`
+
+Four compiler warnings + five runtime SwiftUI warnings from Noah's build:
+
+- **Swift 6 isolation (2):** `CatchBackfill.client` (referenced from a
+  default argument, which evaluates outside the enum's MainActor) and
+  `ObservedAircraft.catchSizeFloorArcminutes` (read by a nonisolated
+  telemetry builder) → both `nonisolated static let` (immutable Sendable).
+- **Deprecated `Text + Text` (2, iOS 26):** `HangarRestorePromptView`
+  photo caveat and `PublicScreens` champion banner → `Text` interpolation
+  (`Text("\(Image(...)) …")` / interpolated styled `Text` segments).
+- **"Publishing changes from within view updates" (ADSBManager ×3,
+  ContentView ×1):** SwiftUI runs a `.task` body synchronously inside the
+  view update that attaches it (up to the first suspension), and the
+  ADS-B loops are spawned from view-update contexts (startup `.task`,
+  scenePhase/arOccluded onChange — the perf-pass resume paths) with
+  publishes in their first slice. Fix: every loop now hits a suspension
+  point before its first state write — the indoor-streak loop sleeps
+  first (streak needs 5 ticks anyway; nothing observable changes), and
+  both ADS-B loops open with `await Task.yield()` to escape the spawning
+  update pass. Poll cadence and the immediate first fetch are unchanged.
+
 ## 2026-07-20 — Authenticity-gate moderation for GA: warm bar 0.07→0.10, occluded texture bar split — branch `tune/gate-moderation`
 
 Noah's pre-GA report: the "go outside" state and the "did you really see

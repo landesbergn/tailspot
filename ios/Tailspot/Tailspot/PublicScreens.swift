@@ -284,10 +284,7 @@ struct LeaderboardScreen: View {
                             .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                             .tracking(1.2)
                             .foregroundStyle(Brand.Color.podiumGold)
-                        (Text(ChampionBanner.names(champions))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                         + Text(" · \(champions[0].points.formatted(.number)) PTS")
-                            .foregroundStyle(Brand.Color.podiumGold))
+                        Text("\(Text(ChampionBanner.names(champions)).foregroundStyle(Brand.Color.textPrimary))\(Text(" · \(champions[0].points.formatted(.number)) PTS").foregroundStyle(Brand.Color.podiumGold))")
                             .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
                     }
                     Spacer()

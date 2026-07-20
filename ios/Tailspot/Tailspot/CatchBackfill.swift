@@ -29,7 +29,10 @@ enum CatchBackfill {
     /// Bypasses ADSBManager's MetadataCache by design — the manager
     /// isn't reachable from the Hangar sheet; this is a one-shot
     /// recovery path. The backend serves merged FAA / DOC-8643 metadata.
-    static let client: ADSBSource = TailspotBackendClient()
+    /// `nonisolated`: referenced from `backfillAll`'s default argument,
+    /// which Swift evaluates outside the enum's MainActor isolation —
+    /// safe because `ADSBSource` is Sendable and the let is immutable.
+    nonisolated static let client: ADSBSource = TailspotBackendClient()
     /// Concrete client for route lookups — `route(forCallsign:)` is a
     /// backfill concern and deliberately NOT part of the ADSBSource seam.
     static let routeClient = TailspotBackendClient()

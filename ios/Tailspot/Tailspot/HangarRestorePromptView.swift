@@ -164,8 +164,7 @@ struct HangarRestorePromptView: View {
 
     /// The photo truth, said once, plainly but gently.
     private var photoCaveat: some View {
-        (Text(Image(systemName: "camera.on.rectangle"))
-            + Text("  Catch photos only ever lived on this phone, so they can't come back — restored cards use the standard artwork."))
+        Text("\(Image(systemName: "camera.on.rectangle"))  Catch photos only ever lived on this phone, so they can't come back — restored cards use the standard artwork.")
             .font(Brand.Font.caption)
             .foregroundStyle(Brand.Color.textTertiary)
             .multilineTextAlignment(.center)

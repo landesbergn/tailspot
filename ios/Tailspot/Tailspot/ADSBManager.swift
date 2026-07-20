@@ -83,7 +83,9 @@ extension ObservedAircraft {
     /// sighting (the marginal SKW5480 regional at 18 km ≈ 5′, the ANA179
     /// widebody contrail at 19 km ≈ 11′). The far end is owned by the
     /// localized sky gate, not this floor. Tunable; calibrate from telemetry.
-    static let catchSizeFloorArcminutes: Double = 2.5
+    /// `nonisolated`: read by `CatchTelemetry.sizeGateProperties` (a
+    /// nonisolated property builder) — safe, an immutable Sendable constant.
+    nonisolated static let catchSizeFloorArcminutes: Double = 2.5
 }
 
 /// Apply visibility hysteresis to a freshly-annotated frame: stamp each
@@ -577,6 +579,13 @@ final class ADSBManager: ObservableObject {
 
         // Network poll: fetches new state from the backend periodically.
         pollTask = Task { @MainActor [weak self] in
+            // Escape the spawning context before any work: `start()` is
+            // called from view-update contexts (the startup `.task`, the
+            // scenePhase onChange on foreground), and a first slice that
+            // publishes before its first suspension can land inside that
+            // update pass ("Publishing changes from within view updates",
+            // 2026-07-20). One yield re-enqueues us outside it.
+            await Task.yield()
             while !Task.isCancelled {
                 if let loc = self?.locationProvider?() {
                     await self?.refresh(around: loc)
@@ -621,6 +630,11 @@ final class ADSBManager: ObservableObject {
         guard reAnnotationTask == nil else { return }
         let tick = reAnnotationInterval
         reAnnotationTask = Task { @MainActor [weak self] in
+            // Same escape as the poll loop — this one matters more: resume
+            // is called from the `arOccluded` onChange (mid-view-update on
+            // sheet dismissal) and the first iteration publishes `observed`
+            // + `diagnostic` synchronously, with no suspension point first.
+            await Task.yield()
             while !Task.isCancelled {
                 if let loc = self?.locationProvider?() {
                     self?.reAnnotate(observer: loc, now: Date())
