@@ -27,21 +27,36 @@ import type { AircraftRoute, NormalizedAircraft } from "./types.js";
  * Mirrors the fire-and-forget spirit of `ingest/feedEnrich.ts`, except the
  * result is attached to the served snapshot rather than written to the DB.
  *
- * ## Round-trip leg disambiguation (2026-07-11)
+ * ## Multi-leg disambiguation + plausibility (2026-07-19; supersedes the
+ * ## round-trip-only leg pick of 2026-07-11)
  *
- * A flight filed as an out-and-back under one callsign has `airport_codes` like
- * "KLGA-KPIT-KLGA" — origin == destination once collapsed to first→last. A card
- * reading "LGA → LGA" is worse than nothing, so historically these resolved to
- * `null` (route dropped). But which leg the plane is *on* is recoverable from
- * live flight data: its ground `track` points at the airport it's heading
- * toward. So the cache now stores the *parsed candidates* (a fixed route, an
- * A↔B round trip with airport coordinates, or none), and `enrich` picks the leg
- * per-aircraft from its position + track — attaching "LGA → PIT" outbound and
- * "PIT → LGA" inbound. The pick is gated on confidence (`pickRoundTripLeg`): a
- * plane maneuvering near the turnaround, or with no reported track, falls back
- * to `null` rather than guessing a direction no one observed. The backfill
- * resolver (`GET /v1/routes/:callsign`) has no live position, so a round trip
- * still resolves to `null` there.
+ * A callsign's filing is often MULTI-LEG: an out-and-back "KLGA-KPIT-KLGA", or
+ * a through-flight "KONT-KSFO-KORD" (UAL1375). The old parser collapsed a
+ * multi-leg filing to first → last — which showed "ONT → ORD" on a plane
+ * descending into SFO (field report 2026-07-19). No collapsed pair is ever a
+ * journey anyone flies, so the cache now stores the *parsed candidates* (a
+ * fixed 2-code route, the per-leg list of a multi-leg filing with airport
+ * coordinates, or none) and `enrich` picks the leg the plane is actually ON:
+ *
+ *   - CORRIDOR check: the plane must lie near the great-circle corridor of a
+ *     leg (`corridorDistanceKm` ≤ a tolerance scaled to leg length) for that
+ *     leg to be a candidate.
+ *   - TRACK check: among plausible legs, the plane's ground `track` must point
+ *     at the leg's destination (within `MAX_TRACK_ERR_DEG`, beating the
+ *     runner-up by `MIN_TRACK_MARGIN_DEG`). A single plausible leg with no
+ *     reported track is accepted on the corridor alone — the filing admits no
+ *     other direction; several plausible legs with no track stay `null`.
+ *
+ * The SAME corridor check gates a plain 2-code route: adsb.lol's route DB is
+ * keyed by callsign and can be STALE — SWA1067 was on file as "KMAF-KDAL"
+ * while the flight actually flew BWI → SFO (Southwest reuses flight numbers;
+ * field report 2026-07-19). A plane observed 1,900 km from the filed corridor
+ * is not flying that filing: better no route than a fabricated one.
+ *
+ * The backfill resolver (`GET /v1/routes/:callsign`) may now carry the
+ * caller's position (+ optional track) as query params and applies the same
+ * picks; with no position a multi-leg filing resolves to `null` (never a
+ * first→last collapse) and a 2-code route is returned un-gated.
  */
 
 const DEFAULT_BASE_URL = "https://api.adsb.lol";
@@ -56,12 +71,19 @@ const DEFAULT_NEGATIVE_TTL_MS = 10 * 60_000;
 /** Max concurrent per-callsign route GETs (be polite to adsb.lol). */
 const ROUTE_CONCURRENCY = 8;
 
-/** Round-trip leg pick (`pickRoundTripLeg`): the ground track must point within
- *  this many degrees of the chosen airport for the pick to be credible. */
+/** Leg pick (`pickLeg`): the ground track must point within this many degrees
+ *  of the chosen leg's destination for the pick to be credible. */
 const MAX_TRACK_ERR_DEG = 55;
-/** ...and the chosen airport must beat the other by at least this margin, so a
- *  plane maneuvering near the turnaround (both bearings similar) stays `null`. */
+/** ...and the chosen leg must beat the runner-up by at least this margin, so a
+ *  plane maneuvering near a shared endpoint (both bearings similar) stays
+ *  `null`. */
 const MIN_TRACK_MARGIN_DEG = 40;
+/** Corridor plausibility: the plane must be within this distance of the leg's
+ *  great-circle corridor (or the leg's endpoints)... */
+const CORRIDOR_BASE_TOLERANCE_KM = 250;
+/** ...widened to this fraction of the leg length for long legs, where real
+ *  routings (jet streams, weather) bow far off the great circle. */
+const CORRIDOR_TOLERANCE_FRACTION = 0.15;
 
 /** One airport in a routeset row's `_airports` array — only the fields we use.
  *  `location` is the city/municipality ("San Francisco"); `name` the full
@@ -92,27 +114,30 @@ interface LatLon {
   lon: number;
 }
 
+/** One leg of a multi-leg filing: the directed route plus both endpoint
+ *  coordinates, so `pickLeg` can corridor-check the plane against it and
+ *  compare the plane's track to the bearing toward the leg's destination. */
+interface RouteLeg {
+  route: AircraftRoute;
+  from: LatLon;
+  to: LatLon;
+}
+
 /**
  * A callsign's route parsed from adsb.lol, *before* a direction is chosen:
- *   - `fixed`     — a one-way A → B (the common case); route is final.
- *   - `roundTrip` — an out-and-back A ⇄ B; the leg is picked per-aircraft from
- *                   its position + track (`away` = A→B, `back` = B→A, with the
- *                   destination coordinate of each so `pickRoundTripLeg` can
- *                   compare the plane's track to the bearing toward each end).
- *   - `none`      — no usable route on file (negative-cached).
+ *   - `fixed` — a one-way A → B (the common case). Endpoint coordinates ride
+ *               along when the row carries them, so a per-plane corridor check
+ *               can reject a stale filing (see `resolveDirection`).
+ *   - `legs`  — a multi-leg filing (out-and-back A-B-A, through-flight A-B-C,
+ *               or longer): the current leg is picked per-aircraft from its
+ *               position + track (`pickLeg`).
+ *   - `none`  — no usable route on file (negative-cached).
  * Caching the candidates rather than a resolved direction lets the same cached
- * callsign yield "outbound" or "inbound" as the plane turns around, without a
- * re-lookup.
+ * callsign yield a different leg as the plane progresses, without a re-lookup.
  */
 type ParsedRoute =
-  | { kind: "fixed"; route: AircraftRoute }
-  | {
-      kind: "roundTrip";
-      away: AircraftRoute;
-      back: AircraftRoute;
-      awayDest: LatLon;
-      backDest: LatLon;
-    }
+  | { kind: "fixed"; route: AircraftRoute; from?: LatLon; to?: LatLon }
+  | { kind: "legs"; legs: RouteLeg[] }
   | { kind: "none" };
 
 /** Cache entry: the parsed route candidates (`none` = "known to have no route",
@@ -155,10 +180,12 @@ export interface RouteEnricher {
  */
 export interface RouteResolver {
   /** The route for one callsign, or null when none is on file. Never throws
-   *  for "no route"; transport errors reject (the endpoint maps them). A
-   *  round-trip filing resolves to null here — with no live position, the leg
-   *  can't be disambiguated (see `pickRoundTripLeg`). */
-  resolve(callsign: string): Promise<AircraftRoute | null>;
+   *  for "no route"; transport errors reject (the endpoint maps them). When
+   *  the caller supplies the plane's observed position (+ optional track),
+   *  the resolver leg-picks a multi-leg filing and corridor-gates a fixed
+   *  one, exactly like `enrich`; without a position a multi-leg filing
+   *  resolves to null — the leg can't be disambiguated (see `pickLeg`). */
+  resolve(callsign: string, plane?: TrackedPlane): Promise<AircraftRoute | null>;
 }
 
 export interface AdsbLolRouteServiceOptions {
@@ -339,15 +366,16 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
    * `enrich`, `prefetch` skips it and this returns null rather than waiting —
    * the client's next backfill pass picks up the by-then-cached answer.
    *
-   * No live position here, so a round-trip filing resolves to null (its leg is
-   * only pickable in `enrich`, from the plane's track).
+   * With a `plane` (the endpoint's optional lat/lng/track params) the same
+   * corridor + track picks as `enrich` apply; without one, a multi-leg filing
+   * resolves to null (never a first→last collapse).
    */
-  async resolve(callsign: string): Promise<AircraftRoute | null> {
+  async resolve(callsign: string, plane?: TrackedPlane): Promise<AircraftRoute | null> {
     const hit = this.lookupCache(callsign);
-    if (hit !== undefined) return resolveDirection(hit, undefined);
+    if (hit !== undefined) return resolveDirection(hit, plane);
     await this.prefetch([{ callsign, lat: 0, lng: 0 }]);
     const after = this.lookupCache(callsign);
-    return after !== undefined ? resolveDirection(after, undefined) : null;
+    return after !== undefined ? resolveDirection(after, plane) : null;
   }
 
   /** Fresh cache value: the parsed candidates (`fixed`/`roundTrip`/`none`), or
@@ -365,11 +393,15 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
 
 /**
  * Choose the concrete `AircraftRoute` for a plane from its parsed candidates:
- *   - `fixed`     → the route, verbatim.
- *   - `none`      → null.
- *   - `roundTrip` → the leg the plane is flying, from its track, or null when
- *                   the plane has no track or the geometry is ambiguous, or when
- *                   there is no plane at all (the backfill resolver).
+ *   - `fixed` → the route — corridor-gated against the plane's position when
+ *               both the position and the endpoint coordinates are known (a
+ *               plane far off the filed corridor is not flying that filing —
+ *               the route DB is keyed by callsign and can be stale). With no
+ *               plane (the position-less backfill resolver) the route is
+ *               returned un-gated.
+ *   - `none`  → null.
+ *   - `legs`  → the leg the plane is flying (`pickLeg`), or null when there is
+ *               no plane at all or the geometry is ambiguous.
  */
 function resolveDirection(
   parsed: ParsedRoute,
@@ -377,52 +409,86 @@ function resolveDirection(
 ): AircraftRoute | null {
   switch (parsed.kind) {
     case "fixed":
+      if (plane && parsed.from && parsed.to) {
+        const p = { lat: plane.latitude, lon: plane.longitude };
+        if (!isOnCorridor(p, parsed.from, parsed.to)) return null;
+      }
       return parsed.route;
     case "none":
       return null;
-    case "roundTrip":
-      if (!plane || plane.trackDeg == null) return null;
-      return pickRoundTripLeg(parsed, plane.latitude, plane.longitude, plane.trackDeg);
+    case "legs":
+      return plane ? pickLeg(parsed.legs, plane) : null;
   }
 }
 
 /**
- * Pick the leg of an out-and-back (A ⇄ B) the plane is actually flying, from
- * its position + ground track — or null when the direction is ambiguous.
+ * Pick the leg of a multi-leg filing the plane is actually flying, from its
+ * position + ground track — or null when the answer is ambiguous.
  *
- * The plane's `track` points at the airport it's heading toward: compare it to
- * the bearing from the plane to each end. The chosen airport must be both
- * *plausible* (track within `MAX_TRACK_ERR_DEG` of it) and *decisive* (better
- * than the other end by `MIN_TRACK_MARGIN_DEG`). Near the turnaround, or on a
- * vectored terminal leg where the track doesn't point cleanly at either end,
- * neither test passes and we return null — the codebase's rule is to never
- * fabricate a journey no one observed.
+ * Two tests, in order:
+ *   1. CORRIDOR — keep only legs whose great-circle corridor the plane is near
+ *      (`isOnCorridor`). A plane over the Bay Area is not on any leg of a
+ *      Texas out-and-back.
+ *   2. TRACK — the plane's `track` points at the airport it's heading toward:
+ *      compare it to the bearing from the plane to each surviving leg's
+ *      destination. The winner must be *credible* (within `MAX_TRACK_ERR_DEG`)
+ *      and *decisive* (beating the runner-up by `MIN_TRACK_MARGIN_DEG` — two
+ *      legs sharing a nearby endpoint have similar corridors but opposite
+ *      destination bearings, which is exactly what this separates).
+ *
+ * A single corridor-plausible leg with NO reported track is accepted — the
+ * filing offers no other direction the plane could be flying. Several
+ * plausible legs with no track, or a track that points cleanly at no
+ * surviving leg (vectoring near a turnaround), return null — the codebase's
+ * rule is to never fabricate a journey no one observed.
  */
-function pickRoundTripLeg(
-  rt: { away: AircraftRoute; back: AircraftRoute; awayDest: LatLon; backDest: LatLon },
-  lat: number,
-  lng: number,
-  track: number,
-): AircraftRoute | null {
-  const towardTurnaround = initialBearing(lat, lng, rt.awayDest.lat, rt.awayDest.lon); // toward B
-  const towardHome = initialBearing(lat, lng, rt.backDest.lat, rt.backDest.lon); // toward A
-  const errAway = angularDelta(track, towardTurnaround);
-  const errBack = angularDelta(track, towardHome);
-  if (errAway <= MAX_TRACK_ERR_DEG && errBack - errAway >= MIN_TRACK_MARGIN_DEG) return rt.away;
-  if (errBack <= MAX_TRACK_ERR_DEG && errAway - errBack >= MIN_TRACK_MARGIN_DEG) return rt.back;
-  return null;
+function pickLeg(legs: RouteLeg[], plane: TrackedPlane): AircraftRoute | null {
+  const p = { lat: plane.latitude, lon: plane.longitude };
+  const track = plane.trackDeg;
+  const plausible = legs.filter((leg) => isOnCorridor(p, leg.from, leg.to));
+  if (plausible.length === 0) return null;
+  if (track == null) {
+    return plausible.length === 1 ? plausible[0].route : null;
+  }
+  const scored = plausible
+    .map((leg) => ({
+      leg,
+      err: angularDelta(track, initialBearing(p.lat, p.lon, leg.to.lat, leg.to.lon)),
+    }))
+    .sort((a, b) => a.err - b.err);
+  const best = scored[0];
+  if (best.err > MAX_TRACK_ERR_DEG) return null;
+  if (scored.length > 1 && scored[1].err - best.err < MIN_TRACK_MARGIN_DEG) return null;
+  return best.leg.route;
+}
+
+/** Whether point `p` lies within the corridor tolerance of the great-circle
+ *  SEGMENT from → to. Mid-corridor, the cross-track tolerance scales with leg
+ *  length (long-haul routings bow far off the great circle for jet streams /
+ *  weather); beyond an endpoint only the BASE tolerance applies — being
+ *  "near SFO" must not grow with how far away the other end is. */
+function isOnCorridor(p: LatLon, from: LatLon, to: LatLon): boolean {
+  const legKm = haversineKm(from, to);
+  const m = corridorMetrics(p, from, to);
+  const tolKm = m.onSegment
+    ? Math.max(CORRIDOR_BASE_TOLERANCE_KM, CORRIDOR_TOLERANCE_FRACTION * legKm)
+    : CORRIDOR_BASE_TOLERANCE_KM;
+  return m.distanceKm <= tolKm;
 }
 
 /**
  * Parse adsb.lol's "-"-joined ICAO `airport_codes` into route CANDIDATES.
  *
- * A one-way A → B (first != last) is a `fixed` route; multi-leg collapses to
- * first → last. An out-and-back A-B-A (first == last, three codes) becomes a
- * `roundTrip` when both airports' coordinates are present — so the leg can be
- * picked from the plane's track. Everything else — the "unknown" sentinel, a
- * blank string, a single code, a same-airport A-A, a longer round trip that
- * doesn't reduce to one leg, or an A-B-A missing coordinates — is `none`.
- * Exported for unit tests.
+ * Exactly two codes A-B (A != B) is a `fixed` route, with endpoint coordinates
+ * when the row carries them (so the per-plane corridor gate can apply). Three
+ * or more codes — an out-and-back A-B-A or a through-flight A-B-C(-…) — become
+ * `legs`, one per consecutive pair, when every airport's coordinates are
+ * present, so the current leg can be picked from the plane's position + track.
+ * (The old parser collapsed a multi-leg filing to first → last — a pair no
+ * one flies; UAL1375 "KONT-KSFO-KORD" rendered as ONT → ORD, 2026-07-19.)
+ * Everything else — the "unknown" sentinel, a blank string, a single code, a
+ * same-airport A-A, degenerate repeated legs, or a multi-leg filing missing
+ * coordinates — is `none`. Exported for unit tests.
  */
 export function parseRouteCandidates(
   airportCodes: string | undefined,
@@ -435,44 +501,49 @@ export function parseRouteCandidates(
     .split("-")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  const origin = parts[0];
-  const dest = parts[parts.length - 1];
-  if (!origin || !dest || parts.length < 2) return { kind: "none" };
+  if (parts.length < 2) return { kind: "none" };
 
   const byIcao = new Map<string, RoutesetAirport>();
   if (airports) for (const a of airports) if (a.icao) byIcao.set(a.icao, a);
 
-  // One-way (incl. multi-leg collapsed to first → last): route is final.
-  if (origin !== dest) {
-    return { kind: "fixed", route: buildDirectedRoute(origin, dest, byIcao) };
+  // Exactly two codes: a plain one-way filing.
+  if (parts.length === 2) {
+    const [origin, dest] = parts;
+    if (origin === dest) return { kind: "none" }; // degenerate A-A
+    return {
+      kind: "fixed",
+      route: buildDirectedRoute(origin, dest, byIcao),
+      from: coordOf(byIcao.get(origin)),
+      to: coordOf(byIcao.get(dest)),
+    };
   }
 
-  // origin === dest → an out-and-back filed under one callsign. Only the
-  // simple three-leg A-B-A reduces to a single ambiguous pair of legs; a
-  // same-airport A-A or a longer tour (A-B-C-A) can't, so leave them null.
-  if (parts.length !== 3) return { kind: "none" };
-  const home = origin; // parts[0] === parts[2]
-  const turnaround = parts[1];
-  if (turnaround === home) return { kind: "none" }; // degenerate A-A-A
-  const homeCoord = coordOf(byIcao.get(home));
-  const turnaroundCoord = coordOf(byIcao.get(turnaround));
-  if (!homeCoord || !turnaroundCoord) return { kind: "none" }; // no coords → can't pick a leg
-  return {
-    kind: "roundTrip",
-    away: buildDirectedRoute(home, turnaround, byIcao), // A → B
-    back: buildDirectedRoute(turnaround, home, byIcao), // B → A
-    awayDest: turnaroundCoord,
-    backDest: homeCoord,
-  };
+  // Three or more codes: one leg per consecutive pair, dropping degenerate
+  // same-airport legs (A-A inside a longer filing). Every kept leg needs both
+  // endpoint coordinates — without them neither the corridor check nor the
+  // track bearing works, and a leg that can't be checked can't be picked.
+  const legs: RouteLeg[] = [];
+  for (let i = 0; i < parts.length - 1; i++) {
+    const origin = parts[i];
+    const dest = parts[i + 1];
+    if (origin === dest) continue; // degenerate leg (A-A) → skip
+    const from = coordOf(byIcao.get(origin));
+    const to = coordOf(byIcao.get(dest));
+    if (!from || !to) return { kind: "none" }; // no coords → can't pick legs
+    legs.push({ route: buildDirectedRoute(origin, dest, byIcao), from, to });
+  }
+  if (legs.length === 0) return { kind: "none" }; // all legs degenerate (A-A-A)
+  return { kind: "legs", legs };
 }
 
 /**
  * Parse adsb.lol's `airport_codes` into a single origin → destination, or null.
  *
- * The one-shot resolver's contract (also used widely in tests): a one-way route
- * (incl. multi-leg first → last), else null — the "unknown"/blank/single-code
- * cases and a round trip both collapse to null, since no single direction is
- * known without a live track. Exported for unit tests.
+ * The position-less contract (also used widely in tests): a plain two-code
+ * one-way route, else null — the "unknown"/blank/single-code cases and EVERY
+ * multi-leg filing (round trip or through-flight) collapse to null, since
+ * which leg the plane is on is unknowable without its position. Exported for
+ * unit tests.
  */
 export function parseRoute(
   airportCodes: string | undefined,
@@ -519,6 +590,48 @@ function airportName(a: RoutesetAirport | undefined): string | undefined {
   if (loc) return loc;
   const name = a?.name?.trim();
   return name && name.length > 0 ? name : undefined;
+}
+
+const EARTH_RADIUS_KM = 6371;
+
+/** Great-circle distance between two points, km (haversine). */
+function haversineKm(a: LatLon, b: LatLon): number {
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+/**
+ * Distance (km) from point `p` to the great-circle SEGMENT from → to — the
+ * cross-track distance where `p` projects between the endpoints (`onSegment`),
+ * else the distance to the nearer endpoint. Standard spherical cross-track /
+ * along-track construction (e.g. Movable Type's aviation formulary).
+ */
+function corridorMetrics(
+  p: LatLon,
+  from: LatLon,
+  to: LatLon,
+): { distanceKm: number; onSegment: boolean } {
+  const d12 = haversineKm(from, to) / EARTH_RADIUS_KM; // angular leg length
+  if (d12 === 0) return { distanceKm: haversineKm(p, from), onSegment: false };
+  const d13 = haversineKm(from, p) / EARTH_RADIUS_KM; // angular from → p
+  const theta12 = toRad(initialBearing(from.lat, from.lon, to.lat, to.lon));
+  const theta13 = toRad(initialBearing(from.lat, from.lon, p.lat, p.lon));
+  const crossTrack = Math.asin(Math.sin(d13) * Math.sin(theta13 - theta12));
+  // Signed along-track distance of p's projection from the start point.
+  const alongTrack =
+    Math.acos(clamp(Math.cos(d13) / Math.max(Math.cos(crossTrack), 1e-12), -1, 1)) *
+    Math.sign(Math.cos(theta13 - theta12));
+  if (alongTrack < 0) return { distanceKm: haversineKm(p, from), onSegment: false };
+  if (alongTrack > d12) return { distanceKm: haversineKm(p, to), onSegment: false };
+  return { distanceKm: Math.abs(crossTrack) * EARTH_RADIUS_KM, onSegment: true };
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v));
 }
 
 /** Initial great-circle bearing from (lat1,lon1) to (lat2,lon2), degrees true

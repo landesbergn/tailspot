@@ -208,10 +208,34 @@ nonisolated struct TailspotBackendClient: ADSBSource {
     /// has no route for the flight (a real answer the caller can stop on).
     /// Not part of `ADSBSource` — route lookup is a backfill concern, not a
     /// position-source one; `CatchBackfill` holds a concrete client for it.
-    func route(forCallsign callsign: String) async throws -> BackendAircraft.Route? {
+    ///
+    /// `lat`/`lng` (+ optional `track`, degrees true) are the plane's observed
+    /// position — or, for old catches that recorded no plane position, the
+    /// observer's, which is within slant range of it (2026-07-19). With them
+    /// the server picks the current LEG of a multi-leg filing (UAL1375 was
+    /// filed ONT–SFO–ORD; the old first→last collapse showed "ONT → ORD" on
+    /// an SFO arrival) and rejects a stale filing whose corridor the plane
+    /// was nowhere near (SWA1067 was filed MAF→DAL but flew BWI→SFO). Without
+    /// a position, a multi-leg filing resolves to nil server-side.
+    func route(
+        forCallsign callsign: String,
+        lat: Double? = nil,
+        lng: Double? = nil,
+        track: Double? = nil
+    ) async throws -> BackendAircraft.Route? {
         let trimmed = callsign.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let url = baseURL.appendingPathComponent("v1/routes/\(trimmed)")
+        var url = baseURL.appendingPathComponent("v1/routes/\(trimmed)")
+        if let lat, let lng,
+           var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = [
+                URLQueryItem(name: "lat", value: String(lat)),
+                URLQueryItem(name: "lng", value: String(lng)),
+            ]
+            if let track { items.append(URLQueryItem(name: "track", value: String(track))) }
+            comps.queryItems = items
+            url = comps.url ?? url
+        }
         let data = try await get(url)
         do {
             return try JSONDecoder().decode(BackendRouteResponse.self, from: data).route
