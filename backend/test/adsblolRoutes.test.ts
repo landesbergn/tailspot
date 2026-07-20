@@ -62,8 +62,11 @@ describe("parseRoute", () => {
     expect(parseRoute("KSFO-EGLL")).toEqual({ originIcao: "KSFO", destIcao: "EGLL" });
   });
 
-  it("collapses a multi-leg route to first → last", () => {
-    expect(parseRoute("KSFO-KDEN-EGLL")).toEqual({ originIcao: "KSFO", destIcao: "EGLL" });
+  it("returns null for a multi-leg filing (no position → the leg is unknowable)", () => {
+    // The old first→last collapse showed "ONT → ORD" for a plane on the
+    // ONT→SFO leg of KONT-KSFO-KORD (UAL1375, field report 2026-07-19) —
+    // a pair no one flies. Position-less parsing now refuses to guess.
+    expect(parseRoute("KSFO-KDEN-EGLL")).toBeNull();
   });
 
   it("returns null for a degenerate round trip (first == last)", () => {
@@ -379,27 +382,37 @@ describe("round-trip leg disambiguation (A ⇄ B filings)", () => {
     ],
   };
 
-  it("parseRouteCandidates yields a round trip with both legs + turnaround/home coords", () => {
+  it("parseRouteCandidates yields both legs with endpoint coords", () => {
+    const LGA = { lat: 40.777199, lon: -73.872597 };
+    const PIT = { lat: 40.491501, lon: -80.232903 };
     expect(parseRouteCandidates(RPA5715_ROW.airport_codes, RPA5715_ROW._airports)).toEqual({
-      kind: "roundTrip",
-      away: {
-        originIcao: "KLGA",
-        destIcao: "KPIT",
-        originIata: "LGA",
-        destIata: "PIT",
-        originName: "New York",
-        destName: "Pittsburgh",
-      },
-      back: {
-        originIcao: "KPIT",
-        destIcao: "KLGA",
-        originIata: "PIT",
-        destIata: "LGA",
-        originName: "Pittsburgh",
-        destName: "New York",
-      },
-      awayDest: { lat: 40.491501, lon: -80.232903 },
-      backDest: { lat: 40.777199, lon: -73.872597 },
+      kind: "legs",
+      legs: [
+        {
+          route: {
+            originIcao: "KLGA",
+            destIcao: "KPIT",
+            originIata: "LGA",
+            destIata: "PIT",
+            originName: "New York",
+            destName: "Pittsburgh",
+          },
+          from: LGA,
+          to: PIT,
+        },
+        {
+          route: {
+            originIcao: "KPIT",
+            destIcao: "KLGA",
+            originIata: "PIT",
+            destIata: "LGA",
+            originName: "Pittsburgh",
+            destName: "New York",
+          },
+          from: PIT,
+          to: LGA,
+        },
+      ],
     });
   });
 
@@ -417,14 +430,19 @@ describe("round-trip leg disambiguation (A ⇄ B filings)", () => {
     ).toEqual({ kind: "none" });
   });
 
-  it("a longer round trip (A-B-C-A) stays null — no single leg reduction", () => {
-    expect(
-      parseRouteCandidates("KLGA-KPIT-KORD-KLGA", [
-        { icao: "KLGA", lat: 40.78, lon: -73.87 },
-        { icao: "KPIT", lat: 40.49, lon: -80.23 },
-        { icao: "KORD", lat: 41.98, lon: -87.9 },
-      ]),
-    ).toEqual({ kind: "none" });
+  it("a longer round trip (A-B-C-A) parses into one leg per consecutive pair", () => {
+    const parsed = parseRouteCandidates("KLGA-KPIT-KORD-KLGA", [
+      { icao: "KLGA", lat: 40.78, lon: -73.87 },
+      { icao: "KPIT", lat: 40.49, lon: -80.23 },
+      { icao: "KORD", lat: 41.98, lon: -87.9 },
+    ]);
+    expect(parsed.kind).toBe("legs");
+    if (parsed.kind !== "legs") return;
+    expect(parsed.legs.map((l) => `${l.route.originIcao}→${l.route.destIcao}`)).toEqual([
+      "KLGA→KPIT",
+      "KPIT→KORD",
+      "KORD→KLGA",
+    ]);
   });
 
   /** A service with RPA5715's round-trip filing already cached. */
@@ -476,5 +494,121 @@ describe("round-trip leg disambiguation (A ⇄ B filings)", () => {
     svc.enrich(inbound);
     expect(outbound[0].route).toMatchObject({ destIcao: "KPIT" });
     expect(inbound[0].route).toMatchObject({ destIcao: "KLGA" });
+  });
+});
+
+describe("multi-leg through-flights + stale filings (SFO arrival field reports, 2026-07-19)", () => {
+  // UAL1375's real adsb.lol filing: a through-flight ONT → SFO → ORD under one
+  // callsign. The old parser collapsed it to "ONT → ORD" — a pair no one flies
+  // — on a plane descending into SFO over Fremont.
+  const UAL1375_ROW = {
+    callsign: "UAL1375",
+    airport_codes: "KONT-KSFO-KORD",
+    _airports: [
+      { icao: "KONT", iata: "ONT", location: "Ontario", lat: 34.056, lon: -117.600998 },
+      { icao: "KSFO", iata: "SFO", location: "San Francisco", lat: 37.618999, lon: -122.375 },
+      { icao: "KORD", iata: "ORD", location: "Chicago", lat: 41.9786, lon: -87.9048 },
+    ],
+  };
+  // SWA1067's filing was simply STALE: on file as MAF → DAL while the flight
+  // actually flew BWI → SFO (Southwest reuses flight numbers across unrelated
+  // leg sets). No leg of the filing is near the Bay Area.
+  const SWA1067_ROW = {
+    callsign: "SWA1067",
+    airport_codes: "KMAF-KDAL",
+    _airports: [
+      { icao: "KMAF", iata: "MAF", location: "Midland", lat: 31.942499, lon: -102.202003 },
+      { icao: "KDAL", iata: "DAL", location: "Dallas", lat: 32.847099, lon: -96.851799 },
+    ],
+  };
+
+  async function warm(row: typeof UAL1375_ROW | typeof SWA1067_ROW) {
+    const fetchFn = vi.fn(async () => routeset([row])) as unknown as typeof fetch;
+    const svc = new AdsbLolRouteService({ baseUrl: "https://example.test", fetchFn });
+    await svc.prefetch([{ callsign: row.callsign, lat: 37.5, lng: -121.96 }]);
+    return svc;
+  }
+
+  it("enrich picks the ARRIVAL leg (ONT → SFO) for a plane descending into SFO", async () => {
+    const svc = await warm(UAL1375_ROW);
+    // Over Fremont, tracking ~300° toward SFO (the real UAL1375 geometry).
+    const ac = [planeAt("UAL1375", 37.5, -121.96, 300)];
+    svc.enrich(ac);
+    expect(ac[0].route).toMatchObject({
+      originIcao: "KONT",
+      destIcao: "KSFO",
+      originIata: "ONT",
+      destIata: "SFO",
+    });
+  });
+
+  it("enrich picks the DEPARTURE leg (SFO → ORD) once the plane heads out northeast", async () => {
+    const svc = await warm(UAL1375_ROW);
+    // Climbing out over the East Bay, tracking ~60° toward ORD.
+    const ac = [planeAt("UAL1375", 37.75, -122.1, 60)];
+    svc.enrich(ac);
+    expect(ac[0].route).toMatchObject({ originIcao: "KSFO", destIcao: "KORD" });
+  });
+
+  it("enrich attaches nothing mid-filing when the plane is on neither leg's corridor", async () => {
+    const svc = await warm(UAL1375_ROW);
+    // Over Seattle — nowhere near ONT-SFO or SFO-ORD.
+    const ac = [planeAt("UAL1375", 47.6, -122.3, 300)];
+    svc.enrich(ac);
+    expect(ac[0].route).toBeUndefined();
+  });
+
+  it("enrich REJECTS a stale fixed filing whose corridor the plane is nowhere near", async () => {
+    const svc = await warm(SWA1067_ROW);
+    // The real SWA1067 geometry: descending into SFO, ~1,900 km from MAF-DAL.
+    const ac = [planeAt("SWA1067", 37.5, -121.96, 300)];
+    svc.enrich(ac);
+    expect(ac[0].route).toBeUndefined();
+  });
+
+  it("enrich still attaches a fixed filing to a plane ON its corridor", async () => {
+    const svc = await warm(SWA1067_ROW);
+    // Near Abilene TX, eastbound — plausibly flying MAF → DAL.
+    const ac = [planeAt("SWA1067", 32.45, -99.73, 80)];
+    svc.enrich(ac);
+    expect(ac[0].route).toMatchObject({ originIcao: "KMAF", destIcao: "KDAL" });
+  });
+
+  it("resolve() without a position leaves a multi-leg filing null (no first→last collapse)", async () => {
+    const svc = await warm(UAL1375_ROW);
+    expect(await svc.resolve("UAL1375")).toBeNull();
+  });
+
+  it("resolve() WITH a position (+track) picks the leg — the catch-time/backfill path", async () => {
+    const svc = await warm(UAL1375_ROW);
+    expect(
+      await svc.resolve("UAL1375", { latitude: 37.5, longitude: -121.96, trackDeg: 300 }),
+    ).toMatchObject({ originIcao: "KONT", destIcao: "KSFO" });
+  });
+
+  it("resolve() WITH a position but NO track accepts a sole plausible leg", async () => {
+    const svc = await warm(UAL1375_ROW);
+    // Just northwest of Ontario, where the ONT→SFO corridor is the only
+    // plausible leg (the SFO→ORD great circle is ~490 km away): no track
+    // needed. This is the on-device repair path — old catches recorded no
+    // plane track.
+    expect(
+      await svc.resolve("UAL1375", { latitude: 34.5, longitude: -118.1, trackDeg: null }),
+    ).toMatchObject({ originIcao: "KONT", destIcao: "KSFO" });
+    // But near SFO — an endpoint BOTH legs share — a track-less resolve
+    // stays null rather than guessing arrival vs departure.
+    expect(
+      await svc.resolve("UAL1375", { latitude: 37.5, longitude: -121.96, trackDeg: null }),
+    ).toBeNull();
+  });
+
+  it("resolve() WITH a position corridor-gates a stale fixed filing", async () => {
+    const svc = await warm(SWA1067_ROW);
+    expect(
+      await svc.resolve("SWA1067", { latitude: 37.5, longitude: -121.96, trackDeg: 300 }),
+    ).toBeNull();
+    expect(
+      await svc.resolve("SWA1067", { latitude: 32.45, longitude: -99.73, trackDeg: null }),
+    ).toMatchObject({ originIcao: "KMAF", destIcao: "KDAL" });
   });
 });

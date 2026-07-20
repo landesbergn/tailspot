@@ -30,7 +30,41 @@ describe("GET /v1/routes/:callsign", () => {
     const res = await app.inject({ method: "GET", url: "/v1/routes/ana858" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ callsign: "ANA858", route });
-    expect(resolve).toHaveBeenCalledWith("ANA858");
+    expect(resolve).toHaveBeenCalledWith("ANA858", undefined);
+  });
+
+  it("passes lat/lng/track through to the resolver for leg picking", async () => {
+    const resolve = vi.fn(async () => route);
+    app = await buildApp({ routeResolver: { resolve }, rateLimitNow: () => 0 });
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/routes/UAL1375?lat=37.5&lng=-121.96&track=300",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(resolve).toHaveBeenCalledWith("UAL1375", {
+      latitude: 37.5,
+      longitude: -121.96,
+      trackDeg: 300,
+    });
+  });
+
+  it("position without track resolves with trackDeg null; malformed/partial position degrades to none", async () => {
+    const resolve = vi.fn(async () => route);
+    app = await buildApp({ routeResolver: { resolve }, rateLimitNow: () => 0 });
+
+    await app.inject({ method: "GET", url: "/v1/routes/UAL1375?lat=37.5&lng=-121.96" });
+    expect(resolve).toHaveBeenLastCalledWith("UAL1375", {
+      latitude: 37.5,
+      longitude: -121.96,
+      trackDeg: null,
+    });
+
+    // lat alone, junk values, out-of-range → position dropped, never a 400.
+    for (const qs of ["lat=37.5", "lat=abc&lng=-121.96", "lat=95&lng=-121.96"]) {
+      const res = await app.inject({ method: "GET", url: `/v1/routes/UAL1375?${qs}` });
+      expect(res.statusCode, qs).toBe(200);
+      expect(resolve).toHaveBeenLastCalledWith("UAL1375", undefined);
+    }
   });
 
   it("returns route: null as a normal 200 when nothing is on file", async () => {
