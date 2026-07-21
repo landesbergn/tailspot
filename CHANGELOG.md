@@ -5,6 +5,38 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-21 — Dead-code cleanup sweep — branch `chore/dead-code-cleanup`
+
+Full-repo dead-code audit (three parallel sweeps: iOS, backend/web, repo-level
+tooling), every candidate hand-verified before removal. The repo turned out
+clean — past feature removals (OpenSky, mock mode, type-guessing, the guess
+cover machinery) left only comments behind. What was actually dead:
+
+- **iOS:** `HangarFilter` (an unreferenced Hangar filter enum in
+  `HangarView.swift`, zero call sites) and `ClaimHandleResponse` (a private
+  DTO in `TailspotAccountClient.swift` that `claimHandle` never decoded).
+- **Backend:** `selectProvider` now **throws on an unknown
+  `POSITION_PROVIDER`** (e.g. the long-removed `"opensky"`) instead of
+  silently degrading to the fallback pair — a misconfigured deploy fails
+  loudly at startup (new test in `fallback.test.ts`). No dead endpoints,
+  modules, or npm deps found; all 10 routes have live iOS callers.
+- **Docs:** `docs/testflight-handoff.md` → `docs/archive/` (it documents the
+  since-removed OpenSky credential pipeline end-to-end; the live ship process
+  is CONTRIBUTING.md). PLAN §9's pointer updated.
+- **Leak hygiene:** `.gitignore`'s `pulled-replays/` widened to
+  `pulled-replays*/` — an untracked `pulled-replays-new/` (live GPS + ADS-B
+  session data) was escaping the rule on its `-new` suffix alone and one
+  `git add .` away from being committed.
+
+Deliberately KEPT (verified intentional, not dead): `FailureMode.swift` + the
+bundled `scoring-*.json` (test-kept regression bench / parity fixtures that
+ship in the app bundle by design), `GuessKind.type` + its scoring branch (the
+backend wire contract the client never sends), and the backend's ~30
+only-locally-referenced exports (test surface). Local git hygiene handled
+outside the PR: stale merged-PR branches + clean worktrees pruned; the
+`tailspot-reveal-bound` worktree left alone (uncommitted changes — Noah's
+call).
+
 ## 2026-07-21 — Typecode-map gap fix: ATR / Pipistrel / Tecnam — branch `fix/typecode-map-atr-pipistrel-tecnam`
 
 A catch-review pass found 7 of 377 prod catches with no make/model category.

@@ -136,4 +136,10 @@ describe("selectProvider", () => {
     expect(selectProvider({ POSITION_PROVIDER: "adsblol" }).name).toBe("adsblol");
     expect(selectProvider({ POSITION_PROVIDER: "airplaneslive" }).name).toBe("airplaneslive");
   });
+
+  it("throws on an unknown provider instead of silently degrading", () => {
+    expect(() => selectProvider({ POSITION_PROVIDER: "opensky" })).toThrow(
+      /Unknown POSITION_PROVIDER "opensky"/,
+    );
+  });
 });
