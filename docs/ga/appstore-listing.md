@@ -1,6 +1,6 @@
 # App Store listing — GA draft
 
-Drafted 2026-07-11 (PLAN §9 #8). Region decision per Noah: **worldwide** —
+Drafted 2026-07-11 (PLAN §9 #8). **Submitted 2026-07-21 (v1.0.0, Waiting for Review)** — the ☐ items below were clicked through in ASC; kept for the next version's checklist. Region decision per Noah: **worldwide** —
 supersedes PLAN §6.6's US + W. Europe default. Everything marked ☐ is a manual
 App Store Connect step only Noah can click.
 
