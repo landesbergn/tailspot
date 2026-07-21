@@ -63,6 +63,7 @@ struct DynamicTypeSnapshotTests {
     private func seededContainer() throws -> ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(container)
         let seeds: [(String, String, String, String, String, String, String)] = [
             // (icao, callsign, model, manufacturer, typecode, reg, operator)
             ("86e123", "ANA858", "787-9", "Boeing", "B789", "JA936A", "All Nippon Airways"),
@@ -105,6 +106,7 @@ struct DynamicTypeSnapshotTests {
             for: Catch.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
+        TestContainerRetention.retain(empty)
         snapshot(NavigationStack { SettingsScreen() }, as: "dt_settings_default")
         snapshot(NavigationStack { SettingsScreen() }.dynamicTypeSize(.accessibility2),
                  as: "dt_settings_a11y2")

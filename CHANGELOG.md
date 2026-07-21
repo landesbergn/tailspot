@@ -34,8 +34,23 @@ ship in the app bundle by design), `GuessKind.type` + its scoring branch (the
 backend wire contract the client never sends), and the backend's ~30
 only-locally-referenced exports (test surface). Local git hygiene handled
 outside the PR: stale merged-PR branches + clean worktrees pruned; the
-`tailspot-reveal-bound` worktree left alone (uncommitted changes — Noah's
-call).
+`tailspot-reveal-bound` worktree removed on Noah's call (its uncommitted
+4-file diff saved out-of-repo first).
+
+**Rider: the "random tests fail at 0.000 s" CI/local flake FIXED.** This PR's
+own CI failures forced the diagnosis: the test-host app CRASHES mid-run
+(xcresult "Crash: Tailspot at \<external symbol\>"; crash report:
+EXC_BREAKPOINT on the main thread, `__NSFireTimer` → SwiftData autosave →
+`_SwiftData_SwiftUI` observer) — SwiftData's deferred autosave timer fires
+AFTER a per-test in-memory `ModelContainer` deallocs, killing whichever
+suites are in flight. Hence random 0.000 s victims each run: whole clone
+batches on CI, the TrophyUnlockCenter batch locally, and two crash reports
+already sitting on disk from 07-20. `CatchBackfillTests` and
+`MarketingSnapshotTests` already carried the known workaround (leak the tiny
+in-memory stores for the process lifetime); a new shared
+`TestContainerRetention.retain(_:)` now applies it to EVERY
+container-creating suite (13 sites across 9 test files). Reproduced locally
+on run 2 of a 3-run hunt before the fix; full suite green after.
 
 ## 2026-07-21 — Typecode-map gap fix: ATR / Pipistrel / Tecnam — branch `fix/typecode-map-atr-pipistrel-tecnam`
 

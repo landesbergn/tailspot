@@ -388,6 +388,7 @@ struct AircraftTypeResolutionTests {
         // the typecode path, overriding the stale stored value.
         let modelConfig = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: modelConfig)
+        TestContainerRetention.retain(container)
         let context = ModelContext(container)
 
         // Insert with stale stored type (simulate a pre-fix row)

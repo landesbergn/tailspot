@@ -50,6 +50,7 @@ struct ProfileSettingsSnapshotTests {
     private func seededContainer() throws -> ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(container)
         let seeds: [(String, String?, String?, String?, String?)] = [
             // (icao, callsign, model, manufacturer, typecode)
             ("86e123", "ANA858", "787-9", "Boeing", "B789"),
@@ -124,6 +125,7 @@ struct ProfileSettingsSnapshotTests {
     @Test func renderEmptyStates() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let empty = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(empty)
         snapshot(HangarView().modelContainer(empty), as: "hangar_empty")
         if let entry = CardSets.all.first?.entries.first {
             snapshot(

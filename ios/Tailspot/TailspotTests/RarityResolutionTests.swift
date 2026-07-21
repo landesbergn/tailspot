@@ -76,6 +76,7 @@ struct RarityResolutionTests {
         // to the frozen-moment rule, spec 2026-06-08).
         let modelConfig = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: modelConfig)
+        TestContainerRetention.retain(container)
         let context = ModelContext(container)
 
         let c = Catch(

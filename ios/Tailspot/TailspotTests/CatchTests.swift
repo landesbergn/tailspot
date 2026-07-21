@@ -19,7 +19,9 @@ struct CatchTests {
 
     private func makeContainer() throws -> ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try ModelContainer(for: Catch.self, configurations: config)
+        let container = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(container)
+        return container
     }
 
     @Test func insertsAndFetchesACatch() throws {
@@ -125,6 +127,7 @@ struct CatchTests {
     @Test func duplicateInsertIsRejected() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(container)
         let ctx = ModelContext(container)
 
         let icao = "abc123"
