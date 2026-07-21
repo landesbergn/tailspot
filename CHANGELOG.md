@@ -5,6 +5,30 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-20 — Handle-gate hardening: leet normalization + surfaced 422 + strand repair — branch `fix/handle-gaps`
+
+GA prep, from Noah's "do I have checks on explicit usernames?" review. The
+server-side blocklist was solid (3–20 char `[A-Za-z0-9_]` regex, substring
+profanity list, leaderboard only ever shows server-claimed handles) with two
+gaps, both closed:
+
+- **Leetspeak evasion (backend).** `containsProfanity` now checks a second,
+  normalized form — underscores stripped, digits folded (`0→o 1→i 3→e 4→a
+  5→s 6→g 7→t 8→b 9→g`) — so `sh1t` / `n1gg4` / `f_u_c_k`-style spellings
+  are caught. Widens the deliberate Scunthorpe over-block slightly; the
+  suggester vocabulary is regression-tested clean. **Requires a backend
+  deploy to take effect.**
+- **Client swallowed the rejection (iOS).** The claim UIs distinguished only
+  409; a profanity/validation **422 fell into the offline fallback** — the
+  explicit handle persisted locally with no error, and `HandleSyncer`
+  re-claimed it every foreground, forever. Now: `AccountError.handleNotAllowed`
+  (422) surfaces "That handle isn't allowed" in onboarding + Settings
+  (telemetry `handle_claimed result=not_allowed`), is never persisted, and
+  `HandleSyncer` treats it as terminal — reverting a legacy-stranded local
+  handle to the last server-confirmed value (or the placeholder) so the
+  device UI matches the public identity and the retry loop ends
+  (`HandleSyncerTests` pin both repair paths).
+
 ## 2026-07-20 — Onboarding feedback: copy trims + AR-viewport welcome visual — branch `feat/onboarding-feedback`
 
 Noah's simulator run-through of onboarding, three items:

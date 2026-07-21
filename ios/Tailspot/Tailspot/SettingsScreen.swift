@@ -211,6 +211,11 @@ struct SettingsScreen: View {
         } catch AccountError.handleTaken {
             handleTakenError = "@\(trimmed) is already taken"
             Analytics.capture("handle_claimed", ["result": .string("taken")])
+        } catch AccountError.handleNotAllowed {
+            // Server validation / profanity rejection (422) — terminal for
+            // this handle; never persist it locally (see OnboardingFlow).
+            handleTakenError = "@\(trimmed) isn't allowed"
+            Analytics.capture("handle_claimed", ["result": .string("not_allowed")])
         } catch {
             Log.ui.error("Settings: handle claim failed (non-fatal): \(error, privacy: .public)")
             handle = trimmed

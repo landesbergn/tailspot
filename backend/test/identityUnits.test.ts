@@ -14,6 +14,21 @@ describe("containsProfanity (substring on lowercased handle)", () => {
     expect(containsProfanity("plane_nerd_99")).toBe(false);
     expect(containsProfanity("SpotterNoah")).toBe(false);
   });
+  it("flags leetspeak spellings (GA hardening, 2026-07-20)", () => {
+    expect(containsProfanity("sh1thead")).toBe(true);   // 1 → i
+    expect(containsProfanity("a55hat")).toBe(true);      // 5 → s
+    expect(containsProfanity("c0ckpit_fan")).toBe(true); // 0 → o (over-block, accepted)
+    expect(containsProfanity("n1gg4")).toBe(true);       // 1 → i, 4 → a
+    expect(containsProfanity("ni66a")).toBe(true);       // 6 → g
+    expect(containsProfanity("b8stard")).toBe(false);    // 8 → b gives "bbstard" — not matched, documents the limit
+    expect(containsProfanity("f_u_c_k")).toBe(true);     // underscore separators stripped
+    expect(containsProfanity("8itch")).toBe(true);       // 8 → b
+  });
+  it("leet folding does not break the suggester vocabulary", () => {
+    expect(containsProfanity("heading_1996")).toBe(false);
+    expect(containsProfanity("vapor_6564")).toBe(false);
+    expect(containsProfanity("redeye_1297")).toBe(false);
+  });
 });
 
 describe("pointsForRarity (mirror of iOS GameSystem tiers)", () => {

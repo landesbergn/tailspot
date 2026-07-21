@@ -709,6 +709,14 @@ struct OnboardingFlow: View {
             Analytics.capture("handle_claimed", ["result": .string("taken")])
             // Offer a fresh set of verified-free chips so the user has a quick out.
             await refreshSuggestions()
+        } catch AccountError.handleNotAllowed {
+            // Server validation / profanity rejection (422) — terminal for this
+            // handle. Do NOT fall into the offline fallback: persisting a
+            // rejected handle stranded it locally with HandleSyncer re-claiming
+            // it every foreground, forever (GA hardening, 2026-07-20).
+            handleTakenError = "That handle isn't allowed. Try a different one."
+            Analytics.capture("handle_claimed", ["result": .string("not_allowed")])
+            await refreshSuggestions()
         } catch {
             // Network/auth failure — persist locally anyway and move on.
             // The handle claim can be retried from Settings later.

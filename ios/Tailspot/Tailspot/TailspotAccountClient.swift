@@ -392,6 +392,12 @@ nonisolated struct LeaderboardResponse: Decodable {
 nonisolated enum AccountError: Error, LocalizedError {
     /// PUT /v1/devices/me/handle returned 409 — the handle is taken.
     case handleTaken
+    /// PUT /v1/devices/me/handle returned 422 — the handle failed server
+    /// validation (format or profanity blocklist). Terminal for THIS handle:
+    /// callers must surface it and never persist/retry the handle (the old
+    /// generic-catch path stored rejected handles locally and HandleSyncer
+    /// re-claimed them every foreground, forever — GA hardening 2026-07-20).
+    case handleNotAllowed
     /// The server returned an unexpected HTTP status.
     case http(status: Int)
     /// A URLSession transport error.
@@ -404,6 +410,7 @@ nonisolated enum AccountError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .handleTaken:       return "Handle already taken"
+        case .handleNotAllowed:  return "Handle not allowed"
         case .http(let s):       return "HTTP \(s)"
         case .transport(let e):  return "Network error: \(e.localizedDescription)"
         case .decoding(let e):   return "Decode error: \(e.localizedDescription)"
@@ -499,7 +506,9 @@ nonisolated struct TailspotAccountClient {
     // MARK: - claimHandle
 
     /// Claim or replace the caller's public handle. The backend enforces
-    /// case-insensitive uniqueness. Throws `AccountError.handleTaken` on 409.
+    /// case-insensitive uniqueness, the 3–20 char [A-Za-z0-9_] format, and
+    /// the profanity blocklist. Throws `AccountError.handleTaken` on 409 and
+    /// `AccountError.handleNotAllowed` on 422 (validation/profanity).
     func claimHandle(_ handle: String) async throws {
         guard let token = storedToken else { throw AccountError.notRegistered }
 
@@ -512,7 +521,8 @@ nonisolated struct TailspotAccountClient {
         let body = ["handle": handle]
         request.httpBody = try JSONEncoder().encode(body)
 
-        _ = try await perform(request, expectedStatus: 200, on409: .handleTaken)
+        _ = try await perform(request, expectedStatus: 200,
+                              on409: .handleTaken, on422: .handleNotAllowed)
     }
 
     // MARK: - uploadCatch
@@ -678,7 +688,8 @@ nonisolated struct TailspotAccountClient {
         _ request: URLRequest,
         expectedStatus: Int,
         alsoAccept: Int? = nil,
-        on409: AccountError? = nil
+        on409: AccountError? = nil,
+        on422: AccountError? = nil
     ) async throws -> Data {
         let (data, response): (Data, URLResponse)
         do {
@@ -693,6 +704,9 @@ nonisolated struct TailspotAccountClient {
             return data
         }
         if http.statusCode == 409, let mapped = on409 {
+            throw mapped
+        }
+        if http.statusCode == 422, let mapped = on422 {
             throw mapped
         }
         throw AccountError.http(status: http.statusCode)
