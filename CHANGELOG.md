@@ -5,6 +5,20 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-20 — Onboarding feedback: copy trims + AR-viewport welcome visual — branch `feat/onboarding-feedback`
+
+Noah's simulator run-through of onboarding, three items:
+
+- Dropped "Tap below — iOS will ask for camera and location." (the Allow
+  permissions button says it) and "Real name stays private." (the handle
+  step never asks for a real name, so the reassurance read as noise).
+- **Welcome visual replaced:** the mock collection card gave way to a
+  miniature of the actual AR experience — the REAL `LockBrackets` (now
+  internal, was private to ContentView, so the mock tracks the HUD) + the
+  ambient callsign pill over a dusk-sky viewport, with a second dimmed
+  contact for depth. The card is the reward; the viewport is the app.
+  Rendered via `OnboardingSnapshotTests` and eyeballed before shipping.
+
 ## 2026-07-20 — Warning sweep: Swift 6 isolation, deprecated Text `+`, publish-during-view-update — branch `fix/build-warnings`
 
 Four compiler warnings + five runtime SwiftUI warnings from Noah's build:

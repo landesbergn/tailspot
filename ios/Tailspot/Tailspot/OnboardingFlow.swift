@@ -249,31 +249,83 @@ struct OnboardingFlow: View {
             Text("Point your phone at the sky. Tailspot uses live ADS-B data to identify the aircraft you're looking at, then lets you catch it to your Hangar.")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
-            sampleCardHint
+            arViewportHint
         }
     }
 
-    private var sampleCardHint: some View {
-        HStack {
-            Spacer()
-            CatchCardView(
-                plane: .init(
-                    callsign: "UAL248",
-                    model: "Boeing 787-9",
-                    carrier: "United Airlines",
-                    rarity: .rare,
-                    type: .wide,
-                    altText: "FL370",
-                    speedText: "478 kt",
-                    distText: "12 km"
-                ),
-                size: .md,
-                holoIntensity: 0.45,
-                rotation: .degrees(-4)
+    /// A miniature of the actual AR experience — the real `LockBrackets`
+    /// + callsign pill (mirroring `PlaneLabel`'s ambient styling) over a
+    /// dusk-sky viewport, with a second dimmed label for depth. Replaced
+    /// the collection-card mock (2026-07-20 feedback): the card is the
+    /// reward, but THIS is the app experience the welcome step promises.
+    private var arViewportHint: some View {
+        ZStack {
+            // Dusk sky: deep navy up top settling toward the horizon, with
+            // a faint warm band low — evening light, not a black void.
+            LinearGradient(
+                stops: [
+                    .init(color: Color(red: 0.04, green: 0.07, blue: 0.15), location: 0),
+                    .init(color: Color(red: 0.09, green: 0.13, blue: 0.24), location: 0.62),
+                    .init(color: Color(red: 0.23, green: 0.19, blue: 0.25), location: 1),
+                ],
+                startPoint: .top, endPoint: .bottom
             )
-            Spacer()
+
+            // The spotted plane: silhouette inside the REAL HUD brackets,
+            // callsign pill beneath — the ambient (unpinned) label look.
+            VStack(spacing: 2) {
+                ZStack {
+                    Image(systemName: "airplane")
+                        .font(.system(size: 30, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .rotationEffect(.degrees(-18))
+                    LockBrackets(boxSize: 84, color: Brand.Color.cyan,
+                                 opacity: 0.9, lineWidth: 2)
+                }
+                HStack(spacing: 4) {
+                    Text("UAL248")
+                        .font(Brand.Font.mono(size: 9, weight: .bold))
+                        .foregroundStyle(Brand.Color.cyan)
+                    Text("· \(Rarity.rare.label)")
+                        .font(Brand.Font.mono(size: 8, weight: .semibold))
+                        .foregroundStyle(Rarity.rare.tint)
+                }
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Brand.Color.bgPrimary.opacity(0.55),
+                            in: .rect(cornerRadius: 4))
+            }
+            .offset(x: -38, y: -16)
+
+            // A second, farther plane — dimmed the way the HUD dims
+            // non-primary labels — so the sky reads as live, not staged.
+            VStack(spacing: 2) {
+                ZStack {
+                    Image(systemName: "airplane")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .rotationEffect(.degrees(8))
+                    LockBrackets(boxSize: 40, color: Brand.Color.cyan,
+                                 opacity: 0.45, lineWidth: 1.5)
+                }
+                Text("SKW3412")
+                    .font(Brand.Font.mono(size: 7, weight: .bold))
+                    .foregroundStyle(Brand.Color.cyan.opacity(0.6))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1.5)
+                    .background(Brand.Color.bgPrimary.opacity(0.45),
+                                in: .rect(cornerRadius: 3))
+            }
+            .offset(x: 96, y: 52)
         }
+        .frame(height: 250)
+        .clipShape(.rect(cornerRadius: Brand.Radius.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: Brand.Radius.card)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
         .padding(.top, 18)
+        .accessibilityHidden(true)   // decorative; the copy above says it all
     }
 
     // MARK: - Step 2: Permissions
@@ -293,9 +345,6 @@ struct OnboardingFlow: View {
                               body: "Read which way you're aiming so the labels match the plane in view.")
             }
             .padding(.top, 4)
-            Text("Tap below — iOS will ask for camera and location.")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
         }
     }
 
@@ -332,7 +381,7 @@ struct OnboardingFlow: View {
             Text("Pick a handle.")
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
-            Text("Shown on the global leaderboard. Real name stays private.")
+            Text("Shown on the global leaderboard.")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
 
