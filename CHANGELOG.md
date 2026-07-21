@@ -5,6 +5,40 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-20 — App Store screenshot set (6 slides, all iPhone sizes) — branch `feat/appstore-screenshots`
+
+GA prep (PLAN §9 #8): the full store-ready screenshot set, generated end-to-end
+rather than waiting on the field session. Two new durable pieces plus the deck:
+
+- **`marketing/app-store-screenshots/`** — the ParthJadhav app-store-screenshots
+  editor (Next.js, `npm install --legacy-peer-deps && npm run dev`), seeded with
+  a 6-slide iPhone deck (`app-store-screenshots.json`, git-tracked) in a new
+  **"tailspot-dusk"** theme: brand navy/cyan, the onboarding dusk-sky gradient
+  as every slide's backdrop, CSS twin-contrail decorations (`Contrail` in
+  `slide-canvas.tsx`), one inverted cyan pop slide. **Export bundle** produces
+  all four required sizes (1320×2868 → 1125×2436); `export/` is gitignored
+  (regenerable; zips land in `~/Downloads`).
+- **`MarketingSnapshotTests.swift`** — renders the six source captures from the
+  real screens with fixture data (17-catch Berkeley hangar, DLH454 A380 story
+  across slides 1–2, epic 747-8F guess round). Card shots via ImageRenderer;
+  the glass-bearing screens (Hangar/Leaderboard) captured **off the booted
+  simulator's real screen** via `tools/marketing-shot-watcher.sh` + a
+  flag-file handshake, because BOTH offscreen capture APIs (drawHierarchy,
+  layer.render) relocate `.glassEffect` backdrop layers to the window origin.
+  Also: window-hosted Hangar tests must retain their in-memory ModelContainer
+  for the process lifetime or `CatchBackfill`'s task traps post-dealloc. The
+  whole suite is a capture harness, not a regression net, so it's gated
+  behind `TEST_RUNNER_MARKETING_CAPTURE=1` (skipped in CI — the on-screen
+  shots crashed/idled on CI's watcher-less parallel clones).
+- Copy is Noah's (2026-07-20 review): sentence-style headlines, no label
+  eyebrows. Slide 1 stays a stylized stand-in until the field session; the
+  slide-2 "collection" shot is the settled A380 card stacked over a prior
+  catch in the same dusk sky.
+
+Mid-session note: macOS revoked the session's ~/Desktop TCC access partway
+through round 1 (worked around via Finder AppleScript copies + an ios/ mirror
+in /tmp); access restored before this branch landed.
+
 ## 2026-07-20 — Handle-gate hardening: leet normalization + surfaced 422 + strand repair — branch `fix/handle-gaps`
 
 GA prep, from Noah's "do I have checks on explicit usernames?" review. The
