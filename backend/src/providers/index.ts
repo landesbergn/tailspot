@@ -47,8 +47,7 @@ export function selectProvider(
       );
     default:
       throw new Error(
-        `Unknown POSITION_PROVIDER "${env.POSITION_PROVIDER}" — ` +
-          `use "adsblol", "airplaneslive", or leave unset for the fallback pair.`,
+        `Unknown POSITION_PROVIDER "${env.POSITION_PROVIDER}" — use "adsblol", "airplaneslive", or leave unset for the fallback pair.`,
       );
   }
 }
