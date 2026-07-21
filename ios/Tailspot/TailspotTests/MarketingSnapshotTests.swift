@@ -23,7 +23,17 @@ import UIKit
 @testable import Tailspot
 
 @MainActor
-@Suite("Marketing snapshots (App Store set)", .serialized)
+@Suite(
+    "Marketing snapshots (App Store set)",
+    .serialized,
+    // Capture harness, not a regression net: the window-hosted shots need the
+    // booted-sim watcher (tools/marketing-shot-watcher.sh) and crash/idle on
+    // CI's parallel clones. Run deliberately:
+    //   TEST_RUNNER_MARKETING_CAPTURE=1 xcodebuild test … \
+    //     -destination 'platform=iOS Simulator,id=<booted sim>' \
+    //     -parallel-testing-enabled NO -only-testing:TailspotTests/MarketingSnapshotTests
+    .enabled(if: ProcessInfo.processInfo.environment["MARKETING_CAPTURE"] == "1")
+)
 struct MarketingSnapshotTests {
 
     private static let dir = URL(

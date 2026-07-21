@@ -26,7 +26,10 @@ rather than waiting on the field session. Two new durable pieces plus the deck:
   flag-file handshake, because BOTH offscreen capture APIs (drawHierarchy,
   layer.render) relocate `.glassEffect` backdrop layers to the window origin.
   Also: window-hosted Hangar tests must retain their in-memory ModelContainer
-  for the process lifetime or `CatchBackfill`'s task traps post-dealloc.
+  for the process lifetime or `CatchBackfill`'s task traps post-dealloc. The
+  whole suite is a capture harness, not a regression net, so it's gated
+  behind `TEST_RUNNER_MARKETING_CAPTURE=1` (skipped in CI — the on-screen
+  shots crashed/idled on CI's watcher-less parallel clones).
 - Copy is Noah's (2026-07-20 review): sentence-style headlines, no label
   eyebrows. Slide 1 stays a stylized stand-in until the field session; the
   slide-2 "collection" shot is the settled A380 card stacked over a prior
