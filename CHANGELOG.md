@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-21 — Submitted to the App Store (v1.0.0) + tailspot-www: legal pages live, /support
+
+GA milestone: **Noah submitted Tailspot 1.0.0 for App Review** (first App Store
+submission; Waiting for Review). Supporting work this round:
+
+- **tailspot-www deployed from `web/`** — the rewritten privacy policy + ToS
+  (effective 2026-07-11, PR #137) are finally live; the site had still been
+  serving the stale June-11 pages. Also new: **`/support`** (a single mailto
+  button to support@tailspot.app — the App Store listing's support URL), a
+  Support footer link on every page, and a `.content a.btn-primary` contrast
+  fix (`.content a`'s cyan beat `.btn-primary`'s dark text — cyan-on-cyan
+  button).
+- Process note: the /support page originally shipped 2026-07-20 via deploys
+  built from a live-machine reconstruction (curl'd site + `fly ssh` nginx conf)
+  because a macOS TCC failure made all of ~/Desktop unreadable mid-session;
+  this round re-synced everything into the real `web/` source, which is again
+  the single source of truth.
+
 ## 2026-07-20 — App Store screenshot set (6 slides, all iPhone sizes) — branch `feat/appstore-screenshots`
 
 GA prep (PLAN §9 #8): the full store-ready screenshot set, generated end-to-end
