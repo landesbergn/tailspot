@@ -17,6 +17,8 @@ Babel-standalone will recompile the JSX on every load — first paint is slow (~
 
 - `index.html` — entry point; pulls in React/ReactDOM/Babel from unpkg and loads the local JSX modules in order
 - `brand.css` — design tokens mirroring `ios/Tailspot/Tailspot/Brand.swift`
+  (last synced 2026-07-21: four-step radius scale, 26px display head, B612
+  Mono, reveal-ledger/duplicate/halo colors, type + chrome rules)
 - `app.jsx` — the canvas itself; one `<DCArtboard>` per screen, organized by `<DCSection>`
 - `brand-atoms.jsx` / `ios-frame.jsx` / `design-canvas.jsx` / `tweaks-panel.jsx` — chrome
 - `game-systems.jsx` / `game-trophies.jsx` — rarity, types, PokeCard, trophy components
