@@ -1,5 +1,19 @@
 /* Tailspot design tokens — mirrored from ios/Tailspot/Tailspot/Brand.swift
-   Updated via Tweaks panel: hue, density, type, copy tone. */
+   (synced 2026-07-21, incl. the 2026-07-10 polish sweep: four-step radius
+   scale, mono/prose type rule, 26px display head).
+   Updated via Tweaks panel: hue, density, type, copy tone.
+
+   Rules baked into the app (keep the canvas honest):
+   · Dark-locked — there is no light theme.
+   · Type: mono = readouts/data/ALL-CAPS labels; system sans = human prose;
+     exactly ONE display head (.t-display 26px = .brandDisplayFont()).
+   · Radii snap to chip 6 / row 12 / card 16 / hero 26; AR HUD stays
+     literal-tight (4); capsules stay capsules.
+   · Chrome: custom chrome for game surfaces (Hangar/cards/reveals),
+     stock-but-branded system nav for utility screens (Settings/Map/
+     Leaderboard).
+   · Alerts are FAA-aligned (14 CFR 25.1322e): amber = caution only,
+     magenta = advisory/pinned, red = true warnings, green sparingly. */
 
 :root {
   /* foundations */
@@ -19,16 +33,35 @@
   --alert-advisory: #FF6BE6;
   --alert-normal: #3DD68C;
 
-  /* fonts */
-  --font-mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+  /* reveal ledger + duplicate stamp + HUD legibility */
+  --ledger-gold: #FBBF24;     /* FIRST OF TYPE / ROUTE BONUS — distinct from
+                                 medal gold #FFC74A and caution amber */
+  --duplicate-rose: #E0556B;  /* "· ALREADY CAUGHT" stamp — softer than warning */
+  --hud-bracket-halo: #050810; /* dark outline behind cyan HUD brackets */
+
+  /* leaderboard podium medals */
+  --podium-gold: #FFC74A;
+  --podium-silver: #C5D0DA;
+  --podium-bronze: #C26B3F;
+
+  /* fonts — B612 Mono (Airbus cockpit font, bundled in-app; Google Fonts
+     on web via index.html). Two physical weights: ≤500→Regular, ≥600→Bold. */
+  --font-mono: "B612 Mono", ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 
-  /* radii + spacing scale */
-  --r-sm: 4px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 18px;
+  /* radii — Brand.Radius four-step scale (2026-07-10) */
+  --r-chip: 6px;   /* glyph tiles, tags, tight chips */
+  --r-row: 12px;   /* list rows, inputs, buttons, banners */
+  --r-card: 16px;  /* cards, sheets-within-screens */
+  --r-hero: 26px;  /* reveal / settled catch card */
   --r-pill: 999px;
+  --r-hud: 4px;    /* AR HUD panels/brackets stay literal — exempt */
+
+  /* legacy aliases (pre-polish handoff names) → current scale */
+  --r-sm: var(--r-hud);
+  --r-md: var(--r-chip);
+  --r-lg: var(--r-row);
+  --r-xl: var(--r-card);
 
   --pad: 1;     /* density multiplier, 0.85–1.2 */
 }
@@ -37,7 +70,7 @@
 .t-wordmark {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 24px;
   letter-spacing: 4px;
   text-transform: uppercase;
   color: var(--text-primary);
@@ -70,15 +103,19 @@
 .t-card-subtitle { font-family: var(--font-sans); font-weight: 400; font-size: 13px; color: var(--text-secondary); }
 .t-body { font-family: var(--font-sans); font-weight: 400; font-size: 15px; color: var(--text-primary); }
 .t-caption { font-family: var(--font-sans); font-weight: 400; font-size: 12px; color: var(--text-tertiary); }
-.t-display { font-family: var(--font-sans); font-weight: 700; font-size: 28px; letter-spacing: -0.4px; color: var(--text-primary); }
+/* The ONE prose-head treatment (app: .brandDisplayFont(), 26pt, scales with
+   Dynamic Type). Don't freelance 24–30px bold heads. */
+.t-display { font-family: var(--font-sans); font-weight: 700; font-size: 26px; letter-spacing: -0.4px; color: var(--text-primary); }
 
 /* ────────── Reusable HUD chrome ────────── */
+/* In-app these are iOS 26 Liquid Glass (.glassEffect); blur+saturate is the
+   web approximation. HUD radius stays literal-tight. */
 .hud-panel {
   background: rgba(10, 14, 26, 0.88);
   backdrop-filter: blur(8px) saturate(180%);
   -webkit-backdrop-filter: blur(8px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-hud);
 }
 .hud-panel.pinned { border-color: var(--alert-advisory); }
 .hud-panel.locked { border-color: var(--alert-normal); }
@@ -114,6 +151,9 @@
 .bracket.br { bottom: 0; right: 0; border-left: 0; border-top: 0; }
 .bracket-set.pinned .bracket { border-color: var(--alert-advisory); }
 .bracket-set.locked .bracket { border-color: var(--alert-normal); }
+/* Dark halo behind cyan strokes for bright-sky legibility (app:
+   hudBracketHalo behind the lock-on brackets). */
+.bracket-set.haloed .bracket { filter: drop-shadow(0 0 1px var(--hud-bracket-halo)); }
 
 /* Density helper */
 .dense { --pad: 0.85; }
