@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 2,
+  "appName": "Tailspot",
+  "themeId": "tailspot-dusk",
+  "connectedCanvas": true,
+  "locales": [
+    "en"
+  ],
+  "locale": "en",
+  "device": "iphone",
+  "orientation": "portrait",
+  "appIcon": "/app-icon.png",
+  "slidesByDevice": {
+    "iphone": [
+      {
+        "id": "ts_01_catch",
+        "layout": "hero",
+        "label": {
+          "en": ""
+        },
+        "headline": {
+          "en": "Point at the sky\nand capture\nplanes overhead."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/01.png"
+      },
+      {
+        "id": "ts_02_reveal",
+        "layout": "device-bottom",
+        "label": {
+          "en": ""
+        },
+        "headline": {
+          "en": "Add each catch\nto your collection."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/07.png"
+      },
+      {
+        "id": "ts_03_guess",
+        "layout": "device-top",
+        "label": {
+          "en": ""
+        },
+        "headline": {
+          "en": "Guess where it's\ngoing to or\ncoming from."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/03.png"
+      },
+      {
+        "id": "ts_04_hangar",
+        "layout": "hero",
+        "label": {
+          "en": ""
+        },
+        "headline": {
+          "en": "Fill your hangar.\nCatch every\nmake and model."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/04.png",
+        "inverted": true
+      },
+      {
+        "id": "ts_05_trophies",
+        "layout": "device-bottom",
+        "label": {
+          "en": ""
+        },
+        "headline": {
+          "en": "Earn trophies\nfor unique catches."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/05.png"
+      },
+      {
+        "id": "ts_06_board",
+        "layout": "two-devices",
+        "label": {
+          "en": ""
+        },
+        "headline": {
+          "en": "Make your way\nup the leaderboard."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/06.png",
+        "screenshotSecondary": "/screenshots/apple/iphone/en/05.png"
+      }
+    ],
+    "android": [
+      {
+        "id": "s_mrtzo040_5",
+        "layout": "hero",
+        "label": {
+          "en": "MEET YOUR APP"
+        },
+        "headline": {
+          "en": "Sell one\nidea per slide."
+        },
+        "screenshot": ""
+      },
+      {
+        "id": "s_mrtzo040_6",
+        "layout": "device-bottom",
+        "label": {
+          "en": "FEATURE 01"
+        },
+        "headline": {
+          "en": "Your headline\nlives here."
+        },
+        "screenshot": ""
+      },
+      {
+        "id": "s_mrtzo040_7",
+        "layout": "two-devices",
+        "label": {
+          "en": "FEATURE 02"
+        },
+        "headline": {
+          "en": "Show two\nscreens at once."
+        },
+        "screenshot": "",
+        "screenshotSecondary": ""
+      },
+      {
+        "id": "s_mrtzo040_8",
+        "layout": "device-top",
+        "label": {
+          "en": "FEATURE 03"
+        },
+        "headline": {
+          "en": "Flip the contrast\nfor visual rhythm."
+        },
+        "screenshot": "",
+        "inverted": true
+      },
+      {
+        "id": "s_mrtzo040_9",
+        "layout": "no-device",
+        "label": {
+          "en": "MORE"
+        },
+        "headline": {
+          "en": "And so\nmuch more."
+        },
+        "screenshot": ""
+      }
+    ],
+    "ipad": [
+      {
+        "id": "s_mrtzo040_a",
+        "layout": "hero",
+        "label": {
+          "en": "MEET YOUR APP"
+        },
+        "headline": {
+          "en": "Made for\nthe big screen."
+        },
+        "screenshot": ""
+      },
+      {
+        "id": "s_mrtzo040_b",
+        "layout": "device-bottom",
+        "label": {
+          "en": "FEATURE 01"
+        },
+        "headline": {
+          "en": "Built for\nfocus."
+        },
+        "screenshot": ""
+      },
+      {
+        "id": "s_mrtzo040_c",
+        "layout": "device-top",
+        "label": {
+          "en": "FEATURE 02"
+        },
+        "headline": {
+          "en": "Always within reach."
+        },
+        "screenshot": "",
+        "inverted": true
+      }
+    ],
+    "android-7": [
+      {
+        "id": "s_mrtzo040_d",
+        "layout": "hero",
+        "label": {
+          "en": "MEET YOUR APP"
+        },
+        "headline": {
+          "en": "Pocket-sized\npower."
+        },
+        "screenshot": ""
+      },
+      {
+        "id": "s_mrtzo040_e",
+        "layout": "split-landscape",
+        "label": {
+          "en": "FEATURE 01"
+        },
+        "headline": {
+          "en": "Wide canvas,\nbigger ideas."
+        },
+        "screenshot": ""
+      }
+    ],
+    "android-10": [
+      {
+        "id": "s_mrtzo040_f",
+        "layout": "hero",
+        "label": {
+          "en": "MEET YOUR APP"
+        },
+        "headline": {
+          "en": "Made for\nthe big screen."
+        },
+        "screenshot": ""
+      },
+      {
+        "id": "s_mrtzo040_g",
+        "layout": "split-landscape",
+        "label": {
+          "en": "FEATURE 01"
+        },
+        "headline": {
+          "en": "Wide canvas,\nbigger ideas."
+        },
+        "screenshot": ""
+      }
+    ],
+    "feature-graphic": [
+      {
+        "id": "s_mrtzo040_h",
+        "layout": "feature-graphic",
+        "label": {},
+        "headline": {
+          "en": "Your tagline goes here."
+        },
+        "screenshot": ""
+      }
+    ]
+  }
+}
