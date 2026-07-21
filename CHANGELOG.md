@@ -5,6 +5,19 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-21 — v1.1 planning round (post-submission re-prioritization) — branch `docs/v1.1-plan`
+
+With v1.0.0 submitted to App Review (2026-07-21, Waiting for Review), re-ranked
+PLAN §9 for the first post-GA release. Decisions (Noah's calls): v1.1 is a
+**fast follow (~1–2 weeks after approval)** headlined by **rare-plane push
+alerts** (#9, promoted from post-GA parking), with ride-alongs: the deferred
+battery/perf items from the 2026-07-17 performance pass, a hard/rare trophy
+addition round, and reactive GA triage (bugs, perf, device compatibility from
+the launch cohort). L4 enforcement flip + onboarding iteration stay data-gated;
+Spotter Pass invites deferred to a v1.2 candidate; photo upload/sync (#58)
+explicitly held for its own decision. Doc-only round — details in the new
+§9 intro paragraph.
+
 ## 2026-07-21 — Submitted to the App Store (v1.0.0) + tailspot-www: legal pages live, /support
 
 GA milestone: **Noah submitted Tailspot 1.0.0 for App Review** (first App Store
