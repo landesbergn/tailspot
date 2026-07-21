@@ -5,6 +5,22 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-21 — Typecode-map gap fix: ATR / Pipistrel / Tecnam — branch `fix/typecode-map-atr-pipistrel-tecnam`
+
+A catch-review pass found 7 of 377 prod catches with no make/model category.
+Root causes: 3 foreign airframes caught before feedEnrich shipped (PR #65) that
+no registry source knows (likely garbled hexes — absent from fresh basic-ac-db,
+adsbdb, hexdb); 2 US hexes absent from the FAA snapshot; and 1 real map gap —
+JSX's ATR 42-500 (N401JX): ACFTREF spells the make "ATR-GIE AVIONS DE TRNSP
+REGION", which never matched the map builder's canon table. Fixed by adding
+ATR/Pipistrel/Tecnam make-canon prefixes + family rules to
+`build-typecode-map.py` (7 new spot-checks, 35/35 pass) and rebuilding the
+committed map against a fresh ACFTREF: **+87 entries, 0 changed, 0 removed**
+(all 9 ATR codes, Pipistrel Virus/Sinus/Taurus/Alpha/Panthera/Velis, Tecnam
+P92→P2012). Remaining unmapped tail mass is all drones (DJI/Zipline/…) —
+correctly unmappable. Post-merge: FAA re-ingest against prod + rescore heals
+the N401JX catch (null rarity → AT45/common, first-of-type applies).
+
 ## 2026-07-21 — v1.1 planning round (post-submission re-prioritization) — branch `docs/v1.1-plan`
 
 With v1.0.0 submitted to App Review (2026-07-21, Waiting for Review), re-ranked
