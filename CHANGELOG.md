@@ -51,7 +51,11 @@ rather than waiting on the field session. Two new durable pieces plus the deck:
 - Copy is Noah's (2026-07-20 review): sentence-style headlines, no label
   eyebrows. Slide 1 stays a stylized stand-in until the field session; the
   slide-2 "collection" shot is the settled A380 card stacked over a prior
-  catch in the same dusk sky.
+  catch in the same dusk sky — since 2026-07-21 (Noah's follow-up) the card's
+  hero photo IS the slide-1 AR lock-on moment, rendered to a JPEG and fed in
+  via `CardPlane.photoURL` (drawHierarchy render for this shot: `.postHogMask`
+  wraps the photo in a UIKit tag view, which ImageRenderer draws as the
+  yellow no-entry placeholder).
 
 Mid-session note: macOS revoked the session's ~/Desktop TCC access partway
 through round 1 (worked around via Finder AppleScript copies + an ios/ mirror
