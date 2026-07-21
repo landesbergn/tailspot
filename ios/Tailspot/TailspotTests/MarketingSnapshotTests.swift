@@ -201,14 +201,70 @@ struct MarketingSnapshotTests {
 
     // MARK: - Shot 2b · The collection card (stylized, same sky as shot 1)
 
+    /// The shot-1 AR lock-on moment re-composed at the card hero's landscape
+    /// aspect — this becomes the front card's "catch photo", so slide 2
+    /// literally shows the slide-1 catch filed into the collection.
+    /// RevealPhoto decodes file URLs synchronously (its ImageRenderer
+    /// contract), so a pre-rendered JPEG on disk shows up in a static render.
+    private func arHeroPhotoURL() -> URL? {
+        let pinnedRarity = resolveAROverlayRarity(
+            typecode: "A388", manufacturer: "Airbus", model: "A380-800",
+            operatorName: "Lufthansa")
+        let scene = ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: Color(red: 0.04, green: 0.07, blue: 0.15), location: 0),
+                    .init(color: Color(red: 0.09, green: 0.13, blue: 0.24), location: 0.62),
+                    .init(color: Color(red: 0.23, green: 0.19, blue: 0.25), location: 1),
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            VStack(spacing: 2) {
+                ZStack {
+                    Image(systemName: "airplane")
+                        .font(.system(size: 44, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .rotationEffect(.degrees(-18))
+                    LockBrackets(boxSize: 120, color: Brand.Color.cyan,
+                                 opacity: 1.0, lineWidth: 3)
+                }
+                HStack(spacing: 4) {
+                    Text("DLH454")
+                        .font(Brand.Font.mono(size: 11, weight: .bold))
+                        .foregroundStyle(Brand.Color.cyan)
+                    Text("· \(pinnedRarity.label) +\(pinnedRarity.basePoints)")
+                        .font(Brand.Font.mono(size: 9, weight: .semibold))
+                        .foregroundStyle(pinnedRarity.tint)
+                }
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Brand.Color.bgPrimary.opacity(0.55),
+                            in: .rect(cornerRadius: 4))
+            }
+            .position(x: 168, y: 104)
+        }
+        .frame(width: 400, height: 220)
+        let renderer = ImageRenderer(content: scene)
+        renderer.scale = 3
+        guard let img = renderer.uiImage,
+              let jpeg = img.jpegData(compressionQuality: 0.92) else { return nil }
+        let url = Self.dir.appendingPathComponent("ar_hero_photo.jpg")
+        try? FileManager.default.createDirectory(
+            at: Self.dir, withIntermediateDirectories: true)
+        try? jpeg.write(to: url)
+        return url
+    }
+
     /// "Add each catch to your collection" — the caught A380's settled card
-    /// floating in the shot-1 dusk sky, with a previous catch peeking out
-    /// behind it so it reads as a growing stack, not a lone receipt.
+    /// floating in the shot-1 dusk sky, its hero photo the AR lock-on moment
+    /// itself, with a previous catch peeking out behind it so it reads as a
+    /// growing stack, not a lone receipt.
     @Test func renderCollectionCard() {
         let front = CardPlane(
             callsign: "DLH454", model: "Airbus A380-800", carrier: "Lufthansa",
             rarity: .rare, type: .wide,
             altText: "11,475 ft", speedText: "318 kt", distText: "8.6 km",
+            photoURL: arHeroPhotoURL(),
             originIcao: "FRA", destIcao: "SFO",
             originName: "Frankfurt", destName: "San Francisco"
         )
@@ -236,7 +292,28 @@ struct MarketingSnapshotTests {
                 .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
         }
         .frame(width: Self.screen.width, height: Self.screen.height)
-        write(view, name: "mkt_07_collection")
+        // NOT the ImageRenderer path: `.postHogMask` wraps the photo in a
+        // UIKit tag view, and ImageRenderer draws platform views as the
+        // yellow "no entry" placeholder. drawHierarchy in an offscreen
+        // window renders it fine (no .glassEffect in the card, so the
+        // glass-garble caveat doesn't apply).
+        let bounds = CGRect(origin: .zero, size: Self.screen)
+        let host = UIHostingController(rootView: view.ignoresSafeArea())
+        let window = UIWindow(frame: bounds)
+        window.rootViewController = host
+        window.overrideUserInterfaceStyle = .dark
+        window.isHidden = false
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = 3
+        let renderer = UIGraphicsImageRenderer(bounds: bounds, format: fmt)
+        let png = renderer.pngData { _ in
+            host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        }
+        try? png.write(to: Self.dir.appendingPathComponent("mkt_07_collection.png"))
+        window.isHidden = true
+        Self.retained.append(window)
     }
 
     // MARK: - Shot 3 · The guess round (chips popped, route masked)
