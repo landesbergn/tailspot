@@ -18,8 +18,12 @@ ATR/Pipistrel/Tecnam make-canon prefixes + family rules to
 committed map against a fresh ACFTREF: **+87 entries, 0 changed, 0 removed**
 (all 9 ATR codes, Pipistrel Virus/Sinus/Taurus/Alpha/Panthera/Velis, Tecnam
 P92→P2012). Remaining unmapped tail mass is all drones (DJI/Zipline/…) —
-correctly unmappable. Post-merge: FAA re-ingest against prod + rescore heals
-the N401JX catch (null rarity → AT45/common, first-of-type applies).
+correctly unmappable. Post-merge (applied 2026-07-21): 964-tail registry delta
+via psql + rescore healed the N401JX catch (null rarity → AT45/common, Δ +0
+pts — first-of-type is a frozen upload-time verdict, so it does NOT apply
+retroactively; a null-typecode upload is never first-of-type). The other 6
+uncategorized catches are permanent unknowns: absent from FAA MASTER, fresh
+basic-ac-db, adsbdb and hexdb alike — likely garbled hexes.
 
 ## 2026-07-21 — v1.1 planning round (post-submission re-prioritization) — branch `docs/v1.1-plan`
 
