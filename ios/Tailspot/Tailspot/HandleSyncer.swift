@@ -81,6 +81,19 @@ final class HandleSyncer {
             // Leave `confirmed` unset; the user can rename in Settings. A
             // re-attempt next foreground is harmless (a single 409).
             Log.ui.notice("HandleSyncer: handle is taken; cannot auto-claim")
+        } catch AccountError.handleNotAllowed {
+            // The server rejected this handle outright (validation/profanity
+            // 422) — retrying can never succeed. This is the legacy-strand
+            // repair path: before 2026-07-20 the claim UIs persisted rejected
+            // handles locally (the generic catch treated 422 as offline), so a
+            // device can carry one. Revert the local handle to the last
+            // server-confirmed value (or the placeholder) so the UI matches
+            // the public identity and the retry loop ends.
+            let confirmed = defaults.string(forKey: SpotterHandle.confirmedKey)
+            defaults.set(confirmed ?? SpotterHandle.defaultPlaceholder,
+                         forKey: SpotterHandle.storageKey)
+            Log.ui.notice("HandleSyncer: handle rejected by server (not allowed); reverted local handle")
+            Analytics.capture("handle_claimed", ["result": .string("not_allowed_reverted")])
         } catch {
             // Transient (offline / 5xx / not-yet-registered). Leave `confirmed`
             // unset so the next foreground retries.

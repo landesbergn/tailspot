@@ -711,6 +711,44 @@ struct HandleSyncerTests {
         #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == "babyjoda")
     }
 
+    /// A server 422 (validation / profanity rejection) can never succeed on
+    /// retry — the legacy-strand repair (GA hardening, 2026-07-20): the local
+    /// handle reverts to the last confirmed value and the loop ends.
+    @Test func rejectedHandleRevertsToConfirmed() async {
+        let defaults = makeDefaults()
+        defaults.set("sh1thead", forKey: SpotterHandle.storageKey)
+        defaults.set("noah", forKey: SpotterHandle.confirmedKey)
+
+        let fake = FakeClaimClient()
+        fake.outcome = .failure(AccountError.handleNotAllowed)
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(defaults.string(forKey: SpotterHandle.storageKey) == "noah")
+
+        // The loop actually ends: the next foreground makes no claim call.
+        fake.claimedHandles.removeAll()
+        await syncer.syncIfNeeded()
+        #expect(fake.claimedHandles.isEmpty)
+    }
+
+    /// Same repair with no previously-confirmed handle: revert to the
+    /// placeholder so the UI prompts a fresh pick instead of showing a
+    /// handle the server will never accept.
+    @Test func rejectedHandleWithNoConfirmedRevertsToPlaceholder() async {
+        let defaults = makeDefaults()
+        defaults.set("sh1thead", forKey: SpotterHandle.storageKey)
+
+        let fake = FakeClaimClient()
+        fake.outcome = .failure(AccountError.handleNotAllowed)
+        let syncer = HandleSyncer(client: fake, defaults: defaults)
+        await syncer.syncIfNeeded()
+
+        #expect(defaults.string(forKey: SpotterHandle.storageKey)
+                == SpotterHandle.defaultPlaceholder)
+        #expect(defaults.string(forKey: SpotterHandle.confirmedKey) == nil)
+    }
+
     /// A 409 (taken by another device) leaves `confirmed` unset and doesn't crash.
     @Test func takenHandleLeavesUnconfirmed() async {
         let defaults = makeDefaults()
