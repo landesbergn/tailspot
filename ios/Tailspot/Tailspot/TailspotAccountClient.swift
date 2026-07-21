@@ -106,11 +106,6 @@ nonisolated private struct RegisterDeviceResponse: Decodable {
     let deviceToken: String
 }
 
-/// Response from PUT /v1/devices/me/handle.
-nonisolated private struct ClaimHandleResponse: Decodable {
-    let handle: String
-}
-
 /// Response from GET /v1/handles/suggestions.
 nonisolated struct SuggestHandlesResponse: Decodable {
     let suggestions: [String]

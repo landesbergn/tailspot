@@ -21,9 +21,13 @@ export {
  * (the result is captured in buildApp's closure), so flipping the env mid-run
  * has no effect — restart to change providers.
  *
- *   (default)                        — adsb.lol primary, airplanes.live fallback
+ *   (unset)                          — adsb.lol primary, airplanes.live fallback
  *   POSITION_PROVIDER=adsblol       — adsb.lol only (pre-2026-07 behavior)
  *   POSITION_PROVIDER=airplaneslive — airplanes.live only (debugging a feed)
+ *
+ * Any other value (e.g. the long-removed "opensky") throws at startup rather
+ * than silently degrading to the fallback pair — a misconfigured deploy should
+ * fail loudly, not quietly change providers.
  */
 export function selectProvider(
   env: NodeJS.ProcessEnv = process.env,
@@ -35,11 +39,15 @@ export function selectProvider(
       return new AdsbLolProvider();
     case "airplaneslive":
       return new AirplanesLiveProvider();
-    default:
+    case "":
       return new FallbackProvider(
         new AdsbLolProvider(),
         new AirplanesLiveProvider(),
         fallbackOptions,
+      );
+    default:
+      throw new Error(
+        `Unknown POSITION_PROVIDER "${env.POSITION_PROVIDER}" — use "adsblol", "airplaneslive", or leave unset for the fallback pair.`,
       );
   }
 }
