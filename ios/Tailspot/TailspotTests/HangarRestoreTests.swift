@@ -27,7 +27,9 @@ struct HangarRestoreTests {
 
     private func makeContainer() throws -> ModelContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try ModelContainer(for: Catch.self, configurations: config)
+        let container = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(container)
+        return container
     }
 
     /// A fully-populated server row (the B738 the backend tests use).

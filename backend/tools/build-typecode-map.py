@@ -315,6 +315,17 @@ MAKE_PREFIX_CANON = {
     "AGUSTA": "AGUSTA",
     "LEONARDO": "LEONARDO",
     "CONSOLIDATED AERONAUTICS": "CONSOLIDATED AERONAUTICS",
+    # ATR's ACFTREF spellings drift across truncations ("ATR-GIE AVIONS DE
+    # TRNSP REGION" / "TRNSP RGNL" / "TRNSPT REG" / "TRANSPORT"); all start
+    # "ATR GIE" after norm(). Bare "ATR" is in MAKE_CANON.
+    "ATR GIE": "ATR",
+    # Pipistrel registers under many subsidiary spellings ("PIPISTREL D O O
+    # AJDOVSCINA" / "PIPISTREL ITALIA S R L" / "PIPISTREL LSA S R L" ...).
+    "PIPISTREL": "PIPISTREL",
+    # Tecnam's ACFTREF make is the 30-char truncation of "COSTRUZIONI
+    # AERONAUTICHE TECNAM S P A"; some rows also carry the plain brand.
+    "COSTRUZIONI AERONAUTICHE TECNA": "TECNAM",
+    "TECNAM": "TECNAM",
 }
 
 
@@ -836,6 +847,33 @@ FAMILY_RULES = [
     ("BOEING", r"^N2S", "ST75"),  # DOC: Boeing 75 Kaydet (Navy N2S Stearman)
     ("BOEING", r"^PT[\s-]*13", "ST75"),  # DOC: Boeing 75 Kaydet (Army PT-13)
     ("BOEING", r"^PT[\s-]*17", "ST75"),  # DOC: Boeing 75 Kaydet (Army PT-17)
+    # --- ATR regional turboprops (JSX/FedEx-feeder territory) ----------------
+    # FAA models certify as "ATR 72-212A" for both the 72-500 (AT75) and 72-600
+    # (AT76); the active US -212A fleet is -600s, so map to AT76. The specific
+    # -212A rule must precede the bare 211/212 rule.
+    ("ATR", r"^ATR[\s-]*72[\s-]*212A", "AT76"),      # DOC: ATR-72-600 (cert 72-212A)
+    ("ATR", r"^ATR[\s-]*72[\s-]*21[12](?!\d)", "AT73"),  # DOC: ATR-72-211 (covers -212)
+    ("ATR", r"^ATR[\s-]*72[\s-]*20\d", "AT72"),      # DOC: ATR-72-201 (72-200/201/202)
+    ("ATR", r"^ATR[\s-]*42[\s-]*5", "AT45"),         # DOC: ATR-42-500
+    ("ATR", r"^ATR[\s-]*42[\s-]*6", "AT46"),         # DOC: ATR-42-600
+    ("ATR", r"^ATR[\s-]*42[\s-]*[34]", "AT43"),      # DOC: ATR-42-300 (300/320/400-series)
+    # --- Pipistrel light singles / motor gliders -----------------------------
+    ("PIPISTREL", r"^VELIS", "PIVE"),                # DOC: Velis Electro
+    ("PIPISTREL", r"^(SW[\s-]*)?VIRUS", "PIVI"),     # DOC key PIVI: Virus/Virus SW line ("SW VIRUS" too)
+    ("PIPISTREL", r"^SINUS", "PISI"),                # DOC: Sinus
+    ("PIPISTREL", r"^TAURUS", "PIT4"),               # DOC: Taurus Electro G4 (whole Taurus family)
+    ("PIPISTREL", r"^ALPHA", "PIAT"),                # DOC: Alpha Trainer (incl Alpha Electro)
+    ("PIPISTREL", r"^PANTHERA", "PIPA"),             # DOC: Panthera
+    # --- Tecnam GA singles / twins -------------------------------------------
+    ("TECNAM", r"^P[\s-]*2006", "P06T"),             # DOC: P-2006T twin
+    ("TECNAM", r"^P[\s-]*2010", "TWEN"),             # DOC: P-2010 (incl TDI)
+    ("TECNAM", r"^P[\s-]*2012", "P212"),             # DOC: P-2012 Traveller
+    ("TECNAM", r"^P[\s-]*2008", "P208"),             # DOC: P-2008
+    ("TECNAM", r"^P[\s-]*2002", "SIRA"),             # DOC: P-2002 Sierra
+    ("TECNAM", r"^P[\s-]*2004", "BRAV"),             # DOC: P-2004 Bravo
+    ("TECNAM", r"^P[\s-]*92", "ECHO"),               # DOC: P-92 Echo
+    ("TECNAM", r"^P[\s-]*96", "GOLF"),               # DOC: P-96 Golf
+    ("TECNAM", r"^ASTORE", "ASTO"),                  # DOC: Astore
 ]
 
 
@@ -1005,6 +1043,13 @@ SPOT_CHECKS = [
     ("EMBRAER S A", "ERJ 170-200 LR", "E75L"),
     ("PILATUS AIRCRAFT LTD", "PC-12/47E", "PC12"),
     ("DIAMOND AIRCRAFT IND INC", "DA 40", "DA40"),
+    ("ATR-GIE AVIONS DE TRNSP REGION", "ATR42-500", "AT45"),
+    ("ATR-GIE AVIONS DE TRNSP RGNL", "ATR 72-212A", "AT76"),
+    ("ATR-GIE AVIONS DE TRNSP RGNL", "ATR 42-300", "AT43"),
+    ("PIPISTREL D O O AJDOVSCINA", "VIRUS SW 100 IS", "PIVI"),
+    ("PIPISTREL D O O", "ALPHA TRAINER", "PIAT"),
+    ("COSTRUZIONI AERONAUTICHE TECNA", "P2006T", "P06T"),
+    ("COSTRUZIONI AERONAUTICHE TECNA", "P2012 TRAVELLER", "P212"),
 ]
 
 

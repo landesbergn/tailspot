@@ -305,24 +305,6 @@ struct HangarView: View {
     }
 }
 
-// MARK: - HangarFilter
-
-/// What's currently visible in the Hangar grid. Used to drive both
-/// the chip selection and the row filter predicate.
-enum HangarFilter: Hashable {
-    case all
-    case rarePlus
-    case type(AircraftType)
-
-    func includes(_ row: HangarRow) -> Bool {
-        switch self {
-        case .all:              return true
-        case .rarePlus:         return row.rarity.ordinal >= Rarity.rare.ordinal
-        case .type(let t):      return row.aircraftType == t
-        }
-    }
-}
-
 // All three Hangar segment views now live in their own files:
 //   - HangarRecentView   → HangarRecentView.swift   (Task 13)
 //   - HangarTrophiesView → HangarTrophiesView.swift (Task 14)

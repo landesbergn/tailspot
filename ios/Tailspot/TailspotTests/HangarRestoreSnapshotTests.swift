@@ -27,6 +27,7 @@ struct HangarRestoreSnapshotTests {
         let screen = CGSize(width: 393, height: 852)
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(container)
         let context = ModelContext(container)
         let center = TrophyUnlockCenter(
             ledger: UserDefaultsTrophyLedger(defaults: UserDefaults(suiteName: "snap.restore")!)

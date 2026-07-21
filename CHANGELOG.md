@@ -5,6 +5,104 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-07-21 — Dead-code cleanup sweep — branch `chore/dead-code-cleanup`
+
+Full-repo dead-code audit (three parallel sweeps: iOS, backend/web, repo-level
+tooling), every candidate hand-verified before removal. The repo turned out
+clean — past feature removals (OpenSky, mock mode, type-guessing, the guess
+cover machinery) left only comments behind. What was actually dead:
+
+- **iOS:** `HangarFilter` (an unreferenced Hangar filter enum in
+  `HangarView.swift`, zero call sites) and `ClaimHandleResponse` (a private
+  DTO in `TailspotAccountClient.swift` that `claimHandle` never decoded).
+- **Backend:** `selectProvider` now **throws on an unknown
+  `POSITION_PROVIDER`** (e.g. the long-removed `"opensky"`) instead of
+  silently degrading to the fallback pair — a misconfigured deploy fails
+  loudly at startup (new test in `fallback.test.ts`). No dead endpoints,
+  modules, or npm deps found; all 10 routes have live iOS callers.
+- **Docs:** `docs/testflight-handoff.md` → `docs/archive/` (it documents the
+  since-removed OpenSky credential pipeline end-to-end; the live ship process
+  is CONTRIBUTING.md). PLAN §9's pointer updated.
+- **Leak hygiene:** `.gitignore`'s `pulled-replays/` widened to
+  `pulled-replays*/` — an untracked `pulled-replays-new/` (live GPS + ADS-B
+  session data) was escaping the rule on its `-new` suffix alone and one
+  `git add .` away from being committed.
+
+Deliberately KEPT (verified intentional, not dead): `FailureMode.swift` + the
+bundled `scoring-*.json` (test-kept regression bench / parity fixtures that
+ship in the app bundle by design), `GuessKind.type` + its scoring branch (the
+backend wire contract the client never sends), and the backend's ~30
+only-locally-referenced exports (test surface). Local git hygiene handled
+outside the PR: stale merged-PR branches + clean worktrees pruned; the
+`tailspot-reveal-bound` worktree removed on Noah's call (its uncommitted
+4-file diff saved out-of-repo first).
+
+**Rider: the "random tests fail at 0.000 s" CI/local flake FIXED.** This PR's
+own CI failures forced the diagnosis: the test-host app CRASHES mid-run
+(xcresult "Crash: Tailspot at \<external symbol\>"; crash report:
+EXC_BREAKPOINT on the main thread, `__NSFireTimer` → SwiftData autosave →
+`_SwiftData_SwiftUI` observer) — SwiftData's deferred autosave timer fires
+AFTER a per-test in-memory `ModelContainer` deallocs, killing whichever
+suites are in flight. Hence random 0.000 s victims each run: whole clone
+batches on CI, the TrophyUnlockCenter batch locally, and two crash reports
+already sitting on disk from 07-20. `CatchBackfillTests` and
+`MarketingSnapshotTests` already carried the known workaround (leak the tiny
+in-memory stores for the process lifetime); a new shared
+`TestContainerRetention.retain(_:)` now applies it to EVERY
+container-creating suite (13 sites across 9 test files). Reproduced locally
+on run 2 of a 3-run hunt before the fix; full suite green after.
+
+## 2026-07-21 — Typecode-map gap fix: ATR / Pipistrel / Tecnam — branch `fix/typecode-map-atr-pipistrel-tecnam`
+
+A catch-review pass found 7 of 377 prod catches with no make/model category.
+Root causes: 3 foreign airframes caught before feedEnrich shipped (PR #65) that
+no registry source knows (likely garbled hexes — absent from fresh basic-ac-db,
+adsbdb, hexdb); 2 US hexes absent from the FAA snapshot; and 1 real map gap —
+JSX's ATR 42-500 (N401JX): ACFTREF spells the make "ATR-GIE AVIONS DE TRNSP
+REGION", which never matched the map builder's canon table. Fixed by adding
+ATR/Pipistrel/Tecnam make-canon prefixes + family rules to
+`build-typecode-map.py` (7 new spot-checks, 35/35 pass) and rebuilding the
+committed map against a fresh ACFTREF: **+87 entries, 0 changed, 0 removed**
+(all 9 ATR codes, Pipistrel Virus/Sinus/Taurus/Alpha/Panthera/Velis, Tecnam
+P92→P2012). Remaining unmapped tail mass is all drones (DJI/Zipline/…) —
+correctly unmappable. Post-merge (applied 2026-07-21): 964-tail registry delta
+via psql + rescore healed the N401JX catch (null rarity → AT45/common, Δ +0
+pts — first-of-type is a frozen upload-time verdict, so it does NOT apply
+retroactively; a null-typecode upload is never first-of-type). The other 6
+uncategorized catches are permanent unknowns: absent from FAA MASTER, fresh
+basic-ac-db, adsbdb and hexdb alike — likely garbled hexes.
+
+## 2026-07-21 — v1.1 planning round (post-submission re-prioritization) — branch `docs/v1.1-plan`
+
+With v1.0.0 submitted to App Review (2026-07-21, Waiting for Review), re-ranked
+PLAN §9 for the first post-GA release. Decisions (Noah's calls): v1.1 is a
+**fast follow (~1–2 weeks after approval)** headlined by **rare-plane push
+alerts** (#9, promoted from post-GA parking), with ride-alongs: the deferred
+battery/perf items from the 2026-07-17 performance pass, a hard/rare trophy
+addition round, and reactive GA triage (bugs, perf, device compatibility from
+the launch cohort). L4 enforcement flip + onboarding iteration stay data-gated;
+Spotter Pass invites deferred to a v1.2 candidate; photo upload/sync (#58)
+explicitly held for its own decision. Doc-only round — details in the new
+§9 intro paragraph.
+
+## 2026-07-21 — Submitted to the App Store (v1.0.0) + tailspot-www: legal pages live, /support
+
+GA milestone: **Noah submitted Tailspot 1.0.0 for App Review** (first App Store
+submission; Waiting for Review). Supporting work this round:
+
+- **tailspot-www deployed from `web/`** — the rewritten privacy policy + ToS
+  (effective 2026-07-11, PR #137) are finally live; the site had still been
+  serving the stale June-11 pages. Also new: **`/support`** (a single mailto
+  button to support@tailspot.app — the App Store listing's support URL), a
+  Support footer link on every page, and a `.content a.btn-primary` contrast
+  fix (`.content a`'s cyan beat `.btn-primary`'s dark text — cyan-on-cyan
+  button).
+- Process note: the /support page originally shipped 2026-07-20 via deploys
+  built from a live-machine reconstruction (curl'd site + `fly ssh` nginx conf)
+  because a macOS TCC failure made all of ~/Desktop unreadable mid-session;
+  this round re-synced everything into the real `web/` source, which is again
+  the single source of truth.
+
 ## 2026-07-20 — App Store screenshot set (6 slides, all iPhone sizes) — branch `feat/appstore-screenshots`
 
 GA prep (PLAN §9 #8): the full store-ready screenshot set, generated end-to-end
@@ -33,7 +131,11 @@ rather than waiting on the field session. Two new durable pieces plus the deck:
 - Copy is Noah's (2026-07-20 review): sentence-style headlines, no label
   eyebrows. Slide 1 stays a stylized stand-in until the field session; the
   slide-2 "collection" shot is the settled A380 card stacked over a prior
-  catch in the same dusk sky.
+  catch in the same dusk sky — since 2026-07-21 (Noah's follow-up) the card's
+  hero photo IS the slide-1 AR lock-on moment, rendered to a JPEG and fed in
+  via `CardPlane.photoURL` (drawHierarchy render for this shot: `.postHogMask`
+  wraps the photo in a UIKit tag view, which ImageRenderer draws as the
+  yellow no-entry placeholder).
 
 Mid-session note: macOS revoked the session's ~/Desktop TCC access partway
 through round 1 (worked around via Finder AppleScript copies + an ios/ mirror

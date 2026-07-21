@@ -139,7 +139,7 @@ __pycache__/
 .compound-engineering/*.local.yaml
 
 # Replay sessions pulled off the device for analysis (local only)
-pulled-replays/
+pulled-replays*/
 
 # Local-tier replay corpus — full-fidelity recordings (real GPS + logs)
 # used by FailureModeRegressionTests. Never committed; the redacted CI
