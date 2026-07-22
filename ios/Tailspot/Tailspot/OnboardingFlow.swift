@@ -388,16 +388,16 @@ struct OnboardingFlow: View {
             // Input row + inline availability pill.
             VStack(alignment: .leading, spacing: 6) {
                 Text("HANDLE")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 HStack {
                     Text("@")
-                        .font(Brand.Font.mono(size: 22, weight: .bold))
+                        .font(Brand.Font.mono(size: 22, weight: .bold, relativeTo: .title2))
                         .foregroundStyle(Brand.Color.textTertiary)
                         .accessibilityHidden(true)
                     TextField("spotter_42", text: $draftHandle)
-                        .font(Brand.Font.mono(size: 22, weight: .bold))
+                        .font(Brand.Font.mono(size: 22, weight: .bold, relativeTo: .title2))
                         .foregroundStyle(Brand.Color.textPrimary)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -434,7 +434,7 @@ struct OnboardingFlow: View {
             // Suggestion chips.
             VStack(alignment: .leading, spacing: 8) {
                 Text("SUGGESTIONS")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 LazyVGrid(
@@ -451,7 +451,7 @@ struct OnboardingFlow: View {
                                 Text(s)
                                     .foregroundStyle(Brand.Color.textPrimary)
                             }
-                            .font(Brand.Font.mono(size: 13, weight: .semibold))
+                            .font(Brand.Font.mono(size: 13, weight: .semibold, relativeTo: .footnote))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
@@ -503,21 +503,21 @@ struct OnboardingFlow: View {
             // ± number fall IS the feedback loop.
             HStack(spacing: 14) {
                 Text("HDG")
-                    .font(Brand.Font.mono(size: 10, weight: .semibold))
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Text(calibrationHeadingText)
-                    .font(Brand.Font.mono(size: 15, weight: .bold))
+                    .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(calibrationAccuracyText)
-                    .font(Brand.Font.mono(size: 15, weight: .bold))
+                    .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
                     .foregroundStyle(calibratedInFlow
                                      ? Brand.Color.alertNormal
                                      : Brand.Color.alertCaution)
                 Spacer()
                 if calibratedInFlow {
                     Label("CALIBRATED", systemImage: "checkmark.circle.fill")
-                        .font(Brand.Font.mono(size: 10, weight: .bold))
+                        .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
                         .tracking(1.0)
                         .foregroundStyle(Brand.Color.alertNormal)
                 }
@@ -560,7 +560,7 @@ struct OnboardingFlow: View {
         return HStack(spacing: 4) {
             Circle().fill(tint).frame(width: 6, height: 6)
             Text(label)
-                .font(Brand.Font.mono(size: 9, weight: .bold))
+                .font(Brand.Font.mono(size: 9, weight: .bold, relativeTo: .caption2))
                 .tracking(0.8)
                 .foregroundStyle(tint)
         }
@@ -617,7 +617,7 @@ struct OnboardingFlow: View {
         } label: {
             HStack {
                 Text(primaryButtonTitle)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(Brand.Font.button)
                 if step < totalSteps - 1 {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 14, weight: .bold))
@@ -778,7 +778,7 @@ struct OnboardingFlow: View {
                 .foregroundStyle(Brand.Color.cyan)
                 .accessibilityHidden(true)
             Text("TAILSPOT")
-                .font(Brand.Font.mono(size: 22, weight: .bold))
+                .font(Brand.Font.mono(size: 22, weight: .bold, relativeTo: .title2))
                 .tracking(3)
                 .foregroundStyle(Brand.Color.textPrimary)
         }
@@ -786,7 +786,7 @@ struct OnboardingFlow: View {
 
     private func stepLabel(_ text: String) -> some View {
         Text(text)
-            .font(Brand.Font.mono(size: 10, weight: .semibold))
+            .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
             .tracking(1.4)
             .foregroundStyle(Brand.Color.cyan)
     }
