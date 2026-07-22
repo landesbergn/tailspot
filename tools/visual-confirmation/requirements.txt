@@ -4,7 +4,7 @@
 #   This is an Apple Silicon Mac, but the only available Python interpreters are
 #   x86_64 (Homebrew under /usr/local, run via Rosetta). There is NO native
 #   arm64 Python here. PyTorch dropped x86_64 macOS wheels after 2.2.x, and the
-#   last x86_64 macOS torch wheel is torch==2.12.1 built for cp39 (Python 3.9).
+#   last x86_64 macOS torch wheel is torch==2.13.0 built for cp39 (Python 3.9).
 #   So the ONLY viable combo on this box is:  Python 3.9 (x86_64) + torch 2.2.2.
 #
 # Setup (from tools/visual-confirmation/):
@@ -19,7 +19,7 @@
 # (3.11/3.12) + current torch arm64 wheel; coremltools/onnx/etc. all have arm64
 # wheels. The conversion code is unchanged — only the interpreter/torch pins move.
 
-torch==2.12.1
+torch==2.13.0
 torchvision==0.17.2
 coremltools==9.0
 onnx==1.22.0
