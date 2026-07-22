@@ -85,7 +85,7 @@ private struct SetTile: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(set.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Brand.Font.body.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(set.type.summary)
                     .font(Brand.Font.caption)

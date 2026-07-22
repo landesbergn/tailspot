@@ -44,6 +44,15 @@
   --podium-silver: #C5D0DA;
   --podium-bronze: #C26B3F;
 
+  /* artboard vocabularies — local palettes the app deliberately keeps
+     OUTSIDE Brand.Color (fixed card canvases; see Brand.swift header).
+     Mirrored so canvas mocks can reproduce the reveal + rare-card foil. */
+  --rp-bg: #08090C; --rp-ink: #E7EEF5; --rp-muted: #8DA0B2;
+  --rp-faint: #5F7284; --rp-rule: #232C38;
+  --rp-flap-face: #131720; --rp-flap-unsettled: #6B7886;
+  --holo-pink: #FF63C7; --holo-cyan: #63C7FF; --holo-yellow: #FFDB63;
+  --holo-mint: #63FFB5; --holo-violet: #B58CFF; --card-dust: #FFC74A;
+
   /* fonts — B612 Mono (Airbus cockpit font, bundled in-app; Google Fonts
      on web via index.html). Two physical weights: ≤500→Regular, ≥600→Bold. */
   --font-mono: "B612 Mono", ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
