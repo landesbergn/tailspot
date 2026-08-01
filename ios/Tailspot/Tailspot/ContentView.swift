@@ -203,6 +203,10 @@ struct ContentView: View {
     /// catches on the backend while the local Hangar is empty — the
     /// reinstall signature — and, if so, drives the restore prompt overlay.
     @StateObject private var restoreManager = HangarRestoreManager()
+    /// One-shot recovery runner (see MissedCatchRepair). Holds no observable
+    /// state — it just needs somewhere to live — so a plain `let`, not a
+    /// `@StateObject`.
+    private let missedCatchRepair = MissedCatchRepairRunner()
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
@@ -729,6 +733,13 @@ struct ContentView: View {
         // so a fresh install can't race two POST /v1/devices calls.
         .task {
             await restoreManager.checkIfNeeded(context: modelContext)
+        }
+        // One-shot recovery of two catches that never reached the server (see
+        // MissedCatchRepair). Double-gated on device id + a fixed uuid
+        // allowlist, so on every other install this returns immediately
+        // without touching the network. Delete once it has run.
+        .task {
+            await missedCatchRepair.runIfNeeded(context: modelContext)
         }
         // When the Hangar closes, re-diff — a country backfill done inside
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
