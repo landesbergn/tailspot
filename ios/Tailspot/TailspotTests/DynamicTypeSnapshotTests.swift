@@ -116,6 +116,18 @@ struct DynamicTypeSnapshotTests {
         snapshot(HangarView().modelContainer(empty), as: "dt_hangar_default")
         snapshot(HangarView().modelContainer(empty).dynamicTypeSize(.accessibility2),
                  as: "dt_hangar_a11y2")
+        // Onboarding gained its anchors in the 2026-07-21 guideline pass
+        // (mono relativeTo: + the Brand.Font.button token) — steps 1 (rows
+        // of prose + mono labels) and 2 (the handle step's 22 pt mono
+        // field) are the surfaces that scale. The step-0 mock-HUD
+        // illustration stays fixed BY CHOICE — don't flag it in review.
+        for step in [1, 2] {
+            snapshot(OnboardingFlow(onFinish: {}, initialStep: step).modelContainer(empty),
+                     as: "dt_onboarding_step\(step)_default")
+            snapshot(OnboardingFlow(onFinish: {}, initialStep: step).modelContainer(empty)
+                        .dynamicTypeSize(.accessibility2),
+                     as: "dt_onboarding_step\(step)_a11y2")
+        }
         #expect(true)
     }
 }
