@@ -4,7 +4,13 @@
 //
 //  Single source of truth for the Tailspot visual identity.
 //  Every color or font value used across the app routes through
-//  here so a one-file edit re-themes the whole app.
+//  here so a one-file edit re-themes the whole app — with three
+//  deliberate ARTBOARD exceptions that carry local vocabularies
+//  (fixed card canvases, the same class the type rule exempts):
+//  the reveal's `RP` palette (CatchRevealView), the holo-foil
+//  rainbow + dust gold (CatchCardView), and the onboarding
+//  illustration sky (OnboardingFlow). Keep them local; document
+//  new ones here.
 //
 //  Design spec: docs/archive/superpowers/specs/2026-05-18-tailspot-visual-identity-design.md
 //
@@ -22,7 +28,10 @@
 //  transitions), stock-but-branded SYSTEM navigation for the UTILITY
 //  screens (Settings, Map, Leaderboard — inline nav titles, branded
 //  list chrome). Don't hand-roll nav bars on utility screens and don't
-//  put stock bars on game surfaces.
+//  put stock bars on game surfaces. One blessed exception: the Sets
+//  ROOT keeps a stock `.navigationTitle` because it's entered from
+//  Profile's stack (its pushed children switch to HangarChildBar —
+//  see the note atop SetsScreen.swift).
 //
 
 import SwiftUI
@@ -177,6 +186,11 @@ nonisolated enum Brand {
         // Text adaptation with zero visual change at default settings.
         // (`display`, the old 26 pt head, matches no built-in style; it
         // became the `.brandDisplayFont()` view modifier below.)
+        /// Primary-action button label. `.callout`'s default metric is
+        /// exactly the 16 pt these buttons always used, so adopting the
+        /// text style changes nothing at the default setting — it buys
+        /// Dynamic Type scaling + Bold Text adaptation (audit 2026-07-21).
+        static var button:       SwiftUI.Font { SwiftUI.Font.callout.weight(.bold) }
         static var cardTitle:    SwiftUI.Font { .headline }
         static var cardSubtitle: SwiftUI.Font { .footnote }
         static var label:        SwiftUI.Font { SwiftUI.Font.caption2.weight(.semibold) }

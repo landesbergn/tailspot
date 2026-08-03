@@ -217,7 +217,7 @@ struct CompassCalibrationSheet: View {
                         .font(.system(size: 13, weight: .bold))
                 }
                 Text(calibratedThisSession ? "All good" : "Got it")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(Brand.Font.button)
             }
             .foregroundStyle(.black.opacity(0.88))
             .frame(maxWidth: .infinity)

@@ -61,7 +61,10 @@ nonisolated enum Rarity: String, CaseIterable, Equatable, Sendable {
         case .uncommon:  return Color(hex: 0x4ECCA3)
         case .rare:      return Brand.Color.cyan    // same hex — rare IS brand cyan
         case .epic:      return Color(hex: 0x9B5DE5)
-        case .legendary: return Color(hex: 0xFFB800)
+        // Collector gold (same family as Brand.Color.podiumGold), NOT
+        // 0xFFB800 — that hex is Brand.Color.alertCaution, and FAA amber
+        // stays reserved for caution surfaces (guideline audit, 2026-07-21).
+        case .legendary: return Color(hex: 0xFFC74A)
         }
     }
 

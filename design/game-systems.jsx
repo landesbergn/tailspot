@@ -9,7 +9,7 @@ const RARITY = {
   uncommon:  { id: "uncommon",  label: "UNCOMMON",  color: "#4ECCA3", bg: "rgba(78,204,163,0.16)",  base: 25,   examples: "737 MAX · A220 · E190" },
   rare:      { id: "rare",      label: "RARE",      color: "#00D4FF", bg: "rgba(0,212,255,0.16)",   base: 100,  examples: "787 · A350 · 777" },
   epic:      { id: "epic",      label: "EPIC",      color: "#9B5DE5", bg: "rgba(155,93,229,0.16)",  base: 500,  examples: "A380 · 747-8 · Concorde-era heavies" },
-  legendary: { id: "legendary", label: "LEGENDARY", color: "#FFB800", bg: "rgba(255,184,0,0.16)",   base: 2000, examples: "Air Force One · NASA SOFIA · prototypes" },
+  legendary: { id: "legendary", label: "LEGENDARY", color: "#FFC74A", bg: "rgba(255,199,74,0.16)",  base: 2000, examples: "Air Force One · NASA SOFIA · prototypes" }, // collector gold — NOT FAA caution amber #FFB800 (2026-07-21)
 };
 
 const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"];

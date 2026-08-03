@@ -34,7 +34,9 @@ struct HangarSegmentedSwitcher: View {
             segmentTitle: { $0.label }
         ) { seg, isSelected in
             Text(seg.label)
-                .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
+                // Brand.Font.body == .subheadline, whose default metric is
+                // the 15 pt this always was — now it scales.
+                .font(Brand.Font.body.weight(isSelected ? .semibold : .medium))
                 .foregroundStyle(isSelected ? Brand.Color.bgPrimary : Brand.Color.textSecondary)
         }
         .padding(.horizontal, 16)
