@@ -642,7 +642,9 @@ struct OnboardingFlow: View {
     private var primaryButtonTitle: String {
         switch step {
         case 0: return "Get started"
-        case 1: return "Allow permissions"
+        // "Continue", not "Allow …" — App Review 5.1.1(iv) rejects priming
+        // screens whose CTA pre-commits the user to granting (2026-08-03).
+        case 1: return "Continue"
         case 2: return "Claim handle"
         default: return calibratedInFlow ? "Start spotting" : "Skip · I'll do it later"
         }
