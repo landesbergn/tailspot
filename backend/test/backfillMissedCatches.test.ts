@@ -138,10 +138,14 @@ describe("backfillMissedCatches", () => {
 
     const rows = await backfilled();
     const byIcao = new Map(rows.map((r) => [r.icao24, r]));
-    expect(new Date(byIcao.get(C5_ICAO)!.caughtAt).toISOString()).toBe("2026-06-30T23:13:37.164Z");
-    expect(new Date(byIcao.get(C340_ICAO)!.caughtAt).toISOString()).toBe(
-      "2026-07-18T12:20:48.796Z",
-    );
+    const c5 = byIcao.get(C5_ICAO);
+    const c340 = byIcao.get(C340_ICAO);
+    expect(c5).toBeDefined();
+    expect(c340).toBeDefined();
+    // `?? 0` never fires (toBeDefined threw first) — it's only narrowing
+    // for tsc, in place of the `!` assertions biome's lint rejects.
+    expect(new Date(c5?.caughtAt ?? 0).toISOString()).toBe("2026-06-30T23:13:37.164Z");
+    expect(new Date(c340?.caughtAt ?? 0).toISOString()).toBe("2026-07-18T12:20:48.796Z");
   });
 
   it("borrows the observer position from the nearest-in-time catch", async () => {
