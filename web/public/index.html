@@ -38,7 +38,10 @@
     <div class="hero-copy">
       <h1 class="hero-title">Catch the planes flying overhead.<br><span class="accent">Build your collection.</span></h1>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://apps.apple.com/app/id6773470079">Download on the App Store</a>
+        <!-- Deliberately NOT badge wording: Apple's guidelines allow one
+             official badge per layout (it lives in #get below), and a custom
+             button imitating the badge's text would undercut it. -->
+        <a class="btn btn-primary" href="https://apps.apple.com/app/id6773470079">Get the app</a>
         <a class="btn btn-ghost" href="#how">See how it works ↓</a>
       </div>
     </div>
@@ -92,7 +95,18 @@
 <!-- ───────────────── Get the app ───────────────── -->
 <section class="section cta-final" id="get">
   <h2 class="section-title">Get Tailspot</h2>
-  <a class="btn btn-primary btn-lg" href="https://apps.apple.com/app/id6773470079">Download on the App Store</a>
+  <!-- Apple's official badge, used unmodified per
+       developer.apple.com/app-store/marketing/guidelines/#section-badges:
+       one badge per layout, subordinate to the main message, no added
+       shadow/glow/animation, and clear space >= 1/4 its height.
+       This is Apple's PREFERRED black badge. The white variant is only
+       sanctioned when black "appears visually heavy" — the opposite is true
+       on #0A0E1A, where white renders as a glaring block and black reads as
+       a subtle outlined pill. Verified by rendering both. -->
+  <a class="badge-link" href="https://apps.apple.com/app/id6773470079">
+    <img class="app-store-badge" src="app-store-badge.svg"
+         alt="Download Tailspot on the App Store">
+  </a>
   <p class="hero-note">Free on iPhone. Requires iOS 26.2 or later.</p>
 </section>
 

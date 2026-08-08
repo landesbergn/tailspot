@@ -31,6 +31,31 @@ overridden the filled button's dark text — it doesn't, because that rule is
 scoped to `.content` and the hero isn't inside it. `.cta-row` already had
 `flex-wrap`, so the longer label wraps to its own line and reads fine.
 
+**Follow-up (same day, branch `feat/app-store-badge`): the official Apple badge.**
+The custom cyan "Download on the App Store" button was brand-styled text
+imitating Apple's badge. Replaced with Apple's real artwork, used verbatim
+(`web/public/app-store-badge.svg`, byte-identical to Apple's `black.svg` —
+verified by SHA-256), per
+[Apple's badge guidelines](https://developer.apple.com/app-store/marketing/guidelines/#section-badges):
+
+- **One badge per layout**, in the "Get Tailspot" section — subordinate to the
+  hero message, as Apple requires. The hero CTA was reworded to **"Get the app"**
+  so it no longer imitates badge text; nav and footer stay plain text links.
+  (Side benefit: the shorter label lets both hero CTAs sit on one line again.)
+- **Black badge, not white** — and the first attempt got this backwards.
+  Apple's black badge is *preferred*; white is sanctioned only when black
+  "appears visually heavy." On `#0A0E1A` the reverse holds: the white badge is a
+  white-filled block that dominates the layout, while black reads as a subtle
+  outlined pill. Caught by rendering both and comparing, not by reading the SVG.
+- **48 px tall** (Apple's web minimum is 40), height-only sizing with `width:auto`
+  so the SVG's viewBox drives the aspect ratio and it can never be stretched;
+  clear space ≥ ¼ the badge height. The CSS rule carries a **do-not-add-effects
+  warning** — the site's `.btn-primary` cyan glow must never leak onto it, since
+  Apple prohibits shadows, highlights, and animation on the badge.
+- **Required trademark attribution** added to `attributions.html` (the site's
+  legal-notice surface, linked from every footer), using the international form
+  since availability is worldwide, plus an explicit non-affiliation line.
+
 Also **PLAN §9: put the App Store listing into the app's share sheets** (v1.1
 ride-along). The gap is bigger than expected — `CatchDetailView` shares a
 rendered card *image* with **no link at all**, so the best artifact the app

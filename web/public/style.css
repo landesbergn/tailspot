@@ -350,6 +350,26 @@ a.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--c
 .cta-final { text-align: center; }
 .cta-final .btn { margin-bottom: 1rem; }
 
+/* Apple's "Download on the App Store" badge.
+   Constrained by Apple's marketing guidelines, so this rule is deliberately
+   plain — DO NOT add a shadow, glow, filter, hover transform, or animation
+   here, and don't let the brand's cyan CTA treatment leak onto it:
+     · min 40 px tall on web (48 px here), aspect ratio never altered — the
+       height is set and the width left auto so the SVG's own viewBox drives it
+     · clear space >= 1/4 the badge height (12 px at 48 px) on every side
+     · artwork used verbatim; app-store-badge.svg is Apple's black.svg
+       byte-for-byte (the preferred badge; white is for light layouts)
+   https://developer.apple.com/app-store/marketing/guidelines/#section-badges */
+.badge-link {
+  display: inline-block;
+  margin: 0.75rem 0.75rem 1rem;
+  line-height: 0; /* kills the inline-image descender gap so clear space is exact */
+}
+.app-store-badge {
+  height: 48px;
+  width: auto;
+}
+
 /* ── 404 — squawk 7600 (lost comms) ── */
 .error-page {
   max-width: var(--maxw);
