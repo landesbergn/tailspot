@@ -117,7 +117,14 @@ Nothing is used for **Tracking** (Apple's cross-app/ad sense) — `NSPrivacyTrac
   (Bali field data). Mitigation is expectation-setting: the description's
   coverage paragraph + the in-app empty-sky messaging.
 
-## App Store Connect checklist (Noah's clicks)
+## First-submission checklist (one-time — DONE, kept as the record)
+
+> **This is the v1.0 first-submission setup, completed for the 2026-08-08
+> approval. Don't re-run it per release.** The recurring per-release checklist
+> (version bump, soak, release notes, privacy-label re-sync, phased release)
+> lives in `CONTRIBUTING.md` → "Cutting a release". What stays live here is the
+> **nutrition-label table above** — re-check it against `PrivacyInfo.xcprivacy`
+> whenever a release changes what data leaves the device.
 
 Prep that must exist first:
 - ☐ **Host the updated policy/terms** — port `privacy-policy.md` / `terms.md`
@@ -143,10 +150,14 @@ Then, in App Store Connect (My Apps → Tailspot):
    aircraft, (b) a link to a short screen-recording of a real outdoor catch,
    (c) note that camera + when-in-use location permission are required for the
    core flow, and the app shows a permission-recovery card if denied.
-8. ☐ Export compliance: HTTPS-only → "standard encryption, exempt." To skip
-   the per-build question, add `ITSAppUsesNonExemptEncryption = NO` to the
-   target's Info tab (an Xcode-manual step — the key is **not currently set**).
-9. ☐ Select the GA build (TestFlight → the build Noah cuts), submit for review.
-10. ☐ After approval: release manually (recommended over auto-release, so the
+8. ☑ Export compliance: HTTPS-only → "standard encryption, exempt."
+   **Resolved permanently** — `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO`
+   is set on the app target (and in `Info.plist`), so the per-upload question no
+   longer appears. Nothing to do per release.
+9. ☑ Select the GA build (TestFlight → the build Noah cuts), submit for review.
+10. ☑ After approval: release manually (recommended over auto-release, so the
     backend can be watched during the first hours), then check App Store
     Connect → Crashes and PostHog.
+
+**Outcome:** v1.0.0 (build 83) approved and released 2026-08-08, after one
+round-1 rejection under 5.1.1(iv) (onboarding CTA wording, fixed in #170).
