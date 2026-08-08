@@ -5,6 +5,39 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-08 — tailspot.app points at the App Store — branch `feat/app-store-links`
+
+The site still said "Coming soon" and "Currently in private TestFlight beta" the
+day the app went live. Now it links the listing
+(`https://apps.apple.com/app/id6773470079`):
+
+- **Hero + "Get Tailspot" CTAs** are real links reading "Download on the App
+  Store" (both were inert `<span role="text">` placeholders), the nav "Get the
+  app" button points at the listing, and the beta note became "Free on iPhone.
+  Requires iOS 26.2 or later" — 26.2 verified against
+  `IPHONEOS_DEPLOYMENT_TARGET`, not assumed.
+- **Footer gained an App Store link on all six pages** (incl. `404.html`, whose
+  footer omits Support).
+- **`apple-itunes-app` meta tag** added, so iOS Safari visitors get the native
+  Get banner — the phone they're browsing on is the device that runs the app.
+- **Geo-neutral `/app/id…` URL, not the `/us/` form** Apple hands you from the
+  US storefront: availability is worldwide and Apple redirects each visitor to
+  their own storefront, so the `/us/` variant would have sent every
+  international visitor to the wrong store.
+
+Verified by rendering the page locally, not just by reading the diff: the hero
+CTA changed from `<span>` to `<a>`, and `.content a { color: cyan }` would have
+overridden the filled button's dark text — it doesn't, because that rule is
+scoped to `.content` and the hero isn't inside it. `.cta-row` already had
+`flex-wrap`, so the longer label wraps to its own line and reads fine.
+
+Also **PLAN §9: put the App Store listing into the app's share sheets** (v1.1
+ride-along). The gap is bigger than expected — `CatchDetailView` shares a
+rendered card *image* with **no link at all**, so the best artifact the app
+produces gives a recipient no path to install. `ProfileScreen`'s invite already
+shares `tailspot.app`, which now forwards to the store, so it's recommended to
+stay as-is (richer OG preview, and it's the Spotter Pass attribution surface).
+
 ## 2026-08-08 — 🚀 GA: v1.0.0 live on the App Store + post-GA release process — branch `docs/post-ga-release-process`
 
 **v1.0.0 (build 83) was approved and released on the App Store 2026-08-08.**
