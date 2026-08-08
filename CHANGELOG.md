@@ -5,6 +5,57 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-08 — 🚀 GA: v1.0.0 live on the App Store + post-GA release process — branch `docs/post-ga-release-process`
+
+**v1.0.0 (build 83) was approved and released on the App Store 2026-08-08.**
+Submitted 2026-07-21, rejected once under 5.1.1(iv) (the onboarding
+pre-permission CTA read "Allow permissions"; Apple requires neutral wording —
+fixed to "Continue" in #170), resubmitted 2026-08-04, approved 2026-08-08.
+
+Docs-only round rebuilding the development lifecycle around the fact that there
+is now a production audience that can't be messaged, running a binary that
+can't be recalled.
+
+- **`CONTRIBUTING.md` rewritten around four rings** — `bin/deploy` (Noah's
+  phone) → `main` (nobody) → TestFlight (invited testers) → App Store (public).
+  **TestFlight's job changed**: it was the release, it is now the *soak* — the
+  last place a bad build costs a message instead of a review cycle, and the only
+  place the app runs on hardware that isn't Noah's iPhone 16. New: a soak table
+  (same-day for copy → 3+ days for SwiftData changes), a per-release checklist,
+  a post-release 48-hour watch (ASC crashes, Sentry, PostHog funnel *by version*,
+  and — new at GA — **ratings and reviews**), and a hotfix path that skips
+  patience but not process.
+- **The versioning rule INVERTED, and the old one would have failed loudly.**
+  Pre-GA guidance (in both `CLAUDE.md` and `CONTRIBUTING.md`) was "keep the same
+  `MARKETING_VERSION`, let the build number increment" — correct for TestFlight,
+  where Beta App Review clears additional builds under an approved version
+  faster. It is **wrong for the App Store**, which requires a new, higher version
+  string per public release: 1.0.0 build 84 cannot follow 1.0.0 build 83. Now
+  **one `MARKETING_VERSION` per public release, bumped when the train opens, not
+  at submission** (bumping at submission ships a version string nobody soaked).
+  Cost, stated honestly: one Beta App Review per train. Only the app target's two
+  config blocks get edited — the `1.0` values on the test targets never ship.
+  `CURRENT_PROJECT_VERSION` still stays `1` and is still rewritten to
+  `CI_BUILD_NUMBER` by `ci_pre_xcodebuild.sh`.
+- **Backend discipline written down**: additive-only with respect to shipped
+  clients (old builds live on phones for months), server deployed *before* the
+  client that needs it, DB snapshot before Drizzle migrations.
+- **`docs/ga/appstore-listing.md`** relabelled — its checklist is the *one-time*
+  first-submission record, not a per-release list; the nutrition-label table is
+  what stays live. Fixed a stale line: export compliance is now permanently
+  resolved via `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO`, so the
+  per-upload question no longer appears.
+- **PLAN §9** records GA, the process change, and promotes **in-app account
+  deletion (5.1.1(v))** onto the v1.1 critical path — it was the top latent
+  rejection risk, and v1.1's push alerts deepen the account, which makes the gap
+  more conspicuous rather than less.
+
+**Deliberately not built (Noah's call, correct at current user counts):** remote
+feature flags / kill switches and a client-version header to the API. iOS has no
+rollback, but with few users a bad release can still be fixed by shipping
+forward; revisit when it can't. Phased release is used instead — it's a free
+checkbox at submission and the closest thing to a rollback iOS offers.
+
 ## 2026-07-21 — Dead-code cleanup sweep — branch `chore/dead-code-cleanup`
 
 Full-repo dead-code audit (three parallel sweeps: iOS, backend/web, repo-level
