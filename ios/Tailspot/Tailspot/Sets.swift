@@ -148,7 +148,7 @@ nonisolated enum CardSets {
             id: "regional", type: .regional, title: "Regional jets & turboprops",
             entries: [
                 .init(id: "r-e175",    canonicalName: "Embraer E175",      rarity: .common,
-                      modelTokens: ["e175", "e170"],
+                      modelTokens: ["e175", "e170", "embraer 175"],
                       summary: "Sole feeder jet for most US legacy carriers.",
                       representativeTypecode: "E75L"),
                 .init(id: "r-crj-700", canonicalName: "Bombardier CRJ-700",rarity: .common,
@@ -195,6 +195,16 @@ nonisolated enum CardSets {
                       modelTokens: ["global 7500", "global 6500"],
                       summary: "Largest of the Globals. Three-zone cabin.",
                       representativeTypecode: "GL7T"),
+                // Rarity: uncommon (H25B) — mid-size fleet still large in the US.
+                .init(id: "b-hawker",   canonicalName: "Hawker 800",       rarity: .uncommon,
+                      modelTokens: ["hawker 800", "hawker 750", "hawker 900", "800xp"],
+                      summary: "Midsize British-born twin. Hundreds still working.",
+                      representativeTypecode: "H25B"),
+                // One slot for the whole marque — any Learjet fills it.
+                .init(id: "b-learjet",  canonicalName: "Learjet",          rarity: .uncommon,
+                      modelTokens: ["learjet"],
+                      summary: "The name that meant bizjet. 35s and 60s still fly hard.",
+                      representativeTypecode: "LJ60"),
             ]
         ),
         .init(
@@ -285,6 +295,12 @@ nonisolated enum CardSets {
                       modelTokens: ["da42", "da 42", "twin star"],
                       summary: "Twin-engine diesel. Multi-engine trainer.",
                       representativeTypecode: "DA42"),
+                // Rarity: uncommon (PC12) — turboprop single; 16 catches in prod
+                // with no slot before this (2026-08-12 histogram audit).
+                .init(id: "ga-pc12", canonicalName: "Pilatus PC-12", rarity: .uncommon,
+                      modelTokens: ["pc-12", "pc12"],
+                      summary: "Single-engine turboprop workhorse. Freight, medevac, charter.",
+                      representativeTypecode: "PC12"),
                 // No typecode in DOC 8643 table (homebuilt / experimental category).
                 .init(id: "ga-rv", canonicalName: "Van's RV-series", rarity: .uncommon,
                       modelTokens: ["van's rv", "vans rv", "rv-7", "rv-8", "rv-9", "rv-10", "rv-12", "rv-14"],
@@ -339,6 +355,12 @@ nonisolated enum CardSets {
     /// `type` field drives the family's tint/glyph in the browser.
     private static let familiesCore: [CardSet] = [
         .init(id: "fam-737", type: .narrow, title: "Boeing 737", entries: [
+            // One slot for the -300/-400/-500 generation — mostly freighters
+            // now, so variant-level slots would be near-impossible quests.
+            .init(id: "f737-classic", canonicalName: "737 Classic", rarity: .common,
+                  modelTokens: ["737-300", "737-400", "737-500", "737-3", "737-4", "737-5"],
+                  summary: "The -300/-400/-500 generation. Mostly night freight now.",
+                  representativeTypecode: "B734"),
             .init(id: "f737-700", canonicalName: "737-700", rarity: .common,
                   modelTokens: ["737-7", "737-700"],
                   summary: "Shortest current-gen 737. Southwest's backbone.",
@@ -360,7 +382,7 @@ nonisolated enum CardSets {
                   summary: "Stretched MAX. United and Alaska fly the most.",
                   representativeTypecode: "B39M"),
         ]),
-        .init(id: "fam-a320", type: .narrow, title: "Airbus A320 Family", entries: [
+        .init(id: "fam-a320", type: .narrow, title: "Airbus A320", entries: [
             // Classic ceo variants are TYPECODE-ONLY (empty tokens): the neo
             // canonical names contain "a320" etc., so a token would let a neo
             // catch bleed into the classic slot. The typecode (A320 vs A20N)
@@ -400,7 +422,7 @@ nonisolated enum CardSets {
                   modelTokens: ["777-300er", "777er"], summary: "The workhorse long-hauler. Raked wingtips.",
                   representativeTypecode: "B77W"),
         ]),
-        .init(id: "fam-787", type: .wide, title: "Boeing 787 Dreamliner", entries: [
+        .init(id: "fam-787", type: .wide, title: "Boeing 787", entries: [
             .init(id: "f787-8", canonicalName: "787-8", rarity: .uncommon,
                   modelTokens: ["787-8"], summary: "First Dreamliner. Composite fuselage.",
                   representativeTypecode: "B788"),
@@ -433,6 +455,15 @@ nonisolated enum CardSets {
                   modelTokens: ["a350-1000", "a350-10"], summary: "Stretched A350. Six-wheel main gear.",
                   representativeTypecode: "A35K"),
         ]),
+        // Rare-hunt quest: the last quads in scheduled service, retiring fast.
+        .init(id: "fam-a340", type: .wide, title: "Airbus A340", entries: [
+            .init(id: "fa340-300", canonicalName: "A340-300", rarity: .rare,
+                  modelTokens: ["a340-300", "a340-3"], summary: "Four engines, CFM56s. The common A340 — for now.",
+                  representativeTypecode: "A343"),
+            .init(id: "fa340-600", canonicalName: "A340-600", rarity: .rare,
+                  modelTokens: ["a340-600", "a340-6"], summary: "Stretched quad on RR Trents. Once the longest airliner.",
+                  representativeTypecode: "A346"),
+        ]),
         .init(id: "fam-747", type: .wide, title: "Boeing 747", entries: [
             .init(id: "f747-400", canonicalName: "747-400", rarity: .rare,
                   modelTokens: ["747-400", "747-4"], summary: "The classic Queen. Mostly cargo now.",
@@ -459,8 +490,11 @@ nonisolated enum CardSets {
             .init(id: "fe170", canonicalName: "E170", rarity: .common,
                   modelTokens: ["e170", "e-170", "erj 170"], summary: "Smallest E-Jet. Four-abreast regional.",
                   representativeTypecode: "E170"),
+            // "embraer 175": the short-winglet E75S resolves to canonical
+            // "Embraer 175", which no e175/e-175 token substring-matches —
+            // 2 prod catches fell through (2026-08-12 histogram audit).
             .init(id: "fe175", canonicalName: "E175", rarity: .common,
-                  modelTokens: ["e175", "e-175", "erj 175"], summary: "The US regional-jet standard.",
+                  modelTokens: ["e175", "e-175", "erj 175", "embraer 175"], summary: "The US regional-jet standard.",
                   representativeTypecode: "E75L"),
             .init(id: "fe190", canonicalName: "E190", rarity: .uncommon,
                   modelTokens: ["e190", "e-190", "erj 190"], summary: "Larger E-Jet. Mainline-feel regional.",
@@ -623,6 +657,11 @@ nonisolated enum CardSets {
             .init(id: "fc208", canonicalName: "Cessna 208 Caravan", rarity: .common,
                   modelTokens: ["caravan", "c208", "208"], summary: "Single turboprop utility hauler.",
                   representativeTypecode: "C208"),
+            // The twin the singles-only lineup skipped (field report 2026-08-12:
+            // a Cape Air 402 catch had no slot to fill).
+            .init(id: "fc402", canonicalName: "Cessna 402", rarity: .common,
+                  modelTokens: ["cessna 402", "c402", "402"], summary: "Twin-piston commuter. Cape Air's workhorse.",
+                  representativeTypecode: "C402"),
         ]),
         .init(id: "fam-cirrus", type: .ga, title: "Cirrus", entries: [
             .init(id: "fsr20", canonicalName: "Cirrus SR20", rarity: .common,
@@ -671,7 +710,39 @@ nonisolated enum CardSets {
                   modelTokens: ["da62", "da-62"], summary: "Larger seven-seat twin.",
                   representativeTypecode: "DA62"),
         ]),
-        .init(id: "fam-bombardier-biz", type: .biz, title: "Bombardier (Business)", entries: [
+        // Rotorcraft finally get a home: 33 heli catches in prod had zero
+        // set slots before this (2026-08-12 histogram audit — B407 alone
+        // was the single most-caught uncovered typecode at 17).
+        .init(id: "fam-heli", type: .ga, title: "Helicopters", entries: [
+            .init(id: "fh-r44", canonicalName: "Robinson R44", rarity: .uncommon,
+                  modelTokens: ["r44", "robinson"], summary: "Light piston heli. The rotorcraft trainer.",
+                  representativeTypecode: "R44"),
+            .init(id: "fh-b407", canonicalName: "Bell 407", rarity: .uncommon,
+                  modelTokens: ["bell 407", "b407"], summary: "News, EMS, charter — the utility standard.",
+                  representativeTypecode: "B407"),
+            .init(id: "fh-h125", canonicalName: "Airbus H125", rarity: .uncommon,
+                  modelTokens: ["h-125", "h125", "as350", "as 350", "as-350"],
+                  summary: "The AStar. Tour and utility single.",
+                  representativeTypecode: "AS50"),
+            .init(id: "fh-h135", canonicalName: "Airbus H135", rarity: .uncommon,
+                  modelTokens: ["h-135", "h135", "ec135", "ec 135", "ec-135"],
+                  summary: "Twin-engine EMS staple.",
+                  representativeTypecode: "EC35"),
+            .init(id: "fh-h145", canonicalName: "Airbus H145", rarity: .uncommon,
+                  modelTokens: ["h-145", "h145", "ec145", "ec 145", "ec-145", "bk117", "bk 117"],
+                  summary: "Police and rescue twin. Five-blade rotor on the D3.",
+                  representativeTypecode: "EC45"),
+            .init(id: "fh-s76", canonicalName: "Sikorsky S-76", rarity: .uncommon,
+                  modelTokens: ["s-76", "s76"], summary: "Executive and offshore twin.",
+                  representativeTypecode: "S76"),
+            .init(id: "fh-aw139", canonicalName: "Leonardo AW139", rarity: .uncommon,
+                  modelTokens: ["aw139", "aw-139", "aw 139"], summary: "Medium twin. SAR, offshore, VIP.",
+                  representativeTypecode: "A139"),
+            .init(id: "fh-a109", canonicalName: "Leonardo AW109", rarity: .uncommon,
+                  modelTokens: ["a109", "a-109", "aw109", "aw-109"], summary: "Sleek light twin. EMS and VIP.",
+                  representativeTypecode: "A109"),
+        ]),
+        .init(id: "fam-bombardier-biz", type: .biz, title: "Bombardier Business Jets", entries: [
             .init(id: "fcl35", canonicalName: "Challenger 350", rarity: .uncommon,
                   modelTokens: ["challenger 3", "cl35", "cl30"], summary: "Super-midsize Challenger.",
                   representativeTypecode: "CL35"),
@@ -706,8 +777,11 @@ nonisolated enum CardSets {
             .init(id: "fe55p", canonicalName: "Phenom 300", rarity: .uncommon,
                   modelTokens: ["phenom 300", "e55p"], summary: "Best-selling light jet.",
                   representativeTypecode: "E55P"),
+            // "legacy 450"/"e545": the EMB-545 (Legacy 450 → Praetor 500)
+            // resolves to canonical "EMB-545 Legacy 450", which none of the
+            // old tokens matched — 3 prod catches fell through (2026-08-12).
             .init(id: "fe550", canonicalName: "Praetor 500", rarity: .uncommon,
-                  modelTokens: ["praetor", "legacy 500", "e550"], summary: "Midsize Embraer business jet.",
+                  modelTokens: ["praetor", "legacy 500", "legacy 450", "e550", "e545"], summary: "Midsize Embraer business jet.",
                   representativeTypecode: "E550"),
             .init(id: "fe35l", canonicalName: "Legacy 600", rarity: .uncommon,
                   modelTokens: ["legacy 600", "legacy 650", "e35l"], summary: "ERJ-derived large-cabin jet.",
