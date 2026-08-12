@@ -48,13 +48,19 @@ enum PostHogSessionReplay {
         //     full-window mask blacks every replay frame (the 2026-06
         //     all-black-replay bug). The guarantee is pinned by
         //     SessionReplayPrivacyTests + the note in ContentView.
-        //   - USER CATCH PHOTOS are masked with scoped `.postHogMask()` at
-        //     every render site: RevealPhoto (reveal + SettledCatchCard hero,
-        //     incl. the Hangar detail screen), CatchCardView's photo (card
-        //     reveal / multi-catch / model-slot detail), and FocusThumbnail
-        //     (Hangar list rows). Only the photo rect is redacted — the
-        //     surrounding card/UI chrome still records. Planespotters stock
-        //     photos (public airframe imagery, not user content) stay visible.
+        //   - USER CATCH PHOTOS are masked at every ON-SCREEN render site
+        //     via `.catchPhotoReplayMask()` (a scoped `.postHogMask()` —
+        //     see CatchPhotoReplayMask.swift): RevealPhoto (reveal +
+        //     SettledCatchCard hero, incl. the Hangar detail screen),
+        //     CatchCardView's photo (card reveal / multi-catch / model-slot
+        //     detail), and FocusThumbnail (Hangar list rows). Only the photo
+        //     rect is redacted — the surrounding card/UI chrome still
+        //     records. Planespotters stock photos (public airframe imagery,
+        //     not user content) stay visible. The OFFSCREEN share render
+        //     (`CatchShare.uiImage`) drops the mask structurally — the tag
+        //     views ImageRenderer can't draw were masking shared cards with
+        //     a yellow placeholder — which loses no privacy: those pixels
+        //     never appear on screen, so replay can't capture them.
         //   - Text inputs are unmasked below (non-sensitive game data).
         config.sessionReplayConfig.screenshotMode = true
         // On iOS this flag masks ALL text (labels, not just editable fields), so

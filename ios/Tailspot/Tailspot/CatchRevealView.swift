@@ -33,7 +33,6 @@
 
 import SwiftUI
 import UIKit
-import PostHog   // .postHogMask() on the user's catch photo (session replay)
 
 // MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
 
@@ -240,10 +239,13 @@ struct RevealPhoto: View {
             // PRIVACY: a local file URL here is always the user's own catch
             // JPEG — mask it from PostHog session replay. The mask redacts
             // only this photo's rect, so the surrounding card chrome still
-            // records. Inert under ImageRenderer (share/snapshot renders).
-            // The remote branch below is a Planespotters stock photo of the
-            // airframe (public imagery, not user content) — left visible.
-            .postHogMask()
+            // records. NOT inert under ImageRenderer (it injects platform
+            // views that render as the yellow no-entry placeholder), so the
+            // share render disables it via \.replayMaskingDisabled — see
+            // CatchPhotoReplayMask.swift. The remote branch below is a
+            // Planespotters stock photo of the airframe (public imagery,
+            // not user content) — left visible.
+            .catchPhotoReplayMask()
         } else if let url, !url.isFileURL {
             // Remote hero (Planespotters thumbnail on catches with no local
             // photo). AsyncImage can't be waited on by ImageRenderer, so
