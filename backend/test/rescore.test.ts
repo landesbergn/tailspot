@@ -149,7 +149,7 @@ describe("rescoreCatches", () => {
     expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
   });
 
-  it("a stored ROUTE guess re-scores at +10%, and stacks with first-of-type", async () => {
+  it("a stored ROUTE guess re-scores at +25%, and stacks with first-of-type", async () => {
     const id = await insertCatch({
       icao24: FOREIGN,
       rarity: null,
@@ -161,7 +161,7 @@ describe("rescoreCatches", () => {
     });
     await rescoreCatches(db, {});
     const after = await db.select().from(catches).where(eq(catches.id, id));
-    expect(after[0].points).toBe(160); // 100 base + 50 first-of-type + round(100*0.1)=10
+    expect(after[0].points).toBe(175); // 100 base + 50 first-of-type + round(100*0.25)=25
   });
 
   it("a stored INCORRECT guess earns nothing on re-score", async () => {

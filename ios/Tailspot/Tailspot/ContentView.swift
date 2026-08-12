@@ -2391,7 +2391,7 @@ struct ContentView: View {
             !catches.contains { $0 !== row && $0.typecode == tc }
         } ?? false
         // Guess bonus (game-layer PR3; route-only per Noah 2026-07-09): a
-        // "10% ROUTE BONUS +N" line only for a CORRECT call (wrong/skipped/
+        // "25% ROUTE BONUS +N" line only for a CORRECT call (wrong/skipped/
         // no-round → nil kind → no line). The amount derives live off the
         // current base like firstOfType, so it re-tiers on read. Server
         // re-verifies at upload and is authoritative.

@@ -106,8 +106,8 @@ nonisolated enum Rarity: String, CaseIterable, Equatable, Sendable {
 nonisolated enum ScoringBonuses {
     /// First-ever catch of a typecode: +50% of base.
     static let firstOfType = 0.5
-    /// Correct route guess (near coin-flip): +10% of base.
-    static let routeGuess = 0.1
+    /// Correct route guess: +25% of base (re-balanced from +10%, 2026-08-12).
+    static let routeGuess = 0.25
     /// Correct type call (the marquee skill test): +25% of base.
     static let typeGuess = 0.25
 

@@ -65,12 +65,12 @@ struct ScoringBonusesParityTests {
 
     @Test func bonusRoundingMatchesBackendMathRound() {
         // Backend: Math.round(base * fraction) — half rounds UP for the
-        // always-positive bases. The awkward case is typeGuess on the common
+        // always-positive bases. The awkward case is a guess bonus on the common
         // base: 10 × 0.25 = 2.5 → 3, where Swift's banker's rounding would
         // give 2. Pin the full ladder for each bonus.
         let bases = Rarity.allCases.map(\.basePoints)          // 10 20 50 100 500
         #expect(bases.map { ScoringBonuses.firstOfTypeBonus(base: $0) } == [5, 10, 25, 50, 250])
-        #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .route) } == [1, 2, 5, 10, 50])
+        #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .route) } == [3, 5, 13, 25, 125])
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type) } == [3, 5, 13, 25, 125])
     }
 }

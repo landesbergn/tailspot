@@ -449,13 +449,13 @@ describe("route guess (server-verified via the RouteResolver)", () => {
     return { ...catchBody("aaaaaa", uuid), guess: { kind: "route", value } };
   }
 
-  it("a correct guess on the ORIGIN earns +10% of base (and the callsign is normalized)", async () => {
+  it("a correct guess on the ORIGIN earns +25% of base (and the callsign is normalized)", async () => {
     const body = guessedBody("bbbb1111-1111-4111-8111-111111111111", "ksfo");
     body.callsign = "ual123"; // lowercase on the wire — resolver must get UAL123
     const res = await post(body);
     expect(res.statusCode).toBe(201);
     expect(res.json().guessCorrect).toBe(true);
-    expect(res.json().points).toBe(80); // rare 50 + first-of-type 25 + route-guess round(50*0.1)=5
+    expect(res.json().points).toBe(88); // rare 50 + first-of-type 25 + route-guess round(50*0.25)=13
     expect(resolvedCallsigns).toEqual(["UAL123"]);
   });
 
@@ -463,7 +463,7 @@ describe("route guess (server-verified via the RouteResolver)", () => {
     const res = await post(guessedBody("bbbb2222-2222-4222-8222-222222222222", "EGLL"));
     expect(res.statusCode).toBe(201);
     expect(res.json().guessCorrect).toBe(true);
-    expect(res.json().points).toBe(80);
+    expect(res.json().points).toBe(88);
   });
 
   it("a wrong guess earns no bonus", async () => {

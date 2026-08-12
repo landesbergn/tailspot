@@ -29,7 +29,7 @@
  * The server verifies it against its OWN truth ("type" → the registry-resolved
  * typecode for the icao24, the same resolution the scorer uses; "route" → the
  * RouteResolver behind GET /v1/routes/:callsign, correct iff the value matches
- * EITHER endpoint) and a correct guess earns +10% (route) / +25% (type) of the
+ * EITHER endpoint) and a correct guess earns +25% (route or type) of the
  * base via the canonical scorer. Verification failure (resolver down, no route
  * on file, no callsign) scores the guess incorrect but NEVER fails the catch.
  *

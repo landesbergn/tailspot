@@ -5,6 +5,30 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-12 — route-guess bonus re-balanced +10% → +25% — branch `claude/route-guessing-bonus-25-rlymmj`
+
+The route-guess bonus round now pays **+25% of base** (was +10%), matching the
+type-guess fraction. Changed at the canonical source and everywhere the parity
+net pins it:
+
+- **Canonical:** `tools/generate-aircraft-types.py` (`SCORING_BONUSES.routeGuess`
+  0.1 → 0.25) + the generated `scoring-bonuses.json`.
+- **Backend:** `GUESS_BONUS_FRACTIONS.route` 0.1 → 0.25 and
+  **`CURRENT_SCORING_VERSION` 3 → 4** (per the regime rule — the fraction is
+  scoring logic). The v3→v4 rescore is **NOT zero-delta**: every correct
+  ROUTE-guess catch gains (verdict frozen on the row, amount floats) — run
+  `npm run rescore -- --all --dry-run` and review before applying. Route/rescore
+  test totals updated (rare correct-route catch 80 → 88; epic
+  first-of-type + route rescore 160 → 175). Full backend suite green (334).
+- **iOS:** `ScoringBonuses.routeGuess` 0.1 → 0.25 (display-side estimate; server
+  stays authoritative), ledger label "10% ROUTE BONUS" → "25% ROUTE BONUS",
+  masked-route eyebrow "BONUS ROUND · +10%" → "· +25%", and the
+  `ScoringPointsParityTests` route ladder now equals the type ladder
+  ([3, 5, 13, 25, 125]). iOS suite not run this round (Linux session — no
+  simulator); run before deploy.
+- **Compat:** additive with respect to shipped builds — old clients' "10%" label
+  is display-only while the server awards 25%; deploy the server first as usual.
+
 ## 2026-08-08 — tailspot.app points at the App Store — branch `feat/app-store-links`
 
 The site still said "Coming soon" and "Currently in private TestFlight beta" the

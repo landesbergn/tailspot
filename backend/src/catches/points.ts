@@ -49,8 +49,13 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       versions. Run `npm run rescore -- --all --dry-run` and confirm Δ 0
  *       before applying; the bump still matters so the version history stays
  *       honest for the next real re-balance.
+ *   4 — route-guess bonus re-balanced +10% → +25% (2026-08-12), matching the
+ *       type-guess fraction. The v3→v4 rescore lifts every correct ROUTE-guess
+ *       catch (the verdict is frozen on the row; only the amount floats) — run
+ *       `npm run rescore -- --all --dry-run` and review the delta before
+ *       applying.
  */
-export const CURRENT_SCORING_VERSION = 3;
+export const CURRENT_SCORING_VERSION = 4;
 
 /** Type guard for a known rarity tier string. */
 function isRarity(value: string | null | undefined): value is Rarity {
@@ -89,10 +94,11 @@ export function isGuessKind(value: unknown): value is GuessKind {
   return value === "route" || value === "type";
 }
 
-/** Correct-guess bonus fractions: route is a near coin-flip (+10%); calling the
- *  exact type is the marquee skill test (+25%, still under first-of-type's +50%). */
+/** Correct-guess bonus fractions: +25% for both kinds (still under
+ *  first-of-type's +50%). Route was +10% until the 2026-08-12 re-balance
+ *  (scoring v4). */
 export const GUESS_BONUS_FRACTIONS: Record<GuessKind, number> = {
-  route: 0.1,
+  route: 0.25,
   type: 0.25,
 };
 
@@ -110,7 +116,7 @@ export function firstOfTypeBonus(base: number): number {
 }
 
 /**
- * The correct-guess BONUS for a given base: +10% (route) / +25% (type) of the
+ * The correct-guess BONUS for a given base: +25% (route or type) of the
  * base, rounded. Like `firstOfTypeBonus`, defined ONCE and used only by the
  * canonical scorer — the VERDICT is frozen on the row at upload, but the
  * AMOUNT floats with the re-derived base at rescore time.

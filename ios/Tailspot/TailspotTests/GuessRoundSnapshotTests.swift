@@ -5,7 +5,7 @@
 //  Visual-pass harness for the IN-CARD ROUTE BONUS ROUND (game-layer PR3;
 //  in-card redesign per Noah 2026-07-10). The round now plays ON the reveal
 //  card (`CatchRevealView`), so this renders the three beats — chips popped +
-//  masked route, correct-answer settled (with the "10% ROUTE BONUS" ledger
+//  masked route, correct-answer settled (with the "25% ROUTE BONUS" ledger
 //  line + rolled-up TOTAL), wrong-answer settled (route revealed, no line) — as
 //  static frames via `_snapshotScreen(guessState:)`. NOT an assertion test: it
 //  writes PNGs to /private/tmp/tailspot_snaps and passes. Review the PNGs.
@@ -63,7 +63,7 @@ struct GuessRoundSnapshotTests {
         write(reveal()._snapshotScreen(width: cardWidth, size: screen, guessState: popped),
               name: "guess_chips_popped", to: dir)
 
-        // (b) — correct answer settled: chips collapsed, real route, "10% ROUTE
+        // (b) — correct answer settled: chips collapsed, real route, "25% ROUTE
         // BONUS +N" in the ledger, TOTAL rolled up to include it (bt = 1).
         let correct = CatchRevealView.GuessSnapshotState(
             render: .init(
