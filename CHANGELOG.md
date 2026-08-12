@@ -5,6 +5,31 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-12 — catch-card identity row unified across reveal + detail — branch `claude/catch-card-consistency-05mrcm`
+
+The row under the split-flap name drifted between the two card surfaces: the
+catch-time reveal showed only `● COMMON`, while the Hangar detail showed
+`● COMMON · BRITISH AIRWAYS … BAW380` (carrier muted, flight right-aligned).
+Per Noah: drop the rarity word from that row and show `FLIGHT · CARRIER`, both
+in ink, the same on both cards.
+
+- **New shared atom `identityRow(...)`** in `CatchRevealView.swift` (next to
+  `statCell`/`ledgerRow`) renders `● BAW380 · BRITISH AIRWAYS` — tier-tinted
+  dot kept as the rarity accent, flight + carrier both `RP.ink`. The rarity
+  WORD still appears in the ledger's base line, so no information is lost.
+  Falls back to the rarity label when a catch has neither callsign nor
+  carrier, so the row never renders as a lone dot. Both `CatchRevealView` and
+  `SettledCatchCard` call it, so the surfaces can't drift again; the share
+  card inherits via `SettledCatchCard`. The reveal's `· ALREADY CAUGHT`
+  duplicate tag still appends.
+- **Catch-time carrier now derives like the detail's**: ContentView's
+  `CardPlane` uses `Airlines.operatorLabel(operatorName:callsign:)` (recorded
+  operator → callsign-prefix airline → Private/unknown) instead of the raw
+  stored `operatorName`, so the reveal and the detail show the same airline.
+- **Detail-screen spacing pass**: the chrome-pills → card gap shrank from
+  ~28 pt of dead air to 12 pt (scroll content top padding 72 → 56, and the
+  card's extra 8 pt top padding removed).
+
 ## 2026-08-08 — tailspot.app points at the App Store — branch `feat/app-store-links`
 
 The site still said "Coming soon" and "Currently in private TestFlight beta" the

@@ -368,6 +368,39 @@ func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) ->
     }
 }
 
+/// The identity row under the split-flap name — tier-accent dot, then
+/// "FLIGHT · CARRIER" in ink (2026-08-12: the rarity WORD moved out of this
+/// row; the tier still shows as the dot's tint and as the ledger's base
+/// line). Shared by the reveal and `SettledCatchCard` so the catch moment
+/// and the Hangar detail render the identical row. Falls back to the rarity
+/// label when the catch has neither a callsign nor a carrier, so the row
+/// never renders as a lone dot.
+func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
+                 scale: CGFloat, isDuplicate: Bool = false) -> some View {
+    let parts = [callsign, carrier]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+        .filter { !$0.isEmpty }
+    return HStack(spacing: 7 * scale) {
+        Circle().fill(rarity.tint).frame(width: 6 * scale, height: 6 * scale)
+        if parts.isEmpty {
+            Text(rarity.label.uppercased())
+                .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
+                .tracking(3).foregroundColor(rarity.tint)
+        } else {
+            Text(parts.joined(separator: " · "))
+                .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
+                .tracking(1).foregroundColor(RP.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        if isDuplicate {
+            Text("· ALREADY CAUGHT")
+                .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
+                .tracking(1).foregroundColor(Brand.Color.duplicateRose)
+                .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+        }
+    }
+}
+
 func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Double, scale: CGFloat, big: Bool = false) -> some View {
     HStack {
         Text(label)
@@ -881,18 +914,9 @@ struct CatchRevealView: View {
                         }
                     }
 
-                    HStack(spacing: 7 * scale) {
-                        Circle().fill(accent).frame(width: 6 * scale, height: 6 * scale)
-                        Text(plane.rarity.label.uppercased())
-                            .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                            .tracking(3).foregroundColor(accent)
-                        if isDuplicate {
-                            Text("· ALREADY CAUGHT")
-                                .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
-                                .tracking(1).foregroundColor(Brand.Color.duplicateRose)
-                        }
-                    }
-                    .opacity(ss(0.56, 0.7, t))
+                    identityRow(callsign: plane.callsign, carrier: plane.carrier,
+                                rarity: plane.rarity, scale: scale, isDuplicate: isDuplicate)
+                        .opacity(ss(0.56, 0.7, t))
 
                     Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)
 

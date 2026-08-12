@@ -105,30 +105,8 @@ struct SettledCatchCard: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(plane.model ?? "Unknown aircraft"))
 
-                HStack(spacing: 7 * scale) {
-                    Circle().fill(accent).frame(width: 6 * scale, height: 6 * scale)
-                    Text(plane.rarity.label.uppercased())
-                        .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                        .tracking(3).foregroundColor(accent)
-                    if let carrier = plane.carrier?.trimmingCharacters(in: .whitespacesAndNewlines),
-                       !carrier.isEmpty {
-                        Text("· \(carrier.uppercased())")
-                            .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
-                            .tracking(1).foregroundColor(RP.muted)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                    // Flight number (callsign) — the identifier a spotter reads
-                    // off the card. Right-aligned so a long carrier name
-                    // truncates before it; monospaced to match the HUD vocabulary.
-                    if let flight = plane.callsign?.trimmingCharacters(in: .whitespacesAndNewlines),
-                       !flight.isEmpty {
-                        Spacer(minLength: 6 * scale)
-                        Text(flight.uppercased())
-                            .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                            .tracking(1).foregroundColor(RP.ink)
-                            .lineLimit(1).fixedSize(horizontal: true, vertical: false)
-                    }
-                }
+                identityRow(callsign: plane.callsign, carrier: plane.carrier,
+                            rarity: plane.rarity, scale: scale)
 
                 Rectangle().fill(RP.rule).frame(height: 1)
 
