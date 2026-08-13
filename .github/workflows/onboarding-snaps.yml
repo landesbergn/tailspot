@@ -1,0 +1,59 @@
+# TEMPORARY branch-scoped workflow (claude/test-onboarding-flow-nwkje6 only).
+# Purpose: build the app for the iOS Simulator on the macOS runner, render the
+# onboarding steps via OnboardingSnapshotTests, and push the PNGs back to this
+# branch so they can be reviewed from an environment without Xcode.
+# Not meant to merge to main — delete before/at PR time.
+name: onboarding-snaps
+
+on:
+  push:
+    branches: [claude/test-onboarding-flow-nwkje6]
+    # The snaps commit is pushed with GITHUB_TOKEN (which doesn't retrigger
+    # workflows); paths-ignore is belt-and-suspenders against loops.
+    paths-ignore:
+      - 'snaps/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: onboarding-snaps
+  cancel-in-progress: true
+
+jobs:
+  snaps:
+    name: Onboarding snapshots
+    # Same image + Xcode pin rationale as tests.yml: only macos-26 carries
+    # the pinned Xcode, and the pin must match local dev.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode (pinned to local dev version)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.6'
+
+      - name: Build + render onboarding steps in the simulator
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project ios/Tailspot/Tailspot.xcodeproj \
+            -scheme Tailspot \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -only-testing:TailspotTests/OnboardingSnapshotTests \
+            CODE_SIGNING_ALLOWED=NO
+
+      # OnboardingSnapshotTests writes PNGs to /private/tmp/tailspot_snaps on
+      # the simulator host (= this runner). Commit them into snaps/ so the
+      # remote session can `git pull` and view them.
+      - name: Commit rendered snapshots back to the branch
+        run: |
+          ls -la /private/tmp/tailspot_snaps/
+          mkdir -p snaps
+          cp /private/tmp/tailspot_snaps/*.png snaps/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add snaps
+          git commit -m "ci: onboarding snapshot renders (automated, branch-only)"
+          git push origin HEAD:claude/test-onboarding-flow-nwkje6
