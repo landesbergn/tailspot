@@ -28,7 +28,6 @@
 //
 
 import SwiftUI
-import PostHog   // .postHogMask() on the user's catch photo (session replay)
 
 // MARK: - Value object
 
@@ -364,8 +363,11 @@ struct CatchCardView: View {
                             // PRIVACY: a file URL is the user's own catch JPEG
                             // (CatchPhotoStore) — mask it from PostHog session
                             // replay. Remote URLs are public stock imagery of
-                            // the airframe and stay visible.
-                            .postHogMask(url.isFileURL)
+                            // the airframe and stay visible. Routed through
+                            // CatchPhotoReplayMask so offscreen share renders
+                            // can drop the mask (ImageRenderer draws PostHog's
+                            // tag views as the yellow no-entry placeholder).
+                            .catchPhotoReplayMask(url.isFileURL)
                     default:
                         placeholderStripes
                     }

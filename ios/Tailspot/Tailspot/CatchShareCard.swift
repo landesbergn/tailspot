@@ -72,11 +72,26 @@ enum CatchShare {
     /// natural size (the split-flap name can wrap to a second line).
     @MainActor
     static func image(for plane: CardPlane) -> Image {
-        let renderer = ImageRenderer(content: CatchShareCard(plane: plane))
-        renderer.scale = 3
-        if let ui = renderer.uiImage {
+        if let ui = uiImage(for: plane) {
             return Image(uiImage: ui)
         }
         return Image(systemName: "airplane")
+    }
+
+    /// The raw render behind `image(for:)` — split out so tests can assert
+    /// on pixels. `\.replayMaskingDisabled` drops the session-replay photo
+    /// mask from this OFFSCREEN tree: ImageRenderer draws the mask's hidden
+    /// UIKit tag views as a yellow no-entry placeholder over the hero (the
+    /// "photo mask on shared cards" bug), and these pixels never appear on
+    /// screen, so replay can't capture them anyway — no privacy loss. See
+    /// CatchPhotoReplayMask.swift.
+    @MainActor
+    static func uiImage(for plane: CardPlane) -> UIImage? {
+        let renderer = ImageRenderer(
+            content: CatchShareCard(plane: plane)
+                .environment(\.replayMaskingDisabled, true)
+        )
+        renderer.scale = 3
+        return renderer.uiImage
     }
 }
