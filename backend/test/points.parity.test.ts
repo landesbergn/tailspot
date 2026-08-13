@@ -14,6 +14,8 @@ import { describe, expect, it } from "vitest";
 import {
   FIRST_OF_TYPE_BONUS_FRACTION,
   GUESS_BONUS_FRACTIONS,
+  LEGACY_ROUTE_GUESS_FRACTION,
+  ROUTE_GUESS_REBALANCE_CUTOVER,
   type Rarity,
   UNKNOWN_RARITY_POINTS,
   firstOfTypeBonus,
@@ -28,6 +30,8 @@ const bonusesPath = resolve(here, "../../ios/Tailspot/Tailspot/scoring-bonuses.j
 const bonuses = JSON.parse(readFileSync(bonusesPath, "utf8")) as {
   firstOfType: number;
   routeGuess: number;
+  routeGuessCutover: number; // unix seconds — the 2026-08-13 route re-balance instant
+  routeGuessLegacy: number; // the pre-cutover route fraction (+10%)
   typeGuess: number;
 };
 const tiers: Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
@@ -49,22 +53,46 @@ describe("scoring points parity (backend ↔ canonical scoring-points.json)", ()
 });
 
 describe("bonus parity (backend ↔ canonical scoring-bonuses.json)", () => {
-  it("the canonical file defines exactly the three bonus fractions", () => {
-    expect(Object.keys(bonuses).sort()).toEqual(["firstOfType", "routeGuess", "typeGuess"]);
+  // One tick either side of the route re-balance cutover (2026-08-13, the
+  // +10% → +25% change is going-forward only, keyed off each catch's own
+  // caughtAt).
+  const preCutover = new Date(bonuses.routeGuessCutover * 1000 - 1);
+  const postCutover = new Date(bonuses.routeGuessCutover * 1000);
+
+  it("the canonical file defines exactly the five bonus values", () => {
+    expect(Object.keys(bonuses).sort()).toEqual([
+      "firstOfType",
+      "routeGuess",
+      "routeGuessCutover",
+      "routeGuessLegacy",
+      "typeGuess",
+    ]);
   });
 
-  it("every backend fraction matches the canonical file", () => {
+  it("every backend fraction (and the cutover instant) matches the canonical file", () => {
     expect(FIRST_OF_TYPE_BONUS_FRACTION).toBe(bonuses.firstOfType);
     expect(GUESS_BONUS_FRACTIONS.route).toBe(bonuses.routeGuess);
     expect(GUESS_BONUS_FRACTIONS.type).toBe(bonuses.typeGuess);
+    expect(LEGACY_ROUTE_GUESS_FRACTION).toBe(bonuses.routeGuessLegacy);
+    expect(ROUTE_GUESS_REBALANCE_CUTOVER.getTime()).toBe(bonuses.routeGuessCutover * 1000);
   });
 
   it("the bonus helpers apply the canonical fractions (rounded) to every base tier", () => {
     for (const tier of tiers) {
       const base = pointsForRarity(tier);
       expect(firstOfTypeBonus(base)).toBe(Math.round(base * bonuses.firstOfType));
-      expect(guessBonus(base, "route")).toBe(Math.round(base * bonuses.routeGuess));
-      expect(guessBonus(base, "type")).toBe(Math.round(base * bonuses.typeGuess));
+      expect(guessBonus(base, "route", postCutover)).toBe(Math.round(base * bonuses.routeGuess));
+      expect(guessBonus(base, "type", postCutover)).toBe(Math.round(base * bonuses.typeGuess));
+    }
+  });
+
+  it("a pre-cutover ROUTE guess keeps the legacy fraction; a type guess is era-blind", () => {
+    for (const tier of tiers) {
+      const base = pointsForRarity(tier);
+      expect(guessBonus(base, "route", preCutover)).toBe(
+        Math.round(base * bonuses.routeGuessLegacy),
+      );
+      expect(guessBonus(base, "type", preCutover)).toBe(Math.round(base * bonuses.typeGuess));
     }
   });
 });

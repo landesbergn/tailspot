@@ -5,6 +5,54 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-13 — route-guess bonus re-balanced +10% → +25%, GOING FORWARD only — branch `claude/route-guessing-bonus-25-rlymmj`
+
+The route-guess bonus round now pays **+25% of base** (was +10%), matching the
+type-guess fraction — **for catches made from 2026-08-13T00:00:00Z on** (Noah's
+call: the re-balance does not apply historically). The fraction is ERA-AWARE,
+keyed off each catch's own `caughtAt` — never the scoring or display moment —
+so old catches keep their +10% on every surface and under any future rescore.
+Changed at the canonical source and everywhere the parity net pins it:
+
+- **Canonical:** `tools/generate-aircraft-types.py` / `scoring-bonuses.json` —
+  `routeGuess` 0.1 → 0.25 plus two NEW keys pinned by both parity suites:
+  `routeGuessLegacy` (0.1) and `routeGuessCutover` (unix seconds; all values
+  stay JSON numbers so the strict decoders keep working).
+- **Backend:** `guessBonus(base, kind, caughtAt)` picks 0.25 or the legacy 0.1
+  by `caughtAt < ROUTE_GUESS_REBALANCE_CUTOVER`; the upload path scores by the
+  wire `caughtAt` (a delayed offline upload of an old catch still earns +10%)
+  and the rescore job feeds each row's stored `caughtAt` through — with the
+  era added to its memoization key, so mixed-era rows of one airframe can't
+  share a score. **`CURRENT_SCORING_VERSION` 3 → 4** (the fraction logic
+  changed), and the v3→v4 rescore is **zero-delta by construction** — no prod
+  rescore needed (only a row caught post-cutover but scored by a still-v3
+  server in the deploy gap would move). Suite green (336, two new era tests).
+- **iOS:** `ScoringBonuses.routeGuess` 0.25 + `routeGuessLegacy` /
+  `routeGuessCutover`; `guessBonus(base:kind:caughtAt:)` mirrors the server's
+  era pick (default "now" serves the live reveal, which is post-cutover by
+  construction — its "25% ROUTE BONUS" ledger label and "BONUS ROUND · +25%"
+  eyebrow stay hardcoded); the Hangar-card path passes `row.caughtAt`.
+  `ScoringPointsParityTests` pins the new keys + both era ladders (post
+  [3, 5, 13, 25, 125] = the type ladder; pre [1, 2, 5, 10, 50]).
+- **Compat:** additive with respect to shipped builds — old clients' "10%"
+  label is display-only while the server awards the era fraction; deploy the
+  server first as usual.
+
+## 2026-08-13 — `GET /readyz` DB readiness probe for uptime monitoring — branch `claude/readyz-db-ping`
+
+Alerting round (with Noah, remote): the external uptime monitor (Sentry monitor
+8072647, created today) watched `/healthz`, which deliberately skips the DB — so
+a dead Postgres looked "up" and only surfaced as a trickle of Sentry 500s. New
+**`GET /readyz`**: 200 only when the process is up AND Postgres answers `SELECT 1`
+within 3 s (hung-socket cap via `Promise.race`), else 503. Probe resolved lazily
+per-request (the established lazy-store pattern) so DB-less tests never touch
+`DATABASE_URL`; tests inject `readyProbe` for success/failure/timeout/default-probe
+cases (+4 tests, 338 green). `/healthz` stays DB-free on purpose — Fly restarts
+machines failing that check, and restarting the API over a DB outage adds churn.
+After deploy, repoint monitor 8072647 at `/readyz`. Same round, outside the repo:
+Sentry MCP connected (org `noah-lc`), uptime monitor created, PostHog crash alert
++ zero-DAU canary added, stale OpenSky Fly secrets removed.
+
 ## 2026-08-12 — catch-card identity row unified across reveal + detail — branch `claude/catch-card-consistency-05mrcm`
 
 The row under the split-flap name drifted between the two card surfaces: the
@@ -29,6 +77,68 @@ in ink, the same on both cards.
 - **Detail-screen spacing pass**: the chrome-pills → card gap shrank from
   ~28 pt of dead air to 12 pt (scroll content top padding 72 → 56, and the
   card's extra 8 pt top padding removed).
+
+## 2026-08-12 — Shared catch cards: photo unmasked in the share render — branch `claude/photo-mask-catch-cards-vzpghs`
+
+Field report (Noah): shared catch cards still covered the hero photo with a
+yellow no-entry mask. Root cause: `.postHogMask()` isn't inert under
+ImageRenderer after all — the SDK modifier injects hidden UIKit tag views
+around the photo (on iOS 26+ including a FULL-SIZED frame-capture overlay for
+layer-backed SwiftUI), and ImageRenderer draws platform views as the yellow
+no-entry placeholder. PR #137's "inert" claim was wrong, and the visual-pass
+snapshot harness (no assertions) let it regress silently; the 2026-07-21
+marketing round had already hit the identical failure (see that entry). Note
+`postHogMask(false)` does NOT avoid it — the SDK still injects the tag views
+and only flips their redaction flag.
+
+- **`CatchPhotoReplayMask.swift` (new)** — the one way photo views opt into
+  replay masking: `.catchPhotoReplayMask(_:)` applies `.postHogMask()` only
+  when masking isn't disabled via the new `\.replayMaskingDisabled`
+  environment flag (structurally — the modifier isn't applied at all, since
+  a disabled mask still injects tag views). `RevealPhoto`, `CatchCardView`'s
+  photo, and `FocusThumbnail` all route through it.
+- **`CatchShare.uiImage` sets `\.replayMaskingDisabled` on the offscreen
+  share tree.** No privacy change: those pixels never reach the screen, so
+  session replay can't capture them; every on-screen tree keeps the default
+  and stays masked (the GA posture from #137 is intact).
+- **`ShareCardMaskRegressionTests` (new)** — a real assertion this time:
+  renders the production share path with a solid-magenta catch photo and
+  requires a large magenta region in the output pixels. With a mask tag view
+  back in the tree, the placeholder covers the hero and the count drops to
+  ~0.
+
+## 2026-08-12 — sets curation: helicopter set, data-driven gap fill, title consistency — branch `sets-curation`
+
+Trigger: Noah's Cape Air Cessna 402 catch (Newbury MA) had no set slot to fill.
+Instead of one-off patching, the whole catalog was audited against the prod
+catch histogram (1,032 catches → per-typecode counts, read-only), so every
+addition is backed by real catches:
+
+- **New "Helicopters" family set (8 slots)** — R44, Bell 407, H125/AStar, H135,
+  H145, S-76, AW139, AW109. Rotorcraft were the single biggest curation hole:
+  33 prod catches (B407 alone = 17, the most-caught uncovered typecode) had
+  zero slots anywhere. Noah's healed Bavarian-police H145 fills `fh-h145`.
+- **Cessna 402 slot** in the Cessna family (the trigger), **Pilatus PC-12** in
+  General aviation (16 catches, second-biggest gap), **Hawker 800 + Learjet**
+  slots in Business jets, a **737 Classic** slot (-300/-400/-500, one slot —
+  freighter-era variants are too rare for per-variant quests), and a new
+  2-slot **Airbus A340** family (rare-tier quest; A340-600 caught twice).
+- **Token fixes for silent fall-throughs:** EMB-545 Legacy 450 (3 catches) now
+  fills the Praetor 500 slot ("legacy 450"/"e545" tokens); the short-winglet
+  E75S (2 catches) now fills both E175 slots ("embraer 175" token — its
+  canonical name "Embraer 175" matched no e175/e-175 substring).
+- **Title consistency (Noah's ask):** "Airbus A320 Family" → "Airbus A320",
+  "Boeing 787 Dreamliner" → "Boeing 787", "Bombardier (Business)" →
+  "Bombardier Business Jets" (kept ≤ the 26-char precedent — the browser row
+  is `lineLimit(1)`).
+- **Watched, not added** (zero catches in 1,032): HondaJet, PC-24, TBM,
+  Twin Otter, Beech 1900, PA-31, C310/C421. Add when the histogram says so.
+
+Verified: full TailspotTests green (FamilySetsTests pins every new entry's
+rarity to AircraftTypes.json and all IDs unique). ImageRenderer visual pass
+hit a known wall — SetDetailScreen's `List` and the browser's lazy stack are
+UIKit-backed/viewport-dependent (same class of limitation as the glass-capture
+lesson), so the visual check is the device deploy.
 
 ## 2026-08-08 — tailspot.app points at the App Store — branch `feat/app-store-links`
 

@@ -21,7 +21,7 @@
 //  a "Where's it headed?" prompt — hosts four airport chips that pop in on
 //  the card. Answering resolves the route in place: the tapped chip flashes,
 //  the masked panel crossfades to the real route, and a correct call rolls a
-//  "10% ROUTE BONUS" line into the ledger with the TOTAL counting up. This
+//  "25% ROUTE BONUS" line into the ledger with the TOTAL counting up. This
 //  replaced the separate pre-reveal `GuessRoundView` cover — the guess and
 //  the reveal are now one fluid surface. ContentView threads the question in
 //  via `guess` + resolves through `onGuessResolved`; the eligibility/cadence
@@ -33,7 +33,6 @@
 
 import SwiftUI
 import UIKit
-import PostHog   // .postHogMask() on the user's catch photo (session replay)
 
 // MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
 
@@ -240,10 +239,13 @@ struct RevealPhoto: View {
             // PRIVACY: a local file URL here is always the user's own catch
             // JPEG — mask it from PostHog session replay. The mask redacts
             // only this photo's rect, so the surrounding card chrome still
-            // records. Inert under ImageRenderer (share/snapshot renders).
-            // The remote branch below is a Planespotters stock photo of the
-            // airframe (public imagery, not user content) — left visible.
-            .postHogMask()
+            // records. NOT inert under ImageRenderer (it injects platform
+            // views that render as the yellow no-entry placeholder), so the
+            // share render disables it via \.replayMaskingDisabled — see
+            // CatchPhotoReplayMask.swift. The remote branch below is a
+            // Planespotters stock photo of the airframe (public imagery,
+            // not user content) — left visible.
+            .catchPhotoReplayMask()
         } else if let url, !url.isFileURL {
             // Remote hero (Planespotters thumbnail on catches with no local
             // photo). AsyncImage can't be waited on by ImageRenderer, so
@@ -543,6 +545,9 @@ struct CatchRevealView: View {
     }
     /// The route bonus a correct in-card guess earns — derived live off the base
     /// like `firstOfTypeBonus`, so it re-tiers on read. Route-only per Noah.
+    /// The defaulted `caughtAt:` (now) is correct here BY CONSTRUCTION: the
+    /// reveal only ever shows a catch being made right now, which is always
+    /// post-cutover — hence the hardcoded "25%" ledger labels below.
     private var routeBonus: Int {
         isDuplicate ? 0 : ScoringBonuses.guessBonus(base: base, kind: .route)
     }
@@ -942,14 +947,14 @@ struct CatchRevealView: View {
                             // Route-guess bonus. In the live in-card round it
                             // appears ONLY on a correct call and fades in with
                             // the count-up (`bt`); the legacy re-render path uses
-                            // the pre-frozen amount. Label locked to "10% ROUTE
-                            // BONUS" (Noah 2026-07-09).
+                            // the pre-frozen amount. Label locked to "<pct> ROUTE
+                            // BONUS" (Noah 2026-07-09; 25% since 2026-08-12).
                             if let render {
                                 if render.resolution?.correct == true, routeBonus > 0 {
-                                    ledgerRow("10% ROUTE BONUS", "+\(routeBonus)", RP.gold, ss(0.0, 0.4, bt), scale: scale)
+                                    ledgerRow("25% ROUTE BONUS", "+\(routeBonus)", RP.gold, ss(0.0, 0.4, bt), scale: scale)
                                 }
                             } else if frozenGuessBonus > 0 {
-                                ledgerRow("10% ROUTE BONUS", "+\(frozenGuessBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
+                                ledgerRow("25% ROUTE BONUS", "+\(frozenGuessBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
                             }
                         }
                         Rectangle().fill(RP.rule).frame(height: 1)
@@ -1034,7 +1039,7 @@ struct CatchRevealView: View {
     /// into. Styled to match the card's mono labels.
     private func maskedRoutePrompt(question: GuessRoundQuestion, scale: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4 * scale) {
-            Text("BONUS ROUND · +10%")
+            Text("BONUS ROUND · +25%")
                 .font(.system(size: 9.5 * scale, weight: .bold, design: .monospaced))
                 .tracking(1.5).foregroundColor(RP.gold)
             Text(question.prompt)
