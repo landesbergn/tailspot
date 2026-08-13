@@ -308,11 +308,16 @@ export interface CatchStore {
    * `guess` follows the same pattern: the caller supplies the server-verified
    * VERDICT (upload verifies the wire's guess value against registry/route
    * truth; re-score reads the frozen `guess_kind`/`guess_correct` off the row),
-   * and a correct guess adds `guessBonus(base, kind)` on top.
+   * and a correct guess adds `guessBonus(base, kind, caughtAt)` on top.
+   *
+   * `caughtAt` is the catch's own moment (wire `caughtAt` on upload, the
+   * stored column on re-score) — it picks the guess-bonus ERA (the 2026-08-13
+   * route re-balance applies going forward only). Omitting it means "now",
+   * which is only right for a catch being made right now.
    */
   scoreCatch(
     icao24: string,
-    opts?: { firstOfType?: boolean; guess?: GuessVerdict },
+    opts?: { firstOfType?: boolean; guess?: GuessVerdict; caughtAt?: Date },
   ): Promise<ScoredCatch>;
   /**
    * Whether `deviceId` has NO existing catch of `typecode` — i.e. a new catch of
@@ -405,7 +410,7 @@ export class DrizzleCatchStore implements CatchStore {
 
   async scoreCatch(
     icao24: string,
-    opts: { firstOfType?: boolean; guess?: GuessVerdict } = {},
+    opts: { firstOfType?: boolean; guess?: GuessVerdict; caughtAt?: Date } = {},
   ): Promise<ScoredCatch> {
     const { typecode, rarity } = await this.resolveRarity(icao24);
     const firstOfType = opts.firstOfType ?? false;
@@ -414,7 +419,7 @@ export class DrizzleCatchStore implements CatchStore {
     const points =
       base +
       (firstOfType ? firstOfTypeBonus(base) : 0) +
-      (opts.guess?.correct ? guessBonus(base, opts.guess.kind) : 0);
+      (opts.guess?.correct ? guessBonus(base, opts.guess.kind, opts.caughtAt ?? new Date()) : 0);
     return {
       typecode,
       rarity,

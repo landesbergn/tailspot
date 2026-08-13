@@ -2399,7 +2399,12 @@ struct ContentView: View {
             ? row.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil
         let guessBonusPoints = guessKind.map {
-            ScoringBonuses.guessBonus(base: row.resolvedRarity.basePoints, kind: $0)
+            // The row's own caughtAt picks the fraction era (the 2026-08-13
+            // route re-balance is going-forward only) — a pre-cutover catch
+            // re-tiers at its legacy +10%, mirroring the server's award.
+            ScoringBonuses.guessBonus(
+                base: row.resolvedRarity.basePoints, kind: $0, caughtAt: row.caughtAt
+            )
         } ?? 0
         return CardPlane(
             callsign: row.callsign,

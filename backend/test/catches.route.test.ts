@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
+import { ROUTE_GUESS_REBALANCE_CUTOVER } from "../src/catches/points.js";
 import type { Database } from "../src/db/client.js";
 import { catches, registry, typecodes } from "../src/db/schema.js";
 import { DrizzleCatchStore, DrizzleIdentityStore } from "../src/identity/store.js";
@@ -449,13 +450,16 @@ describe("route guess (server-verified via the RouteResolver)", () => {
     return { ...catchBody("aaaaaa", uuid), guess: { kind: "route", value } };
   }
 
-  it("a correct guess on the ORIGIN earns +25% of base (and the callsign is normalized)", async () => {
+  // The fixture NOW (caughtAt) predates the 2026-08-13 route re-balance
+  // cutover, so these correct guesses earn the LEGACY +10% — the +25% applies
+  // going forward only, keyed off each catch's own caughtAt (see points.ts).
+  it("a correct guess on the ORIGIN earns its era's bonus (and the callsign is normalized)", async () => {
     const body = guessedBody("bbbb1111-1111-4111-8111-111111111111", "ksfo");
     body.callsign = "ual123"; // lowercase on the wire — resolver must get UAL123
     const res = await post(body);
     expect(res.statusCode).toBe(201);
     expect(res.json().guessCorrect).toBe(true);
-    expect(res.json().points).toBe(88); // rare 50 + first-of-type 25 + route-guess round(50*0.25)=13
+    expect(res.json().points).toBe(80); // rare 50 + first-of-type 25 + route-guess round(50*0.1)=5
     expect(resolvedCallsigns).toEqual(["UAL123"]);
   });
 
@@ -463,7 +467,18 @@ describe("route guess (server-verified via the RouteResolver)", () => {
     const res = await post(guessedBody("bbbb2222-2222-4222-8222-222222222222", "EGLL"));
     expect(res.statusCode).toBe(201);
     expect(res.json().guessCorrect).toBe(true);
-    expect(res.json().points).toBe(88);
+    expect(res.json().points).toBe(80);
+  });
+
+  it("a catch caught AT/AFTER the cutover earns the re-balanced +25%", async () => {
+    const body = guessedBody("bbbb7777-7777-4777-8777-777777777777", "KSFO");
+    // Override the fixture's pre-cutover caughtAt: the catch's own moment
+    // picks the fraction, not the server clock (which stays at NOW here).
+    body.caughtAt = ROUTE_GUESS_REBALANCE_CUTOVER.getTime() / 1000;
+    const res = await post(body);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().guessCorrect).toBe(true);
+    expect(res.json().points).toBe(88); // rare 50 + first-of-type 25 + route-guess round(50*0.25)=13
   });
 
   it("a wrong guess earns no bonus", async () => {

@@ -512,6 +512,9 @@ struct CatchRevealView: View {
     }
     /// The route bonus a correct in-card guess earns — derived live off the base
     /// like `firstOfTypeBonus`, so it re-tiers on read. Route-only per Noah.
+    /// The defaulted `caughtAt:` (now) is correct here BY CONSTRUCTION: the
+    /// reveal only ever shows a catch being made right now, which is always
+    /// post-cutover — hence the hardcoded "25%" ledger labels below.
     private var routeBonus: Int {
         isDuplicate ? 0 : ScoringBonuses.guessBonus(base: base, kind: .route)
     }

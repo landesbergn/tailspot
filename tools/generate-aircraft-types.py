@@ -66,15 +66,25 @@ BONUSES_OUT = OUT.parent / "scoring-bonuses.json"
 RARITY_POINTS = {"common": 10, "uncommon": 20, "rare": 50, "epic": 100, "legendary": 500}
 
 # Canonical bonus FRACTIONS (of the catch's base points): first-of-type +50%,
-# correct route guess +25%, correct type guess +25% (game-layer plan D2;
-# route re-balanced from +10% on 2026-08-12). The
-# single source pinned by the backend's points.parity.test.ts (and by an iOS
-# parity test once the client-side guess work lands). Emitted as a SEPARATE
+# correct route guess +25%, correct type guess +25% (game-layer plan D2).
+# The route fraction is ERA-AWARE: it was +10% at launch and the 2026-08-13
+# re-balance to +25% applies GOING FORWARD ONLY (Noah's call) — catches whose
+# own caughtAt predates routeGuessCutover (unix seconds, 2026-08-13T00:00:00Z)
+# keep routeGuessLegacy forever, on both platforms and under any rescore. The
+# single source pinned by the backend's points.parity.test.ts and the iOS
+# ScoringBonusesParityTests (all values are JSON numbers so both strict
+# decoders keep working). Emitted as a SEPARATE
 # scoring-bonuses.json — NOT a block inside scoring-points.json — because
 # shipped iOS clients decode that file as a strict {tier: points} map and a
 # nested block would break their pinned parity test. Same regeneration rule as
 # the ladder: edit here, regenerate, bump CURRENT_SCORING_VERSION, re-score.
-SCORING_BONUSES = {"firstOfType": 0.5, "routeGuess": 0.25, "typeGuess": 0.25}
+SCORING_BONUSES = {
+    "firstOfType": 0.5,
+    "routeGuess": 0.25,
+    "routeGuessCutover": 1786579200,
+    "routeGuessLegacy": 0.1,
+    "typeGuess": 0.25,
+}
 FAA_XLSX = Path(__file__).resolve().parent / "data/faa_aircraft_characteristics.xlsx"
 
 # ---------------------------------------------------------------------------

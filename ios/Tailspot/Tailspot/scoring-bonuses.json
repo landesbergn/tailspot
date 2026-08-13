@@ -1,5 +1,7 @@
 {
  "firstOfType": 0.5,
  "routeGuess": 0.25,
+ "routeGuessCutover": 1786579200,
+ "routeGuessLegacy": 0.1,
  "typeGuess": 0.25
 }

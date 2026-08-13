@@ -5,29 +5,38 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-08-12 — route-guess bonus re-balanced +10% → +25% — branch `claude/route-guessing-bonus-25-rlymmj`
+## 2026-08-13 — route-guess bonus re-balanced +10% → +25%, GOING FORWARD only — branch `claude/route-guessing-bonus-25-rlymmj`
 
 The route-guess bonus round now pays **+25% of base** (was +10%), matching the
-type-guess fraction. Changed at the canonical source and everywhere the parity
-net pins it:
+type-guess fraction — **for catches made from 2026-08-13T00:00:00Z on** (Noah's
+call: the re-balance does not apply historically). The fraction is ERA-AWARE,
+keyed off each catch's own `caughtAt` — never the scoring or display moment —
+so old catches keep their +10% on every surface and under any future rescore.
+Changed at the canonical source and everywhere the parity net pins it:
 
-- **Canonical:** `tools/generate-aircraft-types.py` (`SCORING_BONUSES.routeGuess`
-  0.1 → 0.25) + the generated `scoring-bonuses.json`.
-- **Backend:** `GUESS_BONUS_FRACTIONS.route` 0.1 → 0.25 and
-  **`CURRENT_SCORING_VERSION` 3 → 4** (per the regime rule — the fraction is
-  scoring logic). The v3→v4 rescore is **NOT zero-delta**: every correct
-  ROUTE-guess catch gains (verdict frozen on the row, amount floats) — run
-  `npm run rescore -- --all --dry-run` and review before applying. Route/rescore
-  test totals updated (rare correct-route catch 80 → 88; epic
-  first-of-type + route rescore 160 → 175). Full backend suite green (334).
-- **iOS:** `ScoringBonuses.routeGuess` 0.1 → 0.25 (display-side estimate; server
-  stays authoritative), ledger label "10% ROUTE BONUS" → "25% ROUTE BONUS",
-  masked-route eyebrow "BONUS ROUND · +10%" → "· +25%", and the
-  `ScoringPointsParityTests` route ladder now equals the type ladder
-  ([3, 5, 13, 25, 125]). iOS suite not run this round (Linux session — no
-  simulator); run before deploy.
-- **Compat:** additive with respect to shipped builds — old clients' "10%" label
-  is display-only while the server awards 25%; deploy the server first as usual.
+- **Canonical:** `tools/generate-aircraft-types.py` / `scoring-bonuses.json` —
+  `routeGuess` 0.1 → 0.25 plus two NEW keys pinned by both parity suites:
+  `routeGuessLegacy` (0.1) and `routeGuessCutover` (unix seconds; all values
+  stay JSON numbers so the strict decoders keep working).
+- **Backend:** `guessBonus(base, kind, caughtAt)` picks 0.25 or the legacy 0.1
+  by `caughtAt < ROUTE_GUESS_REBALANCE_CUTOVER`; the upload path scores by the
+  wire `caughtAt` (a delayed offline upload of an old catch still earns +10%)
+  and the rescore job feeds each row's stored `caughtAt` through — with the
+  era added to its memoization key, so mixed-era rows of one airframe can't
+  share a score. **`CURRENT_SCORING_VERSION` 3 → 4** (the fraction logic
+  changed), and the v3→v4 rescore is **zero-delta by construction** — no prod
+  rescore needed (only a row caught post-cutover but scored by a still-v3
+  server in the deploy gap would move). Suite green (336, two new era tests).
+- **iOS:** `ScoringBonuses.routeGuess` 0.25 + `routeGuessLegacy` /
+  `routeGuessCutover`; `guessBonus(base:kind:caughtAt:)` mirrors the server's
+  era pick (default "now" serves the live reveal, which is post-cutover by
+  construction — its "25% ROUTE BONUS" ledger label and "BONUS ROUND · +25%"
+  eyebrow stay hardcoded); the Hangar-card path passes `row.caughtAt`.
+  `ScoringPointsParityTests` pins the new keys + both era ladders (post
+  [3, 5, 13, 25, 125] = the type ladder; pre [1, 2, 5, 10, 50]).
+- **Compat:** additive with respect to shipped builds — old clients' "10%"
+  label is display-only while the server awards the era fraction; deploy the
+  server first as usual.
 
 ## 2026-08-12 — Shared catch cards: photo unmasked in the share render — branch `claude/photo-mask-catch-cards-vzpghs`
 

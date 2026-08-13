@@ -49,11 +49,13 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       versions. Run `npm run rescore -- --all --dry-run` and confirm Δ 0
  *       before applying; the bump still matters so the version history stays
  *       honest for the next real re-balance.
- *   4 — route-guess bonus re-balanced +10% → +25% (2026-08-12), matching the
- *       type-guess fraction. The v3→v4 rescore lifts every correct ROUTE-guess
- *       catch (the verdict is frozen on the row; only the amount floats) — run
- *       `npm run rescore -- --all --dry-run` and review the delta before
- *       applying.
+ *   4 — route-guess bonus re-balanced +10% → +25% GOING FORWARD (2026-08-13,
+ *       Noah's call), matching the type-guess fraction. Era-aware: the route
+ *       fraction keys off the row's own `caughtAt` (cutover
+ *       2026-08-13T00:00:00Z), so pre-cutover catches keep their +10% under
+ *       ANY future rescore — the v3→v4 rescore is zero-delta by construction.
+ *       (The only rows that could move are ones caught AFTER the cutover but
+ *       scored by a still-v3 server in the deploy gap.)
  */
 export const CURRENT_SCORING_VERSION = 4;
 
@@ -95,12 +97,27 @@ export function isGuessKind(value: unknown): value is GuessKind {
 }
 
 /** Correct-guess bonus fractions: +25% for both kinds (still under
- *  first-of-type's +50%). Route was +10% until the 2026-08-12 re-balance
- *  (scoring v4). */
+ *  first-of-type's +50%). Route was +10% until the 2026-08-13 re-balance
+ *  (scoring v4) — and stays +10% for catches made before it (below). */
 export const GUESS_BONUS_FRACTIONS: Record<GuessKind, number> = {
   route: 0.25,
   type: 0.25,
 };
+
+/** The route-guess fraction for catches made BEFORE the re-balance cutover
+ *  (the launch value, game-layer PR1). */
+export const LEGACY_ROUTE_GUESS_FRACTION = 0.1;
+
+/**
+ * The route re-balance cutover instant (2026-08-13T00:00:00Z; mirrored in
+ * scoring-bonuses.json as unix seconds so the iOS parity test pins the SAME
+ * instant). The +10% → +25% change applies GOING FORWARD ONLY: a catch's
+ * fraction is chosen by its own `caughtAt`, never by when it happens to be
+ * scored — so a delayed offline upload of an old catch still earns +10%, and
+ * a future rescore (registry heals re-derive points routinely) can never
+ * retroactively lift pre-cutover rows to +25%.
+ */
+export const ROUTE_GUESS_REBALANCE_CUTOVER = new Date("2026-08-13T00:00:00Z");
 
 /**
  * The first-of-type BONUS for a given base: +50% of the base, rounded (R3, AE2).
@@ -116,11 +133,17 @@ export function firstOfTypeBonus(base: number): number {
 }
 
 /**
- * The correct-guess BONUS for a given base: +25% (route or type) of the
- * base, rounded. Like `firstOfTypeBonus`, defined ONCE and used only by the
- * canonical scorer — the VERDICT is frozen on the row at upload, but the
- * AMOUNT floats with the re-derived base at rescore time.
+ * The correct-guess BONUS for a given base: +25% (route or type) of the base,
+ * rounded — except a ROUTE guess on a catch made before the 2026-08-13
+ * cutover, which keeps the legacy +10% (the re-balance is going-forward
+ * only). Like `firstOfTypeBonus`, defined ONCE and used only by the canonical
+ * scorer — the VERDICT is frozen on the row at upload, but the AMOUNT floats
+ * with the re-derived base at rescore time, within the row's own era.
  */
-export function guessBonus(base: number, kind: GuessKind): number {
-  return Math.round(base * GUESS_BONUS_FRACTIONS[kind]);
+export function guessBonus(base: number, kind: GuessKind, caughtAt: Date): number {
+  const fraction =
+    kind === "route" && caughtAt < ROUTE_GUESS_REBALANCE_CUTOVER
+      ? LEGACY_ROUTE_GUESS_FRACTION
+      : GUESS_BONUS_FRACTIONS[kind];
+  return Math.round(base * fraction);
 }
