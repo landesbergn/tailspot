@@ -35,11 +35,7 @@ import { eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
 import { DrizzleCatchStore, type GuessVerdict, type ScoredCatch } from "../identity/store.js";
-import {
-  CURRENT_SCORING_VERSION,
-  ROUTE_GUESS_REBALANCE_CUTOVER,
-  isGuessKind,
-} from "./points.js";
+import { CURRENT_SCORING_VERSION, ROUTE_GUESS_REBALANCE_CUTOVER, isGuessKind } from "./points.js";
 
 export interface RescoreOptions {
   /** Re-score EVERY catch, not just the stale set. Default false. */
