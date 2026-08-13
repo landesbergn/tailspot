@@ -74,14 +74,16 @@ struct CatchDetailView: View {
                         onPhotoTap: heroPhotoLink.map { url in { openURL(url) } }
                     )
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 8)
                     finePrint
                     if let photo = planespottersPhoto, !hasCatchPhoto {
                         attribution(photo)
                     }
                 }
                 .padding(.horizontal, 18)
-                .padding(.top, 64)
+                // Clears the 44 pt floating chrome bar (8 pt top inset + 36 pt
+                // pill) with a 12 pt breath — was 72 pt of dead air (2026-08-12
+                // spacing pass: the pills → photo gap read as empty).
+                .padding(.top, 56)
                 .padding(.bottom, 40)
             }
 
