@@ -36,6 +36,8 @@ describe("rescoreCatches", () => {
     firstOfType?: boolean;
     guessKind?: string | null;
     guessCorrect?: boolean;
+    /** Defaults PRE the 2026-08-13 route re-balance cutover (legacy +10% era). */
+    caughtAt?: Date;
   }): Promise<string> {
     const rows = await db
       .insert(catches)
@@ -53,7 +55,7 @@ describe("rescoreCatches", () => {
         // Frozen guess verdict (defaults mirror the columns: no guess).
         guessKind: opts.guessKind ?? null,
         guessCorrect: opts.guessCorrect ?? false,
-        caughtAt: new Date("2026-06-11T00:00:00Z"),
+        caughtAt: opts.caughtAt ?? new Date("2026-06-11T00:00:00Z"),
         observerLat: 37.8,
         observerLon: -122.3,
       })
@@ -149,8 +151,10 @@ describe("rescoreCatches", () => {
     expect(after[0].scoringVersion).toBe(CURRENT_SCORING_VERSION);
   });
 
-  it("a stored ROUTE guess re-scores at +10%, and stacks with first-of-type", async () => {
-    const id = await insertCatch({
+  it("a stored ROUTE guess re-scores at its ERA's fraction — the 2026-08-13 re-balance never lifts old rows", async () => {
+    // Caught 2026-06-11 (the fixture default), PRE the +10% → +25% cutover:
+    // the re-derived bonus stays at the legacy +10%, stacked on first-of-type.
+    const preId = await insertCatch({
       icao24: FOREIGN,
       rarity: null,
       typecode: null,
@@ -159,9 +163,24 @@ describe("rescoreCatches", () => {
       guessKind: "route",
       guessCorrect: true,
     });
+    // Same airframe, same frozen verdict, caught AFTER the cutover: +25%.
+    // Sharing the pre-cutover row's memoized score would be the era bug —
+    // this pair pins the (…, era) memo key.
+    const postId = await insertCatch({
+      icao24: FOREIGN,
+      rarity: null,
+      typecode: null,
+      points: 10,
+      firstOfType: true,
+      guessKind: "route",
+      guessCorrect: true,
+      caughtAt: new Date("2026-09-01T00:00:00Z"),
+    });
     await rescoreCatches(db, {});
-    const after = await db.select().from(catches).where(eq(catches.id, id));
-    expect(after[0].points).toBe(160); // 100 base + 50 first-of-type + round(100*0.1)=10
+    const pre = await db.select().from(catches).where(eq(catches.id, preId));
+    expect(pre[0].points).toBe(160); // 100 base + 50 first-of-type + round(100*0.1)=10
+    const post = await db.select().from(catches).where(eq(catches.id, postId));
+    expect(post[0].points).toBe(175); // 100 base + 50 first-of-type + round(100*0.25)=25
   });
 
   it("a stored INCORRECT guess earns nothing on re-score", async () => {

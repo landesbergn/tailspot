@@ -29,8 +29,11 @@
  * The server verifies it against its OWN truth ("type" → the registry-resolved
  * typecode for the icao24, the same resolution the scorer uses; "route" → the
  * RouteResolver behind GET /v1/routes/:callsign, correct iff the value matches
- * EITHER endpoint) and a correct guess earns +10% (route) / +25% (type) of the
- * base via the canonical scorer. Verification failure (resolver down, no route
+ * EITHER endpoint) and a correct guess earns +25% (route or type) of the
+ * base via the canonical scorer — except a ROUTE guess on a catch whose own
+ * `caughtAt` predates the 2026-08-13 re-balance cutover, which earns the
+ * legacy +10% (the re-balance is going-forward only; see points.ts).
+ * Verification failure (resolver down, no route
  * on file, no callsign) scores the guess incorrect but NEVER fails the catch.
  *
  * Anti-cheat is INSTRUMENTED, NEVER ENFORCED: we compute a plausibility verdict,
@@ -282,9 +285,14 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       }
     }
 
+    // The catch's own moment picks the guess-bonus era (the 2026-08-13 route
+    // re-balance is going-forward only) — never the scoring moment, so a
+    // delayed offline upload of an old catch still earns its era's fraction.
+    const caughtAtDate = new Date(caughtAt * 1000);
     const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24, {
       firstOfType,
       guess: guess ? { kind: guess.kind, correct: guessCorrect } : undefined,
+      caughtAt: caughtAtDate,
     });
 
     // ── Instrumented anti-cheat (stored, never enforced) ────────────────────
@@ -317,7 +325,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       guessKind: guess?.kind ?? null,
       guessValue: guess?.value ?? null,
       guessCorrect,
-      caughtAt: new Date(caughtAt * 1000),
+      caughtAt: caughtAtDate,
       observerLat: obsLat,
       observerLon: obsLon,
       headingDeg,

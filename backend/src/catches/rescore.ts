@@ -20,10 +20,12 @@
  *   - IDEMPOTENT — a second run over settled data changes nothing.
  *   - DRY-RUNNABLE — `{ dryRun: true }` computes the full delta and writes nothing,
  *     so a public-leaderboard re-score's blast radius is reviewable before it lands.
- *   - BATCHED — resolves each (icao24, first-of-type, guess) variant once,
- *     writes once per variant (the first-of-type and correct-guess bonuses
- *     float with the re-derived base, so two catches of one airframe can land
- *     on different points).
+ *   - BATCHED — resolves each (icao24, first-of-type, guess, guess-era)
+ *     variant once, writes once per variant (the first-of-type and
+ *     correct-guess bonuses float with the re-derived base, so two catches of
+ *     one airframe can land on different points; the guess ERA — the row's
+ *     caughtAt vs. the 2026-08-13 route re-balance cutover — keeps
+ *     pre-cutover route guesses at their legacy +10% forever).
  *
  * Run as a script:  npm run rescore -- [--all] [--dry-run]
  *   (default targets only stale rows: unresolved OR older-regime.)
@@ -33,7 +35,7 @@ import { eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { type Database, closeDb, getDb } from "../db/client.js";
 import { catches } from "../db/schema.js";
 import { DrizzleCatchStore, type GuessVerdict, type ScoredCatch } from "../identity/store.js";
-import { CURRENT_SCORING_VERSION, isGuessKind } from "./points.js";
+import { CURRENT_SCORING_VERSION, ROUTE_GUESS_REBALANCE_CUTOVER, isGuessKind } from "./points.js";
 
 export interface RescoreOptions {
   /** Re-score EVERY catch, not just the stale set. Default false. */
@@ -99,6 +101,7 @@ export async function rescoreCatches(
       firstOfType: catches.firstOfType,
       guessKind: catches.guessKind,
       guessCorrect: catches.guessCorrect,
+      caughtAt: catches.caughtAt,
     })
     .from(catches);
   const rows = opts.all
@@ -119,7 +122,7 @@ export async function rescoreCatches(
   };
   if (rows.length === 0) return report;
 
-  // Resolve+score each distinct (airframe, first-of-type, guess) variant ONCE.
+  // Resolve+score each distinct (airframe, first-of-type, guess, era) variant ONCE.
   // The expensive part — the registry→typecode join — depends only on the
   // icao24, but the FINAL points also depend on the row's FROZEN `firstOfType`
   // flag and its FROZEN guess verdict (`guess_kind`/`guess_correct`) — both
@@ -135,9 +138,15 @@ export async function rescoreCatches(
   // (A non-guess-kind string in guess_kind can't score — treat it as no guess.)
   const rowGuess = (row: RescoreRow): GuessVerdict | undefined =>
     isGuessKind(row.guessKind) ? { kind: row.guessKind, correct: row.guessCorrect } : undefined;
+  // The row's guess-bonus era: which side of the 2026-08-13 route re-balance
+  // cutover it was caught on. Part of the memo key — two rows of the SAME
+  // airframe with the SAME correct route guess score differently across the
+  // cutover, and a shared cache entry would silently lift (or clip) one era.
+  const guessEra = (row: RescoreRow) =>
+    row.caughtAt < ROUTE_GUESS_REBALANCE_CUTOVER ? "pre" : "post";
   const scoreKey = (row: RescoreRow) => {
     const guess = rowGuess(row);
-    const guessPart = guess ? `${guess.kind}:${guess.correct ? 1 : 0}` : "-";
+    const guessPart = guess ? `${guess.kind}:${guess.correct ? 1 : 0}:${guessEra(row)}` : "-";
     return `${row.icao24}:${row.firstOfType ? 1 : 0}:${guessPart}`;
   };
   const scoredByKey = new Map<string, ScoredCatch>();
@@ -149,6 +158,7 @@ export async function rescoreCatches(
         await store.scoreCatch(row.icao24, {
           firstOfType: row.firstOfType,
           guess: rowGuess(row),
+          caughtAt: row.caughtAt,
         }),
       );
     }

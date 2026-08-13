@@ -2391,7 +2391,7 @@ struct ContentView: View {
             !catches.contains { $0 !== row && $0.typecode == tc }
         } ?? false
         // Guess bonus (game-layer PR3; route-only per Noah 2026-07-09): a
-        // "10% ROUTE BONUS +N" line only for a CORRECT call (wrong/skipped/
+        // "25% ROUTE BONUS +N" line only for a CORRECT call (wrong/skipped/
         // no-round → nil kind → no line). The amount derives live off the
         // current base like firstOfType, so it re-tiers on read. Server
         // re-verifies at upload and is authoritative.
@@ -2399,7 +2399,12 @@ struct ContentView: View {
             ? row.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil
         let guessBonusPoints = guessKind.map {
-            ScoringBonuses.guessBonus(base: row.resolvedRarity.basePoints, kind: $0)
+            // The row's own caughtAt picks the fraction era (the 2026-08-13
+            // route re-balance is going-forward only) — a pre-cutover catch
+            // re-tiers at its legacy +10%, mirroring the server's award.
+            ScoringBonuses.guessBonus(
+                base: row.resolvedRarity.basePoints, kind: $0, caughtAt: row.caughtAt
+            )
         } ?? 0
         return CardPlane(
             callsign: row.callsign,

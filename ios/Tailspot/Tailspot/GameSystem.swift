@@ -106,8 +106,17 @@ nonisolated enum Rarity: String, CaseIterable, Equatable, Sendable {
 nonisolated enum ScoringBonuses {
     /// First-ever catch of a typecode: +50% of base.
     static let firstOfType = 0.5
-    /// Correct route guess (near coin-flip): +10% of base.
-    static let routeGuess = 0.1
+    /// Correct route guess: +25% of base — GOING FORWARD only. The 2026-08-13
+    /// re-balance (from +10%) is keyed off each catch's own `caughtAt`, never
+    /// the display moment, mirroring the server: old catches keep their +10%.
+    static let routeGuess = 0.25
+    /// The route fraction for catches made BEFORE `routeGuessCutover`
+    /// (the launch value, game-layer PR1).
+    static let routeGuessLegacy = 0.1
+    /// The route re-balance cutover: 2026-08-13T00:00:00Z. Mirrored in
+    /// scoring-bonuses.json as unix seconds so the backend parity test pins
+    /// the SAME instant on both platforms.
+    static let routeGuessCutover = Date(timeIntervalSince1970: 1_786_579_200)
     /// Correct type call (the marquee skill test): +25% of base.
     static let typeGuess = 0.25
 
@@ -117,9 +126,14 @@ nonisolated enum ScoringBonuses {
         Int((Double(base) * firstOfType).rounded())
     }
 
-    static func guessBonus(base: Int, kind: GuessKind) -> Int {
+    /// `caughtAt` picks the route-guess era; the default (now) is only right
+    /// for a catch being made right now — pass the row's own `caughtAt`
+    /// when rendering a stored catch.
+    static func guessBonus(base: Int, kind: GuessKind, caughtAt: Date = Date()) -> Int {
         switch kind {
-        case .route: return Int((Double(base) * routeGuess).rounded())
+        case .route:
+            let fraction = caughtAt < routeGuessCutover ? routeGuessLegacy : routeGuess
+            return Int((Double(base) * fraction).rounded())
         case .type:  return Int((Double(base) * typeGuess).rounded())
         }
     }
