@@ -53,13 +53,17 @@ struct ScoringBonusesParityTests {
             [String: Double].self, from: try Data(contentsOf: url)
         )
 
-        // The canonical file carries exactly the three bonus fractions; every
-        // iOS constant matches it. The backend's points.parity.test.ts pins
-        // its literals to the SAME file, so a re-balance that edits only one
-        // side fails a parity test somewhere.
-        #expect(canonical.count == 3)
+        // The canonical file carries the three bonus fractions plus the
+        // route re-balance pair (legacy fraction + cutover instant, unix
+        // seconds — the 2026-08-13 +10% → +25% change is going-forward only);
+        // every iOS constant matches it. The backend's points.parity.test.ts
+        // pins its literals to the SAME file, so a re-balance that edits only
+        // one side fails a parity test somewhere.
+        #expect(canonical.count == 5)
         #expect(canonical["firstOfType"] == ScoringBonuses.firstOfType)
         #expect(canonical["routeGuess"] == ScoringBonuses.routeGuess)
+        #expect(canonical["routeGuessLegacy"] == ScoringBonuses.routeGuessLegacy)
+        #expect(canonical["routeGuessCutover"] == ScoringBonuses.routeGuessCutover.timeIntervalSince1970)
         #expect(canonical["typeGuess"] == ScoringBonuses.typeGuess)
     }
 
@@ -69,8 +73,14 @@ struct ScoringBonusesParityTests {
         // base: 10 × 0.25 = 2.5 → 3, where Swift's banker's rounding would
         // give 2. Pin the full ladder for each bonus.
         let bases = Rarity.allCases.map(\.basePoints)          // 10 20 50 100 500
+        // One tick before the route re-balance cutover — the legacy +10% era.
+        // AT the cutover (and after, incl. the defaulted now) the +25% applies.
+        let preCutover = ScoringBonuses.routeGuessCutover.addingTimeInterval(-1)
         #expect(bases.map { ScoringBonuses.firstOfTypeBonus(base: $0) } == [5, 10, 25, 50, 250])
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .route) } == [3, 5, 13, 25, 125])
+        #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .route, caughtAt: ScoringBonuses.routeGuessCutover) } == [3, 5, 13, 25, 125])
+        #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .route, caughtAt: preCutover) } == [1, 2, 5, 10, 50])
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type) } == [3, 5, 13, 25, 125])
+        #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type, caughtAt: preCutover) } == [3, 5, 13, 25, 125])
     }
 }
