@@ -11,16 +11,25 @@
 //
 //  Events (via Analytics.swift):
 //    - catch_performed  — fires once per processed target on a catch tap.
-//                         Successful catches carry rarity/type/slant;
-//                         duplicates (already in the Hangar, no new row)
-//                         carry only icao24 + is_duplicate=true.
+//                         Successful catches carry rarity/type/slant PLUS
+//                         (2026-08-13) the aircraft identity, as-observed
+//                         route, and tier base_points — everything honestly
+//                         known at catch time. NOT here by design: place_name
+//                         (reverse-geocode is async post-save) and the
+//                         awarded points/bonuses (decided at reveal/upload)
+//                         — both live on catch_uploaded. Duplicates (already
+//                         in the Hangar, no new row) carry only
+//                         icao24 + is_duplicate=true.
 //    - catch_uploaded   — fires once per catch the backend accepts. Carries
 //                         the aircraft IDENTITY snapshotted on the Catch
 //                         (tail number, typecode, manufacturer, model,
 //                         operator, type, ADS-B category, callsign) plus the
 //                         authoritative rarity/points/duplicate from the
-//                         server response — so PostHog can show *which* plane
-//                         was caught. Airframe attributes, not user PII; the
+//                         server response and the bonus outcomes behind that
+//                         points total (first_of_type; guess_kind +
+//                         guess_correct when a round ran) — so PostHog can
+//                         show *which* plane was caught and *why* it scored
+//                         what it did. Airframe attributes, not user PII; the
 //                         only location is the coarse reverse-geocoded
 //                         place_name (no precise coordinates).
 //    - catch_deleted    — fires once per delete action (a HangarRow may
@@ -93,6 +102,16 @@ nonisolated enum CatchTelemetry {
     // MARK: - Pure property builders (unit-tested)
 
     /// Properties for a successful catch of a single airframe.
+    ///
+    /// Since 2026-08-13 this also carries WHAT was caught — the aircraft
+    /// identity + as-observed route off the fresh `Catch` row, and the tier's
+    /// `base_points` — so PostHog can answer "which plane / which flight /
+    /// worth what" directly on the north-star event. Deliberately absent:
+    /// `place_name` (the reverse-geocode is async post-save, so it isn't known
+    /// yet — it lives on `catch_uploaded`; PostHog's GeoIP covers coarse
+    /// where), and the bonus/points TOTAL (first-of-type + guess bonuses are
+    /// decided at reveal/upload — the server-authoritative `points` lives on
+    /// `catch_uploaded`). Identity/route params follow the omit-blank rule.
     static func performedProperties(
         icao24: String,
         rarity: String,
@@ -102,7 +121,17 @@ nonisolated enum CatchTelemetry {
         visualFixConfidence: Float?,
         multiN: Int = 1,
         angularSizeArcmin: Double? = nil,
-        detectorVerdict: DetectorGateVerdict? = nil
+        detectorVerdict: DetectorGateVerdict? = nil,
+        basePoints: Int? = nil,
+        registration: String? = nil,
+        typecode: String? = nil,
+        manufacturer: String? = nil,
+        model: String? = nil,
+        operatorName: String? = nil,
+        callsign: String? = nil,
+        category: String? = nil,
+        originIcao: String? = nil,
+        destIcao: String? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -126,7 +155,33 @@ nonisolated enum CatchTelemetry {
         // L4 detector soft-gate verdict for this target; omitted when the
         // gate didn't run (multi-catch, no photo) so absent means "not judged".
         if let v = detectorVerdict { props["detector_verdict"] = .string(v.rawValue) }
+        // The tier's base value at catch time — the pre-bonus floor of what
+        // this catch is worth (server-authoritative total on catch_uploaded).
+        if let basePoints { props["base_points"] = .int(basePoints) }
+        // Aircraft identity + as-observed route, same vocabulary as
+        // catch_uploaded so the two events join cleanly in HogQL.
+        addNonBlank("registration", registration, to: &props)
+        addNonBlank("typecode", typecode, to: &props)
+        addNonBlank("manufacturer", manufacturer, to: &props)
+        addNonBlank("model", model, to: &props)
+        addNonBlank("operator_name", operatorName, to: &props)
+        addNonBlank("callsign", callsign, to: &props)
+        addNonBlank("category", category, to: &props)
+        addNonBlank("origin_icao", originIcao, to: &props)
+        addNonBlank("dest_icao", destIcao, to: &props)
         return props
+    }
+
+    /// Insert only when the value is non-nil and non-blank — a missing
+    /// airframe field should be an absent key, never "" or null (matching
+    /// `Catch.preferredAirframeField`'s blank-is-absent rule), so PostHog
+    /// only sees keys we actually know.
+    private static func addNonBlank(
+        _ key: String, _ value: String?, to props: inout [String: AnalyticsValue]
+    ) {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return }
+        props[key] = .string(trimmed)
     }
 
     /// Properties for the activation milestone (`first_plane_catch`): the
@@ -176,8 +231,10 @@ nonisolated enum CatchTelemetry {
     /// manufacturer, model, operator, derived type, ADS-B emitter category,
     /// and callsign. `rarity`/`points`/`duplicate` come from the authoritative
     /// server response (rarity falls back to the local resolved value when the
-    /// server omits it). These are airframe attributes, NOT user PII — the only
-    /// location is the coarse reverse-geocoded `place_name` (no coordinates).
+    /// server omits it), and `first_of_type`/`guess_kind`/`guess_correct`
+    /// unpack the bonuses inside that points total. These are airframe
+    /// attributes, NOT user PII — the only location is the coarse
+    /// reverse-geocoded `place_name` (no coordinates).
     ///
     /// Nil/blank string fields are OMITTED (matching `deletedProperties` and
     /// `Catch.preferredAirframeField`'s blank-is-absent rule) — never sent as
@@ -195,7 +252,10 @@ nonisolated enum CatchTelemetry {
         aircraftType: String?,
         category: String?,
         callsign: String?,
-        placeName: String?
+        placeName: String?,
+        firstOfType: Bool? = nil,
+        guessKind: String? = nil,
+        guessCorrect: Bool? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -203,22 +263,23 @@ nonisolated enum CatchTelemetry {
             "points": .int(points),
             "duplicate": .bool(duplicate),
         ]
-        // Insert only when the value is non-nil and non-blank — a missing
-        // airframe field should be an absent key, not "" or null.
-        func add(_ key: String, _ value: String?) {
-            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !trimmed.isEmpty else { return }
-            props[key] = .string(trimmed)
-        }
-        add("registration", registration)
-        add("typecode", typecode)
-        add("manufacturer", manufacturer)
-        add("model", model)
-        add("operator_name", operatorName)
-        add("aircraft_type", aircraftType)
-        add("category", category)
-        add("callsign", callsign)
-        add("place_name", placeName)
+        addNonBlank("registration", registration, to: &props)
+        addNonBlank("typecode", typecode, to: &props)
+        addNonBlank("manufacturer", manufacturer, to: &props)
+        addNonBlank("model", model, to: &props)
+        addNonBlank("operator_name", operatorName, to: &props)
+        addNonBlank("aircraft_type", aircraftType, to: &props)
+        addNonBlank("category", category, to: &props)
+        addNonBlank("callsign", callsign, to: &props)
+        addNonBlank("place_name", placeName, to: &props)
+        // Bonus outcomes behind the awarded `points` (2026-08-13): the
+        // server's first-of-type verdict (+50% already inside points), and —
+        // only when a guess round actually ran — its kind + verdict. All
+        // omitted when unknown, so absent means "not applicable / old
+        // backend", never false-by-default.
+        if let firstOfType { props["first_of_type"] = .bool(firstOfType) }
+        addNonBlank("guess_kind", guessKind, to: &props)
+        if let guessCorrect { props["guess_correct"] = .bool(guessCorrect) }
         return props
     }
 
@@ -322,7 +383,17 @@ nonisolated enum CatchTelemetry {
             visualFixConfidence: visualFixConfidence,
             multiN: multiN,
             angularSizeArcmin: angularSizeArcmin,
-            detectorVerdict: detectorVerdict
+            detectorVerdict: detectorVerdict,
+            basePoints: row.resolvedRarity.basePoints,
+            registration: row.registration,
+            typecode: row.typecode,
+            manufacturer: row.manufacturer,
+            model: row.model,
+            operatorName: row.operatorName,
+            callsign: row.callsign,
+            category: row.category,
+            originIcao: row.originIcao,
+            destIcao: row.destIcao
         ))
     }
 
@@ -364,7 +435,15 @@ nonisolated enum CatchTelemetry {
             aircraftType: row.resolvedType.rawValue,
             category: row.category,
             callsign: row.callsign,
-            placeName: row.placeName
+            placeName: row.placeName,
+            firstOfType: response.firstOfType,
+            guessKind: row.guessKind,
+            // Guess verdict only when a round actually ran on this catch —
+            // the backend echoes guessCorrect=false for guess-less catches,
+            // which must NOT land as a recorded wrong answer. Server verdict
+            // preferred; frozen local verdict as fallback (old backend).
+            guessCorrect: row.guessKind != nil
+                ? (response.guessCorrect ?? row.guessCorrect) : nil
         ))
     }
 

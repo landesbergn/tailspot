@@ -5,6 +5,33 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-13 — catch_performed enriched with plane identity + base points; catch_uploaded gains bonus outcomes — branch `claude/catch-performed-enrichment`
+
+`catch_performed` (the north-star event) now answers "which plane / which
+flight / worth what" directly, without a HogQL join to `catch_uploaded`:
+
+- **`catch_performed` +=** aircraft identity off the fresh `Catch` row —
+  `registration`, `typecode`, `manufacturer`, `model`, `operator_name`,
+  `callsign`, `category` — plus the as-observed route (`origin_icao` /
+  `dest_icao`) and the tier's `base_points`. Same key vocabulary and
+  omit-blank rule as `catch_uploaded` (helper hoisted to a shared
+  `addNonBlank`), so the two events join cleanly.
+- **Honesty split (why some asks stayed off it):** `place_name` is
+  reverse-geocoded *async post-save*, so it isn't known when the event fires
+  — "where" stays on `catch_uploaded` (PostHog GeoIP covers coarse where on
+  every event); "when" is the event timestamp itself; the awarded
+  points/bonus TOTAL is decided at reveal/upload by the server, so it also
+  stays on `catch_uploaded`.
+- **`catch_uploaded` +=** the bonus outcomes inside its authoritative
+  `points`: `first_of_type` (server verdict, +50% already in points) and —
+  only when a guess round actually ran — `guess_kind` + `guess_correct`
+  (server verdict preferred, frozen local verdict as old-backend fallback;
+  gated on `row.guessKind` because the backend echoes `guessCorrect=false`
+  for guess-less catches, which must not land as a recorded wrong answer).
+- All keys omitted when unknown — absent means "not known / not applicable",
+  never "" / null / false-by-default. Four new `CatchTelemetryTests` pin the
+  enriched shapes + omit rules; suite green.
+
 ## 2026-08-13 — route-guess bonus re-balanced +10% → +25%, GOING FORWARD only — branch `claude/route-guessing-bonus-25-rlymmj`
 
 The route-guess bonus round now pays **+25% of base** (was +10%), matching the

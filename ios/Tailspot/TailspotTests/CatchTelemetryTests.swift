@@ -42,6 +42,51 @@ struct CatchTelemetryTests {
         #expect(p["visual_fix_confidence"] == nil)
     }
 
+    @Test func performedCarriesIdentityRouteAndBasePoints() {
+        // The 2026-08-13 enrichment: WHAT was caught rides the north-star
+        // event itself, in the same vocabulary as catch_uploaded.
+        let p = CatchTelemetry.performedProperties(
+            icao24: "ac5c1f", rarity: "epic", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: false, visualFixConfidence: nil,
+            basePoints: 100,
+            registration: "N628TS",
+            typecode: "B77W",
+            manufacturer: "Boeing",
+            model: "777-300ER",
+            operatorName: "United Airlines",
+            callsign: "UAL1",
+            category: "A5",
+            originIcao: "KSFO",
+            destIcao: "RJAA"
+        )
+        #expect(p["base_points"]?.jsonValue as? Int == 100)
+        #expect(p["registration"]?.jsonValue as? String == "N628TS")
+        #expect(p["typecode"]?.jsonValue as? String == "B77W")
+        #expect(p["manufacturer"]?.jsonValue as? String == "Boeing")
+        #expect(p["model"]?.jsonValue as? String == "777-300ER")
+        #expect(p["operator_name"]?.jsonValue as? String == "United Airlines")
+        #expect(p["callsign"]?.jsonValue as? String == "UAL1")
+        #expect(p["category"]?.jsonValue as? String == "A5")
+        #expect(p["origin_icao"]?.jsonValue as? String == "KSFO")
+        #expect(p["dest_icao"]?.jsonValue as? String == "RJAA")
+    }
+
+    @Test func performedOmitsUnknownIdentityAndRoute() {
+        // Nil/blank identity → absent keys (the omit-blank rule), and no
+        // base_points key when the builder isn't given one.
+        let p = CatchTelemetry.performedProperties(
+            icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
+            visualConfirmEnabled: false, visualFixConfidence: nil,
+            registration: nil, typecode: "  ", operatorName: ""
+        )
+        #expect(p["base_points"] == nil)
+        #expect(p["registration"] == nil)
+        #expect(p["typecode"] == nil)
+        #expect(p["operator_name"] == nil)
+        #expect(p["origin_icao"] == nil)
+        #expect(p["dest_icao"] == nil)
+    }
+
     @Test func performedCarriesVisualFixWhenLockedOn() {
         let p = CatchTelemetry.performedProperties(
             icao24: "ac5c1f", rarity: "rare", aircraftType: "wide", slantKm: 7.5,
@@ -139,6 +184,34 @@ struct CatchTelemetryTests {
         )
         #expect(p["registration"]?.jsonValue as? String == "N123AB")
         #expect(p["callsign"]?.jsonValue as? String == "SWA42")
+    }
+
+    @Test func uploadedCarriesBonusOutcomesWhenKnown() {
+        let p = CatchTelemetry.uploadedProperties(
+            icao24: "ac5c1f", rarity: "rare", points: 88, duplicate: false,
+            registration: nil, typecode: nil, manufacturer: nil, model: nil,
+            operatorName: nil, aircraftType: "narrow", category: nil,
+            callsign: nil, placeName: nil,
+            firstOfType: true, guessKind: "route", guessCorrect: true
+        )
+        #expect(p["first_of_type"]?.jsonValue as? Bool == true)
+        #expect(p["guess_kind"]?.jsonValue as? String == "route")
+        #expect(p["guess_correct"]?.jsonValue as? Bool == true)
+    }
+
+    @Test func uploadedOmitsBonusOutcomesWhenAbsent() {
+        // nil bonus fields (old backend / no guess round) → absent keys,
+        // never a false-by-default — the shape every pre-existing caller
+        // (and the guess-less catch path) produces.
+        let p = CatchTelemetry.uploadedProperties(
+            icao24: "ac5c1f", rarity: "rare", points: 50, duplicate: false,
+            registration: nil, typecode: nil, manufacturer: nil, model: nil,
+            operatorName: nil, aircraftType: "narrow", category: nil,
+            callsign: nil, placeName: nil
+        )
+        #expect(p["first_of_type"] == nil)
+        #expect(p["guess_kind"] == nil)
+        #expect(p["guess_correct"] == nil)
     }
 
     @Test func uploadedEventNameIsStable() {
