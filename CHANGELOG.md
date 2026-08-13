@@ -38,6 +38,21 @@ Changed at the canonical source and everywhere the parity net pins it:
   label is display-only while the server awards the era fraction; deploy the
   server first as usual.
 
+## 2026-08-13 — `GET /readyz` DB readiness probe for uptime monitoring — branch `claude/readyz-db-ping`
+
+Alerting round (with Noah, remote): the external uptime monitor (Sentry monitor
+8072647, created today) watched `/healthz`, which deliberately skips the DB — so
+a dead Postgres looked "up" and only surfaced as a trickle of Sentry 500s. New
+**`GET /readyz`**: 200 only when the process is up AND Postgres answers `SELECT 1`
+within 3 s (hung-socket cap via `Promise.race`), else 503. Probe resolved lazily
+per-request (the established lazy-store pattern) so DB-less tests never touch
+`DATABASE_URL`; tests inject `readyProbe` for success/failure/timeout/default-probe
+cases (+4 tests, 338 green). `/healthz` stays DB-free on purpose — Fly restarts
+machines failing that check, and restarting the API over a DB outage adds churn.
+After deploy, repoint monitor 8072647 at `/readyz`. Same round, outside the repo:
+Sentry MCP connected (org `noah-lc`), uptime monitor created, PostHog crash alert
++ zero-DAU canary added, stale OpenSky Fly secrets removed.
+
 ## 2026-08-12 — Shared catch cards: photo unmasked in the share render — branch `claude/photo-mask-catch-cards-vzpghs`
 
 Field report (Noah): shared catch cards still covered the hero photo with a

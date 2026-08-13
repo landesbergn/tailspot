@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import { getDb } from "./db/client.js";
 import { RateLimiter } from "./identity/rateLimiter.js";
@@ -93,6 +94,11 @@ export interface BuildAppOptions {
    * uses the default word-bank generator.
    */
   handleCandidateGenerator?: (batchSize: number) => string[];
+  /**
+   * Readiness probe override (tests inject success/failure). Production pings
+   * Postgres (`SELECT 1`) through the shared pool — see GET /readyz.
+   */
+  readyProbe?: () => Promise<void>;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -129,12 +135,51 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   /**
    * GET /healthz
-   * Kubernetes / Fly.io health check.  Returns 200 as long as the process is
-   * up and can handle requests.  No DB ping here — that belongs in a separate
-   * /readyz once WP 1.4 adds Postgres.
+   * Fly.io health check (fly.toml [[http_service.checks]]). Returns 200 as long
+   * as the process is up and can handle requests. Deliberately NO DB ping: Fly
+   * restarts machines that fail this check, and restarting the API because the
+   * *database* is down would just add churn on top of the real outage. End-to-end
+   * readiness (process + DB) lives at /readyz.
    */
   app.get("/healthz", async () => {
     return { status: "ok", version: pkg.version };
+  });
+
+  /**
+   * GET /readyz
+   * End-to-end readiness: 200 only when the process is up AND Postgres answers
+   * a `SELECT 1` within 3 s. This is the URL the external uptime monitor watches
+   * (Sentry monitor 8072647) — unlike /healthz it turns a dead/unreachable DB
+   * into a visible outage instead of a slow trickle of 500s.
+   *
+   * The probe is resolved lazily per-request (same pattern as the stores below):
+   * building the app never touches DATABASE_URL, so DB-less tests stay DB-less —
+   * hitting /readyz without a database simply reports 503, which is the truth.
+   * The 3 s cap keeps a hung DB connection from dragging the response past the
+   * monitor's own timeout; the stray timer is cleared so injected test probes
+   * don't leak into vitest's open-handle check.
+   */
+  const readyProbe =
+    options.readyProbe ??
+    (async () => {
+      await getDb().execute(sql`select 1`);
+    });
+  app.get("/readyz", async (request, reply) => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        readyProbe(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("readiness probe timed out")), 3_000);
+        }),
+      ]);
+      return { status: "ok" };
+    } catch (err) {
+      request.log.warn({ err }, "readiness probe failed");
+      return reply.code(503).send({ status: "unavailable" });
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   // GET /v1/aircraft — cached, single-flighted position proxy (WP 1.3).
