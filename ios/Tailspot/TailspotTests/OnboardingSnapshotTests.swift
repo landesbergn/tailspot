@@ -33,16 +33,16 @@ struct OnboardingSnapshotTests {
     }
 
     @Test func renderOnboardingSteps() {
-        for step in 0...3 {
+        for step in 0...2 {
             let view = OnboardingFlow(onFinish: {}, initialStep: step)
                 ._snapshotScreen(size: screen)
             write(view, "onboarding_step\(step)_\(ActivationTelemetry.stepName(step))")
         }
-        // The calibration step on an SE-class height — the class of device
-        // that clipped the old fixed-VStack flow (issue #36).
-        let view = OnboardingFlow(onFinish: {}, initialStep: 3)
+        // The (now-final) handle step on an SE-class height — the class of
+        // device that clipped the old fixed-VStack flow (issue #36).
+        let view = OnboardingFlow(onFinish: {}, initialStep: 2)
             ._snapshotScreen(size: smallScreen)
-        write(view, "onboarding_step3_calibration_se")
+        write(view, "onboarding_step2_handle_se")
     }
 
     @Test func renderPermissionRecoveryVariants() {

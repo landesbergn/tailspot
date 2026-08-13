@@ -5,6 +5,33 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-13 — compass-calibration step removed from onboarding — branch `remove-onboarding-calibration`
+
+Noah's call: the step was confusing and getting in the way. The funnel data it
+was instrumented for (2026-07-09) agrees — it wasn't gating completion, just
+adding a mostly-skipped screen:
+
+- **Since 2026-07-09:** 48/49 users who reached the calibration step completed
+  onboarding, but only **11/48 (23%) calibrated in-flow — 77% skipped**.
+- **`OnboardingFlow`** back to 3 steps: welcome → permissions → handle; the
+  "Claim handle" CTA now completes onboarding directly (`finish(claimResult:)`
+  fires `onboarding_completed` + latches). Step labels renumbered ("STEP n / 3",
+  handle = "FINAL STEP"); the quiet-skip footer state (`primaryIsSubtle`) died
+  with the step.
+- **Telemetry:** `ActivationTelemetry.stepName(3)` no longer names
+  "calibration" (reports `step_3` like any unknown index);
+  `onboarding_completed` drops the `calibrated` property (old events keep
+  theirs). The compass triad (`compass_caution_shown` / `compass_sheet_opened` /
+  `compass_calibrated`) is untouched — it instruments the surviving surface.
+- **`Figure8Animation` moved** to `CompassCalibrationSheet.swift` — the in-AR
+  loud banner → sheet path (2026-07-13) is now the only calibration coaching,
+  and the sheet is the animation's only consumer.
+- **Tests:** step-name + completed-properties assertions updated; onboarding
+  snapshots render 0–2 with the SE-height render now on the handle step.
+- **History note:** second removal of this exact step — cut 2026-05-27
+  (v0.1.2, tester feedback), reintroduced 2026-07-09 as a measurable bet.
+  The bet is now settled by data; don't re-add without new evidence.
+
 ## 2026-08-13 — catch_performed enriched with plane identity + base points; catch_uploaded gains bonus outcomes — branch `claude/catch-performed-enrichment`
 
 `catch_performed` (the north-star event) now answers "which plane / which
