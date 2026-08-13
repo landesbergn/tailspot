@@ -2409,7 +2409,11 @@ struct ContentView: View {
         return CardPlane(
             callsign: row.callsign,
             model: canonical.displayName ?? row.model,
-            carrier: row.operatorName,
+            // Same derivation as CatchDetailView's card: recorded operator,
+            // else the callsign-prefix airline, else Private/unknown — so the
+            // reveal's identity row matches the Hangar detail's exactly.
+            carrier: Airlines.operatorLabel(operatorName: row.operatorName,
+                                            callsign: row.callsign),
             rarity: row.resolvedRarity,
             type: row.resolvedType,
             altText: CardPlane.altText(fromMeters: observed?.aircraft.altitudeMeters ?? row.altitudeMeters),
