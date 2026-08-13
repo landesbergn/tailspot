@@ -5,6 +5,35 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-12 — Shared catch cards: photo unmasked in the share render — branch `claude/photo-mask-catch-cards-vzpghs`
+
+Field report (Noah): shared catch cards still covered the hero photo with a
+yellow no-entry mask. Root cause: `.postHogMask()` isn't inert under
+ImageRenderer after all — the SDK modifier injects hidden UIKit tag views
+around the photo (on iOS 26+ including a FULL-SIZED frame-capture overlay for
+layer-backed SwiftUI), and ImageRenderer draws platform views as the yellow
+no-entry placeholder. PR #137's "inert" claim was wrong, and the visual-pass
+snapshot harness (no assertions) let it regress silently; the 2026-07-21
+marketing round had already hit the identical failure (see that entry). Note
+`postHogMask(false)` does NOT avoid it — the SDK still injects the tag views
+and only flips their redaction flag.
+
+- **`CatchPhotoReplayMask.swift` (new)** — the one way photo views opt into
+  replay masking: `.catchPhotoReplayMask(_:)` applies `.postHogMask()` only
+  when masking isn't disabled via the new `\.replayMaskingDisabled`
+  environment flag (structurally — the modifier isn't applied at all, since
+  a disabled mask still injects tag views). `RevealPhoto`, `CatchCardView`'s
+  photo, and `FocusThumbnail` all route through it.
+- **`CatchShare.uiImage` sets `\.replayMaskingDisabled` on the offscreen
+  share tree.** No privacy change: those pixels never reach the screen, so
+  session replay can't capture them; every on-screen tree keeps the default
+  and stays masked (the GA posture from #137 is intact).
+- **`ShareCardMaskRegressionTests` (new)** — a real assertion this time:
+  renders the production share path with a solid-magenta catch photo and
+  requires a large magenta region in the output pixels. With a mask tag view
+  back in the tree, the placeholder covers the hero and the count drops to
+  ~0.
+
 ## 2026-08-12 — sets curation: helicopter set, data-driven gap fill, title consistency — branch `sets-curation`
 
 Trigger: Noah's Cape Air Cessna 402 catch (Newbury MA) had no set slot to fill.
