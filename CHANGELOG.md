@@ -34,6 +34,39 @@ and only flips their redaction flag.
   back in the tree, the placeholder covers the hero and the count drops to
   ~0.
 
+## 2026-08-12 — sets curation: helicopter set, data-driven gap fill, title consistency — branch `sets-curation`
+
+Trigger: Noah's Cape Air Cessna 402 catch (Newbury MA) had no set slot to fill.
+Instead of one-off patching, the whole catalog was audited against the prod
+catch histogram (1,032 catches → per-typecode counts, read-only), so every
+addition is backed by real catches:
+
+- **New "Helicopters" family set (8 slots)** — R44, Bell 407, H125/AStar, H135,
+  H145, S-76, AW139, AW109. Rotorcraft were the single biggest curation hole:
+  33 prod catches (B407 alone = 17, the most-caught uncovered typecode) had
+  zero slots anywhere. Noah's healed Bavarian-police H145 fills `fh-h145`.
+- **Cessna 402 slot** in the Cessna family (the trigger), **Pilatus PC-12** in
+  General aviation (16 catches, second-biggest gap), **Hawker 800 + Learjet**
+  slots in Business jets, a **737 Classic** slot (-300/-400/-500, one slot —
+  freighter-era variants are too rare for per-variant quests), and a new
+  2-slot **Airbus A340** family (rare-tier quest; A340-600 caught twice).
+- **Token fixes for silent fall-throughs:** EMB-545 Legacy 450 (3 catches) now
+  fills the Praetor 500 slot ("legacy 450"/"e545" tokens); the short-winglet
+  E75S (2 catches) now fills both E175 slots ("embraer 175" token — its
+  canonical name "Embraer 175" matched no e175/e-175 substring).
+- **Title consistency (Noah's ask):** "Airbus A320 Family" → "Airbus A320",
+  "Boeing 787 Dreamliner" → "Boeing 787", "Bombardier (Business)" →
+  "Bombardier Business Jets" (kept ≤ the 26-char precedent — the browser row
+  is `lineLimit(1)`).
+- **Watched, not added** (zero catches in 1,032): HondaJet, PC-24, TBM,
+  Twin Otter, Beech 1900, PA-31, C310/C421. Add when the histogram says so.
+
+Verified: full TailspotTests green (FamilySetsTests pins every new entry's
+rarity to AircraftTypes.json and all IDs unique). ImageRenderer visual pass
+hit a known wall — SetDetailScreen's `List` and the browser's lazy stack are
+UIKit-backed/viewport-dependent (same class of limitation as the glass-capture
+lesson), so the visual check is the device deploy.
+
 ## 2026-08-08 — tailspot.app points at the App Store — branch `feat/app-store-links`
 
 The site still said "Coming soon" and "Currently in private TestFlight beta" the
