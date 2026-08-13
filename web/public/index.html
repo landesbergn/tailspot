@@ -8,6 +8,10 @@
   <meta name="theme-color" content="#0A0E1A">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
+  <!-- Native "Get" banner for iOS Safari visitors — the phone they're holding
+       is the device that runs the app, so surface the store before the copy. -->
+  <meta name="apple-itunes-app" content="app-id=6773470079">
+
   <!-- Open Graph / social -->
   <meta property="og:title" content="Tailspot">
   <meta property="og:description" content="Point your phone at a plane. Collect them all.">
@@ -24,7 +28,7 @@
   <a class="wordmark" href="/">Tailspot</a>
   <ul class="nav-links">
     <li><a href="#how">How it works</a></li>
-    <li><a class="nav-cta" href="#get">Get the app</a></li>
+    <li><a class="nav-cta" href="https://apps.apple.com/app/id6773470079">Get the app</a></li>
   </ul>
 </nav>
 
@@ -34,7 +38,10 @@
     <div class="hero-copy">
       <h1 class="hero-title">Catch the planes flying overhead.<br><span class="accent">Build your collection.</span></h1>
       <div class="cta-row">
-        <span class="btn btn-primary" role="text">Coming soon&nbsp;·&nbsp;iOS</span>
+        <!-- Deliberately NOT badge wording: Apple's guidelines allow one
+             official badge per layout (it lives in #get below), and a custom
+             button imitating the badge's text would undercut it. -->
+        <a class="btn btn-primary" href="https://apps.apple.com/app/id6773470079">Get the app</a>
         <a class="btn btn-ghost" href="#how">See how it works ↓</a>
       </div>
     </div>
@@ -88,8 +95,19 @@
 <!-- ───────────────── Get the app ───────────────── -->
 <section class="section cta-final" id="get">
   <h2 class="section-title">Get Tailspot</h2>
-  <span class="btn btn-primary btn-lg" role="text">Coming soon to the App Store</span>
-  <p class="hero-note">Currently in private TestFlight beta.</p>
+  <!-- Apple's official badge, used unmodified per
+       developer.apple.com/app-store/marketing/guidelines/#section-badges:
+       one badge per layout, subordinate to the main message, no added
+       shadow/glow/animation, and clear space >= 1/4 its height.
+       This is Apple's PREFERRED black badge. The white variant is only
+       sanctioned when black "appears visually heavy" — the opposite is true
+       on #0A0E1A, where white renders as a glaring block and black reads as
+       a subtle outlined pill. Verified by rendering both. -->
+  <a class="badge-link" href="https://apps.apple.com/app/id6773470079">
+    <img class="app-store-badge" src="app-store-badge.svg"
+         alt="Download Tailspot on the App Store">
+  </a>
+  <p class="hero-note">Free on iPhone. Requires iOS 26.2 or later.</p>
 </section>
 
 <footer class="site-footer">
@@ -98,6 +116,7 @@
     <span class="footer-coords" title="Field-tested under the SFO/OAK approach">37.87° N · 122.27° W</span>
   </div>
   <ul class="footer-links">
+    <li><a href="https://apps.apple.com/app/id6773470079">App Store</a></li>
     <li><a href="support.html">Support</a></li>
     <li><a href="privacy.html">Privacy Policy</a></li>
     <li><a href="terms.html">Terms of Service</a></li>

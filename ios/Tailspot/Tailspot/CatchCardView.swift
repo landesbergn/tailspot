@@ -28,7 +28,6 @@
 //
 
 import SwiftUI
-import PostHog   // .postHogMask() on the user's catch photo (session replay)
 
 // MARK: - Value object
 
@@ -72,7 +71,7 @@ struct CardPlane: Equatable {
     let isFirstOfType: Bool
     /// The bonus-round question this catch answered CORRECTLY (game-layer
     /// PR3; route-only per Noah 2026-07-09) — drives the reveal's
-    /// "10% ROUTE BONUS +N" ledger line. nil when no round fired, was skipped,
+    /// "25% ROUTE BONUS +N" ledger line. nil when no round fired, was skipped,
     /// or was wrong (a wrong guess shows no reveal line — the guess screen
     /// already flashed the miss). Mirrors `isFirstOfType`: display-only,
     /// computed off the frozen `Catch` row; the backend re-verifies and is
@@ -364,8 +363,11 @@ struct CatchCardView: View {
                             // PRIVACY: a file URL is the user's own catch JPEG
                             // (CatchPhotoStore) — mask it from PostHog session
                             // replay. Remote URLs are public stock imagery of
-                            // the airframe and stay visible.
-                            .postHogMask(url.isFileURL)
+                            // the airframe and stay visible. Routed through
+                            // CatchPhotoReplayMask so offscreen share renders
+                            // can drop the mask (ImageRenderer draws PostHog's
+                            // tag views as the yellow no-entry placeholder).
+                            .catchPhotoReplayMask(url.isFileURL)
                     default:
                         placeholderStripes
                     }

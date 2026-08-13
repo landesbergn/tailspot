@@ -203,6 +203,10 @@ struct ContentView: View {
     /// catches on the backend while the local Hangar is empty — the
     /// reinstall signature — and, if so, drives the restore prompt overlay.
     @StateObject private var restoreManager = HangarRestoreManager()
+    /// One-shot recovery runner (see MissedCatchRepair). Holds no observable
+    /// state — it just needs somewhere to live — so a plain `let`, not a
+    /// `@StateObject`.
+    private let missedCatchRepair = MissedCatchRepairRunner()
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
@@ -729,6 +733,13 @@ struct ContentView: View {
         // so a fresh install can't race two POST /v1/devices calls.
         .task {
             await restoreManager.checkIfNeeded(context: modelContext)
+        }
+        // One-shot recovery of two catches that never reached the server (see
+        // MissedCatchRepair). Double-gated on device id + a fixed uuid
+        // allowlist, so on every other install this returns immediately
+        // without touching the network. Delete once it has run.
+        .task {
+            await missedCatchRepair.runIfNeeded(context: modelContext)
         }
         // When the Hangar closes, re-diff — a country backfill done inside
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
@@ -2380,7 +2391,7 @@ struct ContentView: View {
             !catches.contains { $0 !== row && $0.typecode == tc }
         } ?? false
         // Guess bonus (game-layer PR3; route-only per Noah 2026-07-09): a
-        // "10% ROUTE BONUS +N" line only for a CORRECT call (wrong/skipped/
+        // "25% ROUTE BONUS +N" line only for a CORRECT call (wrong/skipped/
         // no-round → nil kind → no line). The amount derives live off the
         // current base like firstOfType, so it re-tiers on read. Server
         // re-verifies at upload and is authoritative.
@@ -2388,7 +2399,12 @@ struct ContentView: View {
             ? row.guessKind.flatMap(GuessKind.init(rawValue:))
             : nil
         let guessBonusPoints = guessKind.map {
-            ScoringBonuses.guessBonus(base: row.resolvedRarity.basePoints, kind: $0)
+            // The row's own caughtAt picks the fraction era (the 2026-08-13
+            // route re-balance is going-forward only) — a pre-cutover catch
+            // re-tiers at its legacy +10%, mirroring the server's award.
+            ScoringBonuses.guessBonus(
+                base: row.resolvedRarity.basePoints, kind: $0, caughtAt: row.caughtAt
+            )
         } ?? 0
         return CardPlane(
             callsign: row.callsign,

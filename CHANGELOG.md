@@ -5,6 +5,252 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-13 — catch_performed enriched with plane identity + base points; catch_uploaded gains bonus outcomes — branch `claude/catch-performed-enrichment`
+
+`catch_performed` (the north-star event) now answers "which plane / which
+flight / worth what" directly, without a HogQL join to `catch_uploaded`:
+
+- **`catch_performed` +=** aircraft identity off the fresh `Catch` row —
+  `registration`, `typecode`, `manufacturer`, `model`, `operator_name`,
+  `callsign`, `category` — plus the as-observed route (`origin_icao` /
+  `dest_icao`) and the tier's `base_points`. Same key vocabulary and
+  omit-blank rule as `catch_uploaded` (helper hoisted to a shared
+  `addNonBlank`), so the two events join cleanly.
+- **Honesty split (why some asks stayed off it):** `place_name` is
+  reverse-geocoded *async post-save*, so it isn't known when the event fires
+  — "where" stays on `catch_uploaded` (PostHog GeoIP covers coarse where on
+  every event); "when" is the event timestamp itself; the awarded
+  points/bonus TOTAL is decided at reveal/upload by the server, so it also
+  stays on `catch_uploaded`.
+- **`catch_uploaded` +=** the bonus outcomes inside its authoritative
+  `points`: `first_of_type` (server verdict, +50% already in points) and —
+  only when a guess round actually ran — `guess_kind` + `guess_correct`
+  (server verdict preferred, frozen local verdict as old-backend fallback;
+  gated on `row.guessKind` because the backend echoes `guessCorrect=false`
+  for guess-less catches, which must not land as a recorded wrong answer).
+- All keys omitted when unknown — absent means "not known / not applicable",
+  never "" / null / false-by-default. Four new `CatchTelemetryTests` pin the
+  enriched shapes + omit rules; suite green.
+
+## 2026-08-13 — route-guess bonus re-balanced +10% → +25%, GOING FORWARD only — branch `claude/route-guessing-bonus-25-rlymmj`
+
+The route-guess bonus round now pays **+25% of base** (was +10%), matching the
+type-guess fraction — **for catches made from 2026-08-13T00:00:00Z on** (Noah's
+call: the re-balance does not apply historically). The fraction is ERA-AWARE,
+keyed off each catch's own `caughtAt` — never the scoring or display moment —
+so old catches keep their +10% on every surface and under any future rescore.
+Changed at the canonical source and everywhere the parity net pins it:
+
+- **Canonical:** `tools/generate-aircraft-types.py` / `scoring-bonuses.json` —
+  `routeGuess` 0.1 → 0.25 plus two NEW keys pinned by both parity suites:
+  `routeGuessLegacy` (0.1) and `routeGuessCutover` (unix seconds; all values
+  stay JSON numbers so the strict decoders keep working).
+- **Backend:** `guessBonus(base, kind, caughtAt)` picks 0.25 or the legacy 0.1
+  by `caughtAt < ROUTE_GUESS_REBALANCE_CUTOVER`; the upload path scores by the
+  wire `caughtAt` (a delayed offline upload of an old catch still earns +10%)
+  and the rescore job feeds each row's stored `caughtAt` through — with the
+  era added to its memoization key, so mixed-era rows of one airframe can't
+  share a score. **`CURRENT_SCORING_VERSION` 3 → 4** (the fraction logic
+  changed), and the v3→v4 rescore is **zero-delta by construction** — no prod
+  rescore needed (only a row caught post-cutover but scored by a still-v3
+  server in the deploy gap would move). Suite green (336, two new era tests).
+- **iOS:** `ScoringBonuses.routeGuess` 0.25 + `routeGuessLegacy` /
+  `routeGuessCutover`; `guessBonus(base:kind:caughtAt:)` mirrors the server's
+  era pick (default "now" serves the live reveal, which is post-cutover by
+  construction — its "25% ROUTE BONUS" ledger label and "BONUS ROUND · +25%"
+  eyebrow stay hardcoded); the Hangar-card path passes `row.caughtAt`.
+  `ScoringPointsParityTests` pins the new keys + both era ladders (post
+  [3, 5, 13, 25, 125] = the type ladder; pre [1, 2, 5, 10, 50]).
+- **Compat:** additive with respect to shipped builds — old clients' "10%"
+  label is display-only while the server awards the era fraction; deploy the
+  server first as usual.
+
+## 2026-08-13 — `GET /readyz` DB readiness probe for uptime monitoring — branch `claude/readyz-db-ping`
+
+Alerting round (with Noah, remote): the external uptime monitor (Sentry monitor
+8072647, created today) watched `/healthz`, which deliberately skips the DB — so
+a dead Postgres looked "up" and only surfaced as a trickle of Sentry 500s. New
+**`GET /readyz`**: 200 only when the process is up AND Postgres answers `SELECT 1`
+within 3 s (hung-socket cap via `Promise.race`), else 503. Probe resolved lazily
+per-request (the established lazy-store pattern) so DB-less tests never touch
+`DATABASE_URL`; tests inject `readyProbe` for success/failure/timeout/default-probe
+cases (+4 tests, 338 green). `/healthz` stays DB-free on purpose — Fly restarts
+machines failing that check, and restarting the API over a DB outage adds churn.
+After deploy, repoint monitor 8072647 at `/readyz`. Same round, outside the repo:
+Sentry MCP connected (org `noah-lc`), uptime monitor created, PostHog crash alert
++ zero-DAU canary added, stale OpenSky Fly secrets removed.
+
+## 2026-08-12 — Shared catch cards: photo unmasked in the share render — branch `claude/photo-mask-catch-cards-vzpghs`
+
+Field report (Noah): shared catch cards still covered the hero photo with a
+yellow no-entry mask. Root cause: `.postHogMask()` isn't inert under
+ImageRenderer after all — the SDK modifier injects hidden UIKit tag views
+around the photo (on iOS 26+ including a FULL-SIZED frame-capture overlay for
+layer-backed SwiftUI), and ImageRenderer draws platform views as the yellow
+no-entry placeholder. PR #137's "inert" claim was wrong, and the visual-pass
+snapshot harness (no assertions) let it regress silently; the 2026-07-21
+marketing round had already hit the identical failure (see that entry). Note
+`postHogMask(false)` does NOT avoid it — the SDK still injects the tag views
+and only flips their redaction flag.
+
+- **`CatchPhotoReplayMask.swift` (new)** — the one way photo views opt into
+  replay masking: `.catchPhotoReplayMask(_:)` applies `.postHogMask()` only
+  when masking isn't disabled via the new `\.replayMaskingDisabled`
+  environment flag (structurally — the modifier isn't applied at all, since
+  a disabled mask still injects tag views). `RevealPhoto`, `CatchCardView`'s
+  photo, and `FocusThumbnail` all route through it.
+- **`CatchShare.uiImage` sets `\.replayMaskingDisabled` on the offscreen
+  share tree.** No privacy change: those pixels never reach the screen, so
+  session replay can't capture them; every on-screen tree keeps the default
+  and stays masked (the GA posture from #137 is intact).
+- **`ShareCardMaskRegressionTests` (new)** — a real assertion this time:
+  renders the production share path with a solid-magenta catch photo and
+  requires a large magenta region in the output pixels. With a mask tag view
+  back in the tree, the placeholder covers the hero and the count drops to
+  ~0.
+
+## 2026-08-12 — sets curation: helicopter set, data-driven gap fill, title consistency — branch `sets-curation`
+
+Trigger: Noah's Cape Air Cessna 402 catch (Newbury MA) had no set slot to fill.
+Instead of one-off patching, the whole catalog was audited against the prod
+catch histogram (1,032 catches → per-typecode counts, read-only), so every
+addition is backed by real catches:
+
+- **New "Helicopters" family set (8 slots)** — R44, Bell 407, H125/AStar, H135,
+  H145, S-76, AW139, AW109. Rotorcraft were the single biggest curation hole:
+  33 prod catches (B407 alone = 17, the most-caught uncovered typecode) had
+  zero slots anywhere. Noah's healed Bavarian-police H145 fills `fh-h145`.
+- **Cessna 402 slot** in the Cessna family (the trigger), **Pilatus PC-12** in
+  General aviation (16 catches, second-biggest gap), **Hawker 800 + Learjet**
+  slots in Business jets, a **737 Classic** slot (-300/-400/-500, one slot —
+  freighter-era variants are too rare for per-variant quests), and a new
+  2-slot **Airbus A340** family (rare-tier quest; A340-600 caught twice).
+- **Token fixes for silent fall-throughs:** EMB-545 Legacy 450 (3 catches) now
+  fills the Praetor 500 slot ("legacy 450"/"e545" tokens); the short-winglet
+  E75S (2 catches) now fills both E175 slots ("embraer 175" token — its
+  canonical name "Embraer 175" matched no e175/e-175 substring).
+- **Title consistency (Noah's ask):** "Airbus A320 Family" → "Airbus A320",
+  "Boeing 787 Dreamliner" → "Boeing 787", "Bombardier (Business)" →
+  "Bombardier Business Jets" (kept ≤ the 26-char precedent — the browser row
+  is `lineLimit(1)`).
+- **Watched, not added** (zero catches in 1,032): HondaJet, PC-24, TBM,
+  Twin Otter, Beech 1900, PA-31, C310/C421. Add when the histogram says so.
+
+Verified: full TailspotTests green (FamilySetsTests pins every new entry's
+rarity to AircraftTypes.json and all IDs unique). ImageRenderer visual pass
+hit a known wall — SetDetailScreen's `List` and the browser's lazy stack are
+UIKit-backed/viewport-dependent (same class of limitation as the glass-capture
+lesson), so the visual check is the device deploy.
+
+## 2026-08-08 — tailspot.app points at the App Store — branch `feat/app-store-links`
+
+The site still said "Coming soon" and "Currently in private TestFlight beta" the
+day the app went live. Now it links the listing
+(`https://apps.apple.com/app/id6773470079`):
+
+- **Hero + "Get Tailspot" CTAs** are real links reading "Download on the App
+  Store" (both were inert `<span role="text">` placeholders), the nav "Get the
+  app" button points at the listing, and the beta note became "Free on iPhone.
+  Requires iOS 26.2 or later" — 26.2 verified against
+  `IPHONEOS_DEPLOYMENT_TARGET`, not assumed.
+- **Footer gained an App Store link on all six pages** (incl. `404.html`, whose
+  footer omits Support).
+- **`apple-itunes-app` meta tag** added, so iOS Safari visitors get the native
+  Get banner — the phone they're browsing on is the device that runs the app.
+- **Geo-neutral `/app/id…` URL, not the `/us/` form** Apple hands you from the
+  US storefront: availability is worldwide and Apple redirects each visitor to
+  their own storefront, so the `/us/` variant would have sent every
+  international visitor to the wrong store.
+
+Verified by rendering the page locally, not just by reading the diff: the hero
+CTA changed from `<span>` to `<a>`, and `.content a { color: cyan }` would have
+overridden the filled button's dark text — it doesn't, because that rule is
+scoped to `.content` and the hero isn't inside it. `.cta-row` already had
+`flex-wrap`, so the longer label wraps to its own line and reads fine.
+
+**Follow-up (same day, branch `feat/app-store-badge`): the official Apple badge.**
+The custom cyan "Download on the App Store" button was brand-styled text
+imitating Apple's badge. Replaced with Apple's real artwork, used verbatim
+(`web/public/app-store-badge.svg`, byte-identical to Apple's `black.svg` —
+verified by SHA-256), per
+[Apple's badge guidelines](https://developer.apple.com/app-store/marketing/guidelines/#section-badges):
+
+- **One badge per layout**, in the "Get Tailspot" section — subordinate to the
+  hero message, as Apple requires. The hero CTA was reworded to **"Get the app"**
+  so it no longer imitates badge text; nav and footer stay plain text links.
+  (Side benefit: the shorter label lets both hero CTAs sit on one line again.)
+- **Black badge, not white** — and the first attempt got this backwards.
+  Apple's black badge is *preferred*; white is sanctioned only when black
+  "appears visually heavy." On `#0A0E1A` the reverse holds: the white badge is a
+  white-filled block that dominates the layout, while black reads as a subtle
+  outlined pill. Caught by rendering both and comparing, not by reading the SVG.
+- **48 px tall** (Apple's web minimum is 40), height-only sizing with `width:auto`
+  so the SVG's viewBox drives the aspect ratio and it can never be stretched;
+  clear space ≥ ¼ the badge height. The CSS rule carries a **do-not-add-effects
+  warning** — the site's `.btn-primary` cyan glow must never leak onto it, since
+  Apple prohibits shadows, highlights, and animation on the badge.
+- **Required trademark attribution** added to `attributions.html` (the site's
+  legal-notice surface, linked from every footer), using the international form
+  since availability is worldwide, plus an explicit non-affiliation line.
+
+Also **PLAN §9: put the App Store listing into the app's share sheets** (v1.1
+ride-along). The gap is bigger than expected — `CatchDetailView` shares a
+rendered card *image* with **no link at all**, so the best artifact the app
+produces gives a recipient no path to install. `ProfileScreen`'s invite already
+shares `tailspot.app`, which now forwards to the store, so it's recommended to
+stay as-is (richer OG preview, and it's the Spotter Pass attribution surface).
+
+## 2026-08-08 — 🚀 GA: v1.0.0 live on the App Store + post-GA release process — branch `docs/post-ga-release-process`
+
+**v1.0.0 (build 83) was approved and released on the App Store 2026-08-08.**
+Submitted 2026-07-21, rejected once under 5.1.1(iv) (the onboarding
+pre-permission CTA read "Allow permissions"; Apple requires neutral wording —
+fixed to "Continue" in #170), resubmitted 2026-08-04, approved 2026-08-08.
+
+Docs-only round rebuilding the development lifecycle around the fact that there
+is now a production audience that can't be messaged, running a binary that
+can't be recalled.
+
+- **`CONTRIBUTING.md` rewritten around four rings** — `bin/deploy` (Noah's
+  phone) → `main` (nobody) → TestFlight (invited testers) → App Store (public).
+  **TestFlight's job changed**: it was the release, it is now the *soak* — the
+  last place a bad build costs a message instead of a review cycle, and the only
+  place the app runs on hardware that isn't Noah's iPhone 16. New: a soak table
+  (same-day for copy → 3+ days for SwiftData changes), a per-release checklist,
+  a post-release 48-hour watch (ASC crashes, Sentry, PostHog funnel *by version*,
+  and — new at GA — **ratings and reviews**), and a hotfix path that skips
+  patience but not process.
+- **The versioning rule INVERTED, and the old one would have failed loudly.**
+  Pre-GA guidance (in both `CLAUDE.md` and `CONTRIBUTING.md`) was "keep the same
+  `MARKETING_VERSION`, let the build number increment" — correct for TestFlight,
+  where Beta App Review clears additional builds under an approved version
+  faster. It is **wrong for the App Store**, which requires a new, higher version
+  string per public release: 1.0.0 build 84 cannot follow 1.0.0 build 83. Now
+  **one `MARKETING_VERSION` per public release, bumped when the train opens, not
+  at submission** (bumping at submission ships a version string nobody soaked).
+  Cost, stated honestly: one Beta App Review per train. Only the app target's two
+  config blocks get edited — the `1.0` values on the test targets never ship.
+  `CURRENT_PROJECT_VERSION` still stays `1` and is still rewritten to
+  `CI_BUILD_NUMBER` by `ci_pre_xcodebuild.sh`.
+- **Backend discipline written down**: additive-only with respect to shipped
+  clients (old builds live on phones for months), server deployed *before* the
+  client that needs it, DB snapshot before Drizzle migrations.
+- **`docs/ga/appstore-listing.md`** relabelled — its checklist is the *one-time*
+  first-submission record, not a per-release list; the nutrition-label table is
+  what stays live. Fixed a stale line: export compliance is now permanently
+  resolved via `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO`, so the
+  per-upload question no longer appears.
+- **PLAN §9** records GA, the process change, and promotes **in-app account
+  deletion (5.1.1(v))** onto the v1.1 critical path — it was the top latent
+  rejection risk, and v1.1's push alerts deepen the account, which makes the gap
+  more conspicuous rather than less.
+
+**Deliberately not built (Noah's call, correct at current user counts):** remote
+feature flags / kill switches and a client-version header to the API. iOS has no
+rollback, but with few users a bad release can still be fixed by shipping
+forward; revisit when it can't. Phased release is used instead — it's a free
+checkbox at submission and the closest thing to a rollback iOS offers.
+
 ## 2026-07-21 — Dead-code cleanup sweep — branch `chore/dead-code-cleanup`
 
 Full-repo dead-code audit (three parallel sweeps: iOS, backend/web, repo-level

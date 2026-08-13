@@ -84,29 +84,47 @@ TailspotBackendClient())`** has a defaulted param so production uses the real
 backend and tests inject a fixture; `ContentView`'s `@StateObject private var adsb
 = ADSBManager()` depends on the no-arg default — don't break that shape.
 
-## Workflow: branch → PR → merge → ship
+## Workflow: four rings (local → main → TestFlight → App Store)
 
-`main` is the **enforced, always-green integration line** — branch protection
-blocks direct pushes (admins included) and requires the green **Unit tests**
-GitHub Actions check. **Shipping to TestFlight is a separate, manual step and
-Noah's call only.** Canonical process: `CONTRIBUTING.md`.
+**Tailspot is live on the App Store** (v1.0.0 build 83, approved 2026-08-08), so
+there are now four rings, not three. Canonical process, with the per-release
+checklist and soak table: `CONTRIBUTING.md`.
 
-- Flow: branch → field-test with `bin/deploy` → PR → squash-merge → lands on `main`
-  (does **not** ship). Autonomous commit + `bin/deploy` + merges on green CI are
-  fine; **only Noah triggers the TestFlight build** (App Store Connect / Xcode →
-  Start Build, batching everything since the last build).
-- **Build numbers auto-bump in CI** (`ci_scripts/ci_pre_xcodebuild.sh`). Leave
-  `CURRENT_PROJECT_VERSION` at `1` in `project.pbxproj`.
-- **Keep the same `MARKETING_VERSION` by default; let the build number increment**
-  (App Review clears builds under an approved version string faster). Bump the
-  version only for major changes worth flagging to testers.
+```
+Ring 0 bin/deploy → Ring 1 main → Ring 2 TestFlight → Ring 3 App Store
+       (Noah's phone)  (nobody)     (invited testers)   (the public, NO ROLLBACK)
+```
+
+- `main` is the **enforced, always-green integration line** — branch protection
+  blocks direct pushes (admins included) and requires the green **Unit tests**
+  check. Flow: branch → field-test with `bin/deploy` → PR → squash-merge.
+  **Merging does not ship; cutting a TestFlight build does not ship.**
+- **Claude may** commit, `bin/deploy`, and merge on green CI autonomously.
+  **Claude may not** promote to Ring 2 or Ring 3 — the Start Build and the App
+  Review submission are Noah's, always.
+- **Ring 3 is irreversible.** iOS has no rollback; the only post-hoc levers are
+  pull-from-sale, an expedited review, or pausing a phased rollout. Front-load
+  the caution — soak on TestFlight, and prefer phased release on every submit.
+- **Versioning — this rule INVERTED at GA.** Pre-GA guidance was "keep the same
+  `MARKETING_VERSION`, let the build number increment"; that is **wrong for the
+  App Store**, where each public release needs a new, higher version string. Now:
+  **one `MARKETING_VERSION` per public release, bumped when the train opens**
+  (not at submission), edited in *both* config blocks of the app target only.
+  Build numbers still auto-bump in CI (`ci_scripts/ci_pre_xcodebuild.sh`) —
+  leave `CURRENT_PROJECT_VERSION` at `1` in `project.pbxproj`.
 - **SwiftData migrations stay lightweight/additive** (new optional fields with
-  defaults). Testers have catches on-device — a breaking schema change loses them.
-  The Hangar is **local-only** (no sync, photos not uploaded); reinstall loses it,
-  so warn before any delete/reinstall test.
+  defaults). The Hangar is **local-only** (no sync, photos not uploaded), so a
+  breaking schema change destroys real users' collections — and post-GA there is
+  no one to warn, because they aren't testers you can message. Reinstall also
+  loses it: warn before any delete/reinstall test on a device that matters.
+- **The backend is half of production and serves clients you can't fix.** Old
+  app versions live on phones for months: API changes are **additive-only** with
+  respect to shipped builds, deploy the **server before the client** that needs
+  it, and snapshot the DB before migrations.
 - **Don't force-push to `main` without Noah's explicit OK** (e.g. a leak needing
   history rewrite — surface the trade-offs and let him decide).
-- After a TestFlight build, check App Store Connect → Crashes. Testers paste the
+- After any build reaches Ring 2 or 3, check App Store Connect → Crashes (and,
+  for Ring 3, ratings/reviews + the PostHog funnel by version). Testers paste the
   version+build from Settings' tap-to-copy footer.
 
 ### Doc-staleness Stop hook

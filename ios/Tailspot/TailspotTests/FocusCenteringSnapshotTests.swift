@@ -58,6 +58,10 @@ struct FocusCenteringSnapshotTests {
                 .padding(12)
                 .background(Brand.Color.bgPrimary)
                 .environment(\.colorScheme, .dark)
+                // Offscreen render: drop the replay photo mask, whose tag
+                // views ImageRenderer draws as a yellow placeholder over
+                // the hero (see CatchPhotoReplayMask.swift).
+                .environment(\.replayMaskingDisabled, true)
                 let renderer = ImageRenderer(content: view)
                 renderer.scale = 3
                 guard let png = renderer.uiImage?.pngData() else { continue }
