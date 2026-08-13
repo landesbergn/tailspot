@@ -23,12 +23,13 @@ struct ActivationTelemetryTests {
         #expect(ActivationTelemetry.stepName(0) == "welcome")
         #expect(ActivationTelemetry.stepName(1) == "permissions")
         #expect(ActivationTelemetry.stepName(2) == "handle")
-        #expect(ActivationTelemetry.stepName(3) == "calibration")
     }
 
     @Test func unknownStepsStillReportRatherThanVanish() {
-        // A future 5th step must show up in the funnel even before anyone
-        // names it here.
+        // A future 4th step must show up in the funnel even before anyone
+        // names it here. (Index 3 was "calibration" until the step's
+        // removal, 2026-08-13 — it must NOT report that name anymore.)
+        #expect(ActivationTelemetry.stepName(3) == "step_3")
         #expect(ActivationTelemetry.stepName(4) == "step_4")
     }
 
@@ -46,12 +47,12 @@ struct ActivationTelemetryTests {
         #expect(p["granted"]?.jsonValue as? Bool == false)
     }
 
-    @Test func completedCarriesClaimResultAndCalibration() {
-        let p = ActivationTelemetry.completedProperties(
-            claimResult: "offline_fallback", calibrated: false
-        )
+    @Test func completedCarriesClaimResult() {
+        let p = ActivationTelemetry.completedProperties(claimResult: "offline_fallback")
         #expect(p["handle_claim"]?.jsonValue as? String == "offline_fallback")
-        #expect(p["calibrated"]?.jsonValue as? Bool == false)
+        // The compass step is gone — completion must no longer report a
+        // "calibrated" split (old events keep theirs; new ones are clean).
+        #expect(p["calibrated"] == nil)
     }
 
     // MARK: - Once-per-install latches
