@@ -46,6 +46,22 @@ struct RevealSnapshotTests {
                 altText: "40,026 ft", speedText: "488 kt", distText: "31.0 km",
                 originIcao: "KBAD", destIcao: nil,
                 originName: "Barksdale AFB", destName: nil)),
+            // Early reveal SHELL states (capture-lag work, 2026-08-13): the
+            // card as presented at TAP time, before the pipeline delivers the
+            // photo. Cache-hit shell = full airframe identity, no photo
+            // (SkyPlaceholder holds the slot), feed route present.
+            ("shell_cachehit_noPhoto", CardPlane(
+                callsign: "UAL837", model: "Boeing 777-300ER", carrier: "United Airlines",
+                rarity: .rare, type: .wide,
+                altText: "36,745 ft", speedText: "490 kt", distText: "11.2 km",
+                originIcao: "SFO", destIcao: "NRT",
+                originName: "San Francisco", destName: "Tokyo Narita")),
+            // Metadata-cache-miss shell: nil model → UNKNOWN AIRCRAFT flaps,
+            // conservative common tier, no route — the worst-case first frame.
+            ("shell_cachemiss_noPhoto", CardPlane(
+                callsign: "N4521C", model: nil, carrier: "Private",
+                rarity: .common, type: .ga,
+                altText: "3,609 ft", speedText: "101 kt", distText: "3.8 km")),
         ]
 
         // Render the FULL screen (card + CTA) at iPhone size so card↔CTA
@@ -62,6 +78,29 @@ struct RevealSnapshotTests {
             try? data.write(to: dir.appendingPathComponent("\(name).png"))
         }
 
+        // Early-shell LOADING states (freeze-frame rework, 2026-08-13):
+        // (a) viewfinder freeze-frame in the slot — the normal shell look;
+        // (b) no frame available (camera denied) — the quiet dark panel,
+        // NOT the illustrated SkyPlaceholder (permanent-state only now).
+        let shellPlane = cases[4].1  // shell_cachehit_noPhoto
+        let frozenLoader = RevealLoader(plane: shellPlane)
+        frozenLoader.provisionalPhoto = Self.syntheticViewfinderFrame()
+        let darkLoader = RevealLoader(plane: shellPlane)
+        for (name, loader) in [("shell_freezeframe", frozenLoader),
+                               ("shell_loading_noframe", darkLoader)] {
+            let view = CatchRevealView(
+                plane: shellPlane, entryNumber: 62,
+                onDismiss: {}, onViewInHangar: {}, loader: loader
+            )._snapshotScreen(width: min(screen.width - 28, 420), size: screen)
+            // The replay mask is not inert under ImageRenderer (renders as
+            // the yellow no-entry block) — disable it like the share render.
+            .environment(\.replayMaskingDisabled, true)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 3
+            guard let img = renderer.uiImage, let data = img.pngData() else { continue }
+            try? data.write(to: dir.appendingPathComponent("\(name).png"))
+        }
+
         // Reduce Motion must end on the IDENTICAL settled frame (the
         // split-flap tumble becomes a straight fade, but at t = 1 both
         // paths show the settled characters). Rendered for eyeball diffing
@@ -73,6 +112,23 @@ struct RevealSnapshotTests {
         rmRenderer.scale = 3
         if let img = rmRenderer.uiImage, let data = img.pngData() {
             try? data.write(to: dir.appendingPathComponent("a220_route_uncommon_reducemotion.png"))
+        }
+    }
+
+    /// A stand-in for the tap-time viewfinder frame: a portrait sky
+    /// gradient with a small aircraft speck, so the freeze-frame snapshot
+    /// exercises the same aspect-fill + clip path as a real 1080×1920 frame.
+    private static func syntheticViewfinderFrame() -> UIImage {
+        let size = CGSize(width: 1080, height: 1920)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let colors = [UIColor(red: 0.10, green: 0.16, blue: 0.30, alpha: 1).cgColor,
+                          UIColor(red: 0.45, green: 0.58, blue: 0.75, alpha: 1).cgColor]
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                      colors: colors as CFArray, locations: [0, 1])!
+            ctx.cgContext.drawLinearGradient(
+                gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
+            UIColor(white: 0.15, alpha: 1).setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(x: 640, y: 520, width: 26, height: 10))
         }
     }
 }

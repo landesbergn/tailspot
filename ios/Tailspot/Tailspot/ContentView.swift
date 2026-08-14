@@ -210,6 +210,14 @@ struct ContentView: View {
     /// Counter that triggers `sensoryFeedback(.success)` once per
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
+    /// Same-frame capture acknowledgment (capture-lag work, 2026-08-13):
+    /// the impact haptic + shutter flash fire at the TAP, not at pipeline
+    /// end — a working press must be distinguishable from a missed one
+    /// before any async work starts. Counter, like `catchHaptic`.
+    @State private var captureTapHaptic = 0
+    /// Drives the brief white shutter-flash overlay; set true at the tap,
+    /// animated back to false ~70 ms later.
+    @State private var captureFlash = false
     /// Collapsed by default. Tap the NEARBY AIRCRAFT header in the
     /// debug panel to expand the per-plane list.
     @State private var showAircraftList = false
@@ -876,7 +884,15 @@ struct ContentView: View {
         // frame, the other a tap that reached an in-data plane).
         .overlay(alignment: .top) { groundedToastBanner }
         .overlay(alignment: .top) { farTapToastBanner }
-        .sensoryFeedback(.success, trigger: catchHaptic)
+        // Catch feedback surface: pipeline-end success haptic + tap-time
+        // impact haptic + shutter flash (see `performCatch`). Bundled into
+        // ONE modifier because `body` is a single expression already at the
+        // type-check budget — adding chain links here times out the compiler.
+        .modifier(CaptureFeedback(
+            catchHaptic: catchHaptic,
+            tapHaptic: captureTapHaptic,
+            flash: captureFlash
+        ))
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
         // the device. Dismiss path either closes the sheet (Keep
@@ -905,18 +921,23 @@ struct ContentView: View {
                 // pop, `answered`/`skipped` on resolve; the ✦ Catch simulator
                 // keeps its `isSimulated` mute (no telemetry, transient row).
                 guess: reveal.guess,
-                onGuessShown: reveal.guess == nil ? nil : {
+                // With an early-shell loader the question can arrive AFTER
+                // presentation, so the callbacks must exist whenever a loader
+                // does — they only ever fire once chips actually pop.
+                onGuessShown: (reveal.guess == nil && reveal.loader == nil) ? nil : {
                     guessShownAt = Date()
                     if !reveal.isSimulated {
                         CatchTelemetry.fireGuessRoundShown(kind: .route)
                     }
                 },
-                onGuessResolved: reveal.guess == nil ? nil : { answeredValue, correct in
+                onGuessResolved: (reveal.guess == nil && reveal.loader == nil) ? nil : { answeredValue, correct in
                     let elapsedMs = guessShownAt.map { Int(Date().timeIntervalSince($0) * 1000) }
                     // Freeze the outcome onto the row (like serverUuid — after
                     // the row is born). A SKIP / dismiss (nil value) freezes
-                    // nothing, leaving all three guess fields nil.
-                    if let answeredValue, let row = reveal.row {
+                    // nothing, leaving all three guess fields nil. The shell
+                    // path's row arrives via the loader (it didn't exist at
+                    // presentation).
+                    if let answeredValue, let row = reveal.loader?.row ?? reveal.row {
                         row.guessKind = GuessKind.route.rawValue
                         row.guessValue = answeredValue
                         row.guessCorrect = correct
@@ -928,7 +949,8 @@ struct ContentView: View {
                     } else if !reveal.isSimulated {
                         CatchTelemetry.fireGuessRoundSkipped(kind: .route, elapsedMs: elapsedMs)
                     }
-                }
+                },
+                loader: reveal.loader
             )
             .presentationBackground(.clear)
         }
@@ -1180,6 +1202,13 @@ struct ContentView: View {
         /// ✦ Catch simulation — the in-card round plays, but no telemetry and no
         /// persistence (transient row).
         var isSimulated: Bool = false
+        /// Early-shell conduit (capture-lag work, 2026-08-13): non-nil when the
+        /// reveal presented at TAP time as a loading shell and the pipeline is
+        /// still filling it — `plane` above is then just the initial snapshot,
+        /// and the finished plane/row/guess arrive through the loader. nil on
+        /// the settled paths (multi fallback, simulator), where `plane`/`row`/
+        /// `guess` are final at presentation exactly as before.
+        var loader: RevealLoader? = nil
     }
 
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
@@ -1630,6 +1659,18 @@ struct ContentView: View {
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
 
+        // Acknowledge the tap in THIS frame: impact haptic + shutter flash.
+        // Everything after this point is async (shutter ~0.2–0.6 s, detector,
+        // compose) — without this beat a working press was indistinguishable
+        // from a missed one until the reveal, ~1.4 s later (field report
+        // 2026-08-13). The success haptic at pipeline end is unchanged.
+        captureTapHaptic &+= 1
+        captureFlash = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(70))
+            withAnimation(.easeOut(duration: 0.3)) { captureFlash = false }
+        }
+
         // Post-catch confirm model (2026-07-04): the gates below RAISE
         // SUSPICION instead of blocking — the catch + reveal always proceed
         // instantly. A pre-catch nudge interrupted a moving target, and its
@@ -1783,14 +1824,76 @@ struct ContentView: View {
             uniquingKeysWith: { first, _ in first }
         )
 
+        // Pipeline stage clock (fed to `catch_pipeline_timing` at the end —
+        // the storyboard's numbers were estimates; this measures the field).
+        let tapAt = Date()
+
+        // EARLY REVEAL SHELL (capture-lag work, 2026-08-13). Single-target
+        // catches present the reveal NOW — before the shutter — as a loading
+        // shell over tap-time data: the dedup verdict and entry number are
+        // cheap local fetches that used to run after the detector for no
+        // reason, callsign/typecode/rarity/alt/speed/route ride the live
+        // feed, and the photo slot holds `SkyPlaceholder` until the pipeline
+        // delivers the still through the loader. The reveal's own split-flap
+        // settle (~2 s) covers the fill window, so loading reads as the
+        // ceremony, not as waiting. Multi-catches keep the settled flow —
+        // `MultiCatchReveal` is built from finished rows.
+        var earlyLoader: RevealLoader? = nil
+        if icaos.count == 1, let icao = icaos.first {
+            let isDup = Catch.exists(icao24: icao, in: modelContext)
+            // "ENTRY #N" = unique airframes AFTER this catch: the current
+            // unique count plus one for a fresh catch (`catches` hasn't seen
+            // the insert yet), unchanged for a duplicate.
+            let entryNumber = Set(catches.map(\.icao24)).count + (isDup ? 0 : 1)
+            let shellPlane: CardPlane?
+            if isDup {
+                // A duplicate re-reveals the EXISTING catch — complete
+                // already (old photo included), just presented ~1 s sooner.
+                shellPlane = fetchExistingCatch(icao: icao).map {
+                    cardPlane(from: $0, observed: visibleByIcao[icao])
+                }
+            } else {
+                shellPlane = visibleByIcao[icao].map {
+                    shellCardPlane(observed: $0, metadata: cachedMetadata(for: icao))
+                }
+            }
+            if let shellPlane {
+                let loader = RevealLoader(plane: shellPlane)
+                earlyLoader = loader
+                pendingReveal = PendingReveal(
+                    plane: shellPlane,
+                    entryNumber: entryNumber,
+                    isDuplicate: isDup,
+                    loader: loader
+                )
+                // Freeze the viewfinder into the shell's photo slot: convert
+                // the pipeline's latest tapped frame (≤ ~125 ms old at 8 fps)
+                // off-main and hand it to the loader — it lands during the
+                // cover animation, so the slot opens showing the actual sky
+                // instead of a placeholder. Fresh catches only: a duplicate
+                // shell already carries the existing catch's photo.
+                if !isDup {
+                    Task.detached(priority: .userInitiated) { [visualConfirm] in
+                        guard let frame = visualConfirm.latestFrameImage() else { return }
+                        await MainActor.run { loader.provisionalPhoto = frame }
+                    }
+                }
+            }
+        }
+
         Task { @MainActor in
             // Backstop: the latch is normally cleared by the reveal's
             // dismiss callbacks, but if this task exits before a reveal
             // is presented (e.g. an error/cancellation at an await) the
             // catch button would soft-lock. Clear it unless a sheet
-            // actually went up.
-            var revealPresented = false
+            // actually went up. The early shell counts as up from the start
+            // (its dismiss callbacks own the latch from presentation on).
+            var revealPresented = (earlyLoader != nil)
             defer { if !revealPresented { captureInFlight = false } }
+            // However this task exits, the shell must stop reading as
+            // "loading" — a photo-less catch settles to the classic
+            // placeholder instead of a perpetual loading slot.
+            defer { earlyLoader?.pipelineFinished = true }
             // Catch-time route resolve (see CatchBackfill.resolveCatchTimeRoute):
             // the backend attaches routes a poll LATE, so a freshly-caught
             // plane usually froze a route-less row and the bonus round couldn't
@@ -1823,11 +1926,15 @@ struct ContentView: View {
             // `captureJPEG` returns nil — Catches are still valid
             // without a photo. Capture first so a slow shutter doesn't
             // double-fire the dedup gate when the user re-taps.
+            let shutterStart = Date()
             let photoData = await captureBridge.captureJPEG()
+            let shutterMs = Int(Date().timeIntervalSince(shutterStart) * 1000)
             if photoData == nil {
                 Log.adsb.notice("Catch: camera capture returned no data")
             }
             let now = Date()
+            var snapMs: Int? = nil
+            var composeMs: Int? = nil
 
             // Bracket snap (single-target catches): geometry places the
             // bracket, but compass wobble plus hand drift during the
@@ -1859,6 +1966,7 @@ struct ContentView: View {
                 // Detached: up to ~19 CoreML passes (fine ring + coarse
                 // ring + refine) plus a 12 MP resample; never on the
                 // MainActor.
+                let snapStart = Date()
                 let snap = await Task.detached(priority: .userInitiated) {
                     CatchPhotoSnapper.snapOutcome(
                         jpegData: data,
@@ -1866,6 +1974,7 @@ struct ContentView: View {
                         screenSize: screenSize
                     )
                 }.value
+                snapMs = Int(Date().timeIntervalSince(snapStart) * 1000)
                 let snapped = snap.screenPoint
                 let outcome: String
                 if let snapped {
@@ -1996,30 +2105,54 @@ struct ContentView: View {
                 // photo (the bracket center, normalized 0…1); persisted so
                 // photo displays crop around the plane, not the frame center.
                 var photoFocus: CGPoint? = nil
-                let photoFilename: String? = photoData.flatMap { data -> String? in
-                    let toSave: Data
-                    if let pos = bracketPositions[icao] {
-                        let overlay = CatchPhotoComposer.BracketOverlay(
-                            screenPosition: pos,
-                            screenSize: screenSize
-                        )
-                        if let composed = CatchPhotoComposer.compose(
-                            jpegData: data, overlay: overlay
-                        ) {
-                            toSave = composed.jpegData
-                            photoFocus = composed.normalizedFocus
+                var photoFilename: String? = nil
+                if let data = photoData {
+                    let composeStart = Date()
+                    let overlayPos = bracketPositions[icao]
+                    // Detached like the snapper above: the 12 MP decode +
+                    // bracket bake + JPEG re-encode + disk write were a
+                    // synchronous MainActor block (~0.1–0.4 s) that froze
+                    // the camera preview mid-capture. The composer and
+                    // store are `nonisolated` — hop off to run them.
+                    let saved = await Task.detached(priority: .userInitiated) {
+                        () -> (filename: String?, focus: CGPoint?) in
+                        let toSave: Data
+                        var focus: CGPoint? = nil
+                        if let pos = overlayPos {
+                            let overlay = CatchPhotoComposer.BracketOverlay(
+                                screenPosition: pos,
+                                screenSize: screenSize
+                            )
+                            if let composed = CatchPhotoComposer.compose(
+                                jpegData: data, overlay: overlay
+                            ) {
+                                toSave = composed.jpegData
+                                focus = composed.normalizedFocus
+                            } else {
+                                toSave = data
+                            }
                         } else {
-                            toSave = data
+                            // No bracket to bake (missing position or
+                            // off-frame target) — still normalize orientation
+                            // and cap the size so a raw 12 MP sensor still
+                            // never lands in the Hangar verbatim.
+                            toSave = CatchPhotoComposer.normalizedWithoutBracket(
+                                jpegData: data) ?? data
                         }
-                    } else {
-                        // No bracket to bake (missing position or
-                        // off-frame target) — still normalize orientation
-                        // and cap the size so a raw 12 MP sensor still
-                        // never lands in the Hangar verbatim.
-                        toSave = CatchPhotoComposer.normalizedWithoutBracket(
-                            jpegData: data) ?? data
-                    }
-                    return CatchPhotoStore.save(toSave, icao24: icao, at: now)
+                        let filename = CatchPhotoStore.save(toSave, icao24: icao, at: now)
+                        // Warm the reveal's decode cache while still off-main
+                        // so the early shell's photo swap-in is a cache hit,
+                        // not a ~12 MP main-thread decode mid-flap-animation.
+                        if let filename,
+                           let url = CatchPhotoStore.url(forFilename: filename) {
+                            await RevealPhoto.preloadDecoded(url: url)
+                        }
+                        return (filename, focus)
+                    }.value
+                    photoFilename = saved.filename
+                    photoFocus = saved.focus
+                    composeMs = (composeMs ?? 0)
+                        + Int(Date().timeIntervalSince(composeStart) * 1000)
                 }
                 let row = Catch(
                     icao24: icao,
@@ -2178,9 +2311,44 @@ struct ContentView: View {
                 }
             }
 
-            presentReveal(newCatches: newCatches, duplicates: duplicates,
-                          visibleByIcao: visibleByIcao, guess: guessPayload)
-            revealPresented = (pendingReveal != nil || pendingMultiReveal != nil)
+            let presentMs: Int
+            let revealMode: String
+            if let loader = earlyLoader {
+                // The shell has been up since tap time — hand it the finished
+                // catch. Swapping the whole CardPlane keeps photo/route/
+                // first-of-type consistent in one update; the row rides along
+                // for the guess round to freeze onto; the question (if the
+                // scheduler fired one) pops when the reveal settles.
+                if let row = newCatches.first {
+                    loader.plane = cardPlane(from: row, observed: visibleByIcao[row.icao24])
+                    loader.row = row
+                    if let payload = guessPayload { loader.guess = payload.question }
+                }
+                // If the user tap-skipped and dismissed the shell before the
+                // pipeline finished, the dismiss callbacks already ran — any
+                // late-arriving suspicion review must present itself.
+                if pendingReveal == nil {
+                    presentSuspectReviewIfNeeded()
+                }
+                revealPresented = (pendingReveal != nil)
+                presentMs = 0
+                revealMode = "shell"
+            } else {
+                presentReveal(newCatches: newCatches, duplicates: duplicates,
+                              visibleByIcao: visibleByIcao, guess: guessPayload)
+                revealPresented = (pendingReveal != nil || pendingMultiReveal != nil)
+                presentMs = Int(Date().timeIntervalSince(tapAt) * 1000)
+                revealMode = pendingMultiReveal != nil ? "multi"
+                    : (pendingReveal != nil ? "settled" : "none")
+            }
+            CatchTelemetry.firePipelineTiming(
+                mode: revealMode,
+                shutterMs: shutterMs,
+                snapMs: snapMs,
+                composeMs: composeMs,
+                presentMs: presentMs,
+                totalMs: Int(Date().timeIntervalSince(tapAt) * 1000)
+            )
         }
     }
 
@@ -2431,6 +2599,72 @@ struct ContentView: View {
         )
     }
 
+    /// Tap-time `CardPlane` for the early reveal SHELL — built from the live
+    /// observation plus whatever metadata is already cached, BEFORE any row
+    /// exists (CardPlane's documented pre-persistence path). Mirrors
+    /// `cardPlane(from:observed:)` field-for-field where the data exists at
+    /// tap time; photo and guess fields start empty, and the loader swaps in
+    /// the full row-built snapshot when the pipeline finishes.
+    private func shellCardPlane(
+        observed: ObservedAircraft, metadata: AircraftMetadata?
+    ) -> CardPlane {
+        let aircraft = observed.aircraft
+        let typecode = Catch.preferredAirframeField(
+            feed: aircraft.typecode, metadata: metadata?.typecode
+        )
+        let canonical = AircraftNaming.canonical(
+            typecode: typecode,
+            manufacturer: metadata?.manufacturerName,
+            model: metadata?.model
+        )
+        // Same derivations as `Catch.resolvedRarity` / `resolvedType`:
+        // typecode is authoritative; no typecode → conservative `.common`
+        // plus the string classifier for the type bucket.
+        let rarity = AircraftNaming.rarity(forTypecode: typecode) ?? .common
+        let type = AircraftNaming.aircraftType(forTypecode: typecode)
+            ?? AircraftClassifier.classify(
+                manufacturer: metadata?.manufacturerName,
+                model: metadata?.model,
+                operatorName: metadata?.operatorName
+            ).type
+        // No row exists yet, so unlike `cardPlane(from:)` there's nothing to
+        // exclude from the scan: first-of-type ⇔ no existing row shares the
+        // typecode.
+        let isFirstOfType = typecode.map { tc in
+            !catches.contains { $0.typecode == tc }
+        } ?? false
+        return CardPlane(
+            callsign: aircraft.callsign,
+            model: canonical.displayName ?? metadata?.model,
+            carrier: Airlines.operatorLabel(
+                operatorName: metadata?.operatorName
+                    ?? Airlines.name(forCallsign: aircraft.callsign),
+                callsign: aircraft.callsign
+            ),
+            rarity: rarity,
+            type: type,
+            altText: CardPlane.altText(fromMeters: aircraft.altitudeMeters),
+            speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
+            distText: String(format: "%.1f km", observed.slantDistanceMeters / 1000),
+            originIcao: aircraft.originIata ?? aircraft.originIcao,
+            destIcao: aircraft.destIata ?? aircraft.destIcao,
+            originName: aircraft.originName,
+            destName: aircraft.destName,
+            isFirstOfType: isFirstOfType
+        )
+    }
+
+    /// Metadata already on hand at tap time — the locked snapshot for the
+    /// pinned plane, else the ambient prefetch cache. Never the network: the
+    /// shell can't wait, and the pipeline's own `adsb.metadata(for:)`
+    /// fallback fills the row (and thus the loader's final snapshot) later.
+    private func cachedMetadata(for icao: String) -> AircraftMetadata? {
+        if let locked = lockedMetadata, icao == lockOn.state.targetIcao24 {
+            return locked
+        }
+        return ambientMetadata[icao] ?? nil
+    }
+
     /// Big central capture button. A single circle that is always
     /// present; multi-mode adds a small magenta `×N` badge in the
     /// top-right corner.
@@ -2467,10 +2701,20 @@ struct ContentView: View {
                     Circle()
                         .fill(Brand.Color.cyan.opacity(0.15))
                         .frame(width: 60, height: 60)
-                    Text("CAPTURE")
-                        .font(Brand.Font.mono(size: 10, weight: .bold))
-                        .tracking(0.6)
-                        .foregroundStyle(Brand.Color.cyan)
+                    // Capturing state: `captureInFlight` was previously a
+                    // pure re-entry latch that nothing rendered — now the
+                    // button owns it visually. Mostly visible on the multi
+                    // path (the single path's reveal shell covers it fast).
+                    if captureInFlight {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Brand.Color.cyan)
+                    } else {
+                        Text("CAPTURE")
+                            .font(Brand.Font.mono(size: 10, weight: .bold))
+                            .tracking(0.6)
+                            .foregroundStyle(Brand.Color.cyan)
+                    }
                 }
                 if isMulti {
                     Text("×\(count)")
@@ -3853,6 +4097,30 @@ private struct EmptyTapRippleView: View {
                 .position(at)
             }
         }
+    }
+}
+
+/// The catch feedback surface, bundled: the pipeline-end success haptic,
+/// the tap-time impact haptic, and the capture shutter flash. One
+/// `.modifier` call instead of three chain links because `ContentView.body`
+/// is a single expression sitting at the compiler's type-check budget —
+/// growing the chain there times out the build (2026-08-13).
+private struct CaptureFeedback: ViewModifier {
+    let catchHaptic: Int
+    let tapHaptic: Int
+    let flash: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .sensoryFeedback(.success, trigger: catchHaptic)
+            .sensoryFeedback(.impact(weight: .medium), trigger: tapHaptic)
+            .overlay {
+                Rectangle()
+                    .fill(.white)
+                    .opacity(flash ? 0.5 : 0)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
     }
 }
 

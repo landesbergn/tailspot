@@ -28,6 +28,7 @@ import Combine     // @Published/ObservableObject without import SwiftUI
 import CoreImage
 import CoreVideo
 import Foundation
+import UIKit       // UIImage for the reveal shell's freeze-frame
 import QuartzCore
 import os
 
@@ -118,6 +119,18 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// camera queue every frame (independent of the detector toggle), read at
     /// catch time to judge the patch under each target's bracket.
     private let localGridSnapshot = OSAllocatedUnfairLock<LocalSkyGrid?>(initialState: nil)
+    /// Latest tapped camera frame, retained for the reveal shell's tap-time
+    /// freeze-frame (capture-lag work, 2026-08-13). Exactly ONE pool buffer
+    /// held at a time, replaced on every arrival — safe for AVCapture's
+    /// buffer pool. CVPixelBuffer isn't Sendable; the box's
+    /// `nonisolated(unsafe)` documents that the lock is the confinement.
+    private struct FrameBox {
+        nonisolated(unsafe) var buffer: CVPixelBuffer?
+    }
+    private let latestFrameSnapshot = OSAllocatedUnfairLock<FrameBox>(initialState: FrameBox(buffer: nil))
+    /// Shared context for the freeze-frame render. CIContext is documented
+    /// thread-safe; creating one per conversion would dominate the cost.
+    nonisolated(unsafe) private static let frameImageContext = CIContext()
 
     private var tracker = VisualFixTracker(gateRadius: 150)
     // `nonisolated`: CropFrameSaver is itself a nonisolated class (it uses
@@ -162,8 +175,26 @@ final class VisualConfirmationPipeline: ObservableObject {
         recordingSnapshot.withLock { $0 = recording }
     }
 
+    /// The most recent tapped camera frame as a display image — the reveal
+    /// shell's freeze-frame. Called once per catch tap, OFF main (a ~1080p
+    /// BGRA → CGImage render). Buffers arrive portrait (the video connection
+    /// rotates 90° — CameraPreview), so no orientation fix-up. nil before
+    /// the first frame (camera denied / session not yet running).
+    nonisolated func latestFrameImage() -> UIImage? {
+        guard let buffer = latestFrameSnapshot.withLock({ $0.buffer }) else { return nil }
+        let ci = CIImage(cvPixelBuffer: buffer)
+        guard let cg = Self.frameImageContext.createCGImage(ci, from: ci.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+
     /// Frame entry point — runs on the camera's video queue (~8 fps).
     nonisolated func ingestFrame(_ pixelBuffer: CVPixelBuffer) {
+        // Freeze-frame retention — before every gate, so the catch tap has
+        // a frame even with the detector off or no lock target.
+        do {
+            nonisolated(unsafe) let frame = pixelBuffer
+            latestFrameSnapshot.withLock { $0.buffer = frame }
+        }
         // v1 authenticity gate: compute sky features on EVERY frame,
         // independent of the visual-confirm detector toggle and of having
         // a lock target. Cheap (12×12 sample lattice); stored for a read

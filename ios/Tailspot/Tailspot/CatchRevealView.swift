@@ -182,6 +182,17 @@ struct RevealPhoto: View {
     /// plane instead of the frame center, clamped so no edge ever shows.
     /// nil (pre-focus catches, Planespotters photos) → plain center fill.
     var focus: CGPoint? = nil
+    /// Tap-time viewfinder freeze-frame (early reveal shell only): shown
+    /// while `url` has nothing to decode, so the slot opens on the ACTUAL
+    /// scene and the composed photo swap-in reads as the shot sharpening
+    /// into place. nil everywhere outside the shell (Hangar, shares).
+    var provisional: UIImage? = nil
+    /// True while the catch pipeline is still in flight (early shell). With
+    /// no `provisional` to show (camera denied), the slot renders a quiet
+    /// dark panel instead of `SkyPlaceholder` — the illustration reads as
+    /// content, wrong for a loading beat (Noah, 2026-08-13); it stays the
+    /// PERMANENT photo-less treatment only.
+    var loading: Bool = false
 
     /// Decoded-image cache, keyed by file path. `UIImage(contentsOfFile:)`
     /// synchronously decodes a full ~12 MP catch JPEG on the main thread —
@@ -192,11 +203,25 @@ struct RevealPhoto: View {
     /// we decode once and reuse. Catch photos are immutable files → no
     /// invalidation needed; NSCache evicts on its own under memory pressure.
     /// Small `countLimit` because these are full-size images.
-    private static let cache: NSCache<NSString, UIImage> = {
+    /// `nonisolated(unsafe)` so `preloadDecoded` can seed it from off the
+    /// main actor — safe because NSCache is documented thread-safe.
+    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
         c.countLimit = 8
         return c
     }()
+
+    /// Decode + prepare a just-saved catch photo OFF the main thread and
+    /// seed the cache, so the early reveal shell's photo swap-in is a cache
+    /// hit instead of a ~12 MP main-thread decode mid-flap-animation. The
+    /// catch pipeline calls this from its detached compose task.
+    nonisolated static func preloadDecoded(url: URL) async {
+        let key = url.path as NSString
+        guard cache.object(forKey: key) == nil,
+              let image = UIImage(contentsOfFile: url.path) else { return }
+        let prepared = await image.byPreparingForDisplay() ?? image
+        cache.setObject(prepared, forKey: key)
+    }
 
     /// Cache-checked synchronous decode. nil (no file at `path`, e.g. a
     /// remote URL) falls through to the AsyncImage / placeholder branches,
@@ -256,8 +281,40 @@ struct RevealPhoto: View {
             } placeholder: {
                 SkyPlaceholder()
             }
+        } else if let provisional {
+            // The user's own camera content — replay-masked like the local
+            // catch photo above. (Never reached by share renders: those only
+            // render settled cards, whose photo comes through `url`.)
+            Color.clear
+                .overlay(
+                    Image(uiImage: provisional)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                )
+                .clipped()
+                .catchPhotoReplayMask()
+        } else if loading {
+            PhotoLoadingPlaceholder()
         } else {
             SkyPlaceholder()
+        }
+    }
+}
+
+/// Quiet dark slot while the catch photo is in flight and no viewfinder
+/// frame was available (camera denied — the only way to reach this).
+/// Deliberately mute chrome, not content: card-ground tones, a hairline
+/// rule, nothing figurative.
+private struct PhotoLoadingPlaceholder: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: 0x121826), Color(hex: 0x0B0F18)],
+                startPoint: .top, endPoint: .bottom
+            )
+            RoundedRectangle(cornerRadius: 1)
+                .fill(RP.rule)
+                .frame(width: 28, height: 2)
         }
     }
 }
@@ -443,6 +500,21 @@ struct CatchRevealView: View {
     /// outcome onto the row + fires `guess_round_answered`/`_skipped`.
     var onGuessResolved: ((_ answeredValue: String?, _ correct: Bool) -> Void)? = nil
 
+    /// Early-shell conduit (capture-lag work, 2026-08-13). Non-nil when the
+    /// reveal presented as a loading shell at tap time: the pipeline swaps
+    /// in the finished `plane` snapshot (photo, healed route), the persisted
+    /// `row`, and any bonus-round `guess` as they land. nil on every settled
+    /// path (multi/duplicate fallbacks, ✦ Catch simulator, snapshots) —
+    /// then `livePlane`/`liveGuess` collapse to the immutable inputs.
+    var loader: RevealLoader? = nil
+
+    /// What the card actually renders: the loader's evolving snapshot when
+    /// attached, else the immutable presentation value.
+    private var livePlane: CardPlane { loader?.plane ?? plane }
+    /// The bonus-round question, whether threaded at presentation (`guess`)
+    /// or delivered late by the pipeline (`loader`).
+    private var liveGuess: GuessRoundQuestion? { guess ?? loader?.guess }
+
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     #if DEBUG
@@ -527,7 +599,7 @@ struct CatchRevealView: View {
 
     /// Tier-scaled wall-clock for the whole reveal.
     private var duration: Double {
-        switch plane.rarity {
+        switch livePlane.rarity {
         case .common:    return 1.7
         case .uncommon:  return 1.9
         case .rare:      return 2.2
@@ -536,12 +608,12 @@ struct CatchRevealView: View {
         }
     }
 
-    private var base: Int { plane.rarity.basePoints }
+    private var base: Int { livePlane.rarity.basePoints }
     private var firstOfTypeBonus: Int {
         // Fraction via ScoringBonuses (pinned to scoring-bonuses.json by the
         // parity test) — never a local literal, so the ledger can't drift
         // from the server's award.
-        plane.isFirstOfType && !isDuplicate ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
+        livePlane.isFirstOfType && !isDuplicate ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
     }
     /// The route bonus a correct in-card guess earns — derived live off the base
     /// like `firstOfTypeBonus`, so it re-tiers on read. Route-only per Noah.
@@ -555,8 +627,8 @@ struct CatchRevealView: View {
     /// whose row already recorded a correct guess (e.g. a re-render). With a live
     /// `guess` payload the count-up drives the bonus instead, so this is 0.
     private var frozenGuessBonus: Int {
-        guard guess == nil, plane.guessKind != nil, !isDuplicate else { return 0 }
-        return plane.guessBonusPoints
+        guard liveGuess == nil, livePlane.guessKind != nil, !isDuplicate else { return 0 }
+        return livePlane.guessBonusPoints
     }
     /// The target the reveal's own count-up climbs to — base + first-of-type +
     /// any pre-frozen bonus. The LIVE route bonus is deliberately excluded: it
@@ -615,6 +687,14 @@ struct CatchRevealView: View {
             .onChange(of: start) { _, _ in rearmAnimationSettle() }
             .onChange(of: chipsStart) { _, _ in rearmAnimationSettle() }
             .onChange(of: bonusStart) { _, _ in rearmAnimationSettle() }
+            // Early-shell path: the pipeline usually delivers the bonus-round
+            // question before the reveal settles (the settle handler above
+            // pops it), but on a slow network it can land after — pop late
+            // rather than never. Bool proxy because the question isn't
+            // Equatable; `popBonusRoundIfEligible` guards re-entry.
+            .onChange(of: liveGuess != nil) { _, hasGuess in
+                if hasGuess, settled { popBonusRoundIfEligible() }
+            }
             .onDisappear { settleTask?.cancel() }
             .sensoryFeedback(.success, trigger: settled)
             .sensoryFeedback(.success, trigger: successBeat)
@@ -632,7 +712,7 @@ struct CatchRevealView: View {
     @ViewBuilder
     private func layout(t: Double, bt: Double, gt: Double, width: CGFloat) -> some View {
         // Map the live bonus-round @State into the immutable per-frame render.
-        let render: GuessRender? = guess.map {
+        let render: GuessRender? = liveGuess.map {
             GuessRender(question: $0,
                         resolution: resolution,
                         chipsInLayout: chipsPhase == .shown,
@@ -673,11 +753,11 @@ struct CatchRevealView: View {
 
     /// Announced once when the reveal settles (see `.onChange(of: settled)`).
     private var settleAnnouncement: String {
-        let model = plane.model ?? "Unknown aircraft"
+        let model = livePlane.model ?? "Unknown aircraft"
         if isDuplicate {
-            return "Caught \(model), \(plane.rarity.label), already in hangar, no points"
+            return "Caught \(model), \(livePlane.rarity.label), already in hangar, no points"
         }
-        var parts = ["Caught \(model)", plane.rarity.label]
+        var parts = ["Caught \(model)", livePlane.rarity.label]
         if firstOfTypeBonus > 0 { parts.append("first of type") }
         parts.append("\(revealTargetTotal) points")
         return parts.joined(separator: ", ")
@@ -687,15 +767,15 @@ struct CatchRevealView: View {
     /// total). Mirrors what's on screen at rest — the live bonus (if earned)
     /// is folded into the total the same way the ledger shows it.
     private var cardAccessibilityLabel: String {
-        var parts = [plane.model ?? "Unknown aircraft", plane.rarity.label]
+        var parts = [livePlane.model ?? "Unknown aircraft", livePlane.rarity.label]
         if isDuplicate { parts.append("already caught") }
-        if let alt = plane.altText { parts.append("altitude \(alt)") }
-        if let spd = plane.speedText { parts.append("speed \(spd)") }
-        if let o = plane.originIcao, let d = plane.destIcao {
+        if let alt = livePlane.altText { parts.append("altitude \(alt)") }
+        if let spd = livePlane.speedText { parts.append("speed \(spd)") }
+        if let o = livePlane.originIcao, let d = livePlane.destIcao {
             parts.append("route \(o) to \(d)")
-        } else if let o = plane.originIcao {
+        } else if let o = livePlane.originIcao {
             parts.append("from \(o)")
-        } else if let d = plane.destIcao {
+        } else if let d = livePlane.destIcao {
             parts.append("to \(d)")
         }
         if !isDuplicate {
@@ -743,7 +823,7 @@ struct CatchRevealView: View {
     /// Pops the chips in ~0.2 s after the reveal settles (guarded to once). Fires
     /// `onGuessShown` so ContentView stamps the deliberation clock + telemetry.
     private func popBonusRoundIfEligible() {
-        guard guess != nil, chipsPhase == .hidden else { return }
+        guard liveGuess != nil, chipsPhase == .hidden else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(0.2))
             guard chipsPhase == .hidden, resolution == nil else { return }
@@ -762,7 +842,7 @@ struct CatchRevealView: View {
     /// Tap on a chip — lock the set, flash the verdict, crossfade to the real
     /// route, and (if correct) roll the bonus into the TOTAL. Resolves once.
     private func tapChip(_ option: GuessOptions.Option) {
-        guard let q = guess, !guessResolved else { return }
+        guard let q = liveGuess, !guessResolved else { return }
         guessResolved = true
         let correct = option.value == q.correctValue
         withAnimation(reduceMotion ? .easeOut(duration: 0.2)
@@ -777,7 +857,7 @@ struct CatchRevealView: View {
     /// Quiet SKIP — resolve with no answer (no flash, no bonus line), then the
     /// route reveals and the chips collapse like a wrong-minus-flash.
     private func skipBonusRound() {
-        guard guess != nil, !guessResolved else { return }
+        guard liveGuess != nil, !guessResolved else { return }
         guessResolved = true
         withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .easeOut(duration: 0.3)) {
             resolution = GuessResolution(answeredValue: nil, correct: false)
@@ -803,7 +883,7 @@ struct CatchRevealView: View {
     /// SKIP: resolve first (freeze nothing — a nil answer), then let the caller
     /// dismiss. No collapse animation — we're leaving the reveal.
     private func resolveAsSkipIfNeeded() {
-        guard guess != nil, !guessResolved else { return }
+        guard liveGuess != nil, !guessResolved else { return }
         guessResolved = true
         resolution = GuessResolution(answeredValue: nil, correct: false)
         onGuessResolved?(nil, false)
@@ -844,7 +924,7 @@ struct CatchRevealView: View {
     // count-up clock `bt`, and the immutable bonus-round `render` (nil = plain
     // reveal). Keeping it pure of `@State` lets any beat render as a static frame.
     private func card(t: Double, bt: Double, width: CGFloat, render: GuessRender?) -> some View {
-        let accent = plane.rarity.tint
+        let accent = livePlane.rarity.tint
         // The prototype's absolute sizes were tuned for a 300pt-wide card.
         // Scale every metric off the real card width so it reads full-size
         // (and not vertically cramped) on a phone instead of postage-stamp.
@@ -868,7 +948,7 @@ struct CatchRevealView: View {
         // Split-flap sizing: keep cells legible. If the name won't fit on one
         // line at the floor cell size, WRAP it across lines rather than shrink
         // the flaps to dust.
-        let model = (plane.model ?? "UNKNOWN AIRCRAFT").uppercased()
+        let model = (livePlane.model ?? "UNKNOWN AIRCRAFT").uppercased()
         let flapGap = 2.5 * scale
         let maxCW = 17.5 * scale
         let minCW = 12.0 * scale
@@ -890,21 +970,23 @@ struct CatchRevealView: View {
 
         return ZStack {
             // Tier bloom behind the card — modest for rare, cinematic for legendary.
-            if plane.rarity.ordinal >= Rarity.epic.ordinal {
+            if livePlane.rarity.ordinal >= Rarity.epic.ordinal {
                 RadialGradient(colors: [accent.opacity(0.22), .clear],
                                center: .center, startRadius: 1, endRadius: Double(width) * 0.9)
-                    .opacity(ss(0.0, 0.4, t) * (plane.rarity == .legendary ? 1.0 : 0.6))
+                    .opacity(ss(0.0, 0.4, t) * (livePlane.rarity == .legendary ? 1.0 : 0.6))
                     .blur(radius: 8)
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
+                RevealPhoto(url: livePlane.photoURL, focus: livePlane.photoFocus,
+                            provisional: loader?.provisionalPhoto,
+                            loading: loader.map { !$0.pipelineFinished } ?? false)
                     .frame(height: photoHeight)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
                     .overlay(
                         RoundedRectangle(cornerRadius: Brand.Radius.card)
-                            .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
+                            .stroke(accent.opacity(livePlane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
                     )
                     .opacity(ss(0.0, 0.18, t))
                     .padding(18 * scale)
@@ -919,8 +1001,8 @@ struct CatchRevealView: View {
                         }
                     }
 
-                    identityRow(callsign: plane.callsign, carrier: plane.carrier,
-                                rarity: plane.rarity, scale: scale, isDuplicate: isDuplicate)
+                    identityRow(callsign: livePlane.callsign, carrier: livePlane.carrier,
+                                rarity: livePlane.rarity, scale: scale, isDuplicate: isDuplicate)
                         .opacity(ss(0.56, 0.7, t))
 
                     Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)
@@ -940,7 +1022,7 @@ struct CatchRevealView: View {
                         if isDuplicate {
                             ledgerRow("ALREADY IN HANGAR", "", RP.muted, ss(0.78, 0.86, t), scale: scale)
                         } else {
-                            ledgerRow(plane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
+                            ledgerRow(livePlane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
                             if firstOfTypeBonus > 0 {
                                 ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
                             }
@@ -992,14 +1074,14 @@ struct CatchRevealView: View {
     // prompt) while prompting and CROSSFADES to the real route once resolved.
     @ViewBuilder
     private func dataSection(t: Double, scale: CGFloat, accent: Color, render: GuessRender?) -> some View {
-        let hasRoute = (plane.originIcao ?? plane.destIcao) != nil
+        let hasRoute = (livePlane.originIcao ?? livePlane.destIcao) != nil
         VStack(alignment: .leading, spacing: 12 * scale) {
             // ALT / SPD — always two columns with a real gap so wide values
             // (e.g. "35,433 ft") never butt against the next column.
             HStack(spacing: 14 * scale) {
-                statCell("ALT", plane.altText, scale: scale, accent: accent)
+                statCell("ALT", livePlane.altText, scale: scale, accent: accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                statCell("SPD", plane.speedText, scale: scale, accent: accent)
+                statCell("SPD", livePlane.speedText, scale: scale, accent: accent)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .opacity(ss(0.6, 0.76, t))
@@ -1030,7 +1112,7 @@ struct CatchRevealView: View {
         if hasRoute {
             routeCell(scale: scale, accent: accent)
         } else {
-            statCell("DIST", plane.distText, scale: scale, accent: accent)
+            statCell("DIST", livePlane.distText, scale: scale, accent: accent)
         }
     }
 
@@ -1062,27 +1144,27 @@ struct CatchRevealView: View {
                 .font(.system(size: 9.5 * scale, weight: .semibold, design: .monospaced))
                 .tracking(1.5).foregroundColor(RP.faint)
             HStack(alignment: .firstTextBaseline, spacing: 8 * scale) {
-                if let o = plane.originIcao {
+                if let o = livePlane.originIcao {
                     Text(o).font(codeFont).foregroundColor(RP.ink)
-                    if let d = plane.destIcao {
+                    if let d = livePlane.destIcao {
                         Text("→").font(arrowFont).foregroundColor(accent)
                         Text(d).font(codeFont).foregroundColor(RP.ink)
                     }
-                } else if let d = plane.destIcao {
+                } else if let d = livePlane.destIcao {
                     Text("→").font(arrowFont).foregroundColor(accent)
                     Text(d).font(codeFont).foregroundColor(RP.ink)
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.6)
-            if plane.originName != nil || plane.destName != nil {
+            if livePlane.originName != nil || livePlane.destName != nil {
                 HStack(spacing: 5 * scale) {
-                    if let on = plane.originName {
+                    if let on = livePlane.originName {
                         Text(on)
-                        if let dn = plane.destName {
+                        if let dn = livePlane.destName {
                             Text("→").foregroundColor(RP.faint)
                             Text(dn)
                         }
-                    } else if let dn = plane.destName {
+                    } else if let dn = livePlane.destName {
                         Text("→").foregroundColor(RP.faint)
                         Text(dn)
                     }
@@ -1110,7 +1192,7 @@ struct CatchRevealView: View {
             Button(action: { resolveAsSkipIfNeeded(); onViewInHangar() }) {
                 Text("View in Hangar ›")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .tracking(0.5).foregroundColor(plane.rarity.tint)
+                    .tracking(0.5).foregroundColor(livePlane.rarity.tint)
                     .contentShape(Rectangle().inset(by: -16))
             }
             .buttonStyle(.plain)
