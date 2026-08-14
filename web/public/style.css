@@ -87,17 +87,9 @@ body > * { position: relative; z-index: 1; }
   letter-spacing: 0.04em;
 }
 .nav-links a:hover { color: var(--cyan); }
-.nav-links .nav-cta {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cyan);
-  border: 1px solid var(--cyan-dim);
-  border-radius: 4px;
-  padding: 0.45em 0.9em;
-}
-.nav-links .nav-cta:hover { background: rgba(0, 212, 255, 0.1); color: #fff; }
+/* The nav CTA is the App Store badge itself — see .badge-link--nav below.
+   (The old bordered .nav-cta pill was dropped with it; no page used it
+   elsewhere — the other pages' <nav> is the wordmark alone.) */
 
 /* ───────────────── Hero ───────────────── */
 .hero {
@@ -157,14 +149,17 @@ body > * { position: relative; z-index: 1; }
   text-decoration: none;
   padding: 0.85em 1.5em;
   border-radius: 6px;
-  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background 0.12s ease, box-shadow 0.22s ease;
 }
 .btn-primary {
   background: var(--cyan);
   color: #04121b;
   box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.4), 0 8px 30px -8px rgba(0, 212, 255, 0.5);
 }
-a.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--cyan), 0 12px 36px -8px rgba(0, 212, 255, 0.6); }
+a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0 1px var(--cyan), 0 14px 38px -8px rgba(0, 212, 255, 0.7); }
+/* Same press as the badge, so every CTA on the page reacts the same way. */
+.btn:active { transform: translateY(0) scale(0.97); transition-duration: 0.07s; }
 .btn-ghost {
   color: var(--text);
   border: 1px solid var(--border);
@@ -350,19 +345,28 @@ a.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--c
 .cta-final { text-align: center; }
 .cta-final .btn { margin-bottom: 1rem; }
 
-/* Apple's "Download on the App Store" badge.
-   Constrained by Apple's marketing guidelines, so this rule is deliberately
-   plain — DO NOT add a shadow, glow, filter, hover transform, or animation
-   here, and don't let the brand's cyan CTA treatment leak onto it:
-     · min 40 px tall on web (48 px here), aspect ratio never altered — the
-       height is set and the width left auto so the SVG's own viewBox drives it
-     · clear space >= 1/4 the badge height (12 px at 48 px) on every side
-     · artwork used verbatim; app-store-badge.svg is Apple's black.svg
-       byte-for-byte (the preferred badge; white is for light layouts)
-   https://developer.apple.com/app-store/marketing/guidelines/#section-badges */
+/* Apple's "Download on the App Store" badge — used in the nav and the hero.
+   The ARTWORK is untouched, which is the part that matters:
+     · min 40 px tall on web (40 in the nav, 48 in the hero), aspect ratio
+       never altered — the height is set and the width left auto, so the SVG's
+       own viewBox drives it, and the hover transform scales it uniformly
+     · clear space >= 1/4 the badge height on every side
+     · app-store-badge.svg is Apple's black.svg byte-for-byte (the preferred
+       badge; white is for light layouts)
+     · no filter, recolour, or distortion is ever applied to the <img>
+   Two deliberate departures from
+   https://developer.apple.com/app-store/marketing/guidelines/#section-badges,
+   both at Noah's request (2026-08-14): two badges on one page layout, and the
+   lift/glow/press motion below. Keep the motion on .badge-link (the wrapper),
+   never on .app-store-badge. */
 .badge-link {
   display: inline-block;
   line-height: 0; /* kills the inline-image descender gap so clear space is exact */
+  border-radius: 10px; /* ~matches the badge artwork's corners, for the glow + focus ring */
+  /* The overshoot easing is what makes the lift read as springy rather than
+     as a plain slide — it passes 1.0 and settles back. */
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.22s ease;
 }
 /* In the hero the clear space comes from its neighbours, all >= 12px:
    the title's 1.25rem margin above, the .cta-row 1rem gap beside, and the
@@ -371,6 +375,28 @@ a.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--c
   height: 48px;
   width: auto;
 }
+
+.badge-link:hover {
+  transform: translateY(-3px) scale(1.03);
+  /* Glow sits BEHIND/around the wrapper, on brand with the cyan CTA. */
+  box-shadow: 0 14px 30px -10px rgba(0, 212, 255, 0.7),
+              0 0 20px -4px rgba(0, 212, 255, 0.35);
+}
+/* Press: snap down fast (short duration, no overshoot) so the click feels
+   physical, then the hover rule springs it back on release. */
+.badge-link:active {
+  transform: translateY(0) scale(0.96);
+  transition-duration: 0.07s;
+  transition-timing-function: ease-out;
+}
+.badge-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+}
+
+/* Nav badge — 40px is Apple's on-screen minimum. The nav's 1.25rem padding
+   gives it 20px of clear space, comfortably past the 10px required here. */
+.badge-link--nav .app-store-badge { height: 40px; }
 
 /* ── 404 — squawk 7600 (lost comms) ── */
 .error-page {
@@ -507,4 +533,9 @@ a.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--c
 
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto; transition: none !important; }
+  /* Killing the transition alone would leave the hover/press transforms
+     snapping instantly, which is the jolt this query exists to avoid — so
+     drop the movement entirely and let the glow carry the affordance. */
+  .badge-link:hover, .badge-link:active,
+  a.btn-primary:hover, .btn:active { transform: none; }
 }
