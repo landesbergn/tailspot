@@ -5,6 +5,46 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-14 — tailspot.app is a one-screen App Store badge page — branch `web-hero-app-store-badge`
+
+Marketing-site round (no app code). The landing page was a scrolling three-part
+pitch — hero, "How it works" 01/02/03, closing "Get Tailspot" CTA. It is now a
+**single screen**: nav + hero + footer, no scrolling, with Apple's badge as the
+only call to action.
+
+- **Apple's "Download on the App Store" badge replaces both text CTAs** — it is
+  now the nav button (40px, Apple's on-screen minimum) *and* the hero CTA (48px).
+  The artwork is `app-store-badge.svg` unchanged; the old bordered `.nav-cta`
+  pill is gone. **Two deliberate departures from Apple's badge guidelines, at
+  Noah's request:** two badges in one page layout, and hover/press motion. The
+  motion lives on the `.badge-link` wrapper and scales uniformly (144x48 hero,
+  120x40 nav), so the artwork itself is never distorted or recoloured — noted in
+  comments at both call sites and in `style.css`.
+- **CTAs animate:** lift + cyan glow on hover with an overshoot easing, a fast
+  ease-out press to 0.96 on click. `prefers-reduced-motion` drops the transforms
+  entirely rather than leaving them to snap.
+- **"How it works" and "Get Tailspot" removed**, with them the `#how` nav link
+  and hero button that pointed at the now-missing anchor, and the dead
+  `.section` / `.features` / `.feature` / `.cta-final` CSS. Headline trimmed to
+  "Catch the planes flying overhead." (the "Build your collection." line and the
+  "Free on iPhone…" note are gone, along with `.accent` / `.hero-note`).
+- **Fitting one screen:** `body:has(.hero)` is a 100svh flex column with the
+  hero absorbing the slack, scoped so the inner pages still scroll normally.
+  Its children need an explicit `width` — their `margin: 0 auto` is an auto
+  *cross-axis* margin, which suppresses flex stretch and would otherwise shrink
+  the nav and footer to content width. The HUD mockup is sized off the viewport
+  **height**, not just its column width, and its internals moved from fixed px
+  to container units (`cqw`) so it keeps its proportions as it shrinks. Floor is
+  200px — below that the label's minimum type stops scaling and collides with
+  the reticle — and under that floor the mockup hides instead (iPhone SE
+  portrait, every phone in landscape; it's decorative and `aria-hidden`).
+  Swept 19 viewports, 1512x982 down to 568x320: no overflow on any.
+- **All eight App Store links now carry the campaign URL**
+  (`/app/apple-store/id6773470079?pt=119286625&ct=Tailspot%20Website&mt=8`) —
+  both badges plus the footer link on all six pages — so website installs are
+  attributed in App Analytics. The `apple-itunes-app` smart banner can't carry
+  the token (Apple's meta tag has no field for it) and is unchanged.
+
 ## 2026-08-14 — error-copy pass: human transport errors, compass-flow coherence, save-fail toast — branch `error-copy-pass`
 
 Every user-facing error/warning/failure surface was audited into an interactive
