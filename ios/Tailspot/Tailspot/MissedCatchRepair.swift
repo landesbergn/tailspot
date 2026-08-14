@@ -45,8 +45,9 @@ import Combine
 import SwiftData
 import os
 
-@MainActor
-enum MissedCatchRepair {
+// `nonisolated`: pure constants + pure functions, no mutable state — callable
+// from any isolation (the runner below is the MainActor half).
+nonisolated enum MissedCatchRepair {
 
     /// The only device this repair touches — the backend device id of the
     /// tester whose two catches were lost. An opaque server-issued uuid.
@@ -67,7 +68,7 @@ enum MissedCatchRepair {
 
     /// Whether this install is the one the repair targets and hasn't run yet.
     /// Pure + injectable so tests don't need a Keychain or a real device id.
-    nonisolated static func shouldRun(
+    static func shouldRun(
         deviceID: String?,
         alreadyRan: Bool
     ) -> Bool {
@@ -79,7 +80,7 @@ enum MissedCatchRepair {
     /// Of `rows`, the ones this repair is allowed to insert. Everything the
     /// server returns that isn't on the allowlist is ignored — this is what
     /// keeps the repair from behaving like a general merge.
-    nonisolated static func repairableRows(_ rows: [RestoredCatchRow]) -> [RestoredCatchRow] {
+    static func repairableRows(_ rows: [RestoredCatchRow]) -> [RestoredCatchRow] {
         rows.filter { repairableUUIDs.contains($0.catchUuid.lowercased()) }
     }
 }

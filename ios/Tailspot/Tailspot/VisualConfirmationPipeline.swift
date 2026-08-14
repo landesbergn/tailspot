@@ -123,14 +123,16 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// freeze-frame (capture-lag work, 2026-08-13). Exactly ONE pool buffer
     /// held at a time, replaced on every arrival — safe for AVCapture's
     /// buffer pool. CVPixelBuffer isn't Sendable; the box's
-    /// `nonisolated(unsafe)` documents that the lock is the confinement.
-    private struct FrameBox {
+    /// `nonisolated(unsafe)` documents that the lock is the confinement and
+    /// carries the `Sendable` conformance `withLock`'s return type requires.
+    private struct FrameBox: Sendable {
         nonisolated(unsafe) var buffer: CVPixelBuffer?
     }
     private let latestFrameSnapshot = OSAllocatedUnfairLock<FrameBox>(initialState: FrameBox(buffer: nil))
     /// Shared context for the freeze-frame render. CIContext is documented
-    /// thread-safe; creating one per conversion would dominate the cost.
-    nonisolated(unsafe) private static let frameImageContext = CIContext()
+    /// thread-safe (and Sendable as of the iOS 26 SDK); creating one per
+    /// conversion would dominate the cost.
+    nonisolated private static let frameImageContext = CIContext()
 
     private var tracker = VisualFixTracker(gateRadius: 150)
     // `nonisolated`: CropFrameSaver is itself a nonisolated class (it uses
@@ -181,7 +183,9 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// rotates 90° — CameraPreview), so no orientation fix-up. nil before
     /// the first frame (camera denied / session not yet running).
     nonisolated func latestFrameImage() -> UIImage? {
-        guard let buffer = latestFrameSnapshot.withLock({ $0.buffer }) else { return nil }
+        // Return the whole box: FrameBox is the Sendable carrier — returning
+        // the bare CVPixelBuffer would trip its unavailable Sendable conformance.
+        guard let buffer = latestFrameSnapshot.withLock({ $0 }).buffer else { return nil }
         let ci = CIImage(cvPixelBuffer: buffer)
         guard let cg = Self.frameImageContext.createCGImage(ci, from: ci.extent) else { return nil }
         return UIImage(cgImage: cg)
