@@ -397,6 +397,33 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
+    /// Per-stage catch-pipeline timings (capture-lag work, 2026-08-13):
+    /// where the tap→reveal path actually spends its time in the field, so
+    /// latency work is steered by measurements instead of estimates. One
+    /// event per capture tap that ran the pipeline. `mode`: "shell" (early
+    /// loading reveal), "settled" (single card built at pipeline end),
+    /// "multi", or "none" (nothing presented). `snapMs`/`composeMs` are nil
+    /// when that stage didn't run (no photo / multi-target snap skip);
+    /// `presentMs` is tap→reveal-on-screen, `totalMs` tap→pipeline-done.
+    @MainActor static func firePipelineTiming(
+        mode: String,
+        shutterMs: Int,
+        snapMs: Int?,
+        composeMs: Int?,
+        presentMs: Int,
+        totalMs: Int
+    ) {
+        var props: [String: AnalyticsValue] = [
+            "mode": .string(mode),
+            "shutter_ms": .int(shutterMs),
+            "present_ms": .int(presentMs),
+            "total_ms": .int(totalMs),
+        ]
+        if let snapMs { props["snap_ms"] = .int(snapMs) }
+        if let composeMs { props["compose_ms"] = .int(composeMs) }
+        Analytics.capture("catch_pipeline_timing", props)
+    }
+
     /// Fire `first_plane_catch` once per install. The caller decides
     /// "the Hangar was empty before this tap"; the latch here makes the
     /// event idempotent across any double-fire path.

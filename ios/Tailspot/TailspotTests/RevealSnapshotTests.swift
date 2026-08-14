@@ -46,6 +46,22 @@ struct RevealSnapshotTests {
                 altText: "40,026 ft", speedText: "488 kt", distText: "31.0 km",
                 originIcao: "KBAD", destIcao: nil,
                 originName: "Barksdale AFB", destName: nil)),
+            // Early reveal SHELL states (capture-lag work, 2026-08-13): the
+            // card as presented at TAP time, before the pipeline delivers the
+            // photo. Cache-hit shell = full airframe identity, no photo
+            // (SkyPlaceholder holds the slot), feed route present.
+            ("shell_cachehit_noPhoto", CardPlane(
+                callsign: "UAL837", model: "Boeing 777-300ER", carrier: "United Airlines",
+                rarity: .rare, type: .wide,
+                altText: "36,745 ft", speedText: "490 kt", distText: "11.2 km",
+                originIcao: "SFO", destIcao: "NRT",
+                originName: "San Francisco", destName: "Tokyo Narita")),
+            // Metadata-cache-miss shell: nil model → UNKNOWN AIRCRAFT flaps,
+            // conservative common tier, no route — the worst-case first frame.
+            ("shell_cachemiss_noPhoto", CardPlane(
+                callsign: "N4521C", model: nil, carrier: "Private",
+                rarity: .common, type: .ga,
+                altText: "3,609 ft", speedText: "101 kt", distText: "3.8 km")),
         ]
 
         // Render the FULL screen (card + CTA) at iPhone size so card↔CTA

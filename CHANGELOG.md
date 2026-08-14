@@ -5,6 +5,42 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-13 — capture tap acknowledged instantly; reveal presents as a split-flap loading shell — branch `feature/capture-feedback`
+
+Field report (Noah): pressing CAPTURE felt laggy — the button gave no
+response until the whole pipeline (shutter → detector → bracket bake → save)
+finished, ~1.4 s of dead air, with the only mid-pipeline "feedback" being a
+main-thread compose hitch. Four changes, mocked first in the "Silent Second"
+artifact (interactive frame-by-frame storyboard, Noah approved 2026-08-13):
+
+- **Same-frame tap acknowledgment:** impact haptic + white shutter flash at
+  the top of `performCatch`, and the capture button now renders
+  `captureInFlight` (spinner) — the latch nothing previously read. Bundled
+  into one `CaptureFeedback` ViewModifier because `ContentView.body` is a
+  single expression at the compiler's type-check budget.
+- **Early reveal shell (single-target path):** the reveal presents at TAP
+  time over tap-time data — dedup verdict + entry number moved ahead of the
+  shutter (cheap local fetches), callsign/typecode/rarity/route ride the live
+  feed via `shellCardPlane`, `SkyPlaceholder` holds the photo slot — and the
+  pipeline feeds finished results (photo, healed route, row, guess question)
+  through the new `RevealLoader` (`@Observable`, first Observation use).
+  The reveal's own ~2 s split-flap settle covers the fill window, so loading
+  reads as ceremony. `CardPlane` stays an immutable snapshot — the loader
+  REPLACES it wholesale, never exposes live rows. Multi-catch keeps the
+  settled flow. Late edges handled: a guess question landing post-settle pops
+  via `onChange`; a suspect review landing post-dismiss presents itself.
+- **Bracket compose off-main:** the 12 MP decode + bake + re-encode + disk
+  write moved into a detached task (was a synchronous MainActor block that
+  froze the preview); the composed JPEG is pre-decoded off-main into
+  `RevealPhoto`'s cache so the shell's photo swap-in is a cache hit.
+- **`catch_pipeline_timing` telemetry:** shutter/snap/compose/present/total
+  ms per capture tap — the storyboard's numbers were estimates; the field
+  will say where time actually goes.
+
+Suite green incl. two new reveal-shell snapshot states (cache-hit and
+cache-miss, both eyeballed). **Status: Ring 0 — deployed to Noah's phone for
+field review; PR after his pass.**
+
 ## 2026-08-13 — compass-calibration step removed from onboarding — branch `remove-onboarding-calibration`
 
 Noah's call: the step was confusing and getting in the way. The funnel data it
