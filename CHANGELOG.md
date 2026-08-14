@@ -21,9 +21,15 @@ artifact (interactive frame-by-frame storyboard, Noah approved 2026-08-13):
 - **Early reveal shell (single-target path):** the reveal presents at TAP
   time over tap-time data — dedup verdict + entry number moved ahead of the
   shutter (cheap local fetches), callsign/typecode/rarity/route ride the live
-  feed via `shellCardPlane`, `SkyPlaceholder` holds the photo slot — and the
-  pipeline feeds finished results (photo, healed route, row, guess question)
-  through the new `RevealLoader` (`@Observable`, first Observation use).
+  feed via `shellCardPlane` — and the pipeline feeds finished results (photo,
+  healed route, row, guess question) through the new `RevealLoader`
+  (`@Observable`, first Observation use). **Photo slot while loading: the
+  tap-time viewfinder freeze-frame** — `VisualConfirmationPipeline` retains
+  the newest tapped frame (~8 fps, so ≤ ~125 ms old) and the shell shows the
+  ACTUAL scene until the composed shot swaps in. (v1 used the illustrated
+  `SkyPlaceholder` here; Noah's device pass called it low-quality filler —
+  it's back to permanent-photo-less duty only, and the no-camera loading
+  edge gets a quiet dark panel instead.)
   The reveal's own ~2 s split-flap settle covers the fill window, so loading
   reads as ceremony. `CardPlane` stays an immutable snapshot — the loader
   REPLACES it wholesale, never exposes live rows. Multi-catch keeps the

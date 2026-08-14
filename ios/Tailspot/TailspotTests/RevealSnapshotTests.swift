@@ -78,6 +78,29 @@ struct RevealSnapshotTests {
             try? data.write(to: dir.appendingPathComponent("\(name).png"))
         }
 
+        // Early-shell LOADING states (freeze-frame rework, 2026-08-13):
+        // (a) viewfinder freeze-frame in the slot — the normal shell look;
+        // (b) no frame available (camera denied) — the quiet dark panel,
+        // NOT the illustrated SkyPlaceholder (permanent-state only now).
+        let shellPlane = cases[4].1  // shell_cachehit_noPhoto
+        let frozenLoader = RevealLoader(plane: shellPlane)
+        frozenLoader.provisionalPhoto = Self.syntheticViewfinderFrame()
+        let darkLoader = RevealLoader(plane: shellPlane)
+        for (name, loader) in [("shell_freezeframe", frozenLoader),
+                               ("shell_loading_noframe", darkLoader)] {
+            let view = CatchRevealView(
+                plane: shellPlane, entryNumber: 62,
+                onDismiss: {}, onViewInHangar: {}, loader: loader
+            )._snapshotScreen(width: min(screen.width - 28, 420), size: screen)
+            // The replay mask is not inert under ImageRenderer (renders as
+            // the yellow no-entry block) — disable it like the share render.
+            .environment(\.replayMaskingDisabled, true)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 3
+            guard let img = renderer.uiImage, let data = img.pngData() else { continue }
+            try? data.write(to: dir.appendingPathComponent("\(name).png"))
+        }
+
         // Reduce Motion must end on the IDENTICAL settled frame (the
         // split-flap tumble becomes a straight fade, but at t = 1 both
         // paths show the settled characters). Rendered for eyeball diffing
@@ -89,6 +112,23 @@ struct RevealSnapshotTests {
         rmRenderer.scale = 3
         if let img = rmRenderer.uiImage, let data = img.pngData() {
             try? data.write(to: dir.appendingPathComponent("a220_route_uncommon_reducemotion.png"))
+        }
+    }
+
+    /// A stand-in for the tap-time viewfinder frame: a portrait sky
+    /// gradient with a small aircraft speck, so the freeze-frame snapshot
+    /// exercises the same aspect-fill + clip path as a real 1080×1920 frame.
+    private static func syntheticViewfinderFrame() -> UIImage {
+        let size = CGSize(width: 1080, height: 1920)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let colors = [UIColor(red: 0.10, green: 0.16, blue: 0.30, alpha: 1).cgColor,
+                          UIColor(red: 0.45, green: 0.58, blue: 0.75, alpha: 1).cgColor]
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                      colors: colors as CFArray, locations: [0, 1])!
+            ctx.cgContext.drawLinearGradient(
+                gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
+            UIColor(white: 0.15, alpha: 1).setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(x: 640, y: 520, width: 26, height: 10))
         }
     }
 }

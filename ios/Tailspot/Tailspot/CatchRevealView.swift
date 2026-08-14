@@ -182,6 +182,17 @@ struct RevealPhoto: View {
     /// plane instead of the frame center, clamped so no edge ever shows.
     /// nil (pre-focus catches, Planespotters photos) → plain center fill.
     var focus: CGPoint? = nil
+    /// Tap-time viewfinder freeze-frame (early reveal shell only): shown
+    /// while `url` has nothing to decode, so the slot opens on the ACTUAL
+    /// scene and the composed photo swap-in reads as the shot sharpening
+    /// into place. nil everywhere outside the shell (Hangar, shares).
+    var provisional: UIImage? = nil
+    /// True while the catch pipeline is still in flight (early shell). With
+    /// no `provisional` to show (camera denied), the slot renders a quiet
+    /// dark panel instead of `SkyPlaceholder` — the illustration reads as
+    /// content, wrong for a loading beat (Noah, 2026-08-13); it stays the
+    /// PERMANENT photo-less treatment only.
+    var loading: Bool = false
 
     /// Decoded-image cache, keyed by file path. `UIImage(contentsOfFile:)`
     /// synchronously decodes a full ~12 MP catch JPEG on the main thread —
@@ -270,8 +281,40 @@ struct RevealPhoto: View {
             } placeholder: {
                 SkyPlaceholder()
             }
+        } else if let provisional {
+            // The user's own camera content — replay-masked like the local
+            // catch photo above. (Never reached by share renders: those only
+            // render settled cards, whose photo comes through `url`.)
+            Color.clear
+                .overlay(
+                    Image(uiImage: provisional)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                )
+                .clipped()
+                .catchPhotoReplayMask()
+        } else if loading {
+            PhotoLoadingPlaceholder()
         } else {
             SkyPlaceholder()
+        }
+    }
+}
+
+/// Quiet dark slot while the catch photo is in flight and no viewfinder
+/// frame was available (camera denied — the only way to reach this).
+/// Deliberately mute chrome, not content: card-ground tones, a hairline
+/// rule, nothing figurative.
+private struct PhotoLoadingPlaceholder: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: 0x121826), Color(hex: 0x0B0F18)],
+                startPoint: .top, endPoint: .bottom
+            )
+            RoundedRectangle(cornerRadius: 1)
+                .fill(RP.rule)
+                .frame(width: 28, height: 2)
         }
     }
 }
@@ -935,7 +978,9 @@ struct CatchRevealView: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                RevealPhoto(url: livePlane.photoURL, focus: livePlane.photoFocus)
+                RevealPhoto(url: livePlane.photoURL, focus: livePlane.photoFocus,
+                            provisional: loader?.provisionalPhoto,
+                            loading: loader.map { !$0.pipelineFinished } ?? false)
                     .frame(height: photoHeight)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))

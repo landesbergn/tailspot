@@ -22,6 +22,7 @@
 //    that mutates it and the view that reads it are both MainActor.
 //
 import Observation
+import UIKit
 
 @Observable
 final class RevealLoader {
@@ -42,6 +43,21 @@ final class RevealLoader {
     /// round pops only post-settle, so nothing changes visually); if it lands
     /// after, CatchRevealView's `onChange` pops the chips late.
     var guess: GuessRoundQuestion?
+
+    /// Tap-time viewfinder freeze-frame — the ACTUAL scene, shown in the
+    /// photo slot until the composed catch photo lands. Replaced the
+    /// illustrated `SkyPlaceholder` as the loading visual (it read as
+    /// low-quality filler mid-ceremony — Noah's device pass, 2026-08-13);
+    /// the illustration is now permanent-state only. nil when the camera
+    /// wasn't delivering frames (denied / session down).
+    var provisionalPhoto: UIImage?
+
+    /// Flipped exactly once, when the catch pipeline's task exits (deferred,
+    /// so error exits flip it too). Distinguishes "photo still in flight"
+    /// (quiet dark loading slot) from "settled with no photo" (the classic
+    /// `SkyPlaceholder`) — without it, a photo-less catch would show the
+    /// loading slot forever.
+    var pipelineFinished = false
 
     init(plane: CardPlane) {
         self.plane = plane

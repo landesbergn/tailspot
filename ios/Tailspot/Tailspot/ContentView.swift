@@ -1866,6 +1866,18 @@ struct ContentView: View {
                     isDuplicate: isDup,
                     loader: loader
                 )
+                // Freeze the viewfinder into the shell's photo slot: convert
+                // the pipeline's latest tapped frame (≤ ~125 ms old at 8 fps)
+                // off-main and hand it to the loader — it lands during the
+                // cover animation, so the slot opens showing the actual sky
+                // instead of a placeholder. Fresh catches only: a duplicate
+                // shell already carries the existing catch's photo.
+                if !isDup {
+                    Task.detached(priority: .userInitiated) { [visualConfirm] in
+                        guard let frame = visualConfirm.latestFrameImage() else { return }
+                        await MainActor.run { loader.provisionalPhoto = frame }
+                    }
+                }
             }
         }
 
@@ -1878,6 +1890,10 @@ struct ContentView: View {
             // (its dismiss callbacks own the latch from presentation on).
             var revealPresented = (earlyLoader != nil)
             defer { if !revealPresented { captureInFlight = false } }
+            // However this task exits, the shell must stop reading as
+            // "loading" — a photo-less catch settles to the classic
+            // placeholder instead of a perpetual loading slot.
+            defer { earlyLoader?.pipelineFinished = true }
             // Catch-time route resolve (see CatchBackfill.resolveCatchTimeRoute):
             // the backend attaches routes a poll LATE, so a freshly-caught
             // plane usually froze a route-less row and the bonus round couldn't
