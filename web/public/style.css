@@ -39,6 +39,24 @@ body {
   overflow-x: hidden;
 }
 
+/* The home page is a SINGLE SCREEN: nav + hero + footer, no scrolling.
+   The hero takes whatever height is left over, and the HUD mockup is capped
+   against the viewport height (see .hud) so it shrinks instead of pushing the
+   footer off-screen. svh, not vh, so mobile browser chrome doesn't eat the
+   footer. The inner pages (support, privacy, …) scroll normally — they don't
+   use .hero, so this only affects index.html. */
+body:has(.hero) {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+/* The nav/hero/footer all centre themselves with `margin: 0 auto`, and an auto
+   margin on the cross axis SUPPRESSES the default stretch — as flex items they
+   would shrink to their content width and drift out of alignment. Restoring an
+   explicit width puts them back at the full 1080px column. */
+body:has(.hero) > * { width: 100%; }
+/* body::before is position:fixed, so it stays out of the flex flow. */
+
 /* Subtle cyan aura behind the whole page, top-centered like a HUD glow. */
 body::before {
   content: "";
@@ -93,11 +111,19 @@ body > * { position: relative; z-index: 1; }
 
 /* ───────────────── Hero ───────────────── */
 .hero {
+  width: 100%;
   max-width: var(--maxw);
   margin: 0 auto;
-  padding: 4.5rem 1.75rem 3rem;
+  padding: 2.5rem 1.75rem;
+  /* Absorbs the leftover height and centres its content in it, so the page
+     stays balanced whether the window is 700px tall or 1100px. */
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 0; /* lets the flex child actually shrink below its content size */
 }
 .hero-inner {
+  width: 100%;
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
   gap: 3.5rem;
@@ -177,9 +203,19 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 .hero-visual { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; }
 .hud {
   position: relative;
-  width: 100%;
-  max-width: 420px;
+  /* Sized off the VIEWPORT HEIGHT, not just the column width, because the
+     page may not scroll: 420px at full size, but on a short window the
+     height budget wins and the mockup shrinks to fit. The subtrahend is the
+     chrome around it (nav + footer + hero padding); x0.8 converts the height
+     budget to a width via the 4/5 ratio. The 160px floor stops it collapsing
+     on very short windows — below that the page scrolls a little, which
+     beats an unreadable mockup. */
+  width: min(100%, 420px, max(160px, calc((100svh - 290px) * 0.8)));
   aspect-ratio: 4 / 5;
+  /* Everything inside is sized in cqw (below), so the mockup keeps its
+     proportions at any size instead of the fixed-px reticle bursting out of a
+     shrunken frame. */
+  container-type: size;
   background:
     radial-gradient(120% 90% at 50% 0%, #122036 0%, var(--bg-surface) 70%);
   border: 1px solid var(--border);
@@ -194,7 +230,7 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   background-image:
     linear-gradient(rgba(0, 212, 255, 0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0, 212, 255, 0.06) 1px, transparent 1px);
-  background-size: 38px 38px;
+  background-size: 9cqw 9cqw;
   mask-image: radial-gradient(80% 70% at 50% 45%, #000 30%, transparent 80%);
 }
 
@@ -205,14 +241,14 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   top: 44%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 162px;
-  height: 162px;
+  width: 38.6cqw;
+  height: 38.6cqw;
 }
 .hud-corner {
   position: absolute;
-  width: 30px;
-  height: 30px;
-  border: 2.5px solid var(--cyan);
+  width: 7.1cqw;
+  height: 7.1cqw;
+  border: max(1.5px, 0.6cqw) solid var(--cyan);
 }
 .hud-corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 4px 0 0 0; }
 .hud-corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 4px 0 0; }
@@ -222,10 +258,10 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 .hud-plane {
   position: absolute;
   top: 50%; left: 50%;
-  width: 74px; height: 74px;
+  width: 17.6cqw; height: 17.6cqw;
   transform: translate(-50%, -50%) rotate(28deg);
   color: var(--text);
-  filter: drop-shadow(0 0 14px rgba(0, 212, 255, 0.55));
+  filter: drop-shadow(0 0 3.3cqw rgba(0, 212, 255, 0.55));
 }
 
 .hud-chip {
@@ -246,7 +282,7 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 }
 .hud-chip-airline {
   font-family: var(--mono);
-  font-size: 0.6rem;
+  font-size: clamp(0.5rem, 2.3cqw, 0.6rem);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -254,32 +290,32 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 }
 .hud-chip-model {
   font-family: var(--mono);
-  font-size: 0.98rem;
+  font-size: clamp(0.68rem, 3.7cqw, 0.98rem);
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--text);
 }
 .hud-chip-route {
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: clamp(0.5rem, 2.4cqw, 0.62rem);
   letter-spacing: 0.04em;
   color: var(--text-dim);
 }
 
 .hud-status {
   position: absolute;
-  top: 14px; left: 16px;
+  top: 3.3cqw; left: 3.8cqw;
   font-family: var(--mono);
-  font-size: 0.66rem;
+  font-size: clamp(0.52rem, 2.5cqw, 0.66rem);
   font-weight: 700;
   letter-spacing: 0.16em;
   color: var(--green);
 }
 .hud-call {
   position: absolute;
-  top: 14px; right: 16px;
+  top: 3.3cqw; right: 3.8cqw;
   font-family: var(--mono);
-  font-size: 0.66rem;
+  font-size: clamp(0.52rem, 2.5cqw, 0.66rem);
   font-weight: 700;
   letter-spacing: 0.12em;
   color: var(--cyan-dim);
@@ -291,59 +327,9 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   text-align: center;
 }
 
-/* ───────────────── Sections ───────────────── */
-.section {
-  max-width: var(--maxw);
-  margin: 0 auto;
-  padding: 4.5rem 1.75rem;
-}
-.section-title {
-  font-size: clamp(1.5rem, 3vw, 2.1rem);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  margin-bottom: 0.75rem;
-}
-.section-lede {
-  font-size: 1.05rem;
-  color: var(--text-dim);
-  max-width: 52ch;
-  margin-bottom: 2.5rem;
-}
-
-/* ── Feature trio ── */
-.features {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-}
-.feature {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.75rem 1.5rem;
-  transition: border-color 0.15s ease, transform 0.15s ease;
-}
-.feature:hover { border-color: var(--cyan-dim); transform: translateY(-3px); }
-.feature-h {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem;
-}
-.feature-num {
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--cyan);
-}
-.feature p { color: var(--text-dim); font-size: 0.95rem; }
-
-/* ── Final CTA ── */
-.cta-final { text-align: center; }
-.cta-final .btn { margin-bottom: 1rem; }
+/* The home page has no sections below the hero any more (see index.html), so
+   .section / .section-title / .features / .feature / .cta-final went with
+   them — the inner pages use .page.content, not .section. */
 
 /* Apple's "Download on the App Store" badge — used in the nav and the hero.
    The ARTWORK is untouched, which is the part that matters:
@@ -515,20 +501,57 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 .footer-links { display: flex; gap: 1.25rem; list-style: none; flex-wrap: wrap; }
 .footer-links a { font-size: 0.8125rem; color: var(--text-dim); text-decoration: none; }
 .footer-links a:hover { color: var(--cyan); }
+/* Home page only: the hero already absorbs all the slack above the footer, so
+   the 4rem gap and the tall padding just cost height the single screen needs.
+   The scrolling inner pages keep the roomier default. */
+body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
 
 /* ───────────────── Responsive ───────────────── */
 @media (max-width: 820px) {
-  .hero-inner { grid-template-columns: 1fr; gap: 2.5rem; }
+  .hero-inner { grid-template-columns: 1fr; gap: 1.5rem; }
   .hero-copy { text-align: center; }
   .hero-sub { margin-left: auto; margin-right: auto; }
   .cta-row { justify-content: center; }
-  .features { grid-template-columns: 1fr; }
+  .hero { padding: 1.5rem 1.75rem; }
+  /* Stacked, the headline and CTA sit ABOVE the mockup in the same screen,
+     so the height left for it is far smaller than on desktop — hence the
+     bigger subtrahend. */
+  .hud { width: min(100%, 420px, max(140px, calc((100svh - 540px) * 0.8))); }
 }
 @media (max-width: 560px) {
   .nav-links { gap: 1rem; }
-  .nav-links li:not(:last-child) { display: none; }  /* keep only the CTA on tiny screens */
-  .hero { padding-top: 2.5rem; }
+  /* The nav is just the badge now, so there is nothing left to hide here. */
   .site-footer { flex-direction: column; }
+  /* Stacked footer is two rows tall, which is height the mockup wants back. */
+  body:has(.hero) .site-footer { padding: 1.1rem 1.75rem; gap: 0.4rem; }
+  body:has(.hero) .footer-links { gap: 0.9rem; justify-content: center; }
+}
+
+/* Narrow phones wrap the headline onto an extra line or two, so the copy is
+   taller and the mockup gets a smaller share of the same screen. */
+@media (max-width: 400px) {
+  .hud { width: min(100%, 420px, max(140px, calc((100svh - 590px) * 0.8))); }
+}
+
+/* Last resort for screens with no room for both: a small phone (iPhone SE) or
+   any phone in landscape can't fit the headline, the CTA and the mockup in one
+   screen — below roughly 720px of height the mockup would shrink past the
+   point of being readable. It's decorative (aria-hidden), so it's the part
+   that goes; the headline and the badge still fit without scrolling. */
+@media (max-width: 820px) and (max-height: 720px),
+       (max-height: 460px) {
+  .hero-visual { display: none; }
+}
+
+/* Landscape phone (~390px of height): even without the mockup the default
+   type and padding overflow, so everything compacts. The badge sets the floor
+   for the nav — it can't go below its 40px minimum. */
+@media (max-height: 460px) {
+  .site-nav { padding: 0.6rem 1.75rem; }
+  .hero { padding: 0.75rem 1.75rem; }
+  .hero-title { font-size: 1.5rem; margin-bottom: 0.75rem; }
+  .cta-row { margin-bottom: 0.5rem; }
+  body:has(.hero) .site-footer { padding: 0.6rem 1.75rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -27,7 +27,6 @@
 <nav class="site-nav">
   <a class="wordmark" href="/">Tailspot</a>
   <ul class="nav-links">
-    <li><a href="#how">How it works</a></li>
     <li>
       <a class="badge-link badge-link--nav" href="https://apps.apple.com/app/id6773470079">
         <img class="app-store-badge" src="app-store-badge.svg"
@@ -48,8 +47,8 @@
              only sanctioned when black "appears visually heavy", and on
              #0A0E1A the opposite is true: white renders as a glaring block,
              black as a subtle outlined pill. Verified by rendering both).
-             Clear space >= 1/4 its height comes from the title's margin above
-             and the .cta-row gap beside — both clear 12px at 48px tall.
+             Clear space >= 1/4 its height (12px at 48px tall) comes from the
+             title's 1.25rem margin above and the row's 1rem margin below.
 
              DEPARTURE, at Noah's request (2026-08-14): the badge also appears
              in the nav, and both instances lift/press on hover, where Apple's
@@ -61,8 +60,10 @@
           <img class="app-store-badge" src="app-store-badge.svg"
                alt="Download Tailspot on the App Store">
         </a>
-        <a class="btn btn-ghost" href="#how">See how it works ↓</a>
       </div>
+      <!-- Kept from the old #get section when it was removed — it's the only
+           place the price and the OS requirement are stated. -->
+      <p class="hero-note">Free on iPhone. Requires iOS 26.2 or later.</p>
     </div>
 
     <!-- On-brand AR HUD mockup (pure CSS/SVG, mirrors the in-app lock-on) -->
@@ -91,35 +92,11 @@
   </div>
 </header>
 
-<!-- ───────────────── How it works ───────────────── -->
-<section class="section" id="how">
-  <h2 class="section-title">How it works</h2>
-
-  <div class="features">
-    <article class="feature">
-      <h3 class="feature-h"><span class="feature-num">01</span> Aim</h3>
-      <p>Point at any plane. It's identified live from ADS-B.</p>
-    </article>
-    <article class="feature">
-      <h3 class="feature-h"><span class="feature-num">02</span> Catch</h3>
-      <p>Tap to catch it as a card.</p>
-    </article>
-    <article class="feature">
-      <h3 class="feature-h"><span class="feature-num">03</span> Collect</h3>
-      <p>Fill sets, earn trophies, climb the leaderboard.</p>
-    </article>
-  </div>
-</section>
-
-<!-- ───────────────── Get the app ───────────────── -->
-<section class="section cta-final" id="get">
-  <h2 class="section-title">Get Tailspot</h2>
-  <!-- Deliberately NOT badge wording: Apple's guidelines allow one official
-       badge per page layout (it lives in the hero above), and a custom button
-       imitating the badge's text would undercut it. -->
-  <a class="btn btn-primary btn-lg" href="https://apps.apple.com/app/id6773470079">Get the app</a>
-  <p class="hero-note">Free on iPhone. Requires iOS 26.2 or later.</p>
-</section>
+<!-- No sections below the hero, on purpose: the page is sized to one
+     viewport (nav + hero + footer, no scroll), so the "How it works" steps
+     and the closing "Get Tailspot" CTA were removed rather than shrunk. The
+     hero's headline and the HUD mockup carry the pitch; the badge is the
+     only call to action, and it appears twice above the fold. -->
 
 <footer class="site-footer">
   <div class="footer-brand-group">
