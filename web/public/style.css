@@ -362,9 +362,11 @@ a.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px var(--c
    https://developer.apple.com/app-store/marketing/guidelines/#section-badges */
 .badge-link {
   display: inline-block;
-  margin: 0.75rem 0.75rem 1rem;
   line-height: 0; /* kills the inline-image descender gap so clear space is exact */
 }
+/* In the hero the clear space comes from its neighbours, all >= 12px:
+   the title's 1.25rem margin above, the .cta-row 1rem gap beside, and the
+   row's 1rem margin below — so no margin of its own is needed here. */
 .app-store-badge {
   height: 48px;
   width: auto;
