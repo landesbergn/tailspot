@@ -504,6 +504,11 @@ final class ADSBManager: ObservableObject {
     /// logs when the counts actually change, not 60× a minute.
     private var lastLoggedDiagnostic: VisibilityDiagnostic?
     @Published var lastError: String?
+    /// Human-facing companion to `lastError`, mapped through `ErrorCopy`
+    /// (two buckets: no internet / Tailspot unreachable). The AR status
+    /// pill renders THIS; `lastError` keeps the raw transport string for
+    /// the debug aircraft list and logs. Set and cleared in lockstep.
+    @Published var lastErrorUserMessage: String?
 
     /// Consecutive `refresh` failures since the last success. A single
     /// failed poll on flaky cellular (one bar under an approach corridor)
@@ -700,6 +705,7 @@ final class ADSBManager: ObservableObject {
             // nil→nil assignment each successful poll would wake SwiftUI for
             // nothing. Only clear when there's actually an error to clear.
             if self.lastError != nil { self.lastError = nil }
+            if self.lastErrorUserMessage != nil { self.lastErrorUserMessage = nil }
             self.consecutiveFetchFailures = 0
             self.lastFetched = Date()
         } catch {
@@ -707,6 +713,7 @@ final class ADSBManager: ObservableObject {
             if self.lastFetched == nil
                 || self.consecutiveFetchFailures >= Self.fetchFailureGraceCount {
                 self.lastError = error.localizedDescription
+                self.lastErrorUserMessage = ErrorCopy.pill(for: error)
             } else {
                 // Within grace: log it, keep the HUD quiet, keep extrapolating.
                 Log.adsb.notice("Poll failed (\(self.consecutiveFetchFailures, privacy: .public)/\(Self.fetchFailureGraceCount, privacy: .public), banner suppressed): \(error.localizedDescription, privacy: .public)")
@@ -732,6 +739,7 @@ final class ADSBManager: ObservableObject {
                 // cache. The next tap will retry.
                 Log.adsb.error("metadata lookup failed for \(icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 self.lastError = "Metadata lookup failed: \(error.localizedDescription)"
+                self.lastErrorUserMessage = ErrorCopy.pill(for: error)
                 return nil
             }
         }

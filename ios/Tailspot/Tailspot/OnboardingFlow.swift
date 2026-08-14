@@ -474,30 +474,34 @@ struct OnboardingFlow: View {
     }
 
     /// Compact status pill rendered inside the handle field. Reads
-    /// "● AVAILABLE" when the draft is valid, "● TOO SHORT" when
-    /// length is wrong, "● BAD CHARS" when characters are invalid.
-    /// This is LOCAL FORMAT validation only — "AVAILABLE" means the draft is a
-    /// well-formed handle, not that the name is free. Real uniqueness is
-    /// enforced at claim time (the backend 409 → inline "taken" error); the
-    /// suggestion chips are separately pre-filtered to free names by the backend.
+    /// "● TOO SHORT" when length is wrong, "● BAD CHARS" when characters
+    /// are invalid — and renders NOTHING when the draft is well-formed.
+    /// The old "● AVAILABLE" pill promised the server's answer with only
+    /// a local format check in hand (real uniqueness is enforced at claim
+    /// time: the backend 409 → inline "taken" error), so a quiet field
+    /// plus an enabled button is now the whole "go" signal (error-copy
+    /// pass, 2026-08-14). The suggestion chips remain separately
+    /// pre-filtered to free names by the backend.
+    @ViewBuilder
     private var availabilityPill: some View {
-        let label: String = {
+        let label: String? = {
             let t = draftHandle.trimmingCharacters(in: .whitespacesAndNewlines)
             if t.count < 3 { return "TOO SHORT" }
             if t.count > 20 { return "TOO LONG" }
-            return handleIsValid ? "AVAILABLE" : "BAD CHARS"
+            return handleIsValid ? nil : "BAD CHARS"
         }()
-        let tint = handleIsValid ? Brand.Color.alertNormal : Brand.Color.alertCaution
-        return HStack(spacing: 4) {
-            Circle().fill(tint).frame(width: 6, height: 6)
-            Text(label)
-                .font(Brand.Font.mono(size: 9, weight: .bold, relativeTo: .caption2))
-                .tracking(0.8)
-                .foregroundStyle(tint)
+        if let label {
+            HStack(spacing: 4) {
+                Circle().fill(Brand.Color.alertCaution).frame(width: 6, height: 6)
+                Text(label)
+                    .font(Brand.Font.mono(size: 9, weight: .bold, relativeTo: .caption2))
+                    .tracking(0.8)
+                    .foregroundStyle(Brand.Color.alertCaution)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Brand.Color.alertCaution.opacity(0.12), in: .capsule)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(tint.opacity(0.12), in: .capsule)
     }
 
     // MARK: - Footer

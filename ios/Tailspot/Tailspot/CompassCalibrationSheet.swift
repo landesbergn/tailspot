@@ -19,9 +19,12 @@ struct CompassCalibrationSheet: View {
     @ObservedObject var location: LocationManager
     @Environment(\.dismiss) private var dismiss
 
-    /// Accuracy threshold at which we consider the compass "good
-    /// enough" — mirrors `ContentView.isHeadingAccuracyBad`.
-    private static let goodAccuracyThreshold: Double = 10
+    /// Accuracy threshold at which we consider the compass "good enough" —
+    /// the shared `CompassAccuracy.goodDeg`, the same line that clears the
+    /// AR caution banner. (This used to hardcode ±10° while the banner
+    /// cleared at ±15°: a user at ±12° watched the banner vanish while
+    /// this sheet still read amber — and `compass_calibrated` never fired.)
+    private static let goodAccuracyThreshold: Double = CompassAccuracy.goodDeg
 
     /// True when the live accuracy reading has dropped under the
     /// threshold while the sheet's open. Latches once it goes good
@@ -105,12 +108,12 @@ struct CompassCalibrationSheet: View {
                 .foregroundStyle(calibratedThisSession ? Brand.Color.alertNormal : Brand.Color.alertCaution)
             Text(calibratedThisSession
                  ? "You're good to go."
-                 : "Your heading is off by more than ±10°.")
+                 : "Your heading is off by more than ±\(Int(Self.goodAccuracyThreshold))°.")
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
             Text(calibratedThisSession
-                 ? "Brackets will now sit on the right plane. You can dismiss."
-                 : "AR brackets will sit off to the side of the actual plane until you recalibrate.")
+                 ? "Labels will now sit on the right plane."
+                 : "Labels will drift until you recalibrate.")
                 .font(Brand.Font.body)
                 .foregroundStyle(Brand.Color.textSecondary)
         }
@@ -192,17 +195,17 @@ struct CompassCalibrationSheet: View {
             ExplanationRow(
                 glyph: "magnifyingglass",
                 title: "What's wrong",
-                detail: "iPhone's magnetometer drifts near metal — cars, bridges, steel-framed buildings, even appliances. Off by ±10° puts AR brackets ~50 px off-target at 4× zoom."
+                detail: "iPhone compass drift can cause labeling issues."
             )
             ExplanationRow(
                 glyph: "infinity",
                 title: "What fixes it",
-                detail: "Move the phone in a smooth figure-8 in the air, like writing the number 8 with your hand. Two or three passes is enough."
+                detail: "Move your phone in a smooth figure-8 in the air two or three times."
             )
             ExplanationRow(
                 glyph: "checkmark.seal",
                 title: "How you know it worked",
-                detail: "The accuracy number above ticks down. When it drops under ±10°, brackets sit on the right plane again."
+                detail: "Once fixed, labels will sit correctly."
             )
         }
     }

@@ -32,8 +32,9 @@ struct ContentView: View {
     private static let compassBadThreshold: Double = 25
     /// Hysteresis floor: once the badge is up, accuracy must improve
     /// below this to dismiss. Prevents flicker when readings hover
-    /// at the bad threshold.
-    private static let compassGoodThreshold: Double = 15
+    /// at the bad threshold. Shared with the calibration sheet via
+    /// `CompassAccuracy.goodDeg` so the two can't disagree again.
+    private static let compassGoodThreshold: Double = CompassAccuracy.goodDeg
     /// Seconds of continuously-bad readings before the badge appears.
     /// A momentary spike (passing under a bridge, briefly near a car)
     /// shouldn't surface a warning.
@@ -238,6 +239,15 @@ struct ContentView: View {
     /// tap reveals nothing and this toast says why. Same lifecycle as
     /// `groundedToastAt`.
     @State private var farTapToast: (at: Date, slantMeters: Double)? = nil
+    /// Set when the post-catch `modelContext.save()` throws; flushed into
+    /// the save-failure toast when the reveal dismisses (presenting at
+    /// catch time would hide it behind the full-screen reveal). Without
+    /// this the reveal has already played, so a lost catch reads as a
+    /// success (error-copy pass, 2026-08-14).
+    @State private var pendingSaveFailToast = false
+    /// Timestamp of the active "That catch didn't save" toast, or nil.
+    /// Same auto-clear lifecycle as `groundedToastAt`.
+    @State private var saveFailToastAt: Date? = nil
     /// Cached content signature of the currently-visible icao24 set — the id
     /// that keys the ambient-metadata prefetch `.task(id:)`. CACHED (not a
     /// computed var) so `body` doesn't rebuild it (map+sort+join over all
@@ -483,9 +493,20 @@ struct ContentView: View {
                                 }
                             }
 
-                            if visible.isEmpty {
+                            if visible.isEmpty || adsb.lastError != nil {
                                 // Empty-sky overlay. Shown when nothing
-                                // is in view. Quiet center reticle +
+                                // is in view — OR whenever the feed is
+                                // erroring, even with planes still on
+                                // screen (error-copy pass, 2026-08-14):
+                                // extrapolated labels keep gliding on
+                                // stale data during an outage, and
+                                // catching against 90-second-old
+                                // positions with no warning undercuts
+                                // "is the catch real?". The pill's
+                                // error variant wins its text switch,
+                                // so this never shows "NO AIRCRAFT"
+                                // over visible planes.
+                                // Quiet center reticle +
                                 // a status pill anchored low so it
                                 // doesn't compete with the top-center
                                 // compass / zoom affordances.
@@ -883,7 +904,12 @@ struct ContentView: View {
         // hint; the two can't realistically co-fire (one needs a not-sky
         // frame, the other a tap that reached an in-data plane).
         .overlay(alignment: .top) { groundedToastBanner }
-        .overlay(alignment: .top) { farTapToastBanner }
+        // Save-fail toast shares the far-tap link rather than adding its
+        // own — body's modifier chain is AT the type-check budget (PR
+        // #184); a new link can time out the CI build. The two can only
+        // overlap if a far tap lands in the 3 s after a failed save —
+        // acceptable for a state this rare.
+        .overlay(alignment: .top) { farTapToastBanner; saveFailToastBanner }
         // Catch feedback surface: pipeline-end success haptic + tap-time
         // impact haptic + shutter flash (see `performCatch`). Bundled into
         // ONE modifier because `body` is a single expression already at the
@@ -1290,6 +1316,41 @@ struct ContentView: View {
         }
     }
 
+    /// Save-failure toast: the post-catch `modelContext.save()` threw, so
+    /// the catch the reveal just celebrated may not be in the Hangar. Same
+    /// capsule as its siblings but bordered `alertWarning` red, not caution
+    /// amber — losing a catch is data loss, which is exactly what red is
+    /// reserved for (the FAA color rule in Brand.swift).
+    @ViewBuilder
+    private var saveFailToastBanner: some View {
+        if saveFailToastAt != nil {
+            Text("That catch didn't save — try again.")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                .overlay(Capsule().strokeBorder(Brand.Color.alertWarning.opacity(0.55), lineWidth: 1))
+                .padding(.top, 60)
+                .padding(.horizontal, 24)
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    /// Present the save-failure toast for ~3 s (same pattern as the
+    /// grounded / far-tap toasts: the timestamp guards the auto-clear
+    /// against clearing a newer toast).
+    private func presentSaveFailToast() {
+        let now = Date()
+        withAnimation(.easeInOut(duration: 0.2)) { saveFailToastAt = now }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if saveFailToastAt == now {
+                withAnimation(.easeInOut(duration: 0.3)) { saveFailToastAt = nil }
+            }
+        }
+    }
+
     /// Present the beyond-eyeshot toast for ~3 s.
     private func presentFarTapToast(slantMeters: Double) {
         let now = Date()
@@ -1530,14 +1591,24 @@ struct ContentView: View {
 
     @ViewBuilder
     private var suspectReviewActions: some View {
-        Button("I saw it — keep") { resolveSuspectReview(keep: true) }
-        Button("Discard it", role: .destructive) { resolveSuspectReview(keep: false) }
+        // Buttons agree in number with the question — "did you really see
+        // them?" answered by "I saw it" read like different conversations.
+        let plural = (pendingSuspectReview?.rows.count ?? 1) > 1
+        Button(plural ? "I saw them — keep" : "I saw it — keep") { resolveSuspectReview(keep: true) }
+        Button(plural ? "Discard them" : "Discard it", role: .destructive) { resolveSuspectReview(keep: false) }
     }
 
     /// Promote the stashed suspected rows into the review dialog. Called from
     /// the reveal's dismiss callbacks so the question lands right AFTER the
     /// card moment, never on top of it (post-catch confirm, 2026-07-04).
     private func presentSuspectReviewIfNeeded() {
+        // Also the reveal-dismissal flush point for the save-failure toast:
+        // presenting it at catch time would hide it behind the full-screen
+        // reveal and it would expire unseen.
+        if pendingSaveFailToast {
+            pendingSaveFailToast = false
+            presentSaveFailToast()
+        }
         guard !suspectAwaitingReview.isEmpty else { return }
         let rows = suspectAwaitingReview.filter { !$0.isDeleted && $0.suspectReason != nil }
         suspectAwaitingReview = []
@@ -1547,7 +1618,7 @@ struct ContentView: View {
            let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) {
             question = reason.question(slantKm: row.slantDistanceMeters / 1000)
         } else {
-            question = "\(rows.count) of those look doubtful (hidden or very far) — did you really see them?"
+            question = CatchSuspicion.multiQuestion(count: rows.count)
         }
         pendingSuspectReview = SuspectReview(rows: rows, question: question)
     }
@@ -2213,6 +2284,10 @@ struct ContentView: View {
                     try modelContext.save()
                 } catch {
                     Log.adsb.error("Catch save failed: \(error.localizedDescription, privacy: .public)")
+                    // Surfaced after the reveal dismisses (see
+                    // `presentSuspectReviewIfNeeded`) — silently losing a
+                    // catch the reveal just celebrated reads as success.
+                    pendingSaveFailToast = true
                 }
                 // One haptic per catch event regardless of N — the
                 // reveal carries the multiplicity message.
@@ -2820,7 +2895,11 @@ struct ContentView: View {
     /// N nearby" so they understand traffic IS there, just below
     /// the horizon or past 30 km.
     private func emptySkyOverlay(rawCount: Int) -> some View {
-        let lastErr = adsb.lastError
+        // The pill renders the ErrorCopy-mapped message ("NO INTERNET —
+        // RETRYING" / "TAILSPOT UNREACHABLE — RETRYING"), never the raw
+        // transport string — that stays in `lastError` for the debug
+        // aircraft list and logs (error-copy pass, 2026-08-14).
+        let lastErr = adsb.lastErrorUserMessage
         let neverFetched = adsb.lastFetched == nil && lastErr == nil
         let pillText: String = {
             if let lastErr { return lastErr.uppercased() }

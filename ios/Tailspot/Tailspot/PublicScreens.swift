@@ -162,9 +162,11 @@ struct LeaderboardScreen: View {
             }
         } catch {
             // Keep stale data when we have it — a failed silent refresh must
-            // not blank a board the user is looking at.
+            // not blank a board the user is looking at. The stored message
+            // is ErrorCopy prose, never the raw transport string (which
+            // could be developer copy like AccountError.notRegistered).
             if responses[window] == nil {
-                errors[window] = error.localizedDescription
+                errors[window] = ErrorCopy.prose(for: error)
             }
         }
     }
