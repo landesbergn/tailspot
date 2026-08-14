@@ -148,7 +148,6 @@ body > * { position: relative; z-index: 1; }
   letter-spacing: -0.01em;
   margin-bottom: 1.25rem;
 }
-.hero-title .accent { color: var(--cyan); }
 
 .hero-sub {
   font-size: clamp(1rem, 1.6vw, 1.15rem);
@@ -193,12 +192,6 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
 .btn-lg { font-size: 0.95rem; padding: 1em 1.9em; }
 
-.hero-note {
-  font-size: 0.8125rem;
-  color: var(--text-dim2);
-  letter-spacing: 0.02em;
-}
-
 /* ── AR HUD mockup ── */
 .hero-visual { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; }
 .hud {
@@ -206,11 +199,13 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   /* Sized off the VIEWPORT HEIGHT, not just the column width, because the
      page may not scroll: 420px at full size, but on a short window the
      height budget wins and the mockup shrinks to fit. The subtrahend is the
-     chrome around it (nav + footer + hero padding); x0.8 converts the height
-     budget to a width via the 4/5 ratio. The 160px floor stops it collapsing
-     on very short windows — below that the page scrolls a little, which
-     beats an unreadable mockup. */
-  width: min(100%, 420px, max(160px, calc((100svh - 290px) * 0.8)));
+     measured chrome around it (nav + footer + hero padding = 260px here,
+     +15px of slack); x0.8 converts that height budget to a width via the 4/5
+     ratio. 200px is the floor: the label's type has a minimum size, so below
+     roughly that the chip stops scaling with the frame and collides with the
+     reticle. Rather than shrink past it the mockup is hidden — see the
+     short-screen rules at the bottom. */
+  width: min(100%, 420px, max(200px, calc((100svh - 275px) * 0.8)));
   aspect-ratio: 4 / 5;
   /* Everything inside is sized in cqw (below), so the mockup keeps its
      proportions at any size instead of the fixed-px reticle bursting out of a
@@ -514,9 +509,8 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   .cta-row { justify-content: center; }
   .hero { padding: 1.5rem 1.75rem; }
   /* Stacked, the headline and CTA sit ABOVE the mockup in the same screen,
-     so the height left for it is far smaller than on desktop — hence the
-     bigger subtrahend. */
-  .hud { width: min(100%, 420px, max(140px, calc((100svh - 540px) * 0.8))); }
+     so the chrome to subtract includes them: measured 469px, +11 slack. */
+  .hud { width: min(100%, 420px, max(200px, calc((100svh - 480px) * 0.8))); }
 }
 @media (max-width: 560px) {
   .nav-links { gap: 1rem; }
@@ -527,19 +521,14 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   body:has(.hero) .footer-links { gap: 0.9rem; justify-content: center; }
 }
 
-/* Narrow phones wrap the headline onto an extra line or two, so the copy is
-   taller and the mockup gets a smaller share of the same screen. */
-@media (max-width: 400px) {
-  .hud { width: min(100%, 420px, max(140px, calc((100svh - 590px) * 0.8))); }
-}
-
-/* Last resort for screens with no room for both: a small phone (iPhone SE) or
-   any phone in landscape can't fit the headline, the CTA and the mockup in one
-   screen — below roughly 720px of height the mockup would shrink past the
-   point of being readable. It's decorative (aria-hidden), so it's the part
-   that goes; the headline and the badge still fit without scrolling. */
-@media (max-width: 820px) and (max-height: 720px),
-       (max-height: 460px) {
+/* Last resort for screens with no room for both: below these heights the
+   mockup would be forced under its 140px floor and overflow the screen. It's
+   decorative (aria-hidden), so it's the part that goes; the headline and the
+   badge still fit without scrolling. Each threshold is where the 200px floor
+   stops fitting: chrome + 200/0.8, i.e. 480+250 stacked (phone portrait) and
+   275+250 side-by-side (which is every phone in landscape). */
+@media (max-width: 820px) and (max-height: 730px),
+       (max-height: 525px) {
   .hero-visual { display: none; }
 }
 
