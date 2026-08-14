@@ -27,8 +27,12 @@
 <nav class="site-nav">
   <a class="wordmark" href="/">Tailspot</a>
   <ul class="nav-links">
-    <li><a href="#how">How it works</a></li>
-    <li><a class="nav-cta" href="https://apps.apple.com/app/id6773470079">Get the app</a></li>
+    <li>
+      <a class="badge-link badge-link--nav" href="https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&amp;ct=Tailspot%20Website&amp;mt=8">
+        <img class="app-store-badge" src="app-store-badge.svg"
+             alt="Download Tailspot on the App Store">
+      </a>
+    </li>
   </ul>
 </nav>
 
@@ -36,13 +40,26 @@
 <header class="hero">
   <div class="hero-inner">
     <div class="hero-copy">
-      <h1 class="hero-title">Catch the planes flying overhead.<br><span class="accent">Build your collection.</span></h1>
+      <h1 class="hero-title">Catch the planes flying overhead.</h1>
       <div class="cta-row">
-        <!-- Deliberately NOT badge wording: Apple's guidelines allow one
-             official badge per layout (it lives in #get below), and a custom
-             button imitating the badge's text would undercut it. -->
-        <a class="btn btn-primary" href="https://apps.apple.com/app/id6773470079">Get the app</a>
-        <a class="btn btn-ghost" href="#how">See how it works ↓</a>
+        <!-- Apple's badge artwork, used verbatim (app-store-badge.svg is
+             Apple's black.svg byte-for-byte — the PREFERRED variant; white is
+             only sanctioned when black "appears visually heavy", and on
+             #0A0E1A the opposite is true: white renders as a glaring block,
+             black as a subtle outlined pill. Verified by rendering both).
+             Clear space >= 1/4 its height (12px at 48px tall) comes from the
+             title's 1.25rem margin above and the row's 1rem margin below.
+
+             DEPARTURE, at Noah's request (2026-08-14): the badge also appears
+             in the nav, and both instances lift/press on hover, where Apple's
+             guidelines ask for one badge per page layout and no animation.
+             The artwork itself is never altered — the motion is a uniform
+             transform on the link wrapper, so proportions are preserved.
+             https://developer.apple.com/app-store/marketing/guidelines/#section-badges -->
+        <a class="badge-link" href="https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&amp;ct=Tailspot%20Website&amp;mt=8">
+          <img class="app-store-badge" src="app-store-badge.svg"
+               alt="Download Tailspot on the App Store">
+        </a>
       </div>
     </div>
 
@@ -72,43 +89,11 @@
   </div>
 </header>
 
-<!-- ───────────────── How it works ───────────────── -->
-<section class="section" id="how">
-  <h2 class="section-title">How it works</h2>
-
-  <div class="features">
-    <article class="feature">
-      <h3 class="feature-h"><span class="feature-num">01</span> Aim</h3>
-      <p>Point at any plane. It's identified live from ADS-B.</p>
-    </article>
-    <article class="feature">
-      <h3 class="feature-h"><span class="feature-num">02</span> Catch</h3>
-      <p>Tap to catch it as a card.</p>
-    </article>
-    <article class="feature">
-      <h3 class="feature-h"><span class="feature-num">03</span> Collect</h3>
-      <p>Fill sets, earn trophies, climb the leaderboard.</p>
-    </article>
-  </div>
-</section>
-
-<!-- ───────────────── Get the app ───────────────── -->
-<section class="section cta-final" id="get">
-  <h2 class="section-title">Get Tailspot</h2>
-  <!-- Apple's official badge, used unmodified per
-       developer.apple.com/app-store/marketing/guidelines/#section-badges:
-       one badge per layout, subordinate to the main message, no added
-       shadow/glow/animation, and clear space >= 1/4 its height.
-       This is Apple's PREFERRED black badge. The white variant is only
-       sanctioned when black "appears visually heavy" — the opposite is true
-       on #0A0E1A, where white renders as a glaring block and black reads as
-       a subtle outlined pill. Verified by rendering both. -->
-  <a class="badge-link" href="https://apps.apple.com/app/id6773470079">
-    <img class="app-store-badge" src="app-store-badge.svg"
-         alt="Download Tailspot on the App Store">
-  </a>
-  <p class="hero-note">Free on iPhone. Requires iOS 26.2 or later.</p>
-</section>
+<!-- No sections below the hero, on purpose: the page is sized to one
+     viewport (nav + hero + footer, no scroll), so the "How it works" steps
+     and the closing "Get Tailspot" CTA were removed rather than shrunk. The
+     hero's headline and the HUD mockup carry the pitch; the badge is the
+     only call to action, and it appears twice above the fold. -->
 
 <footer class="site-footer">
   <div class="footer-brand-group">
@@ -116,7 +101,7 @@
     <span class="footer-coords" title="Field-tested under the SFO/OAK approach">37.87° N · 122.27° W</span>
   </div>
   <ul class="footer-links">
-    <li><a href="https://apps.apple.com/app/id6773470079">App Store</a></li>
+    <li><a href="https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&amp;ct=Tailspot%20Website&amp;mt=8">App Store</a></li>
     <li><a href="support.html">Support</a></li>
     <li><a href="privacy.html">Privacy Policy</a></li>
     <li><a href="terms.html">Terms of Service</a></li>
