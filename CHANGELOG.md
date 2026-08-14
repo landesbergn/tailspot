@@ -43,9 +43,11 @@ artifact (interactive frame-by-frame storyboard, Noah approved 2026-08-13):
   ms per capture tap — the storyboard's numbers were estimates; the field
   will say where time actually goes.
 
-Suite green incl. two new reveal-shell snapshot states (cache-hit and
-cache-miss, both eyeballed). **Status: Ring 0 — deployed to Noah's phone for
-field review; PR after his pass.**
+Suite green incl. the new reveal-shell snapshot states (cache-hit,
+cache-miss, freeze-frame, no-frame — all eyeballed). Two device passes:
+the first flagged the illustrated placeholder as loading state (replaced
+with the viewfinder freeze-frame, second commit); the second approved.
+**Merged to main 2026-08-14.**
 
 ## 2026-08-13 — compass-calibration step removed from onboarding — branch `remove-onboarding-calibration`
 
