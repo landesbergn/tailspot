@@ -693,4 +693,11 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
             return "Looks like you were indoors — did you really see it?"
         }
     }
+
+    /// The review question when several rows are suspected in one
+    /// multi-catch — same tone, plural. Lives here with its five siblings
+    /// (it used to be inline in ContentView, the one stray).
+    static func multiQuestion(count: Int) -> String {
+        "\(count) of those were hidden or very far — did you really see them?"
+    }
 }

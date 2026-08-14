@@ -5,6 +5,49 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-14 — error-copy pass: human transport errors, compass-flow coherence, save-fail toast — branch `error-copy-pass`
+
+Every user-facing error/warning/failure surface was audited into an interactive
+review artifact ("Every Way Tailspot Fails" — 55+ surfaces reconstructed with
+verbatim copy, 15 flags, 16 proposed rewrites); Noah reviewed per-item
+(11 approve / 3 revise / 2 reject — the Settings handle strings stay as-is)
+and this round applies the decisions:
+
+- **`ErrorCopy` (new)** — the one place transport errors become human copy.
+  Two buckets (your connection / Tailspot's side) × two voices (mono-caps
+  pill / prose). The AR status pill renders `NO INTERNET — RETRYING` /
+  `TAILSPOT UNREACHABLE — RETRYING` via new `ADSBManager.lastErrorUserMessage`
+  (the raw transport string stays in `lastError` for the debug list + logs);
+  the leaderboard error card renders the prose pair ("You're offline —
+  reconnect and try again." / "Couldn't reach Tailspot. Try again in a
+  moment." — deliberately the restore card's phrasing) and can no longer leak
+  `AccountError.notRegistered`'s developer copy.
+- **Outage honesty:** the pill's error variant now renders even with planes on
+  screen (was empty-sky-only — a total backend outage was invisible while
+  labels coasted on extrapolated positions).
+- **Compass coherence:** new `CompassAccuracy.goodDeg = 15` shared by the
+  banner-clear and the calibration sheet, which had hardcoded ±10° — a user
+  at ±12° watched the banner vanish while the sheet still read amber, and
+  `compass_calibrated` never fired for that recovery. Sheet copy per Noah's
+  pass: "labels" everywhere (never "AR brackets"), headline threshold
+  interpolated from the constant, tightened subheads + explanation rows.
+- **Doubt dialog:** the multi-catch question moved into
+  `CatchSuspicion.multiQuestion` beside its five siblings and lost its
+  hedging parenthetical ("3 of those were hidden or very far — did you
+  really see them?"); the buttons now agree in number with the question
+  ("I saw them — keep" / "Discard them" when >1 row is flagged).
+- **A failed catch save finally says so** — "That catch didn't save — try
+  again." toast, `alertWarning` red border (data loss is what red is reserved
+  for), flushed when the reveal dismisses so the full-screen reveal can't
+  swallow it. Shares the far-tap overlay link rather than adding one —
+  `body`'s chain is at the type-check budget (PR #184).
+- **Handle field:** the "● AVAILABLE" pill is gone — it promised the server's
+  answer with only a local regex in hand; the problem pills (TOO SHORT /
+  TOO LONG / BAD CHARS) remain, and a quiet field is the "go" signal.
+- Six new `ErrorCopyTests` pin the buckets and exact strings (including the
+  `notRegistered` no-leak guarantee and the `AccountError.transport` unwrap);
+  suite green.
+
 ## 2026-08-13 — capture tap acknowledged instantly; reveal presents as a split-flap loading shell — branch `feature/capture-feedback`
 
 Field report (Noah): pressing CAPTURE felt laggy — the button gave no
