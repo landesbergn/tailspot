@@ -15,65 +15,16 @@ concurrency:
   group: tests-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
-# Three jobs, one required check. Branch protection requires the "Unit tests"
-# check — that name now belongs to the cheap gate job at the bottom, which
-# fails closed unless change detection succeeded AND the iOS job either
-# passed or was legitimately skipped. The expensive macOS job only runs when
-# the diff could actually affect the app, so backend-/web-/docs-only PRs get
-# a green required check in ~30s instead of a 10-minute simulator run.
+# One job, on EVERY PR — deliberately. A path-gated variant (skip the
+# simulator suite when the diff can't touch the app) shipped 2026-08-15 and
+# was reverted the same day: the skip's failure mode (classifier bug →
+# green required check with zero tests run) is silent, and Noah preferred
+# paying ~10 min on web-/backend-only PRs over carrying that risk. Don't
+# re-propose skipping without a loud backstop (e.g. a full run on every
+# push to main).
 jobs:
-  # Classifies the PR diff. `ios` is true unless EVERY changed file lives in a
-  # path the iOS build provably never touches. Deny-list, not allow-list: any
-  # new top-level directory defaults to running the full suite, so the
-  # conservative failure mode is "ran tests unnecessarily", never "skipped
-  # tests that mattered".
-  changes:
-    name: Detect changed areas
-    runs-on: ubuntu-latest
-    outputs:
-      ios: ${{ steps.filter.outputs.ios }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Full history so the PR base commit is present for merge-base.
-          # This repo is small; the extra fetch costs a couple of seconds.
-          fetch-depth: 0
-
-      - name: Classify changed files
-        id: filter
-        run: |
-          # On pull_request events HEAD is the synthetic merge commit, so
-          # merge-base(base, HEAD) is the base-branch tip and the diff below
-          # is exactly "what this PR changes" — base-branch drift excluded.
-          merge_base=$(git merge-base "${{ github.event.pull_request.base.sha }}" HEAD)
-          changed=$(git diff --name-only "$merge_base" HEAD)
-          printf 'Changed files:\n%s\n' "$changed"
-
-          # Paths that the iOS app/test build cannot observe:
-          #   backend/  — Node service, has its own workflow
-          #   web/      — the tailspot.app marketing site
-          #   design/   — HTML/JSX reference prototype, never compiled
-          #   tools/    — host-side scripts (deploy config, eval harnesses)
-          #   bin/      — dev shell scripts (deploy, log tailing, doc hook)
-          #   *.md      — documentation anywhere in the tree
-          # Everything else (ios/, .github/, project files, anything new)
-          # counts as iOS-relevant.
-          ios=false
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            case "$f" in
-              backend/*|web/*|design/*|tools/*|bin/*|*.md) ;;
-              *) ios=true ;;
-            esac
-          done <<< "$changed"
-
-          echo "ios=$ios" >> "$GITHUB_OUTPUT"
-          echo "iOS-relevant: $ios"
-
-  ios-tests:
-    name: iOS simulator tests
-    needs: changes
-    if: needs.changes.outputs.ios == 'true'
+  test:
+    name: Unit tests
     # macos-26 explicitly, NOT macos-latest: the -latest alias serves a mixed
     # pool (macos-15-arm64 vs macos-26-arm64 within one day, seen 2026-07-11
     # and again 2026-07-12), and only the macos-26 image carries the Xcode
@@ -118,7 +69,8 @@ jobs:
       # pre-booted above and pays the cold-boot cost again on the critical
       # path. The suite ran on a single clone anyway (no cross-process
       # parallelism to lose), and Swift Testing still runs individual tests
-      # concurrently in-process, so this trades nothing for the boot overlap.
+      # concurrently in-process, so this trades nothing for the boot overlap
+      # (verified 2026-08-15: identical 914 tests / 119 suites either way).
       - name: Run TailspotTests
         run: |
           set -o pipefail
@@ -129,33 +81,3 @@ jobs:
             -only-testing:TailspotTests \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO
-
-  # The required check. Branch protection points at "Unit tests", and a
-  # workflow-level paths: filter would leave that check stuck in "Expected"
-  # on skipped PRs — so instead this always-running gate owns the name.
-  # Fail-closed: anything other than (detection succeeded + tests passed or
-  # were skipped-by-detection) fails the check, including cancelled or
-  # errored upstream jobs.
-  test:
-    name: Unit tests
-    needs: [changes, ios-tests]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verdict
-        run: |
-          echo "changes:   ${{ needs.changes.result }}"
-          echo "ios-tests: ${{ needs.ios-tests.result }}"
-          if [ "${{ needs.changes.result }}" != "success" ]; then
-            echo "Change detection did not succeed — failing closed."
-            exit 1
-          fi
-          case "${{ needs.ios-tests.result }}" in
-            success)
-              echo "iOS tests passed." ;;
-            skipped)
-              echo "Diff cannot affect the iOS app — tests not required." ;;
-            *)
-              echo "iOS tests did not pass — failing."
-              exit 1 ;;
-          esac
