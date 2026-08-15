@@ -5,26 +5,28 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-08-15 — PR CI is path-gated and the simulator boots during the build — branch `ci/faster-pr-tests`
+## 2026-08-15 — CI: simulator pre-boot kept, path gating tried and reverted — branches `ci/faster-pr-tests`, `ci/revert-path-gating`
 
-CI-only round (no app code). The **Unit tests** required check previously ran
-the full macOS simulator suite (~8–12 min + macOS runner queue) on *every* PR —
-including web- and backend-only ones. `tests.yml` is now three jobs:
+CI-only round (no app code), two PRs in one day:
 
-- **Path gating.** A cheap ubuntu `changes` job classifies the PR diff; the
-  macOS job only runs when a changed file could affect the iOS app. Deny-list
-  (`backend/`, `web/`, `design/`, `tools/`, `bin/`, `*.md`), so anything new or
-  unrecognized still runs the full suite. A gate job now owns the required
-  **Unit tests** check name — always reports, fails closed on any upstream
-  failure/cancel, goes green in ~30s on skipped PRs. Branch protection is
-  untouched. No test is skipped on any diff that can reach the app binary.
-- **Simulator pre-boot.** The 8½-minute test step was ~4 min of dead time
-  booting a simulator clone *after* the build finished. The device now boots
-  in the background right after the Xcode pin (overlapping the ~2.5 min
-  build), and `-parallel-testing-enabled NO` makes xcodebuild use that
-  pre-booted device instead of a fresh clone (the suite ran on a single clone
-  anyway; Swift Testing's in-process concurrency is unaffected). iOS PRs
-  ~8.5 min → ~5–6 min of job time; identical tests, identical coverage.
+- **Kept: simulator pre-boot** (PR #190). The 8½-minute `xcodebuild test` step
+  was ~4 min of dead time booting a simulator clone *after* the build
+  finished. The device now boots in the background right after the Xcode pin
+  (overlapping the ~2.5 min build), and `-parallel-testing-enabled NO` makes
+  xcodebuild use that pre-booted device instead of a fresh clone. Verified:
+  post-build gap 3m52s → ~64s, identical 914 tests / 119 suites either way
+  (Swift Testing's in-process concurrency is unaffected). Expected iOS PR job
+  time ~5–6 min on an average runner (both validation runs landed on slow
+  VMs, so wall-clock evidence is from phase timings, not totals).
+- **Reverted: path gating** (PR #190, backed out same day). A three-job
+  variant skipped the macOS suite for backend-/web-/docs-only diffs behind a
+  fail-closed gate that kept the required **Unit tests** check name. It
+  worked in validation, but its failure mode (classifier bug → green
+  required check with zero tests run) is silent, and Noah chose not to carry
+  that risk for ~10 min saved on non-app PRs. `tests.yml` is back to one
+  always-run **Unit tests** job; the guard-comment atop the file says not to
+  re-propose skipping without a loud backstop (e.g. full suite on every push
+  to `main`).
 
 `CONTRIBUTING.md` (workflow bullet + "What runs where") updated to match.
 

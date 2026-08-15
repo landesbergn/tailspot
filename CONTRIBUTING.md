@@ -77,14 +77,12 @@ user, so merge freely and often.
 - One feature per branch, short-lived — merge in days, not weeks. Long-lived
   branches are the main way a solo dev accidentally ships an untested batch.
 - `git push -u origin <branch>` then `gh pr create --fill --base main`.
-- GitHub Actions runs `TailspotTests` on every PR that could affect the app;
-  the **Unit tests** check must pass before merge. Branch protection enforces
-  PR + green check for everyone, admins included. PRs touching only
-  `backend/`, `web/`, `design/`, `tools/`, `bin/`, or Markdown skip the macOS
-  simulator job — a cheap gate job still reports the required **Unit tests**
-  check (green in ~30s) so those PRs aren't blocked. Backend PRs additionally
-  run **Backend tests** (typecheck, lint, vitest) — that job only triggers on
-  `backend/**` changes.
+- GitHub Actions runs `TailspotTests` on every PR — deliberately including
+  web-/backend-only ones (a path-gated skip was tried and reverted 2026-08-15;
+  see the comment atop `tests.yml`). The **Unit tests** check must pass before
+  merge. Branch protection enforces PR + green check for everyone, admins
+  included. Backend PRs additionally run **Backend tests** (typecheck, lint,
+  vitest) — that job only triggers on `backend/**` changes.
 - Prefer `gh pr merge --auto --squash --delete-branch`.
 - Update `PLAN.md` §9 and `CHANGELOG.md` **in the feature's PR**, so code and
   docs land together. `CLAUDE.md` changes only when durable guidance changes.
@@ -278,10 +276,8 @@ at a time.
 ## What runs where
 
 - **GitHub Actions** (`.github/workflows/tests.yml`) — `TailspotTests` on every
-  PR to `main` whose diff can affect the iOS app (backend-/web-/docs-only PRs
-  skip the simulator job; a gate job still reports the required **Unit tests**
-  check). Free, no secrets. `backend-tests.yml` runs typecheck/lint/test on
-  `backend/**` changes only.
+  PR to `main`. Free, no secrets. `backend-tests.yml` runs typecheck/lint/test
+  on `backend/**` changes only.
 - **Xcode Cloud** — archives `main` → external TestFlight on a **manual Start
   Build**. Reads the optional PostHog key from workflow env vars (see
   `ci_scripts/ci_post_clone.sh`). Configured in App Store Connect, not the repo.
