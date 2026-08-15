@@ -23,6 +23,9 @@ fallback = [r["file"] for r in data["records"] if r["has_bracket"] and r["file"]
 pre = [r["file"] for r in data["records"] if not r["has_bracket"]]
 ORDER = fallback + pre
 GROUP = {**{f: "unchanged" for f in fallback}, **{f: "pre-composer" for f in pre}}
+# Filename -> path allowlist for /img/. Built from the corpus we enumerated
+# above, so the only paths this server can ever read are ones it chose itself.
+SERVABLE = {f: PHOTOS / f for f in ORDER if Path(f).suffix == ".jpg"}
 
 PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Tailspot plane labeler</title>
@@ -180,9 +183,14 @@ class Handler(BaseHTTPRequestHandler):
             }
             self._send(json.dumps(state).encode(), "application/json")
         elif self.path.startswith("/img/"):
-            name = Path(self.path[5:]).name  # sanitized: basename only
-            f = PHOTOS / name
-            if f.exists() and f.suffix == ".jpg":
+            # The request only *selects* a corpus entry by name; it never
+            # builds a path. Basename-stripping alone was already safe, but
+            # taking the path from SERVABLE's values means the request string
+            # cannot reach the filesystem at all — traversal just misses the
+            # dict and 404s. (Also clears CodeQL py/path-injection, which
+            # can't see that Path(...).name is a sanitizer.)
+            f = SERVABLE.get(Path(self.path[5:]).name)
+            if f is not None and f.exists():
                 self._send(f.read_bytes(), "image/jpeg")
             else:
                 self._send(b"not found", code=404)
