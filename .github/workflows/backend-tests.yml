@@ -8,6 +8,12 @@ on:
     paths:
       - "backend/**"
 
+# Least privilege for GITHUB_TOKEN: without this block the token defaults to
+# the repo-wide setting (write on many scopes), which is more than a checkout
+# + npm test needs. Add scopes here only when a step actually requires them.
+permissions:
+  contents: read
+
 # Cancel older runs for the same PR when a new push arrives.
 concurrency:
   group: backend-tests-${{ github.head_ref || github.ref }}
