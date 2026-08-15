@@ -5,6 +5,29 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-15 — PR CI is path-gated and the simulator boots during the build — branch `ci/faster-pr-tests`
+
+CI-only round (no app code). The **Unit tests** required check previously ran
+the full macOS simulator suite (~8–12 min + macOS runner queue) on *every* PR —
+including web- and backend-only ones. `tests.yml` is now three jobs:
+
+- **Path gating.** A cheap ubuntu `changes` job classifies the PR diff; the
+  macOS job only runs when a changed file could affect the iOS app. Deny-list
+  (`backend/`, `web/`, `design/`, `tools/`, `bin/`, `*.md`), so anything new or
+  unrecognized still runs the full suite. A gate job now owns the required
+  **Unit tests** check name — always reports, fails closed on any upstream
+  failure/cancel, goes green in ~30s on skipped PRs. Branch protection is
+  untouched. No test is skipped on any diff that can reach the app binary.
+- **Simulator pre-boot.** The 8½-minute test step was ~4 min of dead time
+  booting a simulator clone *after* the build finished. The device now boots
+  in the background right after the Xcode pin (overlapping the ~2.5 min
+  build), and `-parallel-testing-enabled NO` makes xcodebuild use that
+  pre-booted device instead of a fresh clone (the suite ran on a single clone
+  anyway; Swift Testing's in-process concurrency is unaffected). iOS PRs
+  ~8.5 min → ~5–6 min of job time; identical tests, identical coverage.
+
+`CONTRIBUTING.md` (workflow bullet + "What runs where") updated to match.
+
 ## 2026-08-14 — tailspot.app is a one-screen App Store badge page — branch `web-hero-app-store-badge`
 
 Marketing-site round (no app code). The landing page was a scrolling three-part
