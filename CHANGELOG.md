@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-16 — Trophy altitude thresholds fixed, "Mile High" → "Sky High" — branch `trophy-altitude-fix`
+
+A user field report caught the "Mile High" badge unlocking at 39,950 ft: the
+"above 40,000 ft" copy was enforced as a rounded 12,000 m (= 39,370 ft).
+
+- **"Sky High"** (renamed from "Mile High" — it was never about a mile) now
+  gates at the exact conversion, 12,192 m = 40,000 ft. The achievement id
+  stays `milehigh` so TrophyLedger/recap history and the unlock-seen state
+  survive the rename. Holders in the 39,370–40,000 ft window (incl. the
+  reporter) silently lose the badge on next derive — accepted, by design of
+  the fix; trophies are a pure projection of the Hangar.
+- **"On the Deck"** had the same rounded-metric bug in the generous
+  direction: "below 3,000 ft" checked ≤ 1,000 m (3,281 ft); now ≤ 914 m.
+- **Speed Demon left alone** (600+ mph checks ≥ 268 m/s = 599.5 mph —
+  half-a-mph lenient, deliberately kept).
+- Regression tests pin both exact thresholds, including the reported
+  39,950 ft catch as a non-earner.
+
 ## 2026-08-15 — CI: simulator pre-boot kept, path gating tried and reverted — branches `ci/faster-pr-tests`, `ci/revert-path-gating`
 
 CI-only round (no app code), two PRs in one day:

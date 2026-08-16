@@ -584,14 +584,30 @@ struct TrophiesExpansionTests {
 
     // MARK: - Second batch
 
-    @Test func onTheDeckSecretBelowAThousandMeters() {
+    @Test func onTheDeckSecretBelowThreeThousandFeet() {
         let t = ach("ondeck")
         #expect(t.secret)
         #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 600)])))            // low
         #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 5000)])) == false)  // cruising
         #expect(t.isEarned(inputs: Trophies.inputs(from: [mk()])) == false)            // no altitude data
+        // Threshold is the exact conversion: 3,000 ft = 914 m. 950 m (~3,117 ft)
+        // was inside the old rounded 1,000 m gate but is above the copy's line.
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 950)])) == false)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 914)])))
         // A zero/bad altitude is ignored — the genuinely-low one still counts.
         #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 0), mk(altM: 700)])))
+    }
+
+    // Regression (field report, 2026-08-16): a 39,950 ft catch earned the old
+    // "Mile High" because the threshold was a rounded 12,000 m (= 39,370 ft).
+    // Now "Sky High" with the exact 40,000 ft = 12,192 m line.
+    @Test func skyHighNeedsFortyThousandFeet() {
+        let t = ach("milehigh")   // id is stable across the rename
+        #expect(t.title == "Sky High")
+        #expect(t.secret)
+        let ft39950InMeters = 39_950 * 0.3048   // ≈ 12,177 m — the reported catch
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: ft39950InMeters)])) == false)
+        #expect(t.isEarned(inputs: Trophies.inputs(from: [mk(altM: 12_192)])))
     }
 
     @Test func homebodyTenAtOnePlace() {

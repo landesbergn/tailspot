@@ -534,9 +534,14 @@ nonisolated enum Trophies {
         Achievement(id: "helicopter", title: "Whirlybird", summary: "Catch a helicopter",
                     iconName: "heli", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.caughtTags.contains("helicopter") ? 1 : 0 }),
-        Achievement(id: "milehigh", title: "Mile High", summary: "Catch one above 40,000 ft",
+        // "Sky High" (renamed from "Mile High", 2026-08-16). The id stays
+        // "milehigh": TrophyLedger/recap history is keyed by id, and a new id
+        // would re-fire the unlock for existing holders. Threshold is the exact
+        // conversion — 40,000 ft = 12,192 m; the old rounded 12_000 m unlocked
+        // at 39,370 ft (field report, 2026-08-16).
+        Achievement(id: "milehigh", title: "Sky High", summary: "Catch one above 40,000 ft",
                     iconName: "altitude", tiers: [.init(tier: .gold, at: 1)], secret: true,
-                    progress: { $0.highestAltitudeM >= 12_000 ? 1 : 0 }),
+                    progress: { $0.highestAltitudeM >= 12_192 ? 1 : 0 }),
         Achievement(id: "speeddemon", title: "Speed Demon", summary: "Catch one doing 600+ mph",
                     iconName: "speed", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.fastestVelocityMps >= 268 ? 1 : 0 }),
@@ -546,9 +551,11 @@ nonisolated enum Trophies {
         Achievement(id: "aroundclock", title: "Around the Clock", summary: "Catch in all four parts of the day",
                     iconName: "clock", tiers: [.init(tier: .gold, at: 4)], secret: true,
                     progress: { $0.dayPartsCovered }),
+        // Same exact-conversion fix as Sky High: 3,000 ft = 914 m (the rounded
+        // 1_000 m was ~280 ft more generous than the copy).
         Achievement(id: "ondeck", title: "On the Deck", summary: "Catch one below 3,000 ft",
                     iconName: "approach", tiers: [.init(tier: .gold, at: 1)], secret: true,
-                    progress: { $0.lowestAltitudeM <= 1000 ? 1 : 0 }),
+                    progress: { $0.lowestAltitudeM <= 914 ? 1 : 0 }),
         Achievement(id: "weekend", title: "Weekend Warrior", summary: "Catch on a Saturday and a Sunday",
                     iconName: "weekend", tiers: [.init(tier: .gold, at: 2)], secret: true,
                     progress: { $0.weekendDaysHit }),
