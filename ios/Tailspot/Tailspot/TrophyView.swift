@@ -672,7 +672,7 @@ private struct HeliIcon: Shape {
     }
 }
 
-/// Mile High — a double up-chevron (way up there).
+/// Sky High — a double up-chevron (way up there).
 private struct AltitudeIcon: Shape {
     func path(in rect: CGRect) -> Path {
         let s = rect.width / 32
