@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-17 — v1.1 scope set on the Flight Plan board — branch `docs/v1-1-flight-plan-scope`
+
+Planning round, docs only. Noah and Claude re-prioritized the release plan from
+first principles on an interactive decision board (29 opportunities, four
+problem spaces), replacing the 2026-07-21 v1.1 ordering:
+
+- **v1.1 "Habits & housekeeping":** streaks + guardrailed local reminders,
+  scoped first-catch onboarding, in-app review prompt, App Store link in catch
+  shares, catch-photo zoom, the two deferred battery items, GA triage.
+- **Push alerts demoted to v1.2** (local notifications and client-side
+  mechanics cover the habit loop; APNs is reserved for server-known events).
+  **Head-to-head promoted into v1.2**, which Noah chose to keep as one long
+  train alongside quests. **Account deletion demoted off the critical path**
+  (anonymous identity; Apple approved v1.0 with handles live; residual review
+  risk accepted).
+- New requirements doc: `docs/plans/2026-08-17-1443-feat-v1-1-release-scope-plan.md`.
+  PLAN §9 carries the new ordering.
+
 ## 2026-08-16 — Trophy altitude thresholds fixed, "Mile High" → "Sky High" — branch `trophy-altitude-fix`
 
 A user field report caught the "Mile High" badge unlocking at 39,950 ft: the
