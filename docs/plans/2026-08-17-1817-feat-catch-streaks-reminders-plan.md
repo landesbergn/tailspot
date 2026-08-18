@@ -162,7 +162,7 @@ The planner never reads `Date()` or the notification center directly — the cal
   - Covers AE4/AE8. `enabled == false` or `authorized == false` → no-op and cancel.
   - Covers AE6. Day already spent → no-op on the 18:02 re-foreground.
   - After a catch today with resulting streak ≥3 → schedule tomorrow 18:00.
-  - Now past 18:00, unspent, no catch → schedule tomorrow (not today).
+  - Now past 18:00, unspent, no catch → nothing schedules: if tonight stays catchless the streak dies at midnight, and R2 forbids nudging a broken streak. A catch tonight (or the next foreground) arms tomorrow.
 - **Verification:** `TailspotTests` green; decision matrix fully covered.
 
 ### U4. Delegate, tap handling, and lifecycle wiring

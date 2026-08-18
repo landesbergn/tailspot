@@ -48,6 +48,15 @@ final class Catch {
     /// as the collection grows.
     var photoFilename: String?
     var caughtAt: Date
+    /// Local calendar day of the catch ("yyyy-MM-dd"), frozen in the device's
+    /// timezone at insert. Streak bucketing prefers this over re-deriving from
+    /// `caughtAt`, so changing timezones later can't reshuffle which day a
+    /// catch belongs to (streaks plan KTD4). Optional + nil-default: rows
+    /// written before this field existed fall back to current-zone bucketing
+    /// on read (SwiftData lightweight migration). Set in `init`, which also
+    /// covers the Hangar-restore path (best-effort from the restored
+    /// `caughtAt` — the original zone is unrecoverable).
+    var dayKey: String?
     var observerLat: Double
     var observerLon: Double
     var slantDistanceMeters: Double
@@ -222,6 +231,7 @@ final class Catch {
         self.operatorName = operatorName
         self.photoFilename = photoFilename
         self.caughtAt = caughtAt
+        self.dayKey = Catch.dayKey(for: caughtAt)
         self.observerLat = observerLat
         self.observerLon = observerLon
         self.slantDistanceMeters = slantDistanceMeters
@@ -304,6 +314,18 @@ final class Catch {
             model: model,
             operatorName: operatorName
         ).type
+    }
+
+    /// The frozen day label for a moment in the given calendar's zone —
+    /// "yyyy-MM-dd" in local time. The default calendar matches the
+    /// trophy-metrics convention (`Calendar(identifier: .gregorian)` inherits
+    /// `TimeZone.current`).
+    nonisolated static func dayKey(
+        for date: Date,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
     /// Returns true when at least one `Catch` row with the given icao24
