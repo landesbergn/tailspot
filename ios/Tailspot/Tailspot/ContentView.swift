@@ -11,6 +11,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
+import UserNotifications   // streak-reminder permission ask + recompute hooks
 import os
 
 struct ContentView: View {
@@ -227,27 +228,25 @@ struct ContentView: View {
     /// plane within the widened 250 px search). Auto-clears after 1.0 s
     /// so the ripple doesn't linger.
     @State private var emptyRipple: (CGPoint, Date)? = nil
-    /// Timestamp of the active "that one's still parked" toast, or nil.
-    /// Set when an empty-sky tap's nearest in-data plane turns out to be a
-    /// GROUNDED one (the grounded easter egg) — the tap gets a playful
-    /// explanation instead of a reveal (parked planes are never catchable).
-    /// The timestamp guards the auto-clear against clearing a newer toast
+    /// The ONE active transient top toast, or nil. Every top-capsule toast
+    /// (grounded / far-tap / save-fail / streak) shares this state so only
+    /// one can be visible at a time (streaks plan KTD6 — a fourth
+    /// independent overlay risked co-fired capsules stacking). The
+    /// timestamp guards the auto-clear against clearing a newer toast
     /// (same pattern as `emptyRipple`).
-    @State private var groundedToastAt: Date? = nil
-    /// Beyond-eyeshot hint: (shown-at, distance) of the last "filtered-far"
-    /// tap — the nearest in-data plane was too far to plausibly see, so the
-    /// tap reveals nothing and this toast says why. Same lifecycle as
-    /// `groundedToastAt`.
-    @State private var farTapToast: (at: Date, slantMeters: Double)? = nil
+    @State private var topToast: (kind: TopToast, at: Date)? = nil
     /// Set when the post-catch `modelContext.save()` throws; flushed into
     /// the save-failure toast when the reveal dismisses (presenting at
     /// catch time would hide it behind the full-screen reveal). Without
     /// this the reveal has already played, so a lost catch reads as a
     /// success (error-copy pass, 2026-08-14).
     @State private var pendingSaveFailToast = false
-    /// Timestamp of the active "That catch didn't save" toast, or nil.
-    /// Same auto-clear lifecycle as `groundedToastAt`.
-    @State private var saveFailToastAt: Date? = nil
+    /// Day-3 contextual notification-permission pre-prompt (streaks plan
+    /// KTD5). Presented from the reveal-dismiss flush point only when no
+    /// suspect review took the moment; latched one-shot on any dismissal.
+    @State private var showStreakPermissionPrompt = false
+    /// Reminder-tap → toast channel, injected by TailspotApp (KTD6).
+    @Environment(StreakToastRelay.self) private var streakRelay
     /// Cached content signature of the currently-visible icao24 set — the id
     /// that keys the ambient-metadata prefetch `.task(id:)`. CACHED (not a
     /// computed var) so `body` doesn't rebuild it (map+sort+join over all
@@ -900,16 +899,13 @@ struct ContentView: View {
         // Success haptic — counter (not Bool) lets multiple catches
         // each fire.
         .overlay(alignment: .top) { indoorHintBanner }
-        // Parked-plane toast (grounded easter egg) — same slot as the indoor
-        // hint; the two can't realistically co-fire (one needs a not-sky
-        // frame, the other a tap that reached an in-data plane).
-        .overlay(alignment: .top) { groundedToastBanner }
-        // Save-fail toast shares the far-tap link rather than adding its
-        // own — body's modifier chain is AT the type-check budget (PR
-        // #184); a new link can time out the CI build. The two can only
-        // overlap if a far tap lands in the 3 s after a failed save —
-        // acceptable for a state this rare.
-        .overlay(alignment: .top) { farTapToastBanner; saveFailToastBanner }
+        // ONE transient toast slot for grounded / far-tap / save-fail /
+        // streak: merging the two former toast links SHRINKS body's chain
+        // (type-check budget, PR #184), and the shared `topToast` state
+        // means capsules can never stack. The streak relay watch and the
+        // day-3 permission sheet live INSIDE the banner container, keeping
+        // them off body's expression entirely.
+        .overlay(alignment: .top) { topToastBanner }
         // Catch feedback surface: pipeline-end success haptic + tap-time
         // impact haptic + shutter flash (see `performCatch`). Bundled into
         // ONE modifier because `body` is a single expression already at the
@@ -1272,94 +1268,62 @@ struct ContentView: View {
         }
     }
 
-    /// Transient parked-plane toast (the grounded easter egg): shown when an
-    /// empty-sky tap's nearest in-data plane is on the ground. Same look as
-    /// `indoorHintBanner`; auto-dismisses (see `presentGroundedTapToast`).
-    /// Grounded planes stay visually hidden — this toast is the feature's
-    /// entire UI.
-    @ViewBuilder
-    private var groundedToastBanner: some View {
-        if groundedToastAt != nil {
-            Text("Tailspot only works with planes in the air")
-                .font(Brand.Font.mono(size: 12, weight: .semibold))
-                .foregroundStyle(Brand.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
-                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
-                .padding(.top, 60)
-                .padding(.horizontal, 24)
-                .transition(.move(edge: .top).combined(with: .opacity))
+    /// The single transient top toast (grounded / far-tap / save-fail /
+    /// streak). One shared capsule + one shared state means toasts can't
+    /// stack. Message and border vary by kind: save-fail is `alertWarning`
+    /// RED — losing a catch is data loss, exactly what red is reserved for
+    /// (the FAA color rule in Brand.swift) — the rest caution amber.
+    ///
+    /// The outer ZStack is ALWAYS present (empty when no toast), which is
+    /// load-bearing: the streak-relay watch and the day-3 permission sheet
+    /// hang off it, so they stay live while keeping two whole modifier
+    /// links out of body's type-check budget (PR #184).
+    private var topToastBanner: some View {
+        ZStack(alignment: .top) {
+            if let toast = topToast {
+                Text(toast.kind.message)
+                    .font(Brand.Font.mono(size: 12, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                    .overlay(Capsule().strokeBorder(toast.kind.borderColor, lineWidth: 1))
+                    .padding(.top, 60)
+                    .padding(.horizontal, 24)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .onChange(of: streakRelay.streakLine) { _, line in
+            if let line {
+                presentTopToast(.streak(line: line), duration: 4.0)
+                streakRelay.streakLine = nil
+            }
+        }
+        .sheet(isPresented: $showStreakPermissionPrompt) { streakPermissionSheet }
+    }
+
+    /// Show `kind` as the single top toast for ~`duration` seconds. The
+    /// timestamp guards the auto-clear against clearing a newer toast.
+    private func presentTopToast(_ kind: TopToast, duration: TimeInterval = 3.0) {
+        let now = Date()
+        withAnimation(.easeInOut(duration: 0.2)) { topToast = (kind, now) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            if topToast?.at == now {
+                withAnimation(.easeInOut(duration: 0.3)) { topToast = nil }
+            }
         }
     }
 
-    /// Transient beyond-eyeshot toast: shown when an empty-sky tap's nearest
-    /// in-data plane is past plausible reveal reach ("filtered-far"). Honest
-    /// about WHY nothing revealed — in dense airspace there is almost always
-    /// *something* in the data, and silently ignoring the tap reads as broken.
-    /// Same look/lifecycle as `groundedToastBanner`.
-    @ViewBuilder
-    private var farTapToastBanner: some View {
-        if let toast = farTapToast {
-            Text("Nearest plane is \(Int((toast.slantMeters / 1000).rounded())) km out — beyond eyeshot")
-                .font(Brand.Font.mono(size: 12, weight: .semibold))
-                .foregroundStyle(Brand.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
-                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
-                .padding(.top, 60)
-                .padding(.horizontal, 24)
-                .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    /// Save-failure toast: the post-catch `modelContext.save()` threw, so
-    /// the catch the reveal just celebrated may not be in the Hangar. Same
-    /// capsule as its siblings but bordered `alertWarning` red, not caution
-    /// amber — losing a catch is data loss, which is exactly what red is
-    /// reserved for (the FAA color rule in Brand.swift).
-    @ViewBuilder
-    private var saveFailToastBanner: some View {
-        if saveFailToastAt != nil {
-            Text("That catch didn't save — try again.")
-                .font(Brand.Font.mono(size: 12, weight: .semibold))
-                .foregroundStyle(Brand.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
-                .overlay(Capsule().strokeBorder(Brand.Color.alertWarning.opacity(0.55), lineWidth: 1))
-                .padding(.top, 60)
-                .padding(.horizontal, 24)
-                .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    /// Present the save-failure toast for ~3 s (same pattern as the
-    /// grounded / far-tap toasts: the timestamp guards the auto-clear
-    /// against clearing a newer toast).
+    /// Present the save-failure toast (flushed at reveal dismiss — see
+    /// `presentSuspectReviewIfNeeded`).
     private func presentSaveFailToast() {
-        let now = Date()
-        withAnimation(.easeInOut(duration: 0.2)) { saveFailToastAt = now }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            if saveFailToastAt == now {
-                withAnimation(.easeInOut(duration: 0.3)) { saveFailToastAt = nil }
-            }
-        }
+        presentTopToast(.saveFail)
     }
 
-    /// Present the beyond-eyeshot toast for ~3 s.
+    /// Present the beyond-eyeshot toast.
     private func presentFarTapToast(slantMeters: Double) {
-        let now = Date()
-        withAnimation(.easeInOut(duration: 0.2)) { farTapToast = (now, slantMeters) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            if farTapToast?.at == now {
-                withAnimation(.easeInOut(duration: 0.3)) { farTapToast = nil }
-            }
-        }
+        presentTopToast(.farTap(slantMeters: slantMeters))
     }
 
     /// Present the parked-plane toast for ~3 s, record the attempt for the
@@ -1367,16 +1331,61 @@ struct ContentView: View {
     /// unlock check runs immediately after recording so the badge's moment
     /// lands now, not on the next catch.
     private func presentGroundedTapToast(icao24: String) {
-        let now = Date()
-        withAnimation(.easeInOut(duration: 0.2)) { groundedToastAt = now }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            if groundedToastAt == now {
-                withAnimation(.easeInOut(duration: 0.3)) { groundedToastAt = nil }
-            }
-        }
+        presentTopToast(.grounded)
         TrophyEventStore().record(.groundedCatchAttempt)
         CatchTelemetry.fireGroundedAttempt(icao24: icao24)
         unlockCenter.enqueueNewUnlocks(from: catches)
+    }
+
+    // MARK: - Streak permission ask (streaks plan U5 / KTD5)
+
+    /// The day-3 pre-prompt sheet. The latch is set on ANY dismissal —
+    /// accept, decline, or swipe-away — one shot either way (KTD5).
+    private var streakPermissionSheet: some View {
+        StreakPermissionPrompt(
+            onAccept: {
+                showStreakPermissionPrompt = false
+                requestStreakPermission()
+            },
+            onDecline: { showStreakPermissionPrompt = false }
+        )
+        .onDisappear {
+            UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
+        }
+    }
+
+    /// Fire the contextual ask when the just-dismissed reveal completed a
+    /// 3-day streak and nothing else took the flush point. All eligibility
+    /// lives in `StreakReminders.shouldOfferPermissionAsk` (pure, tested).
+    private func offerStreakPermissionIfEligible() {
+        let defaults = UserDefaults.standard
+        let calendar = Calendar(identifier: .gregorian)
+        let streak = Trophies.currentConsecutiveDayRun(
+            Trophies.dayBuckets(from: catches, calendar: calendar),
+            asOf: Date(),
+            calendar: calendar
+        )
+        guard StreakReminders.shouldOfferPermissionAsk(
+            currentStreak: streak,
+            authStatusRaw: defaults.integer(forKey: StreakReminders.cachedAuthStatusKey),
+            asked: defaults.bool(forKey: StreakReminders.permissionAskedKey),
+            enabled: StreakReminders.isEnabled()
+        ) else { return }
+        showStreakPermissionPrompt = true
+    }
+
+    /// The real system prompt, after the pre-prompt's accept. Refreshes the
+    /// cached authorization and immediately arms the reminder if granted.
+    private func requestStreakPermission() {
+        Task { @MainActor in
+            let center = UNUserNotificationCenter.current()
+            let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+            let settings = await center.notificationSettings()
+            UserDefaults.standard.set(settings.authorizationStatus.rawValue,
+                                      forKey: StreakReminders.cachedAuthStatusKey)
+            ActivationTelemetry.firePermissionOutcome(permission: "notifications", granted: granted)
+            await StreakReminders.recompute(context: modelContext)
+        }
     }
 
     /// Compass-bad caution banner. Surfaces only after
@@ -1605,14 +1614,25 @@ struct ContentView: View {
         // Also the reveal-dismissal flush point for the save-failure toast:
         // presenting it at catch time would hide it behind the full-screen
         // reveal and it would expire unseen.
+        let hadSaveFail = pendingSaveFailToast
         if pendingSaveFailToast {
             pendingSaveFailToast = false
             presentSaveFailToast()
         }
-        guard !suspectAwaitingReview.isEmpty else { return }
+        // The day-3 permission pre-prompt is the flush point's LAST tenant:
+        // it fires only when no suspect review takes the moment and the
+        // save didn't just fail (a lost catch is no moment to ask for a
+        // permission) — streaks plan KTD5 ordering.
+        guard !suspectAwaitingReview.isEmpty else {
+            if !hadSaveFail { offerStreakPermissionIfEligible() }
+            return
+        }
         let rows = suspectAwaitingReview.filter { !$0.isDeleted && $0.suspectReason != nil }
         suspectAwaitingReview = []
-        guard !rows.isEmpty else { return }
+        guard !rows.isEmpty else {
+            if !hadSaveFail { offerStreakPermissionIfEligible() }
+            return
+        }
         let question: String
         if rows.count == 1, let row = rows.first,
            let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) {
@@ -2282,6 +2302,12 @@ struct ContentView: View {
             if !newCatches.isEmpty {
                 do {
                     try modelContext.save()
+                    // Re-plan the streak reminder right behind the save: a
+                    // catch today cancels today's pending nudge by
+                    // rescheduling for tomorrow (streaks plan U4; the
+                    // decision is synchronous from cached state, only the
+                    // notification-store write rides the Task).
+                    Task { await StreakReminders.recompute(context: modelContext) }
                 } catch {
                     Log.adsb.error("Catch save failed: \(error.localizedDescription, privacy: .public)")
                     // Surfaced after the reveal dismisses (see
@@ -4200,6 +4226,85 @@ private struct CaptureFeedback: ViewModifier {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
+    }
+}
+
+// MARK: - Top toast kinds + streak surfaces (streaks plan U4/KTD6)
+
+/// The transient top-capsule toasts ContentView can show — one at a time
+/// through the shared `topToast` state.
+nonisolated enum TopToast: Equatable {
+    /// Parked-plane easter egg.
+    case grounded
+    /// Beyond-eyeshot empty-sky tap, with the nearest slant distance.
+    case farTap(slantMeters: Double)
+    /// Post-catch save() threw — data-loss red.
+    case saveFail
+    /// A streak-reminder tap landed; the line names the streak.
+    case streak(line: String)
+
+    var message: String {
+        switch self {
+        case .grounded:
+            return "Tailspot only works with planes in the air"
+        case .farTap(let slantMeters):
+            return "Nearest plane is \(Int((slantMeters / 1000).rounded())) km out — beyond eyeshot"
+        case .saveFail:
+            return "That catch didn't save — try again."
+        case .streak(let line):
+            return line
+        }
+    }
+}
+
+extension TopToast {
+    @MainActor
+    var borderColor: Color {
+        switch self {
+        case .grounded, .farTap: return Brand.Color.alertCaution.opacity(0.45)
+        case .saveFail:          return Brand.Color.alertWarning.opacity(0.55)
+        case .streak:            return Brand.Color.alertCaution.opacity(0.5)
+        }
+    }
+}
+
+/// The one-line pre-prompt before the system notification ask (streaks plan
+/// KTD5 — the onboarding two-beat pattern: explain, then the real prompt).
+private struct StreakPermissionPrompt: View {
+    let onAccept: () -> Void
+    let onDecline: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("PROTECT YOUR STREAK")
+                .font(Brand.Font.mono(size: 12, weight: .semibold, relativeTo: .caption2))
+                .tracking(1.2)
+                .foregroundStyle(Brand.Color.textTertiary)
+                .padding(.top, 28)
+            Text("Three days running. Want a nudge on evenings you haven't caught yet?")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Brand.Color.textPrimary)
+            Text("One a day, only while a streak is live. Mute any time in Settings.")
+                .font(.footnote)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Brand.Color.textSecondary)
+            Button(action: onAccept) {
+                Text("Remind me")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 6)
+            Button("No thanks", action: onDecline)
+                .font(.subheadline)
+                .foregroundStyle(Brand.Color.textSecondary)
+                .padding(.bottom, 12)
+        }
+        .padding(.horizontal, 28)
+        .presentationDetents([.height(320)])
+        .presentationBackground(Brand.Color.bgElevated)
     }
 }
 

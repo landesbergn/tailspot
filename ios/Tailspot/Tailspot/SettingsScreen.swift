@@ -13,10 +13,21 @@
 //
 
 import SwiftUI
+import SwiftData
+import UserNotifications
 import os
 
 struct SettingsScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
+    /// Streak-reminder mute (streaks plan U6). Default ON (KD3); the key
+    /// matches `StreakReminders.enabledKey`, whose absent-means-true read
+    /// agrees with this default.
+    @AppStorage(StreakReminders.enabledKey) private var streakRemindersEnabled = true
+    /// Live notification-permission state, refreshed on appear and on
+    /// foreground so enabling in iOS Settings heals without a relaunch (R6).
+    @State private var notifDenied = false
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var handleDraft: String = ""
     @State private var handleTakenError: String? = nil
@@ -123,6 +134,49 @@ struct SettingsScreen: View {
             }
             .listRowBackground(Brand.Color.bgElevated)
 
+            // MARK: REMINDERS (streaks plan U6)
+
+            Section {
+                // Scoped disable: only the Toggle greys out when the system
+                // permission is denied — the Open Settings row below must
+                // stay tappable (it IS the recovery path; `.disabled` on the
+                // whole row would cascade to it).
+                Toggle("Streak reminder", isOn: $streakRemindersEnabled)
+                    .tint(Brand.Color.cyan)
+                    .disabled(notifDenied)
+                    .onChange(of: streakRemindersEnabled) { _, _ in
+                        // Off cancels the pending nudge immediately; on
+                        // re-plans (the spent-day marker still applies, so
+                        // re-enabling can't double-nudge the same day).
+                        Task { await StreakReminders.recompute(context: modelContext) }
+                    }
+                if notifDenied {
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Notifications are off for Tailspot")
+                                .foregroundStyle(Brand.Color.textSecondary)
+                            Spacer()
+                            Text("Open Settings")
+                                .foregroundStyle(Brand.Color.cyan)
+                        }
+                        .font(.subheadline)
+                    }
+                }
+            } header: {
+                Text("REMINDERS")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
+            } footer: {
+                Text("One nudge in the early evening when a 3-day streak has no catch yet. Nothing else, ever.")
+            }
+            .listRowBackground(Brand.Color.bgElevated)
+
             // MARK: ABOUT
 
             Section {
@@ -160,6 +214,13 @@ struct SettingsScreen: View {
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        // Live permission state for the REMINDERS row — on appear and on
+        // every foreground, so flipping notifications back on in iOS
+        // Settings heals the denied state without a relaunch (R6).
+        .task { await refreshNotifStatus() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refreshNotifStatus() } }
+        }
         // Prefill only a genuinely claimed handle. For an unclaimed user the
         // stored value is still the "spotter_42" placeholder — prefilling it
         // as the field's VALUE reads as "your handle is spotter_42", the same
@@ -178,6 +239,15 @@ struct SettingsScreen: View {
     /// locally and shows a brief confirmation. On 409 shows an inline
     /// "taken" error. Non-handle-taken errors are logged and persisted
     /// locally anyway (backend claim can be retried on next launch).
+    /// Re-read the real authorization status, refreshing the planner's
+    /// cache alongside the row's denied state.
+    private func refreshNotifStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        UserDefaults.standard.set(settings.authorizationStatus.rawValue,
+                                  forKey: StreakReminders.cachedAuthStatusKey)
+        notifDenied = settings.authorizationStatus == .denied
+    }
+
     private func saveHandle() async {
         let trimmed = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed == handleDraft,   // already trimmed — don't re-trim mid-type

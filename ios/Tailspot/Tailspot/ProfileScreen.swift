@@ -387,11 +387,23 @@ struct ProfileScreen: View {
         // `inputs` is the precomputed value passed in — the filter closure
         // reads that single snapshot instead of re-deriving it per trophy.
         let earnedTrophies = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
-        return HStack(spacing: 0) {
-            statCell(value: stats.totalCatches, label: "Catches")
-            statCell(value: stats.uniqueAirframes, label: "Unique")
-            statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
-            statCell(value: earnedTrophies, label: "Trophies")
+        // At-risk only at 3+ days (the reminder-eligible band — one
+        // consistent "protected streak" concept, streaks plan R4): the
+        // value goes caution amber and the label flips to AT RISK.
+        let atRisk = inputs.currentDayStreak >= StreakReminders.minProtectedStreak && !inputs.caughtToday
+        return VStack(spacing: 14) {
+            HStack(spacing: 0) {
+                statCell(value: stats.totalCatches, label: "Catches")
+                statCell(value: stats.uniqueAirframes, label: "Unique")
+                statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
+                statCell(value: earnedTrophies, label: "Trophies")
+            }
+            HStack(spacing: 0) {
+                statCell(value: inputs.currentDayStreak,
+                         label: atRisk ? "At risk" : "Streak",
+                         valueColor: atRisk ? Brand.Color.alertCaution : Brand.Color.textPrimary)
+                statCell(value: inputs.longestDayStreak, label: "Best streak")
+            }
         }
         .padding(.vertical, 12)
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))

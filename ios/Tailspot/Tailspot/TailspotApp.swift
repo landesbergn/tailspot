@@ -6,6 +6,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import UserNotifications
 import os
 
 @main
@@ -32,9 +33,20 @@ struct TailspotApp: App {
     /// appeared on the leaderboard (the babyjoda bug).
     private let handleSyncer = HandleSyncer()
 
+    /// Reminder-tap → camera-toast channel (streaks plan KTD6). Injected into
+    /// the environment; ContentView reads it through the shared banner state.
+    private let toastRelay: StreakToastRelay
+    /// UNUserNotificationCenter delegate — must exist before launch finishes
+    /// or foreground banners and tap responses are silently dropped.
+    private let notificationCoordinator: NotificationCoordinator
+
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        let relay = StreakToastRelay()
+        toastRelay = relay
+        notificationCoordinator = NotificationCoordinator(relay: relay)
+        UNUserNotificationCenter.current().delegate = notificationCoordinator
         Log.ui.notice("Tailspot launched")
         // The Tailspot backend is the only ADS-B source (OpenSky + the mock
         // source were removed in the 2026-06-21 cutover), so there's no
@@ -78,6 +90,13 @@ struct TailspotApp: App {
             // directly on every subsequent launch.
             RootView()
                 .modelContainer(container)
+                .environment(toastRelay)
+                // Re-plan the streak reminder when the device timezone
+                // changes mid-session — the trigger's fire time floats with
+                // the zone, but the target day may shift (streaks plan KTD2).
+                .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                    Task { await StreakReminders.recompute(context: container.mainContext) }
+                }
                 // The app is locked to dark (Noah, 2026-07-10 polish
                 // sweep): the Brand palette is a fixed dark HUD and every
                 // light-mode rendering of it is a bug, not a mode.
@@ -114,6 +133,14 @@ struct TailspotApp: App {
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
                 }
+                // Streak-reminder refresh rides its own Task, outside the
+                // upload chain (streaks plan U4): re-cache the notification
+                // authorization (it can change in iOS Settings — R6's heal
+                // path), then recompute/apply the one pending reminder.
+                // Also covers "the day rolled over while backgrounded" and
+                // timezone changes (the trigger floats, the target day may
+                // not — see StreakReminders).
+                Task { await StreakReminders.foregroundRefresh(context: ctx) }
             }
         }
     }

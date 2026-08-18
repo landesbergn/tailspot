@@ -120,6 +120,42 @@ struct ProfileSettingsSnapshotTests {
         #expect(true)
     }
 
+    /// Streak stats-row states (streaks plan U2): a live streak caught
+    /// today (plain STREAK cell) and an at-risk streak (3+ days, today
+    /// uncaught → AT RISK, caution amber). Seeds are relative to Date() by
+    /// necessity — the states are defined against "today" — which is fine
+    /// here: this suite is a visual pass, not an assertion.
+    @Test func renderProfileStreakStates() throws {
+        let defaults = UserDefaults.standard
+        let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
+        defaults.set("noah", forKey: SpotterHandle.storageKey)
+        defer { defaults.set(savedHandle, forKey: SpotterHandle.storageKey) }
+
+        let cal = Calendar(identifier: .gregorian)
+        func seeded(offsets: [Int]) throws -> ModelContainer {
+            let config = ModelConfiguration(isStoredInMemoryOnly: true)
+            let container = try ModelContainer(for: Catch.self, configurations: config)
+            TestContainerRetention.retain(container)
+            for offset in offsets {
+                let day = cal.date(byAdding: .day, value: -offset, to: Date())!
+                container.mainContext.insert(Catch(
+                    icao24: String(format: "%06x", 0x100000 + offset), callsign: "TST\(offset)",
+                    model: "A330-300", manufacturer: "Airbus", operatorName: nil,
+                    caughtAt: day, observerLat: 37.87, observerLon: -122.27,
+                    slantDistanceMeters: 9_800, typecode: "A333"
+                ))
+            }
+            return container
+        }
+        // Live 8-day streak including today.
+        snapshot(ProfileScreen().modelContainer(try seeded(offsets: Array(0...7))),
+                 as: "profile_streak_live")
+        // 5 days ending yesterday, today uncaught → AT RISK.
+        snapshot(ProfileScreen().modelContainer(try seeded(offsets: Array(1...5))),
+                 as: "profile_streak_at_risk")
+        #expect(true)
+    }
+
     /// Empty-Hangar "Go outside." hero + a model-detail empty state — the
     /// two empty-state heads converted to Brand.Font.display (D3).
     @Test func renderEmptyStates() throws {

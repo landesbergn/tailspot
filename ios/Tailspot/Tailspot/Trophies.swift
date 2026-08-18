@@ -164,6 +164,10 @@ nonisolated struct TrophyProgressInputs: Sendable {
     let bestBurstWithinTenMin: Int  // max catches inside any 10-min window
     let hasRepeatAirframeAcrossDays: Bool  // an icao24 caught on >= 2 days
     let longestDayStreak: Int       // longest run of consecutive catch-days
+    // Metric added with the catch-streaks round (2026-08-17). Defaulted in
+    // the initializer — the established zero-churn pattern.
+    let currentDayStreak: Int       // live run ending today or yesterday; 0 once a full day passes uncaught
+    let caughtToday: Bool           // asOf's day has a catch (drives the Profile's at-risk hint)
     // Metrics added with the 2026-06-21 trophy expansion.
     let caughtTags: Set<String>     // aircraft tags (heavymetal, freighter, …)
     let highestAltitudeM: Double    // max recorded catch altitude (m)
@@ -230,6 +234,8 @@ nonisolated struct TrophyProgressInputs: Sendable {
         bestBurstWithinTenMin: Int = 0,
         hasRepeatAirframeAcrossDays: Bool = false,
         longestDayStreak: Int = 0,
+        currentDayStreak: Int = 0,
+        caughtToday: Bool = false,
         caughtTags: Set<String> = [],
         highestAltitudeM: Double = 0,
         fastestVelocityMps: Double = 0,
@@ -271,6 +277,8 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.bestBurstWithinTenMin = bestBurstWithinTenMin
         self.hasRepeatAirframeAcrossDays = hasRepeatAirframeAcrossDays
         self.longestDayStreak = longestDayStreak
+        self.currentDayStreak = currentDayStreak
+        self.caughtToday = caughtToday
         self.caughtTags = caughtTags
         self.highestAltitudeM = highestAltitudeM
         self.fastestVelocityMps = fastestVelocityMps
@@ -599,7 +607,8 @@ nonisolated enum Trophies {
     static func inputs(
         from catches: [Catch],
         events: TrophyEventStore = TrophyEventStore(),
-        standing: LeaderboardStandingCache = LeaderboardStandingCache()
+        standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        asOf: Date = Date()
     ) -> TrophyProgressInputs {
         var unique = Set<String>()
         var rarePlusUnique = Set<String>()
@@ -663,7 +672,7 @@ nonisolated enum Trophies {
             if let country = c.country?.trimmingCharacters(in: .whitespacesAndNewlines), !country.isEmpty {
                 countries.insert(country)
             }
-            let day = calendar.startOfDay(for: c.caughtAt)
+            let day = catchDay(c, calendar: calendar)
             days.insert(day)
             dayCounts[day, default: 0] += 1
             icaoDays[c.icao24, default: []].insert(day)
@@ -693,8 +702,11 @@ nonisolated enum Trophies {
         let hasRepeat = icaoDays.values.contains { $0.count >= 2 }
         // Hat Trick: most catches inside any 10-minute (600 s) sliding window.
         let bestBurst = maxCountWithinWindow(timestamps, seconds: 600)
-        // Streak: longest run of consecutive calendar days with a catch.
+        // Streak: longest run of consecutive calendar days with a catch, and
+        // the live run ending today-or-yesterday (R4 of the streaks plan).
         let longestStreak = longestConsecutiveDayRun(days, calendar: calendar)
+        let currentStreak = currentConsecutiveDayRun(days, asOf: asOf, calendar: calendar)
+        let caughtToday = days.contains(calendar.startOfDay(for: asOf))
         // Doubleheader: two time-adjacent catches share an operator.
         let consecutiveOp = hasConsecutiveSameOperator(opTimeline)
 
@@ -734,6 +746,8 @@ nonisolated enum Trophies {
             bestBurstWithinTenMin: bestBurst,
             hasRepeatAirframeAcrossDays: hasRepeat,
             longestDayStreak: longestStreak,
+            currentDayStreak: currentStreak,
+            caughtToday: caughtToday,
             caughtTags: tags,
             highestAltitudeM: highestAlt,
             fastestVelocityMps: fastestVel,
@@ -847,6 +861,61 @@ nonisolated enum Trophies {
             best = max(best, j - i + 1)
         }
         return best
+    }
+
+    /// The calendar day a catch belongs to, as a start-of-day Date in
+    /// `calendar`. Prefers the frozen `dayKey` (travel-proof — the day was
+    /// labeled in the zone where the catch happened; streaks plan KTD4) and
+    /// falls back to bucketing `caughtAt` in the calendar's current zone for
+    /// pre-feature rows. This is the SINGLE owner of day bucketing — the
+    /// Profile stat, the reminder planner, and the streak trophy all read
+    /// day-sets built from it.
+    static func catchDay(_ c: Catch, calendar: Calendar) -> Date {
+        if let key = c.dayKey {
+            let parts = key.split(separator: "-").compactMap { Int($0) }
+            if parts.count == 3 {
+                var comps = DateComponents()
+                comps.year = parts[0]; comps.month = parts[1]; comps.day = parts[2]
+                if let d = calendar.date(from: comps) { return calendar.startOfDay(for: d) }
+            }
+        }
+        return calendar.startOfDay(for: c.caughtAt)
+    }
+
+    /// The distinct catch-day set for a Hangar — the planner-facing wrapper
+    /// over `catchDay`. Callers outside `inputs(from:)` (the reminder
+    /// planner's callers) use this instead of re-deriving buckets.
+    static func dayBuckets(
+        from catches: [Catch],
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> Set<Date> {
+        var days = Set<Date>()
+        for c in catches { days.insert(catchDay(c, calendar: calendar)) }
+        return days
+    }
+
+    /// The LIVE run of consecutive catch-days ending at `asOf`'s day or the
+    /// day before (R4: a streak reads through yesterday until a full local
+    /// day passes with no catch). Returns 0 when neither today nor yesterday
+    /// has a catch.
+    static func currentConsecutiveDayRun(_ days: Set<Date>, asOf: Date, calendar: Calendar) -> Int {
+        let today = calendar.startOfDay(for: asOf)
+        var anchor: Date
+        if days.contains(today) {
+            anchor = today
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+                  days.contains(yesterday) {
+            anchor = yesterday
+        } else {
+            return 0
+        }
+        var run = 1
+        while let prev = calendar.date(byAdding: .day, value: -1, to: anchor),
+              days.contains(prev) {
+            run += 1
+            anchor = prev
+        }
+        return run
     }
 
     /// Longest run of consecutive calendar days present in `days` (a set of
