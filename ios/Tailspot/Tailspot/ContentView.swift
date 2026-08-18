@@ -157,6 +157,16 @@ struct ContentView: View {
     /// and promoted into `pendingSuspectReview` when the reveal dismisses —
     /// the review must never interrupt the reveal moment itself.
     @State private var suspectAwaitingReview: [Catch] = []
+    /// Streak notification pre-prompt, staged by the catch path when the
+    /// just-landed catch made the streak worth protecting (eligibility in
+    /// `StreakReminders.shouldOfferAsk`) and promoted at reveal dismiss —
+    /// never shown over the reveal ceremony or a Keep/Discard review.
+    /// The value is the current streak the card quotes.
+    @State private var pendingStreakAsk: Int? = nil
+    /// The presented pre-prompt card (nil = hidden). One-shot: presenting
+    /// latches `StreakReminders.permissionAskedKey` immediately, so a kill
+    /// mid-card still counts as asked.
+    @State private var streakAsk: Int? = nil
     /// Non-nil → the one-question Keep/Discard review dialog is up.
     @State private var pendingSuspectReview: SuspectReview?
     /// Ambient "you're indoors" hint, shown proactively when the camera
@@ -749,7 +759,12 @@ struct ContentView: View {
             }
         }
         .overlay { trophyUnlockOverlay }
-        .overlay { hangarRestoreOverlay }
+        // Restore prompt + streak pre-prompt share one overlay link — body's
+        // modifier chain is AT the type-check budget (PR #184), so additions
+        // ride existing links instead of adding new ones. The two can't
+        // co-fire: restore needs an EMPTY Hangar, the streak ask a 2-day
+        // catch streak.
+        .overlay { hangarRestoreOverlay; streakAskOverlay }
         // Seed at launch and re-diff on every new catch (idempotent +
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
@@ -976,6 +991,7 @@ struct ContentView: View {
                         CatchTelemetry.fireGuessRoundSkipped(kind: .route, elapsedMs: elapsedMs)
                     }
                 },
+                streakDays: reveal.streakDays,
                 loader: reveal.loader
             )
             .presentationBackground(.clear)
@@ -1235,6 +1251,10 @@ struct ContentView: View {
         /// the settled paths (multi fallback, simulator), where `plane`/`row`/
         /// `guess` are final at presentation exactly as before.
         var loader: RevealLoader? = nil
+        /// Current day-streak after this catch (nil = below the chip
+        /// threshold / simulator). On the shell path the value arrives via
+        /// the loader instead.
+        var streakDays: Int? = nil
     }
 
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
@@ -1521,6 +1541,78 @@ struct ContentView: View {
         }
     }
 
+    /// Streak notification pre-prompt: a bottom card, presented once ever
+    /// (see `presentSuspectReviewIfNeeded`), asking to protect the streak
+    /// with the evening nudge. Accepting fires the SYSTEM permission prompt
+    /// — the pre-prompt exists so that prompt lands with context instead of
+    /// ambushing at cold launch. Solid card, not `.glassEffect` (bare glass
+    /// siblings swallow taps on views below — the Profile bug, PR #127).
+    @ViewBuilder
+    private var streakAskOverlay: some View {
+        if let days = streakAsk {
+            VStack {
+                Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Brand.Color.alertCaution)
+                            .accessibilityHidden(true)
+                        Text("DAY \(days) STREAK")
+                            .font(Brand.Font.mono(size: 12, weight: .semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(Brand.Color.textSecondary)
+                    }
+                    Text("Protect your streak?")
+                        .font(.headline)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                    Text("One evening nudge, only on days a missing catch would break it. Nothing else, ever.")
+                        .font(.subheadline)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 10) {
+                        Button {
+                            withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
+                            Task { @MainActor in
+                                _ = await StreakReminderCenter.shared.requestPermission()
+                                await StreakReminderCenter.shared.sync(context: modelContext)
+                            }
+                        } label: {
+                            Text("Notify me")
+                                .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
+                                .foregroundStyle(Brand.Color.bgPrimary)
+                                .padding(.vertical, 10)
+                                .frame(maxWidth: .infinity)
+                                .background(Brand.Color.cyan,
+                                            in: .rect(cornerRadius: Brand.Radius.row))
+                        }
+                        .buttonStyle(.plain)
+                        Button {
+                            withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
+                        } label: {
+                            Text("Not now")
+                                .font(Brand.Font.mono(size: 15, weight: .semibold, relativeTo: .subheadline))
+                                .foregroundStyle(Brand.Color.textTertiary)
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 16)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(16)
+                .background(Brand.Color.bgElevated,
+                            in: .rect(cornerRadius: Brand.Radius.card))
+                .padding(.horizontal, 16)
+                // Clear the capture bar (its buttons sit ~100 pt tall with
+                // the home indicator inset).
+                .padding(.bottom, 110)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
     // MARK: - Bottom capture bar
 
     /// Snapshot of the catch options visible to the user on the
@@ -1608,6 +1700,19 @@ struct ContentView: View {
         if pendingSaveFailToast {
             pendingSaveFailToast = false
             presentSaveFailToast()
+        }
+        // Streak notification pre-prompt (one-shot). Only an UNCONTESTED
+        // dismissal promotes it: a pending Keep/Discard review or a jump to
+        // the Hangar wins the moment and the ask is dropped, not queued —
+        // eligibility re-stages it on the next streak catch. Presenting
+        // latches the asked bit immediately, so it can never fire twice.
+        if let askDays = pendingStreakAsk {
+            pendingStreakAsk = nil
+            if suspectAwaitingReview.isEmpty, !showHangar,
+               pendingReveal == nil, pendingMultiReveal == nil {
+                UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
+                withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
+            }
         }
         guard !suspectAwaitingReview.isEmpty else { return }
         let rows = suspectAwaitingReview.filter { !$0.isDeleted && $0.suspectReason != nil }
@@ -2341,6 +2446,47 @@ struct ContentView: View {
                 CatchTelemetry.fireFirstCatch(first)
             }
 
+            // Daily streak bookkeeping — EVERY successful catch action counts,
+            // duplicates included: a re-catch writes no row (lifetime dedup),
+            // but it's still "caught a plane today", so the ledger carries the
+            // day (Streaks.swift, rule 3). The @Query slice may not have
+            // refreshed with this tap's inserts yet; the ledger already holds
+            // today, so the union read is exact regardless.
+            var streakDaysForReveal: Int? = nil
+            if !newCatches.isEmpty || !duplicates.isEmpty {
+                let ledger = StreakLedger()
+                let todayKey = Streaks.dayKey(for: Date())
+                let firstActionToday = ledger.record(todayKey)
+                let days = Streaks.daySet(catches: catches, extraDays: ledger.days())
+                let current = Streaks.currentStreak(days: days, todayKey: todayKey)
+                if firstActionToday {
+                    StreakTelemetry.fireExtended(streakDays: current)
+                }
+                if current >= StreakReminders.minimumStreak {
+                    streakDaysForReveal = current
+                }
+                earlyLoader?.streakDays = streakDaysForReveal
+                // Re-plan the protection nudge (a catch today pushes it to
+                // tomorrow evening) and stage the one-time permission ask if
+                // this streak just became worth protecting. Async because the
+                // authorization status read is; lands well before the reveal
+                // dismisses (its ceremony runs ≥1.7 s).
+                Task { @MainActor in
+                    let center = StreakReminderCenter.shared
+                    if StreakReminders.shouldOfferAsk(
+                        currentStreak: current,
+                        enabled: center.remindersEnabled,
+                        alreadyAsked: UserDefaults.standard.bool(
+                            forKey: StreakReminders.permissionAskedKey),
+                        authStatusIsNotDetermined:
+                            await center.authorizationStatus() == .notDetermined
+                    ) {
+                        pendingStreakAsk = current
+                    }
+                    await center.sync(context: modelContext)
+                }
+            }
+
             // Post-catch confirm: record each quarantined row and stash the
             // suspected set — the reveal's dismiss callbacks promote it into
             // the Keep/Discard dialog (never shown on top of the reveal).
@@ -2410,7 +2556,8 @@ struct ContentView: View {
                 revealMode = "shell"
             } else {
                 presentReveal(newCatches: newCatches, duplicates: duplicates,
-                              visibleByIcao: visibleByIcao, guess: guessPayload)
+                              visibleByIcao: visibleByIcao, guess: guessPayload,
+                              streakDays: streakDaysForReveal)
                 revealPresented = (pendingReveal != nil || pendingMultiReveal != nil)
                 presentMs = Int(Date().timeIntervalSince(tapAt) * 1000)
                 revealMode = pendingMultiReveal != nil ? "multi"
@@ -2528,7 +2675,8 @@ struct ContentView: View {
         newCatches: [Catch],
         duplicates: [String],
         visibleByIcao: [String: ObservedAircraft],
-        guess: (question: GuessRoundQuestion, row: Catch)? = nil
+        guess: (question: GuessRoundQuestion, row: Catch)? = nil,
+        streakDays: Int? = nil
     ) {
         let uniqueIcaoCount = Set(catches.map(\.icao24)).count
         let totalCount = newCatches.count + duplicates.count
@@ -2573,7 +2721,8 @@ struct ContentView: View {
                 entryNumber: uniqueIcaoCount,
                 isDuplicate: false,
                 guess: guess?.question,
-                row: guess?.row
+                row: guess?.row,
+                streakDays: streakDays
             )
             return
         }
@@ -2585,7 +2734,8 @@ struct ContentView: View {
             pendingReveal = PendingReveal(
                 plane: plane,
                 entryNumber: uniqueIcaoCount,
-                isDuplicate: true
+                isDuplicate: true,
+                streakDays: streakDays
             )
             return
         }

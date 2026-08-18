@@ -48,6 +48,16 @@ final class Catch {
     /// as the collection grows.
     var photoFilename: String?
     var caughtAt: Date
+    /// The local calendar day this catch belongs to ("yyyy-MM-dd"), frozen
+    /// in the device's timezone at insert. Streak math prefers this over
+    /// re-deriving from `caughtAt` so changing timezones later can't
+    /// reshuffle which day a catch counts for (see Streaks.swift, rule 1).
+    /// Optional + nil-default for SwiftData lightweight migration;
+    /// pre-existing rows fall back to current-zone derivation on read.
+    /// Stamped in `init`, which also covers the Hangar-restore path
+    /// (best-effort from the restored `caughtAt` — the original zone is
+    /// unrecoverable there).
+    var caughtDayKey: String?
     var observerLat: Double
     var observerLon: Double
     var slantDistanceMeters: Double
@@ -222,6 +232,7 @@ final class Catch {
         self.operatorName = operatorName
         self.photoFilename = photoFilename
         self.caughtAt = caughtAt
+        self.caughtDayKey = Streaks.dayKey(for: caughtAt)
         self.observerLat = observerLat
         self.observerLon = observerLon
         self.slantDistanceMeters = slantDistanceMeters

@@ -6,6 +6,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import UserNotifications
 import os
 
 @main
@@ -68,6 +69,24 @@ struct TailspotApp: App {
                 Brand.Font.boldTextPreferred = UIAccessibility.isBoldTextEnabled
             }
         }
+        // Streak reminders: the delegate must be set before launch finishes
+        // so a cold-start notification tap is delivered (it only records
+        // telemetry — the app opens to the camera, which IS the target).
+        UNUserNotificationCenter.current().delegate = StreakReminderCenter.shared
+        // A timezone change moves "today" and the 18:00 target — recompute
+        // the pending reminder against the new zone (frozen per-catch day
+        // labels keep the streak history itself stable; Streaks.swift rule 1).
+        let streakContainer = container
+        NotificationCenter.default.addObserver(
+            forName: .NSSystemTimeZoneDidChange,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                await StreakReminderCenter.shared.sync(
+                    context: streakContainer.mainContext)
+            }
+        }
     }
 
     var body: some Scene {
@@ -113,6 +132,12 @@ struct TailspotApp: App {
                     // without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
+                    // Streak reminder re-plan on every foreground: repairs
+                    // whatever the last run couldn't know (a day rolled over,
+                    // permission changed in iOS Settings, a force-kill raced
+                    // the post-catch sync). Cheap — one Hangar fetch + a pure
+                    // decision — and idempotent like the two steps above.
+                    await StreakReminderCenter.shared.sync(context: ctx)
                 }
             }
         }
