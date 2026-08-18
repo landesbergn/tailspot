@@ -13,7 +13,7 @@ execution: code
 
 ## Goal Capsule
 
-- **Objective:** Ship v1.1 "Habits & housekeeping": eight small/medium items that build a daily habit loop, fix the first-catch activation leak, and open the app's only organic install loop. Everything is client-side or additive; no APNs, no schema breaks.
+- **Objective:** Ship v1.1 "Habits & housekeeping": nine small/medium items that build a daily habit loop, fix the first-catch activation leak, and open the app's only organic install loop. Everything is client-side or additive; no APNs, no schema breaks.
 - **Product authority:** Noah's 2026-08-17 verdicts on the Flight Plan prioritization board (29/29 items decided). v1.2, v1.3+, and the marketing lane are context only, not active scope here.
 - **Open blockers:** none. The stale funnel figure is deferred to planning (see Outstanding Questions).
 
@@ -23,7 +23,7 @@ execution: code
 
 ### Summary
 
-v1.1 adds daily catch streaks with guardrailed local reminders, a scoped first-catch onboarding moment, an in-app review prompt, an App Store link in catch shares, catch-photo zoom, and two deferred battery fixes. All items are S/M effort. The release is a fast follow, not a platform build.
+v1.1 adds daily catch streaks with guardrailed local reminders, a scoped first-catch onboarding moment, an in-app review prompt, an App Store link in catch shares, catch-photo zoom, a narrowed duplicate-catch rule, and two deferred battery fixes. All items are S/M effort. The release is a fast follow, not a platform build.
 
 ### Problem Frame
 
@@ -36,6 +36,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 - KD3. **Streak reminders ship guardrailed and on by default.** (session-settled: user-directed — chosen over opt-in-default-off and cut-from-v1.1.) Governs R2, R3.
 - KD4. **v1.2 stays one long train** holding quests, push alerts, and head-to-head challenges. (session-settled: user-directed — chosen over splitting into two trains.)
 - KD5. **Trophy roster round, Home Screen widget, and the wrong-ID report loop are parked.** (session-settled: user-directed — chosen against their v1.1 recommendation.)
+- KD6. **The duplicate window narrows from lifetime-per-airframe to same-flight-same-day.** (session-settled: user-directed — added 2026-08-17 after the board export; callsign chosen over route as the flight key because route data is late or missing at catch time.) Governs R11, R12.
 
 ### Requirements
 
@@ -58,6 +59,8 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 **Collection polish**
 
 - R8. Tapping the photo on a catch card opens the full-resolution photo with pinch-zoom. It no longer dismisses the card.
+- R11. A catch counts as a duplicate only when the same airframe was already caught with the same callsign on the same local calendar day; if the callsign is missing on either side, a same-day repeat of the airframe compares as a duplicate.
+- R12. Any other repeat sighting is a full catch with its own record, photo, points, and upload; the duplicate reveal (existing catch, "ALREADY CAUGHT", no points) applies only within R11's window. Existing rows are untouched.
 
 **Quality**
 
@@ -82,6 +85,9 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 - AE3. **Covers R2.** Given a streak that broke yesterday, or a lapsed user, nothing fires. The reminder protects an active run; it is not a win-back nag.
 - AE4. **Covers R3.** Given reminders muted in Settings, no reminder fires regardless of streak.
 - AE5. **Covers R7.** Given a trophy unlock, the review sheet may appear after the celebration completes. It never appears during capture or the reveal.
+- AE6. **Covers R11, R12.** Given N123AB caught this morning as UA100, catching the same airframe this evening as UA101 creates a new full catch with points. Catching it again tomorrow as UA100 also creates a new full catch.
+- AE7. **Covers R11.** Given N123AB caught as UA100 an hour ago, tapping it again while it is still UA100 today shows the duplicate reveal and adds no row.
+- AE8. **Covers R11.** Given a same-day repeat where either sighting has no callsign, it is treated as a duplicate.
 
 ### Scope Boundaries
 
@@ -95,6 +101,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 - No StoreKit and no UserNotifications code exists in the app today. R2/R3 and R7 are net-new but small.
 - Any SwiftData change stays additive; the Hangar is local-only and a breaking migration destroys real collections.
 - The funnel figure is from July and assumed directionally right.
+- Repeat catches earn full points on both client and server with no backend change (the backend already scores every uploaded row). Accepted trade-off: a spotter can re-earn daily on a regular plane.
 
 ### Outstanding Questions
 

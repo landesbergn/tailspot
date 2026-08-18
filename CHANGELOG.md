@@ -22,6 +22,10 @@ problem spaces), replacing the 2026-07-21 v1.1 ordering:
   risk accepted).
 - New requirements doc: `docs/plans/2026-08-17-1443-feat-v1-1-release-scope-plan.md`.
   PLAN §9 carries the new ordering.
+- Same-day amendment: the **duplicate-catch rule narrows** in v1.1. A catch is
+  a duplicate only for the same airframe + same callsign + same local day
+  (today's gate is lifetime-per-airframe); other re-sightings become full
+  catches with their own row and points.
 
 ## 2026-08-16 — Trophy altitude thresholds fixed, "Mile High" → "Sky High" — branch `trophy-altitude-fix`
 
