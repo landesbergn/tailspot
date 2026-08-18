@@ -500,6 +500,12 @@ struct CatchRevealView: View {
     /// outcome onto the row + fires `guess_round_answered`/`_skipped`.
     var onGuessResolved: ((_ answeredValue: String?, _ correct: Bool) -> Void)? = nil
 
+    /// The current day-streak AFTER this catch, or nil to show no streak
+    /// chip (streak below threshold, multi reveals, ✦ Catch simulator,
+    /// snapshots). Duplicates carry it too — a re-catch earns no points but
+    /// still keeps the streak alive, and the chip says so.
+    var streakDays: Int? = nil
+
     /// Early-shell conduit (capture-lag work, 2026-08-13). Non-nil when the
     /// reveal presented as a loading shell at tap time: the pipeline swaps
     /// in the finished `plane` snapshot (photo, healed route), the persisted
@@ -514,6 +520,9 @@ struct CatchRevealView: View {
     /// The bonus-round question, whether threaded at presentation (`guess`)
     /// or delivered late by the pipeline (`loader`).
     private var liveGuess: GuessRoundQuestion? { guess ?? loader?.guess }
+    /// The streak chip's day count, whether threaded at presentation or
+    /// delivered late through the shell's loader.
+    private var liveStreakDays: Int? { loader?.streakDays ?? streakDays }
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
@@ -740,6 +749,12 @@ struct CatchRevealView: View {
                 // the catcher and count as a skip-then-dismiss.
                 .allowsHitTesting(chipsPhase == .shown)
             Spacer(minLength: 0)
+            // Streak chip — quiet payoff line above the CTA, faded in with
+            // the settle beat so it never competes with the flap ceremony.
+            if let days = liveStreakDays {
+                streakChip(days: days)
+                    .opacity(settled ? 1 : 0)
+            }
             ctaRow
                 .opacity(settled ? 1 : 0)
                 .allowsHitTesting(settled)
@@ -749,17 +764,42 @@ struct CatchRevealView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// "DAY N STREAK" capsule. Amber flame = the streak accent everywhere
+    /// (Profile card, Settings footer icon); mono per the type rule — it's
+    /// a data readout, not prose.
+    private func streakChip(days: Int) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.alertCaution)
+                .accessibilityHidden(true)
+            Text("DAY \(days) STREAK")
+                .font(Brand.Font.mono(size: 12, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(RP.ink)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(RP.flapFace, in: Capsule())
+        .overlay(Capsule().strokeBorder(RP.rule, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Day \(days) streak")
+    }
+
     // MARK: - VoiceOver copy
 
     /// Announced once when the reveal settles (see `.onChange(of: settled)`).
     private var settleAnnouncement: String {
         let model = livePlane.model ?? "Unknown aircraft"
         if isDuplicate {
-            return "Caught \(model), \(livePlane.rarity.label), already in hangar, no points"
+            var parts = ["Caught \(model)", livePlane.rarity.label, "already in hangar, no points"]
+            if let days = liveStreakDays { parts.append("day \(days) streak") }
+            return parts.joined(separator: ", ")
         }
         var parts = ["Caught \(model)", livePlane.rarity.label]
         if firstOfTypeBonus > 0 { parts.append("first of type") }
         parts.append("\(revealTargetTotal) points")
+        if let days = liveStreakDays { parts.append("day \(days) streak") }
         return parts.joined(separator: ", ")
     }
 
@@ -782,6 +822,7 @@ struct CatchRevealView: View {
             let bonus = (resolution?.correct == true) ? routeBonus : 0
             parts.append("\(revealTargetTotal + bonus) points")
         }
+        if let days = liveStreakDays { parts.append("day \(days) streak") }
         parts.append("entry number \(entryNumber)")
         return parts.joined(separator: ", ")
     }
@@ -904,6 +945,11 @@ struct CatchRevealView: View {
             Spacer(minLength: 0)
             card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render)
             Spacer(minLength: 0)
+            // Settled-state chrome, mirrored from `layout` (which gates it
+            // on the live `settled` flag this static render never flips).
+            if let days = liveStreakDays {
+                streakChip(days: days)
+            }
             ctaRow
                 .padding(.top, 14)
                 .padding(.bottom, 28)

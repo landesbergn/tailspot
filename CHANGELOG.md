@@ -5,6 +5,32 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-17 — Catch streaks + protection reminders — branch `feature/catch-streaks`
+
+The v1.1 lead feature, built as one of two parallel head-to-head implementations
+(Noah's call: independent builds, he picks the winner). Daily catch streak =
+consecutive local-calendar days with at least one successful catch **action**:
+
+- **Engine (`Streaks.swift`):** frozen per-catch day labels
+  (`Catch.caughtDayKey`, stamped at insert — travel can't re-bucket history;
+  legacy rows fall back to current-zone bucketing), UTC key arithmetic
+  (DST-proof), grace rule (a live streak reads through yesterday until a full
+  empty day passes), and the `StreakLedger` action-day record so duplicate-only
+  days still count (lifetime dedup writes no row for a re-catch).
+- **Surfaces:** Profile streak card (current + best + at-risk line), "DAY N
+  STREAK" chip on the reveal's settled frame, Settings REMINDERS section
+  (mute toggle, honest permission-denied state, heal-on-return).
+- **Reminder (`StreakReminders.swift`):** ONE local notification slot,
+  18:00 local, scheduled by a pure matrix-tested decision function; re-planned
+  after each catch / foreground / timezone change / toggle; never fires for a
+  lapsed streak; threshold ≥2 days (deviation from the scope doc's ≥3 —
+  flagged in PLAN §9 for Noah). Contextual one-shot permission pre-prompt at
+  the day-2 reveal dismiss. No APNs, no new capability.
+- **Telemetry:** `streak_extended`, `streak_reminder_opened`,
+  `permission_outcome` (notifications).
+- Tests: `StreaksTests` + `StreakRemindersTests` (guardrail matrix), snapshot
+  additions (Profile at-risk/safe, Settings denied, reveal chip).
+
 ## 2026-08-17 — v1.1 scope set on the Flight Plan board — branch `docs/v1-1-flight-plan-scope`
 
 Planning round, docs only. Noah and Claude re-prioritized the release plan from
