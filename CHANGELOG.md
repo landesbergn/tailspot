@@ -37,6 +37,16 @@ head-to-head PRs close unmerged).
   amended from 3). In the foreground it stays silent on the camera and
   presents everywhere else; tapping it lands on the viewfinder with the stake
   restated as a toast. No APNs, no new capability.
+- **Design pass (Noah, 2026-08-19):** the streak reads "11 day streak", not
+  "DAY 11 STREAK", and is set in PROSE — the one deliberate exception to the
+  mono-for-data type rule, because this is the reward talking to you rather
+  than a readout. The reveal's bordered capsule is gone (it was a second
+  outlined container sitting under the card's own outline); it's now a bare
+  line where the count carries the weight and "day streak" recedes. On the
+  Profile, `best` moved onto the title baseline — as matching numbers at
+  opposite ends of the card, "6 day streak … 6 best" read as a duplicate.
+  The permission card is Noah's copy, prose buttons, with "Not now" one
+  weight down from "Notify me".
 - **Toasts consolidated:** grounded / far-tap / save-fail / streak share one
   `topToast` slot, so two capsules can never stack — and `body`'s modifier
   chain gets shorter, not longer (the PR #184 type-check budget).

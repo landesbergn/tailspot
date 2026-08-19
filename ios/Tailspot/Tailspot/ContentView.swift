@@ -1496,30 +1496,44 @@ struct ContentView: View {
     /// — the pre-prompt exists so that prompt lands with context instead of
     /// ambushing at cold launch. Solid card, not `.glassEffect` (bare glass
     /// siblings swallow taps on views below — the Profile bug, PR #127).
+    ///
+    /// All prose, no mono (Noah, 2026-08-19). Copy is his: the question
+    /// leads, the mechanism explains itself in one line, and neither
+    /// mentions "18:00" or a day threshold — numbers in the copy go stale
+    /// the moment a constant moves.
     @ViewBuilder
     private var streakAskOverlay: some View {
         if let days = streakAsk {
             VStack {
                 Spacer()
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 7) {
                         Image(systemName: "flame.fill")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Brand.Color.alertCaution)
                             .accessibilityHidden(true)
-                        Text("DAY \(days) STREAK")
-                            .font(Brand.Font.mono(size: 12, weight: .semibold))
-                            .tracking(1.2)
-                            .foregroundStyle(Brand.Color.textSecondary)
+                        HStack(spacing: 5) {
+                            Text("\(days)")
+                                .font(.system(.subheadline, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundStyle(Brand.Color.textPrimary)
+                            Text("day streak")
+                                .font(.system(.subheadline, weight: .medium))
+                                .foregroundStyle(Brand.Color.textSecondary)
+                        }
                     }
-                    Text("Protect your streak?")
-                        .font(.headline)
-                        .foregroundStyle(Brand.Color.textPrimary)
-                    Text("One evening nudge, only on days a missing catch would break it. Nothing else, ever.")
-                        .font(.subheadline)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 10) {
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(days) day streak")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Protect your streak?")
+                            .font(.system(.title3, weight: .bold))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                        Text("Turn on notifications to help keep your streak going.")
+                            .font(.subheadline)
+                            .foregroundStyle(Brand.Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack(spacing: 12) {
                         Button {
                             withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
                             Task { @MainActor in
@@ -1528,9 +1542,9 @@ struct ContentView: View {
                             }
                         } label: {
                             Text("Notify me")
-                                .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
+                                .font(Brand.Font.button)
                                 .foregroundStyle(Brand.Color.bgPrimary)
-                                .padding(.vertical, 10)
+                                .padding(.vertical, 13)
                                 .frame(maxWidth: .infinity)
                                 .background(Brand.Color.cyan,
                                             in: .rect(cornerRadius: Brand.Radius.row))
@@ -1540,16 +1554,19 @@ struct ContentView: View {
                             withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
                         } label: {
                             Text("Not now")
-                                .font(Brand.Font.mono(size: 15, weight: .semibold, relativeTo: .subheadline))
-                                .foregroundStyle(Brand.Color.textTertiary)
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 16)
+                                // Same size as the primary, one weight
+                                // down: declining stays easy to hit and
+                                // easy to read, without competing.
+                                .font(.system(.callout, weight: .medium))
+                                .foregroundStyle(Brand.Color.textSecondary)
+                                .padding(.vertical, 13)
+                                .padding(.horizontal, 20)
                         }
                         .buttonStyle(.plain)
                     }
                     .padding(.top, 2)
                 }
-                .padding(16)
+                .padding(20)
                 .background(Brand.Color.bgElevated,
                             in: .rect(cornerRadius: Brand.Radius.card))
                 .padding(.horizontal, 16)
