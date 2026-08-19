@@ -754,6 +754,7 @@ struct CatchRevealView: View {
             if let days = liveStreakDays {
                 streakChip(days: days)
                     .opacity(settled ? 1 : 0)
+                    .padding(.bottom, 4)
             }
             ctaRow
                 .opacity(settled ? 1 : 0)
@@ -764,26 +765,31 @@ struct CatchRevealView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// "DAY N STREAK" capsule. Amber flame = the streak accent everywhere
-    /// (Profile card, Settings footer icon); mono per the type rule — it's
-    /// a data readout, not prose.
+    /// "N day streak" — a bare line, not a chip (Noah, 2026-08-19: the
+    /// bordered capsule read as clunky, and it was a second outlined
+    /// container sitting directly under the card's own outline). Set in
+    /// PROSE, the one deliberate exception to the mono-for-data rule: this
+    /// is the reward talking to you, not a readout. The count carries the
+    /// weight and the brightness; "day streak" recedes, so the eye lands on
+    /// the number without any box to help it.
     private func streakChip(days: Int) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Brand.Color.alertCaution)
                 .accessibilityHidden(true)
-            Text("DAY \(days) STREAK")
-                .font(Brand.Font.mono(size: 12, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(RP.ink)
+            HStack(spacing: 5) {
+                Text("\(days)")
+                    .font(.system(.subheadline, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(RP.ink)
+                Text("day streak")
+                    .font(.system(.subheadline, weight: .medium))
+                    .foregroundStyle(RP.muted)
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(RP.flapFace, in: Capsule())
-        .overlay(Capsule().strokeBorder(RP.rule, lineWidth: 1))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Day \(days) streak")
+        .accessibilityLabel("\(days) day streak")
     }
 
     // MARK: - VoiceOver copy
@@ -793,13 +799,13 @@ struct CatchRevealView: View {
         let model = livePlane.model ?? "Unknown aircraft"
         if isDuplicate {
             var parts = ["Caught \(model)", livePlane.rarity.label, "already in hangar, no points"]
-            if let days = liveStreakDays { parts.append("day \(days) streak") }
+            if let days = liveStreakDays { parts.append("\(days) day streak") }
             return parts.joined(separator: ", ")
         }
         var parts = ["Caught \(model)", livePlane.rarity.label]
         if firstOfTypeBonus > 0 { parts.append("first of type") }
         parts.append("\(revealTargetTotal) points")
-        if let days = liveStreakDays { parts.append("day \(days) streak") }
+        if let days = liveStreakDays { parts.append("\(days) day streak") }
         return parts.joined(separator: ", ")
     }
 
@@ -822,7 +828,7 @@ struct CatchRevealView: View {
             let bonus = (resolution?.correct == true) ? routeBonus : 0
             parts.append("\(revealTargetTotal + bonus) points")
         }
-        if let days = liveStreakDays { parts.append("day \(days) streak") }
+        if let days = liveStreakDays { parts.append("\(days) day streak") }
         parts.append("entry number \(entryNumber)")
         return parts.joined(separator: ", ")
     }

@@ -420,49 +420,68 @@ struct ProfileScreen: View {
 
     // MARK: - Streak card
 
-    /// Daily catch streak — current run with its state line, best run on
-    /// the right. The flame goes amber while a streak is alive and grey
-    /// when there isn't one; the state line is the only place the card
-    /// editorializes ("catch today to keep it"), and only while a live
-    /// streak is actually at risk.
+    /// Daily catch streak — the live run with its state line, best run on
+    /// the right.
+    ///
+    /// Set in PROSE, not mono (Noah, 2026-08-19). The type rule sends data
+    /// readouts to mono, and the stats strip above obeys it — but this card
+    /// is the one on the screen that talks to you ("catch today to keep
+    /// it"), and shouting it in tracked uppercase made it read as a system
+    /// warning rather than encouragement. It sits with the BEST CATCH card
+    /// below, which is prose for the same reason.
+    ///
+    /// The flame is the streak's accent everywhere (reveal line, permission
+    /// card): amber while a run is alive, tertiary when there isn't one.
     private func streakCard(_ s: Streaks.Summary) -> some View {
         let alive = s.current > 0
-        return HStack(spacing: 12) {
+        return HStack(alignment: .top, spacing: 14) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 22))
+                .font(.system(size: 24))
                 .foregroundStyle(alive ? Brand.Color.alertCaution : Brand.Color.textTertiary)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(s.current)-DAY STREAK")
-                    .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .headline))
-                    .foregroundStyle(alive ? Brand.Color.textPrimary : Brand.Color.textTertiary)
+                // Optically centre the flame against the two text lines
+                // rather than the container.
+                .padding(.top, 3)
+            VStack(alignment: .leading, spacing: 2) {
+                // The count carries the weight; the unit recedes, so the
+                // number reads first at a glance. `best` rides the SAME
+                // baseline instead of a matching column on the right — as
+                // two equal-weight numbers at opposite ends of the card,
+                // "6 day streak … 6 best" read as a duplicate rather than
+                // a record being matched.
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("\(s.current)")
+                        .font(.system(.title3, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(alive ? Brand.Color.textPrimary : Brand.Color.textTertiary)
+                    Text("day streak")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(alive ? Brand.Color.textSecondary : Brand.Color.textTertiary)
+                    Spacer(minLength: 10)
+                    Text("best \(s.longest)")
+                        .font(.footnote)
+                        .monospacedDigit()
+                        .foregroundStyle(Brand.Color.textTertiary)
+                }
                 Text(streakStateLine(s))
-                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-                    .tracking(1.2)
+                    .font(.footnote)
                     .foregroundStyle(s.atRisk ? Brand.Color.alertCaution : Brand.Color.textTertiary)
             }
-            Spacer()
-            VStack(spacing: 3) {
-                Text("\(s.longest)")
-                    .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .monospacedDigit()
-                Text("BEST")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 15)
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(s.current) day streak. \(streakStateLine(s)). Best \(s.longest)."
+        )
     }
 
+    /// The card's one editorial line. Sentence case: it's a sentence.
     private func streakStateLine(_ s: Streaks.Summary) -> String {
-        if s.caughtToday { return "EXTENDED TODAY" }
-        if s.atRisk { return "CATCH TODAY TO KEEP IT" }
-        return "CATCH A PLANE TO START ONE"
+        if s.caughtToday { return "Extended today" }
+        if s.atRisk { return "Catch today to keep it" }
+        return "Catch a plane to start one"
     }
 
     // MARK: - Best catch
