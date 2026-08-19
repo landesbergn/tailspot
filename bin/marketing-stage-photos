@@ -1,0 +1,23 @@
+#!/bin/bash
+# Stages the real catch photos into the marketing snapshot directory so
+# MarketingSnapshotTests can read them from inside the simulator.
+#
+# The harness renders card heroes from file URLs (RevealPhoto decodes them
+# synchronously). The simulator can read /private/tmp but not the repo
+# checkout, so the photos are copied there before a capture run.
+#
+# Usage: bin/marketing-stage-photos   (run before the MARKETING_CAPTURE run)
+set -euo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+src="$repo/marketing/catch-photos"
+dst="/private/tmp/tailspot_snaps/marketing/photos"
+
+if [ ! -d "$src" ]; then
+  echo "no catch photos at $src" >&2
+  exit 1
+fi
+
+mkdir -p "$dst"
+cp "$src"/*.jpg "$dst"/
+echo "staged $(ls -1 "$dst"/*.jpg | wc -l | tr -d ' ') catch photos → $dst"

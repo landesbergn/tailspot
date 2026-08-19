@@ -8,11 +8,17 @@
 //  for the framing pass in marketing/app-store-screenshots. NOT an
 //  assertion test — same visual-pass pattern as RevealSnapshotTests.
 //
-//  Shot 1 (the AR catch moment) is a STYLIZED STAND-IN: the simulator has
-//  no camera/GPS, so it composes the real HUD components (LockBrackets +
-//  the PlaneLabel pill styling) over the onboarding dusk-sky treatment.
-//  Replace with a real field capture per the screenshot plan before GA.
-//  Shots 2–6 are the real screens with fixture data.
+//  Shot 1 (the AR catch moment) is still a STYLIZED STAND-IN: the
+//  simulator has no camera/GPS, so it composes the real HUD components
+//  (LockBrackets + the PlaneLabel pill styling) over the onboarding
+//  dusk-sky treatment. Its callsigns and rarity tiers are real catches,
+//  but the sky is not — replace with a real field capture per
+//  docs/ga/screenshot-plan.md.
+//
+//  Shots 2, 2b and 3 now render REAL catches: real ADS-B numbers, real
+//  routes, real tiers, and the app's own composed catch JPEGs (staged by
+//  `bin/marketing-stage-photos` from marketing/catch-photos/) as the hero
+//  photos. Shots 4–6 are the real screens with fixture data.
 //
 
 #if DEBUG
@@ -61,6 +67,34 @@ struct MarketingSnapshotTests {
         try? data.write(to: Self.dir.appendingPathComponent("\(name).png"))
     }
 
+    /// Offscreen-window path — REQUIRED for any shot showing a catch photo.
+    /// `RevealPhoto` wraps the hero in `.postHogMask`, a UIKit tag view, and
+    /// ImageRenderer draws platform views as the yellow "no entry"
+    /// placeholder. drawHierarchy in an offscreen window renders them fine.
+    /// Only safe for views with no `.glassEffect` (offscreen capture
+    /// relocates glass backdrop layers — see `snapshotWindow`).
+    private func writeOffscreen(_ view: some View, name: String) {
+        try? FileManager.default.createDirectory(
+            at: Self.dir, withIntermediateDirectories: true)
+        let bounds = CGRect(origin: .zero, size: Self.screen)
+        let host = UIHostingController(rootView: view.ignoresSafeArea())
+        let window = UIWindow(frame: bounds)
+        window.rootViewController = host
+        window.overrideUserInterfaceStyle = .dark
+        window.isHidden = false
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = 3
+        let renderer = UIGraphicsImageRenderer(bounds: bounds, format: fmt)
+        let png = renderer.pngData { _ in
+            host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        }
+        try? png.write(to: Self.dir.appendingPathComponent("\(name).png"))
+        window.isHidden = true
+        Self.retained.append(window)
+    }
+
     /// On-screen capture path — for List/NavigationStack screens.
     /// Offscreen capture (drawHierarchy AND layer.render) relocates Liquid
     /// Glass (.glassEffect) backdrop layers to the window origin, garbling
@@ -99,17 +133,96 @@ struct MarketingSnapshotTests {
         Self.retained.append(window)
     }
 
+    // MARK: - Real catch photos (Noah's own field catches)
+
+    /// Real catch photos live in `marketing/catch-photos/` and are staged
+    /// into the snapshot dir by `bin/marketing-stage-photos` before a
+    /// capture run (the simulator can read /private/tmp, not the repo).
+    /// Each is the app's OWN composed catch JPEG — `CatchPhotoComposer`
+    /// bakes the cyan lock-on brackets into the file at capture time, so
+    /// these already carry the real framing and need no overlay.
+    private static let photoDir = dir.appendingPathComponent(
+        "photos", isDirectory: true)
+
+    /// A staged real catch photo, or nil when the stage step wasn't run —
+    /// callers fall back to the striped placeholder rather than failing,
+    /// so the harness still produces a deck.
+    private func realPhoto(_ name: String) -> URL? {
+        let url = Self.photoDir.appendingPathComponent("\(name).jpg")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// The rare BD-700 over Berkeley — 43,225 ft, a contrail, RARE tier and
+    /// a FIRST OF TYPE bonus. The best real catch in the set and the one
+    /// the reveal shot is built on. Every field below is what the app
+    /// actually recorded; the shot advertises a catch that happened.
+    private func bd700() -> CardPlane {
+        CardPlane(
+            callsign: "WWI21", model: "BD-700 Global Express",
+            carrier: "Worldwide Jet Charter",
+            rarity: .rare, type: .biz,
+            altText: "43,225 ft", speedText: "546 kt", distText: "27.1 km",
+            photoURL: realPhoto("bd700_rare"),
+            photoFocus: CGPoint(x: 0.499, y: 0.499),
+            isFirstOfType: true
+        )
+    }
+
+    /// Air Canada A220 on the YVR → SFO leg — uncommon, real route.
+    private func a220() -> CardPlane {
+        CardPlane(
+            callsign: "ACA568", model: "A220-300", carrier: "Air Canada",
+            rarity: .uncommon, type: .narrow,
+            altText: "4,050 ft", speedText: "212 kt",
+            photoURL: realPhoto("a220_with_route_uncommon"),
+            photoFocus: CGPoint(x: 0.500, y: 0.500),
+            originIcao: "YVR", destIcao: "SFO",
+            originName: "Vancouver", destName: "San Francisco"
+        )
+    }
+
+    /// A private Citation V at 2.4 km — uncommon, first of type. Used as
+    /// the card peeking out BEHIND the front one, so what shows is its
+    /// right edge: clean blue sky there, unlike the A220's dark tree line.
+    private func c560() -> CardPlane {
+        CardPlane(
+            callsign: "N561SR", model: "560 Citation V", carrier: nil,
+            rarity: .uncommon, type: .biz,
+            altText: "5,125 ft", speedText: "259 kt", distText: "2.4 km",
+            photoURL: realPhoto("c560_uncommon"),
+            photoFocus: CGPoint(x: 0.500, y: 0.574)
+        )
+    }
+
+    /// JetBlue A321neo inbound from Guayaquil — the guess-round shot's
+    /// plane. An exotic origin makes "where's it headed?" worth asking.
+    private func a321() -> CardPlane {
+        CardPlane(
+            callsign: "JBU1770", model: "A321neo", carrier: "JetBlue Airways",
+            rarity: .common, type: .narrow,
+            altText: "2,000 ft", speedText: "179 kt",
+            photoURL: realPhoto("a321_with_route_first"),
+            photoFocus: CGPoint(x: 0.511, y: 0.546),
+            originIcao: "GYE", destIcao: "JFK",
+            originName: "Guayaquil", destName: "New York",
+            isFirstOfType: true
+        )
+    }
+
     // MARK: - Shot 1 · The catch moment (stylized stand-in)
 
     /// Full-screen version of the onboarding AR-mock treatment: the REAL
     /// LockBrackets + PlaneLabel pill styling over the dusk-sky gradient.
     private func arCatchScene() -> some View {
+        // Both planes are real catches from Noah's Hangar, so the HUD
+        // advertises callsigns and tiers the app actually produced.
         let pinnedRarity = resolveAROverlayRarity(
-            typecode: "A388", manufacturer: "Airbus", model: "A380-800",
-            operatorName: "Lufthansa")
+            typecode: "GLEX", manufacturer: "Bombardier",
+            model: "BD-700 Global Express",
+            operatorName: "Worldwide Jet Charter")
         let ambientRarity = resolveAROverlayRarity(
-            typecode: "E75L", manufacturer: "Embraer", model: "ERJ-175",
-            operatorName: "SkyWest")
+            typecode: "E75L", manufacturer: "Embraer", model: "175",
+            operatorName: "SkyWest Airlines")
 
         return ZStack {
             // Dusk sky — the onboarding viewport's stops, full screen.
@@ -134,7 +247,7 @@ struct MarketingSnapshotTests {
                                  opacity: 1.0, lineWidth: 3.5)
                 }
                 HStack(spacing: 4) {
-                    Text("DLH454")
+                    Text("WWI21")
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .foregroundStyle(Brand.Color.cyan)
                     Text("· \(pinnedRarity.label) +\(pinnedRarity.basePoints)")
@@ -160,7 +273,7 @@ struct MarketingSnapshotTests {
                                  opacity: 0.45, lineWidth: 1.5)
                 }
                 HStack(spacing: 4) {
-                    Text("SKW3412")
+                    Text("SKW5711")
                         .font(Brand.Font.mono(size: 8, weight: .bold))
                         .foregroundStyle(Brand.Color.cyan.opacity(0.6))
                     Text("· \(ambientRarity.label)")
@@ -184,97 +297,25 @@ struct MarketingSnapshotTests {
     // MARK: - Shot 2 · The reveal
 
     @Test func renderReveal() {
-        // The same plane shot 1 locks onto — point → catch → reveal.
-        let plane = CardPlane(
-            callsign: "DLH454", model: "Airbus A380-800", carrier: "Lufthansa",
-            rarity: .rare, type: .wide,
-            altText: "11,475 ft", speedText: "318 kt", distText: "8.6 km",
-            originIcao: "FRA", destIcao: "SFO",
-            originName: "Frankfurt", destName: "San Francisco",
-            isFirstOfType: true
-        )
+        // A real catch: the BD-700 at 43,225 ft, its own photo as the hero.
+        let plane = bd700()
         let view = CatchRevealView(plane: plane, entryNumber: 18,
                                    onDismiss: {}, onViewInHangar: {})
             ._snapshotScreen(width: min(Self.screen.width - 28, 420), size: Self.screen)
-        write(view, name: "mkt_02_reveal")
+        writeOffscreen(view, name: "mkt_02_reveal")
     }
 
-    // MARK: - Shot 2b · The collection card (stylized, same sky as shot 1)
+    // MARK: - Shot 2b · The collection card (real catch, real photo)
 
-    /// The shot-1 AR lock-on moment re-composed at the card hero's landscape
-    /// aspect — this becomes the front card's "catch photo", so slide 2
-    /// literally shows the slide-1 catch filed into the collection.
-    /// RevealPhoto decodes file URLs synchronously (its ImageRenderer
-    /// contract), so a pre-rendered JPEG on disk shows up in a static render.
-    private func arHeroPhotoURL() -> URL? {
-        let pinnedRarity = resolveAROverlayRarity(
-            typecode: "A388", manufacturer: "Airbus", model: "A380-800",
-            operatorName: "Lufthansa")
-        let scene = ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: Color(red: 0.04, green: 0.07, blue: 0.15), location: 0),
-                    .init(color: Color(red: 0.09, green: 0.13, blue: 0.24), location: 0.62),
-                    .init(color: Color(red: 0.23, green: 0.19, blue: 0.25), location: 1),
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            VStack(spacing: 2) {
-                ZStack {
-                    Image(systemName: "airplane")
-                        .font(.system(size: 44, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.92))
-                        .rotationEffect(.degrees(-18))
-                    LockBrackets(boxSize: 120, color: Brand.Color.cyan,
-                                 opacity: 1.0, lineWidth: 3)
-                }
-                HStack(spacing: 4) {
-                    Text("DLH454")
-                        .font(Brand.Font.mono(size: 11, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan)
-                    Text("· \(pinnedRarity.label) +\(pinnedRarity.basePoints)")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
-                        .foregroundStyle(pinnedRarity.tint)
-                }
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Brand.Color.bgPrimary.opacity(0.55),
-                            in: .rect(cornerRadius: 4))
-            }
-            .position(x: 168, y: 104)
-        }
-        .frame(width: 400, height: 220)
-        let renderer = ImageRenderer(content: scene)
-        renderer.scale = 3
-        guard let img = renderer.uiImage,
-              let jpeg = img.jpegData(compressionQuality: 0.92) else { return nil }
-        let url = Self.dir.appendingPathComponent("ar_hero_photo.jpg")
-        try? FileManager.default.createDirectory(
-            at: Self.dir, withIntermediateDirectories: true)
-        try? jpeg.write(to: url)
-        return url
-    }
-
-    /// "Add each catch to your collection" — the caught A380's settled card
-    /// floating in the shot-1 dusk sky, its hero photo the AR lock-on moment
-    /// itself, with a previous catch peeking out behind it so it reads as a
-    /// growing stack, not a lone receipt.
+    /// "Add each catch to your collection" — the real BD-700 catch's settled
+    /// card, its hero photo the actual JPEG the app composed at capture time,
+    /// with a real earlier catch (the private Citation V) peeking out behind it
+    /// so it reads as a growing stack, not a lone receipt. The sky behind is
+    /// the dusk gradient the app's own onboarding uses, so the card floats on
+    /// brand colour rather than a second competing photo.
     @Test func renderCollectionCard() {
-        let front = CardPlane(
-            callsign: "DLH454", model: "Airbus A380-800", carrier: "Lufthansa",
-            rarity: .rare, type: .wide,
-            altText: "11,475 ft", speedText: "318 kt", distText: "8.6 km",
-            photoURL: arHeroPhotoURL(),
-            originIcao: "FRA", destIcao: "SFO",
-            originName: "Frankfurt", destName: "San Francisco"
-        )
-        let behind = CardPlane(
-            callsign: "CPA873", model: "Boeing 747-8F", carrier: "Cathay Pacific Cargo",
-            rarity: .epic, type: .wide,
-            altText: "31,025 ft", speedText: "486 kt", distText: "14.3 km",
-            originIcao: "SFO", destIcao: "HKG",
-            originName: "San Francisco", destName: "Hong Kong"
-        )
+        let front = bd700()
+        let behind = c560()
         let view = ZStack {
             LinearGradient(
                 stops: [
@@ -288,32 +329,11 @@ struct MarketingSnapshotTests {
                 .rotationEffect(.degrees(6))
                 .offset(x: 34, y: -44)
                 .opacity(0.35)
-            SettledCatchCard(plane: front, isFirstOfType: true, width: 344)
+            SettledCatchCard(plane: front, isFirstOfType: front.isFirstOfType, width: 344)
                 .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
         }
         .frame(width: Self.screen.width, height: Self.screen.height)
-        // NOT the ImageRenderer path: `.postHogMask` wraps the photo in a
-        // UIKit tag view, and ImageRenderer draws platform views as the
-        // yellow "no entry" placeholder. drawHierarchy in an offscreen
-        // window renders it fine (no .glassEffect in the card, so the
-        // glass-garble caveat doesn't apply).
-        let bounds = CGRect(origin: .zero, size: Self.screen)
-        let host = UIHostingController(rootView: view.ignoresSafeArea())
-        let window = UIWindow(frame: bounds)
-        window.rootViewController = host
-        window.overrideUserInterfaceStyle = .dark
-        window.isHidden = false
-        host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
-        let fmt = UIGraphicsImageRendererFormat()
-        fmt.scale = 3
-        let renderer = UIGraphicsImageRenderer(bounds: bounds, format: fmt)
-        let png = renderer.pngData { _ in
-            host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
-        }
-        try? png.write(to: Self.dir.appendingPathComponent("mkt_07_collection.png"))
-        window.isHidden = true
-        Self.retained.append(window)
+        writeOffscreen(view, name: "mkt_07_collection")
     }
 
     // MARK: - Shot 3 · The guess round (chips popped, route masked)
@@ -321,7 +341,7 @@ struct MarketingSnapshotTests {
     @Test func renderGuessRound() {
         var rng = SeededRNG(seed: 7)
         guard let route = GuessOptions.routeQuestion(
-            originIcao: "KSFO", destIcao: "VHHH",
+            originIcao: "SEGU", destIcao: "KJFK",
             observerLat: 37.87, observerLon: -122.27,
             using: &rng
         ) else {
@@ -329,15 +349,9 @@ struct MarketingSnapshotTests {
             return
         }
         let question = GuessRoundQuestion(route: route)
-        // B748 is epic in AircraftTypes.json — an honest tier for the ad.
-        let plane = CardPlane(
-            callsign: "CPA873", model: "Boeing 747-8F", carrier: "Cathay Pacific Cargo",
-            rarity: .epic, type: .wide,
-            altText: "31,025 ft", speedText: "486 kt", distText: "14.3 km",
-            originIcao: "SFO", destIcao: "HKG",
-            originName: "San Francisco", destName: "Hong Kong",
-            isFirstOfType: true
-        )
+        // A real catch with a real answer — the JetBlue A321neo up from
+        // Guayaquil. Its own photo is the hero behind the chips.
+        let plane = a321()
         let popped = CatchRevealView.GuessSnapshotState(
             render: .init(question: question, resolution: nil,
                           chipsInLayout: true, popClock: 1),
@@ -347,7 +361,7 @@ struct MarketingSnapshotTests {
                                    onDismiss: {}, onViewInHangar: {}, guess: question)
             ._snapshotScreen(width: min(Self.screen.width - 28, 420),
                              size: Self.screen, guessState: popped)
-        write(view, name: "mkt_03_guess_round")
+        writeOffscreen(view, name: "mkt_03_guess_round")
     }
 
     // MARK: - Shots 4 + 5 · The Hangar (sets grid, trophy case)
