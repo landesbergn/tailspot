@@ -48,6 +48,16 @@ final class Catch {
     /// as the collection grows.
     var photoFilename: String?
     var caughtAt: Date
+    /// The local calendar day this catch belongs to ("yyyy-MM-dd"), frozen
+    /// in the device's timezone at insert. Streak math prefers this over
+    /// re-deriving from `caughtAt` so changing timezones later can't
+    /// reshuffle which day a catch counts for (see Streaks.swift, rule 1).
+    /// Optional + nil-default for SwiftData lightweight migration;
+    /// pre-existing rows fall back to current-zone derivation on read.
+    /// Stamped in `init`, which also covers the Hangar-restore path
+    /// (best-effort from the restored `caughtAt` — the original zone is
+    /// unrecoverable there).
+    var caughtDayKey: String?
     var observerLat: Double
     var observerLon: Double
     var slantDistanceMeters: Double
@@ -222,6 +232,7 @@ final class Catch {
         self.operatorName = operatorName
         self.photoFilename = photoFilename
         self.caughtAt = caughtAt
+        self.caughtDayKey = Streaks.dayKey(for: caughtAt)
         self.observerLat = observerLat
         self.observerLon = observerLon
         self.slantDistanceMeters = slantDistanceMeters
@@ -306,11 +317,61 @@ final class Catch {
         ).type
     }
 
-    /// Returns true when at least one `Catch` row with the given icao24
-    /// (case-insensitive comparison after trim) exists in the context.
-    /// Used by the capture path to gate insertion — duplicates render as
-    /// quiet "ALREADY CAUGHT" reveals but don't add a new row.
-    nonisolated static func exists(icao24: String, in context: ModelContext) -> Bool {
+    /// Normalised flight key for the duplicate rule: trimmed + uppercased,
+    /// with blank treated as absent. Callsign is the flight identity we can
+    /// rely on at catch time — route data arrives late or not at all.
+    nonisolated static func flightKey(_ callsign: String?) -> String? {
+        guard let raw = callsign?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return raw.uppercased()
+    }
+
+    /// Returns true when this sighting is a DUPLICATE of one already in the
+    /// Hangar (v1.1 narrowed rule, scope R11/R12 — replaces the old
+    /// lifetime-per-airframe gate).
+    ///
+    /// A sighting is a duplicate only when the SAME airframe was already
+    /// caught with the SAME callsign on the SAME local calendar day. Any
+    /// other repeat — the same airframe tomorrow, or this evening under a
+    /// new flight number — is a full catch with its own row, photo, points
+    /// and upload. That is what makes a catch streak honest: a regular
+    /// spotter's sky repeats tails constantly, and under the old lifetime
+    /// gate a day of familiar planes recorded nothing at all.
+    ///
+    /// Missing callsigns compare as a match (R11/AE8): with no flight
+    /// identity on either side there is nothing to distinguish two same-day
+    /// sightings of one airframe, and counting them as separate catches
+    /// would let a single parked-in-view plane be farmed all afternoon.
+    ///
+    /// Day identity comes from `Streaks.dayKey(for:)` — the frozen
+    /// insert-time label, so a timezone change can't reshuffle which day a
+    /// stored row belongs to (Streaks.swift, rule 1). Rows are filtered in
+    /// Swift rather than in the `#Predicate` because that frozen-key
+    /// fallback isn't expressible in a predicate; the fetch is narrowed to
+    /// one icao24 first, so it reads a handful of rows at most.
+    nonisolated static func isDuplicate(
+        icao24: String,
+        callsign: String?,
+        on dayKey: String,
+        in context: ModelContext
+    ) -> Bool {
+        let key = icao24.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else { return false }
+        let predicate = #Predicate<Catch> { $0.icao24 == key }
+        let rows = (try? context.fetch(FetchDescriptor<Catch>(predicate: predicate))) ?? []
+        let incoming = flightKey(callsign)
+        return rows.contains { row in
+            guard Streaks.dayKey(for: row) == dayKey else { return false }
+            guard let stored = flightKey(row.callsign), let incoming else { return true }
+            return stored == incoming
+        }
+    }
+
+    /// Returns true when this airframe is already in the Hangar at all,
+    /// regardless of day or flight. NOT the duplicate gate — it drives
+    /// "ENTRY #N", which counts UNIQUE airframes, so a second sighting of a
+    /// known tail is a new row but not a new entry number.
+    nonisolated static func airframeCaught(icao24: String, in context: ModelContext) -> Bool {
         let key = icao24.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !key.isEmpty else { return false }
         let predicate = #Predicate<Catch> { $0.icao24 == key }

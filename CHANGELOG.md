@@ -5,6 +5,50 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-19 — Catch streaks, protection reminders + the narrowed duplicate rule — branch `feature/catch-streaks-v11`
+
+The v1.1 lead feature, converged from the two parallel head-to-head builds
+(#196 base, #195's trophy alignment and toast consolidation grafted in; both
+head-to-head PRs close unmerged).
+
+- **The duplicate rule narrowed, and it ships here on purpose.** A catch is a
+  duplicate only for the same airframe + same callsign + same local day
+  (`Catch.isDuplicate`, replacing lifetime-per-airframe `Catch.exists`). The
+  same tail tomorrow — or this evening under a new flight number — is a full
+  catch with its own row, photo, points and upload. That's what makes the
+  streak honest: under the old gate a day of familiar planes wrote no row, so
+  a rows-only streak broke silently and the evening nudge false-fired minutes
+  after a real catch. Missing callsigns collapse to same-day airframe identity
+  so one parked plane can't be farmed. No backend change, no migration.
+- **Engine (`Streaks.swift`):** frozen per-catch day labels
+  (`Catch.caughtDayKey`, stamped at insert — travel can't re-bucket history),
+  UTC key arithmetic (DST-proof), and the grace rule (a live streak reads
+  through yesterday until a full empty day passes). Now the single owner of
+  day bucketing: `Trophies.inputs` reads it, so the secret 7-day trophy and
+  the Profile card count the same run.
+- **Surfaces:** Profile streak card (current + best + at-risk line), a
+  "DAY N STREAK" chip on the reveal's settled frame, and a Settings REMINDERS
+  section (mute toggle, permission-denied state with Open Settings and
+  heal-on-return; toggling on when undetermined fires the system ask).
+- **Reminder (`StreakReminders.swift`):** one local notification slot at 18:00
+  local, planned by a pure matrix-tested decision function, re-planned after
+  each catch / foreground / timezone change / toggle, never fired for a lapsed
+  streak. Threshold **2 days** (Noah, 2026-08-19 — the scope doc's R2/AE2 were
+  amended from 3). In the foreground it stays silent on the camera and
+  presents everywhere else; tapping it lands on the viewfinder with the stake
+  restated as a toast. No APNs, no new capability.
+- **Toasts consolidated:** grounded / far-tap / save-fail / streak share one
+  `topToast` slot, so two capsules can never stack — and `body`'s modifier
+  chain gets shorter, not longer (the PR #184 type-check budget).
+- **Telemetry:** `streak_extended`, `streak_reminder_opened`,
+  `permission_outcome` (notifications).
+- Tests: `StreaksTests`, `StreakRemindersTests`, the duplicate-rule matrix in
+  `CatchTests`, plus snapshot additions (Profile at-risk/safe, Settings
+  denied, reveal chip). Full `TailspotTests` green.
+
+Field test pending: reminder delivery, the permission flow and cancel-on-catch
+can't be verified on the simulator.
+
 ## 2026-08-17 — v1.1 scope set on the Flight Plan board — branch `docs/v1-1-flight-plan-scope`
 
 Planning round, docs only. Noah and Claude re-prioritized the release plan from

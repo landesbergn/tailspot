@@ -605,7 +605,15 @@ nonisolated enum Trophies {
         var rarePlusUnique = Set<String>()
         var operators = Set<String>()
         var places = Set<String>()
-        var days = Set<Date>()
+        // Day-bucketed metrics key off `Streaks.dayKey` — the FROZEN
+        // insert-time local-day label, not a re-derivation of `caughtAt` in
+        // whatever zone the phone is in now. One owner for "what day is this
+        // catch on" means the streak trophy, the Profile streak card and the
+        // reminder planner can never disagree (they used to: the trophy
+        // bucketed in the current zone, so a flight home could rewrite it).
+        // These keys sort chronologically as strings, which is all the day
+        // metrics below need.
+        var days = Set<String>()
         var countries = Set<String>()
         var wide = 0, narrow = 0, regional = 0, heritage = 0
         var rare = 0, epic = 0, legendary = 0
@@ -614,7 +622,7 @@ nonisolated enum Trophies {
         var tags = Set<String>()
         var highestAlt: Double = 0, fastestVel: Double = 0
         var lowestAlt = Double.greatestFiniteMagnitude
-        var dayCounts: [Date: Int] = [:]   // catches per day → best-in-day
+        var dayCounts: [String: Int] = [:]  // catches per day → best-in-day
         var dayParts = Set<String>()       // distinct {night, morning, afternoon, evening}
         var placeCounts: [String: Int] = [:]  // catches per place → best-at-one-place
         var types = Set<String>()          // distinct resolved aircraft types
@@ -623,7 +631,7 @@ nonisolated enum Trophies {
         var opTimeline: [(Date, String)] = []  // (time, operator) → consecutive check
         // Per-airframe day set (repeat-customer) and all catch timestamps
         // (burst) — derived after the loop.
-        var icaoDays: [String: Set<Date>] = [:]
+        var icaoDays: [String: Set<String>] = [:]
         var timestamps: [Date] = []
         var totalPoints = 0
         // (time, correct) for ANSWERED bonus rounds only — skipped/never-
@@ -663,7 +671,7 @@ nonisolated enum Trophies {
             if let country = c.country?.trimmingCharacters(in: .whitespacesAndNewlines), !country.isEmpty {
                 countries.insert(country)
             }
-            let day = calendar.startOfDay(for: c.caughtAt)
+            let day = Streaks.dayKey(for: c)
             days.insert(day)
             dayCounts[day, default: 0] += 1
             icaoDays[c.icao24, default: []].insert(day)
@@ -693,8 +701,10 @@ nonisolated enum Trophies {
         let hasRepeat = icaoDays.values.contains { $0.count >= 2 }
         // Hat Trick: most catches inside any 10-minute (600 s) sliding window.
         let bestBurst = maxCountWithinWindow(timestamps, seconds: 600)
-        // Streak: longest run of consecutive calendar days with a catch.
-        let longestStreak = longestConsecutiveDayRun(days, calendar: calendar)
+        // Streak: longest run of consecutive calendar days with a catch —
+        // the streak engine's own computation, so the secret 7-day trophy and
+        // the Profile card count the same run.
+        let longestStreak = Streaks.longestStreak(days: days)
         // Doubleheader: two time-adjacent catches share an operator.
         let consecutiveOp = hasConsecutiveSameOperator(opTimeline)
 
@@ -849,25 +859,6 @@ nonisolated enum Trophies {
         return best
     }
 
-    /// Longest run of consecutive calendar days present in `days` (a set of
-    /// start-of-day dates), using the SAME calendar as the day-bucketing so
-    /// boundaries don't disagree across metrics.
-    static func longestConsecutiveDayRun(_ days: Set<Date>, calendar: Calendar) -> Int {
-        guard !days.isEmpty else { return 0 }
-        let sorted = days.sorted()
-        var best = 1
-        var run = 1
-        for k in 1..<sorted.count {
-            if let next = calendar.date(byAdding: .day, value: 1, to: sorted[k - 1]),
-               calendar.isDate(next, inSameDayAs: sorted[k]) {
-                run += 1
-            } else {
-                run = 1
-            }
-            best = max(best, run)
-        }
-        return best
-    }
 }
 
 // MARK: - Per-achievement evaluation

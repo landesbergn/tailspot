@@ -65,6 +65,9 @@ struct ProfileScreen: View {
         // then we thread the values down to the sections.
         let stats = ProfileStats(catches: catches)
         let inputs = Trophies.inputs(from: catches)
+        // Same compute-once rule as `stats`/`inputs` above: one O(n) pass
+        // here, threaded down — never a computed property re-run per access.
+        let streak = Streaks.summary(catches: catches)
         return NavigationStack {
             ScrollView {
                 // GlassEffectContainer is load-bearing, not cosmetic: each
@@ -83,6 +86,7 @@ struct ProfileScreen: View {
                             championLaurelRow
                         }
                         statsStrip(stats: stats, inputs: inputs)
+                        streakCard(streak)
                         if let best = Self.bestCatch(in: catches) {
                             bestCatchCard(best)
                         }
@@ -412,6 +416,53 @@ struct ProfileScreen: View {
         // One VoiceOver element per cell ("12, CATCHES"), not value and
         // label as disconnected fragments.
         .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Streak card
+
+    /// Daily catch streak — current run with its state line, best run on
+    /// the right. The flame goes amber while a streak is alive and grey
+    /// when there isn't one; the state line is the only place the card
+    /// editorializes ("catch today to keep it"), and only while a live
+    /// streak is actually at risk.
+    private func streakCard(_ s: Streaks.Summary) -> some View {
+        let alive = s.current > 0
+        return HStack(spacing: 12) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(alive ? Brand.Color.alertCaution : Brand.Color.textTertiary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(s.current)-DAY STREAK")
+                    .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(alive ? Brand.Color.textPrimary : Brand.Color.textTertiary)
+                Text(streakStateLine(s))
+                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(s.atRisk ? Brand.Color.alertCaution : Brand.Color.textTertiary)
+            }
+            Spacer()
+            VStack(spacing: 3) {
+                Text("\(s.longest)")
+                    .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .monospacedDigit()
+                Text("BEST")
+                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func streakStateLine(_ s: Streaks.Summary) -> String {
+        if s.caughtToday { return "EXTENDED TODAY" }
+        if s.atRisk { return "CATCH TODAY TO KEEP IT" }
+        return "CATCH A PLANE TO START ONE"
     }
 
     // MARK: - Best catch
