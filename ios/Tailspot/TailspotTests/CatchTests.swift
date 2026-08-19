@@ -149,11 +149,103 @@ struct CatchTests {
         let before = try ctx.fetch(FetchDescriptor<Catch>())
         #expect(before.count == 1)
 
-        // The Catch model itself enforces nothing — uniqueness is gated at
-        // the insertion site (ContentView.performCatch). What we test here
-        // is the static helper that those sites use.
-        #expect(Catch.exists(icao24: icao, in: ctx) == true)
-        #expect(Catch.exists(icao24: "deadbeef", in: ctx) == false)
+        // The Catch model itself enforces nothing — the gate lives at the
+        // insertion site (ContentView.performCatch). What we test here is
+        // the static helper those sites use, which is about AIRFRAME
+        // identity only: "have I ever caught this tail?" drives ENTRY #N,
+        // not the duplicate verdict (see the narrowed rule below).
+        #expect(Catch.airframeCaught(icao24: icao, in: ctx) == true)
+        #expect(Catch.airframeCaught(icao24: "deadbeef", in: ctx) == false)
+    }
+
+    // MARK: - Narrowed duplicate rule (v1.1, scope R11/R12)
+
+    /// One helper for the whole matrix: seed a Hangar with a single stored
+    /// sighting, then ask how a second sighting compares to it.
+    private func duplicateVerdict(
+        stored: (callsign: String?, day: String),
+        incoming: (callsign: String?, day: String)
+    ) throws -> Bool {
+        let container = try makeContainer()
+        TestContainerRetention.retain(container)
+        let ctx = ModelContext(container)
+        let row = Catch(
+            icao24: "abc123", callsign: stored.callsign,
+            model: "737-800", manufacturer: "BOEING", operatorName: "United",
+            caughtAt: Date(), observerLat: 37.871, observerLon: -122.272,
+            slantDistanceMeters: 12_400
+        )
+        // Freeze the stored row's day explicitly — `init` stamps "today",
+        // and these cases are about days other than today.
+        row.caughtDayKey = stored.day
+        ctx.insert(row)
+        try ctx.save()
+        return Catch.isDuplicate(
+            icao24: "abc123", callsign: incoming.callsign, on: incoming.day, in: ctx
+        )
+    }
+
+    /// AE7: same airframe, same flight, same day → duplicate, no new row.
+    @Test func sameFlightSameDayIsDuplicate() throws {
+        #expect(try duplicateVerdict(
+            stored: ("UAL100", "2026-08-19"), incoming: ("UAL100", "2026-08-19")
+        ))
+        // Callsign comparison is case- and whitespace-insensitive.
+        #expect(try duplicateVerdict(
+            stored: ("UAL100", "2026-08-19"), incoming: ("  ual100 ", "2026-08-19")
+        ))
+    }
+
+    /// AE6, second half — and the reason the streak works: the SAME tail
+    /// seen tomorrow is a full new catch. Under the old lifetime gate this
+    /// was a duplicate, so a day of familiar planes recorded nothing.
+    @Test func sameAirframeNextDayIsAFullCatch() throws {
+        #expect(try duplicateVerdict(
+            stored: ("UAL100", "2026-08-19"), incoming: ("UAL100", "2026-08-20")
+        ) == false)
+    }
+
+    /// AE6, first half: same tail, same day, DIFFERENT flight number — the
+    /// afternoon turnaround is its own catch.
+    @Test func sameAirframeNewFlightSameDayIsAFullCatch() throws {
+        #expect(try duplicateVerdict(
+            stored: ("UAL100", "2026-08-19"), incoming: ("UAL101", "2026-08-19")
+        ) == false)
+    }
+
+    /// AE8: a missing callsign on EITHER side collapses to the airframe —
+    /// with no flight identity there is nothing to tell two same-day
+    /// sightings apart, and counting them separately would let one plane
+    /// parked in view be farmed all afternoon.
+    @Test func missingCallsignFallsBackToSameDayAirframe() throws {
+        #expect(try duplicateVerdict(
+            stored: (nil, "2026-08-19"), incoming: ("UAL100", "2026-08-19")
+        ))
+        #expect(try duplicateVerdict(
+            stored: ("UAL100", "2026-08-19"), incoming: (nil, "2026-08-19")
+        ))
+        #expect(try duplicateVerdict(
+            stored: (nil, "2026-08-19"), incoming: ("   ", "2026-08-19")
+        ))
+        // Still only within the day — a blank callsign doesn't restore the
+        // old lifetime gate.
+        #expect(try duplicateVerdict(
+            stored: (nil, "2026-08-19"), incoming: (nil, "2026-08-20")
+        ) == false)
+    }
+
+    /// A tail never caught at all is never a duplicate, and an empty icao24
+    /// can't match anything.
+    @Test func unknownAirframeIsNeverDuplicate() throws {
+        let container = try makeContainer()
+        TestContainerRetention.retain(container)
+        let ctx = ModelContext(container)
+        #expect(Catch.isDuplicate(
+            icao24: "deadbe", callsign: "UAL100", on: "2026-08-19", in: ctx
+        ) == false)
+        #expect(Catch.isDuplicate(
+            icao24: "  ", callsign: nil, on: "2026-08-19", in: ctx
+        ) == false)
     }
 
     @Test func nilOptionalFieldsAreAllowed() throws {
