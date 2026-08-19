@@ -144,12 +144,22 @@ struct MarketingSnapshotTests {
     private static let photoDir = dir.appendingPathComponent(
         "photos", isDirectory: true)
 
-    /// A staged real catch photo, or nil when the stage step wasn't run —
-    /// callers fall back to the striped placeholder rather than failing,
-    /// so the harness still produces a deck.
+    /// A staged real catch photo. Missing photos are recorded LOUDLY: /private/tmp
+    /// gets swept, and a silent nil here degrades the shot to the illustrated
+    /// placeholder — which once nearly shipped into the store deck looking
+    /// plausible. Fail visibly instead of producing a wrong-but-pretty asset.
     private func realPhoto(_ name: String) -> URL? {
         let url = Self.photoDir.appendingPathComponent("\(name).jpg")
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            Issue.record("""
+                Missing staged catch photo "\(name).jpg" — this shot would render \
+                the illustrated PLACEHOLDER, not a real catch. Run \
+                `bin/marketing-stage-photos` and re-capture. (/private/tmp is \
+                swept periodically, so re-stage before every run.)
+                """)
+            return nil
+        }
+        return url
     }
 
     /// The rare BD-700 over Berkeley — 43,225 ft, a contrail, RARE tier and
@@ -178,19 +188,6 @@ struct MarketingSnapshotTests {
             photoFocus: CGPoint(x: 0.500, y: 0.500),
             originIcao: "YVR", destIcao: "SFO",
             originName: "Vancouver", destName: "San Francisco"
-        )
-    }
-
-    /// A private Citation V at 2.4 km — uncommon, first of type. Used as
-    /// the card peeking out BEHIND the front one, so what shows is its
-    /// right edge: clean blue sky there, unlike the A220's dark tree line.
-    private func c560() -> CardPlane {
-        CardPlane(
-            callsign: "N561SR", model: "560 Citation V", carrier: nil,
-            rarity: .uncommon, type: .biz,
-            altText: "5,125 ft", speedText: "259 kt", distText: "2.4 km",
-            photoURL: realPhoto("c560_uncommon"),
-            photoFocus: CGPoint(x: 0.500, y: 0.574)
         )
     }
 
@@ -309,13 +306,16 @@ struct MarketingSnapshotTests {
 
     /// "Add each catch to your collection" — the real BD-700 catch's settled
     /// card, its hero photo the actual JPEG the app composed at capture time,
-    /// with a real earlier catch (the private Citation V) peeking out behind it
-    /// so it reads as a growing stack, not a lone receipt. The sky behind is
-    /// the dusk gradient the app's own onboarding uses, so the card floats on
-    /// brand colour rather than a second competing photo.
+    /// floating on the dusk gradient the app's own onboarding uses.
+    ///
+    /// There is deliberately NO second card stacked behind it. Every offset
+    /// tried (below-right, corner-peek, with and without a photo) showed only
+    /// a FRAGMENT of the back card, and a fragment of a card reads as a
+    /// rendering bug rather than a collection — Noah called it busted, and he
+    /// was right. Slide 4's Hangar grid already sells the collection; this
+    /// slide's job is one catch, legible.
     @Test func renderCollectionCard() {
         let front = bd700()
-        let behind = c560()
         let view = ZStack {
             LinearGradient(
                 stops: [
@@ -325,10 +325,6 @@ struct MarketingSnapshotTests {
                 ],
                 startPoint: .top, endPoint: .bottom
             )
-            SettledCatchCard(plane: behind, isFirstOfType: false, width: 330)
-                .rotationEffect(.degrees(6))
-                .offset(x: 34, y: -44)
-                .opacity(0.35)
             SettledCatchCard(plane: front, isFirstOfType: front.isFirstOfType, width: 344)
                 .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
         }

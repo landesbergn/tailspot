@@ -733,9 +733,10 @@ function SlideBackground({
     >
       {theme.decor === "aviation" && !inverted ? (
         <>
+          {/* Contrails removed 2026-08-19: at export opacity the two trail
+              lines vanish and only the head dot survives, which reads as a
+              stray speck in the corner rather than a distant plane. */}
           <Blob cW={cW} color={theme.accent} x={-18} y={-12} size={50} opacity={0.18} />
-          <Contrail cW={cW} x={54} y={7} length={38} angle={-14} opacity={0.30} />
-          <Contrail cW={cW} x={4} y={86} length={22} angle={8} opacity={0.16} />
         </>
       ) : (
         <>
@@ -743,66 +744,6 @@ function SlideBackground({
           <Blob cW={cW} color={theme.accent} x={70} y={75} size={45} opacity={inverted ? 0.18 : 0.25} />
         </>
       )}
-    </div>
-  );
-}
-
-// ---------- Decorative contrail (aviation decor) ----------
-
-/// A distant plane drawn as pure CSS: a bright head dot trailing two thin
-/// parallel condensation lines that fade out behind it. No glyphs/emoji so
-/// html-to-image exports it identically everywhere.
-function Contrail({
-  cW,
-  x,
-  y,
-  length,
-  angle,
-  opacity = 0.25,
-}: {
-  cW: number;
-  x: number;   // % of slide width
-  y: number;   // % of slide height
-  length: number; // % of slide width
-  angle: number;  // degrees; head is at the right end
-  opacity?: number;
-}) {
-  const line: React.CSSProperties = {
-    flex: 1,
-    height: Math.max(1.5, cW * 0.0018),
-    borderRadius: 999,
-    background: "linear-gradient(90deg, transparent 0%, rgba(232,244,255,0.85) 85%, rgba(232,244,255,0.3) 100%)",
-  };
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        left: `${x}%`,
-        top: `${y}%`,
-        width: `${length}%`,
-        transform: `rotate(${angle}deg)`,
-        transformOrigin: "right center",
-        opacity,
-        pointerEvents: "none",
-        display: "flex",
-        alignItems: "center",
-        gap: cW * 0.006,
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: cW * 0.004, flex: 1 }}>
-        <div style={line} />
-        <div style={line} />
-      </div>
-      <div
-        style={{
-          width: cW * 0.007,
-          height: cW * 0.007,
-          borderRadius: "50%",
-          background: "rgba(232,244,255,0.95)",
-          boxShadow: `0 0 ${cW * 0.01}px rgba(232,244,255,0.8)`,
-        }}
-      />
     </div>
   );
 }
