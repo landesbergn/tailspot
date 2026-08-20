@@ -14,9 +14,13 @@ export const CANVAS: Record<Device, { w: number; h: number; wL?: number; hL?: nu
 export type ExportSize = { label: string; w: number; h: number };
 
 export const EXPORT_SIZES: Record<Device, ExportSize[]> = {
+  // App Store Connect's iPhone display slots. The 6.7"/6.5" slot accepts
+  // 1284x2778 OR 1242x2688 — ship both so the upload never bounces on size.
+  // (1284x2778 was previously mislabelled 6.5"; that size is the 6.7" alternate.)
   iphone: [
     { label: '6.9"', w: 1320, h: 2868 },
-    { label: '6.5"', w: 1284, h: 2778 },
+    { label: '6.7"', w: 1284, h: 2778 },
+    { label: '6.5"', w: 1242, h: 2688 },
     { label: '6.3"', w: 1206, h: 2622 },
     { label: '6.1"', w: 1125, h: 2436 },
   ],

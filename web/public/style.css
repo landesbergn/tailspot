@@ -40,8 +40,8 @@ body {
 }
 
 /* The home page is a SINGLE SCREEN: nav + hero + footer, no scrolling.
-   The hero takes whatever height is left over, and the HUD mockup is capped
-   against the viewport height (see .hud) so it shrinks instead of pushing the
+   The hero takes whatever height is left over, and the catch photo is capped
+   against the viewport height (see .catch-frame) so it shrinks instead of pushing the
    footer off-screen. svh, not vh, so mobile browser chrome doesn't eat the
    footer. The inner pages (support, privacy, …) scroll normally — they don't
    use .hero, so this only affects index.html. */
@@ -192,134 +192,82 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
 .btn-lg { font-size: 0.95rem; padding: 1em 1.9em; }
 
-/* ── AR HUD mockup ── */
+/* ── Real-catch hero ──
+   Was a pure-CSS HUD mockup cycling invented flights. It is now Noah's own
+   catch photographs, cross-fading, with the ADS-B the app recorded for each.
+   The frame is LANDSCAPE where the mockup was 4:5 portrait, which gives the
+   single-screen layout back roughly 200px of height budget — so the visual
+   survives on shorter windows than the mockup did. */
 .hero-visual { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; }
-.hud {
-  position: relative;
-  /* Sized off the VIEWPORT HEIGHT, not just the column width, because the
-     page may not scroll: 420px at full size, but on a short window the
-     height budget wins and the mockup shrinks to fit. The subtrahend is the
-     measured chrome around it (nav + footer + hero padding = 260px here,
-     +15px of slack); x0.8 converts that height budget to a width via the 4/5
-     ratio. 200px is the floor: the label's type has a minimum size, so below
-     roughly that the chip stops scaling with the frame and collides with the
-     reticle. Rather than shrink past it the mockup is hidden — see the
-     short-screen rules at the bottom. */
-  width: min(100%, 420px, max(200px, calc((100svh - 275px) * 0.8)));
-  aspect-ratio: 4 / 5;
-  /* Everything inside is sized in cqw (below), so the mockup keeps its
-     proportions at any size instead of the fixed-px reticle bursting out of a
-     shrunken frame. */
-  container-type: size;
-  background:
-    radial-gradient(120% 90% at 50% 0%, #122036 0%, var(--bg-surface) 70%);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  overflow: hidden;
-}
-/* faint horizon grid */
-.hud::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0, 212, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 212, 255, 0.06) 1px, transparent 1px);
-  background-size: 9cqw 9cqw;
-  mask-image: radial-gradient(80% 70% at 50% 45%, #000 30%, transparent 80%);
-}
 
-/* Reticle = the lock box (brackets + plane), centered as one unit so the
-   label below never collides with it. */
-.hud-reticle {
-  position: absolute;
-  top: 44%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 38.6cqw;
-  height: 38.6cqw;
-}
-.hud-corner {
-  position: absolute;
-  width: 7.1cqw;
-  height: 7.1cqw;
-  border: max(1.5px, 0.6cqw) solid var(--cyan);
-}
-.hud-corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 4px 0 0 0; }
-.hud-corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 4px 0 0; }
-.hud-corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 4px; }
-.hud-corner.br { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 4px 0; }
-
-.hud-plane {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 17.6cqw; height: 17.6cqw;
-  transform: translate(-50%, -50%) rotate(28deg);
-  color: var(--text);
-  filter: drop-shadow(0 0 3.3cqw rgba(0, 212, 255, 0.55));
-}
-
-.hud-chip {
-  position: absolute;
-  left: 50%;
-  bottom: 9%;
-  transform: translateX(-50%);
+/* width:100% matters: .hero-visual centres with align-items, which makes its
+   children shrink-to-fit. Without it .catch-frame's `min(100%, …)` resolves
+   against a content-sized parent and collapses to a thumbnail. */
+.catch {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 0.7em 1.1em;
-  background: rgba(5, 8, 16, 0.82);
-  border: 1px solid var(--cyan-dim);
-  border-radius: 8px;
-  white-space: nowrap;
-  transition: opacity 0.22s ease;
+  gap: 0.75rem;
 }
-.hud-chip-airline {
-  font-family: var(--mono);
-  font-size: clamp(0.5rem, 2.3cqw, 0.6rem);
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--cyan);
+
+.catch-frame {
+  position: relative;
+  /* Same defensive sizing as the old mockup: capped against the VIEWPORT
+     HEIGHT as well as the column, because the page does not scroll. 1.587 is
+     the photo's 900/567 aspect, converting the height budget into a width
+     (the mockup used 0.8 for 4:5). 260px is the floor — below that the meta
+     line's type stops scaling and wraps. */
+  width: min(100%, 480px, max(260px, calc((100svh - 275px) * 1.587)));
+  aspect-ratio: 900 / 567;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
-.hud-chip-model {
+.catch-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+}
+.catch-photo.is-active { opacity: 1; }
+
+.catch-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  transition: opacity 0.26s ease;
+}
+.catch-tier {
   font-family: var(--mono);
-  font-size: clamp(0.68rem, 3.7cqw, 0.98rem);
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.2em;
+  color: var(--text-dim2);
+}
+/* Tier colours mirror Brand.swift, so the site grades a catch the way the
+   app does rather than inventing its own scale. */
+.catch-tier.tier-uncommon { color: var(--green); }
+.catch-tier.tier-rare     { color: var(--cyan); }
+.catch-tier.tier-epic     { color: var(--magenta); }
+.catch-model {
+  font-family: var(--mono);
+  font-size: clamp(0.85rem, 2.6vw, 1.02rem);
+  font-weight: 700;
   color: var(--text);
 }
-.hud-chip-route {
+.catch-detail {
   font-family: var(--mono);
-  font-size: clamp(0.5rem, 2.4cqw, 0.62rem);
-  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
   color: var(--text-dim);
-}
-
-.hud-status {
-  position: absolute;
-  top: 3.3cqw; left: 3.8cqw;
-  font-family: var(--mono);
-  font-size: clamp(0.52rem, 2.5cqw, 0.66rem);
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--green);
-}
-.hud-call {
-  position: absolute;
-  top: 3.3cqw; right: 3.8cqw;
-  font-family: var(--mono);
-  font-size: clamp(0.52rem, 2.5cqw, 0.66rem);
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  color: var(--cyan-dim);
-}
-
-.hud-caption {
-  font-size: 0.8rem;
-  color: var(--text-dim2);
-  text-align: center;
 }
 
 /* The home page has no sections below the hero any more (see index.html), so
@@ -508,9 +456,11 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   .hero-sub { margin-left: auto; margin-right: auto; }
   .cta-row { justify-content: center; }
   .hero { padding: 1.5rem 1.75rem; }
-  /* Stacked, the headline and CTA sit ABOVE the mockup in the same screen,
-     so the chrome to subtract includes them: measured 469px, +11 slack. */
-  .hud { width: min(100%, 420px, max(200px, calc((100svh - 480px) * 0.8))); }
+  /* Stacked, the headline and CTA sit ABOVE the photo in the same screen, so
+     the chrome to subtract includes them (measured 469px) AND the ~67px meta
+     block beneath the frame, which the mockup's formula never had to carry:
+     469 + 67 + 24 slack = 560. */
+  .catch-frame { width: min(100%, 480px, max(260px, calc((100svh - 560px) * 1.587))); }
 }
 @media (max-width: 560px) {
   .nav-links { gap: 1rem; }
@@ -521,14 +471,18 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   body:has(.hero) .footer-links { gap: 0.9rem; justify-content: center; }
 }
 
-/* Last resort for screens with no room for both: below these heights the
-   mockup would be forced under its 140px floor and overflow the screen. It's
-   decorative (aria-hidden), so it's the part that goes; the headline and the
-   badge still fit without scrolling. Each threshold is where the 200px floor
-   stops fitting: chrome + 200/0.8, i.e. 480+250 stacked (phone portrait) and
-   275+250 side-by-side (which is every phone in landscape). */
-@media (max-width: 820px) and (max-height: 730px),
-       (max-height: 525px) {
+/* Last resort for screens with no room for both: the photo is hidden rather
+   than allowed to break the no-scroll layout.
+
+   NOTE: unlike the old mockup this is NOT decorative — it is the product's
+   evidence and carries real alt text — so it is hidden only where keeping it
+   would overflow outright.
+   Thresholds are where the 260px floor stops fitting, INCLUDING the meta
+   block: floor is 260/1.587 = 164px of photo + 67px of meta = 231px, so
+   469+231 = 700 stacked and 275+231 = 506 side-by-side. Verified against a
+   375x667 iPhone SE, which overflowed by 63px before these were corrected. */
+@media (max-width: 820px) and (max-height: 700px),
+       (max-height: 510px) {
   .hero-visual { display: none; }
 }
 

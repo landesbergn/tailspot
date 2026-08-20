@@ -6,5 +6,8 @@ out
 next-env.d.ts
 .env*.local
 
-# store-ready export bundles are regenerable via Export bundle; keep them out of history
+# Store-ready PNGs. Regenerable via Export bundle, so kept out of history.
+#   export/                       the current set (what you upload)
+#   export-archive/<version>/     what was actually shipped for that version
 export
+export-archive
