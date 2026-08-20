@@ -17,6 +17,14 @@
   <meta property="og:description" content="Point your phone at a plane. Collect them all.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://tailspot.app">
+  <meta property="og:image" content="https://tailspot.app/img/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A real catch: an airliner overhead inside Tailspot's cyan lock-on brackets.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Tailspot">
+  <meta name="twitter:description" content="Point your phone at a plane. Collect them all.">
+  <meta name="twitter:image" content="https://tailspot.app/img/og-image.jpg">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -63,28 +71,27 @@
       </div>
     </div>
 
-    <!-- On-brand AR HUD mockup (pure CSS/SVG, mirrors the in-app lock-on) -->
-    <div class="hero-visual" aria-hidden="true">
-      <div class="hud">
-        <span class="hud-status">● LOCKED</span>
-        <span class="hud-call">UAL2476</span>
-
-        <div class="hud-reticle">
-          <span class="hud-corner tl"></span>
-          <span class="hud-corner tr"></span>
-          <span class="hud-corner bl"></span>
-          <span class="hud-corner br"></span>
-          <svg class="hud-plane" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="aircraft">
-            <path d="M21 16v-2l-8-5V3.5C13 2.67 12.33 2 11.5 2S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
-          </svg>
+    <!-- Real catches, cross-fading. These are Noah's own photographs, straight
+         out of the app: the cyan lock-on brackets are baked into every catch
+         JPEG by CatchPhotoComposer at capture time, so the framing is what he
+         saw through the viewfinder. Every callsign, airframe and route below
+         is what the app actually recorded for that photo — nothing here is a
+         mockup, which is the whole point of the product. -->
+    <div class="hero-visual">
+      <figure class="catch">
+        <div class="catch-frame">
+          <img class="catch-photo is-active" src="img/catch-b737.jpg" alt="A Boeing 737 overhead, framed by the app's lock-on brackets" width="900" height="567" fetchpriority="high">
+          <img class="catch-photo" src="img/catch-b767.jpg" alt="A Boeing 767 against a dark cloud band" width="900" height="567" loading="lazy">
+          <img class="catch-photo" src="img/catch-a321.jpg" alt="An Airbus A321neo on approach" width="900" height="567" loading="lazy">
+          <img class="catch-photo" src="img/catch-a220.jpg" alt="An Airbus A220 below breaking cloud" width="900" height="567" loading="lazy">
+          <img class="catch-photo" src="img/catch-bd700.jpg" alt="A business jet's contrail at 43,000 feet" width="900" height="567" loading="lazy">
         </div>
-
-        <div class="hud-chip">
-          <span class="hud-chip-airline">United</span>
-          <span class="hud-chip-model">Boeing 737-900</span>
-          <span class="hud-chip-route">SFO → ORD</span>
-        </div>
-      </div>
+        <figcaption class="catch-meta">
+          <span class="catch-tier">● COMMON</span>
+          <span class="catch-model">Boeing 737-800</span>
+          <span class="catch-detail">Southwest · 4,075 ft · 2.1 km</span>
+        </figcaption>
+      </figure>
     </div>
   </div>
 </header>
@@ -92,8 +99,8 @@
 <!-- No sections below the hero, on purpose: the page is sized to one
      viewport (nav + hero + footer, no scroll), so the "How it works" steps
      and the closing "Get Tailspot" CTA were removed rather than shrunk. The
-     hero's headline and the HUD mockup carry the pitch; the badge is the
-     only call to action, and it appears twice above the fold. -->
+     hero's headline and the real catch photos carry the pitch; the badge is
+     the only call to action, and it appears twice above the fold. -->
 
 <footer class="site-footer">
   <div class="footer-brand-group">
@@ -110,40 +117,44 @@
 </footer>
 
 <script>
-  // Rotating HUD traffic — real flights, shown the friendly way: airline,
-  // make + model, and whether it's climbing out or coming in to land. The
-  // callsign rides along up top as the techy detail.
+  // The hero cycles Noah's real catches. Each entry is the ADS-B the app
+  // recorded for the photo it belongs to — swapping in invented flights here
+  // would undercut the one claim the product makes.
   (function () {
     var feed = [
-      { call: 'UAL2476', airline: 'United',             model: 'Boeing 737-900',   route: 'SFO → ORD' },
-      { call: 'BAW117',  airline: 'British Airways',    model: 'Airbus A350-1000', route: 'LHR → JFK' },
-      { call: 'DLH441',  airline: 'Lufthansa',          model: 'Boeing 747-8',     route: 'FRA → SFO' },
-      { call: 'UAE201',  airline: 'Emirates',           model: 'Airbus A380',      route: 'DXB → JFK' },
-      { call: 'SIA22',   airline: 'Singapore Airlines', model: 'Airbus A350-900',  route: 'SIN → EWR' },
-      { call: 'AAL100',  airline: 'American',           model: 'Boeing 777-300ER', route: 'JFK → LHR' },
-      { call: 'QFA9',    airline: 'Qantas',             model: 'Boeing 787-9',     route: 'PER → LHR' },
-      { call: 'AFR007',  airline: 'Air France',         model: 'Boeing 777-200',   route: 'CDG → JFK' }
+      { tier: 'COMMON',   model: 'Boeing 737-800',  detail: 'Southwest · 4,075 ft · 2.1 km' },
+      { tier: 'COMMON',   model: 'Boeing 767-300',  detail: 'Delta · SFO → JFK' },
+      { tier: 'COMMON',   model: 'Airbus A321neo',  detail: 'JetBlue · GYE → JFK' },
+      { tier: 'UNCOMMON', model: 'Airbus A220-300', detail: 'Air Canada · YVR → SFO' },
+      { tier: 'RARE',     model: 'BD-700 Global',   detail: 'Worldwide Jet · 43,225 ft' }
     ];
-    var chip    = document.querySelector('.hud-chip');
-    var callEl  = document.querySelector('.hud-call');
-    var airEl   = document.querySelector('.hud-chip-airline');
-    var modelEl = document.querySelector('.hud-chip-model');
-    var routeEl = document.querySelector('.hud-chip-route');
-    if (!chip || !airEl || !modelEl) return;
+    var photos = document.querySelectorAll('.catch-photo');
+    var meta   = document.querySelector('.catch-meta');
+    var tierEl = document.querySelector('.catch-tier');
+    var modelEl= document.querySelector('.catch-model');
+    var detEl  = document.querySelector('.catch-detail');
+    if (!photos.length || !meta || !modelEl) return;
 
-    function render(e) {
-      if (callEl) callEl.textContent = e.call;
-      airEl.textContent = e.airline;
-      modelEl.textContent = e.model;
-      if (routeEl) routeEl.textContent = e.route;
-    }
+    // Honour the same accessibility contract as the rest of the page: if the
+    // visitor asked for less motion, they get the first catch and no cycling.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    var i = 0; // static markup already shows feed[0] (United)
+    var i = 0; // markup already shows feed[0]
     setInterval(function () {
-      i = (i + 1) % feed.length;
-      chip.style.opacity = '0';
-      setTimeout(function () { render(feed[i]); chip.style.opacity = '1'; }, 220);
-    }, 3000);
+      var next = (i + 1) % feed.length;
+      meta.style.opacity = '0';
+      photos[i].classList.remove('is-active');
+      photos[next].classList.add('is-active');
+      setTimeout(function () {
+        var e = feed[next];
+        tierEl.textContent = '● ' + e.tier;
+        tierEl.className = 'catch-tier tier-' + e.tier.toLowerCase();
+        modelEl.textContent = e.model;
+        detEl.textContent = e.detail;
+        meta.style.opacity = '1';
+      }, 260);
+      i = next;
+    }, 3600);
   })();
 </script>
 
