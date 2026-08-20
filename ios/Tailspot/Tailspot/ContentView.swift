@@ -71,6 +71,12 @@ struct ContentView: View {
     #if DEBUG
     /// Cycles the debug "Simulate catch" preset (tier) on each tap.
     @State private var simCatchIndex = 0
+    /// Bumped to force the wrench panel's STREAK row to re-read the
+    /// override, which lives in UserDefaults where SwiftUI can't see it.
+    @State private var streakDebugRefresh = 0
+    /// Last line the STREAK row printed (permission state, what's queued,
+    /// or the result of a manual fire).
+    @State private var streakDebugStatus = "—"
     #endif
     /// DEBUG-only: presents the trophy-icon gallery for visual review.
     @State private var showIconGallery = false
@@ -722,6 +728,8 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
                         .tint(Brand.Color.cyan)
                         .padding(.horizontal, 12)
+
+                        streakDebugRow
                         #endif
 
                         Spacer(minLength: 0)
@@ -1243,8 +1251,8 @@ struct ContentView: View {
         /// `guess` are final at presentation exactly as before.
         var loader: RevealLoader? = nil
         /// Current day-streak after this catch (nil = below the chip
-        /// threshold / simulator). On the shell path the value arrives via
-        /// the loader instead.
+        /// threshold). On the shell path the value arrives via the loader
+        /// instead; ✦ Catch passes it directly so the line is previewable.
         var streakDays: Int? = nil
     }
 
@@ -2607,6 +2615,97 @@ struct ContentView: View {
     /// so the catch / reveal / economy can be eyeballed on-device without a
     /// real plane (the synthetic ADS-B source was removed). Non-persisting —
     /// shows the reveal card without writing to the Hangar.
+    #if DEBUG
+    /// STREAK row of the wrench panel. The feature's three surfaces all key
+    /// off streak LENGTH and a 18:00 clock, so without this the only way to
+    /// see any of them is to catch planes on N consecutive days and then
+    /// wait for the evening. The override is DEBUG-only and printed back on
+    /// the line above in amber whenever it's live — a stuck override that
+    /// quietly makes the Profile lie is the mock-mode failure mode.
+    @ViewBuilder
+    private var streakDebugRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("STREAK")
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(StreakDebug.label)
+                    .foregroundStyle(StreakDebug.override == nil
+                                     ? Brand.Color.textTertiary
+                                     : Brand.Color.alertCaution)
+                Text("·")
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(streakDebugStatus)
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+            .font(Brand.Font.mono(size: 10, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+
+            HStack(spacing: 8) {
+                // nil → 2 → 3 → … → 12 → nil. Re-plans on every step so the
+                // pending reminder always matches what the panel claims.
+                Button("🔥 \(StreakDebug.override.map { "\($0.current)d" } ?? "Set")") {
+                    StreakDebug.cycle()
+                    streakDebugRefresh &+= 1
+                    Task { await StreakReminderCenter.shared.sync(context: modelContext) }
+                }
+                // At-risk vs safe — the branch the card's state line and the
+                // planner's "today" test both hang off.
+                Button(streakSummaryNow.caughtToday ? "🔥 Safe" : "🔥 Risk") {
+                    StreakDebug.toggleCaughtToday()
+                    streakDebugRefresh &+= 1
+                    Task { await StreakReminderCenter.shared.sync(context: modelContext) }
+                }
+                .disabled(StreakDebug.override == nil)
+                // The real notification, 6 s out: same id, same content, same
+                // delegate — only the trigger differs.
+                Button("🔔 Fire") {
+                    let streak = max(streakSummaryNow.current, StreakReminders.minimumStreak)
+                    Task {
+                        streakDebugStatus = await StreakReminderCenter.shared
+                            .debugFireReminder(streakAtStake: streak)
+                    }
+                }
+                // The one-shot pre-prompt, unlatched so it can be re-tested.
+                Button("🔔 Ask") {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        streakAsk = max(streakSummaryNow.current, StreakReminders.minimumStreak)
+                    }
+                }
+                // Clear the override AND the asked latch, then re-plan from
+                // the real Hangar — back to a truthful device.
+                Button("↺ Reset") {
+                    StreakDebug.clear()
+                    UserDefaults.standard.removeObject(forKey: StreakReminders.permissionAskedKey)
+                    streakDebugRefresh &+= 1
+                    Task {
+                        await StreakReminderCenter.shared.sync(context: modelContext)
+                        streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
+                    }
+                }
+            }
+            .font(Brand.Font.mono(size: 11, weight: .bold))
+            .buttonStyle(.bordered)
+            .tint(Brand.Color.cyan)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        // `streakDebugRefresh` is read here so mutating it re-evaluates the
+        // row — the override lives in UserDefaults, which SwiftUI can't
+        // observe on its own.
+        .id(streakDebugRefresh)
+        .task {
+            streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
+        }
+    }
+
+    /// The live summary the panel reports and its buttons act on — override
+    /// included, since that is the whole point of the row.
+    private var streakSummaryNow: Streaks.Summary {
+        Streaks.summary(catches: catches)
+    }
+    #endif
+
     private func simulateCatch() {
         struct Sim {
             let icao, callsign, model, mfr, op, typecode: String
@@ -2653,13 +2752,18 @@ struct ContentView: View {
         // (C172, and the B-52 with a nil destination + uncurated origin) still
         // preview the plain reveal.
         let question = buildGuessQuestion(row: c)
+        // Carry the streak so ✦ Catch previews the reveal's streak line too —
+        // with the wrench override set, that's the only way to see the line
+        // at an arbitrary length without catching for real on N days.
+        let streak = Streaks.summary(catches: catches).current
         pendingReveal = PendingReveal(
             plane: cardPlane(from: c, observed: nil),
             entryNumber: Set(catches.map(\.icao24)).count + 1,
             isDuplicate: false,
             guess: question,
             row: question != nil ? c : nil,
-            isSimulated: true
+            isSimulated: true,
+            streakDays: streak >= StreakReminders.minimumStreak ? streak : nil
         )
     }
     #endif
