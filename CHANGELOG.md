@@ -61,6 +61,17 @@ head-to-head PRs close unmerged).
   notification test involves) and printed back in amber whenever it's live.
   It never writes a `Catch` row — the Hangar is local-only and rows upload,
   so seeded catches would pollute the real collection and the leaderboard.
+- **🔔 Fire fixed** (2026-08-20): pressing it appeared to do nothing. Two
+  causes, both real. The button sits ON the camera, which is the one place
+  the foreground rule deliberately shows nothing — so a correct suppression
+  and a broken notification were the same observation. Debug fires now carry
+  a marker that lets them through, and the delegate reports what it decided
+  ("suppressed (on camera)" / "banner shown") into the panel readout. And the
+  debug fire shared the real notification identifier, which `sync()` clears
+  on every foreground — backgrounding the app to watch for the banner and
+  coming back deleted the pending test. It has its own slot now. The readout
+  also names the states that swallow a notification silently: DENIED,
+  banners-off, and (as a hint) Focus/DND.
 - **Toasts consolidated:** grounded / far-tap / save-fail / streak share one
   `topToast` slot, so two capsules can never stack — and `body`'s modifier
   chain gets shorter, not longer (the PR #184 type-check budget).
