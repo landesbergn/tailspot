@@ -21,7 +21,7 @@
         "headline": {
           "en": "Point at the sky\nand capture\nplanes overhead."
         },
-        "screenshot": "/screenshots/apple/iphone/en/01.png"
+        "screenshot": "/screenshots/apple/iphone/en/slide1-ar-catch.png"
       },
       {
         "id": "ts_02_reveal",
@@ -32,7 +32,7 @@
         "headline": {
           "en": "Add each catch\nto your collection."
         },
-        "screenshot": "/screenshots/apple/iphone/en/07.png"
+        "screenshot": "/screenshots/apple/iphone/en/slide2-collection-card.png"
       },
       {
         "id": "ts_03_guess",
@@ -43,7 +43,7 @@
         "headline": {
           "en": "Guess where it's\ngoing to or\ncoming from."
         },
-        "screenshot": "/screenshots/apple/iphone/en/03.png"
+        "screenshot": "/screenshots/apple/iphone/en/slide3-guess-round.png"
       },
       {
         "id": "ts_04_hangar",
@@ -54,7 +54,7 @@
         "headline": {
           "en": "Fill your hangar.\nCatch every\nmake and model."
         },
-        "screenshot": "/screenshots/apple/iphone/en/04.png",
+        "screenshot": "/screenshots/apple/iphone/en/slide4-hangar-sets.png",
         "inverted": true
       },
       {
@@ -66,7 +66,7 @@
         "headline": {
           "en": "Earn trophies\nfor unique catches."
         },
-        "screenshot": "/screenshots/apple/iphone/en/05.png"
+        "screenshot": "/screenshots/apple/iphone/en/slide5-trophies.png"
       },
       {
         "id": "ts_06_board",
@@ -77,8 +77,8 @@
         "headline": {
           "en": "Make your way\nup the leaderboard."
         },
-        "screenshot": "/screenshots/apple/iphone/en/06.png",
-        "screenshotSecondary": "/screenshots/apple/iphone/en/05.png"
+        "screenshot": "/screenshots/apple/iphone/en/slide6-leaderboard.png",
+        "screenshotSecondary": "/screenshots/apple/iphone/en/slide5-trophies.png"
       }
     ],
     "android": [

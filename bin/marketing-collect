@@ -1,0 +1,45 @@
+#!/bin/bash
+# Copies MarketingSnapshotTests output into the screenshot deck under the
+# names the deck actually references.
+#
+# This step used to be manual, and the mapping is NOT one-to-one: the
+# collection card is shot 07 but sits in slide 2, and the reveal (shot 02)
+# is a spare that no slide currently uses. Getting it wrong silently ships
+# the wrong screen, so it lives in a script.
+#
+# Usage: bin/marketing-collect            (after a MARKETING_CAPTURE run)
+set -euo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+src="/private/tmp/tailspot_snaps/marketing"
+dst="$repo/marketing/app-store-screenshots/public/screenshots/apple/iphone/en"
+
+# shot name → deck filename. slide1 is NOT here: it is Noah's real field
+# capture (docs/ga/screenshots-raw/), not a rendered shot.
+map=(
+  "mkt_07_collection:slide2-collection-card.png"
+  "mkt_03_guess_round:slide3-guess-round.png"
+  "mkt_04_hangar_sets:slide4-hangar-sets.png"
+  "mkt_05_trophies:slide5-trophies.png"
+  "mkt_06_leaderboard:slide6-leaderboard.png"
+)
+
+copied=0 missing=0
+for entry in "${map[@]}"; do
+  shot="${entry%%:*}"; out="${entry##*:}"
+  if [ -f "$src/$shot.png" ]; then
+    cp "$src/$shot.png" "$dst/$out"
+    echo "  $shot.png → $out"
+    copied=$((copied + 1))
+  else
+    echo "  MISSING $shot.png (slide left unchanged)" >&2
+    missing=$((missing + 1))
+  fi
+done
+
+echo "collected $copied shot(s) into the deck"
+if [ "$missing" -gt 0 ]; then
+  echo "WARNING: $missing shot(s) missing — the deck still holds the PREVIOUS" >&2
+  echo "render for those slides. Re-run the capture before exporting." >&2
+  exit 1
+fi

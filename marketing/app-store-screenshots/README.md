@@ -1,3 +1,8 @@
+> **Tailspot pipeline lives in [`../README.md`](../README.md).** That covers
+> which file fills which slide, how to regenerate them, the two capture paths,
+> and the export sizes App Store Connect accepts. This file documents the
+> generic editor scaffold underneath it.
+
 # App Store Screenshots — Editor Template
 
 A pre-built Next.js + ShadCN editor for generating App Store and Google Play screenshots. Scaffolded by the `app-store-screenshots` skill.

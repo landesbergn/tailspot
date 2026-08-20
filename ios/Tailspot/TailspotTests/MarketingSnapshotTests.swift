@@ -8,17 +8,16 @@
 //  for the framing pass in marketing/app-store-screenshots. NOT an
 //  assertion test — same visual-pass pattern as RevealSnapshotTests.
 //
-//  Shot 1 (the AR catch moment) is still a STYLIZED STAND-IN: the
-//  simulator has no camera/GPS, so it composes the real HUD components
-//  (LockBrackets + the PlaneLabel pill styling) over the onboarding
-//  dusk-sky treatment. Its callsigns and rarity tiers are real catches,
-//  but the sky is not — replace with a real field capture per
-//  docs/ga/screenshot-plan.md.
+//  Shot 1 is NOT rendered here — it is Noah's real field capture. See the
+//  note where it used to live, and marketing/README.md for the pipeline.
 //
-//  Shots 2, 2b and 3 now render REAL catches: real ADS-B numbers, real
-//  routes, real tiers, and the app's own composed catch JPEGs (staged by
+//  Shots 2, 2b and 3 render REAL catches: real ADS-B numbers, real routes,
+//  real tiers, and the app's own composed catch JPEGs (staged by
 //  `bin/marketing-stage-photos` from marketing/catch-photos/) as the hero
 //  photos. Shots 4–6 are the real screens with fixture data.
+//
+//  Shot 2 (the reveal) is a SPARE: it renders, but no slide in the current
+//  deck uses it. `bin/marketing-collect` maps shots to deck filenames.
 //
 
 #if DEBUG
@@ -206,90 +205,15 @@ struct MarketingSnapshotTests {
         )
     }
 
-    // MARK: - Shot 1 · The catch moment (stylized stand-in)
-
-    /// Full-screen version of the onboarding AR-mock treatment: the REAL
-    /// LockBrackets + PlaneLabel pill styling over the dusk-sky gradient.
-    private func arCatchScene() -> some View {
-        // Both planes are real catches from Noah's Hangar, so the HUD
-        // advertises callsigns and tiers the app actually produced.
-        let pinnedRarity = resolveAROverlayRarity(
-            typecode: "GLEX", manufacturer: "Bombardier",
-            model: "BD-700 Global Express",
-            operatorName: "Worldwide Jet Charter")
-        let ambientRarity = resolveAROverlayRarity(
-            typecode: "E75L", manufacturer: "Embraer", model: "175",
-            operatorName: "SkyWest Airlines")
-
-        return ZStack {
-            // Dusk sky — the onboarding viewport's stops, full screen.
-            LinearGradient(
-                stops: [
-                    .init(color: Color(red: 0.04, green: 0.07, blue: 0.15), location: 0),
-                    .init(color: Color(red: 0.09, green: 0.13, blue: 0.24), location: 0.62),
-                    .init(color: Color(red: 0.23, green: 0.19, blue: 0.25), location: 1),
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-
-            // The pinned plane: the HUD's lock-on variant (thick brackets,
-            // expanded pill with the base-point award).
-            VStack(spacing: 2) {
-                ZStack {
-                    Image(systemName: "airplane")
-                        .font(.system(size: 54, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.92))
-                        .rotationEffect(.degrees(-18))
-                    LockBrackets(boxSize: 150, color: Brand.Color.cyan,
-                                 opacity: 1.0, lineWidth: 3.5)
-                }
-                HStack(spacing: 4) {
-                    Text("WWI21")
-                        .font(Brand.Font.mono(size: 11, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan)
-                    Text("· \(pinnedRarity.label) +\(pinnedRarity.basePoints)")
-                        .font(Brand.Font.mono(size: 9, weight: .semibold))
-                        .foregroundStyle(pinnedRarity.tint)
-                }
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Brand.Color.bgPrimary.opacity(0.55),
-                            in: .rect(cornerRadius: 4))
-            }
-            .position(x: 172, y: 348)
-
-            // A second, farther plane — dimmed like the HUD dims
-            // non-primary labels, so the sky reads as live.
-            VStack(spacing: 2) {
-                ZStack {
-                    Image(systemName: "airplane")
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.5))
-                        .rotationEffect(.degrees(10))
-                    LockBrackets(boxSize: 52, color: Brand.Color.cyan,
-                                 opacity: 0.45, lineWidth: 1.5)
-                }
-                HStack(spacing: 4) {
-                    Text("SKW5711")
-                        .font(Brand.Font.mono(size: 8, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan.opacity(0.6))
-                    Text("· \(ambientRarity.label)")
-                        .font(Brand.Font.mono(size: 7, weight: .semibold))
-                        .foregroundStyle(ambientRarity.tint.opacity(0.6))
-                }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1.5)
-                .background(Brand.Color.bgPrimary.opacity(0.45),
-                            in: .rect(cornerRadius: 3))
-            }
-            .position(x: 300, y: 480)
-        }
-        .frame(width: Self.screen.width, height: Self.screen.height)
-    }
-
-    @Test func renderARCatchMoment() {
-        write(arCatchScene(), name: "mkt_01_ar_catch")
-    }
+    // MARK: - Shot 1 · The catch moment
+    //
+    // No longer rendered. Shot 1 was a stylized stand-in (real HUD components
+    // over the onboarding dusk gradient) because the simulator has no camera.
+    // It was superseded on 2026-08-19 by Noah's actual field capture, which
+    // lives in the deck as slide1-ar-catch.png with the unretouched original
+    // at docs/ga/screenshots-raw/01-hud-bracket-as-shot.png. The stand-in is
+    // deleted rather than left dead: a synthetic sky must never quietly come
+    // back into a listing whose whole claim is that the catch is real.
 
     // MARK: - Shot 2 · The reveal
 
