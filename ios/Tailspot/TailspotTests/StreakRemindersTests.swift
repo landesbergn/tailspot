@@ -197,4 +197,16 @@ struct StreakRemindersTests {
         #expect(StreakReminders.tapToastLine(streakAtStake: nil)
                 == "Streak at risk — catch one before midnight")
     }
+
+    /// The debug fire must NOT share the real slot. `sync()` clears
+    /// `notificationId` on every foreground, so a debug request filed there
+    /// was deleted by backgrounding the app and coming back — which is
+    /// exactly what you do while waiting for a test notification.
+    @Test func debugReminderUsesItsOwnSlot() {
+        #expect(StreakReminders.debugNotificationId != StreakReminders.notificationId)
+        // The delegate still answers for both.
+        #expect(StreakReminders.isStreakReminder(StreakReminders.notificationId))
+        #expect(StreakReminders.isStreakReminder(StreakReminders.debugNotificationId))
+        #expect(!StreakReminders.isStreakReminder("com.example.other"))
+    }
 }

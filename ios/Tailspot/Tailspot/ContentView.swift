@@ -2657,13 +2657,18 @@ struct ContentView: View {
                     Task { await StreakReminderCenter.shared.sync(context: modelContext) }
                 }
                 .disabled(StreakDebug.override == nil)
-                // The real notification, 6 s out: same id, same content, same
-                // delegate — only the trigger differs.
+                // The real notification, 10 s out: same id, same content, same
+                // delegate — only the trigger differs, plus a marker that
+                // lets it through the camera-silence rule (this button IS on
+                // the camera). Re-reads the status once it has landed so the
+                // row reports what the delegate actually did with it.
                 Button("🔔 Fire") {
                     let streak = max(streakSummaryNow.current, StreakReminders.minimumStreak)
                     Task {
                         streakDebugStatus = await StreakReminderCenter.shared
                             .debugFireReminder(streakAtStake: streak)
+                        try? await Task.sleep(for: .seconds(13))
+                        streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
                     }
                 }
                 // The one-shot pre-prompt, unlatched so it can be re-tested.
@@ -2677,6 +2682,13 @@ struct ContentView: View {
                 Button("↺ Reset") {
                     StreakDebug.clear()
                     UserDefaults.standard.removeObject(forKey: StreakReminders.permissionAskedKey)
+                    // The debug fire has its own slot, so `sync` below won't
+                    // clear it — Reset has to.
+                    UNUserNotificationCenter.current().removePendingNotificationRequests(
+                        withIdentifiers: [StreakReminders.debugNotificationId])
+                    UNUserNotificationCenter.current().removeDeliveredNotifications(
+                        withIdentifiers: [StreakReminders.debugNotificationId])
+                    StreakReminderCenter.lastForegroundDecision = nil
                     streakDebugRefresh &+= 1
                     Task {
                         await StreakReminderCenter.shared.sync(context: modelContext)
