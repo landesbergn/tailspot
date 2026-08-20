@@ -156,9 +156,27 @@ struct ProfileSettingsSnapshotTests {
         // Five consecutive days ending YESTERDAY → live 5-day streak, at risk.
         for back in 1...5 { seed(daysAgo: back) }
         snapshot(ProfileScreen().modelContainer(container), as: "profile_streak_at_risk")
-        // Today's catch lands → 6 days, safe.
+        // Today's catch lands → 6 days, safe. Current == longest, so the
+        // state line's record half reads "your best yet".
         seed(daysAgo: 0)
         snapshot(ProfileScreen().modelContainer(container), as: "profile_streak_safe")
+
+        // Behind the record: a 2-day run today with an old 9-day run in the
+        // history, so the suffix reads "best 9" instead. The other half of
+        // `streakRecordSuffix`, and the longest line the card has to fit.
+        let behind = try ModelContainer(for: Catch.self, configurations: config)
+        TestContainerRetention.retain(behind)
+        for back in [0, 1] + Array(20...28) {
+            behind.mainContext.insert(Catch(
+                icao24: UUID().uuidString.prefix(6).lowercased(),
+                callsign: "ANA858", model: "787-9", manufacturer: "Boeing",
+                operatorName: nil,
+                caughtAt: cal.date(byAdding: .day, value: -back, to: noonToday)!,
+                observerLat: 37.87, observerLon: -122.27,
+                slantDistanceMeters: 9_800, typecode: "B789"
+            ))
+        }
+        snapshot(ProfileScreen().modelContainer(behind), as: "profile_streak_behind_best")
 
         // Settings: REMINDERS in the permission-denied state (dimmed toggle
         // + Open Settings escape hatch + explanatory footer).

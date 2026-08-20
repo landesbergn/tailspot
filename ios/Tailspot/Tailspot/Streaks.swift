@@ -164,6 +164,22 @@ nonisolated enum Streaks {
         asOf: Date = Date(),
         timeZone: TimeZone = .current
     ) -> Summary {
+        #if DEBUG
+        // Debug-only streak override (the wrench panel's STREAK row). The
+        // surfaces this feature ships — the Profile card, the reveal line,
+        // the reminder planner — all key off the streak LENGTH, so without
+        // this the only way to see them is to actually catch planes on N
+        // consecutive days. Seeding backdated `Catch` rows instead was
+        // rejected: the Hangar is local-only with no restore AND rows
+        // upload to the leaderboard, so a debug affordance must never
+        // write one (same reason `simulateCatch` builds a transient row).
+        //
+        // Compiled out of Release entirely, like the wrench that sets it,
+        // and the panel prints it back in amber whenever it's live — a
+        // silently-stuck override that makes the Profile lie is exactly
+        // the failure mode that got mock mode deleted.
+        if let forced = StreakDebug.override { return forced }
+        #endif
         let days = daySet(catches: catches, timeZone: timeZone)
         let today = dayKey(for: asOf, timeZone: timeZone)
         return Summary(
@@ -197,3 +213,68 @@ nonisolated enum StreakTelemetry {
         Analytics.capture(extendedEvent, extendedProperties(streakDays: streakDays))
     }
 }
+
+#if DEBUG
+
+// MARK: - Debug override (wrench panel only)
+
+/// Forces `Streaks.summary` to a chosen value so the streak surfaces can
+/// be exercised on-device without waiting out real days. DEBUG-only — the
+/// whole wrench panel is `#if DEBUG`, so none of this exists in the
+/// TestFlight or App Store builds.
+nonisolated enum StreakDebug {
+    /// UserDefaults-backed so it survives the relaunch that a notification
+    /// test usually involves (background the app, wait for delivery, tap).
+    static let daysKey = "tailspot.debug.streakDays"
+    static let bestKey = "tailspot.debug.streakBest"
+    static let caughtTodayKey = "tailspot.debug.streakCaughtToday"
+
+    /// nil = off, real catches decide.
+    static var override: Streaks.Summary? {
+        let d = UserDefaults.standard
+        guard d.object(forKey: daysKey) != nil else { return nil }
+        let days = d.integer(forKey: daysKey)
+        return Streaks.Summary(
+            current: days,
+            longest: max(d.integer(forKey: bestKey), days),
+            caughtToday: d.bool(forKey: caughtTodayKey)
+        )
+    }
+
+    /// Step the forced streak: nil → 2 → 3 → … → 12 → nil. Starts at 2
+    /// because that's `StreakReminders.minimumStreak`, the first length
+    /// where the chip, the reminder and the ask all switch on.
+    static func cycle() {
+        let d = UserDefaults.standard
+        guard let current = override?.current else {
+            d.set(2, forKey: daysKey)
+            d.set(7, forKey: bestKey)
+            d.set(false, forKey: caughtTodayKey)
+            return
+        }
+        if current >= 12 { clear() } else { d.set(current + 1, forKey: daysKey) }
+    }
+
+    /// Flip today between caught (streak safe) and uncaught (at risk) —
+    /// the two states the Profile card and the reminder planner branch on.
+    static func toggleCaughtToday() {
+        let d = UserDefaults.standard
+        guard override != nil else { return }
+        d.set(!d.bool(forKey: caughtTodayKey), forKey: caughtTodayKey)
+    }
+
+    static func clear() {
+        let d = UserDefaults.standard
+        d.removeObject(forKey: daysKey)
+        d.removeObject(forKey: bestKey)
+        d.removeObject(forKey: caughtTodayKey)
+    }
+
+    /// One-line panel readout, amber whenever the override is live.
+    static var label: String {
+        guard let o = override else { return "off" }
+        return "\(o.current)d best \(o.longest) \(o.caughtToday ? "safe" : "at-risk")"
+    }
+}
+
+#endif

@@ -47,6 +47,20 @@ head-to-head PRs close unmerged).
   opposite ends of the card, "6 day streak … 6 best" read as a duplicate.
   The permission card is Noah's copy, prose buttons, with "Not now" one
   weight down from "Notify me".
+- **Best streak folded into the state line** (Noah, 2026-08-20): it was a
+  matching number at the far right, which at "12 day streak … best 12" read
+  as a duplicate rather than a record being matched. Now a suffix — "Extended
+  today · best 9", or gold "your best yet" once you match it, and suppressed
+  entirely while the streak is at risk so the amber warning owns the one
+  accent on that line.
+- **Wrench panel gains a STREAK row** (DEBUG-only, absent from Release): force
+  a streak length, flip at-risk/safe, fire the real reminder six seconds out,
+  open the permission card unlatched, and reset. Without it the only way to
+  see any of these surfaces is to catch on N consecutive days and wait for
+  18:00. The override is UserDefaults-backed (it has to survive the relaunch a
+  notification test involves) and printed back in amber whenever it's live.
+  It never writes a `Catch` row — the Hangar is local-only and rows upload,
+  so seeded catches would pollute the real collection and the leaderboard.
 - **Toasts consolidated:** grounded / far-tap / save-fail / streak share one
   `topToast` slot, so two capsules can never stack — and `body`'s modifier
   chain gets shorter, not longer (the PR #184 type-check budget).

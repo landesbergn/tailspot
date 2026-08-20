@@ -194,7 +194,15 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         let authorized = settings.authorizationStatus == .authorized
-        let days = Streaks.daySet(catches: catches)
+        var days = Streaks.daySet(catches: catches)
+        #if DEBUG
+        // A forced streak has to reach the PLANNER too, or the wrench can
+        // set "3 days, at risk" and the reminder still refuses to schedule
+        // because the real Hangar says otherwise.
+        if let forced = StreakDebug.override {
+            days = Self.syntheticDays(for: forced, now: now)
+        }
+        #endif
         let decision = StreakReminders.decision(
             days: days, now: now, enabled: remindersEnabled, authorized: authorized
         )
@@ -208,17 +216,9 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
               let comps = StreakReminders.triggerComponents(dayKey: dayKey) else {
             return
         }
-        let content = UNMutableNotificationContent()
-        content.title = StreakReminders.title(streakAtStake: streak)
-        content.body = StreakReminders.body(streakAtStake: streak)
-        content.sound = .default
-        content.interruptionLevel = .active
-        // Carried so the tap toast can restate the stake without re-deriving
-        // a streak that may have moved on since the request was scheduled.
-        content.userInfo = ["streak": streak]
         let request = UNNotificationRequest(
             identifier: StreakReminders.notificationId,
-            content: content,
+            content: Self.content(streakAtStake: streak),
             trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
         )
         do {
@@ -232,6 +232,20 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     /// Fire the system permission prompt (from the pre-prompt's accept or
     /// the Settings toggle) and report the outcome through the standard
     /// activation event.
+    /// The reminder's notification content. One builder so the scheduled
+    /// request and the debug fire below can never drift apart.
+    private static func content(streakAtStake streak: Int) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = StreakReminders.title(streakAtStake: streak)
+        content.body = StreakReminders.body(streakAtStake: streak)
+        content.sound = .default
+        content.interruptionLevel = .active
+        // Carried so the tap toast can restate the stake without re-deriving
+        // a streak that may have moved on since the request was scheduled.
+        content.userInfo = ["streak": streak]
+        return content
+    }
+
     func requestPermission() async -> Bool {
         UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
         let granted = (try? await UNUserNotificationCenter.current()
@@ -304,3 +318,86 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 }
+
+#if DEBUG
+
+extension StreakReminderCenter {
+    /// A day set that produces `summary` under the real streak maths, so a
+    /// forced streak flows through the untouched `decision` matrix rather
+    /// than bypassing it — the planner stays the thing under test.
+    static func syntheticDays(for summary: Streaks.Summary, now: Date) -> Set<String> {
+        guard summary.current > 0 else { return [] }
+        var days = Set<String>()
+        // Anchor at today when today is "caught", else yesterday — the same
+        // two anchors `Streaks.currentStreak` looks for under the grace rule.
+        var cursor = Streaks.dayKey(for: now)
+        if !summary.caughtToday {
+            guard let yesterday = Streaks.key(byAdding: -1, to: cursor) else { return [] }
+            cursor = yesterday
+        }
+        for _ in 0..<summary.current {
+            days.insert(cursor)
+            guard let prev = Streaks.key(byAdding: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return days
+    }
+
+    /// Deliver the REAL reminder in `after` seconds. Same identifier, same
+    /// content builder, same delegate — only the trigger differs, so this
+    /// exercises foreground suppression, the banner, the tap and the toast
+    /// without waiting for 18:00. Requests permission if it hasn't been
+    /// asked, and reports what happened for the panel readout.
+    func debugFireReminder(streakAtStake: Int, after seconds: TimeInterval = 6) async -> String {
+        let center = UNUserNotificationCenter.current()
+        var status = await center.notificationSettings().authorizationStatus
+        if status == .notDetermined {
+            _ = await requestPermission()
+            status = await center.notificationSettings().authorizationStatus
+        }
+        guard status == .authorized else { return "notif \(status.rawValue) — allow in iOS Settings" }
+        let request = UNNotificationRequest(
+            identifier: StreakReminders.notificationId,
+            content: Self.content(streakAtStake: streakAtStake),
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        )
+        do {
+            try await center.add(request)
+            Log.ui.notice("DEBUG streak reminder in \(Int(seconds), privacy: .public)s, streak \(streakAtStake, privacy: .public)")
+            return "firing in \(Int(seconds))s"
+        } catch {
+            return "failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Panel readout: permission state + whether a reminder is queued.
+    func debugStatusLine() async -> String {
+        let center = UNUserNotificationCenter.current()
+        let status = await center.notificationSettings().authorizationStatus
+        let name: String
+        switch status {
+        case .notDetermined: name = "not-asked"
+        case .denied:        name = "DENIED"
+        case .authorized:    name = "ok"
+        case .provisional:   name = "provisional"
+        case .ephemeral:     name = "ephemeral"
+        @unknown default:    name = "?"
+        }
+        let pending = await center.pendingNotificationRequests()
+            .filter { $0.identifier == StreakReminders.notificationId }
+        let when: String
+        if let trigger = pending.first?.trigger as? UNCalendarNotificationTrigger,
+           let date = trigger.nextTriggerDate() {
+            let f = DateFormatter()
+            f.dateFormat = "MMM d HH:mm"
+            when = f.string(from: date)
+        } else if pending.first?.trigger is UNTimeIntervalNotificationTrigger {
+            when = "soon"
+        } else {
+            when = "none"
+        }
+        return "notif \(name) · queued \(when)"
+    }
+}
+
+#endif
