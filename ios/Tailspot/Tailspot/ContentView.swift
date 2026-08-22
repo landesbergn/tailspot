@@ -2456,12 +2456,23 @@ struct ContentView: View {
                 let priorRows = catches.filter { row in
                     !newCatches.contains(where: { $0 === row })
                 }
-                let priorDays = Streaks.daySet(catches: priorRows)
-                let firstCatchToday = !priorDays.contains(todayKey)
-                let days = priorDays.union([todayKey])
-                let current = Streaks.currentStreak(days: days, todayKey: todayKey)
-                if firstCatchToday {
-                    StreakTelemetry.fireExtended(streakDays: current)
+                // ONE entry point, shared with the Profile card. This used
+                // to call `Streaks.currentStreak` directly, which is how the
+                // two screens came to report different streaks minutes apart
+                // (2026-08-21) — the debug override is applied inside the
+                // day-set funnel, and this path was reaching past it.
+                let current = Streaks.summary(
+                    catches: priorRows, assumingCatchOn: todayKey, asOf: now
+                ).current
+                // Telemetry reads the REAL rows, always: a forced streak is
+                // for looking at, and `streak_extended` is a fact about the
+                // user that lands in PostHog forever.
+                let realPriorDays = Streaks.realDaySet(catches: priorRows)
+                if !realPriorDays.contains(todayKey) {
+                    let realCurrent = Streaks.currentStreak(
+                        days: realPriorDays.union([todayKey]), todayKey: todayKey
+                    )
+                    StreakTelemetry.fireExtended(streakDays: realCurrent)
                 }
                 if current >= StreakReminders.minimumStreak {
                     streakDaysForReveal = current

@@ -20,6 +20,16 @@ struct StreaksTests {
 
     // Fixed instants (UTC): 2026-08-17T00:00Z and offsets.
     private static let aug17midnightUTC = Date(timeIntervalSince1970: 1_786_924_800)
+
+    /// Noon UTC on a "yyyy-MM-dd" key — an unambiguous "now" for asOf.
+    private static func noonUTC(on key: String) -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .gmt
+        let p = key.split(separator: "-").compactMap { Int($0) }
+        var c = DateComponents()
+        c.year = p[0]; c.month = p[1]; c.day = p[2]; c.hour = 12
+        return cal.date(from: c)!
+    }
     private let bali = TimeZone(identifier: "Asia/Makassar")!        // UTC+8, no DST
     private let la = TimeZone(identifier: "America/Los_Angeles")!    // UTC-7/-8
 
@@ -191,5 +201,52 @@ struct StreaksTests {
             observerLon: -122.27,
             slantDistanceMeters: 1000
         )
+    }
+
+    // MARK: - One source of truth (regression, 2026-08-21)
+
+    /// The Profile showed 12 while the very next catch reveal showed 26.
+    /// Cause: the Profile went through `Streaks.summary` and the catch path
+    /// re-derived the streak with `currentStreak` directly, so a debug
+    /// override applied inside the day-set funnel reached one and not the
+    /// other. Both now read the same entry point; pin that they agree.
+    @Test func catchPathAndProfileAgreeOnTheSameHangar() {
+        // Four consecutive days ending yesterday, today still uncaught.
+        let rows = (1...4).map { back -> Catch in
+            let r = mk(caughtAt: Self.aug17midnightUTC)
+            r.caughtDayKey = Streaks.key(byAdding: -back, to: "2026-08-20")
+            return r
+        }
+        let asOf = Self.noonUTC(on: "2026-08-20")
+
+        // What the Profile card renders.
+        let profile = Streaks.summary(catches: rows, asOf: asOf, timeZone: .gmt)
+        #expect(profile.current == 4)      // grace: reads through yesterday
+        #expect(profile.caughtToday == false)
+
+        // What the catch path computes for the reveal line, for a catch
+        // landing today whose row the @Query slice hasn't observed yet.
+        let afterCatch = Streaks.summary(
+            catches: rows, assumingCatchOn: "2026-08-20", asOf: asOf, timeZone: .gmt
+        )
+        #expect(afterCatch.current == 5)   // exactly one more, never a second number
+        #expect(afterCatch.caughtToday)
+
+        // And once the row IS visible, the Profile agrees with the reveal.
+        let settled = mk(caughtAt: Self.aug17midnightUTC)
+        settled.caughtDayKey = "2026-08-20"
+        let reloaded = Streaks.summary(catches: rows + [settled], asOf: asOf, timeZone: .gmt)
+        #expect(reloaded.current == afterCatch.current)
+    }
+
+    /// Telemetry must never report a wrench-forced streak: `streak_extended`
+    /// lands in PostHog permanently. `realDaySet` is the rows-only read the
+    /// catch path uses for the event, and it ignores the override by
+    /// construction (it is what `daySet` falls through to).
+    @Test func realDaySetReadsRowsOnly() {
+        let row = mk(caughtAt: Self.aug17midnightUTC)
+        row.caughtDayKey = "2026-08-17"
+        #expect(Streaks.realDaySet(catches: [row]) == ["2026-08-17"])
+        #expect(Streaks.realDaySet(catches: []).isEmpty)
     }
 }
