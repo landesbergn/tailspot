@@ -458,6 +458,22 @@ struct ProfileScreen: View {
                     Text("day streak")
                         .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(alive ? Brand.Color.textSecondary : Brand.Color.textTertiary)
+                    #if DEBUG
+                    // A forced streak says so ON the card. Reading 12 here
+                    // and 26 on the next catch reveal, with nothing to
+                    // explain it, is what made the feature look broken
+                    // (2026-08-21) — the wrench panel knew, but the screen
+                    // telling the lie didn't.
+                    if StreakDebug.override != nil {
+                        Text("DEBUG")
+                            .font(Brand.Font.mono(size: 9, weight: .bold))
+                            .tracking(0.8)
+                            .foregroundStyle(Brand.Color.bgPrimary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Brand.Color.alertCaution, in: .rect(cornerRadius: 3))
+                    }
+                    #endif
                 }
                 // Two Texts, not one string: the state half can be amber
                 // while the record half stays tertiary (or gold).

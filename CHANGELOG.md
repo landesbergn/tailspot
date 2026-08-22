@@ -72,6 +72,20 @@ head-to-head PRs close unmerged).
   coming back deleted the pending test. It has its own slot now. The readout
   also names the states that swallow a notification silently: DENIED,
   banners-off, and (as a hint) Focus/DND.
+- **Fixed: the Profile and the catch reveal reported different streaks**
+  (2026-08-21 field report — 12 on the Profile, 26 on the next reveal). The
+  streak maths was correct; the DEBUG override was half-wired. It
+  short-circuited `Streaks.summary`, which the Profile uses, while the catch
+  path re-derived the streak by calling `Streaks.currentStreak` directly and
+  never saw it. Fixed structurally rather than patched: the override now
+  applies inside `Streaks.daySet` — the one funnel every display reader
+  shares — and the catch path calls `summary(catches:assumingCatchOn:)`
+  instead of re-deriving. Two call sites computing the same number two ways
+  was the actual defect. A forced streak also now prints a **DEBUG** badge on
+  the Profile card itself (the wrench panel knew; the screen telling the lie
+  didn't), and `streak_extended` telemetry reads a new rows-only
+  `realDaySet`, since a wrench-forced number must never land in PostHog.
+  Regression test pins that both paths agree on the same Hangar.
 - **Toasts consolidated:** grounded / far-tap / save-fail / streak share one
   `topToast` slot, so two capsules can never stack — and `body`'s modifier
   chain gets shorter, not longer (the PR #184 type-check budget).

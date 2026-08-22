@@ -72,13 +72,36 @@ nonisolated enum Streaks {
     /// bucketing — the Profile card, the reveal chip, the reminder planner
     /// and the secret streak trophy all read sets built here, so they can
     /// never disagree about what "consecutive days" means.
-    static func daySet(
+    /// The day set from rows ONLY, never the debug override. Telemetry uses
+    /// this: `streak_extended` is a fact about the user that lands in
+    /// PostHog forever, and a wrench-forced streak must not be able to
+    /// write one.
+    static func realDaySet(
         catches: [Catch],
         timeZone: TimeZone = .current
     ) -> Set<String> {
         var days = Set<String>()
         for c in catches { days.insert(dayKey(for: c, timeZone: timeZone)) }
         return days
+    }
+
+    static func daySet(
+        catches: [Catch],
+        timeZone: TimeZone = .current
+    ) -> Set<String> {
+        #if DEBUG
+        // The wrench panel's streak override (see `StreakDebug`). It is
+        // applied HERE, at the one funnel every display reader shares, and
+        // not inside `summary` — that is the bug from 2026-08-21: the
+        // Profile went through `summary` and saw the forced 12, the catch
+        // reveal called `currentStreak` directly and saw the real 26, and
+        // the app confidently showed two different streaks minutes apart.
+        // A debug seam that only some readers honour is worse than none.
+        if let forced = StreakDebug.override {
+            return StreakDebug.syntheticDays(for: forced, timeZone: timeZone)
+        }
+        #endif
+        return realDaySet(catches: catches, timeZone: timeZone)
     }
 
     // MARK: - Key arithmetic (UTC — rule 2 above)
@@ -159,28 +182,20 @@ nonisolated enum Streaks {
         var atRisk: Bool { current > 0 && !caughtToday }
     }
 
+    /// `assumingCatchOn` unions one extra day before the maths — the catch
+    /// path uses it because the `@Query` slice may not have observed the row
+    /// it just inserted. It exists so that path can call THIS function
+    /// rather than re-deriving the streak from `currentStreak` itself: two
+    /// call sites computing the same number two ways is how the Profile and
+    /// the reveal came to disagree (2026-08-21).
     static func summary(
         catches: [Catch],
+        assumingCatchOn extraDay: String? = nil,
         asOf: Date = Date(),
         timeZone: TimeZone = .current
     ) -> Summary {
-        #if DEBUG
-        // Debug-only streak override (the wrench panel's STREAK row). The
-        // surfaces this feature ships — the Profile card, the reveal line,
-        // the reminder planner — all key off the streak LENGTH, so without
-        // this the only way to see them is to actually catch planes on N
-        // consecutive days. Seeding backdated `Catch` rows instead was
-        // rejected: the Hangar is local-only with no restore AND rows
-        // upload to the leaderboard, so a debug affordance must never
-        // write one (same reason `simulateCatch` builds a transient row).
-        //
-        // Compiled out of Release entirely, like the wrench that sets it,
-        // and the panel prints it back in amber whenever it's live — a
-        // silently-stuck override that makes the Profile lie is exactly
-        // the failure mode that got mock mode deleted.
-        if let forced = StreakDebug.override { return forced }
-        #endif
-        let days = daySet(catches: catches, timeZone: timeZone)
+        var days = daySet(catches: catches, timeZone: timeZone)
+        if let extraDay { days.insert(extraDay) }
         let today = dayKey(for: asOf, timeZone: timeZone)
         return Summary(
             current: currentStreak(days: days, todayKey: today),
@@ -268,6 +283,42 @@ nonisolated enum StreakDebug {
         d.removeObject(forKey: daysKey)
         d.removeObject(forKey: bestKey)
         d.removeObject(forKey: caughtTodayKey)
+    }
+
+    /// A day set that reproduces `summary` under the real streak maths, so
+    /// a forced streak flows THROUGH `currentStreak`/`longestStreak` rather
+    /// than replacing their answer. The maths stays the thing under test,
+    /// and every reader of `daySet` agrees by construction.
+    static func syntheticDays(
+        for summary: Streaks.Summary,
+        now: Date = Date(),
+        timeZone: TimeZone = .current
+    ) -> Set<String> {
+        guard summary.current > 0 else { return [] }
+        var days = Set<String>()
+        // Anchor at today when today is "caught", else yesterday — the two
+        // anchors `currentStreak` looks for under the grace rule.
+        var cursor = Streaks.dayKey(for: now, timeZone: timeZone)
+        if !summary.caughtToday {
+            guard let yesterday = Streaks.key(byAdding: -1, to: cursor) else { return [] }
+            cursor = yesterday
+        }
+        for _ in 0..<summary.current {
+            days.insert(cursor)
+            guard let prev = Streaks.key(byAdding: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        // A separate older run so `longestStreak` can report the forced
+        // best without touching the live run.
+        if summary.longest > summary.current,
+           var gap = Streaks.key(byAdding: -2, to: cursor) {
+            for _ in 0..<summary.longest {
+                days.insert(gap)
+                guard let prev = Streaks.key(byAdding: -1, to: gap) else { break }
+                gap = prev
+            }
+        }
+        return days
     }
 
     /// One-line panel readout, amber whenever the override is live.

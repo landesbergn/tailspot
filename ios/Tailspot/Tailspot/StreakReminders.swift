@@ -215,15 +215,9 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         let authorized = settings.authorizationStatus == .authorized
-        var days = Streaks.daySet(catches: catches)
-        #if DEBUG
-        // A forced streak has to reach the PLANNER too, or the wrench can
-        // set "3 days, at risk" and the reminder still refuses to schedule
-        // because the real Hangar says otherwise.
-        if let forced = StreakDebug.override {
-            days = Self.syntheticDays(for: forced, now: now)
-        }
-        #endif
+        // `daySet` is the one funnel the wrench override is applied at, so
+        // the planner sees a forced streak without needing to know it exists.
+        let days = Streaks.daySet(catches: catches)
         let decision = StreakReminders.decision(
             days: days, now: now, enabled: remindersEnabled, authorized: authorized
         )
@@ -368,27 +362,6 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
 #if DEBUG
 
 extension StreakReminderCenter {
-    /// A day set that produces `summary` under the real streak maths, so a
-    /// forced streak flows through the untouched `decision` matrix rather
-    /// than bypassing it — the planner stays the thing under test.
-    static func syntheticDays(for summary: Streaks.Summary, now: Date) -> Set<String> {
-        guard summary.current > 0 else { return [] }
-        var days = Set<String>()
-        // Anchor at today when today is "caught", else yesterday — the same
-        // two anchors `Streaks.currentStreak` looks for under the grace rule.
-        var cursor = Streaks.dayKey(for: now)
-        if !summary.caughtToday {
-            guard let yesterday = Streaks.key(byAdding: -1, to: cursor) else { return [] }
-            cursor = yesterday
-        }
-        for _ in 0..<summary.current {
-            days.insert(cursor)
-            guard let prev = Streaks.key(byAdding: -1, to: cursor) else { break }
-            cursor = prev
-        }
-        return days
-    }
-
     /// Deliver the REAL reminder in `after` seconds. Same identifier, same
     /// content builder, same delegate — only the trigger differs, plus a
     /// `userInfo` marker that lets it through the camera-silence rule (the
