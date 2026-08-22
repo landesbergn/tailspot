@@ -5,6 +5,99 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-19 — Catch streaks, protection reminders + the narrowed duplicate rule — branch `feature/catch-streaks-v11`
+
+The v1.1 lead feature, converged from the two parallel head-to-head builds
+(#196 base, #195's trophy alignment and toast consolidation grafted in; both
+head-to-head PRs close unmerged).
+
+- **The duplicate rule narrowed, and it ships here on purpose.** A catch is a
+  duplicate only for the same airframe + same callsign + same local day
+  (`Catch.isDuplicate`, replacing lifetime-per-airframe `Catch.exists`). The
+  same tail tomorrow — or this evening under a new flight number — is a full
+  catch with its own row, photo, points and upload. That's what makes the
+  streak honest: under the old gate a day of familiar planes wrote no row, so
+  a rows-only streak broke silently and the evening nudge false-fired minutes
+  after a real catch. Missing callsigns collapse to same-day airframe identity
+  so one parked plane can't be farmed. No backend change, no migration.
+- **Engine (`Streaks.swift`):** frozen per-catch day labels
+  (`Catch.caughtDayKey`, stamped at insert — travel can't re-bucket history),
+  UTC key arithmetic (DST-proof), and the grace rule (a live streak reads
+  through yesterday until a full empty day passes). Now the single owner of
+  day bucketing: `Trophies.inputs` reads it, so the secret 7-day trophy and
+  the Profile card count the same run.
+- **Surfaces:** Profile streak card (current + best + at-risk line), a
+  "DAY N STREAK" chip on the reveal's settled frame, and a Settings REMINDERS
+  section (mute toggle, permission-denied state with Open Settings and
+  heal-on-return; toggling on when undetermined fires the system ask).
+- **Reminder (`StreakReminders.swift`):** one local notification slot at 18:00
+  local, planned by a pure matrix-tested decision function, re-planned after
+  each catch / foreground / timezone change / toggle, never fired for a lapsed
+  streak. Threshold **2 days** (Noah, 2026-08-19 — the scope doc's R2/AE2 were
+  amended from 3). In the foreground it stays silent on the camera and
+  presents everywhere else; tapping it lands on the viewfinder with the stake
+  restated as a toast. No APNs, no new capability.
+- **Design pass (Noah, 2026-08-19):** the streak reads "11 day streak", not
+  "DAY 11 STREAK", and is set in PROSE — the one deliberate exception to the
+  mono-for-data type rule, because this is the reward talking to you rather
+  than a readout. The reveal's bordered capsule is gone (it was a second
+  outlined container sitting under the card's own outline); it's now a bare
+  line where the count carries the weight and "day streak" recedes. On the
+  Profile, `best` moved onto the title baseline — as matching numbers at
+  opposite ends of the card, "6 day streak … 6 best" read as a duplicate.
+  The permission card is Noah's copy, prose buttons, with "Not now" one
+  weight down from "Notify me".
+- **Best streak folded into the state line** (Noah, 2026-08-20): it was a
+  matching number at the far right, which at "12 day streak … best 12" read
+  as a duplicate rather than a record being matched. Now a suffix — "Extended
+  today · best 9", or gold "your best yet" once you match it, and suppressed
+  entirely while the streak is at risk so the amber warning owns the one
+  accent on that line.
+- **Wrench panel gains a STREAK row** (DEBUG-only, absent from Release): force
+  a streak length, flip at-risk/safe, fire the real reminder six seconds out,
+  open the permission card unlatched, and reset. Without it the only way to
+  see any of these surfaces is to catch on N consecutive days and wait for
+  18:00. The override is UserDefaults-backed (it has to survive the relaunch a
+  notification test involves) and printed back in amber whenever it's live.
+  It never writes a `Catch` row — the Hangar is local-only and rows upload,
+  so seeded catches would pollute the real collection and the leaderboard.
+- **🔔 Fire fixed** (2026-08-20): pressing it appeared to do nothing. Two
+  causes, both real. The button sits ON the camera, which is the one place
+  the foreground rule deliberately shows nothing — so a correct suppression
+  and a broken notification were the same observation. Debug fires now carry
+  a marker that lets them through, and the delegate reports what it decided
+  ("suppressed (on camera)" / "banner shown") into the panel readout. And the
+  debug fire shared the real notification identifier, which `sync()` clears
+  on every foreground — backgrounding the app to watch for the banner and
+  coming back deleted the pending test. It has its own slot now. The readout
+  also names the states that swallow a notification silently: DENIED,
+  banners-off, and (as a hint) Focus/DND.
+- **Fixed: the Profile and the catch reveal reported different streaks**
+  (2026-08-21 field report — 12 on the Profile, 26 on the next reveal). The
+  streak maths was correct; the DEBUG override was half-wired. It
+  short-circuited `Streaks.summary`, which the Profile uses, while the catch
+  path re-derived the streak by calling `Streaks.currentStreak` directly and
+  never saw it. Fixed structurally rather than patched: the override now
+  applies inside `Streaks.daySet` — the one funnel every display reader
+  shares — and the catch path calls `summary(catches:assumingCatchOn:)`
+  instead of re-deriving. Two call sites computing the same number two ways
+  was the actual defect. A forced streak also now prints a **DEBUG** badge on
+  the Profile card itself (the wrench panel knew; the screen telling the lie
+  didn't), and `streak_extended` telemetry reads a new rows-only
+  `realDaySet`, since a wrench-forced number must never land in PostHog.
+  Regression test pins that both paths agree on the same Hangar.
+- **Toasts consolidated:** grounded / far-tap / save-fail / streak share one
+  `topToast` slot, so two capsules can never stack — and `body`'s modifier
+  chain gets shorter, not longer (the PR #184 type-check budget).
+- **Telemetry:** `streak_extended`, `streak_reminder_opened`,
+  `permission_outcome` (notifications).
+- Tests: `StreaksTests`, `StreakRemindersTests`, the duplicate-rule matrix in
+  `CatchTests`, plus snapshot additions (Profile at-risk/safe, Settings
+  denied, reveal chip). Full `TailspotTests` green.
+
+Field test pending: reminder delivery, the permission flow and cancel-on-catch
+can't be verified on the simulator.
+
 ## 2026-08-17 — v1.1 scope set on the Flight Plan board — branch `docs/v1-1-flight-plan-scope`
 
 Planning round, docs only. Noah and Claude re-prioritized the release plan from

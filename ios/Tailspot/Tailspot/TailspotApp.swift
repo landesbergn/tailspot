@@ -6,6 +6,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import UserNotifications
 import os
 
 @main
@@ -31,6 +32,11 @@ struct TailspotApp: App {
     /// token-not-ready / cold-start) was lost forever and the user never
     /// appeared on the leaderboard (the babyjoda bug).
     private let handleSyncer = HandleSyncer()
+
+    /// Reminder-tap → camera-toast channel. Owned here (the delegate is
+    /// app-level), handed to the delegate in `init` and injected into the
+    /// environment for `ContentView` to observe.
+    private let streakToastRelay = StreakToastRelay()
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -68,6 +74,26 @@ struct TailspotApp: App {
                 Brand.Font.boldTextPreferred = UIAccessibility.isBoldTextEnabled
             }
         }
+        // Streak reminders: the delegate must be set before launch finishes
+        // or a cold-start tap and foreground delivery are both dropped by
+        // iOS. It decides foreground presentation (silent on the camera,
+        // banner elsewhere) and relays the tap line back to the view.
+        StreakReminderCenter.shared.toastRelay = streakToastRelay
+        UNUserNotificationCenter.current().delegate = StreakReminderCenter.shared
+        // A timezone change moves "today" and the 18:00 target — recompute
+        // the pending reminder against the new zone (frozen per-catch day
+        // labels keep the streak history itself stable; Streaks.swift rule 1).
+        let streakContainer = container
+        NotificationCenter.default.addObserver(
+            forName: .NSSystemTimeZoneDidChange,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                await StreakReminderCenter.shared.sync(
+                    context: streakContainer.mainContext)
+            }
+        }
     }
 
     var body: some Scene {
@@ -78,6 +104,7 @@ struct TailspotApp: App {
             // directly on every subsequent launch.
             RootView()
                 .modelContainer(container)
+                .environment(streakToastRelay)
                 // The app is locked to dark (Noah, 2026-07-10 polish
                 // sweep): the Brand palette is a fixed dark HUD and every
                 // light-mode rendering of it is a bug, not a mode.
@@ -113,6 +140,12 @@ struct TailspotApp: App {
                     // without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
+                    // Streak reminder re-plan on every foreground: repairs
+                    // whatever the last run couldn't know (a day rolled over,
+                    // permission changed in iOS Settings, a force-kill raced
+                    // the post-catch sync). Cheap — one Hangar fetch + a pure
+                    // decision — and idempotent like the two steps above.
+                    await StreakReminderCenter.shared.sync(context: ctx)
                 }
             }
         }
