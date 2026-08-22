@@ -456,12 +456,31 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   .hero-sub { margin-left: auto; margin-right: auto; }
   .cta-row { justify-content: center; }
   .hero { padding: 1.5rem 1.75rem; }
-  /* Stacked, the headline and CTA sit ABOVE the photo in the same screen, so
-     the chrome to subtract includes them (measured 469px) AND the ~67px meta
-     block beneath the frame, which the mockup's formula never had to carry:
-     469 + 67 + 24 slack = 560. */
-  .catch-frame { width: min(100%, 480px, max(260px, calc((100svh - 560px) * 1.587))); }
+  /* NO viewport-height term on phones, deliberately.
+     The photo used to be sized (and hidden) by height math inherited from the
+     old CSS mockup. That math was measured in a desktop window, and real iOS
+     Safari reports a viewport ~180px shorter than the device — address bar
+     plus toolbar — so every iPhone fell under the hide threshold and Noah got
+     a page with no photographs on it at all.
+     The no-scroll rule is a DESKTOP nicety. On a phone, scrolling is normal
+     and the photograph is the entire point of the page, so it always shows at
+     a readable size and the page grows if it must. */
+  .catch-frame { width: min(100%, 480px); }
+  .hero-visual { display: flex; }
 }
+/* Compaction only — never hides anything. On a phone the chrome (nav, title,
+   badge, meta, footer) is what pushes the page past one screen, so tighten it
+   rather than dropping the photograph. Whatever is left over scrolls, which
+   also lets Safari collapse its address bar and hand back ~60px. */
+@media (max-width: 820px) and (max-height: 760px) {
+  .hero { padding: 1rem 1.75rem; }
+  .hero-inner { gap: 1.1rem; }
+  .hero-title { font-size: clamp(1.85rem, 5.2vw, 3.4rem); margin-bottom: 0.9rem; }
+  .catch { gap: 0.5rem; }
+  .catch-meta { gap: 0; }
+  body:has(.hero) .site-footer { padding: 0.9rem 1.75rem; }
+}
+
 @media (max-width: 560px) {
   .nav-links { gap: 1rem; }
   /* The nav is just the badge now, so there is nothing left to hide here. */
@@ -471,18 +490,15 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   body:has(.hero) .footer-links { gap: 0.9rem; justify-content: center; }
 }
 
-/* Last resort for screens with no room for both: the photo is hidden rather
-   than allowed to break the no-scroll layout.
+/* Hidden ONLY in true landscape, where a 164px-tall photo plus a headline
+   plus a badge genuinely cannot coexist in ~360px of height.
 
-   NOTE: unlike the old mockup this is NOT decorative — it is the product's
-   evidence and carries real alt text — so it is hidden only where keeping it
-   would overflow outright.
-   Thresholds are where the 260px floor stops fitting, INCLUDING the meta
-   block: floor is 260/1.587 = 164px of photo + 67px of meta = 231px, so
-   469+231 = 700 stacked and 275+231 = 506 side-by-side. Verified against a
-   375x667 iPhone SE, which overflowed by 63px before these were corrected. */
-@media (max-width: 820px) and (max-height: 700px),
-       (max-height: 510px) {
+   This used to also hide on portrait phones under a 700px height threshold.
+   Don't reinstate that: media-query `height` on iOS Safari is the visible
+   area minus browser chrome, which puts every iPhone under 700 — the photo
+   silently vanished on the exact devices the app runs on. This is the
+   product's evidence, not decoration. */
+@media (max-height: 430px) {
   .hero-visual { display: none; }
 }
 
