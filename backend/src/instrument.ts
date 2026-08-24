@@ -19,6 +19,12 @@ if (dsn) {
     // Errors are the priority; keep performance tracing light to stay well
     // inside the free quota. Override via SENTRY_TRACES_SAMPLE_RATE if needed.
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
+    // "Error: aborted" is Node's stock error when a client closes the TCP
+    // socket mid-request (app backgrounded / network blip during an upload).
+    // Nothing server-side to fix, so drop it (BROKEN-DARKNESS-5055-F).
+    // Anchored regex: a plain string here would substring-match any message
+    // merely containing "aborted".
+    ignoreErrors: [/^aborted$/],
   });
   console.log("Sentry: initialized");
 } else {
