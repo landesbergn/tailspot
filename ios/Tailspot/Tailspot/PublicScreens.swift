@@ -514,10 +514,13 @@ struct LeaderboardScreen: View {
         let hasHandle = !localHandle.isEmpty && localHandle != SpotterHandle.defaultPlaceholder
 
         if let meStanding = me {
-            // Server confirmed our standing — show it.
+            // Server confirmed our standing — show it. Rank 0 = UNRANKED
+            // (zero in-window points — the server no longer hands zero-point
+            // devices a census-sized rank; same sentinel ProfileScreen's
+            // hero treats as "—").
             Section {
                 HStack(spacing: 12) {
-                    Text("\(meStanding.rank)")
+                    Text(meStanding.rank >= 1 ? "\(meStanding.rank)" : "—")
                         .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
                         .foregroundStyle(Brand.Color.cyan)
                         .monospacedDigit()
@@ -543,8 +546,9 @@ struct LeaderboardScreen: View {
                 .listRowBackground(Brand.Color.cyan.opacity(0.12))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(
-                    "Your standing: rank \(meStanding.rank), "
-                    + "\(meStanding.points) points"
+                    "Your standing: "
+                    + (meStanding.rank >= 1 ? "rank \(meStanding.rank)" : "not ranked yet")
+                    + ", \(meStanding.points) points"
                 )
                 if !hasHandle {
                     Text("Claim a handle in Profile → Settings to appear in the list above.")

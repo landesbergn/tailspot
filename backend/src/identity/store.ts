@@ -268,7 +268,13 @@ export interface LeaderboardEntry {
   catches: number;
 }
 
-/** The caller's own standing (present whenever a valid token is sent). */
+/**
+ * The caller's own standing (present whenever a valid token is sent).
+ * `rank` 0 = unranked (zero in-window points) — clients render it as "no
+ * rank yet". The wire stays a plain number because shipped clients decode
+ * `rank` as a non-optional Int (null/absent would fail their whole
+ * leaderboard decode).
+ */
 export interface MyStanding {
   rank: number;
   points: number;
@@ -671,6 +677,15 @@ export class DrizzleCatchStore implements CatchStore {
     if (mine.length === 0) return null; // unknown device
     const myPoints = Number(mine[0].points);
     const myCreatedAt = mine[0].createdAt;
+
+    // Zero in-window points → UNRANKED (rank 0), not "last among everyone".
+    // The createdAt tiebreak below would otherwise rank a brand-new device
+    // behind every device row ever registered — overwhelmingly zero-catch
+    // drive-by installs — so a first-time user whose catch hadn't synced yet
+    // saw "458th" (the device-table census, 2026-08-24). Rank 0 is the wire
+    // sentinel every shipped client already renders as "—"/no rank
+    // (ProfileScreen treats rank < 1 as never-ranked), so this is additive-safe.
+    if (myPoints === 0) return { rank: 0, points: 0 };
 
     // Rank = 1 + the number of devices that strictly outrank me under the SAME
     // total order the leaderboard uses (points DESC, createdAt ASC, id ASC). A

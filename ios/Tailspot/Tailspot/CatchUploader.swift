@@ -14,8 +14,13 @@
 //    the next run (non-throwing per-catch error handling). A duplicate
 //    response (server already saw that UUID) is treated as success and marks
 //    the row uploaded — idempotent by design.
-//  - Hook: TailspotApp hooks `scenePhase → .active` to fire `uploadPending`.
-//    Per-catch immediate upload after a new catch is a follow-up (PLAN §9).
+//  - Hooks: TailspotApp fires `uploadPending` on `scenePhase → .active` (the
+//    retry net), and ContentView fires it right after a catch saves / a
+//    suspect Keep (per-catch immediate upload, 2026-08-24 — so the server
+//    knows the points before the user first opens Profile/Leaderboard).
+//    Overlapping sweeps are safe: both run on the MainActor over the same
+//    context, and the serverUuid assigned before the first POST makes any
+//    double-send a server-side duplicate, not a double catch.
 //
 
 import Foundation
