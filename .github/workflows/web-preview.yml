@@ -13,7 +13,17 @@ name: Web preview
 #
 # The trade-off: one preview at a time. Two concurrent web PRs would overwrite
 # each other, which is fine for a solo developer and is why the comment below
-# names the branch it came from.
+# names the branch it came from. On PR close the app is scaled to zero rather
+# than destroyed, so the URL stops serving a stale branch.
+#
+# TO SWITCH TO PER-PR ISOLATION INSTEAD
+# Fly's own blueprint (https://fly.io/docs/blueprints/review-apps-guide/) uses
+# superfly/fly-pr-review-apps, which gives a real app per PR, destroyed on
+# close. It needs `fly tokens org <ORG>` — a token that can also deploy over
+# tailspot-www, the backend, and the database, since they share this org.
+# Worth knowing before switching: GitHub does not expose secrets to PRs from
+# forks, so with no outside contributors the practical exposure is a
+# compromised Action or a malicious dependency rather than a drive-by PR.
 #
 # SETUP (once):
 #   fly apps create tailspot-www-preview
@@ -24,7 +34,7 @@ name: Web preview
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, closed]
     # Only web changes get a preview. This is a convenience deploy, not a
     # correctness gate, so skipping it elsewhere costs nothing — unlike the
     # unit-test path gating that got reverted in #191.
@@ -42,6 +52,7 @@ concurrency:
 
 jobs:
   preview:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     environment:
       name: web-preview
@@ -113,3 +124,32 @@ jobs:
               await github.rest.issues.createComment(
                 {owner, repo, issue_number, body});
             }
+
+  # A standing app has nothing to destroy, but leaving it up means the URL
+  # keeps serving a branch that was merged or abandoned weeks ago — which is
+  # worse than serving nothing, because it looks current. Scaling to zero
+  # machines makes the preview go quiet until the next web PR redeploys it.
+  teardown:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Take the preview down
+        # Never fail a PR close over housekeeping — but say so loudly rather
+        # than passing silently, so a permissions problem here can't sit
+        # unnoticed while a stale preview keeps serving.
+        continue-on-error: true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::warning::FLY_API_TOKEN not set — preview left running."
+            exit 1
+          fi
+          if flyctl scale count 0 --app tailspot-www-preview --yes; then
+            echo "preview scaled to zero machines"
+          else
+            echo "::warning::Could not scale the preview down; it may still be serving $GITHUB_HEAD_REF. Check the token's scope."
+            exit 1
+          fi
