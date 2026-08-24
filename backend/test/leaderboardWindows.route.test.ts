@@ -164,7 +164,7 @@ describe("GET /v1/leaderboard windows + weekly champions", () => {
     expect(month.champions).toBeNull(); // champions ride the week window only
   });
 
-  it("a device with no in-window catches drops out of entries but keeps an in-window rank in `me`", async () => {
+  it("a device with no in-window catches drops out of entries and is unranked (rank 0) in `me`", async () => {
     const alice = await register();
     const bob = await register();
     await claim(alice.token, "Alice");
@@ -174,8 +174,10 @@ describe("GET /v1/leaderboard windows + weekly champions", () => {
 
     const week = await get("/v1/leaderboard?window=week", alice.token);
     expect(week.entries).toEqual([{ rank: 1, handle: "Bob", points: 10, catches: 1 }]);
-    // Alice has 0 in-window points → ranked behind Bob, not vanished.
-    expect(week.me.rank).toBe(2);
+    // Alice has 0 in-window points → unranked (rank 0), not "last among every
+    // device row". Clients render rank 0 as "—"; ranking zero-point devices by
+    // registration order produced census-sized ranks (the "458th" bug).
+    expect(week.me.rank).toBe(0);
     expect(week.me.points).toBe(0);
   });
 

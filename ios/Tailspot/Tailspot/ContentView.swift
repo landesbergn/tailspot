@@ -1707,8 +1707,9 @@ struct ContentView: View {
     }
 
     /// Apply the review answer to every row it covered. Keep vouches — the
-    /// flag clears and the row uploads on the next scene-activation sweep.
-    /// Discard deletes the row + photo and fires the deny signals.
+    /// flag clears and the row uploads immediately (same per-catch sweep the
+    /// non-suspect path fires; the scene-activation sweep stays the retry
+    /// net). Discard deletes the row + photo and fires the deny signals.
     private func resolveSuspectReview(keep: Bool) {
         guard let review = pendingSuspectReview else { return }
         pendingSuspectReview = nil
@@ -1728,6 +1729,9 @@ struct ContentView: View {
             }
         }
         try? modelContext.save()
+        if keep {
+            Task { await CatchUploader().uploadPending(context: modelContext) }
+        }
     }
 
     /// Bottom capture bar — hangar (left), big central capture
@@ -2396,6 +2400,15 @@ struct ContentView: View {
                 // reveal carries the multiplicity message.
                 catchHaptic &+= 1
                 Log.adsb.notice("Caught \(newCatches.count, privacy: .public) plane(s); \(duplicates.count, privacy: .public) duplicate(s)")
+                // Per-catch immediate upload (2026-08-24): push the fresh
+                // non-suspect row(s) to the backend NOW instead of waiting
+                // for the next foreground transition — a first-time user
+                // otherwise opened Profile/Leaderboard with 0 server-side
+                // points and no rank. Fire-and-forget; uploadPending is
+                // idempotent and serverUuid-deduped, so overlapping the
+                // scene-activation sweep is safe, and a failure just defers
+                // to that sweep.
+                Task { await CatchUploader().uploadPending(context: modelContext) }
                 // Reverse-geocode the observer position ONCE for the
                 // batch (every row shares it) and stamp the new rows.
                 // Post-save and fire-and-forget: a catch never waits
