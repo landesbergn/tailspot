@@ -85,8 +85,7 @@ struct ProfileScreen: View {
                         if cachedWeeklyWins >= 1 {
                             championLaurelRow
                         }
-                        statsStrip(stats: stats, inputs: inputs)
-                        streakCard(streak)
+                        statsAndStreak(stats: stats, inputs: inputs, streak: streak)
                         if let best = Self.bestCatch(in: catches) {
                             bestCatchCard(best)
                         }
@@ -387,7 +386,29 @@ struct ProfileScreen: View {
 
     /// One quiet row for the collection counts — deliberately smaller type
     /// than the points/rank hero above it so the two never compete.
-    private func statsStrip(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
+    /// The counts and the streak in ONE card, split by a hairline (Noah,
+    /// 2026-08-24). They were two stacked cards, and on a screen that is
+    /// already a column of seven of them that read as clutter — these two
+    /// are the same thought ("your numbers"), so they share a container
+    /// instead of competing for attention as separate ones.
+    private func statsAndStreak(
+        stats: ProfileStats, inputs: TrophyProgressInputs, streak: Streaks.Summary
+    ) -> some View {
+        VStack(spacing: 0) {
+            statsRow(stats: stats, inputs: inputs)
+                .padding(.vertical, 14)
+            Rectangle()
+                .fill(Brand.Color.bgPrimary.opacity(0.5))
+                .frame(height: 1)
+                .padding(.horizontal, 18)
+            streakRow(streak)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+        }
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
+    }
+
+    private func statsRow(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
         // `inputs` is the precomputed value passed in — the filter closure
         // reads that single snapshot instead of re-deriving it per trophy.
         let earnedTrophies = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
@@ -397,8 +418,6 @@ struct ProfileScreen: View {
             statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
             statCell(value: earnedTrophies, label: "Trophies")
         }
-        .padding(.vertical, 12)
-        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     private func statCell(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
@@ -418,10 +437,11 @@ struct ProfileScreen: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Streak card
+    // MARK: - Streak row
 
     /// Daily catch streak: the live run, and one line under it that carries
-    /// both the state and the record.
+    /// both the state and the record. Rendered as a ROW inside the shared
+    /// numbers card (see `statsAndStreak`), not a card of its own.
     ///
     /// Set in PROSE, not mono (Noah, 2026-08-19). The type rule sends data
     /// readouts to mono, and the stats strip above obeys it — but this card
@@ -437,16 +457,18 @@ struct ProfileScreen: View {
     /// the space it took. Folded in, the card stays exactly two lines, and
     /// matching the record turns the suffix into gold praise instead of a
     /// repeated number.
-    private func streakCard(_ s: Streaks.Summary) -> some View {
+    private func streakRow(_ s: Streaks.Summary) -> some View {
         let alive = s.current > 0
-        return HStack(alignment: .top, spacing: 14) {
+        return HStack(alignment: .center, spacing: 14) {
             Image(systemName: "flame.fill")
                 .font(.system(size: 24))
                 .foregroundStyle(alive ? Brand.Color.alertCaution : Brand.Color.textTertiary)
+                // `.center` aligns the symbol's LAYOUT box, but flame.fill's
+                // ink sits high in that box, leaving it ~1.7 pt above the
+                // text block's optical centre. `.offset` nudges the drawing
+                // without moving the box, so nothing else in the row shifts.
+                .offset(y: 1.5)
                 .accessibilityHidden(true)
-                // Optically centre the flame against the two text lines
-                // rather than the container.
-                .padding(.top, 3)
             VStack(alignment: .leading, spacing: 2) {
                 // The count carries the weight; the unit recedes, so the
                 // number reads first at a glance.
@@ -501,9 +523,6 @@ struct ProfileScreen: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 15)
-        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(streakAccessibilityLabel(s))
     }

@@ -86,6 +86,17 @@ head-to-head PRs close unmerged).
   didn't), and `streak_extended` telemetry reads a new rows-only
   `realDaySet`, since a wrench-forced number must never land in PostHog.
   Regression test pins that both paths agree on the same Hangar.
+- **Profile declutter, first cut** (Noah, 2026-08-24): the stats strip and
+  the streak card share one container split by a hairline. They were two
+  stacked cards on a screen that is already a column of seven of them, and
+  they're the same thought — "your numbers" — so they stop competing as
+  separate ones. Seven cards became six; nothing else on the page moved.
+  Explored four bigger regroupings alongside it (open hero, one sheet, score
+  hero, a boarding-pass flight strip) and Noah took only this. Also: the
+  flame now centres on its text everywhere. `.center` aligns the SYMBOL's
+  layout box, but `flame.fill`'s ink sits high inside it, so all three
+  flames (Profile card, reveal line, permission card) carry a small
+  `.offset` that moves the drawing without disturbing the layout.
 - **Toasts consolidated:** grounded / far-tap / save-fail / streak share one
   `topToast` slot, so two capsules can never stack — and `body`'s modifier
   chain gets shorter, not longer (the PR #184 type-check budget).

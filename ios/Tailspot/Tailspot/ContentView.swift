@@ -1519,6 +1519,10 @@ struct ContentView: View {
                         Image(systemName: "flame.fill")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Brand.Color.alertCaution)
+                            // flame.fill's ink sits high in its layout box, so plain
+                            // centring leaves it ~1 pt above the text. Same nudge as
+                            // the Profile card's flame, scaled to this glyph size.
+                            .offset(y: 1)
                             .accessibilityHidden(true)
                         HStack(spacing: 5) {
                             Text("\(days)")
