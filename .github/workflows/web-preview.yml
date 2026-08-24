@@ -70,15 +70,20 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy preview
+        working-directory: web
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        # Run FROM web/ with a relative --config: flyctl resolves the config
+        # path against the directory it deploys, so `--config web/...` from the
+        # repo root looks for web/web/fly.preview.toml and fails.
+        #
         # --app is explicit and fly.preview.toml carries no `app =` line, so
         # this cannot resolve to tailspot-www and deploy a PR over the live
         # site. Keep both halves of that.
         run: |
-          flyctl deploy web \
+          flyctl deploy . \
             --app tailspot-www-preview \
-            --config web/fly.preview.toml \
+            --config fly.preview.toml \
             --remote-only \
             --yes
 
