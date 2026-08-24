@@ -80,15 +80,17 @@
     <div class="hero-visual">
       <figure class="catch">
         <div class="catch-frame">
-          <img class="catch-photo is-active" src="img/catch-b737.jpg" alt="A Boeing 737 overhead, framed by the app's lock-on brackets" width="900" height="567" fetchpriority="high">
-          <img class="catch-photo" src="img/catch-b767.jpg" alt="A Boeing 767 against a dark cloud band" width="900" height="567" loading="lazy">
-          <img class="catch-photo" src="img/catch-a321.jpg" alt="An Airbus A321neo on approach" width="900" height="567" loading="lazy">
-          <img class="catch-photo" src="img/catch-a220.jpg" alt="An Airbus A220 below breaking cloud" width="900" height="567" loading="lazy">
-          <img class="catch-photo" src="img/catch-bd700.jpg" alt="A business jet's contrail at 43,000 feet" width="900" height="567" loading="lazy">
+          <img class="catch-photo is-active" src="img/catch-b737.jpg" alt="A Boeing 737 overhead, framed by the app's lock-on brackets" width="900" height="567" fetchpriority="high" decoding="async">
+          <img class="catch-photo" src="img/catch-b767.jpg" alt="A Boeing 767 against a dark cloud band" width="900" height="567" decoding="async">
+          <img class="catch-photo" src="img/catch-a321.jpg" alt="An Airbus A321neo on approach" width="900" height="567" decoding="async">
+          <img class="catch-photo" src="img/catch-a220.jpg" alt="An Airbus A220 below breaking cloud" width="900" height="567" decoding="async">
+          <img class="catch-photo" src="img/catch-bd700.jpg" alt="A business jet's contrail at 43,000 feet" width="900" height="567" decoding="async">
         </div>
         <figcaption class="catch-meta">
-          <span class="catch-tier">● COMMON</span>
-          <span class="catch-model">Boeing 737-800</span>
+          <span class="catch-headline">
+            <span class="catch-tier">● COMMON</span>
+            <span class="catch-model">Boeing 737-800</span>
+          </span>
           <span class="catch-detail">Southwest · 4,075 ft · 2.1 km</span>
         </figcaption>
       </figure>
@@ -135,26 +137,78 @@
     var detEl  = document.querySelector('.catch-detail');
     if (!photos.length || !meta || !modelEl) return;
 
-    // Honour the same accessibility contract as the rest of the page: if the
-    // visitor asked for less motion, they get the first catch and no cycling.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // No Reduce Motion special-case any more. It first stopped the rotation
+    // dead (four of five catches never seen), then cut the fade to a hard cut
+    // — which is why the phone snapped between photos while desktop faded.
+    // A slow opacity fade between two still photographs is not the movement
+    // Reduce Motion exists to suppress; the stylesheet keeps it deliberately.
 
-    var i = 0; // markup already shows feed[0]
-    setInterval(function () {
-      var next = (i + 1) % feed.length;
-      meta.style.opacity = '0';
-      photos[i].classList.remove('is-active');
-      photos[next].classList.add('is-active');
-      setTimeout(function () {
-        var e = feed[next];
-        tierEl.textContent = '● ' + e.tier;
-        tierEl.className = 'catch-tier tier-' + e.tier.toLowerCase();
-        modelEl.textContent = e.model;
-        detEl.textContent = e.detail;
-        meta.style.opacity = '1';
-      }, 260);
-      i = next;
-    }, 3600);
+    // Read the fade lengths from CSS rather than restating them. They used to
+    // be duplicated here, and a mismatch means the layer cleanup fires at the
+    // wrong moment — the old photo drops out mid-fade and the card flickers.
+    var rootStyle = getComputedStyle(document.documentElement);
+    function ms(name, fallback) {
+      var v = parseFloat(rootStyle.getPropertyValue(name));
+      return isNaN(v) ? fallback : v;
+    }
+    var PHOTO_MS = ms('--catch-fade', 450);
+    var META_MS  = ms('--catch-meta-fade', 200);
+    var HOLD_MS  = 3600;  // time on screen per catch
+
+    function render(e) {
+      tierEl.textContent = '● ' + e.tier;
+      tierEl.className = 'catch-tier tier-' + e.tier.toLowerCase();
+      modelEl.textContent = e.model;
+      detEl.textContent = e.detail;
+    }
+
+    // Decode every photo up front. Without this the browser decodes each JPEG
+    // the first time it becomes visible — i.e. in the middle of its own fade —
+    // and drops frames doing it. They are ~35 KB each and all needed within
+    // seconds, so there is nothing to save by deferring.
+    var all = Array.prototype.slice.call(photos);
+    function warm() {
+      all.forEach(function (p) { if (p.decode) p.decode().catch(function () {}); });
+    }
+    if (document.readyState === 'complete') warm();
+    else window.addEventListener('load', warm);
+
+    var i = 0;          // markup already shows feed[0]
+    var busy = false;
+
+    function advance() {
+      // A backgrounded tab throttles timers, then fires the backlog at once on
+      // return — a burst of overlapping fades. Skip instead.
+      if (busy || document.hidden) return;
+      var next = (i + 1) % photos.length;
+      var cur = photos[i], nxt = photos[next];
+      busy = true;
+
+      var run = function () {
+        nxt.classList.add('is-incoming');
+        void nxt.offsetWidth;            // flush, so the class change animates
+        nxt.classList.add('is-active');
+
+        meta.style.opacity = '0';
+        setTimeout(function () {
+          render(feed[next]);
+          meta.style.opacity = '1';
+        }, META_MS);
+
+        setTimeout(function () {
+          cur.classList.remove('is-active');   // hidden beneath nxt; invisible
+          nxt.classList.remove('is-incoming'); // drops will-change
+          i = next;
+          busy = false;
+        }, PHOTO_MS);
+      };
+
+      // Decode before starting, so a cold image cannot stall its own fade.
+      if (nxt.decode) nxt.decode().then(run, run);
+      else run();
+    }
+
+    setInterval(advance, HOLD_MS);
   })();
 </script>
 
