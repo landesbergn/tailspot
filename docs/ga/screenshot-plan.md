@@ -58,8 +58,12 @@ Caption strip per frame (short, dry, matching the app voice), e.g.:
 
 ## Not doing (deliberate)
 
-- **App preview video** — allowed 15–30 s, would show the catch loop
-  beautifully, but it's its own production task; revisit post-GA with the
-  same field-session footage.
+- ~~**App preview video**~~ — was deferred at GA as its own production task.
+  **Revisited post-GA: the tooling now exists** at `tools/app-preview/`
+  (`make-preview.sh` assembles iPhone screen recordings into the 886×1920
+  H.264 file ASC wants, adds the required silent stereo track, and can cut
+  from an edit list). Still needs the one thing a script can't produce — a
+  field session recording the catch loop on the phone, since the AR sky
+  doesn't exist in the simulator.
 - iPad screenshots — the app is `TARGETED_DEVICE_FAMILY = 1`, iPhone-only.
 - Localized screenshot sets — worldwide region, English-only listing at GA.
