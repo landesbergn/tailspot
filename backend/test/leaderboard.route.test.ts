@@ -202,6 +202,28 @@ describe("GET /v1/leaderboard", () => {
     expect(noToken.json().me).toBeNull();
   });
 
+  it("a device with zero points is unranked (rank 0), not last among all device rows", async () => {
+    // Regression for the "458th on first catch" bug (2026-08-24): prod held
+    // ~500 device rows (mostly zero-catch drive-by installs), and the
+    // createdAt tiebreak ranked a fresh 0-point device behind every one of
+    // them — so a new user whose first catch hadn't uploaded yet saw a rank
+    // equal to the device-table census.
+    for (let i = 0; i < 5; i++) await register(); // earlier zero-point devices
+    const scorer = await register();
+    await claim(scorer, "Scorer");
+    await postCatch(scorer, COMMON);
+    const fresh = await register(); // newest device, nothing uploaded yet
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/leaderboard",
+      headers: { authorization: `Bearer ${fresh}` },
+    });
+    const me = res.json().me;
+    expect(me.points).toBe(0);
+    expect(me.rank).toBe(0); // unranked — NOT 7 (behind six earlier registrants)
+  });
+
   it("breaks point ties deterministically by registration time (earlier device wins)", async () => {
     // Register early FIRST so its createdAt is earlier; both reach 75 points
     // (each device's first-of-type rare).

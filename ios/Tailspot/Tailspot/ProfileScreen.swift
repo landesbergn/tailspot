@@ -40,7 +40,9 @@ struct ProfileScreen: View {
     /// shows the known server points + rank INSTANTLY on every open (no flash from
     /// the local fallback), then refreshes silently in the background. Sentinels:
     /// points `-1` / rank `0` = "never fetched" → the first-ever open shows the
-    /// local Hangar total + "—" until the first fetch lands.
+    /// local Hangar total + "—" until the first fetch lands. The server also
+    /// SENDS rank 0 for a zero-point device ("unranked", 2026-08-24) — same
+    /// rendering, so the two meanings deliberately share the sentinel.
     @AppStorage("tailspot.standing.points") private var cachedServerPoints: Int = -1
     @AppStorage("tailspot.standing.rank") private var cachedServerRank: Int = 0
     /// Weekly-champion crowns (dynamic-leaderboards L6), cached like the

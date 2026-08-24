@@ -5,6 +5,28 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-24 — Zero-point rank fix + per-catch immediate upload — branch `fix/zero-point-rank`
+
+A new user reported ranking "~458th" right after their first catch. Root cause
+was a compound: catches only uploaded on the next foreground transition, so the
+server saw the fresh device at 0 points — and `myStanding`'s createdAt tiebreak
+ranked a 0-point device behind **every device row ever registered** (497 in
+prod, ~92% zero-catch drive-by installs), i.e. the rank shown was the device-
+table census. Fixes:
+
+- **Backend:** `myStanding` returns `rank: 0` ("unranked") for zero in-window
+  points — wire stays a plain int because shipped clients decode `rank` as
+  non-optional (ProfileScreen already renders rank < 1 as "—"). Also skips the
+  full-table ranking scan for that case.
+- **iOS:** leaderboard "YOU" row renders rank 0 as "—" (+ accessibility copy);
+  ContentView fires `CatchUploader.uploadPending` immediately after a catch
+  saves and after a suspect Keep, so points reach the server before the user
+  first opens Profile/Leaderboard (scene-activation sweep stays the retry net;
+  overlap is safe — serverUuid dedupe).
+
+Backend 341 tests green (incl. new census-rank regression test); iOS suite
+green. Deploy order: server before client, as always.
+
 ## 2026-08-19 — Catch streaks, protection reminders + the narrowed duplicate rule — branch `feature/catch-streaks-v11`
 
 The v1.1 lead feature, converged from the two parallel head-to-head builds

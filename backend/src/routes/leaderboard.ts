@@ -19,7 +19,10 @@
  * accrue points invisibly (and still occupy ranks, so a handled device's rank
  * reflects its TRUE standing among everyone). `me` is present whenever a valid
  * token is sent, even if that device has no handle (so a player can see their
- * rank before choosing a public name); null otherwise. `me.weeklyWins` /
+ * rank before choosing a public name); null otherwise. A device with ZERO
+ * in-window points gets `me.rank` 0 = unranked (the old createdAt tiebreak
+ * ranked it behind every device row ever registered, so a new user whose
+ * first catch hadn't synced yet saw "458th"). `me.weeklyWins` /
  * `me.everToppedAllTime` are LIFETIME trophy counters (not window-scoped) and
  * ride along on every window for simplicity.
  *
