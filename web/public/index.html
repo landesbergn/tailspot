@@ -137,18 +137,15 @@
     var detEl  = document.querySelector('.catch-detail');
     if (!photos.length || !meta || !modelEl) return;
 
-    // Reduce Motion used to stop the rotation dead, which is why the photos
-    // never changed on Noah's phone. The catches are CONTENT, not decoration —
-    // stopping them hides four of the five. So honour the preference by
-    // cutting the cross-fade instead: same rotation, instant swap.
-    var frame = document.querySelector('.catch-frame');
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      frame.classList.add('no-fade');
-    }
+    // No Reduce Motion special-case any more. It first stopped the rotation
+    // dead (four of five catches never seen), then cut the fade to a hard cut
+    // — which is why the phone snapped between photos while desktop faded.
+    // A slow opacity fade between two still photographs is not the movement
+    // Reduce Motion exists to suppress; the stylesheet keeps it deliberately.
 
-    var PHOTO_MS = 900;   // must match .catch-photo's transition
-    var META_MS  = 420;   // must match .catch-meta's transition
-    var HOLD_MS  = 4600;  // time on screen per catch
+    var PHOTO_MS = 700;   // must match .catch-photo's transition
+    var META_MS  = 260;   // must match .catch-meta's transition
+    var HOLD_MS  = 3600;  // time on screen per catch
 
     function render(e) {
       tierEl.textContent = '● ' + e.tier;

@@ -236,7 +236,7 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   z-index: 0;
   /* Slower and on a symmetric ease. `ease` front-loads the change, which on a
      900ms opacity ramp reads as a lurch then a crawl. */
-  transition: opacity 900ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.7s ease;
 }
 .catch-photo.is-active { opacity: 1; z-index: 1; }
 
@@ -248,10 +248,6 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
    permanently costs mobile memory for no gain. */
 .catch-photo.is-incoming { z-index: 2; will-change: opacity; }
 
-/* Set by the rotation script under prefers-reduced-motion: the photos still
-   cycle (they are content), they just cut instead of cross-fading. */
-.catch-frame.no-fade .catch-photo { transition: none; }
-
 .catch-meta {
   display: flex;
   flex-direction: column;
@@ -262,17 +258,12 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
      to snap back at 260ms while the photo was still moving through a 700ms
      fade, so the two halves of one change finished at visibly different
      moments. */
-  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.26s ease;
 }
-/* Tier and model share a line — they are one fact about one catch, and
-   stacking them cost a line of height for no gain. */
-.catch-headline {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.55rem;
-  flex-wrap: wrap;
-}
+/* Desktop keeps the stacked caption it has always had: display:contents makes
+   this wrapper disappear from layout, so tier and model stay separate rows in
+   .catch-meta's column. The single-line treatment is mobile-only, below. */
+.catch-headline { display: contents; }
 .catch-tier {
   font-family: var(--mono);
   font-size: 0.62rem;
@@ -521,6 +512,15 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   .cta-row { margin-bottom: 0; }
   .catch { gap: 0.75rem; }
   .catch-meta { gap: 2px; }
+  /* Mobile only: tier and model on one line. They are one fact about one
+     catch, and on a phone the stacked version cost a line of height. */
+  .catch-headline {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+  }
 
   /* The footer was 152px on a 659px viewport — 23% of the screen for five
      links and a coordinate. Tighter type spacing, tighter link rows. */
@@ -577,10 +577,20 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* `transition: none !important` on * would also freeze the catch rotation's
-     cross-fade — harmless, since .no-fade already cuts it — but the photos
-     themselves must keep cycling. That is handled in JS, not here. */
   * { scroll-behavior: auto; transition: none !important; }
+
+  /* EXCEPT the catch rotation. Reduce Motion targets vestibular triggers —
+     movement, parallax, zoom, spin. A gentle opacity fade between two still
+     photographs is none of those; it is what the guidance recommends AS the
+     calm alternative to movement. Killing it here (plus a JS no-fade class)
+     is why the rotation snapped between photos on Noah's phone while desktop
+     faded smoothly: he has Reduce Motion on, and the site read as broken
+     rather than considerate. The photos are content; the fade is how one
+     hands over to the next. */
+  .catch-photo, .catch-meta { transition-property: opacity !important; }
+  .catch-photo { transition-duration: 0.7s !important; }
+  .catch-meta  { transition-duration: 0.26s !important; }
+  .catch-photo, .catch-meta { transition-timing-function: ease !important; }
   /* Killing the transition alone would leave the hover/press transforms
      snapping instantly, which is the jolt this query exists to avoid — so
      drop the movement entirely and let the glow carry the affordance. */
