@@ -80,11 +80,11 @@
     <div class="hero-visual">
       <figure class="catch">
         <div class="catch-frame">
-          <img class="catch-photo is-active" src="img/catch-b737.jpg" alt="A Boeing 737 overhead, framed by the app's lock-on brackets" width="900" height="567" fetchpriority="high">
-          <img class="catch-photo" src="img/catch-b767.jpg" alt="A Boeing 767 against a dark cloud band" width="900" height="567" loading="lazy">
-          <img class="catch-photo" src="img/catch-a321.jpg" alt="An Airbus A321neo on approach" width="900" height="567" loading="lazy">
-          <img class="catch-photo" src="img/catch-a220.jpg" alt="An Airbus A220 below breaking cloud" width="900" height="567" loading="lazy">
-          <img class="catch-photo" src="img/catch-bd700.jpg" alt="A business jet's contrail at 43,000 feet" width="900" height="567" loading="lazy">
+          <img class="catch-photo is-active" src="img/catch-b737.jpg" alt="A Boeing 737 overhead, framed by the app's lock-on brackets" width="900" height="567" fetchpriority="high" decoding="async">
+          <img class="catch-photo" src="img/catch-b767.jpg" alt="A Boeing 767 against a dark cloud band" width="900" height="567" decoding="async">
+          <img class="catch-photo" src="img/catch-a321.jpg" alt="An Airbus A321neo on approach" width="900" height="567" decoding="async">
+          <img class="catch-photo" src="img/catch-a220.jpg" alt="An Airbus A220 below breaking cloud" width="900" height="567" decoding="async">
+          <img class="catch-photo" src="img/catch-bd700.jpg" alt="A business jet's contrail at 43,000 feet" width="900" height="567" decoding="async">
         </div>
         <figcaption class="catch-meta">
           <span class="catch-headline">
@@ -146,22 +146,64 @@
       frame.classList.add('no-fade');
     }
 
-    var i = 0; // markup already shows feed[0]
-    setInterval(function () {
-      var next = (i + 1) % feed.length;
-      meta.style.opacity = '0';
-      photos[i].classList.remove('is-active');
-      photos[next].classList.add('is-active');
-      setTimeout(function () {
-        var e = feed[next];
-        tierEl.textContent = '● ' + e.tier;
-        tierEl.className = 'catch-tier tier-' + e.tier.toLowerCase();
-        modelEl.textContent = e.model;
-        detEl.textContent = e.detail;
-        meta.style.opacity = '1';
-      }, 260);
-      i = next;
-    }, 3600);
+    var PHOTO_MS = 900;   // must match .catch-photo's transition
+    var META_MS  = 420;   // must match .catch-meta's transition
+    var HOLD_MS  = 4600;  // time on screen per catch
+
+    function render(e) {
+      tierEl.textContent = '● ' + e.tier;
+      tierEl.className = 'catch-tier tier-' + e.tier.toLowerCase();
+      modelEl.textContent = e.model;
+      detEl.textContent = e.detail;
+    }
+
+    // Decode every photo up front. Without this the browser decodes each JPEG
+    // the first time it becomes visible — i.e. in the middle of its own fade —
+    // and drops frames doing it. They are ~35 KB each and all needed within
+    // seconds, so there is nothing to save by deferring.
+    var all = Array.prototype.slice.call(photos);
+    function warm() {
+      all.forEach(function (p) { if (p.decode) p.decode().catch(function () {}); });
+    }
+    if (document.readyState === 'complete') warm();
+    else window.addEventListener('load', warm);
+
+    var i = 0;          // markup already shows feed[0]
+    var busy = false;
+
+    function advance() {
+      // A backgrounded tab throttles timers, then fires the backlog at once on
+      // return — a burst of overlapping fades. Skip instead.
+      if (busy || document.hidden) return;
+      var next = (i + 1) % photos.length;
+      var cur = photos[i], nxt = photos[next];
+      busy = true;
+
+      var run = function () {
+        nxt.classList.add('is-incoming');
+        void nxt.offsetWidth;            // flush, so the class change animates
+        nxt.classList.add('is-active');
+
+        meta.style.opacity = '0';
+        setTimeout(function () {
+          render(feed[next]);
+          meta.style.opacity = '1';
+        }, META_MS);
+
+        setTimeout(function () {
+          cur.classList.remove('is-active');   // hidden beneath nxt; invisible
+          nxt.classList.remove('is-incoming'); // drops will-change
+          i = next;
+          busy = false;
+        }, PHOTO_MS);
+      };
+
+      // Decode before starting, so a cold image cannot stall its own fade.
+      if (nxt.decode) nxt.decode().then(run, run);
+      else run();
+    }
+
+    setInterval(advance, HOLD_MS);
   })();
 </script>
 

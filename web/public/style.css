@@ -233,9 +233,21 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity 0.7s ease;
+  z-index: 0;
+  /* Slower and on a symmetric ease. `ease` front-loads the change, which on a
+     900ms opacity ramp reads as a lurch then a crawl. */
+  transition: opacity 900ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.catch-photo.is-active { opacity: 1; }
+.catch-photo.is-active { opacity: 1; z-index: 1; }
+
+/* The outgoing photo stays fully opaque UNDERNEATH while the incoming one
+   fades in on top. A true cross-fade drops both layers to ~50% at the
+   midpoint, so the dark frame shows through and the whole card pulses darker
+   — that dip is what read as jitter, not the frame rate.
+   will-change only on the layer actually animating; promoting all five
+   permanently costs mobile memory for no gain. */
+.catch-photo.is-incoming { z-index: 2; will-change: opacity; }
+
 /* Set by the rotation script under prefers-reduced-motion: the photos still
    cycle (they are content), they just cut instead of cross-fading. */
 .catch-frame.no-fade .catch-photo { transition: none; }
@@ -246,7 +258,11 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
   align-items: center;
   gap: 2px;
   text-align: center;
-  transition: opacity 0.26s ease;
+  /* Matched to the photo's curve and timed against it in JS: the caption used
+     to snap back at 260ms while the photo was still moving through a 700ms
+     fade, so the two halves of one change finished at visibly different
+     moments. */
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 /* Tier and model share a line — they are one fact about one catch, and
    stacking them cost a line of height for no gain. */
