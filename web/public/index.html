@@ -143,8 +143,16 @@
     // A slow opacity fade between two still photographs is not the movement
     // Reduce Motion exists to suppress; the stylesheet keeps it deliberately.
 
-    var PHOTO_MS = 700;   // must match .catch-photo's transition
-    var META_MS  = 260;   // must match .catch-meta's transition
+    // Read the fade lengths from CSS rather than restating them. They used to
+    // be duplicated here, and a mismatch means the layer cleanup fires at the
+    // wrong moment — the old photo drops out mid-fade and the card flickers.
+    var rootStyle = getComputedStyle(document.documentElement);
+    function ms(name, fallback) {
+      var v = parseFloat(rootStyle.getPropertyValue(name));
+      return isNaN(v) ? fallback : v;
+    }
+    var PHOTO_MS = ms('--catch-fade', 450);
+    var META_MS  = ms('--catch-meta-fade', 200);
     var HOLD_MS  = 3600;  // time on screen per catch
 
     function render(e) {
