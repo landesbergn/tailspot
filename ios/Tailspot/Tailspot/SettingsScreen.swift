@@ -2,27 +2,49 @@
 //  SettingsScreen.swift
 //  Tailspot
 //
-//  Organised into two sections:
-//    SPOTTER  — handle claim (the only real identity setting; everything
-//               else that once lived here was a fake affordance and has
-//               been removed — see git history for the inventory).
-//    ABOUT    — legal links (Privacy Policy, Terms, Attributions —
-//               ODbL attribution for adsb.lol data is a licence
-//               obligation), data-source credits, plus the tap-to-copy
-//               version footer.
+//  Organised into three sections:
+//    SPOTTER   — handle claim (the only real identity setting; everything
+//                else that once lived here was a fake affordance and has
+//                been removed — see git history for the inventory).
+//    REMINDERS — the streak-protection mute toggle (StreakReminders.swift),
+//                with an honest permission-denied state that routes to iOS
+//                Settings and heals on return.
+//    ABOUT     — legal links (Privacy Policy, Terms, Attributions —
+//                ODbL attribution for adsb.lol data is a licence
+//                obligation), data-source credits, plus the tap-to-copy
+//                version footer.
 //
 
 import SwiftUI
+import SwiftData
+import UserNotifications
 import os
 
 struct SettingsScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
+    /// Streak-protection reminders (default ON; muting cancels any pending
+    /// nudge on the next sync below). Key shared with StreakReminderCenter.
+    @AppStorage(StreakReminders.enabledKey) private var streakRemindersEnabled = true
 
     @State private var handleDraft: String = ""
     @State private var handleTakenError: String? = nil
     @State private var isSavingHandle = false
     @State private var savedHandleSuccess: String? = nil   // brief "claimed" confirmation
+    /// System notification permission, re-read on foreground so granting in
+    /// iOS Settings heals the row without a relaunch.
+    @State private var notifStatus: UNAuthorizationStatus = .notDetermined
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     private let accountClient = TailspotAccountClient()
+
+    #if DEBUG
+    /// Snapshot seam — the visual-pass harness can't drive the real
+    /// notification-settings read, so it forces the row state here.
+    /// nil (production) = live status.
+    var _notifStatusOverride: UNAuthorizationStatus? = nil
+    #endif
+
+    private var notifDenied: Bool { notifStatus == .denied }
 
     /// True when the draft differs from the saved handle and is non-empty.
     private var isDirty: Bool {
@@ -123,6 +145,51 @@ struct SettingsScreen: View {
             }
             .listRowBackground(Brand.Color.bgElevated)
 
+            // MARK: REMINDERS
+
+            Section {
+                Toggle(isOn: $streakRemindersEnabled) {
+                    Text("Streak protection")
+                        .foregroundStyle(notifDenied
+                                         ? Brand.Color.textTertiary
+                                         : Brand.Color.textPrimary)
+                }
+                .tint(Brand.Color.cyan)
+                // Denied → the toggle alone goes inert (`.disabled` on the
+                // whole row would also kill the recovery path below).
+                .disabled(notifDenied)
+                if notifDenied {
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Open Settings")
+                                .foregroundStyle(Brand.Color.textPrimary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Brand.Color.textTertiary)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the Settings app")
+                }
+            } header: {
+                Text("REMINDERS")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
+            } footer: {
+                Text(notifDenied
+                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges."
+                     : "One evening nudge when a day without a catch would break your streak. Nothing else, ever.")
+            }
+            .listRowBackground(Brand.Color.bgElevated)
+
             // MARK: ABOUT
 
             Section {
@@ -170,6 +237,42 @@ struct SettingsScreen: View {
                 handle, placeholder: SpotterHandle.defaultPlaceholder
             ) ? handle : ""
         }
+        .task { await refreshNotifStatus() }
+        // Heal-on-return: the user goes to iOS Settings from the denied
+        // state, allows notifications, comes back — the row un-dims on this
+        // re-read, no relaunch needed.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await refreshNotifStatus() }
+            }
+        }
+        .onChange(of: streakRemindersEnabled) { _, enabled in
+            Task { @MainActor in
+                // Toggling ON before the system prompt ever fired IS the
+                // contextual ask for a user who found the setting first —
+                // it latches the one-shot so the in-camera pre-prompt
+                // never re-asks.
+                if enabled,
+                   await StreakReminderCenter.shared.authorizationStatus() == .notDetermined {
+                    _ = await StreakReminderCenter.shared.requestPermission()
+                    await refreshNotifStatus()
+                }
+                // Re-plan under the new setting: OFF cancels any pending
+                // nudge, ON schedules if a streak is live.
+                await StreakReminderCenter.shared.sync(context: modelContext)
+            }
+        }
+    }
+
+    /// Re-read the system permission (or the snapshot harness override).
+    private func refreshNotifStatus() async {
+        #if DEBUG
+        if let override = _notifStatusOverride {
+            notifStatus = override
+            return
+        }
+        #endif
+        notifStatus = await StreakReminderCenter.shared.authorizationStatus()
     }
 
     // MARK: - Handle claim

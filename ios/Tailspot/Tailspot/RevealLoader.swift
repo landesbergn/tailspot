@@ -52,6 +52,12 @@ final class RevealLoader {
     /// wasn't delivering frames (denied / session down).
     var provisionalPhoto: UIImage?
 
+    /// The user's current day-streak AFTER this catch landed, set by the
+    /// pipeline alongside the row — nil when below the chip threshold
+    /// (`StreakReminders.minimumStreak`). Drives the reveal's streak chip
+    /// on the early-shell path, where the streak isn't known at tap time.
+    var streakDays: Int?
+
     /// Flipped exactly once, when the catch pipeline's task exits (deferred,
     /// so error exits flip it too). Distinguishes "photo still in flight"
     /// (quiet dark loading slot) from "settled with no photo" (the classic

@@ -328,12 +328,15 @@ struct TrophiesHiddenAndMetricsTests {
         #expect(Trophies.maxCountWithinWindow([], seconds: 600) == 0)
     }
 
-    @Test func consecutiveDayRun() {
-        let three: Set<Date> = [date(dayOffset: 0), date(dayOffset: 1), date(dayOffset: 2)]
-        #expect(Trophies.longestConsecutiveDayRun(three, calendar: cal) == 3)
+    /// The trophy layer no longer owns a day-run implementation: it reads
+    /// `Streaks`, so the secret 7-day trophy and the Profile streak card can
+    /// never disagree about the same Hangar. Pin that they're one number.
+    @Test func trophyDayStreakReadsTheStreakEngine() {
         // A gap breaks the run: 0,1, [skip 2], 3 → longest is 2.
-        let gapped: Set<Date> = [date(dayOffset: 0), date(dayOffset: 1), date(dayOffset: 3)]
-        #expect(Trophies.longestConsecutiveDayRun(gapped, calendar: cal) == 2)
+        let gapped = [date(dayOffset: 0), date(dayOffset: 1), date(dayOffset: 3)].map { mk(at: $0) }
+        #expect(Trophies.inputs(from: gapped).longestDayStreak == 2)
+        #expect(Trophies.inputs(from: gapped).longestDayStreak
+                == Streaks.longestStreak(days: Streaks.daySet(catches: gapped)))
     }
 
     // MARK: - inputs(from:) metrics

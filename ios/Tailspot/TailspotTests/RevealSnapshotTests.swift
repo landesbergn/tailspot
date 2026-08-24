@@ -113,6 +113,18 @@ struct RevealSnapshotTests {
         if let img = rmRenderer.uiImage, let data = img.pngData() {
             try? data.write(to: dir.appendingPathComponent("a220_route_uncommon_reducemotion.png"))
         }
+
+        // Streak chip (catch-streaks round): settled frame with the
+        // "DAY 5 STREAK" capsule between card and CTA.
+        let streakView = CatchRevealView(
+            plane: cases[0].1, entryNumber: 62,
+            onDismiss: {}, onViewInHangar: {}, streakDays: 5
+        )._snapshotScreen(width: min(screen.width - 28, 420), size: screen)
+        let streakRenderer = ImageRenderer(content: streakView)
+        streakRenderer.scale = 3
+        if let img = streakRenderer.uiImage, let data = img.pngData() {
+            try? data.write(to: dir.appendingPathComponent("a220_streak_day5.png"))
+        }
     }
 
     /// A stand-in for the tap-time viewfinder frame: a portrait sky
