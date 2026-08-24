@@ -223,6 +223,19 @@ struct ProfileSettingsSnapshotTests {
             .modelContainer(container),
             as: "leaderboard"
         )
+        // Unranked variant (zero-point rank fix, 2026-08-24): the server sends
+        // rank 0 for a device with zero in-window points; the YOU row must
+        // render "—", never "0" (nor the old census-sized rank). A distinct
+        // handle so the fixture's @noah at rank 2 doesn't read as the same
+        // user.
+        defaults.set("newspotter", forKey: SpotterHandle.storageKey)
+        snapshot(
+            NavigationStack {
+                LeaderboardScreen(_debugEntries: entries, me: MyStanding(rank: 0, points: 0))
+            }
+            .modelContainer(container),
+            as: "leaderboard_unranked"
+        )
         // Handle-less variant exercises the "claim a handle" standing hint
         // (the section-header + stale-copy fixes both render here).
         defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
