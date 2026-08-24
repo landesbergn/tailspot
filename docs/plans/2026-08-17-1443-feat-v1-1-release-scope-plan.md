@@ -43,7 +43,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 **Habit loop**
 
 - R1. The Profile shows a current streak and a longest streak, counted as consecutive local-calendar days with at least one catch.
-- R2. A local streak-protection reminder fires only when all of these hold: a live streak of 3+ days, no catch yet that day, and no reminder already sent that day. It arrives in the early evening, cancels for the day once a catch lands, and never fires for a broken or absent streak.
+- R2. A local streak-protection reminder fires only when all of these hold: a live streak of 2+ days, no catch yet that day, and no reminder already sent that day. It arrives in the early evening, cancels for the day once a catch lands, and never fires for a broken or absent streak. **Amended 2026-08-19 (Noah): the threshold is 2 days, not 3** — two days is the first moment a streak exists to protect, and the permission ask reads strongest as "you have a 2-day streak, protect it?". One constant, `StreakReminders.minimumStreak`, shared by the reminder, the reveal chip and the ask so all three agree on when a streak exists.
 - R3. Reminders are on by default, gated by the system notification permission requested with context (not at cold launch), and can be muted in Settings.
 
 **First-catch activation**
@@ -59,7 +59,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 **Collection polish**
 
 - R8. Tapping the photo on a catch card opens the full-resolution photo with pinch-zoom. It no longer dismisses the card.
-- R11. A catch counts as a duplicate only when the same airframe was already caught with the same callsign on the same local calendar day; if the callsign is missing on either side, a same-day repeat of the airframe compares as a duplicate.
+- R11. A catch counts as a duplicate only when the same airframe was already caught with the same callsign on the same local calendar day; if the callsign is missing on either side, a same-day repeat of the airframe compares as a duplicate. **Sequencing, settled 2026-08-19 (Noah): R11/R12 ship in the SAME PR as the streak (R1/R2), not after it.** The streak counts days that have a `Catch` row, and under the old lifetime-per-airframe gate a day of re-sighted planes wrote no row — so shipping the streak first would have needed a side-channel record of catch actions purely to bridge the gap.
 - R12. Any other repeat sighting is a full catch with its own record, photo, points, and upload; the duplicate reveal (existing catch, "ALREADY CAUGHT", no points) applies only within R11's window. Existing rows are untouched.
 
 **Quality**
@@ -70,7 +70,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 ### Key Flows
 
 - F1. Streak reminder day
-  - **Trigger:** a day begins with a live 3+ day streak.
+  - **Trigger:** a day begins with a live 2+ day streak (amended 2026-08-19 — see R2).
   - **Steps:** no catch by early evening → one local notification → tapping it opens the app ready to catch. A catch at any point that day cancels the pending reminder.
   - **Covers:** R2, R3.
 - F2. First launch to first catch
@@ -81,7 +81,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 ### Acceptance Examples
 
 - AE1. **Covers R2.** Given a 4-day streak and no catch today, when early evening arrives, exactly one reminder fires. Given a catch at 17:00 that day, no reminder fires.
-- AE2. **Covers R2.** Given a 2-day streak, no reminder fires.
+- AE2. **Covers R2.** Given a 1-day streak, no reminder fires. (Was "a 2-day streak" — see R2's 2026-08-19 amendment.)
 - AE3. **Covers R2.** Given a streak that broke yesterday, or a lapsed user, nothing fires. The reminder protects an active run; it is not a win-back nag.
 - AE4. **Covers R3.** Given reminders muted in Settings, no reminder fires regardless of streak.
 - AE5. **Covers R7.** Given a trophy unlock, the review sheet may appear after the celebration completes. It never appears during capture or the reveal.

@@ -65,6 +65,9 @@ struct ProfileScreen: View {
         // then we thread the values down to the sections.
         let stats = ProfileStats(catches: catches)
         let inputs = Trophies.inputs(from: catches)
+        // Same compute-once rule as `stats`/`inputs` above: one O(n) pass
+        // here, threaded down — never a computed property re-run per access.
+        let streak = Streaks.summary(catches: catches)
         return NavigationStack {
             ScrollView {
                 // GlassEffectContainer is load-bearing, not cosmetic: each
@@ -82,7 +85,7 @@ struct ProfileScreen: View {
                         if cachedWeeklyWins >= 1 {
                             championLaurelRow
                         }
-                        statsStrip(stats: stats, inputs: inputs)
+                        statsAndStreak(stats: stats, inputs: inputs, streak: streak)
                         if let best = Self.bestCatch(in: catches) {
                             bestCatchCard(best)
                         }
@@ -383,7 +386,29 @@ struct ProfileScreen: View {
 
     /// One quiet row for the collection counts — deliberately smaller type
     /// than the points/rank hero above it so the two never compete.
-    private func statsStrip(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
+    /// The counts and the streak in ONE card, split by a hairline (Noah,
+    /// 2026-08-24). They were two stacked cards, and on a screen that is
+    /// already a column of seven of them that read as clutter — these two
+    /// are the same thought ("your numbers"), so they share a container
+    /// instead of competing for attention as separate ones.
+    private func statsAndStreak(
+        stats: ProfileStats, inputs: TrophyProgressInputs, streak: Streaks.Summary
+    ) -> some View {
+        VStack(spacing: 0) {
+            statsRow(stats: stats, inputs: inputs)
+                .padding(.vertical, 14)
+            Rectangle()
+                .fill(Brand.Color.bgPrimary.opacity(0.5))
+                .frame(height: 1)
+                .padding(.horizontal, 18)
+            streakRow(streak)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+        }
+        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
+    }
+
+    private func statsRow(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
         // `inputs` is the precomputed value passed in — the filter closure
         // reads that single snapshot instead of re-deriving it per trophy.
         let earnedTrophies = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
@@ -393,8 +418,6 @@ struct ProfileScreen: View {
             statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
             statCell(value: earnedTrophies, label: "Trophies")
         }
-        .padding(.vertical, 12)
-        .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
     private func statCell(value: Int, label: String, valueColor: Color = Brand.Color.textPrimary) -> some View {
@@ -412,6 +435,120 @@ struct ProfileScreen: View {
         // One VoiceOver element per cell ("12, CATCHES"), not value and
         // label as disconnected fragments.
         .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Streak row
+
+    /// Daily catch streak: the live run, and one line under it that carries
+    /// both the state and the record. Rendered as a ROW inside the shared
+    /// numbers card (see `statsAndStreak`), not a card of its own.
+    ///
+    /// Set in PROSE, not mono (Noah, 2026-08-19). The type rule sends data
+    /// readouts to mono, and the stats strip above obeys it — but this card
+    /// is the one on the screen that talks to you ("catch today to keep
+    /// it"), and shouting it in tracked uppercase made it read as a system
+    /// warning rather than encouragement. It sits with the BEST CATCH card
+    /// below, which is prose for the same reason.
+    ///
+    /// The best run rides the state line as a suffix rather than its own
+    /// element (Noah, 2026-08-20). It was a matching number at the far
+    /// right, which at "12 day streak … best 12" read as a duplicate rather
+    /// than a record being matched — and as a bare stat it earned less than
+    /// the space it took. Folded in, the card stays exactly two lines, and
+    /// matching the record turns the suffix into gold praise instead of a
+    /// repeated number.
+    private func streakRow(_ s: Streaks.Summary) -> some View {
+        let alive = s.current > 0
+        return HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(alive ? Brand.Color.alertCaution : Brand.Color.textTertiary)
+                // `.center` aligns the symbol's LAYOUT box, but flame.fill's
+                // ink sits high in that box, leaving it ~1.7 pt above the
+                // text block's optical centre. `.offset` nudges the drawing
+                // without moving the box, so nothing else in the row shifts.
+                .offset(y: 1.5)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                // The count carries the weight; the unit recedes, so the
+                // number reads first at a glance.
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("\(s.current)")
+                        .font(.system(.title3, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(alive ? Brand.Color.textPrimary : Brand.Color.textTertiary)
+                    Text("day streak")
+                        .font(.system(.subheadline, weight: .medium))
+                        .foregroundStyle(alive ? Brand.Color.textSecondary : Brand.Color.textTertiary)
+                    #if DEBUG
+                    // A forced streak says so ON the card. Reading 12 here
+                    // and 26 on the next catch reveal, with nothing to
+                    // explain it, is what made the feature look broken
+                    // (2026-08-21) — the wrench panel knew, but the screen
+                    // telling the lie didn't.
+                    if StreakDebug.override != nil {
+                        Text("DEBUG")
+                            .font(Brand.Font.mono(size: 9, weight: .bold))
+                            .tracking(0.8)
+                            .foregroundStyle(Brand.Color.bgPrimary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Brand.Color.alertCaution, in: .rect(cornerRadius: 3))
+                    }
+                    #endif
+                }
+                // Two Texts, not one string: the state half can be amber
+                // while the record half stays tertiary (or gold).
+                HStack(spacing: 5) {
+                    Text(streakStateLine(s))
+                        .foregroundStyle(s.atRisk ? Brand.Color.alertCaution : Brand.Color.textTertiary)
+                    if let record = streakRecordSuffix(s) {
+                        Text("·")
+                            .foregroundStyle(Brand.Color.textTertiary)
+                        Text(record.text)
+                            .monospacedDigit()
+                            // One accent per line. Gold praise next to the
+                            // amber warning is nearly the same hue, so the
+                            // two run together into a single amber phrase —
+                            // while the streak is at risk the warning owns
+                            // the colour and the record waits its turn.
+                            .foregroundStyle(record.isRecord && !s.atRisk
+                                             ? Brand.Color.ledgerGold
+                                             : Brand.Color.textTertiary)
+                    }
+                }
+                .font(.footnote)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(streakAccessibilityLabel(s))
+    }
+
+    /// The card's one editorial line. Sentence case: it's a sentence.
+    private func streakStateLine(_ s: Streaks.Summary) -> String {
+        if s.caughtToday { return "Extended today" }
+        if s.atRisk { return "Catch today to keep it" }
+        return "Catch a plane to start one"
+    }
+
+    /// The record half of the state line. nil before there is any history
+    /// worth naming — on a fresh Hangar "best 0" is noise, and telling
+    /// someone with a 1-day streak that their record is 1 says nothing.
+    private func streakRecordSuffix(_ s: Streaks.Summary) -> (text: String, isRecord: Bool)? {
+        guard s.longest > 1 else { return nil }
+        if s.current >= s.longest { return ("your best yet", true) }
+        return ("best \(s.longest)", false)
+    }
+
+    private func streakAccessibilityLabel(_ s: Streaks.Summary) -> String {
+        var parts = ["\(s.current) day streak", streakStateLine(s)]
+        if let record = streakRecordSuffix(s) {
+            parts.append(record.isRecord ? "your best yet" : "best \(s.longest)")
+        }
+        return parts.joined(separator: ". ") + "."
     }
 
     // MARK: - Best catch
