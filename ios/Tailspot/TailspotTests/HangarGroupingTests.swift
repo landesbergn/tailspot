@@ -421,4 +421,42 @@ struct HangarGroupingTests {
         #expect(groups[0].title == "Airbus A380-800")
         #expect(groups[0].rows.count == 3)
     }
+
+    // MARK: - First-of-type row derivation (Recent card sparkle + bonus)
+
+    /// The set contains exactly the rows whose DISPLAYED (most recent)
+    /// catch nothing of the same typecode predates — across ALL catches,
+    /// other airframes included.
+    @Test func firstOfTypeRowIDsMarksOnlyTheEarliestOfEachType() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let catches = [
+            // First B738 ever (airframe b1)…
+            makeCatch(icao: "b1", caughtAt: t0, typecode: "B738"),
+            // …then a different B738 airframe a day later: not first.
+            makeCatch(icao: "b2", caughtAt: t0.addingTimeInterval(86_400), typecode: "B738"),
+            // Sole A388: first of its type.
+            makeCatch(icao: "a1", caughtAt: t0.addingTimeInterval(3_600), typecode: "A388"),
+            // Typeless catch: never first-of-type.
+            makeCatch(icao: "n1", caughtAt: t0.addingTimeInterval(7_200)),
+        ]
+        let rows = HangarGrouping.group(catches, by: .recent)[0].rows
+        let ids = HangarGrouping.firstOfTypeRowIDs(rows: rows, allCatches: catches)
+        #expect(ids == ["b1", "a1"])
+    }
+
+    /// A legacy multi-catch row (same icao24, pre-dedup) displays its most
+    /// recent catch — which an earlier catch of the type predates, so the
+    /// row is NOT first-of-type even though its own history contains the
+    /// first. Mirrors the server's per-catch award for the displayed catch.
+    @Test func firstOfTypeRowIDsAnchorsOnTheDisplayedCatch() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let catches = [
+            makeCatch(icao: "c1", caughtAt: t0, typecode: "C172"),
+            makeCatch(icao: "c1", caughtAt: t0.addingTimeInterval(86_400), typecode: "C172"),
+        ]
+        let rows = HangarGrouping.group(catches, by: .recent)[0].rows
+        #expect(rows.count == 1 && rows[0].count == 2)
+        let ids = HangarGrouping.firstOfTypeRowIDs(rows: rows, allCatches: catches)
+        #expect(ids.isEmpty)
+    }
 }

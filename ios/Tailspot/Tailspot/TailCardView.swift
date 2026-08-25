@@ -10,12 +10,18 @@
 //  the hero line (the card's echo of the reveal's split-flap name), then
 //  the reveal's ROUTE vocabulary — mono ICAO codes with a rarity-tinted
 //  arrow (HND → SFO) · short date — falling back to the quiet
-//  date · location when the catch carries no route. A rarity-tinted point
-//  value sits as the trailing readout (in place of the chevron). The Sets
-//  view leaves `showPoints` off and renders the compact two-line card (no
-//  model — every row in a set shares it — and no points). Two hues carry
-//  meaning (cyan = callsign; the rarity tint = points + route arrow); all
-//  other text is greys. No type pills. Used by the Recent feed
+//  date · location when the catch carries no route. The trailing readout
+//  is the FULL display total — base plus the first-of-type / correct-guess
+//  bonuses the server awarded (mock round 2026-08-24) — over a tiny
+//  "base +bonus" micro-ledger in the same tint (the reveal ledger
+//  compressed to one line; bonus-less rows keep the quiet PTS caption),
+//  in place of the chevron. First-of-type rows cap the model line with a
+//  gold sparkle — the collection milestone sits on the thing it's about.
+//  The Sets view leaves `showPoints` off and renders the compact two-line
+//  card (no model — every row in a set shares it — and no points). Three
+//  hues carry meaning (cyan = callsign; the rarity tint = the whole score
+//  column + route arrow; ledger gold = first-of-type only); all other
+//  text is greys. No type pills. Used by the Recent feed
 //  (HangarRecentView) and the model-detail screen (SetsScreen). Taps into
 //  the full CatchDetailView.
 //
@@ -29,6 +35,13 @@ struct TailCard: View {
     /// default — the Sets view leaves it off and shows the compact card, since
     /// every catch in a set shares a model and a rarity (both would be redundant).
     var showPoints: Bool = false
+    /// The displayed catch was the device's first of its typecode — caps
+    /// the make/model line with the gold sparkle and adds the +50% share
+    /// to the trailing total. Precomputed by the caller (HangarRecentView
+    /// derives it once per feed via `HangarGrouping.firstOfTypeRowIDs`)
+    /// because the card only sees its own row, not the whole Hangar.
+    /// Meaningful only with `showPoints`; the Sets view leaves both off.
+    var isFirstOfType: Bool = false
 
     private var photoURL: URL? {
         row.mostRecent.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
@@ -41,11 +54,13 @@ struct TailCard: View {
     }
 
     /// Scaled metrics for the row sizes with no exact built-in text style
-    /// (14 hero / 20 points / 9 PTS caption) — identical at the default
-    /// setting, scaling with the user's text size like the styled text.
+    /// (14 hero / 20 points / 9 PTS caption / 10 breakdown) — identical at
+    /// the default setting, scaling with the user's text size like the
+    /// styled text.
     @ScaledMetric(relativeTo: .subheadline) private var modelFontSize: CGFloat = 14
     @ScaledMetric(relativeTo: .title3) private var pointsFontSize: CGFloat = 20
     @ScaledMetric(relativeTo: .caption2) private var ptsCaptionSize: CGFloat = 9
+    @ScaledMetric(relativeTo: .caption2) private var breakdownFontSize: CGFloat = 10
 
     /// The reveal's route row, list-sized: mono ICAO codes in secondary ink
     /// with the arrow in the rarity tint (CatchRevealView's `routeCell`
@@ -87,6 +102,18 @@ struct TailCard: View {
         let model = AircraftNaming.canonical(
             typecode: c.typecode, manufacturer: c.manufacturer, model: c.model
         ).displayName
+        // The full display total — base plus the bonuses the server
+        // awarded, re-derived live like resolvedRarity so a re-tier
+        // floats the whole readout. Guess bonus only for a recorded
+        // CORRECT call; the catch's own caughtAt picks the route
+        // fraction era (the 2026-08-13 re-balance is going-forward only).
+        let base = row.rarity.basePoints
+        let guessKind: GuessKind? = (c.guessCorrect == true)
+            ? c.guessKind.flatMap(GuessKind.init(rawValue:))
+            : nil
+        let points = ScoringBonuses.displayPoints(
+            base: base, isFirstOfType: isFirstOfType, guessKind: guessKind, caughtAt: c.caughtAt
+        )
 
         // One spoken line for the whole row — otherwise VoiceOver walks the
         // fragments and reads the "·" separators as "middle dot" and the
@@ -105,7 +132,14 @@ struct TailCard: View {
                 parts.append(place)
             }
             parts.append(c.caughtAt.formatted(date: .abbreviated, time: .omitted))
-            if showPoints { parts.append("\(row.rarity.basePoints) points") }
+            if showPoints {
+                if isFirstOfType { parts.append("first of type") }
+                parts.append(
+                    points.bonus > 0
+                        ? "\(points.total) points, \(base) base plus \(points.bonus) bonus"
+                        : "\(points.total) points"
+                )
+            }
             return parts.joined(separator: ", ")
         }()
 
@@ -138,11 +172,30 @@ struct TailCard: View {
                 // primary ink). Recent feed only, and only when a name
                 // resolves.
                 if showPoints, let model {
-                    Text(model)
-                        .font(.system(size: modelFontSize, weight: .semibold))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    HStack(spacing: 7) {
+                        Text(model)
+                            .font(.system(size: modelFontSize, weight: .semibold))
+                            .foregroundStyle(Brand.Color.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        // First-of-type sparkle — the collection milestone
+                        // sits on the model it commemorates (C+ mock round,
+                        // 2026-08-24). Ledger gold means "first" and nothing
+                        // else on this card; the score column stays in the
+                        // rarity tint.
+                        if isFirstOfType {
+                            Image(systemName: "sparkle")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(Brand.Color.ledgerGold)
+                                .frame(width: 15, height: 15)
+                                .background(Brand.Color.ledgerGold.opacity(0.13), in: Circle())
+                                .overlay(
+                                    Circle().strokeBorder(
+                                        Brand.Color.ledgerGold.opacity(0.35), lineWidth: 1
+                                    )
+                                )
+                        }
+                    }
                 }
 
                 // Line 3 — the reveal's ROUTE vocabulary when the catch
@@ -174,19 +227,31 @@ struct TailCard: View {
             Spacer(minLength: 8)
 
             if showPoints {
-                // Trailing rarity value — points as a tinted readout with a tiny
-                // PTS caption, vertically centered, in place of the chevron (the
-                // row is still a tappable NavigationLink). basePoints via
-                // row.rarity (resolved live); String() keeps them ungrouped.
+                // Trailing score readout — the FULL display total over a
+                // "base +bonus" micro-ledger, BOTH in the rarity tint (one
+                // color family per row; the "+" alone separates earned-
+                // from-base — C+ mock round, 2026-08-24). Bonus-less rows
+                // keep the quiet PTS caption, so plain catches stay plain.
+                // Vertically centered in place of the chevron (the row is
+                // still a tappable NavigationLink; the itemized ledger
+                // lives one tap away in CatchDetailView). String() keeps
+                // the total ungrouped.
                 VStack(alignment: .trailing, spacing: -1) {
-                    Text(String(row.rarity.basePoints))
+                    Text(String(points.total))
                         .font(Brand.Font.mono(size: pointsFontSize, weight: .bold))
                         .foregroundStyle(row.rarity.tint)
                         .monospacedDigit()
-                    Text("PTS")
-                        .font(.system(size: ptsCaptionSize, weight: .heavy))
-                        .tracking(1.5)
-                        .foregroundStyle(Brand.Color.textTertiary)
+                    if points.bonus > 0 {
+                        Text("\(base) +\(points.bonus)")
+                            .font(Brand.Font.mono(size: breakdownFontSize, weight: .semibold))
+                            .foregroundStyle(row.rarity.tint)
+                            .monospacedDigit()
+                    } else {
+                        Text("PTS")
+                            .font(.system(size: ptsCaptionSize, weight: .heavy))
+                            .tracking(1.5)
+                            .foregroundStyle(Brand.Color.textTertiary)
+                    }
                 }
                 .fixedSize()
             } else {
