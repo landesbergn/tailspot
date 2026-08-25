@@ -117,13 +117,16 @@ enum PostHogSessionReplay {
         //     unconditionally (independent of the lifecycle-events flag), so
         //     a normally-closed session ships before suspension.
         //   - Remaining loss window: killed mid-session and NEVER relaunched.
-        // So: flushAt 20 events / 30 s timer (the SDK defaults, stated
-        // explicitly because this posture is deliberate and pinned by
-        // PostHogConfigTests — the radio now wakes at most ~2×/min instead of
-        // per event). If recordings go missing again, check PostHog live data
-        // FIRST (whole sessions can be absent for other reasons — see the
-        // field-debugging notes) before touching these numbers.
-        config.flushAt = 20
+        // So: flushAt 10 events / 30 s timer. 10 is Noah's middle-ground call
+        // (2026-08-25) over the SDK-default 20: battery isn't a live complaint,
+        // so bias toward a smaller crash-loss window and fresher live data —
+        // with replay snapshotting at ~1/s that's a POST roughly every 10 s,
+        // still ~10× fewer radio wakes than the old per-event flushAt = 1.
+        // Posture pinned by PostHogConfigTests. If recordings go missing
+        // again, check PostHog live data FIRST (whole sessions can be absent
+        // for other reasons — see the field-debugging notes) before touching
+        // these numbers.
+        config.flushAt = 10
         config.flushIntervalSeconds = 30
         // Lifecycle events stay ON: the SDK needs app-state awareness to draw
         // session boundaries. (It emits a few extra "Application

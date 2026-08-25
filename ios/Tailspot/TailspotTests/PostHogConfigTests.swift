@@ -11,7 +11,7 @@
 //    The camera-never-recorded guarantee is structural and pinned separately
 //    by SessionReplayPrivacyTests.
 //
-//  - Flush batching (v1.1 battery item R9, 2026-08-25): flushAt 20 / 30 s
+//  - Flush batching (v1.1 battery item R9, 2026-08-25): flushAt 10 / 30 s
 //    timer, NOT the old flushAt = 1 — per-event flushing woke the radio for
 //    a POST on every event and replay snapshot for the whole session. Safe
 //    on the pinned SDK (3.60.1) because both queues are file-backed and the
@@ -29,8 +29,8 @@ struct PostHogConfigTests {
     @Test("Flush is batched, never per-event")
     func flushBatching() {
         let config = PostHogSessionReplay.makeConfig(projectToken: "test-token")
-        #expect(config.flushAt == 20,
-                "flushAt must stay batched (20). flushAt = 1 POSTs per event + per replay snapshot — the 2026-07-17 audit's biggest deferred battery drain. If replay capture regresses, verify against PostHog live data before lowering this.")
+        #expect(config.flushAt == 10,
+                "flushAt must stay batched (10 — Noah's middle-ground call, 2026-08-25). flushAt = 1 POSTs per event + per replay snapshot — the 2026-07-17 audit's biggest deferred battery drain. If replay capture regresses, verify against PostHog live data before lowering this.")
         #expect(config.flushIntervalSeconds == 30)
     }
 

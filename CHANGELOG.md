@@ -18,8 +18,11 @@ corrected.
 **Flush batching:** `flushAt = 1` had the SDK waking the radio for a network
 POST on every product event AND every session-replay snapshot — continuously,
 for the whole time the app was open; the audit rated it the biggest remaining
-controllable battery drain. Now `flushAt = 20` with the 30 s interval timer
-(the SDK defaults, stated explicitly). The 2026-06 reason for per-event
+controllable battery drain. Now `flushAt = 10` with the 30 s interval timer
+(10 over the SDK-default 20 is Noah's middle-ground call — battery isn't a
+live complaint, so bias toward a smaller crash-loss window and fresher live
+data; with replay snapshots at ~1/s that's a POST roughly every 10 s, still
+~10× fewer radio wakes than per-event). The 2026-06 reason for per-event
 flushing — short sessions losing replay recordings because they never hit a
 flush trigger — no longer applies on the pinned posthog-ios 3.60.1: both the
 event queue and the (now separate) replay-snapshot queue are file-backed on
