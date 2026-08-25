@@ -225,17 +225,19 @@ struct RevealPhoto: View {
 
     /// Cache-checked synchronous decode. nil (no file at `path`, e.g. a
     /// remote URL) falls through to the AsyncImage / placeholder branches,
-    /// exactly as the raw `UIImage(contentsOfFile:)` did.
-    private func decodedImage(at url: URL) -> UIImage? {
+    /// exactly as the raw `UIImage(contentsOfFile:)` did. Static (and
+    /// non-private) so CatchPhotoViewer opens on the SAME decoded bitmap
+    /// the card hero already holds — a cache hit, no loading beat.
+    static func cachedDecode(url: URL) -> UIImage? {
         let key = url.path as NSString
-        if let cached = Self.cache.object(forKey: key) { return cached }
+        if let cached = cache.object(forKey: key) { return cached }
         guard let image = UIImage(contentsOfFile: url.path) else { return nil }
-        Self.cache.setObject(image, forKey: key)
+        cache.setObject(image, forKey: key)
         return image
     }
 
     var body: some View {
-        if let image = url.flatMap({ decodedImage(at: $0) }) {
+        if let image = url.flatMap({ Self.cachedDecode(url: $0) }) {
             // Both paths clip HERE: the fill overflow isn't reliably caught
             // by the caller's clipShape under ImageRenderer (share renders
             // showed the oversize image bleeding past the card).
@@ -538,6 +540,11 @@ struct CatchRevealView: View {
 
     /// Animation clock anchor. nil until `onAppear`; `t` is 0 until set.
     @State private var start: Date?
+    /// Full-screen pinch-zoom viewer for the composed catch photo, opened
+    /// by tapping the settled card's hero (see the hit-testing gate in
+    /// `layout` — before the settle, a photo tap still skips the animation).
+    @State private var showPhotoViewer = false
+
     /// Flips true once the reveal has played out (or the user taps to skip),
     /// gating the dismiss CTAs and the success haptic.
     @State private var settled = false
@@ -615,6 +622,13 @@ struct CatchRevealView: View {
         case .epic:      return 2.6
         case .legendary: return 3.2
         }
+    }
+
+    /// The composed catch photo's file URL once the pipeline has delivered
+    /// it — the tap-to-zoom subject. Remote (Planespotters) heroes and the
+    /// provisional freeze-frame never zoom.
+    private var zoomablePhotoURL: URL? {
+        livePlane.photoURL.flatMap { $0.isFileURL ? $0 : nil }
     }
 
     private var base: Int { livePlane.rarity.basePoints }
@@ -706,6 +720,11 @@ struct CatchRevealView: View {
             }
             .onDisappear { settleTask?.cancel() }
             .sensoryFeedback(.success, trigger: settled)
+            .fullScreenCover(isPresented: $showPhotoViewer) {
+                if let url = zoomablePhotoURL {
+                    CatchPhotoViewer(url: url)
+                }
+            }
             .sensoryFeedback(.success, trigger: successBeat)
             .sensoryFeedback(.error, trigger: missBeat)
         }
@@ -745,9 +764,12 @@ struct CatchRevealView: View {
                                     : Text(cardAccessibilityLabel))
                 // The card is normally tap-through (taps fall to the dismiss
                 // catcher behind). While the chips are up it must capture taps
-                // so the chips + SKIP are interactive; margin taps still reach
-                // the catcher and count as a skip-then-dismiss.
-                .allowsHitTesting(chipsPhase == .shown)
+                // so the chips + SKIP are interactive; and once the reveal has
+                // settled with a composed photo, the hero's tap-to-zoom gesture
+                // needs hits too. Either way only ATTACHED gestures capture —
+                // margin/chrome taps still fall through to the catcher and
+                // dismiss (or skip-then-dismiss).
+                .allowsHitTesting(chipsPhase == .shown || (settled && zoomablePhotoURL != nil))
             Spacer(minLength: 0)
             // Streak chip — quiet payoff line above the CTA, faded in with
             // the settle beat so it never competes with the flap ceremony.
@@ -1044,6 +1066,17 @@ struct CatchRevealView: View {
                         RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .stroke(accent.opacity(livePlane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
                     )
+                    // Tap-to-zoom: the settled hero opens the full-res viewer
+                    // instead of falling through to the dismiss catcher. The
+                    // guard mirrors the card's hit-testing gate — before the
+                    // settle (hit-testing off) a photo tap skips the animation
+                    // like any other tap.
+                    .contentShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+                    .onTapGesture {
+                        guard settled, zoomablePhotoURL != nil else { return }
+                        Analytics.capture("catch_photo_viewer_opened", ["source": .string("reveal")])
+                        showPhotoViewer = true
+                    }
                     .opacity(ss(0.0, 0.18, t))
                     .padding(18 * scale)
 

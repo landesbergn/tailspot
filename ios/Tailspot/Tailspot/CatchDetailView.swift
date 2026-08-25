@@ -35,6 +35,9 @@ struct CatchDetailView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showDeleteConfirm = false
+    /// Full-screen pinch-zoom viewer for the user's own catch photo,
+    /// opened by tapping the card hero (user-photo heroes only).
+    @State private var showPhotoViewer = false
 
     /// Planespotters lookup, only consulted when the catch has no
     /// user-captured photo of its own. nil = not loaded yet OR none
@@ -67,11 +70,15 @@ struct CatchDetailView: View {
                         plane: detailPlane,
                         isFirstOfType: wasFirstOfType,
                         width: min(geo.size.width - 36, 420),
-                        // Planespotters TOS: the photo thumbnail itself must
-                        // link to the photo's Planespotters page (licensing
-                        // review 2026-07-11) — the tappable caption below
-                        // stays as the visible credit.
-                        onPhotoTap: heroPhotoLink.map { url in { openURL(url) } }
+                        // User catch photo → the full-res zoom viewer.
+                        // Planespotters hero → its photo page (TOS: the
+                        // thumbnail itself must link there; licensing review
+                        // 2026-07-11 — the tappable caption below stays as
+                        // the visible credit). Placeholder → inert.
+                        onPhotoTap: heroTapAction,
+                        photoTapAccessibilityLabel: hasCatchPhoto
+                            ? "View photo full screen"
+                            : "View photo on Planespotters.net"
                     )
                     .frame(maxWidth: .infinity)
                     finePrint
@@ -93,6 +100,11 @@ struct CatchDetailView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .swipeBackEnabled()
+        .fullScreenCover(isPresented: $showPhotoViewer) {
+            if let url = catchPhotoURL {
+                CatchPhotoViewer(url: url)
+            }
+        }
         .alert(deleteTitle, isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { performDelete() }
             Button("Cancel", role: .cancel) {}
@@ -160,6 +172,24 @@ struct CatchDetailView: View {
     /// hero inert (user photo or placeholder).
     private var heroPhotoLink: URL? {
         hasCatchPhoto ? nil : planespottersPhoto?.link
+    }
+
+    /// Full-res file URL of the user's own catch photo, when there is one —
+    /// the tap-to-zoom subject.
+    private var catchPhotoURL: URL? {
+        hasCatchPhoto ? first.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) } : nil
+    }
+
+    /// What tapping the hero does: user catch photo → full-res viewer;
+    /// Planespotters hero → its photo page; placeholder → nothing (nil).
+    private var heroTapAction: (() -> Void)? {
+        if catchPhotoURL != nil {
+            return {
+                Analytics.capture("catch_photo_viewer_opened", ["source": .string("detail")])
+                showPhotoViewer = true
+            }
+        }
+        return heroPhotoLink.map { url in { openURL(url) } }
     }
 
     /// Historical first-of-type: no catch of this typecode predates the
