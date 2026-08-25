@@ -5,6 +5,36 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — In-app review prompt at the trophy moment (v1.1 R7) — branch `feat/review-prompt`
+
+The App Store rating ask, hung off the celebration the release plan picked
+(AE5): after the user taps through the **final** queued trophy unlock, the
+system review sheet may appear. First StoreKit code in the app.
+
+- **`ReviewPrompt.swift`**, split like the trophy machinery: pure
+  `ReviewPromptPolicy` (directly testable) + `@MainActor ReviewPrompter`
+  (UserDefaults stamp, `review_prompt_requested` analytics, the
+  `AppStore.requestReview(in:)` call — injectable for tests).
+- **Trigger:** `TrophyUnlockCenter` gained an `onCelebrationCompleted` drain
+  hook, fired only when `advance()` empties the queue — i.e. every
+  celebration was seen and tapped through. `skipAll` deliberately does NOT
+  fire (skipping signals a hurry — the worst time to beg), and neither does
+  the one-time roster recap. ContentView wires the hook at `@StateObject`
+  construction — zero body-chain growth (the type-check-budget lesson).
+- **Guardrails:** a ≥3-catch floor (the first trophy unlocks on catch #1 —
+  asking thirty seconds into a first session is premature); at most one
+  request per `MARKETING_VERSION`, stamped on REQUEST because StoreKit never
+  reports whether the sheet actually appeared (Apple's own 3-per-365 cap and
+  system-wide opt-out sit underneath). Never-during-capture/reveal is
+  structural: the celebration overlay only presents when nothing else is on
+  top, and the drain is the user's own tap on that full-screen overlay.
+- Tests: policy table, prompter stamp/re-arm behavior across "launches",
+  and the drain hook (fires once with the catch count, only at the final
+  advance, never on skipAll or an empty-queue advance).
+- OQ3 (trigger choice) resolved: trophy-unlock celebration completion, per
+  the scope plan's AE5. No Settings toggle — the system's own review-request
+  opt-out covers it.
+
 ## 2026-08-25 — Catch photo tap-to-zoom — branch `feat/catch-photo-zoom`
 
 Tapping the card photo now opens a full-res pinch-zoom viewer

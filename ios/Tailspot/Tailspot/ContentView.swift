@@ -214,7 +214,12 @@ struct ContentView: View {
     /// existing tester is never flooded. Survives the Hangar sheet as a
     /// `@StateObject`, so a moment interrupted by backgrounding re-renders
     /// on return (the overlay is declarative, bound to `hasPending`).
-    @StateObject private var unlockCenter = TrophyUnlockCenter()
+    /// Tapping through the FINAL celebration is the app's high moment — the
+    /// drain hook asks for an App Store rating there (v1.1 R7; the policy
+    /// and its guardrails live in `ReviewPrompt.swift`).
+    @StateObject private var unlockCenter = TrophyUnlockCenter(
+        onCelebrationCompleted: { ReviewPrompter.shared.celebrationCompleted(totalCatches: $0) }
+    )
     /// Hangar restore-from-server (PLAN §9 #7, issue #58): checks once per
     /// launch whether this (Keychain-surviving) device identity holds
     /// catches on the backend while the local Hangar is empty — the
@@ -723,6 +728,11 @@ struct ContentView: View {
                             Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
                             Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
                             Button("⚑ Icons") { showIconGallery = true }
+                            // Un-burn the once-per-version review-ask stamp so
+                            // the tap-through-a-trophy → rating-sheet path can
+                            // be exercised repeatedly (dev builds always show
+                            // the sheet; see ReviewPrompt.swift).
+                            Button("★ Rearm") { ReviewPrompter.shared.debugClearStamp() }
                         }
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .buttonStyle(.bordered)
