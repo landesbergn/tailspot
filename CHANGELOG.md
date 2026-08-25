@@ -29,9 +29,14 @@ best artifact had no path to install it.
 - New **`catch_share_opened`** event (rarity, has_photo) via the same
   simultaneous-gesture pattern as `profile_share_opened` — opened, not
   completed; completion isn't observable.
+- **Profile/invite share now links the store directly too** (Noah — reverses
+  the 2026-08-08 leave-it-on-the-site call: the hop bought a nicer OG preview
+  but cost a step). Own campaign `Tailspot Profile Share`; with no image
+  attached it renders as ONE rich store-listing bubble in Messages. Both
+  surfaces build through the new `AppStoreListing.url(campaign:)` helper —
+  the provider token lives in one place.
 - `CatchShareLinkTests` pins the URL shape (geo-neutral path, `pt`, `ct`,
-  `mt`). Profile/invite share stays on `tailspot.app` per the 2026-08-08
-  recommendation; its stale pre-GA `inviteURL` comment updated.
+  `mt`) and that the two surfaces carry distinct campaigns.
 
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 
