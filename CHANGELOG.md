@@ -19,7 +19,13 @@ best artifact had no path to install it.
   attachable item stays the card image, and the catch line + link travel as
   accompanying text. Messages/Mail deliver both; text-hostile targets
   (Instagram stories) drop the text and share the card alone, no worse than
-  before.
+  before. **The link sits mid-sentence on purpose** (Noah's device pass): a
+  URL that stands alone or ends the message gets inflated by Messages into a
+  full rich-preview bubble — stacked under the card image that crowded the
+  canvas. Words on both sides keep it a plain tappable link in one short
+  text bubble. The true single-bubble share (the card as the link's own OG
+  preview) needs a hosted per-catch share page — noted for v1.2, where it
+  pairs with the shareable report card.
 - New **`catch_share_opened`** event (rarity, has_photo) via the same
   simultaneous-gesture pattern as `profile_share_opened` — opened, not
   completed; completion isn't observable.

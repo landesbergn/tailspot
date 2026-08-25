@@ -313,11 +313,14 @@ struct CatchDetailView: View {
         return "Caught \(cs)\(modelPart) on Tailspot"
     }
 
-    /// Text that accompanies the shared card image: the catch line plus the
-    /// App Store campaign link, on its own line so Messages renders it as a
-    /// tappable rich preview under the card.
+    /// Text that accompanies the shared card image. The link sits
+    /// MID-SENTENCE deliberately: Messages inflates a URL that stands alone
+    /// (or ends the message) into a full rich-preview bubble, and stacked
+    /// under the card image that crowded the whole canvas (Noah's device
+    /// pass, 2026-08-25). Words on BOTH sides keep it a plain tappable link
+    /// in one short text bubble: card + one line, no preview card.
     private var shareMessage: String {
-        "\(shareText)\n\(CatchShare.storeURL.absoluteString)"
+        "\(shareText) — get the app at \(CatchShare.storeURL.absoluteString) and start spotting."
     }
 
     // MARK: - Attribution
