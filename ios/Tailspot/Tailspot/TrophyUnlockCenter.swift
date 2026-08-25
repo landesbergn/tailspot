@@ -48,30 +48,19 @@ final class TrophyUnlockCenter: ObservableObject {
     /// The roster generation this build ships (injectable for tests). See
     /// `Trophies.rosterVersion` for the stamp/reseed/recap contract.
     private let rosterVersion: Int
-    /// Fires when the user taps THROUGH the final queued celebration (the
-    /// tap-to-continue drain) — the "celebration completed" high moment the
-    /// review prompt hangs off (v1.1 R7). Carries the Hangar size from the
-    /// last diff. Deliberately silent on `skipAll` (a hurry is the worst
-    /// time to ask) and on the recap. Nil default keeps every existing test
-    /// construction side-effect-free.
-    private let onCelebrationCompleted: ((Int) -> Void)?
-    /// Hangar size at the most recent diff/reseed, for the drain hook.
-    private var lastKnownCatchCount = 0
 
     init(
         ledger: UserDefaultsTrophyLedger = UserDefaultsTrophyLedger(),
         roster: [Achievement] = Trophies.roster,
         events: TrophyEventStore = TrophyEventStore(),
         standing: LeaderboardStandingCache = LeaderboardStandingCache(),
-        rosterVersion: Int = Trophies.rosterVersion,
-        onCelebrationCompleted: ((Int) -> Void)? = nil
+        rosterVersion: Int = Trophies.rosterVersion
     ) {
         self.ledger = ledger
         self.roster = roster
         self.events = events
         self.standing = standing
         self.rosterVersion = rosterVersion
-        self.onCelebrationCompleted = onCelebrationCompleted
     }
 
     var head: TrophyUnlockEvent? { pendingEvents.first }
@@ -93,7 +82,6 @@ final class TrophyUnlockCenter: ObservableObject {
     /// Callers should fire this once at app launch so the seed lands before
     /// the user's first crossing.
     func enqueueNewUnlocks(from catches: [Catch]) {
-        lastKnownCatchCount = catches.count
         let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
         guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
@@ -115,7 +103,6 @@ final class TrophyUnlockCenter: ObservableObject {
     /// and must not re-toast one by one. Deliberately NO recap either: the
     /// restore success screen is the moment; a second overlay would pile on.
     func reseedAfterRestore(from catches: [Catch]) {
-        lastKnownCatchCount = catches.count
         let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
@@ -141,15 +128,8 @@ final class TrophyUnlockCenter: ObservableObject {
     }
 
     /// Pop the head after it's been seen (tap-to-dismiss advances the queue).
-    /// Draining the queue this way — every celebration seen and tapped
-    /// through — is the "celebration completed" moment (see
-    /// `onCelebrationCompleted`).
     func advance() {
-        guard !pendingEvents.isEmpty else { return }
-        pendingEvents.removeFirst()
-        if pendingEvents.isEmpty {
-            onCelebrationCompleted?(lastKnownCatchCount)
-        }
+        if !pendingEvents.isEmpty { pendingEvents.removeFirst() }
     }
 
     /// Skip-all: acknowledge and clear the whole queue in one go.

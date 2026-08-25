@@ -214,12 +214,7 @@ struct ContentView: View {
     /// existing tester is never flooded. Survives the Hangar sheet as a
     /// `@StateObject`, so a moment interrupted by backgrounding re-renders
     /// on return (the overlay is declarative, bound to `hasPending`).
-    /// Tapping through the FINAL celebration is the app's high moment — the
-    /// drain hook asks for an App Store rating there (v1.1 R7; the policy
-    /// and its guardrails live in `ReviewPrompt.swift`).
-    @StateObject private var unlockCenter = TrophyUnlockCenter(
-        onCelebrationCompleted: { ReviewPrompter.shared.celebrationCompleted(totalCatches: $0) }
-    )
+    @StateObject private var unlockCenter = TrophyUnlockCenter()
     /// Hangar restore-from-server (PLAN §9 #7, issue #58): checks once per
     /// launch whether this (Keychain-surviving) device identity holds
     /// catches on the backend while the local Hangar is empty — the
@@ -1685,9 +1680,11 @@ struct ContentView: View {
         // Also the reveal-dismissal flush point for the save-failure toast:
         // presenting it at catch time would hide it behind the full-screen
         // reveal and it would expire unseen.
+        var momentClaimed = false
         if pendingSaveFailToast {
             pendingSaveFailToast = false
             presentSaveFailToast()
+            momentClaimed = true
         }
         // Streak notification pre-prompt (one-shot). Only an UNCONTESTED
         // dismissal promotes it: a pending Keep/Discard review or a jump to
@@ -1700,12 +1697,19 @@ struct ContentView: View {
                pendingReveal == nil, pendingMultiReveal == nil {
                 UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
                 withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
+                momentClaimed = true
             }
         }
-        guard !suspectAwaitingReview.isEmpty else { return }
+        guard !suspectAwaitingReview.isEmpty else {
+            maybeRequestReview(momentClaimed: momentClaimed)
+            return
+        }
         let rows = suspectAwaitingReview.filter { !$0.isDeleted && $0.suspectReason != nil }
         suspectAwaitingReview = []
-        guard !rows.isEmpty else { return }
+        guard !rows.isEmpty else {
+            maybeRequestReview(momentClaimed: momentClaimed)
+            return
+        }
         let question: String
         if rows.count == 1, let row = rows.first,
            let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) {
@@ -1714,6 +1718,26 @@ struct ContentView: View {
             question = CatchSuspicion.multiQuestion(count: rows.count)
         }
         pendingSuspectReview = SuspectReview(rows: rows, question: question)
+    }
+
+    /// Lowest-priority claimant of the post-reveal moment (v1.1 R7): the
+    /// App Store rating ask, only when nothing else took the moment — no
+    /// toast, no streak pre-prompt, no suspect Keep/Discard, no Hangar
+    /// jump, no pending trophy celebration. Contested → drop, not queue;
+    /// eligibility is durable (the Hangar), so it re-tries when the next
+    /// catch's reveal closes. Thresholds + the once-per-version stamp live
+    /// in `ReviewPrompt.swift`.
+    private func maybeRequestReview(momentClaimed: Bool) {
+        guard !momentClaimed, streakAsk == nil, pendingSuspectReview == nil,
+              !showHangar, pendingReveal == nil, pendingMultiReveal == nil,
+              !unlockCenter.hasPending else { return }
+        ReviewPrompter.shared.catchMomentEnded(
+            totalCatches: catches.count,
+            // Day buckets via Streaks.dayKey — the frozen insert-time label
+            // (the one-owner rule; recomputing from caughtAt in the current
+            // zone would disagree with the streak card after a flight home).
+            distinctCatchDays: Set(catches.map { Streaks.dayKey(for: $0) }).count
+        )
     }
 
     /// Apply the review answer to every row it covered. Keep vouches — the
