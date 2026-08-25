@@ -37,6 +37,12 @@ best artifact had no path to install it.
   the provider token lives in one place.
 - `CatchShareLinkTests` pins the URL shape (geo-neutral path, `pt`, `ct`,
   `mt`) and that the two surfaces carry distinct campaigns.
+- **Profile share button re-chromed the iOS 26-native way** (device pass:
+  the hand-drawn cyan disc floated inside the toolbar's own Liquid Glass
+  capsule — double chrome, read as a UI bug). The custom padding/background
+  circle is gone; `.buttonStyle(.glassProminent)` + `.tint(cyan)` lets the
+  system's toolbar glass carry the brand accent, sized and aligned like its
+  Done sibling.
 
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 
