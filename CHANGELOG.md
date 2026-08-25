@@ -5,6 +5,30 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — McDonnell Douglas gets its planes back — branch `feat/mcdonnell-douglas`
+
+Prompted by Noah's MD-11 catch reading "Boeing MD-11". ICAO DOC 8643 lists the
+types still in production at the 1997 Boeing merger (MD-80/90 family, MD-11)
+under manufacturer BOEING; spotters — and every livery those airframes wore —
+say McDonnell Douglas. Generator `OVERRIDES` now pin MD-11, MD-81/82/83/87/88,
+MD-90 to McDonnell Douglas and unify the DC-9 series (DOC 8643 split its five
+variants between DOUGLAS and MCDONNELL DOUGLAS); the 717 stays Boeing — the
+only one of the line actually delivered as one. Names re-derive from typecode
+at display time, so shipped catches re-label with no migration.
+
+Accuracy ride-alongs: the type classifier now checks the narrow-prefix list
+before the heavy-WTC fallback, fixing three heavy-by-weight NARROW-bodies that
+sat in `wide` (707-300, DC-8-60, DC-8-70 — WTC H but single-aisle).
+
+Sets: `fam-md` reworked into the Long Beach family tree — DC-9 (epic) →
+MD-80 series (one slot spanning 81/82/83/87/88; the old per-variant tokens
+silently orphaned MD-81/83/87 catches) → MD-90 → Boeing 717. New
+`fam-md-heavies` wide-body family: DC-10 + MD-11 (both epic — the MD-11 is
+catchable at OAK nightly via FedEx/UPS; the DC-10 is fire-bomber-rare).
+`FamilySetsTests.douglasFamilyTree` pins slot membership; naming pins added
+for the whole line; `DouglasSetsSnapshotTests` renders the re-labeled card
+(SetDetailScreen/SetsBrowser aren't ImageRenderer-able — List/LazyVStack).
+
 ## 2026-08-25 — App Store link rides in every catch share — branch `feat/catch-share-store-link`
 
 v1.1 item R6 (the organic-install loop). The catch share previously sent a

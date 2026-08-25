@@ -603,19 +603,32 @@ nonisolated enum CardSets {
                   modelTokens: ["757-300", "757-3"], summary: "Stretched 757. Rare; mostly charter.",
                   representativeTypecode: "B753"),
         ]),
+        // The Long Beach narrow-body family tree, one slot per generation:
+        // DC-9 → MD-80 → MD-90 → 717 (né MD-95, the only one delivered as
+        // a Boeing). The MD-80 slot spans all five variants (81/82/83/87/88)
+        // — MD-83s fly cargo today and used to fall through the old
+        // per-variant tokens. The MD-11/DC-10 wide-bodies live next door in
+        // fam-md-heavies.
         .init(id: "fam-md", type: .narrow, title: "McDonnell Douglas", entries: [
-            .init(id: "fmd82", canonicalName: "MD-82", rarity: .uncommon,
-                  modelTokens: ["md-82", "md82"], summary: "Classic MD-80 series twinjet.",
+            .init(id: "fdc9", canonicalName: "DC-9", rarity: .epic,
+                  modelTokens: ["dc-9", "dc9"], summary: "Where the line began. A handful still fly.",
+                  representativeTypecode: "DC93"),
+            .init(id: "fmd80", canonicalName: "MD-80 series", rarity: .rare,
+                  modelTokens: ["md-81", "md-82", "md-83", "md-87", "md-88",
+                                "md81", "md82", "md83", "md87", "md88"],
+                  summary: "The Mad Dog. Any MD-81 through MD-88 counts.",
                   representativeTypecode: "MD82"),
-            .init(id: "fmd88", canonicalName: "MD-88", rarity: .uncommon,
-                  modelTokens: ["md-88", "md88"], summary: "Late MD-80. Delta flew them for decades.",
-                  representativeTypecode: "MD88"),
-            .init(id: "fmd90", canonicalName: "MD-90", rarity: .uncommon,
-                  modelTokens: ["md-90", "md90"], summary: "Re-engined MD-80 stretch.",
+            .init(id: "fmd90", canonicalName: "MD-90", rarity: .epic,
+                  modelTokens: ["md-90", "md90"], summary: "Re-engined MD-80 stretch. Very scarce.",
                   representativeTypecode: "MD90"),
-            .init(id: "f717", canonicalName: "Boeing 717", rarity: .uncommon,
+            .init(id: "f717", canonicalName: "Boeing 717", rarity: .rare,
                   modelTokens: ["717"], summary: "The final MD-95, sold as the 717.",
                   representativeTypecode: "B712"),
+        ]),
+        .init(id: "fam-md-heavies", type: .wide, title: "McDonnell Douglas Heavies", entries: [
+            .init(id: "fdc10", canonicalName: "DC-10", rarity: .epic,
+                  modelTokens: ["dc-10", "dc10"], summary: "First Long Beach tri-jet. Fire bombers now.",
+                  representativeTypecode: "DC10"),
             .init(id: "fmd11", canonicalName: "MD-11", rarity: .epic,
                   modelTokens: ["md-11", "md11"], summary: "Tri-jet widebody. Night freighters now.",
                   representativeTypecode: "MD11"),

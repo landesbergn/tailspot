@@ -1890,7 +1890,7 @@
   "make": "Boeing",
   "model": "707-300",
   "rarity": "common",
-  "type": "wide",
+  "type": "narrow",
   "wingspanFt": 145.8
  },
  "B712": {
@@ -2694,6 +2694,12 @@
  "BOOM": {
   "make": "Rutan",
   "model": "202 Boomerang",
+  "rarity": "common",
+  "type": "ga"
+ },
+ "BORY": {
+  "make": "Aerovolga",
+  "model": "Borey",
   "rarity": "common",
   "type": "ga"
  },
@@ -4863,26 +4869,26 @@
   "make": "Douglas",
   "model": "DC-8-60",
   "rarity": "common",
-  "type": "wide"
+  "type": "narrow"
  },
  "DC87": {
   "lengthFt": 187.7,
   "make": "Douglas",
   "model": "DC-8-70",
   "rarity": "common",
-  "type": "wide",
+  "type": "narrow",
   "wingspanFt": 148.4
  },
  "DC91": {
   "lengthFt": 104.4,
-  "make": "Douglas",
+  "make": "McDonnell Douglas",
   "model": "DC-9-10",
   "rarity": "epic",
   "type": "narrow",
   "wingspanFt": 89.4
  },
  "DC92": {
-  "make": "Douglas",
+  "make": "McDonnell Douglas",
   "model": "DC-9-20",
   "rarity": "epic",
   "type": "narrow"
@@ -4896,14 +4902,14 @@
   "wingspanFt": 93.3
  },
  "DC94": {
-  "make": "Douglas",
+  "make": "McDonnell Douglas",
   "model": "DC-9-40",
   "rarity": "epic",
   "type": "narrow"
  },
  "DC95": {
   "lengthFt": 133.6,
-  "make": "Douglas",
+  "make": "McDonnell Douglas",
   "model": "DC-9-50",
   "rarity": "epic",
   "type": "narrow",
@@ -9845,7 +9851,7 @@
  },
  "MD11": {
   "lengthFt": 202.2,
-  "make": "Boeing",
+  "make": "McDonnell Douglas",
   "model": "MD-11",
   "rarity": "epic",
   "type": "wide",
@@ -9877,7 +9883,7 @@
  },
  "MD81": {
   "lengthFt": 147.8,
-  "make": "Boeing",
+  "make": "McDonnell Douglas",
   "model": "MD-81",
   "rarity": "rare",
   "type": "narrow",
@@ -9885,7 +9891,7 @@
  },
  "MD82": {
   "lengthFt": 147.8,
-  "make": "Boeing",
+  "make": "McDonnell Douglas",
   "model": "MD-82",
   "rarity": "rare",
   "type": "narrow",
@@ -9893,7 +9899,7 @@
  },
  "MD83": {
   "lengthFt": 147.8,
-  "make": "Boeing",
+  "make": "McDonnell Douglas",
   "model": "MD-83",
   "rarity": "rare",
   "type": "narrow",
@@ -9901,7 +9907,7 @@
  },
  "MD87": {
   "lengthFt": 130.4,
-  "make": "Boeing",
+  "make": "McDonnell Douglas",
   "model": "MD-87",
   "rarity": "rare",
   "type": "narrow",
@@ -9909,7 +9915,7 @@
  },
  "MD88": {
   "lengthFt": 147.8,
-  "make": "Boeing",
+  "make": "McDonnell Douglas",
   "model": "MD-88",
   "rarity": "rare",
   "type": "narrow",
@@ -9917,7 +9923,7 @@
  },
  "MD90": {
   "lengthFt": 152.6,
-  "make": "Boeing",
+  "make": "McDonnell Douglas",
   "model": "MD-90",
   "rarity": "epic",
   "type": "narrow",
