@@ -39,6 +39,10 @@ struct SettledCatchCard: View {
     /// VoiceOver label for the hero button when `onPhotoTap` is set — must
     /// name the action, which the caller decides (link-out vs. viewer).
     var photoTapAccessibilityLabel: String = "View photo on Planespotters.net"
+    /// In-place pinch on the hero (HeroPinchZoom): magnify under the
+    /// fingers, hand off to the full-screen viewer on a committed pinch.
+    /// nil (Planespotters, placeholder, share renders) leaves pinch off.
+    var onPhotoPinch: (() -> Void)? = nil
 
     private var base: Int { plane.rarity.basePoints }
     private var bonus: Int { isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0 }
@@ -71,7 +75,9 @@ struct SettledCatchCard: View {
         let hero = RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
             .frame(height: 168 * scale)
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+            // Owns the hero's clip + the in-place pinch (inert when
+            // onPhotoPinch is nil — exact same clip as before).
+            .modifier(HeroPinchZoom(onOpen: onPhotoPinch))
             .overlay(
                 RoundedRectangle(cornerRadius: Brand.Radius.card)
                     .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)

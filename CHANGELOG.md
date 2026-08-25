@@ -10,7 +10,10 @@ Git history + PLAN.md §9 remain the authoritative record.
 Tapping the card photo now opens a full-res pinch-zoom viewer
 (`CatchPhotoViewer`) instead of dismissing the reveal (or doing nothing on the
 Hangar detail). Pinch 1x–6x, double-tap toggles 1x/3x toward the tap, single
-tap or the X pill closes. The zoom host is a `UIScrollView` via
+tap or the X pill closes. Pinching directly ON the card hero also works
+(`HeroPinchZoom`): the photo magnifies in place inside its window, anchored at
+the pinch start with rubber-banding below 1x, and a release past 1.25x hands
+off into the viewer (under it, it springs back). The zoom host is a `UIScrollView` via
 `UIViewRepresentable` — a deliberate UIKit exception to the SwiftUI-first rule
 (`viewForZooming` gives Photos-grade pinch anchoring, pan clamping, and
 rubber-banding for free). Reveal wiring widens the card's hit-testing gate
@@ -22,7 +25,7 @@ their TOS-required link-out (the hero's VoiceOver label is now
 caller-supplied). `RevealPhoto.cachedDecode` exposed so the viewer opens
 synchronously on the card's already-decoded bitmap — no loading beat. Viewer
 replay-masked like every user-photo surface; opens fire
-`catch_photo_viewer_opened` (source: reveal/detail). New
+`catch_photo_viewer_opened` (source: reveal/detail, method: tap/pinch). New
 `CatchPhotoViewerSnapshotTests` visual-pass harness renders the viewer at 1x
 and driven to 3x. Full suite green.
 

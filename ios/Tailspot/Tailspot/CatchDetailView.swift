@@ -78,7 +78,8 @@ struct CatchDetailView: View {
                         onPhotoTap: heroTapAction,
                         photoTapAccessibilityLabel: hasCatchPhoto
                             ? "View photo full screen"
-                            : "View photo on Planespotters.net"
+                            : "View photo on Planespotters.net",
+                        onPhotoPinch: heroPinchAction
                     )
                     .frame(maxWidth: .infinity)
                     finePrint
@@ -183,13 +184,20 @@ struct CatchDetailView: View {
     /// What tapping the hero does: user catch photo → full-res viewer;
     /// Planespotters hero → its photo page; placeholder → nothing (nil).
     private var heroTapAction: (() -> Void)? {
-        if catchPhotoURL != nil {
-            return {
-                Analytics.capture("catch_photo_viewer_opened", ["source": .string("detail")])
-                showPhotoViewer = true
-            }
-        }
+        if catchPhotoURL != nil { return { openViewer(method: "tap") } }
         return heroPhotoLink.map { url in { openURL(url) } }
+    }
+
+    /// In-place pinch on the hero — user catch photos only (a pinch on a
+    /// Planespotters hero shouldn't launch their web page).
+    private var heroPinchAction: (() -> Void)? {
+        catchPhotoURL != nil ? { openViewer(method: "pinch") } : nil
+    }
+
+    private func openViewer(method: String) {
+        Analytics.capture("catch_photo_viewer_opened",
+                          ["source": .string("detail"), "method": .string(method)])
+        showPhotoViewer = true
     }
 
     /// Historical first-of-type: no catch of this typecode predates the

@@ -73,6 +73,66 @@ struct CatchPhotoViewer: View {
     }
 }
 
+// MARK: - In-place pinch on the card hero
+
+/// Pinch-to-zoom directly on a card's photo hero: the image magnifies
+/// live under the fingers inside its rounded window (anchored at the
+/// pinch start point, rubber-banding below 1x), and on release past
+/// `openThreshold` it hands off to the full-screen
+/// viewer via `onOpen`; under it, it springs back. The modifier owns the
+/// hero's clip so the magnified image stays inside the photo window —
+/// the card layout never moves.
+///
+/// `onOpen == nil` disables the gesture (mask `.subviews`) but keeps the
+/// view structure identical, so surfaces can flip it on per-frame (the
+/// reveal enables it only once settled) without SwiftUI rebuilding the
+/// hero. Inert under ImageRenderer (pure SwiftUI, no platform views).
+struct HeroPinchZoom: ViewModifier {
+    /// Handoff on a committed pinch; nil = gesture off (share renders,
+    /// Planespotters/placeholder heroes, unsettled reveal).
+    var onOpen: (() -> Void)?
+
+    private static let openThreshold: CGFloat = 1.25
+
+    @State private var scale: CGFloat = 1
+    @State private var anchor: UnitPoint = .center
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(scale, anchor: anchor)
+            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+            .contentShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+            .simultaneousGesture(magnify, including: onOpen != nil ? .all : .subviews)
+    }
+
+    private var magnify: some Gesture {
+        MagnifyGesture(minimumScaleDelta: 0.02)
+            .onChanged { value in
+                anchor = value.startAnchor
+                // Pinching in gets resistance, not a shrunken photo.
+                scale = value.magnification >= 1
+                    ? value.magnification
+                    : 1 - (1 - value.magnification) * 0.3
+            }
+            .onEnded { value in
+                if value.magnification > Self.openThreshold, let onOpen {
+                    onOpen()
+                    // Snap back UNDER the incoming full-screen cover: the
+                    // cover's slide-up takes ~0.4 s, and an animated reset
+                    // racing it reads as the photo deflating mid-handoff.
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        scale = 1; anchor = .center
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        scale = 1
+                    }
+                }
+            }
+    }
+}
+
 // MARK: - UIScrollView zoom host
 
 private struct ZoomableImageView: UIViewRepresentable {

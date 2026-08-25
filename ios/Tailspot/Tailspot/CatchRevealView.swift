@@ -631,6 +631,12 @@ struct CatchRevealView: View {
         livePlane.photoURL.flatMap { $0.isFileURL ? $0 : nil }
     }
 
+    private func openPhotoViewer(method: String) {
+        Analytics.capture("catch_photo_viewer_opened",
+                          ["source": .string("reveal"), "method": .string(method)])
+        showPhotoViewer = true
+    }
+
     private var base: Int { livePlane.rarity.basePoints }
     private var firstOfTypeBonus: Int {
         // Fraction via ScoringBonuses (pinned to scoring-bonuses.json by the
@@ -1061,7 +1067,13 @@ struct CatchRevealView: View {
                             loading: loader.map { !$0.pipelineFinished } ?? false)
                     .frame(height: photoHeight)
                     .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+                    // Owns the hero's clip + in-place pinch-to-zoom. Enabled
+                    // under the same gate as tap-to-zoom (settled + composed
+                    // photo), so a pinch mid-animation neither scales nor
+                    // opens; the hit-testing gate below is already open in
+                    // every state where this is non-nil.
+                    .modifier(HeroPinchZoom(onOpen: settled && zoomablePhotoURL != nil
+                        ? { openPhotoViewer(method: "pinch") } : nil))
                     .overlay(
                         RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .stroke(accent.opacity(livePlane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
@@ -1071,11 +1083,9 @@ struct CatchRevealView: View {
                     // guard mirrors the card's hit-testing gate — before the
                     // settle (hit-testing off) a photo tap skips the animation
                     // like any other tap.
-                    .contentShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
                     .onTapGesture {
                         guard settled, zoomablePhotoURL != nil else { return }
-                        Analytics.capture("catch_photo_viewer_opened", ["source": .string("reveal")])
-                        showPhotoViewer = true
+                        openPhotoViewer(method: "tap")
                     }
                     .opacity(ss(0.0, 0.18, t))
                     .padding(18 * scale)
