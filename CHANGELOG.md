@@ -5,6 +5,27 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — Catch photo tap-to-zoom — branch `feat/catch-photo-zoom`
+
+Tapping the card photo now opens a full-res pinch-zoom viewer
+(`CatchPhotoViewer`) instead of dismissing the reveal (or doing nothing on the
+Hangar detail). Pinch 1x–6x, double-tap toggles 1x/3x toward the tap, single
+tap or the X pill closes. The zoom host is a `UIScrollView` via
+`UIViewRepresentable` — a deliberate UIKit exception to the SwiftUI-first rule
+(`viewForZooming` gives Photos-grade pinch anchoring, pan clamping, and
+rubber-banding for free). Reveal wiring widens the card's hit-testing gate
+(chips shown OR settled-with-photo) so only the hero gesture captures: margin
+taps still dismiss, pre-settle taps still skip the animation, and photo taps
+while the bonus chips are up now zoom instead of counting as skip+dismiss.
+Hangar detail: user-photo heroes open the viewer; Planespotters heroes keep
+their TOS-required link-out (the hero's VoiceOver label is now
+caller-supplied). `RevealPhoto.cachedDecode` exposed so the viewer opens
+synchronously on the card's already-decoded bitmap — no loading beat. Viewer
+replay-masked like every user-photo surface; opens fire
+`catch_photo_viewer_opened` (source: reveal/detail). New
+`CatchPhotoViewerSnapshotTests` visual-pass harness renders the viewer at 1x
+and driven to 3x. Full suite green.
+
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 
 Trigger: an App Store review ("could include more plane types and models")
