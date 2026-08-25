@@ -45,6 +45,18 @@ blaming the batching). Remaining audit deferrals (GPS accuracy, BGRA→4:2:0,
 projection consolidation, detector internals) stay deferred per Noah's
 no-GPS/no-camera-internals scope call.
 
+**Found while verifying: the keyless-worktree telemetry hole.** Noah's first
+device test showed zero events, and PostHog live data proved it predated this
+change: the dev phone's last event was **2026-08-19** — every per-feature
+worktree `bin/deploy` since then shipped a silently keyless build, because
+the PostHog key lives in the gitignored `Tailspot.secrets.xcconfig`, which
+fresh worktrees don't carry, and keyless builds no-op all analytics + replay
+by design. Fix: `bin/deploy` now copies the secrets file from the primary
+checkout when a worktree lacks it (via `git rev-parse --git-common-dir`),
+and prints a LOUD keyless warning when no copy exists anywhere. Flush
+batching itself was innocent — ingestion from real users was healthy
+throughout.
+
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 
 Trigger: an App Store review ("could include more plane types and models")

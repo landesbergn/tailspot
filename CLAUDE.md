@@ -145,7 +145,11 @@ solely from the Tailspot backend (`api.tailspot.app`), which needs no per-app
 secret. The one build-time secret is the **optional** PostHog analytics key in
 gitignored `ios/Tailspot/Tailspot.secrets.xcconfig` (`POSTHOG_API_KEY`); when
 absent, `Analytics.swift` no-ops. It's a write-only anonymous key — baking it into
-the binary is acceptable.
+the binary is acceptable. **Worktree trap:** being gitignored, the file is absent
+from every fresh per-feature worktree, so worktree `bin/deploy` builds were
+silently keyless — the dev phone sent zero analytics/replays for 6 days
+(2026-08-19 → 08-25) before anyone noticed. `bin/deploy` now heals the file from
+the primary checkout (or warns loudly if it can't); don't remove that backstop.
 
 **Leak hygiene still applies** (two real leaks in this repo's history, both
 OpenSky). Inspect `git diff --cached` before every commit; secrets belong only in
