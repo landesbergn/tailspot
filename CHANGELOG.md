@@ -5,6 +5,27 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — Route flash before the bonus round + cadence bump — branch `fix/route-flash-guess-cadence`
+
+Trigger: Noah's field report — the real route flashed on the reveal card, then
+the bonus-round question overtook it (leaking the answer).
+
+**Root cause:** a PR #184 (early reveal shell) regression. The shell presents
+at tap time carrying the feed route, but the guess question only lands when
+the pipeline finishes (~1.4 s). The route row's ceremony fade-in (t 0.66–0.82
+of a 1.7 s common-tier reveal) — or instantly, on tap-to-skip — beat the
+masked prompt whenever the feed already carried the route. **Fix:**
+`shellCardPlane` withholds the route entirely; the card's DIST fallback fills
+the slot, and at pipeline end the loader swaps plane + row + guess in one
+MainActor pass, so the slot resolves atomically to either the real route or
+the masked prompt — the leak is impossible by construction.
+
+**Cadence bump (Noah's call):** the round was too rare — PostHog (60 days):
+246 rounds shown against 2,336 recorded catches (~10.5%), and it performs
+(228 answered vs 23 skipped). `GuessScheduler` roll 1-in-3 → **1-in-2**, min
+gap 2 → **1**: steady state ~1 round per 3 eligible catches, roughly double.
+Scheduler + reveal-snapshot tests re-pinned to the new numbers.
+
 ## 2026-08-25 — PostHog flush batching (v1.1 battery item R9) — branch `perf/posthog-flush-batching`
 
 Closes out the v1.1 "two deferred battery items" from the 2026-07-17

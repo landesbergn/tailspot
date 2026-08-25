@@ -49,13 +49,13 @@ struct RevealSnapshotTests {
             // Early reveal SHELL states (capture-lag work, 2026-08-13): the
             // card as presented at TAP time, before the pipeline delivers the
             // photo. Cache-hit shell = full airframe identity, no photo
-            // (SkyPlaceholder holds the slot), feed route present.
+            // (SkyPlaceholder holds the slot), and NO route — the shell
+            // withholds it so a bonus round's answer can't flash before the
+            // masked prompt (2026-08-25); DIST fills the slot.
             ("shell_cachehit_noPhoto", CardPlane(
                 callsign: "UAL837", model: "Boeing 777-300ER", carrier: "United Airlines",
                 rarity: .rare, type: .wide,
-                altText: "36,745 ft", speedText: "490 kt", distText: "11.2 km",
-                originIcao: "SFO", destIcao: "NRT",
-                originName: "San Francisco", destName: "Tokyo Narita")),
+                altText: "36,745 ft", speedText: "490 kt", distText: "11.2 km")),
             // Metadata-cache-miss shell: nil model → UNKNOWN AIRCRAFT flaps,
             // conservative common tier, no route — the worst-case first frame.
             ("shell_cachemiss_noPhoto", CardPlane(
