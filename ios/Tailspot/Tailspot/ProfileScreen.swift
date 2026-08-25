@@ -147,8 +147,10 @@ struct ProfileScreen: View {
         }
     }
 
-    /// Where an invited friend lands. The site carries install instructions
-    /// now (TestFlight) and becomes the App Store pointer at GA. Real invite
+    /// Where an invited friend lands. Deliberately the site, not the store
+    /// (2026-08-08 call): tailspot.app is now a one-screen App Store badge
+    /// page, so it's one hop with a richer OG preview than a raw listing
+    /// link — revisit only if the hop measurably costs installs. Real invite
     /// attribution (per-user codes, the invite trophy) is PLAN §9 #10.
     private static let inviteURL = URL(string: "https://tailspot.app")!
 

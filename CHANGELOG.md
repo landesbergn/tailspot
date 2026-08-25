@@ -5,6 +5,28 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — App Store link rides in every catch share — branch `feat/catch-share-store-link`
+
+v1.1 item R6 (the organic-install loop). The catch share previously sent a
+rendered card image with no link at all — the friend who received the app's
+best artifact had no path to install it.
+
+- **`CatchShare.storeURL`** — geo-neutral App Store campaign link
+  (`…/app/apple-store/id6773470079?pt=119286625&ct=Tailspot%20Catch%20Share&mt=8`).
+  Same provider token as the website's badge links; its own campaign name so
+  in-app shares and tailspot.app installs read separately in App Analytics.
+- **`CatchDetailView`** threads it through `ShareLink`'s `message:` — the one
+  attachable item stays the card image, and the catch line + link travel as
+  accompanying text. Messages/Mail deliver both; text-hostile targets
+  (Instagram stories) drop the text and share the card alone, no worse than
+  before.
+- New **`catch_share_opened`** event (rarity, has_photo) via the same
+  simultaneous-gesture pattern as `profile_share_opened` — opened, not
+  completed; completion isn't observable.
+- `CatchShareLinkTests` pins the URL shape (geo-neutral path, `pt`, `ct`,
+  `mt`). Profile/invite share stays on `tailspot.app` per the 2026-08-08
+  recommendation; its stale pre-GA `inviteURL` comment updated.
+
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 
 Trigger: an App Store review ("could include more plane types and models")

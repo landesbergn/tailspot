@@ -250,12 +250,31 @@ struct CatchDetailView: View {
             .padding(.trailing, 8)
             // Share a polished card image (not just text) so friends get a
             // clean card instead of a screenshot; the text rides as the
-            // preview title.
-            ShareLink(item: img, preview: SharePreview(shareText, image: img)) {
+            // preview title. The App Store link travels in `message:` —
+            // ShareLink's one item stays the image, and targets that pair
+            // text with an attachment (Messages, Mail) deliver both, so the
+            // recipient finally has a path to install. Text-hostile targets
+            // (e.g. Instagram stories) drop the message and share the card
+            // alone — same as before this link existed.
+            ShareLink(
+                item: img,
+                message: Text(shareMessage),
+                preview: SharePreview(shareText, image: img)
+            ) {
                 chromePillBody(icon: "square.and.arrow.up")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Share catch")
+            // ShareLink exposes no tap callback; a simultaneous gesture
+            // gives the share-funnel signal (opened, not necessarily
+            // completed — completion isn't observable). Read next to the
+            // "Tailspot Catch Share" campaign in App Analytics.
+            .simultaneousGesture(TapGesture().onEnded {
+                Analytics.capture("catch_share_opened", [
+                    "rarity": .string(detailPlane.rarity.label),
+                    "has_photo": .bool(hasCatchPhoto),
+                ])
+            })
         }
         .padding(.horizontal, 16)
     }
@@ -285,13 +304,20 @@ struct CatchDetailView: View {
             .contentShape(Rectangle().inset(by: -4))
     }
 
-    /// Free text for the iOS share sheet. No image attachment — keeps
-    /// share targets (Messages, Mail, copy-link, etc.) predictable.
+    /// Preview title for the share sheet ("Caught UAL2476 · Boeing 737-900
+    /// on Tailspot") — also the first line of `shareMessage`.
     private var shareText: String {
         let cs = first.callsign?.trimmedNonEmpty ?? first.icao24.uppercased()
         let model = first.model?.trimmedNonEmpty
         let modelPart = model.map { " · \($0)" } ?? ""
         return "Caught \(cs)\(modelPart) on Tailspot"
+    }
+
+    /// Text that accompanies the shared card image: the catch line plus the
+    /// App Store campaign link, on its own line so Messages renders it as a
+    /// tappable rich preview under the card.
+    private var shareMessage: String {
+        "\(shareText)\n\(CatchShare.storeURL.absoluteString)"
     }
 
     // MARK: - Attribution

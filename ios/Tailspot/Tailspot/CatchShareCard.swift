@@ -67,6 +67,18 @@ struct CatchShareCard: View {
 // MARK: - Render helper
 
 enum CatchShare {
+    /// App Store listing link that rides along with every shared card —
+    /// the catch share is the app's only organic install loop, and a card
+    /// image alone gives the recipient no path to install. Geo-neutral
+    /// campaign form (no /us/ storefront segment; Apple redirects each
+    /// visitor to their own storefront): `pt` is the account-level provider
+    /// token (same as tailspot.app's badge links), `ct` is this surface's
+    /// campaign name — installs show up under it in App Analytics, next to
+    /// the website's "Tailspot Website" campaign.
+    static let storeURL = URL(
+        string: "https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&ct=Tailspot%20Catch%20Share&mt=8"
+    )!
+
     /// Stamp the share card into an Image for ShareLink. MainActor because
     /// ImageRenderer renders a live SwiftUI view. Height follows the card's
     /// natural size (the split-flap name can wrap to a second line).
