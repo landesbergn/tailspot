@@ -41,6 +41,36 @@ else
   "$here/bin/log-start"
 fi
 
+# Step 0.5: PostHog secrets backstop. The key lives in a GITIGNORED xcconfig,
+# so a fresh per-feature worktree doesn't have it — and a keyless build
+# silently no-ops ALL analytics + session replay (Analytics.swift's designed
+# keyless mode). That silence cost 6 days of dark telemetry from the dev
+# phone (2026-08-19 → 08-25: every worktree deploy was keyless). Heal it
+# from the primary checkout when possible; otherwise warn LOUDLY and build
+# keyless anyway (keyless is still a valid build, just not silently).
+secrets_rel="ios/Tailspot/Tailspot.secrets.xcconfig"
+if [ ! -f "$here/$secrets_rel" ]; then
+  common_dir="$(cd "$here" && git rev-parse --git-common-dir 2>/dev/null || true)"
+  primary="$(dirname "$common_dir")"
+  if [ -n "$common_dir" ] && [ -f "$primary/$secrets_rel" ]; then
+    if [ "$dry_run" -eq 1 ]; then
+      echo "DRY: cp $primary/$secrets_rel $here/$secrets_rel"
+    else
+      cp "$primary/$secrets_rel" "$here/$secrets_rel"
+      echo "NOTE: copied gitignored $secrets_rel from primary checkout ($primary) — worktrees don't carry it"
+    fi
+  else
+    echo "" >&2
+    echo "##################################################################" >&2
+    echo "# WARNING: $secrets_rel missing — this build is KEYLESS:         " >&2
+    echo "# PostHog analytics + session replay will silently NO-OP on the  " >&2
+    echo "# device. Copy the file from the primary checkout if you want    " >&2
+    echo "# telemetry from this build.                                     " >&2
+    echo "##################################################################" >&2
+    echo "" >&2
+  fi
+fi
+
 # TAILSPOT_BUILD_DIR is absolute (see config.sh: outside iCloud-synced
 # Desktop so codesign doesn't choke on fileprovider xattrs).
 app_path="$TAILSPOT_BUILD_DIR/Build/Products/Debug-iphoneos/Tailspot.app"
