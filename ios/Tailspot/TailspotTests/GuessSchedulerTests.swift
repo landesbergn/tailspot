@@ -3,10 +3,11 @@
 //  TailspotTests
 //
 //  Pins the ROUTE bonus-round cadence rules (plan 2026-07-09-001 D3;
-//  route-only per Noah 2026-07-09): ~1-in-3 eligible catches, minimum 2-catch
-//  gap, never the user's very first catch, eligibility = fresh single
-//  non-duplicate non-suspect with a renderable route. Everything runs against
-//  SeededRNG so the distribution assertions are exact replays, not flakes.
+//  route-only per Noah 2026-07-09; re-balanced more frequent 2026-08-25 per
+//  Noah): ~1-in-2 roll on eligible catches, minimum 1-catch gap, never the
+//  user's very first catch, eligibility = fresh single non-duplicate
+//  non-suspect with a renderable route. Everything runs against SeededRNG so
+//  the distribution assertions are exact replays, not flakes.
 //
 
 import Foundation
@@ -14,8 +15,8 @@ import Testing
 @testable import Tailspot
 
 /// RNG that always returns the same raw value. `value: 0` makes every
-/// `Double.random(in: 0..<1)` come out 0.0 — i.e. the 1-in-3 roll ALWAYS
-/// fires — which isolates the deterministic guards from the probability.
+/// `Double.random(in: 0..<1)` come out 0.0 — i.e. the probability roll
+/// ALWAYS fires — which isolates the deterministic guards from it.
 /// `nonisolated` so the RandomNumberGenerator conformance isn't
 /// MainActor-isolated under the repo's default-isolation setting.
 private nonisolated struct ConstantRNG: RandomNumberGenerator {
@@ -84,12 +85,13 @@ struct GuessSchedulerCoreTests {
 
     // ── Minimum gap ─────────────────────────────────────────────────────
 
-    @Test func minimumGapBlocksTheTwoCatchesAfterARound() {
+    @Test func minimumGapBlocksTheCatchAfterARound() {
         var rng = ConstantRNG(value: 0)
-        // Round fired → gap 0, then 1: blocked even though the roll would hit.
+        // Round fired → gap 0: blocked even though the roll would hit.
         #expect(decide(catchesSinceLastRound: 0, rng: &rng) == nil)
-        #expect(decide(catchesSinceLastRound: 1, rng: &rng) == nil)
-        // Two full catches later the roll is allowed again.
+        // One full catch later the roll is allowed again (gap lowered to 1
+        // in the 2026-08-25 re-balance).
+        #expect(decide(catchesSinceLastRound: 1, rng: &rng) != nil)
         #expect(decide(catchesSinceLastRound: 2, rng: &rng) != nil)
         // nil = never fired → no gap constraint.
         #expect(decide(catchesSinceLastRound: nil, rng: &rng) != nil)
@@ -102,7 +104,7 @@ struct GuessSchedulerCoreTests {
 
     // ── Cadence distribution ────────────────────────────────────────────
 
-    @Test func cadenceIsRoughlyOneInThreeWhenUnconstrained() {
+    @Test func cadenceIsRoughlyOneInTwoWhenUnconstrained() {
         // Pure roll probability, gap constraint out of the picture
         // (catchesSinceLastRound: nil each time).
         var rng = SeededRNG(seed: 42)
@@ -170,8 +172,7 @@ struct GuessSchedulerWrapperTests {
         _ = recordCatch(scheduler, rng: &rng)                     // #1 guarded
         #expect(recordCatch(scheduler, rng: &rng) != nil)         // #2 fires
         #expect(recordCatch(scheduler, rng: &rng) == nil)         // #3 gap 0
-        #expect(recordCatch(scheduler, rng: &rng) == nil)         // #4 gap 1
-        #expect(recordCatch(scheduler, rng: &rng) != nil)         // #5 gap 2 → fires
+        #expect(recordCatch(scheduler, rng: &rng) != nil)         // #4 gap 1 → fires
     }
 
     @Test func duplicatesArePureNoOps() {
@@ -206,14 +207,14 @@ struct GuessSchedulerWrapperTests {
         for i in 0..<catches where recordCatch(scheduler, rng: &rng) != nil {
             firedAt.append(i)
         }
-        // No two rounds closer than the minimum gap (2 catches between).
+        // No two rounds closer than the minimum gap (1 catch between).
         for pair in zip(firedAt, firedAt.dropFirst()) {
             #expect(pair.1 - pair.0 > GuessScheduler.minimumGapCatches)
         }
-        // Long-run rate: a renewal cycle is 2 forced skips + Geometric(1/3)
-        // (mean 3) rolls → ~1 round per 5 catches. Assert a generous band —
-        // the point is "occasional treat, not a per-catch tax".
+        // Long-run rate: a renewal cycle is 1 forced skip + Geometric(1/2)
+        // (mean 2) rolls → ~1 round per 3 catches. Assert a generous band —
+        // more frequent since 2026-08-25, but still never per-catch.
         let rate = Double(firedAt.count) / Double(catches)
-        #expect(rate > 0.15 && rate < 0.25, "long-run round rate \(rate) out of band")
+        #expect(rate > 0.28 && rate < 0.38, "long-run round rate \(rate) out of band")
     }
 }
