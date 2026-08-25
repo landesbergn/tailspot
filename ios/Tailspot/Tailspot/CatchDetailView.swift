@@ -35,6 +35,10 @@ struct CatchDetailView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showDeleteConfirm = false
+    /// Photos-style zoom transition for the user's own catch photo: the
+    /// card hero feeds it (HeroZoomSource inside SettledCatchCard), the
+    /// overlay at this screen's root renders the morph + open viewer.
+    @State private var heroZoom = HeroZoomModel()
 
     /// Planespotters lookup, only consulted when the catch has no
     /// user-captured photo of its own. nil = not loaded yet OR none
@@ -67,11 +71,16 @@ struct CatchDetailView: View {
                         plane: detailPlane,
                         isFirstOfType: wasFirstOfType,
                         width: min(geo.size.width - 36, 420),
-                        // Planespotters TOS: the photo thumbnail itself must
-                        // link to the photo's Planespotters page (licensing
-                        // review 2026-07-11) — the tappable caption below
-                        // stays as the visible credit.
-                        onPhotoTap: heroPhotoLink.map { url in { openURL(url) } }
+                        // User catch photo → the full-res zoom viewer.
+                        // Planespotters hero → its photo page (TOS: the
+                        // thumbnail itself must link there; licensing review
+                        // 2026-07-11 — the tappable caption below stays as
+                        // the visible credit). Placeholder → inert.
+                        onPhotoTap: heroTapAction,
+                        photoTapAccessibilityLabel: hasCatchPhoto
+                            ? "View photo full screen"
+                            : "View photo on Planespotters.net",
+                        heroZoom: hasCatchPhoto ? heroZoom : nil
                     )
                     .frame(maxWidth: .infinity)
                     finePrint
@@ -89,10 +98,21 @@ struct CatchDetailView: View {
 
             chromeBar
                 .padding(.top, 8)
+
+            // Morph layer: empty while idle; renders the photo growing out
+            // of (and back into) the card, then the open viewer. Sits above
+            // the chrome so the open photo owns the whole screen.
+            HeroZoomOverlay(model: heroZoom)
         }
         }
         .toolbar(.hidden, for: .navigationBar)
         .swipeBackEnabled()
+        .onAppear {
+            heroZoom.onCommit = { method in
+                Analytics.capture("catch_photo_viewer_opened",
+                                  ["source": .string("detail"), "method": .string(method)])
+            }
+        }
         .alert(deleteTitle, isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { performDelete() }
             Button("Cancel", role: .cancel) {}
@@ -160,6 +180,23 @@ struct CatchDetailView: View {
     /// hero inert (user photo or placeholder).
     private var heroPhotoLink: URL? {
         hasCatchPhoto ? nil : planespottersPhoto?.link
+    }
+
+    /// Full-res file URL of the user's own catch photo, when there is one —
+    /// the tap-to-zoom subject.
+    private var catchPhotoURL: URL? {
+        hasCatchPhoto ? first.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) } : nil
+    }
+
+    /// What tapping the hero does: user catch photo → play the zoom morph
+    /// (same transition the pinch drives); Planespotters hero → its photo
+    /// page; placeholder → nothing (nil).
+    private var heroTapAction: (() -> Void)? {
+        if let url = catchPhotoURL {
+            let focus = first.photoFocus
+            return { heroZoom.openByTap(url: url, focus: focus) }
+        }
+        return heroPhotoLink.map { url in { openURL(url) } }
     }
 
     /// Historical first-of-type: no catch of this typecode predates the

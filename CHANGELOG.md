@@ -5,6 +5,36 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — Catch photo tap-to-zoom — branch `feat/catch-photo-zoom`
+
+Tapping the card photo now opens a full-res pinch-zoom viewer
+(`CatchPhotoViewer`) instead of dismissing the reveal (or doing nothing on the
+Hangar detail). Pinch 1x–6x, double-tap toggles 1x/3x toward the tap, single
+tap or the X pill closes. Opening is a Photos-style interactive morph
+(`HeroZoomModel`/`HeroZoomSource`/`HeroZoomOverlay`): a pinch starting on the
+card hero grows the full image out of the card toward full screen live under
+the fingers — release past ~30% progress commits into the viewer, under it
+the photo settles back into the card; a tap plays the same morph
+automatically, and closing morphs back. The morph starts pixel-aligned with
+the hero's focus crop (shared `FocusFill` math) and lands on the exact
+aspect-fit frame the viewer's scroll view computes, so both handoffs are
+seamless. The model is `@Observable` (Observation), not ObservableObject —
+under default MainActor isolation the ObservableObject conformance trips an
+isolated-conformance error at `@ObservedObject` use sites. The zoom host is a `UIScrollView` via
+`UIViewRepresentable` — a deliberate UIKit exception to the SwiftUI-first rule
+(`viewForZooming` gives Photos-grade pinch anchoring, pan clamping, and
+rubber-banding for free). Reveal wiring widens the card's hit-testing gate
+(chips shown OR settled-with-photo) so only the hero gesture captures: margin
+taps still dismiss, pre-settle taps still skip the animation, and photo taps
+while the bonus chips are up now zoom instead of counting as skip+dismiss.
+Hangar detail: user-photo heroes open the viewer; Planespotters heroes keep
+their TOS-required link-out (the hero's VoiceOver label is now
+caller-supplied). `RevealPhoto.cachedDecode` exposed so the viewer opens
+synchronously on the card's already-decoded bitmap — no loading beat. Viewer
+replay-masked like every user-photo surface; opens fire
+`catch_photo_viewer_opened` (source: reveal/detail, method: tap/pinch). New
+`CatchPhotoViewerSnapshotTests` visual-pass harness renders the viewer at 1x
+and driven to 3x. Full suite green.
 ## 2026-08-25 — McDonnell Douglas gets its planes back — branch `feat/mcdonnell-douglas`
 
 Prompted by Noah's MD-11 catch reading "Boeing MD-11". ICAO DOC 8643 lists the
