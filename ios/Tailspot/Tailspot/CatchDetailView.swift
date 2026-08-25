@@ -35,9 +35,10 @@ struct CatchDetailView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showDeleteConfirm = false
-    /// Full-screen pinch-zoom viewer for the user's own catch photo,
-    /// opened by tapping the card hero (user-photo heroes only).
-    @State private var showPhotoViewer = false
+    /// Photos-style zoom transition for the user's own catch photo: the
+    /// card hero feeds it (HeroZoomSource inside SettledCatchCard), the
+    /// overlay at this screen's root renders the morph + open viewer.
+    @State private var heroZoom = HeroZoomModel()
 
     /// Planespotters lookup, only consulted when the catch has no
     /// user-captured photo of its own. nil = not loaded yet OR none
@@ -79,7 +80,7 @@ struct CatchDetailView: View {
                         photoTapAccessibilityLabel: hasCatchPhoto
                             ? "View photo full screen"
                             : "View photo on Planespotters.net",
-                        onPhotoPinch: heroPinchAction
+                        heroZoom: hasCatchPhoto ? heroZoom : nil
                     )
                     .frame(maxWidth: .infinity)
                     finePrint
@@ -97,13 +98,19 @@ struct CatchDetailView: View {
 
             chromeBar
                 .padding(.top, 8)
+
+            // Morph layer: empty while idle; renders the photo growing out
+            // of (and back into) the card, then the open viewer. Sits above
+            // the chrome so the open photo owns the whole screen.
+            HeroZoomOverlay(model: heroZoom)
         }
         }
         .toolbar(.hidden, for: .navigationBar)
         .swipeBackEnabled()
-        .fullScreenCover(isPresented: $showPhotoViewer) {
-            if let url = catchPhotoURL {
-                CatchPhotoViewer(url: url)
+        .onAppear {
+            heroZoom.onCommit = { method in
+                Analytics.capture("catch_photo_viewer_opened",
+                                  ["source": .string("detail"), "method": .string(method)])
             }
         }
         .alert(deleteTitle, isPresented: $showDeleteConfirm) {
@@ -181,23 +188,15 @@ struct CatchDetailView: View {
         hasCatchPhoto ? first.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) } : nil
     }
 
-    /// What tapping the hero does: user catch photo → full-res viewer;
-    /// Planespotters hero → its photo page; placeholder → nothing (nil).
+    /// What tapping the hero does: user catch photo → play the zoom morph
+    /// (same transition the pinch drives); Planespotters hero → its photo
+    /// page; placeholder → nothing (nil).
     private var heroTapAction: (() -> Void)? {
-        if catchPhotoURL != nil { return { openViewer(method: "tap") } }
+        if let url = catchPhotoURL {
+            let focus = first.photoFocus
+            return { heroZoom.openByTap(url: url, focus: focus) }
+        }
         return heroPhotoLink.map { url in { openURL(url) } }
-    }
-
-    /// In-place pinch on the hero — user catch photos only (a pinch on a
-    /// Planespotters hero shouldn't launch their web page).
-    private var heroPinchAction: (() -> Void)? {
-        catchPhotoURL != nil ? { openViewer(method: "pinch") } : nil
-    }
-
-    private func openViewer(method: String) {
-        Analytics.capture("catch_photo_viewer_opened",
-                          ["source": .string("detail"), "method": .string(method)])
-        showPhotoViewer = true
     }
 
     /// Historical first-of-type: no catch of this typecode predates the

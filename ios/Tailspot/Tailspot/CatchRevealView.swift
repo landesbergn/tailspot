@@ -540,10 +540,11 @@ struct CatchRevealView: View {
 
     /// Animation clock anchor. nil until `onAppear`; `t` is 0 until set.
     @State private var start: Date?
-    /// Full-screen pinch-zoom viewer for the composed catch photo, opened
-    /// by tapping the settled card's hero (see the hit-testing gate in
-    /// `layout` — before the settle, a photo tap still skips the animation).
-    @State private var showPhotoViewer = false
+    /// Photos-style zoom transition for the composed catch photo — pinch
+    /// or tap on the settled hero grows it to full screen (see the
+    /// hit-testing gate in `layout` — before the settle, a photo tap
+    /// still skips the animation).
+    @State private var heroZoom = HeroZoomModel()
 
     /// Flips true once the reveal has played out (or the user taps to skip),
     /// gating the dismiss CTAs and the success haptic.
@@ -631,11 +632,6 @@ struct CatchRevealView: View {
         livePlane.photoURL.flatMap { $0.isFileURL ? $0 : nil }
     }
 
-    private func openPhotoViewer(method: String) {
-        Analytics.capture("catch_photo_viewer_opened",
-                          ["source": .string("reveal"), "method": .string(method)])
-        showPhotoViewer = true
-    }
 
     private var base: Int { livePlane.rarity.basePoints }
     private var firstOfTypeBonus: Int {
@@ -692,6 +688,11 @@ struct CatchRevealView: View {
                         ?? (chipsPhase == .shown ? 1 : 0)
                     layout(t: t, bt: bt, gt: gt, width: width)
                 }
+
+                // Morph layer for the hero's zoom transition — above the
+                // card and the CTA row, so the growing photo passes over
+                // both on its way to full screen.
+                HeroZoomOverlay(model: heroZoom)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onAppear { start = Date() }
@@ -726,9 +727,10 @@ struct CatchRevealView: View {
             }
             .onDisappear { settleTask?.cancel() }
             .sensoryFeedback(.success, trigger: settled)
-            .fullScreenCover(isPresented: $showPhotoViewer) {
-                if let url = zoomablePhotoURL {
-                    CatchPhotoViewer(url: url)
+            .onAppear {
+                heroZoom.onCommit = { method in
+                    Analytics.capture("catch_photo_viewer_opened",
+                                      ["source": .string("reveal"), "method": .string(method)])
                 }
             }
             .sensoryFeedback(.success, trigger: successBeat)
@@ -1067,13 +1069,16 @@ struct CatchRevealView: View {
                             loading: loader.map { !$0.pipelineFinished } ?? false)
                     .frame(height: photoHeight)
                     .frame(maxWidth: .infinity)
-                    // Owns the hero's clip + in-place pinch-to-zoom. Enabled
-                    // under the same gate as tap-to-zoom (settled + composed
-                    // photo), so a pinch mid-animation neither scales nor
-                    // opens; the hit-testing gate below is already open in
-                    // every state where this is non-nil.
-                    .modifier(HeroPinchZoom(onOpen: settled && zoomablePhotoURL != nil
-                        ? { openPhotoViewer(method: "pinch") } : nil))
+                    .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+                    // Zoom-transition source: publishes the hero's frame and
+                    // owns the opening pinch. Enabled under the same gate as
+                    // tap-to-zoom (settled + composed photo), so a pinch
+                    // mid-animation neither scales nor opens; the hit-testing
+                    // gate below is already open in every enabled state.
+                    .modifier(HeroZoomSource(model: heroZoom,
+                                             url: zoomablePhotoURL,
+                                             focus: livePlane.photoFocus,
+                                             enabled: settled))
                     .overlay(
                         RoundedRectangle(cornerRadius: Brand.Radius.card)
                             .stroke(accent.opacity(livePlane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
@@ -1084,8 +1089,8 @@ struct CatchRevealView: View {
                     // settle (hit-testing off) a photo tap skips the animation
                     // like any other tap.
                     .onTapGesture {
-                        guard settled, zoomablePhotoURL != nil else { return }
-                        openPhotoViewer(method: "tap")
+                        guard settled, let url = zoomablePhotoURL else { return }
+                        heroZoom.openByTap(url: url, focus: livePlane.photoFocus)
                     }
                     .opacity(ss(0.0, 0.18, t))
                     .padding(18 * scale)

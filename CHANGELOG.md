@@ -10,10 +10,17 @@ Git history + PLAN.md §9 remain the authoritative record.
 Tapping the card photo now opens a full-res pinch-zoom viewer
 (`CatchPhotoViewer`) instead of dismissing the reveal (or doing nothing on the
 Hangar detail). Pinch 1x–6x, double-tap toggles 1x/3x toward the tap, single
-tap or the X pill closes. Pinching directly ON the card hero also works
-(`HeroPinchZoom`): the photo magnifies in place inside its window, anchored at
-the pinch start with rubber-banding below 1x, and a release past 1.25x hands
-off into the viewer (under it, it springs back). The zoom host is a `UIScrollView` via
+tap or the X pill closes. Opening is a Photos-style interactive morph
+(`HeroZoomModel`/`HeroZoomSource`/`HeroZoomOverlay`): a pinch starting on the
+card hero grows the full image out of the card toward full screen live under
+the fingers — release past ~30% progress commits into the viewer, under it
+the photo settles back into the card; a tap plays the same morph
+automatically, and closing morphs back. The morph starts pixel-aligned with
+the hero's focus crop (shared `FocusFill` math) and lands on the exact
+aspect-fit frame the viewer's scroll view computes, so both handoffs are
+seamless. The model is `@Observable` (Observation), not ObservableObject —
+under default MainActor isolation the ObservableObject conformance trips an
+isolated-conformance error at `@ObservedObject` use sites. The zoom host is a `UIScrollView` via
 `UIViewRepresentable` — a deliberate UIKit exception to the SwiftUI-first rule
 (`viewForZooming` gives Photos-grade pinch anchoring, pan clamping, and
 rubber-banding for free). Reveal wiring widens the card's hit-testing gate
