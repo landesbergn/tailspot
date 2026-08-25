@@ -27,9 +27,10 @@ import UIKit
 @Observable
 final class RevealLoader {
     /// The presentation snapshot. Starts as the tap-time shell (feed
-    /// callsign/typecode → rarity/points; no photo, feed-only route) and is
-    /// replaced wholesale with the row-built snapshot when the pipeline
-    /// finishes. Swapping the whole value keeps every derived field (photo,
+    /// callsign/typecode → rarity/points; no photo, and NO route — the shell
+    /// withholds it so a bonus round's answer can't flash before the masked
+    /// prompt lands, see `shellCardPlane`) and is replaced wholesale with the
+    /// row-built snapshot when the pipeline finishes. Swapping the whole value keeps every derived field (photo,
     /// focus, healed route, first-of-type) consistent in one update.
     var plane: CardPlane
 
