@@ -108,30 +108,32 @@ struct ProfileScreen: View {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    // Share is the page's one action, so it gets the brand's
-                    // CTA treatment (cyan disc, dark glyph) instead of the
-                    // bare system tint — same accent grammar as the reveal's
-                    // CTA and the planned Spotter Pass share (PLAN §9 #10).
+                    // Share is the page's one action, so it keeps the brand's
+                    // cyan CTA accent — but via the SYSTEM's chrome, not our
+                    // own. On iOS 26 the toolbar wraps every item in its own
+                    // Liquid Glass capsule; the previous hand-drawn cyan disc
+                    // (padding + background circle) floated as a second,
+                    // hard-edged disc INSIDE that capsule and read as a
+                    // rendering bug (Noah's device pass, 2026-08-25).
+                    // `.glassProminent` + `.tint` makes the toolbar's own
+                    // glass carry the accent instead — one bubble, sized and
+                    // aligned like its Done sibling, hit target included.
                     // A direct ShareLink, deliberately minimal (Noah,
                     // 2026-07-08): one tap → the system share sheet with a
-                    // short invite + the tailspot.app link. Messages renders
-                    // the link as a rich preview from the site's OG tags; a
-                    // rendered stat-card image was tried and cut as too much.
+                    // short invite + the App Store link. Messages inflates
+                    // the standalone link into one rich store-listing
+                    // bubble — the whole message, by design; a rendered
+                    // stat-card image was tried and cut as too much.
                     ShareLink(
                         item: Self.inviteURL,
                         message: Text("Join me on Tailspot:")
                     ) {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 13, weight: .bold))
+                            .fontWeight(.bold)
                             .foregroundStyle(Brand.Color.bgPrimary)
-                            .padding(7)
-                            .background(Brand.Color.cyan, in: .circle)
-                            // The disc renders ~27 pt; the transparent frame
-                            // carries the 44 pt HIG hit target so the visual
-                            // stays a slim accent.
-                            .frame(minWidth: 44, minHeight: 44)
-                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(Brand.Color.cyan)
                     .accessibilityLabel("Share profile")
                     // ShareLink exposes no tap callback; a simultaneous
                     // gesture gives the share-funnel signal (opened, not
@@ -147,10 +149,14 @@ struct ProfileScreen: View {
         }
     }
 
-    /// Where an invited friend lands. The site carries install instructions
-    /// now (TestFlight) and becomes the App Store pointer at GA. Real invite
-    /// attribution (per-user codes, the invite trophy) is PLAN §9 #10.
-    private static let inviteURL = URL(string: "https://tailspot.app")!
+    /// Where an invited friend lands: the App Store listing, direct (Noah,
+    /// 2026-08-25 — supersedes the 2026-08-08 via-tailspot.app call; the
+    /// site hop bought a nicer OG preview but cost a step). Own campaign
+    /// name so profile-share installs read separately from catch shares and
+    /// the website in App Analytics. Real invite attribution (per-user
+    /// codes, the invite trophy) is PLAN §9 #10.
+    // Internal (not private) so CatchShareLinkTests can pin the campaign.
+    static let inviteURL = AppStoreListing.url(campaign: "Tailspot Profile Share")
 
     // MARK: - Standing fetch
 

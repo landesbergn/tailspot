@@ -35,6 +35,140 @@ replay-masked like every user-photo surface; opens fire
 `catch_photo_viewer_opened` (source: reveal/detail, method: tap/pinch). New
 `CatchPhotoViewerSnapshotTests` visual-pass harness renders the viewer at 1x
 and driven to 3x. Full suite green.
+## 2026-08-25 — McDonnell Douglas gets its planes back — branch `feat/mcdonnell-douglas`
+
+Prompted by Noah's MD-11 catch reading "Boeing MD-11". ICAO DOC 8643 lists the
+types still in production at the 1997 Boeing merger (MD-80/90 family, MD-11)
+under manufacturer BOEING; spotters — and every livery those airframes wore —
+say McDonnell Douglas. Generator `OVERRIDES` now pin MD-11, MD-81/82/83/87/88,
+MD-90 to McDonnell Douglas and unify the DC-9 series (DOC 8643 split its five
+variants between DOUGLAS and MCDONNELL DOUGLAS); the 717 stays Boeing — the
+only one of the line actually delivered as one. Names re-derive from typecode
+at display time, so shipped catches re-label with no migration.
+
+Accuracy ride-alongs: the type classifier now checks the narrow-prefix list
+before the heavy-WTC fallback, fixing three heavy-by-weight NARROW-bodies that
+sat in `wide` (707-300, DC-8-60, DC-8-70 — WTC H but single-aisle).
+
+Sets: `fam-md` reworked into the Long Beach family tree — DC-9 (epic) →
+MD-80 series (one slot spanning 81/82/83/87/88; the old per-variant tokens
+silently orphaned MD-81/83/87 catches) → MD-90 → Boeing 717. New
+`fam-md-heavies` wide-body family: DC-10 + MD-11 (both epic — the MD-11 is
+catchable at OAK nightly via FedEx/UPS; the DC-10 is fire-bomber-rare).
+`FamilySetsTests.douglasFamilyTree` pins slot membership; naming pins added
+for the whole line; `DouglasSetsSnapshotTests` renders the re-labeled card
+(SetDetailScreen/SetsBrowser aren't ImageRenderer-able — List/LazyVStack).
+## 2026-08-25 — Route flash before the bonus round + cadence bump — branch `fix/route-flash-guess-cadence`
+
+Trigger: Noah's field report — the real route flashed on the reveal card, then
+the bonus-round question overtook it (leaking the answer).
+
+**Root cause:** a PR #184 (early reveal shell) regression. The shell presents
+at tap time carrying the feed route, but the guess question only lands when
+the pipeline finishes (~1.4 s). The route row's ceremony fade-in (t 0.66–0.82
+of a 1.7 s common-tier reveal) — or instantly, on tap-to-skip — beat the
+masked prompt whenever the feed already carried the route. **Fix:**
+`shellCardPlane` withholds the route entirely; the card's DIST fallback fills
+the slot, and at pipeline end the loader swaps plane + row + guess in one
+MainActor pass, so the slot resolves atomically to either the real route or
+the masked prompt — the leak is impossible by construction.
+
+**Cadence bump (Noah's call):** the round was too rare — PostHog (60 days):
+246 rounds shown against 2,336 recorded catches (~10.5%), and it performs
+(228 answered vs 23 skipped). `GuessScheduler` roll 1-in-3 → **1-in-2**, min
+gap 2 → **1**: steady state ~1 round per 3 eligible catches, roughly double.
+Scheduler + reveal-snapshot tests re-pinned to the new numbers.
+
+## 2026-08-25 — PostHog flush batching (v1.1 battery item R9) — branch `perf/posthog-flush-batching`
+
+Closes out the v1.1 "two deferred battery items" from the 2026-07-17
+performance audit. Only one needed code: the other — camera power-down behind
+sheets (R10) — turned out to have already shipped inside PR #148 itself
+(`CameraPreview.isActive` stops the `AVCaptureSession`, and with it frame-tap
+delivery, whenever a sheet occludes the AR view or the app leaves the
+foreground); PLAN §9's deferred list predated the branch growing it and is now
+corrected.
+
+**Flush batching:** `flushAt = 1` had the SDK waking the radio for a network
+POST on every product event AND every session-replay snapshot — continuously,
+for the whole time the app was open; the audit rated it the biggest remaining
+controllable battery drain. Now `flushAt = 10` with the 30 s interval timer
+(10 over the SDK-default 20 is Noah's middle-ground call — battery isn't a
+live complaint, so bias toward a smaller crash-loss window and fresher live
+data; with replay snapshots at ~1/s that's a POST roughly every 10 s, still
+~10× fewer radio wakes than per-event). The 2026-06 reason for per-event
+flushing — short sessions losing replay recordings because they never hit a
+flush trigger — no longer applies on the pinned posthog-ios 3.60.1: both the
+event queue and the (now separate) replay-snapshot queue are file-backed on
+disk, so anything unsent when the app dies goes out on next launch, and the
+SDK force-flushes both queues on `didEnterBackground` unconditionally. The
+residual loss window is a session killed mid-flight and never relaunched.
+
+Mechanics: SDK setup split into `PostHogSessionReplay.makeConfig(projectToken:)`
+so the posture is unit-testable without touching the process-global
+`PostHogSDK.shared`; new `PostHogConfigTests` pins the flush numbers AND the
+replay/privacy flags (screenshot mode, unmasked text/images, lifecycle events
+on, screen-view autocapture off) so neither posture regresses silently. The
+stale "SDK flushes eagerly (flushAt = 1)" comment on `Analytics.flush()`
+corrected.
+
+**Needs live verification** (the audit's own caveat): after a few field
+sessions, confirm recordings still land in PostHog (replays were historically
+flaky for OTHER reasons — whole sessions can be absent; check live data before
+blaming the batching). Remaining audit deferrals (GPS accuracy, BGRA→4:2:0,
+projection consolidation, detector internals) stay deferred per Noah's
+no-GPS/no-camera-internals scope call.
+
+**Found while verifying: the keyless-worktree telemetry hole.** Noah's first
+device test showed zero events, and PostHog live data proved it predated this
+change: the dev phone's last event was **2026-08-19** — every per-feature
+worktree `bin/deploy` since then shipped a silently keyless build, because
+the PostHog key lives in the gitignored `Tailspot.secrets.xcconfig`, which
+fresh worktrees don't carry, and keyless builds no-op all analytics + replay
+by design. Fix: `bin/deploy` now copies the secrets file from the primary
+checkout when a worktree lacks it (via `git rev-parse --git-common-dir`),
+and prints a LOUD keyless warning when no copy exists anywhere. Flush
+batching itself was innocent — ingestion from real users was healthy
+throughout.
+
+## 2026-08-25 — App Store link rides in every catch share — branch `feat/catch-share-store-link`
+
+v1.1 item R6 (the organic-install loop). The catch share previously sent a
+rendered card image with no link at all — the friend who received the app's
+best artifact had no path to install it.
+
+- **`CatchShare.storeURL`** — geo-neutral App Store campaign link
+  (`…/app/apple-store/id6773470079?pt=119286625&ct=Tailspot%20Catch%20Share&mt=8`).
+  Same provider token as the website's badge links; its own campaign name so
+  in-app shares and tailspot.app installs read separately in App Analytics.
+- **`CatchDetailView`** threads it through `ShareLink`'s `message:` — the one
+  attachable item stays the card image, and the catch line + link travel as
+  accompanying text. Messages/Mail deliver both; text-hostile targets
+  (Instagram stories) drop the text and share the card alone, no worse than
+  before. **The link sits mid-sentence on purpose** (Noah's device pass): a
+  URL that stands alone or ends the message gets inflated by Messages into a
+  full rich-preview bubble — stacked under the card image that crowded the
+  canvas. Words on both sides keep it a plain tappable link in one short
+  text bubble. The true single-bubble share (the card as the link's own OG
+  preview) needs a hosted per-catch share page — noted for v1.2, where it
+  pairs with the shareable report card.
+- New **`catch_share_opened`** event (rarity, has_photo) via the same
+  simultaneous-gesture pattern as `profile_share_opened` — opened, not
+  completed; completion isn't observable.
+- **Profile/invite share now links the store directly too** (Noah — reverses
+  the 2026-08-08 leave-it-on-the-site call: the hop bought a nicer OG preview
+  but cost a step). Own campaign `Tailspot Profile Share`; with no image
+  attached it renders as ONE rich store-listing bubble in Messages. Both
+  surfaces build through the new `AppStoreListing.url(campaign:)` helper —
+  the provider token lives in one place.
+- `CatchShareLinkTests` pins the URL shape (geo-neutral path, `pt`, `ct`,
+  `mt`) and that the two surfaces carry distinct campaigns.
+- **Profile share button re-chromed the iOS 26-native way** (device pass:
+  the hand-drawn cyan disc floated inside the toolbar's own Liquid Glass
+  capsule — double chrome, read as a UI bug). The custom padding/background
+  circle is gone; `.buttonStyle(.glassProminent)` + `.tint(cyan)` lets the
+  system's toolbar glass carry the brand accent, sized and aligned like its
+  Done sibling.
 
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 

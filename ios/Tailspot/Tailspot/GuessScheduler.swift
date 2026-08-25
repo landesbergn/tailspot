@@ -17,8 +17,10 @@
 //      ("already caught" awards no points, so there's nothing to bonus), not
 //      part of a multi-catch, and not gate-suspect (don't stack a game on top
 //      of the post-reveal Keep/Discard question);
-//    - ~1-in-3 roll on eligible catches;
-//    - minimum 2-catch gap after a round fires;
+//    - ~1-in-2 roll on eligible catches (was 1-in-3 through v1.0 — raised
+//      2026-08-25 per Noah: measured only ~10% of recorded catches actually
+//      got a round, and players answer 90% of the ones shown);
+//    - minimum 1-catch gap after a round fires (was 2, same re-balance);
 //    - never on the user's very first catch (protect activation).
 //
 //  Split design, per the repo's testability convention (ADSBSource,
@@ -71,15 +73,17 @@ nonisolated struct SeededRNG: RandomNumberGenerator, Sendable {
 @MainActor
 final class GuessScheduler {
 
-    /// Probability an eligible, gap-clear, non-first catch fires a round
-    /// (D3: "~1-in-3 eligible catches"). One constant — the kill switch the
-    /// plan's risk #1 calls for lives here.
-    nonisolated static let fireProbability: Double = 1.0 / 3.0
+    /// Probability an eligible, gap-clear, non-first catch fires a round.
+    /// One constant — the kill switch the plan's risk #1 calls for lives
+    /// here. Raised from D3's 1-in-3 on 2026-08-25 (Noah's call): with the
+    /// gap below, the steady state is ~1 round per 3 eligible catches, about
+    /// double the shipped v1.0 rate.
+    nonisolated static let fireProbability: Double = 1.0 / 2.0
 
-    /// Minimum number of recorded catches BETWEEN two rounds (D3: "min gap
-    /// 2"). A round on catch N means catches N+1 and N+2 can never fire;
-    /// N+3 is the first that can roll again.
-    nonisolated static let minimumGapCatches = 2
+    /// Minimum number of recorded catches BETWEEN two rounds. A round on
+    /// catch N means catch N+1 can never fire; N+2 is the first that can
+    /// roll again. Lowered from D3's 2 in the 2026-08-25 re-balance.
+    nonisolated static let minimumGapCatches = 1
 
     // MARK: Pure core
 
@@ -120,7 +124,7 @@ final class GuessScheduler {
         // Minimum gap after the last fired round.
         if let gap = catchesSinceLastRound, gap < minimumGapCatches { return nil }
 
-        // The ~1-in-3 roll.
+        // The ~1-in-2 roll.
         guard Double.random(in: 0..<1, using: &rng) < fireProbability else { return nil }
 
         return .route

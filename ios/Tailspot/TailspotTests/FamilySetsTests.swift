@@ -74,6 +74,28 @@ struct FamilySetsTests {
         #expect(!CardSets.matches(catch: classic, entry: entry("fam-a320", "fa320neo")))
     }
 
+    @Test func douglasFamilyTree() {
+        // Any MD-80 variant fills the ONE MD-80 series slot — the old
+        // per-variant tokens silently orphaned MD-81/83/87 catches.
+        for tc in ["MD81", "MD82", "MD83", "MD87", "MD88"] {
+            let mad = mk(typecode: tc, model: "MD-\(tc.dropFirst(2))")
+            #expect(CardSets.matches(catch: mad, entry: entry("fam-md", "fmd80")),
+                    "\(tc) must fill the MD-80 series slot")
+            #expect(!CardSets.matches(catch: mad, entry: entry("fam-md", "fmd90")))
+        }
+        // The tri-jets live in the Heavies family, not the narrow-body tree.
+        let md11 = mk(typecode: "MD11", model: "MD-11")
+        #expect(CardSets.matches(catch: md11, entry: entry("fam-md-heavies", "fmd11")))
+        #expect(!CardSets.matches(catch: md11, entry: entry("fam-md", "fmd80")),
+                "An MD-11 must NOT fill the MD-80 slot")
+        let dc10 = mk(typecode: "DC10", model: "DC-10")
+        #expect(CardSets.matches(catch: dc10, entry: entry("fam-md-heavies", "fdc10")))
+        // A DC-9 fills its slot via typecode or model, and never the MD-80's.
+        let dc9 = mk(typecode: "DC95", model: "DC-9-50")
+        #expect(CardSets.matches(catch: dc9, entry: entry("fam-md", "fdc9")))
+        #expect(!CardSets.matches(catch: dc9, entry: entry("fam-md", "fmd80")))
+    }
+
     @Test func b77wDoesNotBleedInto777_300() {
         let er = mk(typecode: "B77W", model: "777-300ER")
         #expect(CardSets.matches(catch: er, entry: entry("fam-777", "f777-300er")))

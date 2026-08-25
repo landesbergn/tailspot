@@ -507,7 +507,28 @@ OVERRIDES = {
 
     # Airliner / regional
     "B703": ("Boeing", "707-300"),              # was "C-18"
+
+    # ----- McDonnell Douglas: undo the merger reassignment -----
+    # Boeing acquired McDonnell Douglas in 1997 and DOC 8643 lists the
+    # types still in production then (MD-80/90 family, MD-11) under
+    # manufacturer BOEING. Spotters — and every livery these airframes
+    # ever wore — say McDonnell Douglas; only the 717 (né MD-95) actually
+    # shipped as a Boeing, so B712 keeps its DOC 8643 make. The DC-9
+    # series is unified under McDonnell Douglas too (DOC 8643 splits the
+    # variants between DOUGLAS and MCDONNELL DOUGLAS; the merger happened
+    # two years into the program).
+    "MD11": ("McDonnell Douglas", "MD-11"),
+    "MD81": ("McDonnell Douglas", "MD-81"),
+    "MD82": ("McDonnell Douglas", "MD-82"),
+    "MD83": ("McDonnell Douglas", "MD-83"),
+    "MD87": ("McDonnell Douglas", "MD-87"),
+    "MD88": ("McDonnell Douglas", "MD-88"),
+    "MD90": ("McDonnell Douglas", "MD-90"),
+    "DC91": ("McDonnell Douglas", "DC-9-10"),
+    "DC92": ("McDonnell Douglas", "DC-9-20"),
     "DC93": ("McDonnell Douglas", "DC-9-30"),   # was "VC-9"
+    "DC94": ("McDonnell Douglas", "DC-9-40"),
+    "DC95": ("McDonnell Douglas", "DC-9-50"),
     "CN35": ("CASA", "CN-235"),                 # was "CASA D-4"
     "E45X": ("Embraer", "ERJ-145XR"),           # was "EMB-145XR" (cf E145/E135)
 
@@ -771,7 +792,7 @@ REGIONAL = {
 
 _REGIONAL_RE = re.compile(r'^(CRJ|E17|E19|E75|E70|DH8|AT4|AT7|AT5|SF3|SB20|J41|E45|E13|E14)')
 _WIDE_RE     = re.compile(r'^(B74|B77|B78|B76|A33|A34|A35|A38|MD11|IL9|IL8|A124|AN12|AN22|A30|A310)')
-_NARROW_RE   = re.compile(r'^(B73|B72|B75|A31|A32|BCS|MD8|MD9|DC9|E290|E190|E195|A19N|A20N|A21N)')
+_NARROW_RE   = re.compile(r'^(B70|B73|B72|B75|A31|A32|BCS|MD8|MD9|DC8|DC9|E290|E190|E195|A19N|A20N|A21N)')
 
 
 def aircraft_type(tc, info):
@@ -800,13 +821,21 @@ def aircraft_type(tc, info):
     if tc in REGIONAL or _REGIONAL_RE.match(tc):
         return "regional"
 
-    # 5. Wide-body prefix or heavy/super-heavy WTC
-    if _WIDE_RE.match(tc) or wtc in ("H", "J"):
+    # 5. Wide-body prefix
+    if _WIDE_RE.match(tc):
         return "wide"
 
-    # 6. Narrow prefix or (Jet + medium WTC)
+    # 6. Narrow prefix — checked BEFORE the heavy-WTC fallback because a
+    #    few heavy-by-weight types are single-aisle cabins (707, DC-8 are
+    #    WTC H); "wide/narrow" here means cabin, not wake category.
     if _NARROW_RE.match(tc):
         return "narrow"
+
+    # 6b. Heavy/super-heavy WTC → wide
+    if wtc in ("H", "J"):
+        return "wide"
+
+    # 6c. Jet + medium WTC → narrow
     if eng == "Jet" and wtc == "M":
         return "narrow"
 

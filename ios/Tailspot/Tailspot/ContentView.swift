@@ -1990,8 +1990,9 @@ struct ContentView: View {
         // catches present the reveal NOW — before the shutter — as a loading
         // shell over tap-time data: the dedup verdict and entry number are
         // cheap local fetches that used to run after the detector for no
-        // reason, callsign/typecode/rarity/alt/speed/route ride the live
-        // feed, and the photo slot holds `SkyPlaceholder` until the pipeline
+        // reason, callsign/typecode/rarity/alt/speed ride the live feed
+        // (the route is withheld until pipeline end — see `shellCardPlane`),
+        // and the photo slot holds `SkyPlaceholder` until the pipeline
         // delivers the still through the loader. The reveal's own split-flap
         // settle (~2 s) covers the fill window, so loading reads as the
         // ceremony, not as waiting. Multi-catches keep the settled flow —
@@ -2967,6 +2968,16 @@ struct ContentView: View {
     /// `cardPlane(from:observed:)` field-for-field where the data exists at
     /// tap time; photo and guess fields start empty, and the loader swaps in
     /// the full row-built snapshot when the pipeline finishes.
+    ///
+    /// The ROUTE is deliberately withheld (nil) even when the feed carries it:
+    /// whether this catch gets a route BONUS ROUND isn't known until the
+    /// pipeline finishes (scheduler + suspect verdict need the recorded row),
+    /// and a shell that shows the real route first LEAKS THE ANSWER — the
+    /// route flashed, then the masked "Where's it headed?" prompt overtook it
+    /// (Noah's field report, 2026-08-25). The card's DIST fallback fills the
+    /// slot instead; at pipeline end the loader swaps in plane + row + guess
+    /// in one MainActor pass, so the slot resolves atomically to either the
+    /// real route or the masked prompt — never one then the other.
     private func shellCardPlane(
         observed: ObservedAircraft, metadata: AircraftMetadata?
     ) -> CardPlane {
@@ -3008,10 +3019,6 @@ struct ContentView: View {
             altText: CardPlane.altText(fromMeters: aircraft.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
             distText: String(format: "%.1f km", observed.slantDistanceMeters / 1000),
-            originIcao: aircraft.originIata ?? aircraft.originIcao,
-            destIcao: aircraft.destIata ?? aircraft.destIcao,
-            originName: aircraft.originName,
-            destName: aircraft.destName,
             isFirstOfType: isFirstOfType
         )
     }
