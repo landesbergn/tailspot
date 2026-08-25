@@ -5,6 +5,43 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — PostHog flush batching (v1.1 battery item R9) — branch `perf/posthog-flush-batching`
+
+Closes out the v1.1 "two deferred battery items" from the 2026-07-17
+performance audit. Only one needed code: the other — camera power-down behind
+sheets (R10) — turned out to have already shipped inside PR #148 itself
+(`CameraPreview.isActive` stops the `AVCaptureSession`, and with it frame-tap
+delivery, whenever a sheet occludes the AR view or the app leaves the
+foreground); PLAN §9's deferred list predated the branch growing it and is now
+corrected.
+
+**Flush batching:** `flushAt = 1` had the SDK waking the radio for a network
+POST on every product event AND every session-replay snapshot — continuously,
+for the whole time the app was open; the audit rated it the biggest remaining
+controllable battery drain. Now `flushAt = 20` with the 30 s interval timer
+(the SDK defaults, stated explicitly). The 2026-06 reason for per-event
+flushing — short sessions losing replay recordings because they never hit a
+flush trigger — no longer applies on the pinned posthog-ios 3.60.1: both the
+event queue and the (now separate) replay-snapshot queue are file-backed on
+disk, so anything unsent when the app dies goes out on next launch, and the
+SDK force-flushes both queues on `didEnterBackground` unconditionally. The
+residual loss window is a session killed mid-flight and never relaunched.
+
+Mechanics: SDK setup split into `PostHogSessionReplay.makeConfig(projectToken:)`
+so the posture is unit-testable without touching the process-global
+`PostHogSDK.shared`; new `PostHogConfigTests` pins the flush numbers AND the
+replay/privacy flags (screenshot mode, unmasked text/images, lifecycle events
+on, screen-view autocapture off) so neither posture regresses silently. The
+stale "SDK flushes eagerly (flushAt = 1)" comment on `Analytics.flush()`
+corrected.
+
+**Needs live verification** (the audit's own caveat): after a few field
+sessions, confirm recordings still land in PostHog (replays were historically
+flaky for OTHER reasons — whole sessions can be absent; check live data before
+blaming the batching). Remaining audit deferrals (GPS accuracy, BGRA→4:2:0,
+projection consolidation, detector internals) stay deferred per Noah's
+no-GPS/no-camera-internals scope call.
+
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 
 Trigger: an App Store review ("could include more plane types and models")
