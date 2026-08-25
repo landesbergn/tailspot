@@ -57,6 +57,45 @@ and prints a LOUD keyless warning when no copy exists anywhere. Flush
 batching itself was innocent — ingestion from real users was healthy
 throughout.
 
+## 2026-08-25 — App Store link rides in every catch share — branch `feat/catch-share-store-link`
+
+v1.1 item R6 (the organic-install loop). The catch share previously sent a
+rendered card image with no link at all — the friend who received the app's
+best artifact had no path to install it.
+
+- **`CatchShare.storeURL`** — geo-neutral App Store campaign link
+  (`…/app/apple-store/id6773470079?pt=119286625&ct=Tailspot%20Catch%20Share&mt=8`).
+  Same provider token as the website's badge links; its own campaign name so
+  in-app shares and tailspot.app installs read separately in App Analytics.
+- **`CatchDetailView`** threads it through `ShareLink`'s `message:` — the one
+  attachable item stays the card image, and the catch line + link travel as
+  accompanying text. Messages/Mail deliver both; text-hostile targets
+  (Instagram stories) drop the text and share the card alone, no worse than
+  before. **The link sits mid-sentence on purpose** (Noah's device pass): a
+  URL that stands alone or ends the message gets inflated by Messages into a
+  full rich-preview bubble — stacked under the card image that crowded the
+  canvas. Words on both sides keep it a plain tappable link in one short
+  text bubble. The true single-bubble share (the card as the link's own OG
+  preview) needs a hosted per-catch share page — noted for v1.2, where it
+  pairs with the shareable report card.
+- New **`catch_share_opened`** event (rarity, has_photo) via the same
+  simultaneous-gesture pattern as `profile_share_opened` — opened, not
+  completed; completion isn't observable.
+- **Profile/invite share now links the store directly too** (Noah — reverses
+  the 2026-08-08 leave-it-on-the-site call: the hop bought a nicer OG preview
+  but cost a step). Own campaign `Tailspot Profile Share`; with no image
+  attached it renders as ONE rich store-listing bubble in Messages. Both
+  surfaces build through the new `AppStoreListing.url(campaign:)` helper —
+  the provider token lives in one place.
+- `CatchShareLinkTests` pins the URL shape (geo-neutral path, `pt`, `ct`,
+  `mt`) and that the two surfaces carry distinct campaigns.
+- **Profile share button re-chromed the iOS 26-native way** (device pass:
+  the hand-drawn cyan disc floated inside the toolbar's own Liquid Glass
+  capsule — double chrome, read as a UI bug). The custom padding/background
+  circle is gone; `.buttonStyle(.glassProminent)` + `.tint(cyan)` lets the
+  system's toolbar glass carry the brand accent, sized and aligned like its
+  Done sibling.
+
 ## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
 
 Trigger: an App Store review ("could include more plane types and models")
