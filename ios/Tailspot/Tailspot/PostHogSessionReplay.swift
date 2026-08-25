@@ -28,9 +28,35 @@ enum PostHogSessionReplay {
             return
         }
 
+        PostHogSDK.shared.setup(makeConfig(projectToken: key))
+        // Launch-time identify (self-heal): re-affiliate a returning, registered
+        // user with their canonical person. The real first identify happens at
+        // registration (TailspotAccountClient.ensureRegistered) and handle claim;
+        // this only re-asserts the server id + re-`$set`s the handle on launch so
+        // a profile missing the handle self-heals. We read the id with
+        // `DeviceID.currentIfPresent()` (NEVER mints) and gate on a claimed
+        // handle, so a genuine first launch doesn't identify before registration
+        // establishes the canonical id. `identify` is idempotent (posthog-ios
+        // dedupes an identical repeat), and for a device whose SDK is pinned to
+        // a stale pre-#76 local id — where posthog-ios silently DROPS the
+        // identify — the sink falls back to `$set`ting the handle on the pinned
+        // person (see AnalyticsIdentity.identifyRoute).
+        let handle = UserDefaults.standard.string(forKey: SpotterHandle.storageKey)
+        let hasHandle = AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
+        if let id = AnalyticsIdentity.launchIdentity(deviceId: DeviceID.currentIfPresent(),
+                                                     hasClaimedHandle: hasHandle) {
+            Analytics.identify(id, handle: hasHandle ? handle : nil)
+        }
+        Log.analytics.notice("PostHog session replay: enabled")
+    }
+
+    /// The one SDK configuration. Split from `start()` only so
+    /// `PostHogConfigTests` can pin the replay/privacy/flush posture without
+    /// touching the process-global `PostHogSDK.shared`.
+    static func makeConfig(projectToken: String) -> PostHogConfig {
         // `projectToken:` replaces the deprecated `apiKey:` label (posthog-ios
         // ≥ 3.x); same value, just the renamed initializer.
-        let config = PostHogConfig(projectToken: key, host: host)
+        let config = PostHogConfig(projectToken: projectToken, host: host)
         config.sessionReplay = true
         // Screenshot mode (NOT wireframe). PostHog's wireframe mode rebuilds the
         // replay from the UIKit view hierarchy, which a SwiftUI app on Xcode 26 /
@@ -76,18 +102,36 @@ enum PostHogSessionReplay {
         // masking would also black out card art, badges, and icons — gutting
         // replay usefulness without adding privacy.
         config.sessionReplayConfig.maskAllImages = false
-        // Replay reliability. Snapshots ride the normal event queue, which only
-        // flushes at flushAt (default 20) events, the flushIntervalSeconds (30s)
-        // timer, or on app background. A short session (a few seconds, well under
-        // 20 snapshots) that we DON'T background-flush is lost on next launch —
-        // which is why only ~1 in N sessions was producing a recording.
-        //   - flushAt = 1 sends each snapshot immediately, so nothing is stranded
-        //     in the buffer when the app closes.
-        //   - lifecycle events back ON: the SDK needs app-state awareness to draw
-        //     session boundaries and flush on background. (It emits a few extra
-        //     "Application Opened/Backgrounded" events — distinct names from our
-        //     REST `app_opened`, so no double-count of our funnels.)
-        config.flushAt = 1
+        // Flush BATCHED, not per-event (v1.1 battery item R9 — the 2026-07-17
+        // audit's biggest deferred drain: flushAt = 1 woke the radio for a
+        // network POST on every single event AND every replay snapshot, i.e.
+        // continuously for the whole time the app was open). flushAt = 1 dates
+        // from the 2026-06 replay-reliability fix, when short sessions were
+        // losing recordings ("never hit a flush trigger"). On the SDK we pin
+        // today (3.60.1, Package.resolved) batching no longer risks that:
+        //   - Both queues — events (/batch) and replay snapshots (/snapshot,
+        //     a separate queue since 3.x) — are FILE-BACKED on disk
+        //     (PostHogFileBackedQueue): anything unsent when the app dies is
+        //     sent on next launch, not lost.
+        //   - The SDK force-flushes both queues on didEnterBackground,
+        //     unconditionally (independent of the lifecycle-events flag), so
+        //     a normally-closed session ships before suspension.
+        //   - Remaining loss window: killed mid-session and NEVER relaunched.
+        // So: flushAt 10 events / 30 s timer. 10 is Noah's middle-ground call
+        // (2026-08-25) over the SDK-default 20: battery isn't a live complaint,
+        // so bias toward a smaller crash-loss window and fresher live data —
+        // with replay snapshotting at ~1/s that's a POST roughly every 10 s,
+        // still ~10× fewer radio wakes than the old per-event flushAt = 1.
+        // Posture pinned by PostHogConfigTests. If recordings go missing
+        // again, check PostHog live data FIRST (whole sessions can be absent
+        // for other reasons — see the field-debugging notes) before touching
+        // these numbers.
+        config.flushAt = 10
+        config.flushIntervalSeconds = 30
+        // Lifecycle events stay ON: the SDK needs app-state awareness to draw
+        // session boundaries. (It emits a few extra "Application
+        // Opened/Backgrounded" events — distinct names from our `app_opened`,
+        // so no double-count of our funnels.)
         config.captureApplicationLifecycleEvents = true
         // Still suppress the SDK's screen-view autocapture — our screens aren't
         // UIViewControllers it can name, and we don't want $screen noise.
@@ -98,25 +142,6 @@ enum PostHogSessionReplay {
         config.debug = true
         #endif
 
-        PostHogSDK.shared.setup(config)
-        // Launch-time identify (self-heal): re-affiliate a returning, registered
-        // user with their canonical person. The real first identify happens at
-        // registration (TailspotAccountClient.ensureRegistered) and handle claim;
-        // this only re-asserts the server id + re-`$set`s the handle on launch so
-        // a profile missing the handle self-heals. We read the id with
-        // `DeviceID.currentIfPresent()` (NEVER mints) and gate on a claimed
-        // handle, so a genuine first launch doesn't identify before registration
-        // establishes the canonical id. `identify` is idempotent (posthog-ios
-        // dedupes an identical repeat), and for a device whose SDK is pinned to
-        // a stale pre-#76 local id — where posthog-ios silently DROPS the
-        // identify — the sink falls back to `$set`ting the handle on the pinned
-        // person (see AnalyticsIdentity.identifyRoute).
-        let handle = UserDefaults.standard.string(forKey: SpotterHandle.storageKey)
-        let hasHandle = AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
-        if let id = AnalyticsIdentity.launchIdentity(deviceId: DeviceID.currentIfPresent(),
-                                                     hasClaimedHandle: hasHandle) {
-            Analytics.identify(id, handle: hasHandle ? handle : nil)
-        }
-        Log.analytics.notice("PostHog session replay: enabled")
+        return config
     }
 }

@@ -151,8 +151,10 @@ nonisolated enum Analytics {
         sink?.identify(distinctId, handle: handle)
     }
 
-    /// Force-flush queued events. The SDK flushes eagerly (flushAt = 1), so this
-    /// is rarely needed; retained for symmetry and tests.
+    /// Force-flush queued events. The SDK batches (flushAt = 10 / 30 s timer —
+    /// see PostHogSessionReplay.makeConfig) and force-flushes itself when the
+    /// app backgrounds, so this is rarely needed; retained for symmetry and
+    /// tests.
     static func flush() {
         sink?.flush()
     }
