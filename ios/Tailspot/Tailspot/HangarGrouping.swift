@@ -138,6 +138,38 @@ enum HangarGrouping {
             .sorted { $0.mostRecent.caughtAt > $1.mostRecent.caughtAt }
     }
 
+    /// icao24s of rows whose DISPLAYED catch (`mostRecent`) was the
+    /// device's first-ever catch of its typecode — i.e. no catch of that
+    /// typecode (any airframe, legacy duplicates included) strictly
+    /// predates it. Drives the Recent card's first-of-type sparkle and
+    /// its share of the +50% display bonus, mirroring the server's award
+    /// for that catch. Re-derived like `resolvedRarity` (no stored flag);
+    /// one O(n) pass over `allCatches` so the Recent feed never scans
+    /// catches × rows (the Profile-sheet freeze class).
+    ///
+    /// Typeless catches are never first-of-type. Two catches of the same
+    /// type sharing an exact timestamp both count as first — harmless,
+    /// and stable across renders.
+    static func firstOfTypeRowIDs(rows: [HangarRow], allCatches: [Catch]) -> Set<String> {
+        var earliest: [String: Date] = [:]
+        for c in allCatches {
+            guard let tc = c.typecode?.nonEmpty else { continue }
+            if let current = earliest[tc] {
+                if c.caughtAt < current { earliest[tc] = c.caughtAt }
+            } else {
+                earliest[tc] = c.caughtAt
+            }
+        }
+        var ids = Set<String>()
+        for row in rows {
+            guard let tc = row.mostRecent.typecode?.nonEmpty,
+                  let first = earliest[tc], first >= row.mostRecent.caughtAt
+            else { continue }
+            ids.insert(row.icao24)
+        }
+        return ids
+    }
+
     /// Derives the group key for a single catch under a given mode.
     /// Trims whitespace and collapses empties so blank-string fields
     /// don't create phantom groups.

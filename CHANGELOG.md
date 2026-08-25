@@ -5,7 +5,22 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-08-24 — Zero-point rank fix + per-catch immediate upload — branch `fix/zero-point-rank`
+## 2026-08-24 — Recent row shows the full point total — branch `feat/recent-row-full-points`
+
+The Hangar Recent card's trailing readout showed base plane value only
+(`rarity.basePoints`), so a catch the reveal celebrated as +875 listed as
+"500 PTS" — the earned bonuses vanished after the reveal. Design settled in a
+mock round (5 options + refinements, plus a blind second-Claude design review
+that ranked the micro-ledger first): the readout is now the **full display
+total** in the rarity tint over a tiny "base +bonus" micro-ledger in the same
+tint (the reveal ledger compressed to one line; bonus-less rows keep the quiet
+PTS caption), and first-of-type rows cap the make/model line with a gold
+sparkle — gold now means "first" and nothing else on the card. New pieces:
+`ScoringBonuses.displayPoints` (shared total math, era-aware for the legacy
++10% route fraction) and `HangarGrouping.firstOfTypeRowIDs` (one O(n) pass,
+anchored on each row's displayed catch, cached alongside the rows in
+HangarRecentView's derived cache). Sets cards unchanged. iOS suite green;
+TailCard snapshots re-eyeballed incl. the three new bonus cases.
 
 A new user reported ranking "~458th" right after their first catch. Root cause
 was a compound: catches only uploaded on the next foreground transition, so the

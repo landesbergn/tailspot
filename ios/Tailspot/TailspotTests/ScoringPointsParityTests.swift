@@ -83,4 +83,25 @@ struct ScoringBonusesParityTests {
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type) } == [3, 5, 13, 25, 125])
         #expect(bases.map { ScoringBonuses.guessBonus(base: $0, kind: .type, caughtAt: preCutover) } == [3, 5, 13, 25, 125])
     }
+
+    @Test func displayPointsComposesBaseAndBonuses() {
+        let now = ScoringBonuses.routeGuessCutover.addingTimeInterval(60)
+        // No bonuses → the base, and a zero bonus (the card renders PTS).
+        #expect(ScoringBonuses.displayPoints(
+            base: 10, isFirstOfType: false, guessKind: nil, caughtAt: now) == (10, 0))
+        // The full stack — legendary first-of-type with a correct route
+        // call: 500 + 250 + 125 (the reveal's 875).
+        #expect(ScoringBonuses.displayPoints(
+            base: 500, isFirstOfType: true, guessKind: .route, caughtAt: now) == (875, 375))
+        // Guess only, rare: 50 + 13 (the round(12.5) half-up case).
+        #expect(ScoringBonuses.displayPoints(
+            base: 50, isFirstOfType: false, guessKind: .route, caughtAt: now) == (63, 13))
+        // First only, epic: 100 + 50.
+        #expect(ScoringBonuses.displayPoints(
+            base: 100, isFirstOfType: true, guessKind: nil, caughtAt: now) == (150, 50))
+        // A pre-cutover route call keeps its legacy +10% era forever.
+        let legacy = ScoringBonuses.routeGuessCutover.addingTimeInterval(-60)
+        #expect(ScoringBonuses.displayPoints(
+            base: 50, isFirstOfType: false, guessKind: .route, caughtAt: legacy) == (55, 5))
+    }
 }

@@ -137,6 +137,22 @@ nonisolated enum ScoringBonuses {
         case .type:  return Int((Double(base) * typeGuess).rounded())
         }
     }
+
+    /// Full display total for a stored catch — the base plus the bonuses
+    /// the server awarded, re-derived live like `resolvedRarity` (so a
+    /// re-tier floats the bonuses with the base). Returns the bonus
+    /// separately so the Recent card can render its "base +bonus"
+    /// micro-ledger. Pass `guessKind` only for a CORRECT guess (wrong /
+    /// skipped / no round → nil → no bonus), and the catch's own
+    /// `caughtAt` so the route fraction lands in the right era.
+    static func displayPoints(
+        base: Int, isFirstOfType: Bool, guessKind: GuessKind?, caughtAt: Date
+    ) -> (total: Int, bonus: Int) {
+        var bonus = 0
+        if isFirstOfType { bonus += firstOfTypeBonus(base: base) }
+        if let kind = guessKind { bonus += guessBonus(base: base, kind: kind, caughtAt: caughtAt) }
+        return (base + bonus, bonus)
+    }
 }
 
 // MARK: - AircraftType

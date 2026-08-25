@@ -17,16 +17,23 @@ struct HangarRecentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @State private var rowToDelete: HangarRow?
-    /// Memoizes the grouped rows across body evals — this body used to run
-    /// the full HangarGrouping pass TWICE per eval (isEmpty + ForEach), on
-    /// every segment switch. See HangarDerivedCache.
-    @State private var cache = DerivedCacheBox<[HangarRow]>()
+    /// Memoizes the grouped rows AND the first-of-type row set across body
+    /// evals — this body used to run the full HangarGrouping pass TWICE per
+    /// eval (isEmpty + ForEach), on every segment switch. See
+    /// HangarDerivedCache. The pair is derived in one pass so the sparkle
+    /// set can never drift from the rows it describes.
+    @State private var cache = DerivedCacheBox<([HangarRow], Set<String>)>()
 
-    private var rows: [HangarRow] {
+    private var derived: ([HangarRow], Set<String>) {
         cache.value(for: CatchFingerprint.of(catches)) {
-            HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+            let rows = HangarGrouping.group(catches, by: .recent).first?.rows ?? []
+            return (rows, HangarGrouping.firstOfTypeRowIDs(rows: rows, allCatches: catches))
         }
     }
+
+    private var rows: [HangarRow] { derived.0 }
+    /// icao24s whose card gets the first-of-type sparkle + bonus share.
+    private var firstOfTypeIDs: Set<String> { derived.1 }
 
     var body: some View {
         ScrollView {
@@ -39,7 +46,11 @@ struct HangarRecentView: View {
                 LazyVStack(spacing: 10) {
                     ForEach(rows) { row in
                         NavigationLink(value: row) {
-                            TailCard(row: row, showPoints: true)
+                            TailCard(
+                                row: row,
+                                showPoints: true,
+                                isFirstOfType: firstOfTypeIDs.contains(row.icao24)
+                            )
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
