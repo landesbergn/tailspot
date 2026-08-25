@@ -361,6 +361,10 @@ nonisolated enum CardSets {
                   modelTokens: ["737-300", "737-400", "737-500", "737-3", "737-4", "737-5"],
                   summary: "The -300/-400/-500 generation. Mostly night freight now.",
                   representativeTypecode: "B734"),
+            .init(id: "f737-600", canonicalName: "737-600", rarity: .common,
+                  modelTokens: ["737-6", "737-600"],
+                  summary: "The rarest NG. Barely anyone ordered it.",
+                  representativeTypecode: "B736"),
             .init(id: "f737-700", canonicalName: "737-700", rarity: .common,
                   modelTokens: ["737-7", "737-700"],
                   summary: "Shortest current-gen 737. Southwest's backbone.",
@@ -542,31 +546,41 @@ nonisolated enum CardSets {
                   modelTokens: ["longitude", "citation 10", "650 citation", "700 citation", "750 citation"],
                   summary: "The fast, long-range top of the line.",
                   representativeTypecode: "C700"),
+            // "citation mustang", not bare "mustang" — a P-51 resolves to
+            // canonical "A-36 Mustang" and would bleed into this slot.
             .init(id: "fc-mustang", canonicalName: "Citation Mustang", rarity: .uncommon,
-                  modelTokens: ["mustang", "510 citation"], summary: "Entry-level very-light Citation.",
+                  modelTokens: ["citation mustang", "510 citation"], summary: "Entry-level very-light Citation.",
                   representativeTypecode: "C510"),
         ]),
         .init(id: "fam-gulfstream", type: .biz, title: "Gulfstream", entries: [
             .init(id: "fg-iv", canonicalName: "Gulfstream IV", rarity: .uncommon,
                   modelTokens: ["gulfstream iv", "g-iv", "giv"], summary: "Classic large-cabin Gulfstream.",
                   representativeTypecode: "GLF4"),
-            .init(id: "fg-280", canonicalName: "Gulfstream G280", rarity: .uncommon,
-                  modelTokens: ["g280", "g-280"], summary: "Super-midsize. Israeli-built.",
+            // G200 folded in (2026-08-24 coverage audit: a GALX catch had no
+            // slot) — same Israeli super-midsize line, predecessor to the G280.
+            .init(id: "fg-280", canonicalName: "G200 / G280", rarity: .uncommon,
+                  modelTokens: ["g280", "g-280", "g200", "g-200", "galaxy g200"], summary: "Super-midsize. Israeli-built.",
                   representativeTypecode: "G280"),
             .init(id: "fg-550", canonicalName: "Gulfstream G550", rarity: .uncommon,
                   modelTokens: ["g550", "g-550"], summary: "Long-range large cabin. Ubiquitous at the top.",
                   representativeTypecode: "GLF5"),
+            .init(id: "fg-600", canonicalName: "G500 / G600", rarity: .rare,
+                  modelTokens: ["g500", "g-500", "g600", "g-600"], summary: "New-generation large cabin. Fly-by-wire.",
+                  representativeTypecode: "GA6C"),
             .init(id: "fg-650", canonicalName: "Gulfstream G650", rarity: .rare,
                   modelTokens: ["g650", "g-650"], summary: "Flagship ultra-long-range. The status jet.",
                   representativeTypecode: "GLF6"),
+            .init(id: "fg-700", canonicalName: "G700 / G800", rarity: .rare,
+                  modelTokens: ["g700", "g-700", "g800", "g-800"], summary: "The new flagships. Longest cabins flying.",
+                  representativeTypecode: "GA7C"),
         ]),
     ]
 
     // Gap-filling families so common catches (GA pistons, turboprops, other
     // jet makers) have a home — broadly MECE for what you'll realistically
-    // catch. Obscure / experimental / military / helicopter types still fall
-    // outside curated families. Split into chunks so the Swift type-checker
-    // handles each literal quickly.
+    // catch. As of the 2026-08-24 coverage audit (gap chunk C), every type
+    // observed in prod lands in at least one family. Split into chunks so
+    // the Swift type-checker handles each literal quickly.
     private static let familiesGapA: [CardSet] = [
         .init(id: "fam-a220", type: .narrow, title: "Airbus A220", entries: [
             .init(id: "fa220-100", canonicalName: "A220-100", rarity: .uncommon,
@@ -602,6 +616,9 @@ nonisolated enum CardSets {
             .init(id: "f717", canonicalName: "Boeing 717", rarity: .uncommon,
                   modelTokens: ["717"], summary: "The final MD-95, sold as the 717.",
                   representativeTypecode: "B712"),
+            .init(id: "fmd11", canonicalName: "MD-11", rarity: .epic,
+                  modelTokens: ["md-11", "md11"], summary: "Tri-jet widebody. Night freighters now.",
+                  representativeTypecode: "MD11"),
         ]),
         .init(id: "fam-comac", type: .narrow, title: "Comac", entries: [
             .init(id: "fc919", canonicalName: "C919", rarity: .common,
@@ -642,17 +659,23 @@ nonisolated enum CardSets {
 
     private static let familiesGapB: [CardSet] = [
         .init(id: "fam-cessna", type: .ga, title: "Cessna", entries: [
-            .init(id: "fc152", canonicalName: "Cessna 152", rarity: .common,
-                  modelTokens: ["cessna 152", "c152", "152"], summary: "Two-seat trainer.",
+            .init(id: "fc152", canonicalName: "Cessna 150 / 152", rarity: .common,
+                  modelTokens: ["cessna 152", "c152", "152", "cessna 150"], summary: "Two-seat trainer.",
                   representativeTypecode: "C152"),
             .init(id: "fc172", canonicalName: "Cessna 172", rarity: .common,
                   modelTokens: ["cessna 172", "c172", "172", "skyhawk"], summary: "Most-built aircraft ever.",
                   representativeTypecode: "C172"),
+            .init(id: "fc177", canonicalName: "Cessna 177 Cardinal", rarity: .common,
+                  modelTokens: ["cardinal", "177"], summary: "The strutless, sleeker 172 sibling.",
+                  representativeTypecode: "C77R"),
             .init(id: "fc182", canonicalName: "Cessna 182", rarity: .common,
                   modelTokens: ["cessna 182", "c182", "182", "skylane"], summary: "Higher-power four-seater.",
                   representativeTypecode: "C182"),
-            .init(id: "fc206", canonicalName: "Cessna 206", rarity: .common,
-                  modelTokens: ["cessna 206", "c206", "206", "stationair"], summary: "Hauler / floatplane single.",
+            .init(id: "fc185", canonicalName: "Cessna 180 / 185", rarity: .common,
+                  modelTokens: ["skywagon", "cessna 180", "cessna 185"], summary: "Taildragger workhorse. Bush and floats.",
+                  representativeTypecode: "C185"),
+            .init(id: "fc206", canonicalName: "Cessna 206 / 207", rarity: .common,
+                  modelTokens: ["cessna 206", "c206", "206", "stationair", "cessna 207"], summary: "Hauler / floatplane single.",
                   representativeTypecode: "C206"),
             .init(id: "fc208", canonicalName: "Cessna 208 Caravan", rarity: .common,
                   modelTokens: ["caravan", "c208", "208"], summary: "Single turboprop utility hauler.",
@@ -662,6 +685,11 @@ nonisolated enum CardSets {
             .init(id: "fc402", canonicalName: "Cessna 402", rarity: .common,
                   modelTokens: ["cessna 402", "c402", "402"], summary: "Twin-piston commuter. Cape Air's workhorse.",
                   representativeTypecode: "C402"),
+            // "cessna 310" (canonical-only), never bare "310" — an Airbus
+            // A310's canonical name contains "310" and would bleed in.
+            .init(id: "fc310", canonicalName: "Cessna 310", rarity: .common,
+                  modelTokens: ["cessna 310", "c310"], summary: "Sleek tip-tank twin. Sky King's ride.",
+                  representativeTypecode: "C310"),
         ]),
         .init(id: "fam-cirrus", type: .ga, title: "Cirrus", entries: [
             .init(id: "fsr20", canonicalName: "Cirrus SR20", rarity: .common,
@@ -684,6 +712,17 @@ nonisolated enum CardSets {
             .init(id: "fpa44", canonicalName: "Piper PA-44 Seminole", rarity: .common,
                   modelTokens: ["pa-44", "seminole"], summary: "Light twin trainer.",
                   representativeTypecode: "PA44"),
+            .init(id: "fpa34", canonicalName: "Piper PA-34 Seneca", rarity: .common,
+                  modelTokens: ["pa-34", "seneca"], summary: "Six-seat twin. Trainer and light hauler.",
+                  representativeTypecode: "PA34"),
+            .init(id: "fpa46", canonicalName: "PA-46 / M-Class", rarity: .common,
+                  modelTokens: ["pa-46", "malibu", "m350", "m500", "m600", "meridian"],
+                  summary: "Pressurized single — Malibu through M600.",
+                  representativeTypecode: "PA46"),
+            .init(id: "fpa23", canonicalName: "Apache / Aztec / Pawnee", rarity: .common,
+                  modelTokens: ["pa-23", "apache", "aztec", "pa-25", "pawnee"],
+                  summary: "Vintage Pipers — 50s twins and the cropduster.",
+                  representativeTypecode: "PA23"),
         ]),
         .init(id: "fam-beech", type: .ga, title: "Beechcraft", entries: [
             .init(id: "fbe36", canonicalName: "Beechcraft Bonanza", rarity: .common,
@@ -698,6 +737,16 @@ nonisolated enum CardSets {
             .init(id: "fb350", canonicalName: "King Air 350", rarity: .uncommon,
                   modelTokens: ["king air 350", "b350"], summary: "Stretched King Air.",
                   representativeTypecode: "B350"),
+            // DOC 8643 word order is "90/100 King Air" — tokens match that,
+            // not the colloquial "King Air 90".
+            .init(id: "fbe10", canonicalName: "King Air 90 / 100", rarity: .common,
+                  modelTokens: ["90 king air", "100 king air", "king air 90", "king air 100", "be9l"],
+                  summary: "The original small King Airs.",
+                  representativeTypecode: "BE10"),
+            .init(id: "fbe76", canonicalName: "Travel Air / Duchess", rarity: .common,
+                  modelTokens: ["travel air", "duchess"],
+                  summary: "Beech's classic light twins.",
+                  representativeTypecode: "BE76"),
         ]),
         .init(id: "fam-diamond", type: .ga, title: "Diamond", entries: [
             .init(id: "fda40", canonicalName: "Diamond DA40", rarity: .common,
@@ -717,13 +766,30 @@ nonisolated enum CardSets {
             .init(id: "fh-r44", canonicalName: "Robinson R44", rarity: .uncommon,
                   modelTokens: ["r44", "robinson"], summary: "Light piston heli. The rotorcraft trainer.",
                   representativeTypecode: "R44"),
+            // DOC 8643 names the 206 series "406", so token matching can't
+            // key on the model string (bare "406" would also catch a Cessna
+            // 406) — the B06 typecode is the reliable identity here.
+            .init(id: "fh-b206", canonicalName: "Bell 206", rarity: .uncommon,
+                  modelTokens: ["bell 206", "jetranger", "longranger"],
+                  summary: "JetRanger / LongRanger. Tours and TV news.",
+                  representativeTypecode: "B06"),
             .init(id: "fh-b407", canonicalName: "Bell 407", rarity: .uncommon,
                   modelTokens: ["bell 407", "b407"], summary: "News, EMS, charter — the utility standard.",
                   representativeTypecode: "B407"),
+            .init(id: "fh-b429", canonicalName: "Bell 429", rarity: .uncommon,
+                  modelTokens: ["bell 429", "b429", "globalranger"],
+                  summary: "Modern light twin. EMS and police.",
+                  representativeTypecode: "B429"),
             .init(id: "fh-h125", canonicalName: "Airbus H125", rarity: .uncommon,
                   modelTokens: ["h-125", "h125", "as350", "as 350", "as-350"],
                   summary: "The AStar. Tour and utility single.",
                   representativeTypecode: "AS50"),
+            // No "ec-130" token here or on H130 below: Lockheed's EC-130
+            // Hercules variant canonicalizes to "EC-130 …" and would bleed in.
+            .init(id: "fh-h130", canonicalName: "Airbus H130", rarity: .uncommon,
+                  modelTokens: ["h-130", "h130"],
+                  summary: "Wide-cabin tour single. Quiet fenestron tail.",
+                  representativeTypecode: "EC30"),
             .init(id: "fh-h135", canonicalName: "Airbus H135", rarity: .uncommon,
                   modelTokens: ["h-135", "h135", "ec135", "ec 135", "ec-135"],
                   summary: "Twin-engine EMS staple.",
@@ -741,6 +807,9 @@ nonisolated enum CardSets {
             .init(id: "fh-a109", canonicalName: "Leonardo AW109", rarity: .uncommon,
                   modelTokens: ["a109", "a-109", "aw109", "aw-109"], summary: "Sleek light twin. EMS and VIP.",
                   representativeTypecode: "A109"),
+            .init(id: "fh-h160", canonicalName: "Airbus H160", rarity: .uncommon,
+                  modelTokens: ["h-160", "h160"], summary: "The newest Airbus medium. Biplane stabilizer.",
+                  representativeTypecode: "H160"),
         ]),
         .init(id: "fam-bombardier-biz", type: .biz, title: "Bombardier Business Jets", entries: [
             .init(id: "fcl35", canonicalName: "Challenger 350", rarity: .uncommon,
@@ -789,8 +858,131 @@ nonisolated enum CardSets {
         ]),
     ]
 
+    // Third gap chunk (2026-08-24 coverage audit vs. the full prod catch
+    // census): turboprops, commuters, military, light/classic bizjets,
+    // vintage, and sport types — 49 typecodes (~6% of catches) previously
+    // matched NO family set. With these, every type observed in prod lands
+    // somewhere; `SetsCoverageTests` pins that against a census snapshot.
+    private static let familiesGapC: [CardSet] = [
+        .init(id: "fam-turboprop-singles", type: .ga, title: "Turboprop singles", entries: [
+            .init(id: "ftp-pc12", canonicalName: "Pilatus PC-12", rarity: .uncommon,
+                  modelTokens: ["pc-12", "pc12"], summary: "The Swiss do-everything single. Charter king.",
+                  representativeTypecode: "PC12"),
+            .init(id: "ftp-tbm", canonicalName: "Daher TBM", rarity: .uncommon,
+                  modelTokens: ["tbm"], summary: "Fast personal turboprop — 700 through 960.",
+                  representativeTypecode: "TBM9"),
+            .init(id: "ftp-kodiak", canonicalName: "Kodiak 100", rarity: .common,
+                  modelTokens: ["kodiak"], summary: "Short-field utility single. Floats optional.",
+                  representativeTypecode: "K100"),
+            .init(id: "ftp-beaver", canonicalName: "DHC-2 Beaver", rarity: .common,
+                  modelTokens: ["dhc-2", "beaver"], summary: "The classic bush plane. Often on floats.",
+                  representativeTypecode: "DHC2"),
+        ]),
+        .init(id: "fam-commuter-props", type: .regional, title: "Commuter props", entries: [
+            .init(id: "fcp-islander", canonicalName: "BN-2 Islander", rarity: .common,
+                  modelTokens: ["bn-2", "islander"], summary: "Boxy island-hopper. Ten seats, two pistons.",
+                  representativeTypecode: "BN2P"),
+            .init(id: "fcp-twinotter", canonicalName: "DHC-6 Twin Otter", rarity: .common,
+                  modelTokens: ["dhc-6", "twin otter"], summary: "STOL twin. Skis, floats, gravel bars.",
+                  representativeTypecode: "DHC6"),
+            .init(id: "fcp-saab340", canonicalName: "Saab 340", rarity: .common,
+                  modelTokens: ["saab 340", "sf34"], summary: "Swedish 30-seater. Freight and regionals now.",
+                  representativeTypecode: "SF34"),
+            .init(id: "fcp-l410", canonicalName: "L-410 Turbolet", rarity: .common,
+                  modelTokens: ["l-410", "turbolet"], summary: "Czech 19-seat commuter twin.",
+                  representativeTypecode: "L410"),
+            .init(id: "fcp-be99", canonicalName: "Beech 99", rarity: .common,
+                  modelTokens: ["99 airliner", "be99"], summary: "Small feeder liner. Cargo runs today.",
+                  representativeTypecode: "BE99"),
+        ]),
+        .init(id: "fam-military", type: .mil, title: "Military", entries: [
+            .init(id: "fm-c130", canonicalName: "C-130 Hercules", rarity: .epic,
+                  modelTokens: ["c-130", "hercules"], summary: "Four-turboprop airlifter. Sixty years of Herc.",
+                  representativeTypecode: "C130"),
+            .init(id: "fm-c17", canonicalName: "C-17 Globemaster", rarity: .epic,
+                  modelTokens: ["c-17", "globemaster"], summary: "Heavy airlifter. T-tail, four huge turbofans.",
+                  representativeTypecode: "C17"),
+            .init(id: "fm-kc135", canonicalName: "KC-135 Stratotanker", rarity: .epic,
+                  modelTokens: ["kc-135", "stratotanker", "c-135"], summary: "The 707's tanker sibling. Still everywhere.",
+                  representativeTypecode: "K35R"),
+            .init(id: "fm-c5", canonicalName: "C-5 Galaxy", rarity: .epic,
+                  modelTokens: ["c-5m", "super galaxy"], summary: "The biggest airlifter in the US fleet.",
+                  representativeTypecode: "C5M"),
+            .init(id: "fm-uh60", canonicalName: "UH-60 Black Hawk", rarity: .epic,
+                  modelTokens: ["uh-60", "black hawk", "s-70", "h-60"], summary: "The military utility helicopter.",
+                  representativeTypecode: "H60"),
+            .init(id: "fm-ch47", canonicalName: "CH-47 Chinook", rarity: .epic,
+                  modelTokens: ["ch-47", "chinook", "vertol"], summary: "Tandem-rotor heavy lifter.",
+                  representativeTypecode: "H47"),
+            .init(id: "fm-hh65", canonicalName: "HH-65 Dolphin", rarity: .uncommon,
+                  modelTokens: ["hh-65", "dauphin", "dolphin"], summary: "Coast Guard orange. Fenestron tail.",
+                  representativeTypecode: "AS65"),
+        ]),
+        .init(id: "fam-classic-biz", type: .biz, title: "Classic bizjets", entries: [
+            .init(id: "fcb-learjet", canonicalName: "Learjet", rarity: .uncommon,
+                  modelTokens: ["learjet"], summary: "THE bizjet name. 35 through 75, all slim and fast.",
+                  representativeTypecode: "LJ60"),
+            .init(id: "fcb-hawker", canonicalName: "Hawker 800", rarity: .uncommon,
+                  modelTokens: ["hawker 8", "800xp", "hs-125", "bae 125"], summary: "British midsize. Decades of the same good shape.",
+                  representativeTypecode: "H25B"),
+            .init(id: "fcb-beechjet", canonicalName: "Beechjet 400", rarity: .uncommon,
+                  modelTokens: ["beechjet", "hawker 400"], summary: "Light twin jet — Mitsubishi design, Wichita badge.",
+                  representativeTypecode: "BE40"),
+        ]),
+        .init(id: "fam-light-jets", type: .biz, title: "Light jets", entries: [
+            .init(id: "flj-hondajet", canonicalName: "HondaJet", rarity: .uncommon,
+                  modelTokens: ["hondajet", "ha-420"], summary: "Engines over the wing. Yes, that Honda.",
+                  representativeTypecode: "HDJT"),
+            .init(id: "flj-pc24", canonicalName: "Pilatus PC-24", rarity: .uncommon,
+                  modelTokens: ["pc-24", "pc24"], summary: "A jet that lands on grass. Swiss practicality.",
+                  representativeTypecode: "PC24"),
+            .init(id: "flj-eclipse", canonicalName: "Eclipse 500", rarity: .uncommon,
+                  modelTokens: ["eclipse"], summary: "The very-light-jet dream, tiny and efficient.",
+                  representativeTypecode: "EA50"),
+        ]),
+        .init(id: "fam-vintage", type: .heritage, title: "Vintage & warbirds", entries: [
+            .init(id: "fv-stearman", canonicalName: "Stearman Kaydet", rarity: .common,
+                  modelTokens: ["stearman", "kaydet"], summary: "Open-cockpit biplane trainer. Barnstormer look.",
+                  representativeTypecode: "ST75"),
+            .init(id: "fv-cub", canonicalName: "Piper Cub", rarity: .common,
+                  modelTokens: ["super cub", "j-3 cub", "carbon cub"], summary: "Yellow, slow, beloved. The original trainer.",
+                  representativeTypecode: "PA18"),
+            .init(id: "fv-dc3", canonicalName: "Douglas DC-3", rarity: .rare,
+                  modelTokens: ["dc-3"], summary: "The airliner that made airlines. Still working.",
+                  representativeTypecode: "DC3"),
+            .init(id: "fv-t6", canonicalName: "T-6 Texan", rarity: .rare,
+                  modelTokens: ["texan", "harvard", "at-6"], summary: "WWII advanced trainer. The airshow growl.",
+                  representativeTypecode: "T6"),
+            // "p-51" only, never "mustang" — the Citation Mustang would
+            // bleed into this slot (and vice versa; see fc-mustang).
+            .init(id: "fv-p51", canonicalName: "P-51 Mustang", rarity: .rare,
+                  modelTokens: ["p-51", "tf-51"], summary: "The WWII fighter. Merlin sound included.",
+                  representativeTypecode: "P51"),
+        ]),
+        .init(id: "fam-sport-classics", type: .ga, title: "Sport & classics", entries: [
+            .init(id: "fsc-mooney", canonicalName: "Mooney M20", rarity: .common,
+                  modelTokens: ["mooney"], summary: "Backwards tail, forward speed.",
+                  representativeTypecode: "M20P"),
+            .init(id: "fsc-aa5", canonicalName: "Grumman AA-5", rarity: .common,
+                  modelTokens: ["aa-5", "aa-1"], summary: "Sliding-canopy sport tourer.",
+                  representativeTypecode: "AA5"),
+            .init(id: "fsc-sierra", canonicalName: "Musketeer / Sierra", rarity: .common,
+                  modelTokens: ["musketeer", "sierra", "sundowner"], summary: "Beech's friendly low-wing singles.",
+                  representativeTypecode: "BE24"),
+            .init(id: "fsc-rv", canonicalName: "Van's RV", rarity: .common,
+                  modelTokens: ["van's", "rv-"], summary: "The homebuilt that outsold the factories.",
+                  representativeTypecode: "RV8"),
+            .init(id: "fsc-icon", canonicalName: "Icon A5", rarity: .common,
+                  modelTokens: ["icon a-5", "icon a5"], summary: "Folding-wing amphibian jet-ski of the sky.",
+                  representativeTypecode: "A5"),
+            .init(id: "fsc-tecnam", canonicalName: "Tecnam", rarity: .common,
+                  modelTokens: ["tecnam"], summary: "Italian lights — trainers to the P2012 commuter.",
+                  representativeTypecode: "P212"),
+        ]),
+    ]
+
     /// All make/model family sets — the Sets collection (the only lens).
-    static let families: [CardSet] = familiesCore + familiesGapA + familiesGapB
+    static let families: [CardSet] = familiesCore + familiesGapA + familiesGapB + familiesGapC
 
     /// Slot status for a single entry against a catch list.
     enum SlotStatus: Equatable {

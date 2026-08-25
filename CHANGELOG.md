@@ -5,6 +5,42 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-24 — Identification heal + full sets coverage — branch `feat/sets-coverage`
+
+Trigger: an App Store review ("could include more plane types and models")
+prompted a fleet-wide audit of both identification coverage and set coverage.
+
+**Identification (prod data, no code):** of 2,455 catches, 16 resolved to
+"Unknown". Healed 7 airframes in the prod registry (11 catches): three
+brand-new Airbus A321neos (N681FR/N614DN/N54561 — the registry snapshot
+predated their FAA registrations), a NetJets Global 7500 (N195QS), a Falcon 7X
+(N843GP — previously believed a garbled-hex permanent unknown), Croatia
+Airlines A220-300 9A-CAR, and the FlyNYON doors-off tour Bell 206 N401FN —
+caught by four different users, identified via its FAA reserved-N-number Mode-S
+octal + adsb.lol emitter category A7 (rotorcraft) + flight profile. Two
+remaining temps (N136HY, N163MT) are FAA **PIA privacy addresses** —
+unidentifiable by design; three garbled hexes stay permanent unknowns. Catches
+re-derive via the server rescore (null-rarity rows) + client `CatchBackfill`.
+
+**Sets (client):** replayed the `CardSets` matcher against the full prod type
+census — 49 of 155 distinct caught types (~6% of catches) matched NO family
+set, topped by PC-12 (34), Bell 206 (23), Hawker 800XP (7). Every one of the
+2026-08-12 round's "watched-not-added" types has since been caught, so this
+round adds gap chunk C: **Turboprop singles** (PC-12, TBM, Kodiak, Beaver),
+**Commuter props** (Islander, Twin Otter, Saab 340, L-410, Beech 99),
+**Military** (C-130, C-17, KC-135, C-5, Black Hawk, Chinook, HH-65),
+**Classic bizjets** (Learjet, Hawker 800, Beechjet), **Light jets** (HondaJet,
+PC-24, Eclipse), **Vintage & warbirds** (Stearman, Cub, DC-3, T-6, P-51),
+**Sport & classics** (Mooney, Grumman AA-5, Musketeer/Sierra, Van's RV, Icon
+A5, Tecnam) — plus slots/renames in existing families (737-600, MD-11,
+G200/G280 + G500/G600 + G700/G800, Bell 206/429, H130/H160, Cessna
+150/177/180-185/207/310, Piper Seneca/M-Class/Apache-Aztec-Pawnee, King Air
+90/100, Travel Air/Duchess). Token-bleed traps audited and pinned by test:
+bare "mustang" (P-51 vs Citation Mustang), "ec-130" (Hercules variant vs H130
+heli), "406"/"310" (DOC-8643 quirks vs Cessna). New `SetsCoverageTests` embeds
+the census snapshot and fails if any prod-caught type is ever orphaned again.
+Result: **0 of 155 types orphaned** (was 49). 1,104 tests, 0 failures.
+
 ## 2026-08-24 — Recent row shows the full point total — branch `feat/recent-row-full-points`
 
 The Hangar Recent card's trailing readout showed base plane value only
@@ -21,6 +57,8 @@ sparkle — gold now means "first" and nothing else on the card. New pieces:
 anchored on each row's displayed catch, cached alongside the rows in
 HangarRecentView's derived cache). Sets cards unchanged. iOS suite green;
 TailCard snapshots re-eyeballed incl. the three new bonus cases.
+
+## 2026-08-24 — Zero-point rank fix + per-catch immediate upload — branch `fix/zero-point-rank`
 
 A new user reported ranking "~458th" right after their first catch. Root cause
 was a compound: catches only uploaded on the next foreground transition, so the
