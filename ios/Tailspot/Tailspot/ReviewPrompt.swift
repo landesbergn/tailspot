@@ -128,11 +128,22 @@ final class ReviewPrompter {
     /// The real ask: the system rating sheet over the foreground scene.
     /// Display is the OS's call — it may quietly decline (its 3-per-365
     /// budget, or the user disabled in-app rating requests system-wide).
+    ///
+    /// The call DEFERS ~0.8 s: the trigger runs inside the reveal cover's
+    /// `onDismiss`, and a request made mid-dismiss-transition is silently
+    /// dropped by iOS (observed on-device 2026-08-25 — the analytics event
+    /// fired, no sheet; Apple's docs likewise say to avoid requesting
+    /// during UI transitions). The stamp/analytics upstream stay immediate
+    /// — deferral is presentation-only, so the once-per-version invariant
+    /// is unaffected.
     private static func presentSystemSheet() {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive })
-        else { return }
-        AppStore.requestReview(in: scene)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive })
+            else { return }
+            AppStore.requestReview(in: scene)
+        }
     }
 }
