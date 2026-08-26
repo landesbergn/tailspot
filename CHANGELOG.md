@@ -5,6 +5,23 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-26 — Reveal streak line moves into the card ledger — branch `worktree-streak-ledger-row`
+
+Field report from Noah's Embraer 175 catch: the streak line looked squished.
+Root cause: the free-floating prose line ("🔥 2 day streak") sat between the
+card and the CTA with no minimum gap of its own, so on a tall card (route +
+bonus round) the layout's spacers collapsed and three small centered lines
+packed into the bottom strip. Mocked four options (spacing fix, ledger row,
+single footer bar, scaled-up beat); Noah picked the **ledger row**: the streak
+now renders inside the card's entry-stamp row — "🔥 N DAY STREAK" left,
+"ENTRY #N" right — in the card's mono-caps readout voice, one brightness step
+above the entry stamp (muted vs. faint), flame in `alertCaution` amber. This
+supersedes the 2026-08-19 "prose reward line" call. The strip below the card
+is now just the CTA row, with real minimum air (26pt above, 30pt below). Like
+the entry stamp, the streak hides while bonus-round chips occupy the card and
+returns when they collapse. VoiceOver copy unchanged (streak was already in
+the card's combined label + settle announcement).
+
 ## 2026-08-25 — Streak reminders: day-1 counts, nudge at 17:00 — branch `worktree-streak-threshold-1`
 
 First field report on the streak reminder was its own absence: Noah's 1-day
