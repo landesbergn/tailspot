@@ -11,6 +11,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
+import StoreKit       // \.requestReview environment action (the review ask)
 import os
 
 struct ContentView: View {
@@ -723,6 +724,11 @@ struct ContentView: View {
                             Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
                             Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
                             Button("⚑ Icons") { showIconGallery = true }
+                            // Un-burn the once-per-version review-ask stamp so
+                            // the tap-through-a-trophy → rating-sheet path can
+                            // be exercised repeatedly (dev builds always show
+                            // the sheet; see ReviewPrompt.swift).
+                            Button("★ Rearm") { ReviewPrompter.shared.debugClearStamp() }
                         }
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .buttonStyle(.bordered)
@@ -1675,9 +1681,11 @@ struct ContentView: View {
         // Also the reveal-dismissal flush point for the save-failure toast:
         // presenting it at catch time would hide it behind the full-screen
         // reveal and it would expire unseen.
+        var momentClaimed = false
         if pendingSaveFailToast {
             pendingSaveFailToast = false
             presentSaveFailToast()
+            momentClaimed = true
         }
         // Streak notification pre-prompt (one-shot). Only an UNCONTESTED
         // dismissal promotes it: a pending Keep/Discard review or a jump to
@@ -1690,12 +1698,19 @@ struct ContentView: View {
                pendingReveal == nil, pendingMultiReveal == nil {
                 UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
                 withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
+                momentClaimed = true
             }
         }
-        guard !suspectAwaitingReview.isEmpty else { return }
+        guard !suspectAwaitingReview.isEmpty else {
+            maybeRequestReview(momentClaimed: momentClaimed)
+            return
+        }
         let rows = suspectAwaitingReview.filter { !$0.isDeleted && $0.suspectReason != nil }
         suspectAwaitingReview = []
-        guard !rows.isEmpty else { return }
+        guard !rows.isEmpty else {
+            maybeRequestReview(momentClaimed: momentClaimed)
+            return
+        }
         let question: String
         if rows.count == 1, let row = rows.first,
            let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) {
@@ -1704,6 +1719,41 @@ struct ContentView: View {
             question = CatchSuspicion.multiQuestion(count: rows.count)
         }
         pendingSuspectReview = SuspectReview(rows: rows, question: question)
+    }
+
+    /// The SwiftUI review-request action — Apple's canonical StoreKit
+    /// plumbing for a SwiftUI app. Read here and passed into the prompter;
+    /// the raw scene-based `AppStore.requestReview(in:)` proved unreliable
+    /// on-device (2026-08-25: analytics fired, sheet never showed).
+    @Environment(\.requestReview) private var requestReview
+
+    /// Lowest-priority claimant of the post-reveal moment (v1.1 R7): the
+    /// App Store rating ask, only when nothing else took the moment — no
+    /// toast, no streak pre-prompt, no suspect Keep/Discard, no Hangar
+    /// jump, no pending trophy celebration. Contested → drop, not queue;
+    /// eligibility is durable (the Hangar), so it re-tries when the next
+    /// catch's reveal closes. Thresholds + the once-per-version stamp live
+    /// in `ReviewPrompt.swift`.
+    private func maybeRequestReview(momentClaimed: Bool) {
+        guard !momentClaimed, streakAsk == nil, pendingSuspectReview == nil,
+              !showHangar, pendingReveal == nil, pendingMultiReveal == nil,
+              !unlockCenter.hasPending else { return }
+        ReviewPrompter.shared.catchMomentEnded(
+            totalCatches: catches.count,
+            // Day buckets via Streaks.dayKey — the frozen insert-time label
+            // (the one-owner rule; recomputing from caughtAt in the current
+            // zone would disagree with the streak card after a flight home).
+            distinctCatchDays: Set(catches.map { Streaks.dayKey(for: $0) }).count,
+            // SwiftUI's own action, delayed past the reveal cover's dismiss
+            // transition (a request made mid-transition is silently dropped
+            // — field-observed 2026-08-25).
+            present: {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(800))
+                    requestReview()
+                }
+            }
+        )
     }
 
     /// Apply the review answer to every row it covered. Keep vouches — the
