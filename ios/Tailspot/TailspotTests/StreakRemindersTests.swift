@@ -48,13 +48,24 @@ struct StreakRemindersTests {
 
     // MARK: - Streak thresholds
 
-    @Test func oneDayStreakIsNotWorthNagging() {
-        // Caught today only — a fresh day-1 streak schedules nothing for
-        // tomorrow (no re-engagement nag off a single catch).
+    @Test func oneDayStreakCaughtTodaySchedulesTomorrow() {
+        // Caught today only — a fresh day-1 streak is already worth
+        // protecting (Noah, 2026-08-25; supersedes the original day-2
+        // threshold), so tomorrow's nudge schedules with a stake of 1.
         let d = StreakReminders.decision(
             days: ["2026-08-17"], now: utcInstant(hour: 9), timeZone: utc,
             enabled: true, authorized: true)
-        #expect(d == .cancel)
+        #expect(d == .schedule(dayKey: "2026-08-18", streakAtStake: 1))
+    }
+
+    @Test func oneDayStreakThroughYesterdayNudgesThisEvening() {
+        // Caught yesterday only, nothing yet today — the day-1 streak is
+        // at risk, so this evening's nudge schedules (the field case that
+        // prompted the threshold change: a 1-day streak got no reminder).
+        let d = StreakReminders.decision(
+            days: ["2026-08-16"], now: utcInstant(hour: 9), timeZone: utc,
+            enabled: true, authorized: true)
+        #expect(d == .schedule(dayKey: "2026-08-17", streakAtStake: 1))
     }
 
     @Test func twoDayStreakCaughtTodaySchedulesTomorrow() {
@@ -73,31 +84,31 @@ struct StreakRemindersTests {
         #expect(d == .schedule(dayKey: "2026-08-17", streakAtStake: 4))
     }
 
-    @Test func windowClosesAtSixPMSharp() {
-        // 17:59 still schedules today; 18:00:00 and later do not (the
+    @Test func windowClosesAtFivePMSharp() {
+        // 16:59 still schedules today; 17:00:00 and later do not (the
         // trigger would be in the past), and tomorrow is NOT scheduled
         // either — whether the streak survives today is still unknown.
         let before = StreakReminders.decision(
-            days: streakThroughYesterday, now: utcInstant(hour: 17.99), timeZone: utc,
+            days: streakThroughYesterday, now: utcInstant(hour: 16.99), timeZone: utc,
             enabled: true, authorized: true)
         #expect(before == .schedule(dayKey: "2026-08-17", streakAtStake: 4))
-        let atSix = StreakReminders.decision(
-            days: streakThroughYesterday, now: utcInstant(hour: 18), timeZone: utc,
+        let atFive = StreakReminders.decision(
+            days: streakThroughYesterday, now: utcInstant(hour: 17), timeZone: utc,
             enabled: true, authorized: true)
-        #expect(atSix == .cancel)
+        #expect(atFive == .cancel)
         let evening = StreakReminders.decision(
-            days: streakThroughYesterday, now: utcInstant(hour: 18.5), timeZone: utc,
+            days: streakThroughYesterday, now: utcInstant(hour: 17.5), timeZone: utc,
             enabled: true, authorized: true)
         #expect(evening == .cancel)
     }
 
     @Test func catchingTodayMovesTheNudgeToTomorrow() {
-        // Same streak, plus today's catch at 17:00 → the pending today-18:00
+        // Same streak, plus today's catch at 16:00 → the pending today-17:00
         // request is replaced by tomorrow's (AE: no nag minutes after a catch).
         var days = streakThroughYesterday
         days.insert("2026-08-17")
         let d = StreakReminders.decision(
-            days: days, now: utcInstant(hour: 17), timeZone: utc,
+            days: days, now: utcInstant(hour: 16), timeZone: utc,
             enabled: true, authorized: true)
         #expect(d == .schedule(dayKey: "2026-08-18", streakAtStake: 5))
     }
@@ -154,17 +165,17 @@ struct StreakRemindersTests {
     // MARK: - Permission-ask eligibility
 
     @Test func askEligibilityMatrix() {
-        // Eligible: streak at threshold, enabled, unasked, undetermined.
+        // Eligible: streak at threshold (day 1), enabled, unasked, undetermined.
         #expect(StreakReminders.shouldOfferAsk(
-            currentStreak: 2, enabled: true, alreadyAsked: false,
+            currentStreak: 1, enabled: true, alreadyAsked: false,
             authStatusIsNotDetermined: true))
-        // A longer streak stays eligible (a contested day-2 moment retries).
+        // A longer streak stays eligible (a contested day-1 moment retries).
         #expect(StreakReminders.shouldOfferAsk(
             currentStreak: 6, enabled: true, alreadyAsked: false,
             authStatusIsNotDetermined: true))
         // Each guard alone kills it.
         #expect(!StreakReminders.shouldOfferAsk(
-            currentStreak: 1, enabled: true, alreadyAsked: false,
+            currentStreak: 0, enabled: true, alreadyAsked: false,
             authStatusIsNotDetermined: true))
         #expect(!StreakReminders.shouldOfferAsk(
             currentStreak: 2, enabled: false, alreadyAsked: false,

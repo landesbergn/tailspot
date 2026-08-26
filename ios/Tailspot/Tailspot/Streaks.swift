@@ -256,13 +256,13 @@ nonisolated enum StreakDebug {
         )
     }
 
-    /// Step the forced streak: nil → 2 → 3 → … → 12 → nil. Starts at 2
-    /// because that's `StreakReminders.minimumStreak`, the first length
-    /// where the chip, the reminder and the ask all switch on.
+    /// Step the forced streak: nil → minimumStreak → … → 12 → nil. Starts
+    /// at `StreakReminders.minimumStreak`, the first length where the chip,
+    /// the reminder and the ask all switch on.
     static func cycle() {
         let d = UserDefaults.standard
         guard let current = override?.current else {
-            d.set(2, forKey: daysKey)
+            d.set(StreakReminders.minimumStreak, forKey: daysKey)
             d.set(7, forKey: bestKey)
             d.set(false, forKey: caughtTodayKey)
             return

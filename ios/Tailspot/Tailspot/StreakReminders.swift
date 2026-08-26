@@ -24,17 +24,18 @@
 //  pure function; the delegate only supplies the signal.
 //
 //  Guardrails, all structural:
-//  - Streaks below `minimumStreak` schedule nothing (no day-1 nag; the
-//    reminder only ever protects something already worth keeping).
+//  - Streaks below `minimumStreak` schedule nothing (the reminder only
+//    ever protects a live streak, never conjures one).
 //  - A broken or absent streak schedules nothing — a lapsed user is NEVER
 //    nagged, because a reminder only exists while a streak is alive.
 //  - One nudge per day at most: the pending slot is singular, and a
-//    same-day reminder is only ever scheduled for a FUTURE 18:00 (a
-//    post-18:00 recompute schedules nothing today — it can't know whether
-//    today's catch will happen, so tomorrow stays unscheduled too until
-//    a catch or the next foreground decides).
-//  - Catching before 18:00 replaces today's pending nudge with tomorrow's;
-//    the delivered copy (if any) is also retired from Notification Center.
+//    same-day reminder is only ever scheduled for a FUTURE reminder hour
+//    (a post-hour recompute schedules nothing today — it can't know
+//    whether today's catch will happen, so tomorrow stays unscheduled too
+//    until a catch or the next foreground decides).
+//  - Catching before the reminder hour replaces today's pending nudge with
+//    tomorrow's; the delivered copy (if any) is also retired from
+//    Notification Center.
 //
 
 import Foundation
@@ -55,7 +56,9 @@ nonisolated enum StreakReminders {
     /// the ask never repeats; recovery from denial is the Settings row.
     static let permissionAskedKey = "tailspot.streak.permissionAsked"
     /// Fixed early-evening reminder hour (local). Not a setting in v1.
-    static let reminderHour = 18
+    /// 17, not 18 (Noah, 2026-08-25): 5pm leaves a full daylight-ish hour
+    /// more to act on the nudge before the evening swallows it.
+    static let reminderHour = 17
     #if DEBUG
     /// `userInfo` marker set only by the wrench panel's 🔔 Fire, so the
     /// delegate can present it even on the camera. Never set on the real
@@ -79,15 +82,16 @@ nonisolated enum StreakReminders {
     }
     /// The smallest streak worth protecting — also the reveal-chip and
     /// permission-ask threshold, so the three surfaces agree on when a
-    /// streak "exists". TWO, not the scope doc's original three (Noah,
-    /// 2026-08-19): two days is the first moment there is a streak to
-    /// protect, and the ask reads strongest as "you have a 2-day streak,
-    /// protect it?". Scope R2/AE2 were amended to match.
-    static let minimumStreak = 2
+    /// streak "exists". ONE (Noah, 2026-08-25, superseding his 2026-08-19
+    /// call of two): a single catch day already IS a streak worth keeping
+    /// alive — the first field day ended with no nudge and the streak
+    /// quietly at risk. Means the chip shows from the first catch and the
+    /// permission ask lands on the first reveal. Scope R2/AE2 re-amended.
+    static let minimumStreak = 1
 
     enum Decision: Equatable, Sendable {
-        /// Schedule the one reminder for `dayKey` at 18:00 local, telling
-        /// the user a `streakAtStake`-day streak ends that midnight.
+        /// Schedule the one reminder for `dayKey` at `reminderHour` local,
+        /// telling the user a `streakAtStake`-day streak ends that midnight.
         case schedule(dayKey: String, streakAtStake: Int)
         /// Ensure nothing is pending.
         case cancel
@@ -115,7 +119,7 @@ nonisolated enum StreakReminders {
             return .schedule(dayKey: tomorrow, streakAtStake: current)
         }
         // Live streak through yesterday, nothing today: nudge this evening —
-        // but only while 18:00 is still ahead (scheduling a past calendar
+        // but only while the reminder hour is still ahead (a past calendar
         // trigger would never fire; scheduling tomorrow instead would nag a
         // possibly-already-broken streak).
         var cal = Calendar(identifier: .gregorian)
@@ -161,10 +165,11 @@ nonisolated enum StreakReminders {
         "Your \(streakAtStake)-day catch streak ends at midnight. One plane keeps it alive."
     }
 
-    /// Calendar-trigger components for `dayKey` at 18:00. Full y/m/d so the
-    /// trigger names ONE specific evening (hour-only components would fire
-    /// on the next 18:00, wrong day included). No `timeZone`: the trigger
-    /// floats with the device's zone, matching the frozen-label model.
+    /// Calendar-trigger components for `dayKey` at `reminderHour`. Full
+    /// y/m/d so the trigger names ONE specific evening (hour-only components
+    /// would fire on the next matching hour, wrong day included). No
+    /// `timeZone`: the trigger floats with the device's zone, matching the
+    /// frozen-label model.
     static func triggerComponents(dayKey: String) -> DateComponents? {
         let parts = dayKey.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
@@ -238,7 +243,7 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         )
         do {
             try await center.add(request)
-            Log.ui.notice("Streak reminder scheduled: \(dayKey, privacy: .public) 18:00, streak \(streak, privacy: .public)")
+            Log.ui.notice("Streak reminder scheduled: \(dayKey, privacy: .public) \(StreakReminders.reminderHour, privacy: .public):00, streak \(streak, privacy: .public)")
         } catch {
             Log.ui.error("Streak reminder scheduling failed: \(error, privacy: .public)")
         }
@@ -296,8 +301,8 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         // The wrench's 🔔 Fire lives ON the camera, which is the one place
         // the rule below deliberately shows nothing — so a debug fire that
         // obeyed it would look exactly like a broken notification. Debug
-        // requests carry a marker and always present; the real 18:00 path
-        // below is untouched.
+        // requests carry a marker and always present; the real scheduled
+        // path below is untouched.
         if notification.request.content.userInfo[StreakReminders.debugBypassKey] != nil {
             await MainActor.run { Self.lastForegroundDecision = "presented (debug bypass)" }
             return [.banner, .sound]
@@ -425,7 +430,7 @@ extension StreakReminderCenter {
         let pending = await center.pendingNotificationRequests()
             .filter { StreakReminders.isStreakReminder($0.identifier) }
             // Debug fire first — while one is armed it is what you're
-            // waiting on, not the real 18:00 slot.
+            // waiting on, not the real evening slot.
             .sorted { $0.identifier != StreakReminders.notificationId
                       && $1.identifier == StreakReminders.notificationId }
         if let trigger = pending.first?.trigger as? UNCalendarNotificationTrigger,

@@ -5,6 +5,23 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-25 — Streak reminders: day-1 counts, nudge at 17:00 — branch `worktree-streak-threshold-1`
+
+First field report on the streak reminder was its own absence: Noah's 1-day
+streak sat at risk with no nudge, because day-1 was below
+`StreakReminders.minimumStreak` (2) by design. His call, superseding
+2026-08-19: a single catch day already IS a streak worth protecting —
+**`minimumStreak` 2 → 1**, and **`reminderHour` 18 → 17** (5pm local) so the
+nudge lands with more usable daylight. The constant is shared by the reminder
+planner, the reveal chip and the permission ask, so all three move together:
+the "1 day streak" chip now shows on the first catch, and the notification
+pre-prompt lands on the first reveal instead of the second day. No copy
+changes — the 2026-08-19 copy deliberately named neither the hour nor the
+threshold. Tests updated (day-1 caught-today schedules tomorrow at stake 1;
+day-1 through-yesterday nudges this evening — the exact field case; the
+scheduling window now closes at 17:00 sharp; ask eligibility from streak 1),
+and the v1.1 scope doc's R2/AE1/AE2 re-amended.
+
 ## 2026-08-25 — In-app review prompt after the nth catch (v1.1 R7) — branch `feat/review-prompt`
 
 The App Store rating ask: right after a catch's reveal closes, once the
