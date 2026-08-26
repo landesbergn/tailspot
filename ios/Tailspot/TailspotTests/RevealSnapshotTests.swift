@@ -114,8 +114,8 @@ struct RevealSnapshotTests {
             try? data.write(to: dir.appendingPathComponent("a220_route_uncommon_reducemotion.png"))
         }
 
-        // Streak chip (catch-streaks round): settled frame with the
-        // "DAY 5 STREAK" capsule between card and CTA.
+        // Streak stamp (ledger-row placement, 2026-08-26): settled frame with
+        // "🔥 5 DAY STREAK" sharing the card's entry row opposite ENTRY #62.
         let streakView = CatchRevealView(
             plane: cases[0].1, entryNumber: 62,
             onDismiss: {}, onViewInHangar: {}, streakDays: 5
