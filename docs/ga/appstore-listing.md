@@ -117,6 +117,44 @@ Nothing is used for **Tracking** (Apple's cross-app/ad sense) — `NSPrivacyTrac
   (Bali field data). Mitigation is expectation-setting: the description's
   coverage paragraph + the in-app empty-sky messaging.
 
+## What's New — v1.1.0 (train opened 2026-08-25)
+
+Covers everything since the public v1.0.0 (build 83): the never-submitted
+1.0.1 accumulation plus the v1.1 "Habits & housekeeping" train.
+
+App Store "What's New" (paste into ASC):
+
+> Streaks are here. Catch a plane every day to keep the run alive — Tailspot
+> nudges you in the late afternoon before a streak lapses.
+>
+> Also in this release:
+> • Repeat sightings count. The same airframe on a new day (or a new flight)
+>   is a fresh catch, points and all.
+> • Pinch to zoom on any catch photo, from the reveal or the Hangar.
+> • The guess round shows up twice as often — and no longer flashes the
+>   route before you've guessed.
+> • Route guesses are worth more.
+> • Sets got fuller: every catchable type now fills a slot, helicopters
+>   included, and McDonnell Douglas planes got their names back.
+> • Sharing a catch now includes a link to the app.
+> • Snappier capture: the shutter responds instantly and the reveal opens
+>   while the catch finishes behind it.
+> • Altitude trophies now unlock at their exact advertised heights.
+> • Better battery life, friendlier error messages, and a pile of small
+>   fixes — including new spotters no longer seeing a wildly wrong
+>   leaderboard rank.
+
+TestFlight "What to Test" (tester-notes voice):
+
+> • catch me today and the streak chip lights up from day one — skip
+>   tomorrow and my 5pm nudge will find you
+> • spotted the same tail twice? on a new day it counts again. double
+>   dipping is now legal
+> • pinch a catch photo. full-res zoom, straight from the reveal
+>
+> (Heads-up: the App Store rating sheet never appears on TestFlight builds —
+> that's Apple's behavior, not a bug.)
+
 ## First-submission checklist (one-time — DONE, kept as the record)
 
 > **This is the v1.0 first-submission setup, completed for the 2026-08-08

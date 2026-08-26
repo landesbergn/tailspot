@@ -78,13 +78,17 @@ final class ReviewPrompter {
 
     private let defaults: UserDefaults
     private let currentVersion: String
-    private let request: () -> Void
+    // @MainActor on the closure type, not just the class: the default value
+    // (`presentSystemSheet`, a static on this @MainActor class) is itself
+    // MainActor-isolated, and storing it as a plain `() -> Void` erases that
+    // — a Swift 6 language-mode error the Release build flags today.
+    private let request: @MainActor () -> Void
 
     init(
         defaults: UserDefaults = .standard,
         currentVersion: String = Bundle.main
             .object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
-        request: @escaping () -> Void = ReviewPrompter.presentSystemSheet
+        request: @escaping @MainActor () -> Void = ReviewPrompter.presentSystemSheet
     ) {
         self.defaults = defaults
         self.currentVersion = currentVersion
