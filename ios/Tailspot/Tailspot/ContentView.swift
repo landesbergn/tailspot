@@ -11,6 +11,7 @@ import SwiftUI
 import SwiftData
 import AVFoundation
 import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
+import StoreKit       // \.requestReview environment action (the review ask)
 import os
 
 struct ContentView: View {
@@ -1720,6 +1721,12 @@ struct ContentView: View {
         pendingSuspectReview = SuspectReview(rows: rows, question: question)
     }
 
+    /// The SwiftUI review-request action — Apple's canonical StoreKit
+    /// plumbing for a SwiftUI app. Read here and passed into the prompter;
+    /// the raw scene-based `AppStore.requestReview(in:)` proved unreliable
+    /// on-device (2026-08-25: analytics fired, sheet never showed).
+    @Environment(\.requestReview) private var requestReview
+
     /// Lowest-priority claimant of the post-reveal moment (v1.1 R7): the
     /// App Store rating ask, only when nothing else took the moment — no
     /// toast, no streak pre-prompt, no suspect Keep/Discard, no Hangar
@@ -1736,7 +1743,16 @@ struct ContentView: View {
             // Day buckets via Streaks.dayKey — the frozen insert-time label
             // (the one-owner rule; recomputing from caughtAt in the current
             // zone would disagree with the streak card after a flight home).
-            distinctCatchDays: Set(catches.map { Streaks.dayKey(for: $0) }).count
+            distinctCatchDays: Set(catches.map { Streaks.dayKey(for: $0) }).count,
+            // SwiftUI's own action, delayed past the reveal cover's dismiss
+            // transition (a request made mid-transition is silently dropped
+            // — field-observed 2026-08-25).
+            present: {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(800))
+                    requestReview()
+                }
+            }
         )
     }
 

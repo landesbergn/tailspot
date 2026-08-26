@@ -38,6 +38,7 @@
 import Foundation
 import StoreKit
 import UIKit
+import os
 
 /// Pure eligibility decision — free of I/O so it unit-tests directly.
 nonisolated enum ReviewPromptPolicy {
@@ -97,7 +98,17 @@ final class ReviewPrompter {
     /// The post-reveal hook (see the timing contract above): a catch's
     /// reveal closed and nothing else claimed the moment. Both counts come
     /// from the caller's live Hangar snapshot.
-    func catchMomentEnded(totalCatches: Int, distinctCatchDays: Int) {
+    ///
+    /// `present` is the view-side presenter — ContentView passes SwiftUI's
+    /// `\.requestReview` environment action (Apple's canonical plumbing in
+    /// a SwiftUI app; the raw scene-based call proved unreliable on-device,
+    /// 2026-08-25). The scene-based `presentSystemSheet` stays only as the
+    /// fallback when no presenter is supplied.
+    func catchMomentEnded(
+        totalCatches: Int,
+        distinctCatchDays: Int,
+        present: (() -> Void)? = nil
+    ) {
         guard ReviewPromptPolicy.shouldRequest(
             totalCatches: totalCatches,
             distinctCatchDays: distinctCatchDays,
@@ -112,7 +123,8 @@ final class ReviewPrompter {
             "total_catches": .int(totalCatches),
             "distinct_catch_days": .int(distinctCatchDays),
         ])
-        request()
+        Log.ui.info("review ask: requesting rating sheet (catches \(totalCatches, privacy: .public), days \(distinctCatchDays, privacy: .public))")
+        (present ?? request)()
     }
 
     #if DEBUG
