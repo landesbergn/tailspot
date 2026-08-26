@@ -1507,7 +1507,7 @@ struct ContentView: View {
     ///
     /// All prose, no mono (Noah, 2026-08-19). Copy is his: the question
     /// leads, the mechanism explains itself in one line, and neither
-    /// mentions "18:00" or a day threshold — numbers in the copy go stale
+    /// mentions the reminder hour or a day threshold — numbers in the copy go stale
     /// the moment a constant moves.
     @ViewBuilder
     private var streakAskOverlay: some View {
@@ -2646,7 +2646,7 @@ struct ContentView: View {
     /// shows the reveal card without writing to the Hangar.
     #if DEBUG
     /// STREAK row of the wrench panel. The feature's three surfaces all key
-    /// off streak LENGTH and a 18:00 clock, so without this the only way to
+    /// off streak LENGTH and an evening clock, so without this the only way to
     /// see any of them is to catch planes on N consecutive days and then
     /// wait for the evening. The override is DEBUG-only and printed back on
     /// the line above in amber whenever it's live — a stuck override that

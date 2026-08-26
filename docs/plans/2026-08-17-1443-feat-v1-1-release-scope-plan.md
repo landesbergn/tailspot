@@ -43,7 +43,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 **Habit loop**
 
 - R1. The Profile shows a current streak and a longest streak, counted as consecutive local-calendar days with at least one catch.
-- R2. A local streak-protection reminder fires only when all of these hold: a live streak of 2+ days, no catch yet that day, and no reminder already sent that day. It arrives in the early evening, cancels for the day once a catch lands, and never fires for a broken or absent streak. **Amended 2026-08-19 (Noah): the threshold is 2 days, not 3** — two days is the first moment a streak exists to protect, and the permission ask reads strongest as "you have a 2-day streak, protect it?". One constant, `StreakReminders.minimumStreak`, shared by the reminder, the reveal chip and the ask so all three agree on when a streak exists.
+- R2. A local streak-protection reminder fires only when all of these hold: a live streak of 2+ days, no catch yet that day, and no reminder already sent that day. It arrives in the early evening, cancels for the day once a catch lands, and never fires for a broken or absent streak. **Amended 2026-08-19 (Noah): the threshold is 2 days, not 3** — two days is the first moment a streak exists to protect, and the permission ask reads strongest as "you have a 2-day streak, protect it?". One constant, `StreakReminders.minimumStreak`, shared by the reminder, the reveal chip and the ask so all three agree on when a streak exists. **Re-amended 2026-08-25 (Noah, from the field): the threshold is 1 day, and the reminder hour is 17:00 local (was 18:00)** — his own day-1 streak sat silently at risk with no nudge, so a single catch day now counts as a streak worth protecting. The shared constant means the reveal chip shows from the first catch and the permission ask lands on the first reveal.
 - R3. Reminders are on by default, gated by the system notification permission requested with context (not at cold launch), and can be muted in Settings.
 
 **First-catch activation**
@@ -70,7 +70,7 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 ### Key Flows
 
 - F1. Streak reminder day
-  - **Trigger:** a day begins with a live 2+ day streak (amended 2026-08-19 — see R2).
+  - **Trigger:** a day begins with a live 1+ day streak (re-amended 2026-08-25 — see R2).
   - **Steps:** no catch by early evening → one local notification → tapping it opens the app ready to catch. A catch at any point that day cancels the pending reminder.
   - **Covers:** R2, R3.
 - F2. First launch to first catch
@@ -80,8 +80,8 @@ Three problems drove the 2026-08-17 re-prioritization. The download-to-first-cat
 
 ### Acceptance Examples
 
-- AE1. **Covers R2.** Given a 4-day streak and no catch today, when early evening arrives, exactly one reminder fires. Given a catch at 17:00 that day, no reminder fires.
-- AE2. **Covers R2.** Given a 1-day streak, no reminder fires. (Was "a 2-day streak" — see R2's 2026-08-19 amendment.)
+- AE1. **Covers R2.** Given a 4-day streak and no catch today, when early evening (17:00, re-amended 2026-08-25) arrives, exactly one reminder fires. Given a catch at 16:00 that day, no reminder fires.
+- AE2. **Covers R2.** Given a 1-day streak and no catch today, the evening reminder fires. (Was "no reminder fires" under the 2-day threshold — see R2's 2026-08-25 re-amendment.)
 - AE3. **Covers R2.** Given a streak that broke yesterday, or a lapsed user, nothing fires. The reminder protects an active run; it is not a win-back nag.
 - AE4. **Covers R3.** Given reminders muted in Settings, no reminder fires regardless of streak.
 - AE5. **Covers R7.** Given a trophy unlock, the review sheet may appear after the celebration completes. It never appears during capture or the reveal.
