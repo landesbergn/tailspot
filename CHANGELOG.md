@@ -22,6 +22,45 @@ day-1 through-yesterday nudges this evening — the exact field case; the
 scheduling window now closes at 17:00 sharp; ask eligibility from streak 1),
 and the v1.1 scope doc's R2/AE1/AE2 re-amended.
 
+## 2026-08-25 — In-app review prompt after the nth catch (v1.1 R7) — branch `feat/review-prompt`
+
+The App Store rating ask: right after a catch's reveal closes, once the
+Hangar says the user is sticky. First StoreKit code in the app. (First cut
+triggered on the trophy-celebration drain per the scope plan's AE5; Noah
+redirected to catch-count mid-round — simpler and more predictable — and
+asked for the threshold to come from data.)
+
+- **Thresholds from the prod catches table (39 devices, 2026-08-25):**
+  ≥**3 total catches** — the later-day return rate flattens at ~91% from
+  catch 2–3 — AND ≥**2 distinct catch-days**, because 14 of 33 devices hit
+  their 3rd catch in a single day (the airport rapid-fire triple) and a hot
+  first session isn't a comeback. The day-1 triple crowd defers to their
+  next catch day, which ~91% reach. Day buckets via `Streaks.dayKey` (the
+  frozen insert-time label — one-owner rule).
+- **`ReviewPrompt.swift`**: pure `ReviewPromptPolicy` (directly testable)
+  + `@MainActor ReviewPrompter` (UserDefaults stamp,
+  `review_prompt_requested` analytics, the `AppStore.requestReview(in:)`
+  call — injectable for tests). DEBUG-only stamp reset.
+- **Trigger wiring:** the ask is the LOWEST-priority claimant of the
+  post-reveal moment funnel (`presentSuspectReviewIfNeeded` →
+  `maybeRequestReview`): the save-failure toast, the streak pre-prompt, the
+  suspect Keep/Discard review, a Hangar jump, and a pending trophy
+  celebration all claim the moment first. Contested → dropped, not queued —
+  eligibility is durable, so it re-tries when the next reveal closes.
+  Never-during-capture/reveal is structural (the funnel runs at reveal
+  dismissal).
+- **Once per release:** at most one request per `MARKETING_VERSION`,
+  stamped on REQUEST because StoreKit never reports whether the sheet
+  actually appeared (Apple's own 3-per-365 display cap and system-wide
+  opt-out sit underneath; dev builds always display, TestFlight never).
+- On-device testing: wrench → **✦ Catch** → dismiss the reveal → sheet;
+  **★ Rearm** clears the version stamp for repeat runs (no reinstalls —
+  the Hangar is local-only).
+- Tests: the policy table (incl. the day-1-triple case) + prompter
+  stamp/re-arm across "launches". OQ3 resolved: nth-catch reveal
+  dismissal. No Settings toggle — the system's review-request opt-out
+  covers it.
+
 ## 2026-08-25 — Catch photo tap-to-zoom — branch `feat/catch-photo-zoom`
 
 Tapping the card photo now opens a full-res pinch-zoom viewer
