@@ -58,6 +58,20 @@ struct RarityResolutionTests {
         #expect(AircraftNaming.rarity(forTypecode: code) == expected)
     }
 
+    @Test(arguments: [
+        ("EPIC", Rarity.rare),       // ~150 LT/E1000-family aircraft; low annual utilization
+        ("ESCA", .rare),             // scarce legacy Epic design
+        ("SB91", .rare),             // vintage Saab trainer
+        ("BE99", .rare),             // small aging feeder/cargo fleet
+        ("P212", .rare),             // young, still-small commuter fleet
+        ("BN2P", .uncommon),         // established utility commuter, not regional-jet frequency
+        ("DHC6", .uncommon),         // active worldwide, but localized STOL operations
+        ("L410", .uncommon),         // established niche commuter fleet
+    ])
+    func rarityAccuracyAudit(_ code: String, _ expected: Rarity) {
+        #expect(AircraftNaming.rarity(forTypecode: code) == expected)
+    }
+
     @Test func unknownTypecode_returnsNil() {
         // Unknown / nil typecode falls through to nil; callers then resolve
         // to the conservative `.common` default (the single-source rule —

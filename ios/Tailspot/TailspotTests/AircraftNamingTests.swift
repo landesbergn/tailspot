@@ -159,9 +159,39 @@ struct AircraftNamingTests {
         ("GA6C", "Gulfstream G600"),
         ("GA7C", "Gulfstream G700"),
         ("GA8C", "Gulfstream G800"),
+        // 2026-08-27 field catch + production-census audit.
+        ("EPIC", "Epic Aircraft Epic LT / E1000"),
+        ("ESCA", "Epic Aircraft Epic Escape"),
+        ("B06", "Bell 206 JetRanger / LongRanger"),
+        ("AS50", "Airbus Helicopters H125 / AS350"),
+        ("C30J", "Lockheed Martin C-130J Super Hercules"),
+        ("H47", "Boeing CH-47 Chinook"),
+        ("H500", "MD Helicopters MD 500 / 530"),
+        ("SB91", "Saab 91 Safir"),
+        ("BE36", "Beechcraft 36 Bonanza"),
+        ("C750", "Cessna Citation X"),
     ])
     func auditBatchNamesResolveFromTypecode(typecode: String, expected: String) {
         #expect(AircraftNaming.canonical(typecode: typecode, manufacturer: nil, model: nil).displayName == expected)
+    }
+
+    @Test func auditedCategoriesMatchCollectionHomes() {
+        // E-Jet E2 aircraft stay with the E-Jet family instead of splitting
+        // into Narrow solely because their designator starts with E29.
+        for tc in ["E275", "E290", "E295"] {
+            #expect(AircraftNaming.aircraftType(forTypecode: tc) == .regional, "\(tc) should be REGIONAL")
+        }
+        // These small commuter airliners already live in the Regional
+        // "Commuter props" family; their catch badge must agree.
+        for tc in ["BN2P", "DHC6", "L410", "BE99", "P212"] {
+            #expect(AircraftNaming.aircraftType(forTypecode: tc) == .regional, "\(tc) should be REGIONAL")
+        }
+        // Exact military rotorcraft exceptions run before civil rotorcraft→GA.
+        for tc in ["H47", "H60", "H64", "H53", "H46", "UH1", "V22", "NH90", "A129", "AS65"] {
+            #expect(AircraftNaming.aircraftType(forTypecode: tc) == .mil, "\(tc) should be MIL")
+        }
+        #expect(AircraftNaming.aircraftType(forTypecode: "R44") == .ga,
+                "civil rotorcraft must remain GA")
     }
 
     // MARK: - Fallback: Boeing customer-code collapse

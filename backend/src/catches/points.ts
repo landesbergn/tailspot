@@ -56,8 +56,11 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       ANY future rescore — the v3→v4 rescore is zero-delta by construction.
  *       (The only rows that could move are ones caught AFTER the cutover but
  *       scored by a still-v3 server in the deploy gap.)
+ *   5 — rarity accuracy audit (2026-08-27): low-sky-presence Epic, vintage,
+ *       and niche commuter types re-tiered. Existing catches intentionally
+ *       float to the corrected tier and points under the normal rescore path.
  */
-export const CURRENT_SCORING_VERSION = 4;
+export const CURRENT_SCORING_VERSION = 5;
 
 /** Type guard for a known rarity tier string. */
 function isRarity(value: string | null | undefined): value is Rarity {
