@@ -235,6 +235,12 @@
   <tr><td class="id" id="r9">R9.</td><td>Telemetry can tell whether this worked: events distinguish "a plane label actually rendered on screen" and "the user tapped a visible label" — the two gaps that currently make the 21 stalled users unexplainable. Existing event semantics are preserved.</td></tr>
 </table>
 
+<p><b>Testability</b></p>
+<table>
+  <tr><th class="id">ID</th><th>Requirement</th></tr>
+  <tr><td class="id" id="r10">R10.</td><td>A Debug-build-only override forces the guided first-catch experience on a device that already has catches, so the flow is field-testable end to end without touching stored catches, the account, or the Hangar. While forced, the screen is visibly badged as debug and the run emits none of the activation-funnel analytics.</td></tr>
+</table>
+
 <h3 id="key-flows">Key Flows</h3>
 <div class="flow">
   <p>F1. <b>Zero-catch user, plane in range</b> — <b>Trigger:</b> a zero-catch user opens the viewfinder with a catchable plane nearby.<br>
@@ -261,6 +267,7 @@
   <li>AE5. <b>Covers R6.</b> Given no catchable traffic in range, the user sees the quiet-sky state rather than an empty viewfinder; it does not claim traffic is coming at any specific time.</li>
   <li>AE6. <b>Covers R8.</b> Given the first catch's celebration finishes, the user sees their rank on the THIS WEEK window — not the all-time board.</li>
   <li>AE7. <b>Covers R9.</b> Given a labeled plane renders on screen and the user never taps it, the funnel can now distinguish that user from one whose plane never appeared on screen.</li>
+  <li>AE8. <b>Covers R10.</b> Given the debug override on Noah's device (~1,000 catches), the full guided flow runs — steering, coaching, pulse, quiet sky, weekly-board ending — with the debug badge visible; turning it off restores normal behavior, stored data is byte-identical, and no activation events from the forced run reach analytics.</li>
 </ul>
 
 <h3 id="success-criteria">Success Criteria</h3>
