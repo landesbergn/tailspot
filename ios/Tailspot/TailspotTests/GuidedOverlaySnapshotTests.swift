@@ -76,6 +76,35 @@ struct GuidedOverlaySnapshotTests {
         }
     }
 
+    @Test func renderWeeklyRankCardStates() {
+        let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let cases: [(String, WeeklyRankMoment)] = [
+            ("rank_card_ranked", WeeklyRankMoment(rank: 4, forced: false)),
+            ("rank_card_fallback", WeeklyRankMoment(rank: nil, forced: false)),
+            ("rank_card_forced", WeeklyRankMoment(rank: 812, forced: true)),
+        ]
+        for (name, moment) in cases {
+            let view = ZStack {
+                LinearGradient(
+                    colors: [Color(hex: 0x0A0E1A), Color(hex: 0x2A3850)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                WeeklyRankCardView(moment: moment, onSeeBoard: {}, onDismiss: {})
+            }
+            .frame(width: size.width, height: size.height)
+            .environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 3
+            guard let ui = renderer.uiImage, let png = ui.pngData() else {
+                Issue.record("render failed for \(name)")
+                continue
+            }
+            try? png.write(to: dir.appendingPathComponent("\(name).png"))
+        }
+    }
+
     @Test func scanningAndCalibrateRenderNoBanner() {
         // .scanning defers to the SCANNING SKY… pill and .calibrate defers
         // to the tappable compass badge — the chrome must stay empty so the

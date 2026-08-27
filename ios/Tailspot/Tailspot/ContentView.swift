@@ -280,6 +280,17 @@ struct ContentView: View {
     /// hysteresis (GuidedCatch, plan U1/U2). Reference type: per-frame writes
     /// from the render closure don't invalidate the view.
     @State private var guidedTargetHolder = GuidedTargetHolder()
+    /// The first catch awaiting its weekly-rank landing moment (plan U3, R8).
+    /// Armed at insert when the guided mode is active; disarmed by present
+    /// or by a Discard (the row deletes — mode re-arms per plan A2).
+    @State private var weeklyRankArmedCatch: Catch?
+    /// The presented rank card; nil = not showing.
+    @State private var weeklyRankMoment: WeeklyRankMoment?
+    /// Guards double-presentation while the A5 budget race runs.
+    @State private var weeklyRankResolving = false
+    /// Pre-warmed rank fetch, started at catch time so the round-trips
+    /// overlap the celebration (KTD4).
+    @State private var weeklyRankPrewarm = WeeklyRankPrewarm()
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
     /// row doesn't do a FileManager directory scan on every body eval. Refreshed
     /// when the debug panel opens and after a recording is toggled off.
@@ -846,7 +857,7 @@ struct ContentView: View {
         // ride existing links instead of adding new ones. The two can't
         // co-fire: restore needs an EMPTY Hangar, the streak ask a 2-day
         // catch streak.
-        .overlay { hangarRestoreOverlay; streakAskOverlay }
+        .overlay { hangarRestoreOverlay; streakAskOverlay; weeklyRankOverlay }
         // Seed at launch and re-diff on every new catch (idempotent +
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
@@ -1603,6 +1614,66 @@ struct ContentView: View {
                 unlockCenter: unlockCenter
             )
             .transition(.opacity)
+        }
+    }
+
+    // MARK: - Weekly-rank landing moment (plan U3)
+
+    /// Always-present host (the `topToastBanner` pattern: watchers hang off
+    /// an empty ZStack without a new body chain link). Presents the R8 card
+    /// once every prior claimant of the post-catch sequence settles —
+    /// suspect Keep/Discard, then trophies, then this (KTD4); the review
+    /// prompter can't fire on a first catch (`minimumCatches` = 3).
+    private var weeklyRankOverlay: some View {
+        ZStack {
+            if let moment = weeklyRankMoment {
+                WeeklyRankCardView(
+                    moment: moment,
+                    onSeeBoard: {
+                        withAnimation(.easeIn(duration: 0.2)) { weeklyRankMoment = nil }
+                        showProfile = true
+                    },
+                    onDismiss: {
+                        withAnimation(.easeIn(duration: 0.2)) { weeklyRankMoment = nil }
+                    }
+                )
+            }
+        }
+        .onChange(of: unlockCenter.hasPending) { presentWeeklyRankIfReady() }
+        .onChange(of: pendingSuspectReview == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: pendingReveal == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: weeklyRankArmedCatch == nil) { presentWeeklyRankIfReady() }
+    }
+
+    private func presentWeeklyRankIfReady() {
+        guard let row = weeklyRankArmedCatch,
+              WeeklyRankArbitration.canPresent(
+                  armed: true,
+                  revealUp: pendingReveal != nil || pendingMultiReveal != nil,
+                  suspectReviewUp: pendingSuspectReview != nil,
+                  trophiesPending: unlockCenter.hasPending,
+                  sheetUp: showHangar || showProfile || showCompassSheet,
+                  alreadyShowing: weeklyRankMoment != nil,
+                  resolving: weeklyRankResolving
+              ) else { return }
+        // A discarded suspect first catch deletes the row: no landing
+        // moment, no retirement latch — the guided mode re-arms (plan A2).
+        if row.isDeleted {
+            weeklyRankArmedCatch = nil
+            weeklyRankPrewarm.cancel()
+            return
+        }
+        // The kept first catch is completing its celebration: retire the
+        // guided mode here (KTD2 — the single latch write).
+        GuidedCatch.markRetired()
+        weeklyRankResolving = true
+        weeklyRankArmedCatch = nil
+        Task { @MainActor in
+            let rank = await weeklyRankPrewarm.awaitRank(budgetSeconds: 3)
+            withAnimation(.easeOut(duration: 0.25)) {
+                weeklyRankMoment = WeeklyRankMoment(rank: rank, forced: false)
+            }
+            weeklyRankResolving = false
         }
     }
 
@@ -2609,6 +2680,14 @@ struct ContentView: View {
             // its first catch(es). Latched inside fireFirstCatch.
             if priorCatchCount == 0, let first = newCatches.first {
                 CatchTelemetry.fireFirstCatch(first)
+                // Arm the weekly-rank landing moment (plan U3, R8) and
+                // pre-warm the rank fetch so it resolves during the reveal
+                // (KTD4). Guided-active only — a veteran's manual
+                // delete-everything edge shouldn't celebrate.
+                if guidedModeActive {
+                    weeklyRankArmedCatch = first
+                    weeklyRankPrewarm.start(isUploaded: { first.uploadedAt != nil })
+                }
             }
 
             // Daily streak bookkeeping. Every successful catch action makes
