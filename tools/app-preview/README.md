@@ -31,6 +31,22 @@ The script normalizes any recording size (iPhone 16's 1179x2556 scales to
 to 30 fps, concatenates, encodes to spec, and then **verifies its own output**
 with ffprobe — a non-zero exit means the file would fail ASC validation.
 
+## Creative cuts (from production stills — not submittable)
+
+Three sibling scripts assemble creative cuts from the App Store screenshot
+stills (`marketing/app-store-screenshots/public/…`) instead of device footage,
+rendering into `marketing/app-preview/` (masters are gitignored — rerun to
+rebuild). They need ImageMagick (`magick`) on top of ffmpeg.
+
+- `make-campaign-preview.sh` — the primary cut: kinetic typographic hook,
+  feature sprint, sound design, loopable brand end card (~21.5 s).
+- `make-hero-preview.sh` — longer motion-led product film with HUD copy.
+- `make-marketing-cut.sh` — the quiet reference cut, gentle dissolves only.
+
+These exist for creative approval and product-page planning. Apple wants app
+previews captured on device, so the submission file still comes from a field
+session through `make-preview.sh` above.
+
 ## Storyboard (~28 s target)
 
 | Beat | Time | Footage |
