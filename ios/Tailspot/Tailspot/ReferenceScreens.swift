@@ -2,10 +2,9 @@
 //  ReferenceScreens.swift
 //  Tailspot
 //
-//  Static "Pokédex reference" for the 5 rarity tiers — in-app docs for
-//  the game system. (A companion Types reference existed until
-//  2026-07-08; cut as not useful — the Hangar's Sets segment already
-//  teaches the type buckets in context.)
+//  Catalog-backed rarity guide. Each tier links to the aircraft assigned to
+//  it in AircraftTypes.json and marks typecodes already present in the local
+//  Hangar, so this screen stays accurate as the catalog evolves.
 //
 
 import SwiftUI
@@ -13,18 +12,43 @@ import SwiftUI
 // MARK: - Rarity
 
 struct RarityReferenceScreen: View {
+    let catches: [Catch]
+
+    init(catches: [Catch] = []) {
+        self.catches = catches
+    }
+
     var body: some View {
+        let caughtTypecodes: Set<String> = Set(catches.compactMap { row -> String? in
+            guard let rawTypecode = row.typecode else { return nil }
+            let code = rawTypecode
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased()
+            guard !code.isEmpty else { return nil }
+            return code
+        })
+
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                header
                 ForEach(Rarity.allCases, id: \.self) { r in
-                    rarityCard(r)
+                    let aircraft = AircraftNaming.aircraft(in: r)
+                    NavigationLink {
+                        RarityTierDetailScreen(
+                            rarity: r,
+                            aircraft: aircraft,
+                            caughtTypecodes: caughtTypecodes
+                        )
+                    } label: {
+                        RarityReferenceCard(
+                            rarity: r,
+                            aircraftCount: aircraft.count,
+                            caughtCount: aircraft.lazy.filter {
+                                caughtTypecodes.contains($0.typecode)
+                            }.count
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                Text("Points come from rarity, plus a one-time bonus the first time you catch a new type. Multi-catch combos stack on top. Planes we can't identify default to Common.")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 8)
             }
             .padding(20)
         }
@@ -32,73 +56,158 @@ struct RarityReferenceScreen: View {
         .navigationTitle("Rarity")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("FIVE TIERS")
-                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
-                .tracking(1.2)
-                .foregroundStyle(Brand.Color.cyan)
-            Text("Every plane has a tier.")
-                .brandDisplayFont()
-                .foregroundStyle(Brand.Color.textPrimary)
-            Text("Tiers track how much of a type is actually in the sky — plus a scarcity layer for military, vintage, and vanishing airliners.")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textSecondary)
-        }
-    }
+private struct RarityReferenceCard: View {
+    let rarity: Rarity
+    let aircraftCount: Int
+    let caughtCount: Int
 
-    private func rarityCard(_ r: Rarity) -> some View {
+    var body: some View {
         HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: Brand.Radius.row).fill(r.tint.opacity(0.18))
-                // Fixed size: a numeral inside the fixed 64 pt tile; the
-                // combined label below speaks the points.
-                Text("\(r.basePoints)")
+                RoundedRectangle(cornerRadius: Brand.Radius.row).fill(rarity.tint.opacity(0.18))
+                Text("\(rarity.basePoints)")
                     .font(Brand.Font.mono(size: 18, weight: .heavy))
-                    .foregroundStyle(r.tint)
+                    .foregroundStyle(rarity.tint)
             }
             .frame(width: 64, height: 64)
             .overlay(
-                RoundedRectangle(cornerRadius: Brand.Radius.row).strokeBorder(r.tint, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Brand.Radius.row).strokeBorder(rarity.tint, lineWidth: 1)
             )
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    RarityBadge(rarity: r, size: .md)
-                }
-                // Docs screen — let examples wrap at large text sizes
-                // rather than truncate.
-                Text(examples(for: r))
+                RarityBadge(rarity: rarity, size: .md)
+                Text("\(aircraftCount) aircraft · \(caughtCount) caught")
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
-                Text("Base \(r.basePoints) pt")
-                    .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
-                    .foregroundStyle(Brand.Color.textTertiary)
-                    .tracking(0.6)
             }
             Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary)
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.card))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(r.label) tier, base \(r.basePoints) points. Examples: \(examples(for: r))")
+        .contentShape(.rect)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(rarity.label.capitalized), \(rarity.basePoints) points, \(aircraftCount) aircraft, \(caughtCount) caught"
+        )
+        .accessibilityHint("Shows every aircraft in this tier")
+    }
+}
+
+private struct RarityTierDetailScreen: View {
+    private enum AircraftFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case caught = "Caught"
+        case uncaught = "Uncaught"
+
+        var id: Self { self }
     }
 
-    // Examples must track the live tier table (AircraftTypes.json —
-    // re-tiered by the 2026-07-01 collection economy). Spot-check a
-    // typecode's `rarity` there before editing these strings.
-    private func examples(for r: Rarity) -> String {
-        switch r {
-        case .common:    return "737 · A320 · E175 · 787 · Cessna 172"
-        case .uncommon:  return "Phenom 300 · King Air · PC-12 · Challenger"
-        case .rare:      return "747 · A380 · A340 · G650 · P-51"
-        case .epic:      return "747-8 · C-17 · C-130 · C-5 · DC-10"
-        case .legendary: return "Air Force One · B-2 · F-16 · SR-71"
+    let rarity: Rarity
+    let aircraft: [AircraftNaming.CatalogAircraft]
+    let caughtTypecodes: Set<String>
+
+    @State private var searchText = ""
+    @State private var aircraftFilter: AircraftFilter = .all
+
+    private var visibleAircraft: [AircraftNaming.CatalogAircraft] {
+        let statusMatches = aircraft.filter { plane in
+            switch aircraftFilter {
+            case .all:
+                return true
+            case .caught:
+                return caughtTypecodes.contains(plane.typecode)
+            case .uncaught:
+                return !caughtTypecodes.contains(plane.typecode)
+            }
         }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return statusMatches }
+        return statusMatches.filter {
+            $0.displayName.localizedCaseInsensitiveContains(query)
+                || $0.typecode.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Picker("Aircraft status", selection: $aircraftFilter) {
+                    ForEach(AircraftFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Brand.Color.bgPrimary)
+            }
+
+            Section {
+                ForEach(visibleAircraft) { plane in
+                    RarityAircraftRow(
+                        plane: plane,
+                        isCaught: caughtTypecodes.contains(plane.typecode)
+                    )
+                }
+            } header: {
+                Text("\(visibleAircraft.count) aircraft")
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Brand.Color.bgPrimary)
+        .navigationTitle(rarity.label.capitalized)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "Search aircraft or typecode")
+        .overlay {
+            if visibleAircraft.isEmpty {
+                if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ContentUnavailableView(
+                        aircraftFilter == .caught ? "No caught aircraft" : "No uncaught aircraft",
+                        systemImage: aircraftFilter == .caught ? "checkmark.circle" : "circle.slash"
+                    )
+                } else {
+                    ContentUnavailableView.search(text: searchText)
+                }
+            }
+        }
+    }
+}
+
+private struct RarityAircraftRow: View {
+    let plane: AircraftNaming.CatalogAircraft
+    let isCaught: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(plane.displayName)
+                    .font(Brand.Font.body)
+                    .foregroundStyle(isCaught ? Brand.Color.textPrimary : Brand.Color.textTertiary.opacity(0.48))
+                Text(plane.typecode)
+                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(isCaught ? Brand.Color.textTertiary : Brand.Color.textTertiary.opacity(0.38))
+            }
+            Spacer(minLength: 8)
+            if isCaught {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(Brand.Color.cyan)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.vertical, 5)
+        .listRowBackground(Brand.Color.bgPrimary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(plane.displayName), \(plane.typecode), \(isCaught ? "caught" : "not caught")"
+        )
     }
 }
 
 #Preview("Rarity") {
     NavigationStack { RarityReferenceScreen() }
 }
-
