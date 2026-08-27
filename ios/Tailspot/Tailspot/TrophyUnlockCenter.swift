@@ -123,6 +123,9 @@ final class TrophyUnlockCenter: ObservableObject {
         guard !alreadyShown else { return }
         Analytics.capture("trophy_unlocked", [
             "achievement": .string(event.achievementID),
+            "title": .string(event.achievement.title),
+            "tier": .string(event.newTier.rawValue),
+            "kind": .string(event.kind == .badgeEarned ? "badge" : "tier_up"),
             "secret": .bool(event.achievement.secret),
         ])
     }
