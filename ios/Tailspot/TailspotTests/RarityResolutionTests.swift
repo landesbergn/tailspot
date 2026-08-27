@@ -80,6 +80,27 @@ struct RarityResolutionTests {
         #expect(AircraftNaming.rarity(forTypecode: nil) == nil)
     }
 
+    @Test func browsableCatalogMirrorsRaritySource() {
+        let catalog = AircraftNaming.catalogAircraft
+
+        #expect(!catalog.isEmpty)
+        #expect(Set(catalog.map(\.typecode)).count == catalog.count)
+        #expect(catalog.allSatisfy {
+            AircraftNaming.rarity(forTypecode: $0.typecode) == $0.rarity
+        })
+
+        let epic = catalog.first { $0.typecode == "EPIC" }
+        #expect(epic?.displayName == "Epic Aircraft Epic LT / E1000")
+        #expect(epic?.rarity == .rare)
+    }
+
+    @Test(arguments: Rarity.allCases)
+    func tierBrowserContainsOnlyRequestedRarity(_ rarity: Rarity) {
+        let planes = AircraftNaming.aircraft(in: rarity)
+        #expect(!planes.isEmpty)
+        #expect(planes.allSatisfy { $0.rarity == rarity })
+    }
+
     // MARK: resolvedRarity corrects prior data on read
 
     @Test func resolvedRarity_typecodeOverridesStaleSnapshot() throws {
