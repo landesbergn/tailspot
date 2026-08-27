@@ -1821,12 +1821,19 @@ struct ContentView: View {
     /// (pure debugging — see `CatchCaptureDiagnostics`). Rounds values for a
     /// compact JSON; the caught plane's offset is computed directly from its
     /// observation so it's present even if it drifted out of the catch zone by
-    /// capture time.
+    /// capture time. Pose values come in from the caller's SHUTTER-PRESS
+    /// snapshot — never read the live sensors here (the pipeline runs seconds
+    /// past the press; see the snapshot comment in `runCatch`).
     private func buildCaptureDiagnostics(
         for icao: String,
         observed: ObservedAircraft?,
         candidates: [CatchCandidate],
         basis: Geo.CameraBasis,
+        headingDeg: Double?,
+        headingAccuracyDeg: Double?,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        zoom: CGFloat,
         wasTapped: Bool
     ) -> String? {
         func r1(_ x: Double) -> Double { (x * 10).rounded() / 10 }
@@ -1843,11 +1850,11 @@ struct ContentView: View {
             )
         }
         let diag = CatchCaptureDiagnostics(
-            headingDeg: location.heading.map(r1),
-            cameraElevationDeg: r1(motion.cameraElevationDeg),
-            rollDeg: r1(Geo.rollDeg(gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ)),
+            headingDeg: headingDeg.map(r1),
+            cameraElevationDeg: r1(cameraElevationDeg),
+            rollDeg: r1(rollDeg),
             zoom: (Double(zoom) * 100).rounded() / 100,
-            headingAccuracyDeg: location.headingAccuracy.map(r1),
+            headingAccuracyDeg: headingAccuracyDeg.map(r1),
             targetOffsetDeg: targetOffset.map(r1),
             targetArcmin: observed.map { r1($0.apparentSizeArcminutes) },
             wasTapped: wasTapped,
@@ -1979,22 +1986,31 @@ struct ContentView: View {
                  suspicions: suspicions)
     }
 
-    /// Project an aircraft's CURRENT feed position through the CURRENT
-    /// pose. The catch path calls this after the shutter returns so the
-    /// bracket prediction reflects where the phone points NOW, not where
-    /// it pointed when the button rendered (shutter latency = hand
-    /// drift). nil when the plane left the feed or the compass is down —
-    /// caller falls back to the tap-time position.
-    private func refreshedScreenPosition(for icao: String, screenSize: CGSize) -> CGPoint? {
-        guard let obs = adsb.observed.first(where: { $0.aircraft.icao24 == icao }),
-              let heading = location.heading else { return nil }
-        let roll = Geo.rollDeg(
-            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
-        )
+    /// Project an aircraft's shutter-press observation through the
+    /// shutter-press pose — the bracket's geometric prediction. This used
+    /// to re-read the LIVE pose after the shutter returned (the idea:
+    /// account for hand drift during shutter latency), but a slow shutter
+    /// inverted it — the "live" pose was the phone being lowered after the
+    /// press, projecting the plane off where the photo shows it (ASA1374,
+    /// 2026-08-26). Drift between press and exposure is the detector
+    /// snap's job; geometry sticks to the press instant. nil when the
+    /// plane wasn't observed at press or the compass was down — caller
+    /// falls back to the tap-time position.
+    private func pressScreenPosition(
+        for icao: String,
+        in observed: [ObservedAircraft],
+        screenSize: CGSize,
+        headingDeg: Double?,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        zoom: CGFloat
+    ) -> CGPoint? {
+        guard let obs = observed.first(where: { $0.aircraft.icao24 == icao }),
+              let heading = headingDeg else { return nil }
         let basis = Geo.cameraBasis(
             headingDeg: heading,
-            cameraElevationDeg: motion.cameraElevationDeg,
-            rollDeg: roll
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg
         )
         return obs.screenPosition(
             basis: basis,
@@ -2023,12 +2039,28 @@ struct ContentView: View {
         // linear scans).
         let observerLat = location.latitude ?? 0
         let observerLon = location.longitude ?? 0
+        // SHUTTER-PRESS SNAPSHOT (2026-08-26 ASA1374 field case): everything
+        // pose-derived downstream — the bracket's fallback projection and the
+        // capture diagnostics — must reflect the aim at THIS instant, not
+        // whenever the async pipeline gets around to reading the sensors. A
+        // slow shutter (~2 s on Debug builds) meant the "current" pose was
+        // the phone being LOWERED post-press: diagnostics recorded a
+        // -21.7° elevation / 41.5°-off-target catch of a plane the user had
+        // dead-centered, and the fallback bracket landed on empty sky.
+        let pressObserved = adsb.observed
+        let pressHeading = location.heading
+        let pressHeadingAccuracy = location.headingAccuracy
+        let pressElevationDeg = motion.cameraElevationDeg
+        let pressRollDeg = Geo.rollDeg(
+            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+        )
+        let pressZoom = zoom
         // `Dictionary(uniquingKeysWith:)` over `uniqueKeysWithValues:` —
         // if upstream ever emits two observations with the same icao24
         // (reannotation race, future provider quirk) we deduplicate
         // instead of crashing the catch button.
         let visibleByIcao = Dictionary(
-            adsb.observed.map { ($0.aircraft.icao24, $0) },
+            pressObserved.map { ($0.aircraft.icao24, $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
@@ -2180,8 +2212,11 @@ struct ContentView: View {
             var detectorVerdict: DetectorGateVerdict?
             if let data = photoData, icaos.count == 1, let icao = icaos.first,
                let tapTimePosition = positions[icao] {
-                let predicted = refreshedScreenPosition(for: icao, screenSize: screenSize)
-                    ?? tapTimePosition
+                let predicted = pressScreenPosition(
+                    for: icao, in: pressObserved, screenSize: screenSize,
+                    headingDeg: pressHeading, cameraElevationDeg: pressElevationDeg,
+                    rollDeg: pressRollDeg, zoom: pressZoom
+                ) ?? tapTimePosition
                 // Detached: up to ~19 CoreML passes (fine ring + coarse
                 // ring + refine) plus a 12 MP resample; never on the
                 // MainActor.
@@ -2231,7 +2266,7 @@ struct ContentView: View {
                             DetectorGate.expectedFootprintPx(
                                 wingspanMeters: obs.aircraft.estimatedWingspanMeters,
                                 slantMeters: obs.slantDistanceMeters,
-                                effectiveHfovDeg: Self.baseHfovDeg / zoom,
+                                effectiveHfovDeg: Self.baseHfovDeg / pressZoom,
                                 photoWidthPx: photoWidth
                             )
                         }
@@ -2263,21 +2298,21 @@ struct ContentView: View {
             )) ?? 0
 
             // Capture-time targeting diagnostics (pure debugging — never gates
-            // or scores). Snapshot the pose + in-zone candidate set NOW so a
-            // "wrong plane" mis-catch is diagnosable from the row without a
-            // live replay (the A319 field case, 2026-07-13).
-            let diagRoll = Geo.rollDeg(
-                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
-            )
+            // or scores). Built from the SHUTTER-PRESS snapshot, not the live
+            // sensors — by this point the pipeline is seconds past the press
+            // and the phone may already be lowered, which recorded nonsense
+            // (-21.7° elevation on a dead-centered catch — ASA1374,
+            // 2026-08-26). Press-time is what makes a "wrong plane" mis-catch
+            // diagnosable from the row (the A319 field case, 2026-07-13).
             let diagBasis = Geo.cameraBasis(
-                headingDeg: location.heading ?? 0,
-                cameraElevationDeg: motion.cameraElevationDeg, rollDeg: diagRoll
+                headingDeg: pressHeading ?? 0,
+                cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg
             )
             let diagCandidates = catchCandidates(
-                in: adsb.observed, phoneHeadingDeg: location.heading ?? 0,
-                cameraElevationDeg: motion.cameraElevationDeg, rollDeg: diagRoll,
+                in: pressObserved, phoneHeadingDeg: pressHeading ?? 0,
+                cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg,
                 screenSize: screenSize,
-                hfovDeg: Self.baseHfovDeg / zoom, vfovDeg: Self.baseVfovDeg / zoom,
+                hfovDeg: Self.baseHfovDeg / pressZoom, vfovDeg: Self.baseVfovDeg / pressZoom,
                 zoneRadius: Self.catchZoneRadius
             )
 
@@ -2431,7 +2466,13 @@ struct ContentView: View {
                 )
                 row.captureDiagnosticsJSON = buildCaptureDiagnostics(
                     for: icao, observed: observed, candidates: diagCandidates,
-                    basis: diagBasis, wasTapped: icao == lockOn.state.targetIcao24
+                    basis: diagBasis,
+                    headingDeg: pressHeading,
+                    headingAccuracyDeg: pressHeadingAccuracy,
+                    cameraElevationDeg: pressElevationDeg,
+                    rollDeg: pressRollDeg,
+                    zoom: pressZoom,
+                    wasTapped: icao == lockOn.state.targetIcao24
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -3957,6 +3998,11 @@ struct ContentView: View {
         // GROUNDED beats filtered: a parked plane is never revealed (never
         // labeled, locked, or catchable) — the tap gets the playful toast
         // instead, and the attempt feeds the "Ground Stop" secret badge.
+        // Only a NEARBY parked plane (within `groundedToastMaxSlantMeters`)
+        // classifies "grounded" — a distant one is "grounded-far", which the
+        // subject rescue may already have replaced with an airborne plane in
+        // the cone; unrescued it falls through to the plain empty ripple
+        // below (the OAK-behind-the-Bay-Bridge case, 2026-08-26).
         if let d = diagnosis, d.reason == "grounded" {
             presentGroundedTapToast(icao24: d.obs.aircraft.icao24)
             return
@@ -4046,6 +4092,7 @@ struct ContentView: View {
                     basis: basis, in: screenSize, hfovDeg: hfovDeg, vfovDeg: vfovDeg
                 ) != nil,
                 grounded: obs.grounded,
+                slantMeters: obs.slantDistanceMeters,
                 tier: obs.visibilityTier,
                 plausiblyRevealable: obs.isPlausiblyRevealable
             ))
@@ -4113,14 +4160,32 @@ struct ContentView: View {
 /// tap-reveal radius. Beyond it the tap is truly empty sky.
 let emptySkyTapMaxOffsetDeg: Double = 40
 
+/// Slant bound (meters) inside which a grounded angular winner counts as
+/// "the parked plane you are actually looking at" and earns the playful
+/// toast. Beyond it the parked plane is invisible scenery — the Bay Bridge
+/// field case (2026-08-26): freighters parked at OAK, 18 km away and dead
+/// on the horizon line, beat the airborne plane in sight on angle and
+/// turned every tap into the grounded toast. A far parked plane classifies
+/// `grounded-far` instead: eligible for the rescue, never for the toast.
+let groundedToastMaxSlantMeters: Double = 1_000
+
 /// Classify the nearest in-data plane found under an empty-sky tap.
 /// Extracted from `recordEmptySkyTapDiagnosis` so the branch that decides
 /// toast-vs-reveal-vs-ripple is unit-testable without a SwiftUI view
 /// (same free-function precedent as `resolveAROverlayRarity`).
 ///
-///   - "grounded"       → parked plane under the tap: playful toast, never
-///                         a reveal (checked BEFORE the tier — a grounded
-///                         plane is also `.hidden`, and reveal must lose).
+///   - "grounded"       → parked plane under the tap, near enough to be the
+///                         thing the user is looking at (within
+///                         `groundedToastMaxSlantMeters`): playful toast,
+///                         never a reveal (checked BEFORE the tier — a
+///                         grounded plane is also `.hidden`, and reveal must
+///                         lose).
+///   - "grounded-far"    → parked plane under the tap but beyond the slant
+///                         bound — invisible airport scenery on the horizon
+///                         (the OAK-behind-the-Bay-Bridge case, 2026-08-26),
+///                         not something the user can be aiming at. Subject
+///                         to the same rescue as `filtered-far`; unrescued
+///                         it falls through to the plain empty ripple.
 ///   - "filtered"        → airborne, hidden by the precision band, but within
 ///                         plausible reveal reach: tap-to-reveal (the FDX1268
 ///                         affordance).
@@ -4144,12 +4209,15 @@ let emptySkyTapMaxOffsetDeg: Double = 40
 func classifyEmptySkyTapNearest(
     offsetDeg: Double,
     grounded: Bool,
+    slantMeters: Double,
     tier: ObservedAircraft.VisibilityTier,
     onScreen: Bool,
     plausiblyRevealable: Bool
 ) -> String {
     guard offsetDeg <= emptySkyTapMaxOffsetDeg else { return "nothing-nearby" }
-    if grounded { return "grounded" }
+    if grounded {
+        return slantMeters <= groundedToastMaxSlantMeters ? "grounded" : "grounded-far"
+    }
     if tier == .hidden { return plausiblyRevealable ? "filtered" : "filtered-far" }
     if !onScreen { return "off-frame" }
     return "on-screen"
@@ -4166,6 +4234,9 @@ struct EmptySkyTapCandidate {
     let offsetDeg: Double
     let onScreen: Bool
     let grounded: Bool
+    /// Slant distance to the plane — bounds the grounded toast (a parked
+    /// plane 18 km away is scenery, not a tap subject).
+    let slantMeters: Double
     let tier: ObservedAircraft.VisibilityTier
     let plausiblyRevealable: Bool
 }
@@ -4179,16 +4250,23 @@ struct EmptySkyTapCandidate {
 /// toast with a plane plainly in sight.
 ///
 /// Rule: take the angular-nearest; if (and only if) it classifies
-/// `filtered-far`, look for the angular-nearest plane in the tap cone that
-/// the tap could actually act on — airborne AND (visible-tier OR plausibly
-/// revealable) — and make THAT the subject instead (`rescued: true`). Its
-/// own classification then drives the normal branch: `filtered`/`off-frame`
-/// reveal, `on-screen` ripples.
+/// `filtered-far` or `grounded-far`, look for the angular-nearest plane in
+/// the tap cone that the tap could actually act on — airborne AND
+/// (visible-tier OR plausibly revealable) — and make THAT the subject
+/// instead (`rescued: true`). Its own classification then drives the normal
+/// branch: `filtered`/`off-frame` reveal, `on-screen` ripples.
+///
+/// `grounded-far` joined the rescue on 2026-08-26 (the Bay Bridge case):
+/// freighters parked at OAK — 18 km out, exactly on the horizon line the
+/// user was aiming along — won the angular race against the airborne plane
+/// plainly in sight, and every tap dead-ended in the parked-plane toast.
+/// A parked plane the user cannot possibly see must not outrank one they
+/// can.
 ///
 /// Deliberately NOT rescued:
-///   - "grounded" primary — the parked-plane toast/easter egg must win
-///     (a deliberate tap on a parked plane shouldn't reveal a plane 30°
-///     away).
+///   - "grounded" primary (within `groundedToastMaxSlantMeters`) — the
+///     parked-plane toast/easter egg must win: a deliberate tap on a parked
+///     plane the user is looking at shouldn't reveal a plane 30° away.
 ///   - The NYC couch case — nothing revealable in the cone, so the rescue
 ///     finds no alternative and `filtered-far` stands.
 func chooseEmptySkyTapSubject(
@@ -4196,7 +4274,8 @@ func chooseEmptySkyTapSubject(
 ) -> (candidate: EmptySkyTapCandidate, reason: String, rescued: Bool)? {
     func classify(_ c: EmptySkyTapCandidate) -> String {
         classifyEmptySkyTapNearest(
-            offsetDeg: c.offsetDeg, grounded: c.grounded, tier: c.tier,
+            offsetDeg: c.offsetDeg, grounded: c.grounded,
+            slantMeters: c.slantMeters, tier: c.tier,
             onScreen: c.onScreen, plausiblyRevealable: c.plausiblyRevealable
         )
     }
@@ -4204,7 +4283,7 @@ func chooseEmptySkyTapSubject(
         return nil
     }
     let primaryReason = classify(primary)
-    guard primaryReason == "filtered-far" else {
+    guard primaryReason == "filtered-far" || primaryReason == "grounded-far" else {
         return (primary, primaryReason, false)
     }
     let alt = candidates
@@ -4248,8 +4327,8 @@ func farTapToastSlantMeters(
 /// "grounded" is handled earlier (a parked plane is never revealed);
 /// "filtered-far" gets the beyond-eyeshot hint (a hidden plane past plausible
 /// reveal reach must NOT become catchable — the NYC couch session caught a
-/// Piper 75.8 km away through a wall); "on-screen" and "nothing-nearby" fall
-/// through to the empty-tap ripple.
+/// Piper 75.8 km away through a wall); "grounded-far", "on-screen" and
+/// "nothing-nearby" fall through to the empty-tap ripple.
 func shouldTapReveal(reason: String) -> Bool {
     reason == "filtered" || reason == "off-frame"
 }

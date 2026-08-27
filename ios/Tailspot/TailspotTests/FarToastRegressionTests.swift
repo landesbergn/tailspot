@@ -105,6 +105,7 @@ struct FarToastRegressionTests {
                     hfovDeg: hfovDeg, vfovDeg: vfovDeg
                 ) != nil,
                 grounded: obs.grounded,
+                slantMeters: obs.slantDistanceMeters,
                 tier: obs.visibilityTier,
                 plausiblyRevealable: obs.isPlausiblyRevealable
             ))
@@ -134,6 +135,7 @@ struct FarToastRegressionTests {
             if let primary = cands.min(by: { $0.offsetDeg < $1.offsetDeg }) {
                 let oldReason = classifyEmptySkyTapNearest(
                     offsetDeg: primary.offsetDeg, grounded: primary.grounded,
+                    slantMeters: primary.slantMeters,
                     tier: primary.tier, onScreen: primary.onScreen,
                     plausiblyRevealable: primary.plausiblyRevealable
                 )
