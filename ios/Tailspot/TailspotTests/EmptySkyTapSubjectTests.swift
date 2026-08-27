@@ -36,12 +36,14 @@ struct EmptySkyTapSubjectTests {
     private func cand(
         index: Int, offsetDeg: Double,
         onScreen: Bool = false, grounded: Bool = false,
+        slantMeters: Double = 5_000,
         tier: ObservedAircraft.VisibilityTier = .hidden,
         revealable: Bool = false
     ) -> EmptySkyTapCandidate {
         EmptySkyTapCandidate(
             index: index, offsetDeg: offsetDeg, onScreen: onScreen,
-            grounded: grounded, tier: tier, plausiblyRevealable: revealable
+            grounded: grounded, slantMeters: slantMeters,
+            tier: tier, plausiblyRevealable: revealable
         )
     }
 
@@ -128,16 +130,45 @@ struct EmptySkyTapSubjectTests {
         #expect(choice?.rescued == false)
     }
 
-    @Test func groundedPrimaryIsNeverRescued() {
-        // A deliberate tap on a parked plane keeps the grounded toast (and
-        // the Ground Stop easter egg) even with a revealable plane in cone.
+    @Test func nearbyGroundedPrimaryIsNeverRescued() {
+        // A deliberate tap on a parked plane THE USER CAN SEE (within the
+        // slant bound) keeps the grounded toast (and the Ground Stop easter
+        // egg) even with a revealable plane in cone.
         let choice = chooseEmptySkyTapSubject([
-            cand(index: 0, offsetDeg: 2, grounded: true),
+            cand(index: 0, offsetDeg: 2, grounded: true, slantMeters: 400),
             cand(index: 1, offsetDeg: 20, revealable: true),
         ])
         #expect(choice?.candidate.index == 0)
         #expect(choice?.reason == "grounded")
         #expect(choice?.rescued == false)
+    }
+
+    @Test func farGroundedPrimaryLosesToRevealablePlaneInCone() {
+        // The Bay Bridge case (2026-08-26): a freighter parked at OAK — 18 km
+        // out, dead on the horizon line the user is aiming along — beat the
+        // airborne plane in sight on angle, and every tap dead-ended in the
+        // parked-plane toast. The rescue must hand the tap to the airborne
+        // plane.
+        let choice = chooseEmptySkyTapSubject([
+            cand(index: 0, offsetDeg: 5, grounded: true, slantMeters: 18_000),
+            cand(index: 1, offsetDeg: 19, revealable: true),
+        ])
+        #expect(choice?.candidate.index == 1)
+        #expect(choice?.reason == "filtered")
+        #expect(choice?.rescued == true)
+    }
+
+    @Test func farGroundedPrimaryWithNoAlternativeStaysGroundedFar() {
+        // Nothing actionable in the cone → no rescue, no toast either; the
+        // handler falls through to the plain empty ripple.
+        let choice = chooseEmptySkyTapSubject([
+            cand(index: 0, offsetDeg: 5, grounded: true, slantMeters: 18_000),
+            cand(index: 1, offsetDeg: 15, grounded: true, slantMeters: 17_500),
+        ])
+        #expect(choice?.candidate.index == 0)
+        #expect(choice?.reason == "grounded-far")
+        #expect(choice?.rescued == false)
+        #expect(!shouldTapReveal(reason: choice?.reason ?? ""))
     }
 
     @Test func groundedPlaneNeverServesAsRescueAlternative() {
