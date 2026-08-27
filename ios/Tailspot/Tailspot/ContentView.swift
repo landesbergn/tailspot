@@ -276,6 +276,10 @@ struct ContentView: View {
     /// async hop out of the render pass; the fire's own UserDefaults latch
     /// makes a stray double-hop harmless.
     @State private var firstLabelSeenLatched = false
+    /// Cross-frame steering-target memory for the guided first-catch mode's
+    /// hysteresis (GuidedCatch, plan U1/U2). Reference type: per-frame writes
+    /// from the render closure don't invalidate the view.
+    @State private var guidedTargetHolder = GuidedTargetHolder()
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
     /// row doesn't do a FileManager directory scan on every body eval. Refreshed
     /// when the debug panel opens and after a recording is toggled off.
@@ -680,12 +684,62 @@ struct ContentView: View {
                                 }
                                 return .multi(candidates.map(\.icao24))
                             }()
+                            // Guided first-catch step (plan U2). Derived per
+                            // frame from the SAME sets the labels and capture
+                            // mode use (KTD3), so the coaching can never point
+                            // at a plane the pipeline classifies hidden.
+                            // Error-wins: no step at all while the feed errors
+                            // (never steer on stale extrapolated positions),
+                            // and the restore prompt keeps priority.
+                            let guidedStep: GuidedCatchStep? = {
+                                guard guidedModeActive,
+                                      adsb.lastErrorUserMessage == nil,
+                                      !restoreManager.isPresenting,
+                                      cameraAuthorized else { return nil }
+                                let captureEnabled: Bool = {
+                                    if case .disabled = mode { return false }
+                                    return true
+                                }()
+                                let guidedCandidates = visible
+                                    .filter { !$0.grounded && $0.clearsCatchSizeFloor }
+                                    .map { obs in
+                                        GuidedCandidate(
+                                            icao24: obs.aircraft.icao24,
+                                            bearingDeg: obs.bearingDeg,
+                                            elevationDeg: obs.elevationDeg,
+                                            slantDistanceMeters: obs.slantDistanceMeters,
+                                            displayName: obs.aircraft.callsign
+                                        )
+                                    }
+                                let derivation = GuidedCatch.deriveStep(GuidedCatchInputs(
+                                    hasFirstADSBResponse: adsb.lastFetched != nil,
+                                    pointedIndoors: pointedIndoors,
+                                    compassWarningLatched: showCompassWarning,
+                                    candidates: guidedCandidates,
+                                    currentTargetIcao24: guidedTargetHolder.icao24,
+                                    headingDeg: location.heading,
+                                    cameraElevationDeg: camEl,
+                                    onScreenIcaos: Set(onScreenIcaos),
+                                    captureEnabled: captureEnabled
+                                ))
+                                guidedTargetHolder.icao24 = derivation.targetIcao24
+                                return derivation.step
+                            }()
+                            if let guidedStep {
+                                GuidedCatchChrome(
+                                    step: guidedStep,
+                                    screenSize: geo.size,
+                                    forced: guidedModeForced
+                                )
+                                .allowsHitTesting(false)
+                            }
                             VStack {
                                 Spacer()
                                 captureBar(
                                     mode: mode,
                                     screenSize: geo.size,
-                                    positions: onScreenPositions
+                                    positions: onScreenPositions,
+                                    pulse: guidedStep == .capture
                                 )
                                 // Clear the home-indicator gesture zone: pad
                                 // from the safe-area bottom when there is one
@@ -1149,6 +1203,33 @@ struct ContentView: View {
         )
     }
 
+    /// THE guided-mode trigger (GuidedCatch.isModeActive is the single seam —
+    /// KTD1): zero catches and not retired, or the DEBUG forced override
+    /// feeding a synthetic zero-catch input. Every guided surface (chrome,
+    /// pulse, ambient-banner suppression, rank moment) reads this one
+    /// property so no two screens can disagree.
+    private var guidedModeActive: Bool {
+        var forced = false
+        #if DEBUG
+        forced = GuidedCatchDebug.isForced()
+        #endif
+        return GuidedCatch.isModeActive(
+            catchCount: catches.count,
+            retired: GuidedCatch.isRetired(),
+            forcedZeroCatches: forced
+        )
+    }
+
+    /// Whether the DEBUG forced override is driving `guidedModeActive` —
+    /// read separately so the FORCED badge and telemetry guards stay honest.
+    private var guidedModeForced: Bool {
+        #if DEBUG
+        return GuidedCatchDebug.isForced()
+        #else
+        return false
+        #endif
+    }
+
     /// The interactive-visible set: the ambient visibility tier PLUS any
     /// tap-revealed plane. One definition for the label render loop, the
     /// metadata prefetch, and its signature — they must agree or labels
@@ -1303,7 +1384,9 @@ struct ContentView: View {
     /// toast below.
     @ViewBuilder
     private var indoorHintBanner: some View {
-        if pointedIndoors {
+        // The guided GoOutside step carries this hint's copy with coaching
+        // framing — one banner per condition (plan U2).
+        if pointedIndoors && !guidedModeActive {
             Text("Not many planes indoors.")
                 .font(Brand.Font.mono(size: 12, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -1810,12 +1893,13 @@ struct ContentView: View {
     private func captureBar(
         mode: CaptureMode,
         screenSize: CGSize,
-        positions: [String: CGPoint]
+        positions: [String: CGPoint],
+        pulse: Bool = false
     ) -> some View {
         HStack {
             bottomHangarButton
             Spacer()
-            captureButton(mode: mode, screenSize: screenSize, positions: positions)
+            captureButton(mode: mode, screenSize: screenSize, positions: positions, pulse: pulse)
             Spacer()
             bottomProfileButton
         }
@@ -3109,7 +3193,8 @@ struct ContentView: View {
     private func captureButton(
         mode: CaptureMode,
         screenSize: CGSize,
-        positions: [String: CGPoint]
+        positions: [String: CGPoint],
+        pulse: Bool = false
     ) -> some View {
         let isMulti: Bool = {
             if case .multi = mode { return true }
@@ -3130,6 +3215,12 @@ struct ContentView: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 ZStack {
+                    // Guided-mode capture pulse (R4, plan A1): enablement was
+                    // an opacity change nobody noticed — the ring makes the
+                    // moment loud for first-catch coaching.
+                    if pulse {
+                        CapturePulseRing()
+                    }
                     Circle()
                         .fill(Brand.Color.bgPrimary.opacity(0.7))
                         .frame(width: 72, height: 72)
