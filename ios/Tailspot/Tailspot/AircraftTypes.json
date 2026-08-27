@@ -49,7 +49,7 @@
   "make": "Agusta",
   "model": "T-129",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "A139": {
   "make": "AgustaWestland",
@@ -1227,7 +1227,7 @@
  },
  "AS50": {
   "make": "Airbus Helicopters",
-  "model": "H-125 Fennec",
+  "model": "H125 / AS350",
   "rarity": "uncommon",
   "type": "ga"
  },
@@ -1241,7 +1241,7 @@
   "make": "Aerospatiale",
   "model": "HH-65 Dolphin",
   "rarity": "uncommon",
-  "type": "ga"
+  "type": "mil"
  },
  "AS80": {
   "make": "Starck",
@@ -1547,7 +1547,7 @@
  },
  "B06": {
   "make": "Bell",
-  "model": "406",
+  "model": "206 JetRanger / LongRanger",
   "rarity": "uncommon",
   "type": "ga"
  },
@@ -2364,7 +2364,7 @@
  "BE36": {
   "lengthFt": 27.5,
   "make": "Beechcraft",
-  "model": "36 Bonanza 36",
+  "model": "36 Bonanza",
   "rarity": "common",
   "type": "ga",
   "wingspanFt": 33.5
@@ -2479,8 +2479,8 @@
   "lengthFt": 44.6,
   "make": "Beechcraft",
   "model": "99 Airliner",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "rare",
+  "type": "regional",
   "wingspanFt": 45.9
  },
  "BE9L": {
@@ -2664,8 +2664,8 @@
  "BN2P": {
   "make": "Britten-Norman",
   "model": "BN-2 Islander",
-  "rarity": "common",
-  "type": "ga"
+  "rarity": "uncommon",
+  "type": "regional"
  },
  "BN2T": {
   "make": "Britten-Norman",
@@ -3244,7 +3244,7 @@
  "C30J": {
   "lengthFt": 112.8,
   "make": "Lockheed Martin",
-  "model": "AC-130J Ghostrider",
+  "model": "C-130J Super Hercules",
   "rarity": "epic",
   "type": "mil",
   "wingspanFt": 132.6
@@ -3498,7 +3498,7 @@
  "C750": {
   "lengthFt": 72.3,
   "make": "Cessna",
-  "model": "750 Citation 10",
+  "model": "Citation X",
   "rarity": "uncommon",
   "type": "biz",
   "wingspanFt": 63.6
@@ -5133,8 +5133,8 @@
   "lengthFt": 51.8,
   "make": "De Havilland Canada",
   "model": "DHC-6 Twin Otter",
-  "rarity": "common",
-  "type": "ga",
+  "rarity": "uncommon",
+  "type": "regional",
   "wingspanFt": 65.0
  },
  "DHC7": {
@@ -5429,14 +5429,14 @@
   "make": "Embraer",
   "model": "E175-E2",
   "rarity": "common",
-  "type": "narrow"
+  "type": "regional"
  },
  "E290": {
   "lengthFt": 118.8,
   "make": "Embraer",
   "model": "E190-E2",
   "rarity": "uncommon",
-  "type": "narrow",
+  "type": "regional",
   "wingspanFt": 110.6
  },
  "E295": {
@@ -5444,7 +5444,7 @@
   "make": "Embraer",
   "model": "E195-E2",
   "rarity": "uncommon",
-  "type": "narrow",
+  "type": "regional",
   "wingspanFt": 115.2
  },
  "E2CB": {
@@ -5826,9 +5826,9 @@
   "type": "ga"
  },
  "EPIC": {
-  "make": "Air",
-  "model": "Epic LT",
-  "rarity": "common",
+  "make": "Epic Aircraft",
+  "model": "Epic LT / E1000",
+  "rarity": "rare",
   "type": "ga"
  },
  "EPX1": {
@@ -5864,9 +5864,9 @@
   "type": "ga"
  },
  "ESCA": {
-  "make": "Air",
+  "make": "Epic Aircraft",
   "model": "Epic Escape",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "ESCP": {
@@ -7417,17 +7417,17 @@
   "make": "Boeing Vertol",
   "model": "107",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "H47": {
-  "make": "Boeing Vertol",
-  "model": "114",
+  "make": "Boeing",
+  "model": "CH-47 Chinook",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "H500": {
-  "make": "Hughes",
-  "model": "369",
+  "make": "MD Helicopters",
+  "model": "MD 500 / 530",
   "rarity": "uncommon",
   "type": "ga"
  },
@@ -7435,7 +7435,7 @@
   "make": "Sikorsky",
   "model": "S-65",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "H53S": {
   "make": "Sikorsky",
@@ -7447,13 +7447,13 @@
   "make": "Sikorsky",
   "model": "S-70",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "H64": {
   "make": "McDonnell Douglas",
   "model": "AH-64 Apache",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "HA2": {
   "make": "Hollmann",
@@ -8956,8 +8956,8 @@
  "L410": {
   "make": "Let",
   "model": "L-410 Turbolet",
-  "rarity": "common",
-  "type": "ga"
+  "rarity": "uncommon",
+  "type": "regional"
  },
  "L5": {
   "lengthFt": 24.1,
@@ -10731,7 +10731,7 @@
   "make": "Nhi",
   "model": "HT-29",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "NI28": {
   "make": "Nieuport",
@@ -11010,8 +11010,8 @@
  "P212": {
   "make": "Tecnam",
   "model": "P-2012 Traveller",
-  "rarity": "common",
-  "type": "ga"
+  "rarity": "rare",
+  "type": "regional"
  },
  "P220": {
   "make": "Antoniewski",
@@ -13296,9 +13296,9 @@
   "type": "ga"
  },
  "SB91": {
-  "make": "De Schelde",
+  "make": "Saab",
   "model": "91 Safir",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "SBD": {
@@ -15321,7 +15321,7 @@
   "make": "Bell",
   "model": "204",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "UH12": {
   "make": "Hiller",
@@ -15448,7 +15448,7 @@
   "make": "Bell-Boeing",
   "model": "901 Osprey",
   "rarity": "epic",
-  "type": "ga",
+  "type": "mil",
   "wingspanFt": 45.8
  },
  "V221": {
