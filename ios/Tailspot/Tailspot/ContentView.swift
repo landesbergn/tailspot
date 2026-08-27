@@ -181,6 +181,8 @@ struct ContentView: View {
     /// brief misread doesn't nag). Auto-clears the moment it sees sky.
     @State private var pointedIndoors = false
     @State private var indoorStreak = 0
+    /// When the hint appeared — feeds `indoor_hint_cleared`'s duration.
+    @State private var indoorHintShownAt: Date?
     /// Latched compass warning. Set true after `compassBadDebounce`
     /// seconds of continuously-bad readings; cleared when accuracy
     /// crosses back under `compassGoodThreshold`. Drives the
@@ -1101,14 +1103,7 @@ struct ContentView: View {
             // shows, so a first-tick delay changes nothing observable.
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                let verdict = computeOutdoorVerdict(
-                    features: visualConfirm.latestSkyFeatures,
-                    gps: location.horizontalAccuracy
-                )
-                indoorStreak = verdict == .notSky ? indoorStreak + 1 : 0
-                let indoors = indoorStreak >= 5   // ~5 s sustained (was 3 —
-                                                  // the ambient nag was too eager, 2026-07-01)
-                if indoors != pointedIndoors { withAnimation { pointedIndoors = indoors } }
+                indoorHintTick()
             }
         }
         .sheet(isPresented: replaySheetPresented) {
@@ -2666,6 +2661,41 @@ struct ContentView: View {
             observerLon: row.observerLon,
             using: &rng
         ).map { GuessRoundQuestion(route: $0) }
+    }
+
+    /// One ~1 Hz tick of the ambient indoor-hint debounce: read the gate
+    /// verdict, advance the streak, flip `pointedIndoors` on a sustained
+    /// change, and fire the hint telemetry on each flip. Lives OUTSIDE
+    /// `body` — inlining this work in the `.task` closure pushed
+    /// ContentView.body over the compiler's type-check budget (2026-08-27;
+    /// see the ~880-line lesson from PR #184).
+    ///
+    /// Telemetry (2026-08-27 night-FP audit): the hint rode the same
+    /// verdict as the catch gate but was invisible in analytics. Shown
+    /// carries the tripping frame's features (same payload as
+    /// catch_blocked_outdoors); cleared carries how long it was up. Rapid
+    /// show/clear pairs are the flapping signature — deliberately not
+    /// smoothed here.
+    private func indoorHintTick() {
+        let skyFeatures = visualConfirm.latestSkyFeatures
+        let gpsAccuracy = location.horizontalAccuracy
+        let verdict = computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy)
+        indoorStreak = verdict == .notSky ? indoorStreak + 1 : 0
+        let indoors = indoorStreak >= 5   // ~5 s sustained (was 3 —
+                                          // the ambient nag was too eager, 2026-07-01)
+        guard indoors != pointedIndoors else { return }
+        withAnimation { pointedIndoors = indoors }
+        if indoors {
+            indoorHintShownAt = Date()
+            CatchTelemetry.fireIndoorHintShown(
+                features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
+            )
+        } else if let shownAt = indoorHintShownAt {
+            indoorHintShownAt = nil
+            CatchTelemetry.fireIndoorHintCleared(
+                shownSeconds: Int(Date().timeIntervalSince(shownAt).rounded())
+            )
+        }
     }
 
     /// v1 authenticity gate decision. Pure: maps the latest camera-frame

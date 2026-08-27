@@ -54,10 +54,28 @@ struct SkyCheckVerdictTests {
         // Field case (2026-06-25): a blank ceiling reads SMOOTH (e0.02),
         // identical to sky in structure — only the room's warm light tells
         // them apart. Blocking on warmth catches it. (warmth 0.13 ≥ 0.10,
-        // lum 0.20 ≥ 0.12 → warm → notSky.) 0.13 is the corpus's warm-
+        // lum 0.45 ≥ 0.30 → warm → notSky.) 0.13 is the corpus's warm-
         // ceiling floor — it must stay above the threshold through retunes.
-        let ceiling = SkyFeatures(edgeDensity: 0.02, tileVariance: 0.01, warmth: 0.13, meanLuminance: 0.20)
+        // Lum raised 0.20 → 0.45 with the 2026-08-27 color-trust retune:
+        // this now pins the LIT room; the dim ceiling deliberately passes
+        // (see dimWarmNightSceneFailsOpen).
+        let ceiling = SkyFeatures(edgeDensity: 0.02, tileVariance: 0.01, warmth: 0.13, meanLuminance: 0.45)
         #expect(gate.verdict(features: ceiling, gpsAccuracyMeters: 19) == .notSky)
+    }
+
+    @Test func dimWarmNightSceneFailsOpen() {
+        // The 2026-08-27 night false-positive audit: outdoor night catches
+        // under warm artificial light (patio string lights, streetlights —
+        // photo-verified outdoors) read warmth 0.13–0.25 at lum 0.13–0.30,
+        // and 10/10 user-reviewed indoor flags that week were Kept. Below
+        // the raised color-trust floor (0.30) the white balance is not
+        // trusted, so a dim warm frame must NOT read as an interior — even
+        // though a dim warm-lit ceiling (the old lum-0.20 pin) now slips
+        // through with it. Night spotting must work; fail open.
+        let nightPatio = SkyFeatures(edgeDensity: 0.09, tileVariance: 0.03, warmth: 0.19, meanLuminance: 0.13)
+        #expect(gate.verdict(features: nightPatio, gpsAccuracyMeters: 14) != .notSky)
+        let dimCeiling = SkyFeatures(edgeDensity: 0.02, tileVariance: 0.01, warmth: 0.13, meanLuminance: 0.20)
+        #expect(gate.verdict(features: dimCeiling, gpsAccuracyMeters: 19) != .notSky)
     }
 
     @Test func warmEveningOutdoorsIsNotBlocked() {
