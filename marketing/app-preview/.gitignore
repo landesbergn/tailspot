@@ -1,0 +1,3 @@
+# Rendered preview masters. Regenerable via tools/app-preview/make-*.sh,
+# so kept out of history (same rule as app-store-screenshots/export).
+*.mov
