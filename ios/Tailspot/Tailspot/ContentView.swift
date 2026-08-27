@@ -271,6 +271,11 @@ struct ContentView: View {
     /// itself is once-per-install (persisted), but this short-circuits the
     /// per-tick filter work in `.onReceive(adsb.$observed)` after it's latched.
     @State private var firstPlaneSeenLatched = false
+    /// Session latch for `first_label_on_screen` — a label actually rendered
+    /// in frame (vs. merely in range, which is `first_plane_seen`). Set via an
+    /// async hop out of the render pass; the fire's own UserDefaults latch
+    /// makes a stray double-hop harmless.
+    @State private var firstLabelSeenLatched = false
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
     /// row doesn't do a FileManager directory scan on every body eval. Refreshed
     /// when the debug panel opens and after a recording is toggled off.
@@ -589,6 +594,20 @@ struct ContentView: View {
                                 onScreenProjected.map { ($0.icao, $0.position) },
                                 uniquingKeysWith: { first, _ in first }
                             )
+                            // Activation funnel (R9): a label ACTUALLY rendered in
+                            // frame — unlike `first_plane_seen`, which fires on the
+                            // range filter even for a plane behind the user. Hop out
+                            // of the render pass; the fire's persisted latch makes a
+                            // duplicate hop a no-op.
+                            let _ = {
+                                guard !firstLabelSeenLatched, !onScreenProjected.isEmpty else { return }
+                                let count = onScreenProjected.count
+                                DispatchQueue.main.async {
+                                    guard !firstLabelSeenLatched else { return }
+                                    ActivationTelemetry.fireFirstLabelOnScreenOnce(onScreenCount: count)
+                                    firstLabelSeenLatched = true
+                                }
+                            }()
                             // Visual confirmation: tell the detector where
                             // the current lock target is predicted to be.
                             // Lock-only write (safe inside body); the
@@ -3895,6 +3914,7 @@ struct ContentView: View {
                 pinnedIcao = icao
                 revealedIcao = nil   // a normal pin is a visible plane, not a reveal
                 recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
+                ActivationTelemetry.fireFirstLabelTapOnce()
                 // forceLock is the only way into .locked — the user
                 // just pointed at this plane, so the engine jumps
                 // straight to a locked state.
@@ -3929,6 +3949,7 @@ struct ContentView: View {
             pinnedIcao = icao
             revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
+            ActivationTelemetry.fireFirstLabelTapOnce()
             lockOn.forceLock(targetIcao24: icao, now: now)
             return
         }

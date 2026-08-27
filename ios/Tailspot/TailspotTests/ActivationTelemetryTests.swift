@@ -81,12 +81,41 @@ struct ActivationTelemetryTests {
         #expect(defaults.bool(forKey: ActivationTelemetry.firstPlaneSeenFiredKey))
     }
 
+    @Test func firstLabelOnScreenLatchesAfterOneFire() throws {
+        let defaults = try freshDefaults()
+        #expect(!defaults.bool(forKey: ActivationTelemetry.firstLabelOnScreenFiredKey))
+        ActivationTelemetry.fireFirstLabelOnScreenOnce(onScreenCount: 2, defaults: defaults)
+        #expect(defaults.bool(forKey: ActivationTelemetry.firstLabelOnScreenFiredKey))
+        // Idempotent — this fires from the 30 Hz render path via an async
+        // hop, so a duplicate hop must be a no-op.
+        ActivationTelemetry.fireFirstLabelOnScreenOnce(onScreenCount: 5, defaults: defaults)
+        #expect(defaults.bool(forKey: ActivationTelemetry.firstLabelOnScreenFiredKey))
+    }
+
+    @Test func firstLabelTapLatchesAfterOneFire() throws {
+        let defaults = try freshDefaults()
+        #expect(!defaults.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey))
+        ActivationTelemetry.fireFirstLabelTapOnce(defaults: defaults)
+        #expect(defaults.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey))
+        ActivationTelemetry.fireFirstLabelTapOnce(defaults: defaults)
+        #expect(defaults.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey))
+    }
+
+    @Test func labelEventNamesArePinnedFunnelVocabulary() {
+        // PostHog funnel vocabulary (R9) — a rename silently orphans the
+        // activation dashboard.
+        #expect(ActivationTelemetry.firstLabelOnScreenEvent == "first_label_on_screen")
+        #expect(ActivationTelemetry.firstLabelTapEvent == "first_label_tap")
+    }
+
     @Test func latchKeysAreDistinctFromEachOtherAndFirstCatch() {
-        // Three independent milestones — a shared key would collapse the
+        // Independent milestones — a shared key would collapse the
         // funnel into one event.
         let keys = [
             ActivationTelemetry.arFirstFrameFiredKey,
             ActivationTelemetry.firstPlaneSeenFiredKey,
+            ActivationTelemetry.firstLabelOnScreenFiredKey,
+            ActivationTelemetry.firstLabelTapFiredKey,
             CatchTelemetry.firstCatchFiredKey,
         ]
         #expect(Set(keys).count == keys.count)
