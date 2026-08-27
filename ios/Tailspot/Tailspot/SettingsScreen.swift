@@ -186,7 +186,7 @@ struct SettingsScreen: View {
             } footer: {
                 Text(notifDenied
                      ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges."
-                     : "One evening nudge when a day without a catch would break your streak. Nothing else, ever.")
+                     : "Get notified if your streak is at risk.")
             }
             .listRowBackground(Brand.Color.bgElevated)
 
