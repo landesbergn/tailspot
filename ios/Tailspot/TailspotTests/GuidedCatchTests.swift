@@ -75,6 +75,19 @@ struct GuidedCatchTests {
         #expect(GuidedCatch.isModeActive(catchCount: 0, retired: false))
     }
 
+    @Test func debugForcedFlagRoundTrips() throws {
+        // AE8 plumbing: the wrench toggle reads back what it wrote, and a
+        // fresh defaults domain starts un-forced.
+        let suite = "guided-debug-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        #expect(!GuidedCatchDebug.isForced(defaults: defaults))
+        GuidedCatchDebug.setForced(true, defaults: defaults)
+        #expect(GuidedCatchDebug.isForced(defaults: defaults))
+        GuidedCatchDebug.setForced(false, defaults: defaults)
+        #expect(!GuidedCatchDebug.isForced(defaults: defaults))
+    }
+
     @Test func retirementLatchPersistsViaDefaults() throws {
         let suite = "guided-catch-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))

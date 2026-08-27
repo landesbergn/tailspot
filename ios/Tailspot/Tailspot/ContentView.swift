@@ -78,6 +78,11 @@ struct ContentView: View {
     /// Last line the STREAK row printed (permission state, what's queued,
     /// or the result of a manual fire).
     @State private var streakDebugStatus = "—"
+    /// Re-reads the GUIDED row (the forced flag lives in UserDefaults).
+    @State private var guidedDebugRefresh = 0
+    /// 🎯 Loop armed: the next simulated reveal's dismissal continues into
+    /// the synthesized trophy + forced weekly-rank card (plan U5).
+    @State private var forcedLoopArmed = false
     #endif
     /// DEBUG-only: presents the trophy-icon gallery for visual review.
     @State private var showIconGallery = false
@@ -615,7 +620,11 @@ struct ContentView: View {
                             // of the render pass; the fire's persisted latch makes a
                             // duplicate hop a no-op.
                             let _ = {
-                                guard !firstLabelSeenLatched, !onScreenProjected.isEmpty else { return }
+                                // Forced runs stay silent AND latch-free —
+                                // these are once-per-install events a forced
+                                // run would burn for real (R10/KTD6).
+                                guard !firstLabelSeenLatched, !guidedModeForced,
+                                      !onScreenProjected.isEmpty else { return }
                                 let count = onScreenProjected.count
                                 DispatchQueue.main.async {
                                     guard !firstLabelSeenLatched else { return }
@@ -820,6 +829,7 @@ struct ContentView: View {
                         .padding(.horizontal, 12)
 
                         streakDebugRow
+                        guidedDebugRow
                         #endif
 
                         Spacer(minLength: 0)
@@ -1036,6 +1046,9 @@ struct ContentView: View {
                     captureInFlight = false
                     guessShownAt = nil
                     presentSuspectReviewIfNeeded()
+                    #if DEBUG
+                    if reveal.isSimulated { advanceForcedGuidedLoopIfArmed() }
+                    #endif
                 },
                 onViewInHangar: {
                     pendingReveal = nil
@@ -2683,8 +2696,10 @@ struct ContentView: View {
                 // Arm the weekly-rank landing moment (plan U3, R8) and
                 // pre-warm the rank fetch so it resolves during the reveal
                 // (KTD4). Guided-active only — a veteran's manual
-                // delete-everything edge shouldn't celebrate.
-                if guidedModeActive {
+                // delete-everything edge shouldn't celebrate — and never
+                // from a forced run (its loop is fully simulated and must
+                // not write the retirement latch, R10).
+                if guidedModeActive, !guidedModeForced {
                     weeklyRankArmedCatch = first
                     weeklyRankPrewarm.start(isUploaded: { first.uploadedAt != nil })
                 }
@@ -2976,6 +2991,63 @@ struct ContentView: View {
     /// included, since that is the whole point of the row.
     private var streakSummaryNow: Streaks.Summary {
         Streaks.summary(catches: catches)
+    }
+
+    /// Forced guided-mode row (plan U5, R10): toggles the synthetic
+    /// zero-catch input (KTD1 — the badge and chrome follow on their own),
+    /// and 🎯 Loop runs the whole celebration on simulated inputs —
+    /// simulated reveal → sample trophy → weekly-rank card with a REAL
+    /// read-only rank fetch, badged FORCED. No Catch rows, no latch
+    /// writes, no activation telemetry (fire sites guard on the forced
+    /// flag).
+    private var guidedDebugRow: some View {
+        HStack(spacing: 8) {
+            Text("GUIDED")
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary)
+            Button(GuidedCatchDebug.isForced() ? "🎯 FORCED" : "🎯 Off") {
+                GuidedCatchDebug.setForced(!GuidedCatchDebug.isForced())
+                guidedDebugRefresh &+= 1
+            }
+            Button("🎯 Loop") {
+                forcedLoopArmed = true
+                if !GuidedCatchDebug.isForced() {
+                    GuidedCatchDebug.setForced(true)
+                    guidedDebugRefresh &+= 1
+                }
+                simulateCatch()
+            }
+        }
+        .font(Brand.Font.mono(size: 11, weight: .bold))
+        .buttonStyle(.bordered)
+        .tint(GuidedCatchDebug.isForced() ? Brand.Color.alertAdvisory : Brand.Color.cyan)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        // UserDefaults isn't observable — the counter re-evaluates the row.
+        .id(guidedDebugRefresh)
+    }
+
+    /// The simulated reveal just dismissed with the forced loop armed:
+    /// synthesize the trophy moment, then present the rank card once the
+    /// trophy drains. Real read-only fetch; `forced: true` badges the card
+    /// and keeps every write path (latch, telemetry, rows) untouched.
+    private func advanceForcedGuidedLoopIfArmed() {
+        guard forcedLoopArmed, guidedModeForced else { return }
+        forcedLoopArmed = false
+        unlockCenter.debugEnqueueSample(secret: false)
+        weeklyRankResolving = true
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(20)
+            while unlockCenter.hasPending && Date() < deadline {
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            let response = try? await TailspotAccountClient().leaderboard(window: .week, limit: 1)
+            let rank = WeeklyRankArbitration.displayRank(response?.me)
+            withAnimation(.easeOut(duration: 0.25)) {
+                weeklyRankMoment = WeeklyRankMoment(rank: rank, forced: true)
+            }
+            weeklyRankResolving = false
+        }
     }
     #endif
 
@@ -4084,7 +4156,7 @@ struct ContentView: View {
                 pinnedIcao = icao
                 revealedIcao = nil   // a normal pin is a visible plane, not a reveal
                 recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
-                ActivationTelemetry.fireFirstLabelTapOnce()
+                if !guidedModeForced { ActivationTelemetry.fireFirstLabelTapOnce() }
                 // forceLock is the only way into .locked — the user
                 // just pointed at this plane, so the engine jumps
                 // straight to a locked state.
@@ -4119,7 +4191,7 @@ struct ContentView: View {
             pinnedIcao = icao
             revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
-            ActivationTelemetry.fireFirstLabelTapOnce()
+            if !guidedModeForced { ActivationTelemetry.fireFirstLabelTapOnce() }
             lockOn.forceLock(targetIcao24: icao, now: now)
             return
         }
