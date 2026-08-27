@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First Catch Experience - Plan</title>
+<style>
+  :root {
+    --ink:#1c2026; --muted:#5b6472; --line:#d7dbe2; --bg:#ffffff; --bg-soft:#f5f6f8;
+    --accent:#0b66c3; --accent-soft:#eaf2fb; --accent-text:#0a4f97;
+    --warn:#a34a12; --warn-soft:#fdf1e7;
+    --ok:#1c7a3d; --ok-soft:#eaf6ee;
+    --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.55 -apple-system, "Helvetica Neue", Segoe UI, Arial, sans-serif; }
+  .page { max-width:920px; margin-inline:auto; padding:40px 24px 64px; }
+  p, li, dd { max-width:70ch; }
+  h1 { font-size:30px; line-height:1.2; margin:0 0 6px; }
+  h2 { font-size:22px; margin:44px 0 10px; border-bottom:1.5px solid var(--line); padding-bottom:6px; }
+  h3 { font-size:17px; margin:26px 0 8px; }
+  a { color:var(--accent-text); }
+  code { font-family:var(--mono); font-size:0.86em; background:var(--bg-soft); padding:1px 5px; border-radius:4px; }
+  .eyebrow { font-family:var(--mono); font-size:12px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); }
+  .meta { display:flex; flex-wrap:wrap; gap:8px 24px; margin:14px 0 4px; padding:12px 16px;
+          background:var(--bg-soft); border:1px solid var(--line); border-radius:10px; }
+  .meta dl { display:flex; gap:6px; margin:0; }
+  .meta dt { font-family:var(--mono); font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; align-self:center; }
+  .meta dd { margin:0; font-family:var(--mono); font-size:13px; }
+  nav.toc { margin:18px 0 0; font-size:14px; }
+  nav.toc a { margin-right:14px; }
+  .stats { display:flex; flex-wrap:wrap; gap:12px; margin:22px 0 0; }
+  .stat { flex:1 1 150px; border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:var(--bg); }
+  .stat b { display:block; font-size:24px; }
+  .stat span { font-size:12.5px; color:var(--muted); }
+  table { border-collapse:collapse; width:100%; margin:10px 0 18px; font-size:14.5px; }
+  th, td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--bg-soft); font-size:13px; }
+  td.id, th.id { font-family:var(--mono); white-space:nowrap; width:1%; }
+  .kd { border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin:10px 0; }
+  .kd .id { font-family:var(--mono); color:var(--accent-text); font-size:13px; }
+  .kd p { margin:6px 0 0; font-size:14.5px; }
+  .settled { color:var(--muted); font-size:13.5px; }
+  .flow { border:1px solid var(--line); border-radius:10px; padding:12px 16px; margin:10px 0; }
+  figure { margin:18px 0; }
+  figcaption { font-size:12.5px; color:var(--muted); margin-top:6px; max-width:70ch; }
+  .wrap-x { overflow-x:auto; }
+  .wire { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  footer.composition-signal { margin-top:56px; border-top:1px solid var(--line); padding-top:12px;
+    font-family:var(--mono); font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<p class="eyebrow">Requirements-only unified plan</p>
+<h1>First Catch Experience - Plan</h1>
+<div class="meta">
+  <dl><dt>type</dt><dd>feat</dd></dl>
+  <dl><dt>date</dt><dd><time datetime="2026-08-27">2026-08-27</time></dd></dl>
+  <dl><dt>topic</dt><dd>first-catch-experience</dd></dl>
+  <dl><dt>artifact_contract</dt><dd>ce-unified-plan/v1</dd></dl>
+  <dl><dt>artifact_readiness</dt><dd>requirements-only</dd></dl>
+  <dl><dt>product_contract_source</dt><dd>ce-brainstorm</dd></dl>
+  <dl><dt>execution</dt><dd>code</dd></dl>
+</div>
+
+<nav class="toc">
+  <a href="#goal-capsule">Goal Capsule</a>
+  <a href="#product-contract">Product Contract</a>
+  <a href="#product-requirements">Requirements</a>
+  <a href="#key-flows">Flows</a>
+  <a href="#acceptance-examples">Acceptance</a>
+  <a href="#scope-boundaries">Scope</a>
+  <a href="#outstanding-questions">Questions</a>
+  <a href="#sources">Sources</a>
+</nav>
+
+<div class="stats">
+  <div class="stat"><b>44%</b><span>post-GA activation (29 of 66 new users ever caught) — the number to move</span></div>
+  <div class="stat"><b>21</b><span>had a catchable plane nearby and never caught; none stopped by gates</span></div>
+  <div class="stat"><b>37</b><span>existing users with zero catches the mode must still reach</span></div>
+  <div class="stat"><b>~10 min</b><span>median first-open → first-catch for 1.0.1 users who do activate</span></div>
+</div>
+
+<section id="goal-capsule">
+<h2>Goal Capsule</h2>
+<ul>
+  <li><b>Objective:</b> A person who installs Tailspot and never catches a plane becomes rare. The first catch itself teaches the whole game — spot, center, capture, reveal with route guess and trophy — and ends with the user seeing their place on the weekly leaderboard. Measured as zero-catch → first-catch activation rising from the 44% post-GA baseline.</li>
+  <li><b>Product authority:</b> Noah's calls in the 2026-08-27 brainstorm dialogue (audience, direction, weekly-board ending), on top of the 2026-08-17 Flight Plan board verdicts. The first-catch activation slice (R4/R5 of <code>docs/plans/2026-08-17-1443-feat-v1-1-release-scope-plan.md</code>) slipped v1.1, which was submitted for review 2026-08-26; this plan supersedes and deepens that slice for the v1.2 realm.</li>
+  <li><b>Open blockers:</b> none.</li>
+</ul>
+</section>
+
+<section id="product-contract">
+<h2>Product Contract</h2>
+
+<h3 id="summary">Summary</h3>
+<p>A guided first-catch mode for any user with zero catches: the viewfinder actively steers them to the nearest catchable plane, coaches the center-and-capture mechanic with a visually loud capture affordance, and says so honestly when the sky is quiet. The first catch runs the full existing loop — reveal, route guess, First Catch trophy — and lands on a new "your place this week" moment on the existing weekly leaderboard.</p>
+
+<h3 id="problem-frame">Problem Frame</h3>
+<p>Since GA (2026-08-08), 66 new people opened the app and only 29 ever caught a plane. The old assumption — that the onboarding flow was the leak — is dead: 94% finish the three-step onboarding, ~95% grant both permissions, and the AR view starts for 61 of 66. The funnel breaks after that, in two places.</p>
+
+<figure>
+<div class="wrap-x">
+<svg viewBox="0 0 860 250" width="860" height="250" role="img" aria-label="Activation funnel since GA">
+  <style> text { font:13px -apple-system, Arial, sans-serif; fill:#1c2026; } .n { font:600 15px ui-monospace, Menlo, monospace; } .d { fill:#5b6472; font-size:11.5px; } </style>
+  <g>
+    <rect x="20"  y="30" width="120" height="150" fill="#eaf2fb" stroke="#0b66c3"/>
+    <rect x="180" y="39" width="120" height="141" fill="#eaf2fb" stroke="#0b66c3"/>
+    <rect x="340" y="41" width="120" height="139" fill="#eaf2fb" stroke="#0b66c3"/>
+    <rect x="500" y="66" width="120" height="114" fill="#eaf2fb" stroke="#0b66c3"/>
+    <rect x="660" y="114" width="120" height="66" fill="#eaf6ee" stroke="#1c7a3d"/>
+  </g>
+  <g text-anchor="middle">
+    <text class="n" x="80"  y="55">66</text><text x="80"  y="200">new users</text>
+    <text class="n" x="240" y="63">62</text><text x="240" y="200">finished onboarding</text>
+    <text class="n" x="400" y="65">61</text><text x="400" y="200">AR view started</text>
+    <text class="n" x="560" y="90">50</text><text x="560" y="200">plane nearby</text>
+    <text class="n" x="720" y="137">29</text><text x="720" y="200">first catch</text>
+  </g>
+  <g text-anchor="middle">
+    <text class="d" x="480" y="20">Leak 2 — 11 never had a plane in range</text>
+    <text class="d" x="643" y="235">Leak 1 — 21 had a catchable plane and never caught</text>
+  </g>
+  <line x1="480" y1="24" x2="480" y2="60" stroke="#a34a12" stroke-dasharray="3 3"/>
+  <line x1="643" y1="222" x2="643" y2="185" stroke="#a34a12" stroke-dasharray="3 3"/>
+</svg>
+</div>
+<figcaption>Unique post-GA users reaching each milestone (PostHog, 2026-08-08 → 2026-08-26, Noah excluded). "Plane nearby" is the <code>first_plane_seen</code> event, which fires on the visibility filter regardless of where the phone points.</figcaption>
+</figure>
+
+<p><b>Leak 1 — 21 users had a catchable plane nearby and never caught (32% of all new users).</b> Decomposed per person: 9 never touched the screen again, 11 fired only miss events (6 tapped empty sky — one hunted across 3 sessions with 40 empty-sky taps and never landed on a plane; 5 saw only the compass-error caution), and exactly 1 was ever denied by a gate (a grounded-plane tap). Zero of the 21 ever successfully tapped a plane label. Nine of them returned for 2–4 sessions and still stalled. The catch gates are not the problem; reaching a plane is.</p>
+<p><b>Leak 2 — 11 users got a working AR view and never had a plane in range</b>, the quiet-sky and coverage problem.</p>
+<p>Three verified mechanics explain leak 1. Catching requires aim — the plane must sit in a tight central catch zone (lone-plane-on-frame and tap-pin are the only exceptions) — and nothing teaches that. The capture button's only "you can catch now" signal is an opacity change from 0.4 to 1.0. And nothing steers the user toward a plane that is in range but off-frame, which <code>first_plane_seen</code> proves is common: it fires for planes the user may never have had on screen at all.</p>
+
+<h3 id="key-decisions">Key Decisions</h3>
+<div class="kd"><span class="id">KD1</span> — <b>The trigger is zero catches, not first launch.</b> <span class="settled">(session-settled: user-directed — chosen over fresh-installs-only and over adding a re-engagement nudge: keying off "no catches yet" reaches the 37 existing never-activated users on their next session without expanding scope into notifications.)</span>
+<p>Governs R1.</p></div>
+<div class="kd"><span class="id">KD2</span> — <b>Guidance is live coaching on the real sky, not a canned tutorial, quest card, or relaxed catch rule.</b> <span class="settled">(session-settled: user-approved — chosen over a persistent quest checklist (viewfinder clutter), a radar-orientation-first flow (a screen before the fun), and first-catch aim relaxation (undercuts the earned catch): in-viewfinder steering attacks the verified aim gap directly.)</span>
+<p>Governs R2, R3, R4.</p></div>
+<div class="kd"><span class="id">KD3</span> — <b>Simulated first catch stays parked.</b> <span class="settled">(session-settled: user-directed — 2026-08-17 Flight Plan board verdict, reaffirmed here: teaching happens only on real planes; a fake catch would spend the first-catch moment on something that isn't real.)</span></div>
+<div class="kd"><span class="id">KD4</span> — <b>The first-catch payoff lands on the weekly leaderboard window.</b> <span class="settled">(session-settled: user-directed — chosen over the all-time board: a board that reset this week is climbable for someone with one catch. The weekly window already shipped, so this is a landing moment, not a dependency.)</span>
+<p>Governs R8.</p></div>
+<div class="kd"><span class="id">KD5</span> — <b>When the compass is bad, guidance degrades honestly instead of mis-steering.</b> <span class="settled">(session-settled: user-approved — 5 of the 21 stalled users saw only the compass caution; steering arrows on a bad heading would point at empty sky and teach distrust.)</span>
+<p>Governs R5.</p></div>
+
+<h3 id="product-requirements">Requirements</h3>
+
+<p><b>Guided catch mode</b></p>
+<table>
+  <tr><th class="id">ID</th><th>Requirement</th></tr>
+  <tr><td class="id" id="r1">R1.</td><td>The guided first-catch experience is active for any user with zero catches — fresh installs and existing users alike — and retires permanently once their first catch lands.</td></tr>
+  <tr><td class="id" id="r2">R2.</td><td>When a catchable plane is in range but not in frame, the viewfinder steers the user toward it: which way to turn, roughly how far away it is, and what it is.</td></tr>
+  <tr><td class="id" id="r3">R3.</td><td>Coaching names the current mechanic one step at a time — find the plane, center it, capture — advancing on the user's actual state rather than on a timer.</td></tr>
+  <tr><td class="id" id="r4">R4.</td><td>The capture affordance becomes visually loud (a pulse or equivalent) the moment a catch is possible, replacing the current opacity-only signal.</td></tr>
+  <tr><td class="id" id="r5">R5.</td><td>When heading accuracy is poor, guidance stops steering and says so — prompting calibration — rather than pointing arrows on a heading it can't trust. Per KD5.</td></tr>
+</table>
+
+<figure>
+<div class="wire">
+<svg viewBox="0 0 250 470" width="250" height="470" role="img" aria-label="Guided viewfinder wireframe">
+  <style> .w text { font:11px ui-monospace, Menlo, monospace; fill:#1c2026; } .w .d { fill:#5b6472; } </style>
+  <g class="w">
+    <rect x="1" y="1" width="248" height="468" rx="24" fill="#dfe6ee" stroke="#1c2026" stroke-width="2"/>
+    <rect x="14" y="16" width="222" height="46" rx="8" fill="#fff" stroke="#1c2026" stroke-width="1.5"/>
+    <text x="24" y="35">[step prompt: turn until the</text>
+    <text x="24" y="50">plane is in view]</text>
+    <path d="M226 210 l14 10 -14 10 z" fill="#a34a12"/>
+    <rect x="118" y="232" width="118" height="34" rx="6" fill="#fff" stroke="#a34a12" stroke-width="1.5"/>
+    <text x="126" y="246">[plane id · type]</text>
+    <text x="126" y="260" class="d">[distance · turn right]</text>
+    <rect x="97" y="170" width="56" height="56" rx="8" fill="none" stroke="#8a90a0" stroke-dasharray="4 3" stroke-width="1.5"/>
+    <circle cx="125" cy="410" r="29" fill="#fff" stroke="#0b66c3" stroke-width="2.5"/>
+    <circle cx="125" cy="410" r="37" fill="none" stroke="#0b66c3" stroke-opacity=".35" stroke-width="4"/>
+    <circle cx="125" cy="410" r="45" fill="none" stroke="#0b66c3" stroke-opacity=".15" stroke-width="4"/>
+    <text x="102" y="414">CAPTURE</text>
+  </g>
+</svg>
+<svg viewBox="0 0 250 470" width="250" height="470" role="img" aria-label="Quiet sky wireframe">
+  <g style="font:11px ui-monospace, Menlo, monospace; fill:#1c2026;">
+    <rect x="1" y="1" width="248" height="468" rx="24" fill="#eef1f5" stroke="#1c2026" stroke-width="2"/>
+    <rect x="24" y="120" width="202" height="150" rx="10" fill="#fff" stroke="#a34a12" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <text x="38" y="148">[quiet-sky headline]</text>
+    <text x="38" y="172" style="fill:#5b6472">[honest: nothing catchable</text>
+    <text x="38" y="187" style="fill:#5b6472">is in range right now —</text>
+    <text x="38" y="202" style="fill:#5b6472">the app is working]</text>
+    <text x="38" y="232" style="fill:#5b6472">[expectation: try again /</text>
+    <text x="38" y="247" style="fill:#5b6472">listen for one]</text>
+  </g>
+</svg>
+</div>
+<figcaption>Directional only — illustrates the intended user-facing shape of R2–R4 (left) and R6 (right). Exact colors, spacing, copy, and component choices are placeholders for review, not requirements.</figcaption>
+</figure>
+
+<p><b>Quiet sky</b></p>
+<table>
+  <tr><th class="id">ID</th><th>Requirement</th></tr>
+  <tr><td class="id" id="r6">R6.</td><td>When nothing catchable is in range, the guided experience says so honestly — the sky is quiet, the app is not broken — and sets an expectation for when to try again, without promising traffic it can't predict.</td></tr>
+</table>
+
+<p><b>Completing the loop</b></p>
+<table>
+  <tr><th class="id">ID</th><th>Requirement</th></tr>
+  <tr><td class="id" id="r7">R7.</td><td>The first catch runs the full existing loop unchanged: the reveal card, the route-guess bonus round, and the First Catch trophy.</td></tr>
+  <tr><td class="id" id="r8">R8.</td><td>After the first-catch celebration completes, the user is shown their place on the THIS WEEK leaderboard window. Per KD4.</td></tr>
+</table>
+
+<figure>
+<div class="wrap-x">
+<svg viewBox="0 0 860 90" width="860" height="90" role="img" aria-label="First-catch loop ending">
+  <style> .s text { font:12px -apple-system, Arial, sans-serif; fill:#1c2026; } .s .d { fill:#5b6472; font-size:10.5px; } </style>
+  <g class="s">
+    <rect x="10"  y="20" width="130" height="50" rx="8" fill="#fff" stroke="#1c2026" stroke-width="1.5"/>
+    <text x="26" y="42">Catch lands</text><text x="26" y="58" class="d">haptic + shutter</text>
+    <rect x="180" y="20" width="130" height="50" rx="8" fill="#fff" stroke="#1c2026" stroke-width="1.5"/>
+    <text x="196" y="42">Reveal card</text><text x="196" y="58" class="d">plane identity</text>
+    <rect x="350" y="20" width="130" height="50" rx="8" fill="#fff" stroke="#1c2026" stroke-width="1.5"/>
+    <text x="366" y="42">Route guess</text><text x="366" y="58" class="d">existing round</text>
+    <rect x="520" y="20" width="130" height="50" rx="8" fill="#fff" stroke="#1c2026" stroke-width="1.5"/>
+    <text x="536" y="42">First Catch trophy</text><text x="536" y="58" class="d">existing</text>
+    <rect x="690" y="20" width="160" height="50" rx="8" fill="#eaf2fb" stroke="#0b66c3" stroke-width="2"/>
+    <text x="706" y="42">Place THIS WEEK</text><text x="706" y="58" class="d">NEW — R8 moment</text>
+    <g fill="#5b6472"><text x="152" y="50">→</text><text x="322" y="50">→</text><text x="492" y="50">→</text><text x="662" y="50">→</text></g>
+  </g>
+</svg>
+</div>
+<figcaption>The first-catch loop F1 sequences. Only the final step is new surface; the rest is existing shipped behavior.</figcaption>
+</figure>
+
+<p><b>Measurement</b></p>
+<table>
+  <tr><th class="id">ID</th><th>Requirement</th></tr>
+  <tr><td class="id" id="r9">R9.</td><td>Telemetry can tell whether this worked: events distinguish "a plane label actually rendered on screen" and "the user tapped a visible label" — the two gaps that currently make the 21 stalled users unexplainable. Existing event semantics are preserved.</td></tr>
+</table>
+
+<h3 id="key-flows">Key Flows</h3>
+<div class="flow">
+  <p>F1. <b>Zero-catch user, plane in range</b> — <b>Trigger:</b> a zero-catch user opens the viewfinder with a catchable plane nearby.<br>
+  <b>Steps:</b> steering points them to the plane (R2) → coaching advances as they find and center it (R3) → the capture affordance goes loud (R4) → catch → reveal, route guess, First Catch trophy (R7) → their place on this week's leaderboard (R8). The mode retires (R1).<br>
+  <b>Covers:</b> R1, R2, R3, R4, R7, R8.</p>
+</div>
+<div class="flow">
+  <p>F2. <b>Zero-catch user, quiet sky</b> — <b>Trigger:</b> a zero-catch user opens the viewfinder with nothing catchable in range.<br>
+  <b>Steps:</b> the honest quiet-sky state explains that the app works and the sky is quiet, and sets a return expectation (R6). Next session with traffic, F1 runs.<br>
+  <b>Covers:</b> R1, R6.</p>
+</div>
+<div class="flow">
+  <p>F3. <b>Bad compass during guidance</b> — <b>Trigger:</b> heading accuracy degrades while F1 is steering.<br>
+  <b>Steps:</b> steering stops, the experience says the compass needs calibrating and how (R5); steering resumes when the heading recovers.<br>
+  <b>Covers:</b> R5.</p>
+</div>
+
+<h3 id="acceptance-examples">Acceptance Examples</h3>
+<ul>
+  <li>AE1. <b>Covers R1.</b> Given one of the 37 existing zero-catch users updates and opens the app, the guided experience is active. Given a user with one catch, nothing from this plan appears.</li>
+  <li>AE2. <b>Covers R2.</b> Given a catchable plane 4 km away behind the user, the viewfinder tells them which way to turn before any label is on screen.</li>
+  <li>AE3. <b>Covers R4.</b> Given a plane enters the catch zone, the capture affordance visibly changes beyond opacity; given the zone empties (and no lone-plane or pinned exception applies), it returns to quiet.</li>
+  <li>AE4. <b>Covers R5.</b> Given heading accuracy is poor, no directional steering is shown — the calibration prompt is, and steering returns when accuracy recovers.</li>
+  <li>AE5. <b>Covers R6.</b> Given no catchable traffic in range, the user sees the quiet-sky state rather than an empty viewfinder; it does not claim traffic is coming at any specific time.</li>
+  <li>AE6. <b>Covers R8.</b> Given the first catch's celebration finishes, the user sees their rank on the THIS WEEK window — not the all-time board.</li>
+  <li>AE7. <b>Covers R9.</b> Given a labeled plane renders on screen and the user never taps it, the funnel can now distinguish that user from one whose plane never appeared on screen.</li>
+</ul>
+
+<h3 id="success-criteria">Success Criteria</h3>
+<ul>
+  <li>Zero-catch → first-catch activation for new users rises from the 44% baseline (66 → 29 since GA). Directional target: ~60%, to be re-baselined once R9's events land.</li>
+  <li>The "plane nearby but never caught" cohort (32% of new users today) shrinks, measured with R9's new events rather than the ambiguous <code>first_plane_seen</code>.</li>
+  <li>Median first-open → first-catch stays in the ~10-minute band for users with traffic in range.</li>
+</ul>
+
+<h3 id="scope-boundaries">Scope Boundaries</h3>
+<ul>
+  <li>The three-step onboarding (welcome → permissions → handle) is untouched — the data cleared it as a leak.</li>
+  <li>No quest/checklist card, no first-catch aim-gate relaxation, no simulated first catch (KD2, KD3).</li>
+  <li>No re-engagement notifications for lapsed zero-catch users — the mode reaches them only when they return on their own.</li>
+  <li>The leaderboard itself is unchanged; this plan adds only the first-catch landing moment on the existing weekly window.</li>
+  <li>Coverage itself (why leak 2's skies are quiet) is separate work — the FAA SWIM spike and backend coverage options live outside this plan.</li>
+</ul>
+
+<h3 id="dependencies-assumptions">Dependencies / Assumptions</h3>
+<ul>
+  <li>The weekly leaderboard window is live end-to-end (<code>backend/src/routes/leaderboard.ts</code> serves <code>window=week</code>; the app has a window switcher) — verified 2026-08-27.</li>
+  <li>The route-guess round, First Catch trophy, and reveal are shipped surfaces this plan orchestrates, not builds.</li>
+  <li>Funnel figures are the 2026-08-27 PostHog pull (66 new persons since GA; small-cohort caveats apply; Noah excluded).</li>
+  <li>v1.1 (streaks, submitted for review 2026-08-26) ships before this; this plan targets the v1.2 realm.</li>
+</ul>
+
+<h3 id="outstanding-questions">Outstanding Questions</h3>
+<p><b>Resolve Before Planning:</b> none.</p>
+<p><b>Deferred to Planning:</b></p>
+<ul>
+  <li>OQ1. The steering affordance's exact form (edge arrow, compass ribbon, or other) — within the app's existing motion and glass taste.</li>
+  <li>OQ2. Whether the R4 capture pulse ships to all users or only the guided mode.</li>
+  <li>OQ3. Coaching and quiet-sky copy, in the app's dried voice; the quiet-sky expectation line must not promise predictions the data can't back.</li>
+  <li>OQ4. Whether R8's weekly-rank moment is a screen, a sheet, or a reveal-card extension.</li>
+</ul>
+</section>
+
+<section id="sources">
+<h2>Sources</h2>
+<ul>
+  <li><a href="https://github.com/landesbergn/tailspot/blob/main/docs/plans/2026-08-17-1443-feat-v1-1-release-scope-plan.md"><code>docs/plans/2026-08-17-1443-feat-v1-1-release-scope-plan.md</code></a> — the v1.1 board verdicts this plan inherits (R4/R5, parked items).</li>
+  <li><a href="https://github.com/landesbergn/tailspot/blob/main/ios/Tailspot/Tailspot/ContentView.swift"><code>ios/Tailspot/Tailspot/ContentView.swift</code></a> — capture button (opacity-only signal), catch zone and its exceptions, <code>first_plane_seen</code> firing conditions.</li>
+  <li><a href="https://github.com/landesbergn/tailspot/blob/main/ios/Tailspot/Tailspot/ActivationTelemetry.swift"><code>ios/Tailspot/Tailspot/ActivationTelemetry.swift</code></a> — the activation funnel events and their gaps.</li>
+  <li><a href="https://github.com/landesbergn/tailspot/blob/main/ios/Tailspot/Tailspot/OnboardingFlow.swift"><code>ios/Tailspot/Tailspot/OnboardingFlow.swift</code></a> — the three-step onboarding this plan leaves alone.</li>
+  <li><a href="https://github.com/landesbergn/tailspot/blob/main/ios/Tailspot/Tailspot/LeaderboardWindows.swift"><code>ios/Tailspot/Tailspot/LeaderboardWindows.swift</code></a> and <a href="https://github.com/landesbergn/tailspot/blob/main/backend/src/routes/leaderboard.ts"><code>backend/src/routes/leaderboard.ts</code></a> — the shipped weekly window R8 lands on.</li>
+  <li>PostHog activation pull, 2026-08-27 — funnel by version, milestone counts, and the per-person decomposition of the 21 stalled users.</li>
+</ul>
+</section>
+
+<footer class="composition-signal">Composed 2026-08-27T08:34 local by ce-brainstorm from the 2026-08-27 brainstorm dialogue + PostHog activation pull</footer>
+
+</div>
+</body>
+</html>
