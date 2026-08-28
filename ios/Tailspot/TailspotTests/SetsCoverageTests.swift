@@ -2,20 +2,17 @@
 //  SetsCoverageTests.swift
 //  TailspotTests
 //
-//  Pins FAMILY-SET COVERAGE against reality: every aircraft type users have
-//  actually caught must land in at least one family set. The fixture below is
-//  a snapshot of the full prod catch census (refreshed 2026-08-27, 165 distinct
-//  typecodes across 2,741 resolved catches) — the same audit that produced
-//  gap chunk C in Sets.swift. Before it, 49 of these types (~6% of catches)
-//  matched no set and the catch silently filled nothing.
+//  Pins FAMILY-SET COVERAGE against the maintained aircraft catalog: every
+//  type in the coverage fixture must land in at least one family set. The
+//  fixture contains public ICAO typecode and aircraft-taxonomy facts only.
 //
 //  Each row is (typecode, DOC 8643 manufacturer, DOC 8643 model) exactly as
 //  the backend resolves them — i.e. what `Catch.typecode` / `.manufacturer` /
 //  `.model` carry after backfill. If a future set reshuffle orphans one of
 //  these, this fails with the specific type that lost its home.
 //
-//  When a NEW never-caught type shows up in prod, add it here (the census
-//  query lives in the PR description for round 2026-08-24).
+//  When an audit identifies another public typecode that needs coverage, add
+//  it here without including any catch-level or user-activity data.
 //
 
 import Testing
@@ -25,8 +22,8 @@ import Foundation
 @Suite("Sets coverage")
 struct SetsCoverageTests {
 
-    /// (typecode, manufacturer, model) — prod census snapshot 2026-08-27.
-    private static let prodCensus: [(String, String, String)] = [
+    /// (typecode, manufacturer, model) — public coverage catalog.
+    private static let coverageCatalog: [(String, String, String)] = [
         ("B738", "Boeing", "737-800"), ("E75L", "Embraer", "175"),
         ("CRJ9", "Bombardier", "CRJ-900"), ("A321", "Airbus", "A321"),
         ("A320", "Airbus", "A320"), ("B739", "Boeing", "737-900"),
@@ -109,8 +106,10 @@ struct SetsCoverageTests {
         // slots (A306/C210/EPIC/H500/SB91); the rest exercise existing broad
         // family tokens or exact typecode entries.
         ("A306", "Airbus", "A300B4-600"),
+        ("A343", "Airbus", "A340-300"),
         ("B762", "Boeing", "767-200"),
         ("BE35", "Beechcraft", "35 Bonanza"),
+        ("C170", "Cessna", "170"),
         ("C210", "Cessna", "210"),
         ("C30J", "Lockheed Martin", "C-130J Super Hercules"),
         ("EPIC", "Epic Aircraft", "Epic LT / E1000"),
@@ -127,17 +126,16 @@ struct SetsCoverageTests {
               slantDistanceMeters: 0, typecode: row.0)
     }
 
-    /// The load-bearing assertion: no type ever caught in prod may be
-    /// orphaned by the family sets.
-    @Test func everyProdCaughtTypeFillsAtLeastOneFamilySlot() {
-        for row in Self.prodCensus {
+    /// The load-bearing assertion: every audited public typecode has a family.
+    @Test func everyCoverageTypeFillsAtLeastOneFamilySlot() {
+        for row in Self.coverageCatalog {
             let c = mk(row)
             let key = CardSets.matchKey(for: c)
             let slotted = CardSets.families.contains { set in
                 set.entries.contains { CardSets.matches(key: key, entry: $0) }
             }
             #expect(slotted,
-                    "\(row.0) (\(row.1) \(row.2)) matches NO family set — a real caught type just lost its home")
+                    "\(row.0) (\(row.1) \(row.2)) matches NO family set")
         }
     }
 
@@ -175,6 +173,16 @@ struct SetsCoverageTests {
         let p51Entry = vintageSet.entries.first { $0.id == "fv-p51" }!
         #expect(!CardSets.matches(key: c510Key, entry: p51Entry),
                 "A Citation Mustang must not fill the P-51 slot")
+
+        // Exact Cessna tokens keep the C170 piston single and Embraer E170
+        // regional jet in their own families despite their shared model number.
+        let c170 = mk(("C170", "Cessna", "170"))
+        let c170Key = CardSets.matchKey(for: c170)
+        let c170Entry = cessnaSet.entries.first { $0.id == "fc170" }!
+        let eJetSet = CardSets.families.first { $0.id == "fam-ejet" }!
+        let e170Entry = eJetSet.entries.first { $0.id == "fe170" }!
+        #expect(CardSets.matches(key: c170Key, entry: c170Entry))
+        #expect(!CardSets.matches(key: c170Key, entry: e170Entry))
 
         // A Cessna 406 Caravan II must not fill the Bell 206 slot (DOC 8643
         // names the Bell 206 series "406" — the slot is typecode-driven).
