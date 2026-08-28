@@ -55,6 +55,13 @@ nonisolated enum StreakReminders {
     /// prompt is shown (any outcome) and by a Settings-initiated request —
     /// the ask never repeats; recovery from denial is the Settings row.
     static let permissionAskedKey = "tailspot.streak.permissionAsked"
+    /// Last `StreakTelemetry.scheduledStamp` fired — `sync` re-arms the same
+    /// request many times a day, and only a changed stamp is worth an event.
+    static let scheduledTelemetryKey = "tailspot.streak.telemetry.scheduled"
+    /// Local dayKey of the last reported delivery, shared by the delegate's
+    /// foreground fire and the delivered-list scan so a delivery is counted
+    /// once no matter which path sees it first.
+    static let deliveredTelemetryKey = "tailspot.streak.telemetry.delivered"
     /// Fixed early-evening reminder hour (local). Not a setting in v1.
     /// 17, not 18 (Noah, 2026-08-25): 5pm leaves a full daylight-ish hour
     /// more to act on the nudge before the evening swallows it.
@@ -218,6 +225,11 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     /// Recompute the decision and make the notification center match it.
     func sync(catches: [Catch], now: Date = Date()) async {
         let center = UNUserNotificationCenter.current()
+        // Before the slot is cleared below: a reminder that fired while the
+        // app was backgrounded ran no app code, so its delivered copy in
+        // Notification Center is the only evidence it happened. Report it
+        // now or lose it to the retire.
+        await reportBackgroundDeliveryIfNeeded(center: center)
         let settings = await center.notificationSettings()
         let authorized = settings.authorizationStatus == .authorized
         // `daySet` is the one funnel the wrench override is applied at, so
@@ -244,9 +256,36 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         do {
             try await center.add(request)
             Log.ui.notice("Streak reminder scheduled: \(dayKey, privacy: .public) \(StreakReminders.reminderHour, privacy: .public):00, streak \(streak, privacy: .public)")
+            let stamp = StreakTelemetry.scheduledStamp(dayKey: dayKey, streakDays: streak)
+            if UserDefaults.standard.string(forKey: StreakReminders.scheduledTelemetryKey) != stamp {
+                UserDefaults.standard.set(stamp, forKey: StreakReminders.scheduledTelemetryKey)
+                StreakTelemetry.fireReminderScheduled(dayKey: dayKey, streakDays: streak)
+            }
         } catch {
             Log.ui.error("Streak reminder scheduling failed: \(error, privacy: .public)")
         }
+    }
+
+    /// One `streak_reminder_delivered` per local day, background half: if
+    /// the real reminder is sitting in Notification Center, it was
+    /// delivered while the app wasn't running. The delegate's foreground
+    /// fire shares the same dayKey stamp, so double-counting is structural
+    /// nonsense either way round. Debug fires have their own identifier
+    /// and are deliberately invisible here.
+    private func reportBackgroundDeliveryIfNeeded(center: UNUserNotificationCenter) async {
+        let delivered = await center.deliveredNotifications()
+        guard let note = delivered.first(
+            where: { $0.request.identifier == StreakReminders.notificationId }
+        ) else { return }
+        let dayKey = Streaks.dayKey(for: note.date)
+        guard UserDefaults.standard.string(
+            forKey: StreakReminders.deliveredTelemetryKey) != dayKey else { return }
+        UserDefaults.standard.set(dayKey, forKey: StreakReminders.deliveredTelemetryKey)
+        StreakTelemetry.fireReminderDelivered(
+            streakDays: note.request.content.userInfo["streak"] as? Int,
+            foreground: false,
+            presented: true
+        )
     }
 
     /// Fire the system permission prompt (from the pre-prompt's accept or
@@ -310,6 +349,20 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         #endif
         let onCamera = await MainActor.run { Self.cameraIsFrontmost() }
         let options = StreakReminders.foregroundPresentation(cameraFrontmost: onCamera)
+        // The foreground half of `streak_reminder_delivered`, on the shared
+        // per-day stamp: `presented` false means the camera rule silenced
+        // the banner — delivered and suppressed are different facts, and
+        // conflating them is exactly the ambiguity this event exists to end.
+        let dayKey = Streaks.dayKey(for: Date())
+        if UserDefaults.standard.string(
+            forKey: StreakReminders.deliveredTelemetryKey) != dayKey {
+            UserDefaults.standard.set(dayKey, forKey: StreakReminders.deliveredTelemetryKey)
+            StreakTelemetry.fireReminderDelivered(
+                streakDays: notification.request.content.userInfo["streak"] as? Int,
+                foreground: true,
+                presented: !onCamera
+            )
+        }
         #if DEBUG
         // Make the invisible visible: without this, "correctly suppressed"
         // and "never arrived" are the same observation.

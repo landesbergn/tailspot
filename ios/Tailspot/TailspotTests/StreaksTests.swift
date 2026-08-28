@@ -188,6 +188,49 @@ struct StreaksTests {
         #expect(n == 5)
     }
 
+    @Test func askResponsePropertiesCarryBothFacts() {
+        let accepted = StreakTelemetry.askResponseProperties(accepted: true, streakDays: 3)
+        guard case .bool(let a)? = accepted["accepted"],
+              case .int(let n)? = accepted["streak_days"] else {
+            Issue.record("accepted/streak_days missing or mistyped")
+            return
+        }
+        #expect(a && n == 3)
+        guard case .bool(let declined)? = StreakTelemetry
+            .askResponseProperties(accepted: false, streakDays: 1)["accepted"] else {
+            Issue.record("accepted missing on decline")
+            return
+        }
+        #expect(!declined)
+    }
+
+    /// The scheduled-event dedupe identity: a new day OR a new stake is
+    /// news; the same evening at the same stake is not.
+    @Test func scheduledStampChangesWithDayAndStake() {
+        let base = StreakTelemetry.scheduledStamp(dayKey: "2026-08-28", streakDays: 4)
+        #expect(base == StreakTelemetry.scheduledStamp(dayKey: "2026-08-28", streakDays: 4))
+        #expect(base != StreakTelemetry.scheduledStamp(dayKey: "2026-08-29", streakDays: 4))
+        #expect(base != StreakTelemetry.scheduledStamp(dayKey: "2026-08-28", streakDays: 5))
+    }
+
+    @Test func deliveredPropertiesDistinguishSuppressedFromPresented() {
+        let suppressed = StreakTelemetry.reminderDeliveredProperties(
+            streakDays: 4, foreground: true, presented: false)
+        guard case .bool(let fg)? = suppressed["foreground"],
+              case .bool(let shown)? = suppressed["presented"],
+              case .int(let n)? = suppressed["streak_days"] else {
+            Issue.record("delivered properties missing or mistyped")
+            return
+        }
+        #expect(fg && !shown && n == 4)
+        // A background delivery scanned off Notification Center may predate
+        // the userInfo streak — the event still fires, without the count.
+        let scanned = StreakTelemetry.reminderDeliveredProperties(
+            streakDays: nil, foreground: false, presented: true)
+        #expect(scanned["streak_days"] == nil)
+        #expect(scanned.count == 2)
+    }
+
     // MARK: - Catch builder (TrophiesTests pattern)
 
     private func mk(caughtAt: Date) -> Catch {
