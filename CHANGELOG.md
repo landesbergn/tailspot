@@ -5,7 +5,32 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-08-26 — Reveal streak line moves into the card ledger — branch `worktree-streak-ledger-row`
+## 2026-08-27 — Guided first-catch experience (v1.2 opener) — branch `worktree-first-catch-brainstorm`
+
+The R4/R5 first-catch activation slice slipped v1.1 (submitted 2026-08-26), so
+it opened the v1.2 train — re-brainstormed from fresh data. A PostHog re-pull
+(the v1.1 plan's OQ1) rewrote the problem: activation is 44% since GA (not the
+July ~14%), onboarding/permissions are NOT the leak (94%/95% complete), and
+the real leaks are "plane nearby, never caught" (21 of 66 — zero of them ever
+tapped a label; gates blocked nobody) and "never had a plane in range" (11).
+Shipped the guided first-catch mode per
+`docs/plans/2026-08-27-0834-feat-first-catch-experience-plan.md` (HTML sibling
+holds the wireframes): a `GuidedCatch` engine (single seam — zero-catch
+trigger, persisted retirement latch set only on a KEPT first catch, discard
+re-arms; nearest-with-hysteresis steering targets from the label pipeline's
+own candidate set), viewfinder chrome (step banner, edge chevron + tag,
+capture pulse ring — guided-only this round per plan A1; error-wins: chrome
+suppresses whenever `lastError` is set), honest quiet-sky copy, and a
+weekly-rank landing moment after the celebration (pre-warmed `me.rank` fetch
+on the THIS WEEK window; rank-free fallback within ~3 s when the upload or
+fetch lags — the moment always renders). Telemetry closes the funnel's blind
+spot: `first_label_on_screen` + `first_label_tap` (once-per-install), since
+`first_plane_seen` fires on the range filter even for planes behind the user.
+The wrench panel's GUIDED row forces the mode on a veteran device (synthetic
+zero-catch INPUT at the one seam, FORCED badge, 🎯 Loop = simulated reveal →
+sample trophy → real read-only rank fetch; zero writes, zero telemetry).
+Baseline note: ship-order put telemetry first so the new events accrue
+pre-feature baseline.
 
 Field report from Noah's Embraer 175 catch: the streak line looked squished.
 Root cause: the free-floating prose line ("🔥 2 day streak") sat between the

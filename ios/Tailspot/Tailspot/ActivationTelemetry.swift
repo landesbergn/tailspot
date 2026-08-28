@@ -36,12 +36,16 @@ nonisolated enum ActivationTelemetry {
     static let permissionOutcomeEvent = "permission_outcome"
     static let arFirstFrameEvent = "ar_first_frame"
     static let firstPlaneSeenEvent = "first_plane_seen"
+    static let firstLabelOnScreenEvent = "first_label_on_screen"
+    static let firstLabelTapEvent = "first_label_tap"
     static let compassCautionEvent = "compass_caution_shown"
     static let compassSheetOpenedEvent = "compass_sheet_opened"
     static let compassCalibratedEvent = "compass_calibrated"
 
     static let arFirstFrameFiredKey = "tailspot.telemetry.arFirstFrameFired"
     static let firstPlaneSeenFiredKey = "tailspot.telemetry.firstPlaneSeenFired"
+    static let firstLabelOnScreenFiredKey = "tailspot.telemetry.firstLabelOnScreenFired"
+    static let firstLabelTapFiredKey = "tailspot.telemetry.firstLabelTapFired"
 
     // MARK: - Pure builders (unit-tested)
 
@@ -111,10 +115,33 @@ nonisolated enum ActivationTelemetry {
 
     /// A plane label became visible for the first time ever — the user has
     /// something to catch. Once per install (latch).
+    ///
+    /// NOTE (2026-08-27): fires off the visibility FILTER, not the screen —
+    /// the plane can be behind the user with no label rendered. Semantics
+    /// kept for funnel continuity; `first_label_on_screen` below is the
+    /// honest "a label actually rendered" milestone (R9).
     static func fireFirstPlaneSeenOnce(visibleCount: Int, defaults: UserDefaults = .standard) {
         guard !defaults.bool(forKey: firstPlaneSeenFiredKey) else { return }
         defaults.set(true, forKey: firstPlaneSeenFiredKey)
         Analytics.capture(firstPlaneSeenEvent, ["visible_count": .int(visibleCount)])
+    }
+
+    /// A plane label actually rendered inside the camera frame for the first
+    /// time ever — the user SAW something to catch, not merely had one in
+    /// range. Once per install (latch). Closes the funnel gap that made the
+    /// post-GA "21 saw a plane, never caught" cohort unexplainable.
+    static func fireFirstLabelOnScreenOnce(onScreenCount: Int, defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: firstLabelOnScreenFiredKey) else { return }
+        defaults.set(true, forKey: firstLabelOnScreenFiredKey)
+        Analytics.capture(firstLabelOnScreenEvent, ["on_screen_count": .int(onScreenCount)])
+    }
+
+    /// The user tapped a visible plane label for the first time ever — the
+    /// intent signal between seeing and catching. Once per install (latch).
+    static func fireFirstLabelTapOnce(defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: firstLabelTapFiredKey) else { return }
+        defaults.set(true, forKey: firstLabelTapFiredKey)
+        Analytics.capture(firstLabelTapEvent, [:])
     }
 
     // MARK: - Compass triad (session-scoped; the caution badge is already

@@ -78,6 +78,11 @@ struct ContentView: View {
     /// Last line the STREAK row printed (permission state, what's queued,
     /// or the result of a manual fire).
     @State private var streakDebugStatus = "—"
+    /// Re-reads the GUIDED row (the forced flag lives in UserDefaults).
+    @State private var guidedDebugRefresh = 0
+    /// 🎯 Loop armed: the next simulated reveal's dismissal continues into
+    /// the synthesized trophy + forced weekly-rank card (plan U5).
+    @State private var forcedLoopArmed = false
     #endif
     /// DEBUG-only: presents the trophy-icon gallery for visual review.
     @State private var showIconGallery = false
@@ -271,6 +276,26 @@ struct ContentView: View {
     /// itself is once-per-install (persisted), but this short-circuits the
     /// per-tick filter work in `.onReceive(adsb.$observed)` after it's latched.
     @State private var firstPlaneSeenLatched = false
+    /// Session latch for `first_label_on_screen` — a label actually rendered
+    /// in frame (vs. merely in range, which is `first_plane_seen`). Set via an
+    /// async hop out of the render pass; the fire's own UserDefaults latch
+    /// makes a stray double-hop harmless.
+    @State private var firstLabelSeenLatched = false
+    /// Cross-frame steering-target memory for the guided first-catch mode's
+    /// hysteresis (GuidedCatch, plan U1/U2). Reference type: per-frame writes
+    /// from the render closure don't invalidate the view.
+    @State private var guidedTargetHolder = GuidedTargetHolder()
+    /// The first catch awaiting its weekly-rank landing moment (plan U3, R8).
+    /// Armed at insert when the guided mode is active; disarmed by present
+    /// or by a Discard (the row deletes — mode re-arms per plan A2).
+    @State private var weeklyRankArmedCatch: Catch?
+    /// The presented rank card; nil = not showing.
+    @State private var weeklyRankMoment: WeeklyRankMoment?
+    /// Guards double-presentation while the A5 budget race runs.
+    @State private var weeklyRankResolving = false
+    /// Pre-warmed rank fetch, started at catch time so the round-trips
+    /// overlap the celebration (KTD4).
+    @State private var weeklyRankPrewarm = WeeklyRankPrewarm()
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
     /// row doesn't do a FileManager directory scan on every body eval. Refreshed
     /// when the debug panel opens and after a recording is toggled off.
@@ -589,6 +614,28 @@ struct ContentView: View {
                                 onScreenProjected.map { ($0.icao, $0.position) },
                                 uniquingKeysWith: { first, _ in first }
                             )
+                            // Guided flags, read once per frame (each hides a
+                            // UserDefaults read behind the seam).
+                            let isGuidedActive = guidedModeActive
+                            let isGuidedForced = guidedModeForced
+                            // Activation funnel (R9): a label ACTUALLY rendered in
+                            // frame — unlike `first_plane_seen`, which fires on the
+                            // range filter even for a plane behind the user. Hop out
+                            // of the render pass; the fire's persisted latch makes a
+                            // duplicate hop a no-op.
+                            let _ = {
+                                // Forced runs stay silent AND latch-free —
+                                // these are once-per-install events a forced
+                                // run would burn for real (R10/KTD6).
+                                guard !firstLabelSeenLatched, !isGuidedForced,
+                                      !onScreenProjected.isEmpty else { return }
+                                let count = onScreenProjected.count
+                                DispatchQueue.main.async {
+                                    guard !firstLabelSeenLatched else { return }
+                                    ActivationTelemetry.fireFirstLabelOnScreenOnce(onScreenCount: count)
+                                    firstLabelSeenLatched = true
+                                }
+                            }()
                             // Visual confirmation: tell the detector where
                             // the current lock target is predicted to be.
                             // Lock-only write (safe inside body); the
@@ -661,12 +708,58 @@ struct ContentView: View {
                                 }
                                 return .multi(candidates.map(\.icao24))
                             }()
+                            // Guided first-catch step (plan U2). Derived per
+                            // frame from the SAME sets the labels and capture
+                            // mode use (KTD3), so the coaching can never point
+                            // at a plane the pipeline classifies hidden.
+                            // Error-wins: no step at all while the feed errors
+                            // (never steer on stale extrapolated positions),
+                            // and the restore prompt keeps priority.
+                            let guidedStep: GuidedCatchStep? = {
+                                guard isGuidedActive,
+                                      adsb.lastErrorUserMessage == nil,
+                                      !restoreManager.isPresenting,
+                                      cameraAuthorized else { return nil }
+                                let guidedCandidates = visible
+                                    .filter { !$0.grounded && $0.clearsCatchSizeFloor }
+                                    .map { obs in
+                                        GuidedCandidate(
+                                            icao24: obs.aircraft.icao24,
+                                            bearingDeg: obs.bearingDeg,
+                                            elevationDeg: obs.elevationDeg,
+                                            slantDistanceMeters: obs.slantDistanceMeters,
+                                            displayName: obs.aircraft.callsign
+                                        )
+                                    }
+                                let derivation = GuidedCatch.deriveStep(GuidedCatchInputs(
+                                    hasFirstADSBResponse: adsb.lastFetched != nil,
+                                    pointedIndoors: pointedIndoors,
+                                    compassWarningLatched: showCompassWarning,
+                                    candidates: guidedCandidates,
+                                    currentTargetIcao24: guidedTargetHolder.icao24,
+                                    headingDeg: location.heading,
+                                    cameraElevationDeg: camEl,
+                                    onScreenIcaos: Set(onScreenIcaos),
+                                    captureEnabled: mode.isEnabled
+                                ))
+                                guidedTargetHolder.icao24 = derivation.targetIcao24
+                                return derivation.step
+                            }()
+                            if let guidedStep {
+                                GuidedCatchChrome(
+                                    step: guidedStep,
+                                    screenSize: geo.size,
+                                    forced: isGuidedForced
+                                )
+                                .allowsHitTesting(false)
+                            }
                             VStack {
                                 Spacer()
                                 captureBar(
                                     mode: mode,
                                     screenSize: geo.size,
-                                    positions: onScreenPositions
+                                    positions: onScreenPositions,
+                                    pulse: guidedStep == .capture
                                 )
                                 // Clear the home-indicator gesture zone: pad
                                 // from the safe-area bottom when there is one
@@ -736,6 +829,7 @@ struct ContentView: View {
                         .padding(.horizontal, 12)
 
                         streakDebugRow
+                        guidedDebugRow
                         #endif
 
                         Spacer(minLength: 0)
@@ -773,7 +867,7 @@ struct ContentView: View {
         // ride existing links instead of adding new ones. The two can't
         // co-fire: restore needs an EMPTY Hangar, the streak ask a 2-day
         // catch streak.
-        .overlay { hangarRestoreOverlay; streakAskOverlay }
+        .overlay { hangarRestoreOverlay; streakAskOverlay; weeklyRankOverlay }
         // Seed at launch and re-diff on every new catch (idempotent +
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
@@ -952,6 +1046,9 @@ struct ContentView: View {
                     captureInFlight = false
                     guessShownAt = nil
                     presentSuspectReviewIfNeeded()
+                    #if DEBUG
+                    if reveal.isSimulated { advanceForcedGuidedLoopIfArmed() }
+                    #endif
                 },
                 onViewInHangar: {
                     pendingReveal = nil
@@ -1130,6 +1227,38 @@ struct ContentView: View {
         )
     }
 
+    /// THE guided-mode trigger (GuidedCatch.isModeActive is the single seam —
+    /// KTD1): zero catches and not retired, or the DEBUG forced override
+    /// feeding a synthetic zero-catch input. Every guided surface (chrome,
+    /// pulse, ambient-banner suppression, rank moment) reads this one
+    /// property so no two screens can disagree.
+    private var guidedModeActive: Bool {
+        var forced = false
+        #if DEBUG
+        forced = GuidedCatchDebug.isForced()
+        #endif
+        // Fast path: mirrors isModeActive's own short-circuit, but skips the
+        // UserDefaults retirement read Swift would otherwise evaluate eagerly
+        // — this is called from the 30 Hz render closure, and for anyone with
+        // catches the answer can never be true.
+        guard forced || catches.isEmpty else { return false }
+        return GuidedCatch.isModeActive(
+            catchCount: catches.count,
+            retired: GuidedCatch.isRetired(),
+            forcedZeroCatches: forced
+        )
+    }
+
+    /// Whether the DEBUG forced override is driving `guidedModeActive` —
+    /// read separately so the FORCED badge and telemetry guards stay honest.
+    private var guidedModeForced: Bool {
+        #if DEBUG
+        return GuidedCatchDebug.isForced()
+        #else
+        return false
+        #endif
+    }
+
     /// The interactive-visible set: the ambient visibility tier PLUS any
     /// tap-revealed plane. One definition for the label render loop, the
     /// metadata prefetch, and its signature — they must agree or labels
@@ -1284,7 +1413,11 @@ struct ContentView: View {
     /// toast below.
     @ViewBuilder
     private var indoorHintBanner: some View {
-        if pointedIndoors {
+        // The guided GoOutside step carries this hint's copy with coaching
+        // framing — one banner per condition (plan U2). But when guided
+        // chrome is itself suppressed (feed error → error pill wins), fall
+        // back to this hint rather than showing neither (review finding).
+        if pointedIndoors && !(guidedModeActive && adsb.lastErrorUserMessage == nil) {
             Text("Not many planes indoors.")
                 .font(Brand.Font.mono(size: 12, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -1504,6 +1637,82 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Weekly-rank landing moment (plan U3)
+
+    /// Always-present host (the `topToastBanner` pattern: watchers hang off
+    /// an empty ZStack without a new body chain link). Presents the R8 card
+    /// once every prior claimant of the post-catch sequence settles —
+    /// suspect Keep/Discard, then trophies, then this (KTD4); the review
+    /// prompter can't fire on a first catch (`minimumCatches` = 3).
+    private var weeklyRankOverlay: some View {
+        ZStack {
+            if let moment = weeklyRankMoment {
+                WeeklyRankCardView(
+                    moment: moment,
+                    onSeeBoard: {
+                        withAnimation(.easeIn(duration: 0.2)) { weeklyRankMoment = nil }
+                        showProfile = true
+                    },
+                    onDismiss: {
+                        withAnimation(.easeIn(duration: 0.2)) { weeklyRankMoment = nil }
+                    }
+                )
+            }
+        }
+        // Watch EVERY input the canPresent predicate reads — an unwatched
+        // claimant clearing last would strand the armed card for the whole
+        // session (review finding: the multi-catch reveal and sheet closes
+        // changed no watched value).
+        .onChange(of: unlockCenter.hasPending) { presentWeeklyRankIfReady() }
+        .onChange(of: pendingSuspectReview == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: pendingReveal == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: pendingMultiReveal == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: streakAsk == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: showHangar || showProfile || showCompassSheet) { presentWeeklyRankIfReady() }
+        .onChange(of: weeklyRankArmedCatch == nil) { presentWeeklyRankIfReady() }
+    }
+
+    private func weeklyRankCanPresentNow() -> Bool {
+        WeeklyRankArbitration.canPresent(
+            armed: weeklyRankArmedCatch != nil,
+            revealUp: pendingReveal != nil || pendingMultiReveal != nil,
+            suspectReviewUp: pendingSuspectReview != nil,
+            trophiesPending: unlockCenter.hasPending,
+            streakAskUp: streakAsk != nil || pendingStreakAsk != nil,
+            sheetUp: showHangar || showProfile || showCompassSheet,
+            alreadyShowing: weeklyRankMoment != nil,
+            resolving: weeklyRankResolving
+        )
+    }
+
+    private func presentWeeklyRankIfReady() {
+        guard let row = weeklyRankArmedCatch, weeklyRankCanPresentNow() else { return }
+        // Belt-and-suspenders: the discard path disarms explicitly (the
+        // authoritative fix — `isDeleted` reads false again after the
+        // delete's save), but a row deleted any other way (Hangar delete
+        // during the celebration) is invalidated: skip the moment.
+        if row.isDeleted || row.modelContext == nil {
+            weeklyRankArmedCatch = nil
+            weeklyRankPrewarm.cancel()
+            return
+        }
+        weeklyRankResolving = true
+        Task { @MainActor in
+            let rank = await weeklyRankPrewarm.awaitRank(budgetSeconds: 3)
+            weeklyRankResolving = false
+            // Re-validate after the await: a second catch's reveal, a sheet,
+            // or the streak ask may have claimed the moment meanwhile. Keep
+            // the card armed — the watchers re-fire once the claimant
+            // settles, and the resolved rank is cached so the retry is
+            // instant.
+            guard weeklyRankArmedCatch != nil, weeklyRankCanPresentNow() else { return }
+            weeklyRankArmedCatch = nil
+            withAnimation(.easeOut(duration: 0.25)) {
+                weeklyRankMoment = WeeklyRankMoment(rank: rank, forced: false)
+            }
+        }
+    }
+
     /// Streak notification pre-prompt: a bottom card, presented once ever
     /// (see `presentSuspectReviewIfNeeded`), asking to protect the streak
     /// with the evening nudge. Accepting fires the SYSTEM permission prompt
@@ -1623,6 +1832,14 @@ struct ContentView: View {
             case .single(let i):   return [i]
             case .multi(let list): return list
             }
+        }
+
+        /// One owner for "can the shutter fire" — the capture button's
+        /// tap-gate and the guided-step derivation both read this, so they
+        /// can't drift if a new non-actionable case lands.
+        var isEnabled: Bool {
+            if case .disabled = self { return false }
+            return true
         }
     }
 
@@ -1763,6 +1980,24 @@ struct ContentView: View {
     private func resolveSuspectReview(keep: Bool) {
         guard let review = pendingSuspectReview else { return }
         pendingSuspectReview = nil
+        // Weekly-rank arming resolves HERE, not from `isDeleted` later —
+        // after this function's save, a deleted row reads isDeleted ==
+        // false again, so the present path could take the kept branch for
+        // a discarded catch (review finding). Keep sets the retirement
+        // latch per KTD2 (kept-resolution, not celebration-end, so an
+        // app-kill mid-celebration can't lose it); Discard disarms and
+        // cancels the prewarm poll before the row is deleted, so the
+        // guided mode re-arms (plan A2) and nothing dereferences the
+        // invalidated model.
+        if let armed = weeklyRankArmedCatch,
+           review.rows.contains(where: { $0 === armed }) {
+            if keep {
+                GuidedCatch.markRetired()
+            } else {
+                weeklyRankArmedCatch = nil
+                weeklyRankPrewarm.cancel()
+            }
+        }
         for row in review.rows where !row.isDeleted {
             guard let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) else { continue }
             if keep {
@@ -1791,12 +2026,13 @@ struct ContentView: View {
     private func captureBar(
         mode: CaptureMode,
         screenSize: CGSize,
-        positions: [String: CGPoint]
+        positions: [String: CGPoint],
+        pulse: Bool = false
     ) -> some View {
         HStack {
             bottomHangarButton
             Spacer()
-            captureButton(mode: mode, screenSize: screenSize, positions: positions)
+            captureButton(mode: mode, screenSize: screenSize, positions: positions, pulse: pulse)
             Spacer()
             bottomProfileButton
         }
@@ -2547,6 +2783,31 @@ struct ContentView: View {
             // its first catch(es). Latched inside fireFirstCatch.
             if priorCatchCount == 0, let first = newCatches.first {
                 CatchTelemetry.fireFirstCatch(first)
+                // Arm the weekly-rank landing moment (plan U3, R8) and
+                // pre-warm the rank fetch so it resolves during the reveal
+                // (KTD4). Gate on the CAPTURED pre-insert count, not the
+                // live @Query (which may or may not have observed this
+                // tap's insert — the streak note below distrusts it too).
+                // Guided-active only — a veteran's delete-everything edge
+                // shouldn't celebrate — and never from a forced run (its
+                // loop is fully simulated and must not write the latch,
+                // R10). A NON-suspect first catch is already "kept": the
+                // retirement latch is written now per KTD2, so an app-kill
+                // mid-celebration can't leave it unset; a suspect catch
+                // latches in resolveSuspectReview's Keep branch instead.
+                if GuidedCatch.isModeActive(
+                    catchCount: priorCatchCount,
+                    retired: GuidedCatch.isRetired()
+                ), !guidedModeForced {
+                    weeklyRankArmedCatch = first
+                    weeklyRankPrewarm.start(isUploaded: {
+                        !first.isDeleted && first.modelContext != nil
+                            && first.uploadedAt != nil
+                    })
+                    if first.suspectReason == nil {
+                        GuidedCatch.markRetired()
+                    }
+                }
             }
 
             // Daily streak bookkeeping. Every successful catch action makes
@@ -2835,6 +3096,61 @@ struct ContentView: View {
     /// included, since that is the whole point of the row.
     private var streakSummaryNow: Streaks.Summary {
         Streaks.summary(catches: catches)
+    }
+
+    /// Forced guided-mode row (plan U5, R10): toggles the synthetic
+    /// zero-catch input (KTD1 — the badge and chrome follow on their own),
+    /// and 🎯 Loop runs the celebration on simulated inputs — simulated
+    /// reveal → weekly-rank card with a REAL read-only rank fetch, badged
+    /// FORCED. No Catch rows, no latch writes, no ledger writes, no
+    /// activation telemetry (fire sites guard on the forced flag; trophy
+    /// preview stays on ⚑ Unlock, which has real side effects).
+    private var guidedDebugRow: some View {
+        HStack(spacing: 8) {
+            Text("GUIDED")
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .foregroundStyle(Brand.Color.textTertiary)
+            Button(GuidedCatchDebug.isForced() ? "🎯 FORCED" : "🎯 Off") {
+                GuidedCatchDebug.setForced(!GuidedCatchDebug.isForced())
+                guidedDebugRefresh &+= 1
+            }
+            Button("🎯 Loop") {
+                forcedLoopArmed = true
+                if !GuidedCatchDebug.isForced() {
+                    GuidedCatchDebug.setForced(true)
+                    guidedDebugRefresh &+= 1
+                }
+                simulateCatch()
+            }
+        }
+        .font(Brand.Font.mono(size: 11, weight: .bold))
+        .buttonStyle(.bordered)
+        .tint(GuidedCatchDebug.isForced() ? Brand.Color.alertAdvisory : Brand.Color.cyan)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        // UserDefaults isn't observable — the counter re-evaluates the row.
+        .id(guidedDebugRefresh)
+    }
+
+    /// The simulated reveal just dismissed with the forced loop armed:
+    /// present the rank card (real read-only fetch, bounded like the
+    /// production path, badged FORCED). No sample trophy — the unlock
+    /// center's markShown writes the ledger and captures a real
+    /// trophy_unlocked, which would violate the forced loop's
+    /// write-nothing contract (AE8); the ⚑ Unlock debug button remains
+    /// the trophy-preview surface, side effects and all.
+    private func advanceForcedGuidedLoopIfArmed() {
+        guard forcedLoopArmed, guidedModeForced else { return }
+        forcedLoopArmed = false
+        weeklyRankResolving = true
+        Task { @MainActor in
+            weeklyRankPrewarm.start(isUploaded: { true })
+            let rank = await weeklyRankPrewarm.awaitRank(budgetSeconds: 5)
+            withAnimation(.easeOut(duration: 0.25)) {
+                weeklyRankMoment = WeeklyRankMoment(rank: rank, forced: true)
+            }
+            weeklyRankResolving = false
+        }
     }
     #endif
 
@@ -3131,7 +3447,8 @@ struct ContentView: View {
     private func captureButton(
         mode: CaptureMode,
         screenSize: CGSize,
-        positions: [String: CGPoint]
+        positions: [String: CGPoint],
+        pulse: Bool = false
     ) -> some View {
         let isMulti: Bool = {
             if case .multi = mode { return true }
@@ -3141,10 +3458,7 @@ struct ContentView: View {
             if case .multi(let icaos) = mode { return icaos.count }
             return 0
         }()
-        let isEnabled: Bool = {
-            if case .disabled = mode { return false }
-            return true
-        }()
+        let isEnabled = mode.isEnabled
 
         return Button {
             guard isEnabled else { return }
@@ -3152,6 +3466,12 @@ struct ContentView: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 ZStack {
+                    // Guided-mode capture pulse (R4, plan A1): enablement was
+                    // an opacity change nobody noticed — the ring makes the
+                    // moment loud for first-catch coaching.
+                    if pulse {
+                        CapturePulseRing()
+                    }
                     Circle()
                         .fill(Brand.Color.bgPrimary.opacity(0.7))
                         .frame(width: 72, height: 72)
@@ -3321,7 +3641,10 @@ struct ContentView: View {
                         Circle()
                             .fill(pillTint)
                             .frame(width: 6, height: 6)
-                            .modifier(EmptyPulse(active: lastErr == nil))
+                            // Liveness breathe on the scanning dot; steady
+                            // when the pill carries an error string (the
+                            // signal shouldn't contradict the message).
+                            .modifier(BreathingPulse(active: lastErr == nil))
                         Text(pillText)
                             .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(1.2)
@@ -3936,6 +4259,7 @@ struct ContentView: View {
                 pinnedIcao = icao
                 revealedIcao = nil   // a normal pin is a visible plane, not a reveal
                 recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
+                if !guidedModeForced { ActivationTelemetry.fireFirstLabelTapOnce() }
                 // forceLock is the only way into .locked — the user
                 // just pointed at this plane, so the engine jumps
                 // straight to a locked state.
@@ -3970,6 +4294,7 @@ struct ContentView: View {
             pinnedIcao = icao
             revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
+            if !guidedModeForced { ActivationTelemetry.fireFirstLabelTapOnce() }
             lockOn.forceLock(targetIcao24: icao, now: now)
             return
         }
@@ -4523,31 +4848,6 @@ struct CornerBracket: Shape {
 }
 
 // MARK: - Empty-sky pulse
-
-/// Slow 0.4 → 1.0 opacity breathe at ~1 Hz. Used on the empty-sky
-/// status dot so it telegraphs "actively scanning" without being
-/// a radar sweep. Disabled (`active: false`) when the pill is
-/// surfacing an error string — at that point we don't want the
-/// liveness signal contradicting the message. Reduce Motion: a
-/// steady full-opacity dot, no TimelineView ticking.
-private struct EmptyPulse: ViewModifier {
-    let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if active && !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                // Cosine breathing: 0.4 → 1.0 → 0.4 once per ~1.4 s.
-                let phase = (cos(t * 4.5) + 1) / 2     // 0…1
-                content.opacity(0.4 + 0.6 * phase)
-            }
-        } else {
-            content
-        }
-    }
-}
 
 // MARK: - Empty-tap ripple
 
