@@ -5,6 +5,29 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-27 — Snap radius 700 → 300 ref px, from a 285-photo labeled eval — branch `worktree-snap-radius-tuning`
+
+Noah asked to re-tune the catch-photo bracket snap now that his phone holds a
+real corpus. Pulled all 285 catch photos + the SwiftData store off the device,
+joined `catch_photo_snap` telemetry per catch, and Noah click-labeled the true
+plane position in every photo (the July labeler UX, corpus 4× bigger). Findings:
+snapped catches are near-perfect (32/34 on-plane, 1–6 px from the label); the
+77% fallback rate is the detector genuinely unable to see ~12 km / ~13 px
+planes (2/89 visible even at conf 0.10 full-frame) — so recall is a zoom
+question, not a gate question; and every verifiable wrong snap grabbed a wrong
+object (a streetlight head, a bare twig tip, a parked Ryanair tail) at
+correction ≥ 207 pt, while every verified-correct snap corrected ≤ 147 pt.
+`maxSnapRadiusPixels` 700 → 300 splits those populations with margin on both
+sides (`centerAcceptRadiusPixels` 340 → 150 keeps the early-exit proportion);
+fleet-wide it converts the 12% of prod snaps with > 175 pt corrections into
+geometry fallbacks. Tested and rejected: lower confidence floors, expected-
+footprint gates, wider radii. A refused snap falls back to the geometric
+bracket — the app's majority path already — so the failure mode is the
+pre-July behavior, not a lost catch. Labels + method now in
+`tools/visual-confirmation/labels-2026-08.json` / `EVAL-2026-08.md`. Review
+doc and walkthrough artifacts published in-session. Residual known miss: a
+bird 25 pt from the prediction — indistinguishable from a small plane at 12 px.
+
 ## 2026-08-26 — Reveal streak line moves into the card ledger — branch `worktree-streak-ledger-row`
 
 Field report from Noah's Embraer 175 catch: the streak line looked squished.
