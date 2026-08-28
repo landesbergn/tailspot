@@ -80,3 +80,27 @@ telemetry answers that directly.
   flags drop 39 → 8 (17 of 22 Keep-answered false flags removed; every
   high-texture / warm-lit true block survives). The cool mild-texture cheat
   class this gives up is queued for the L4 detector gate to own.
+
+## Update — night false-positive audit (2026-08-27)
+
+A 7-day all-device audit (59 `notSky` fires / 993 taps, 5.9%) found the
+"indoors" verdict running at ~0% observed precision: **10 of 10 reviewed
+indoor flags were answered Keep**, and both photo-verifiable fires on the
+dev phone were outdoors (a sunset; a night catch under patio string
+lights). 73% of fires landed 8 PM–midnight local — the July "clearly
+indoor" warmth band (0.11–0.19) came from daytime telemetry and does not
+hold at night, where warm artificial light (2700 K string lights,
+streetlights) plus auto-exposure gain reproduces it outdoors.
+
+- **SkyCheck `luminanceForColorTrust` 0.12 → 0.30.** 29 of the 59 fires
+  were dim frames (lum 0.13–0.30); below the new floor the white balance
+  is untrusted and the verdict falls to `.uncertain` (passes). Deliberate
+  cost: dim warm interiors (the corpus's lum-0.20 blank ceiling) now slip
+  through with the cool-lit ones — night spotting must work beats catching
+  dim-room cheats. Bright warm interiors (lum ≥ 0.30) still block.
+- **The ambient hint is now instrumented** (`indoor_hint_shown` with the
+  `catch_blocked_outdoors` payload shape, `indoor_hint_cleared` with
+  `shown_seconds`) — it was the one gate surface invisible in analytics.
+- Sunset-band fires (bright + warm) are NOT addressed by this retune; they
+  are a copy/product question, and the learned classifier (PLAN §9)
+  remains the real fix for both residual classes.

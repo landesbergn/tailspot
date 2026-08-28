@@ -258,6 +258,21 @@ struct CatchTelemetryTests {
 
     @Test func gateEventNamesAreStable() {
         #expect(CatchTelemetry.blockedOutdoorsEvent == "catch_blocked_outdoors")
+        #expect(CatchTelemetry.indoorHintShownEvent == "indoor_hint_shown")
+        #expect(CatchTelemetry.indoorHintClearedEvent == "indoor_hint_cleared")
+    }
+
+    @Test func indoorHintShownSharesTheOutdoorGatePayload() {
+        // The hint's shown event reuses outdoorGateProperties verbatim
+        // (fireIndoorHintShown passes verdict .notSky), so the two surfaces
+        // stay join-compatible in HogQL: same keys, same value shapes.
+        let f = SkyFeatures(edgeDensity: 0.09, tileVariance: 0.03, warmth: 0.19, meanLuminance: 0.13)
+        let p = CatchTelemetry.outdoorGateProperties(
+            verdict: .notSky, features: f, gpsAccuracyMeters: 14)
+        #expect(p["verdict"]?.jsonValue as? String == "notSky")
+        #expect((p["warmth"]?.jsonValue as? Double) == 0.19)
+        #expect((p["mean_luminance"]?.jsonValue as? Double) == 0.13)
+        #expect((p["gps_accuracy_m"]?.jsonValue as? Double) == 14)
     }
 
     // MARK: - Anti-cheat telemetry (PR1: aim + size floor)

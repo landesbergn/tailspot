@@ -39,7 +39,9 @@ def features(path):
     return dict(edge=es / ec, var=var,
                 warmth=(sumR - sumB) / (sumR + sumB) if sumR + sumB else 0, lum=mL)
 
-def blocks(ft, eB, vB, wT, lT=0.12):   # SkyCheck rule: busy AND warm
+def blocks(ft, eB, vB, wT, lT=0.30):   # SkyCheck rule: busy AND warm
+    # lT default tracks SkyCheck.Thresholds.luminanceForColorTrust
+    # (0.12 -> 0.30, 2026-08-27 night false-positive audit).
     return (ft["edge"] >= eB or ft["var"] >= vB) and (ft["lum"] >= lT and ft["warmth"] >= wT)
 
 def main(d):

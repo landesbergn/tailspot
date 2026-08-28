@@ -52,6 +52,12 @@ nonisolated enum CatchTelemetry {
     // not a user-facing wall. Names kept for dashboard continuity with the
     // pre-2026-07-04 blocking era; the *_override events retired with it.
     static let blockedOutdoorsEvent = "catch_blocked_outdoors"
+    /// Ambient "Not many planes indoors." hint appearing / clearing. Added
+    /// 2026-08-27: the hint rides the same whole-frame verdict as the catch
+    /// gate but was invisible in analytics — the one surface users see most
+    /// couldn't be evaluated for false triggers.
+    static let indoorHintShownEvent = "indoor_hint_shown"
+    static let indoorHintClearedEvent = "indoor_hint_cleared"
     static let blockedSizeEvent = "catch_blocked_size"
     // Uncertain-aim flag (2026-07-13). Fires when a center catch is flagged as
     // maybe-the-wrong-plane (off-crosshair + small under a poor compass) — the
@@ -488,6 +494,25 @@ nonisolated enum CatchTelemetry {
         Analytics.capture(blockedOutdoorsEvent, outdoorGateProperties(
             verdict: verdict, features: features, gpsAccuracyMeters: gpsAccuracyMeters
         ))
+    }
+
+    /// Fired when the ambient indoor hint appears (whole-frame verdict has
+    /// read `.notSky` for the sustained streak). Same payload shape as
+    /// `catch_blocked_outdoors` so both surfaces analyze identically in
+    /// HogQL (warmth/luminance banding, the night-false-positive audit).
+    static func fireIndoorHintShown(features: SkyFeatures?, gpsAccuracyMeters: Double?) {
+        Analytics.capture(indoorHintShownEvent, outdoorGateProperties(
+            verdict: .notSky, features: features, gpsAccuracyMeters: gpsAccuracyMeters
+        ))
+    }
+
+    /// Fired when the ambient indoor hint clears — how long it was up. A
+    /// burst of short show/clear pairs is the flapping signature; a long
+    /// show over an active catching session is a label blackout.
+    static func fireIndoorHintCleared(shownSeconds: Int) {
+        Analytics.capture(indoorHintClearedEvent, [
+            "shown_seconds": .int(shownSeconds),
+        ])
     }
 
     /// Fired when the angular-size floor suspects a target (too small-and-
