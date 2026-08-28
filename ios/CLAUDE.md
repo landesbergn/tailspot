@@ -7,8 +7,8 @@ root `CLAUDE.md`.
 
 
 The traps that cause real bugs. For subsystem internals (replay recorder/analyzer,
-Hangar grouping, lock-on engine, metadata cache, camera zoom/tap-to-ID), read the
-source + each one's focused test file — they're not restated here.
+Hangar grouping, catch membership, metadata cache, camera zoom/tap-to-assert), read
+the source + each one's focused test file — they're not restated here.
 
 - **MainActor default isolation (Xcode 26).** `SWIFT_DEFAULT_ACTOR_ISOLATION =
   MainActor` — every type/extension/global is implicitly `@MainActor` unless marked
@@ -53,24 +53,38 @@ source + each one's focused test file — they're not restated here.
   **elevation-dependent distance band** (a near→full→contrail curve — see the field
   data in `ADSBManager.swift`, not a single km cap). A reported "missing plane
   label" is usually the filter doing its job — check below-horizon / too-far first.
-  Genuinely-visible-but-filtered planes are reachable via **tap-to-reveal**
-  (`revealedIcao`: a tap pins + force-locks the single nearest in-data plane when
-  `shouldTapReveal` says so — reason `filtered` (hidden by the band) **or**
-  `off-frame` (a visible-tier plane projected off-screen, usually a compass/heading
-  error; DAL972, 2026-07-11); `grounded` never reveals, and the parked-plane
-  toast only fires when the parked plane is within `groundedToastMaxSlantMeters`
-  (1 km) — beyond that it classifies `grounded-far` and is rescued like
-  `filtered-far` (parked OAK freighters on the horizon beat the visible plane
-  on angle; the Bay Bridge case, 2026-08-26)). The tap's subject is NOT
-  simply the angular-nearest in-data plane: a `filtered-far`/`grounded-far`
-  winner is rescued by
-  the nearest actionable plane in the cone, and the beyond-eyeshot toast only
-  shows when nothing in data is within reveal reach — quoting the
-  distance-nearest slant (`chooseEmptySkyTapSubject` / `farTapToastSlantMeters`;
-  the Dumbarton drive, 2026-07-20 — a car-corrupted compass let a 50 km stranger
-  beat the visible arrival on angle). **Don't loosen the ambient
-  filter to chase one** — it resurfaces the MLAT clutter the precision lean kills
-  (see the `FieldReplays` regression).
+  Genuinely-visible-but-filtered planes are reachable via **tap-assert**
+  (`assertedPlanes`: a tap asserts the diagnosed plane when `shouldTapReveal`
+  says so — reason `filtered` (hidden by the band) **or** `off-frame` (a
+  visible-tier plane projected off-screen, usually a compass/heading error;
+  DAL972, 2026-07-11); a tap on a FAINT-tier label promotes it the same way.
+  Asserted planes label bright, are guaranteed a press slot, skip the occlusion
+  demote, and expire via the 1 Hz prune (on frame + 15 s grace). `grounded`
+  never asserts, and the parked-plane toast only fires when the parked plane is
+  within `groundedToastMaxSlantMeters` (1 km) — beyond that it classifies
+  `grounded-far` and is rescued like `filtered-far` (parked OAK freighters on
+  the horizon beat the visible plane on angle; the Bay Bridge case,
+  2026-08-26)). The tap's subject is NOT simply the angular-nearest in-data
+  plane: a `filtered-far`/`grounded-far` winner is rescued by the nearest
+  actionable plane in the cone, and the beyond-eyeshot toast only shows when
+  nothing in data is within reveal reach — quoting the distance-nearest slant
+  (`chooseEmptySkyTapSubject` / `farTapToastSlantMeters`; the Dumbarton drive,
+  2026-07-20 — a car-corrupted compass let a 50 km stranger beat the visible
+  arrival on angle). **Don't loosen the ambient filter to chase one** — it
+  resurfaces the MLAT clutter the precision lean kills (see the `FieldReplays`
+  regression).
+- **Frame is the catch (2026-08-28).** Press membership is `chooseCatchMembers`
+  (`CatchMembership.swift`): bright (`.full`) tier on frame, occlusion-demoted
+  via the live sky grid, asserted planes guaranteed, arcmin-ranked, capped at
+  `maxCatchTargets` (3). Three load-bearing invariants: **bright = in the
+  press** (the label hierarchy IS the catch promise — never render a
+  non-member full-bright), **membership freezes at the shutter** (catch-time
+  vision snaps brackets and feeds gates but never edits the caught set), and
+  **there is no selection** — no zones, pins, or dominance; don't add a
+  "pick this plane" affordance back without reopening the decision record
+  (`docs/plans/2026-08-28-feat-frame-is-the-catch.md`). The detector runs at
+  catch time only; `VisualConfirmationPipeline.updateTarget` is the kept-but-
+  unarmed live-tracking upgrade path.
 - **The catch pipeline reads the shutter-press snapshot, never live sensors.**
   `runCatch` snapshots pose + observations (`press*`) before its first await;
   everything downstream — bracket projection, capture diagnostics — uses the

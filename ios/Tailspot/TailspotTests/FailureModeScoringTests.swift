@@ -137,29 +137,47 @@ struct FailureModeScoringTests {
 
     // MARK: - Mis-association (mode 5)
 
-    @Test func pinOnPlaneAppWouldNotCenterScoresMisAssociation() {
-        // Two visible planes; learn which the center logic picks, pin the
-        // other — the app's auto-pick then diverges from ground truth.
-        let a = westAircraft(icao: "aaa111", altMeters: 300)              // higher → farther from center
-        let b = westAircraft(icao: "bbb222", altMeters: 220)             // lower → nearer center
-        let planes = [a, b]
+    @Test func pinOnCrowdedOutPlaneScoresMisAssociation() {
+        // Four bright on-frame planes; ambient membership takes the three
+        // largest (nearest). Pinning the smallest — the one an unaided
+        // press would NOT catch — is the crowded-out / wrong-plane class.
+        let planes = [
+            westAircraft(icao: "aaa111", altMeters: 220, lonOffset: -0.024),  // ~2.1 km
+            westAircraft(icao: "bbb222", altMeters: 300, lonOffset: -0.034),  // ~3.0 km
+            westAircraft(icao: "ccc333", altMeters: 400, lonOffset: -0.046),  // ~4.0 km
+            westAircraft(icao: "ddd444", altMeters: 500, lonOffset: -0.058),  // ~5.1 km
+        ]
         let r0 = ReplayAnalyzer().analyze([.tick(tick(at: 0, sensor: berkeleySensor(), aircraft: planes))])
-        let closest = try! #require(r0.ticks[0].closestToCenterIcao24)
-        let pinTarget = closest == "aaa111" ? "bbb222" : "aaa111"
+        #expect(r0.ticks[0].ambientChosenIcaos == ["aaa111", "bbb222", "ccc333"])
         let report = ReplayAnalyzer().scoreFailureModes([
-            .tapPin(.init(timestamp: t0, icao24: pinTarget)),
+            .tapPin(.init(timestamp: t0, icao24: "ddd444")),
             .tick(tick(at: 0.5, sensor: berkeleySensor(), aircraft: planes)),
         ])
         #expect(report.modesFired.contains(.misAssociation))
-        #expect(report.findings(for: .misAssociation).first?.icao24 == closest)
+        #expect(report.findings(for: .misAssociation).first?.icao24 == "ddd444")
+    }
+
+    @Test func pinOnAmbientChosenPlaneIsClean() {
+        // Pinning a plane ambient membership already chooses is agreement,
+        // not a finding.
+        let planes = [
+            westAircraft(icao: "aaa111", altMeters: 220, lonOffset: -0.024),
+            westAircraft(icao: "bbb222", altMeters: 300, lonOffset: -0.034),
+        ]
+        let report = ReplayAnalyzer().scoreFailureModes([
+            .tapPin(.init(timestamp: t0, icao24: "aaa111")),
+            .tick(tick(at: 0.5, sensor: berkeleySensor(), aircraft: planes)),
+        ])
+        #expect(!report.modesFired.contains(.misAssociation))
     }
 
     // MARK: - Phantom (mode 8) — no false positive
 
     @Test func vanishedPinnedPlaneDoesNotFalselyScorePhantom() {
-        // Pin A, then a tick where A is gone and nothing is visible: the
-        // engine holds sticky(A) as intended grace — not a phantom, and not
-        // a missed (A isn't in the data to compare against).
+        // Pin A, then a tick where A is gone and nothing is visible:
+        // membership is empty (a plane must be in the data to be chosen) —
+        // not a phantom, and not a missed (A isn't in the data to compare
+        // against).
         let report = ReplayAnalyzer().scoreFailureModes([
             .tapPin(.init(timestamp: t0, icao24: "abc123")),
             .tick(tick(at: 0.5, sensor: berkeleySensor(), aircraft: [])),
