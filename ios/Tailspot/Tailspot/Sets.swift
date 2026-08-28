@@ -27,6 +27,9 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
     let curatedRarity: Rarity
     let modelTokens: [String]       // case-insensitive substring match
     let summary: String             // tap-to-reveal blurb
+    /// Opt-in fallback for catches with no usable typecode or model identity.
+    /// Kept explicit so an unknown catch cannot accidentally fill a real model.
+    let matchesUnidentified: Bool
     /// A representative ICAO typecode for this entry — the one used
     /// when cross-referencing the activity-rarity table in tests
     /// (divergence-b fix, 2026-06-11). Optional for entries with no
@@ -46,13 +49,15 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
 
     init(id: String, canonicalName: String, rarity: Rarity,
          modelTokens: [String], summary: String,
-         representativeTypecode: String? = nil) {
+         representativeTypecode: String? = nil,
+         matchesUnidentified: Bool = false) {
         self.id = id
         self.canonicalName = canonicalName
         self.curatedRarity = rarity
         self.modelTokens = modelTokens
         self.summary = summary
         self.representativeTypecode = representativeTypecode
+        self.matchesUnidentified = matchesUnidentified
     }
 }
 
@@ -501,11 +506,17 @@ nonisolated enum CardSets {
                   modelTokens: ["e175", "e-175", "erj 175", "embraer 175"], summary: "The US regional-jet standard.",
                   representativeTypecode: "E75L"),
             .init(id: "fe190", canonicalName: "E190", rarity: .uncommon,
-                  modelTokens: ["e190", "e-190", "erj 190"], summary: "Larger E-Jet. Mainline-feel regional.",
+                  modelTokens: ["erj 190"], summary: "Larger E-Jet. Mainline-feel regional.",
                   representativeTypecode: "E190"),
             .init(id: "fe195", canonicalName: "E195", rarity: .uncommon,
-                  modelTokens: ["e195", "e-195", "erj 195"], summary: "Longest classic E-Jet.",
+                  modelTokens: ["erj 195"], summary: "Longest classic E-Jet.",
                   representativeTypecode: "E195"),
+            .init(id: "fe190-e2", canonicalName: "E190-E2", rarity: .uncommon,
+                  modelTokens: ["e190-e2", "e-190-e2"], summary: "New wing and geared turbofans. The shorter E2.",
+                  representativeTypecode: "E290"),
+            .init(id: "fe195-e2", canonicalName: "E195-E2", rarity: .uncommon,
+                  modelTokens: ["e195-e2", "e-195-e2"], summary: "The largest E-Jet. Up to 146 seats.",
+                  representativeTypecode: "E295"),
         ]),
         .init(id: "fam-crj", type: .regional, title: "Bombardier CRJ", entries: [
             .init(id: "fcrj200", canonicalName: "CRJ-200", rarity: .common,
@@ -543,7 +554,7 @@ nonisolated enum CardSets {
                   modelTokens: ["sovereign", "latitude", "680 citation"], summary: "Midsize, transcontinental range.",
                   representativeTypecode: "C680"),
             .init(id: "fc-longitude", canonicalName: "Citation X / Longitude", rarity: .uncommon,
-                  modelTokens: ["longitude", "citation 10", "650 citation", "700 citation", "750 citation"],
+                  modelTokens: ["longitude", "cessna citation x", "citation 10", "650 citation", "700 citation", "750 citation"],
                   summary: "The fast, long-range top of the line.",
                   representativeTypecode: "C700"),
             // "citation mustang", not bare "mustang" — a P-51 resolves to
@@ -594,6 +605,11 @@ nonisolated enum CardSets {
             .init(id: "fa380", canonicalName: "A380-800", rarity: .epic,
                   modelTokens: ["a380"], summary: "Full double-decker. The largest airliner flying.",
                   representativeTypecode: "A388"),
+        ]),
+        .init(id: "fam-a300", type: .wide, title: "Airbus A300", entries: [
+            .init(id: "fa300", canonicalName: "A300", rarity: .epic,
+                  modelTokens: ["a300"], summary: "The first twin-engine widebody. Cargo keeps it flying.",
+                  representativeTypecode: "A306"),
         ]),
         .init(id: "fam-757", type: .narrow, title: "Boeing 757", entries: [
             .init(id: "f757-200", canonicalName: "757-200", rarity: .common,
@@ -675,6 +691,10 @@ nonisolated enum CardSets {
             .init(id: "fc152", canonicalName: "Cessna 150 / 152", rarity: .common,
                   modelTokens: ["cessna 152", "c152", "152", "cessna 150"], summary: "Two-seat trainer.",
                   representativeTypecode: "C152"),
+            .init(id: "fc170", canonicalName: "Cessna 170", rarity: .common,
+                  modelTokens: ["cessna 170", "c170"],
+                  summary: "Postwar four-seat taildragger. The 172's immediate predecessor.",
+                  representativeTypecode: "C170"),
             .init(id: "fc172", canonicalName: "Cessna 172", rarity: .common,
                   modelTokens: ["cessna 172", "c172", "172", "skyhawk"], summary: "Most-built aircraft ever.",
                   representativeTypecode: "C172"),
@@ -693,6 +713,9 @@ nonisolated enum CardSets {
             .init(id: "fc208", canonicalName: "Cessna 208 Caravan", rarity: .common,
                   modelTokens: ["caravan", "c208", "208"], summary: "Single turboprop utility hauler.",
                   representativeTypecode: "C208"),
+            .init(id: "fc210", canonicalName: "Cessna 210 Centurion", rarity: .common,
+                  modelTokens: ["cessna 210", "c210", "centurion"], summary: "Fast retractable-gear six-seat single.",
+                  representativeTypecode: "C210"),
             // The twin the singles-only lineup skipped (field report 2026-08-12:
             // a Cape Air 402 catch had no slot to fill).
             .init(id: "fc402", canonicalName: "Cessna 402", rarity: .common,
@@ -793,6 +816,10 @@ nonisolated enum CardSets {
                   modelTokens: ["bell 429", "b429", "globalranger"],
                   summary: "Modern light twin. EMS and police.",
                   representativeTypecode: "B429"),
+            .init(id: "fh-h500", canonicalName: "MD 500 / 530", rarity: .uncommon,
+                  modelTokens: ["md 500", "md500", "md 530", "md530", "hughes 369"],
+                  summary: "Compact turbine workhorse. Scout, utility, and film ship.",
+                  representativeTypecode: "H500"),
             .init(id: "fh-h125", canonicalName: "Airbus H125", rarity: .uncommon,
                   modelTokens: ["h-125", "h125", "as350", "as 350", "as-350"],
                   summary: "The AStar. Tour and utility single.",
@@ -878,6 +905,10 @@ nonisolated enum CardSets {
     // somewhere; `SetsCoverageTests` pins that against a census snapshot.
     private static let familiesGapC: [CardSet] = [
         .init(id: "fam-turboprop-singles", type: .ga, title: "Turboprop singles", entries: [
+            .init(id: "ftp-epic", canonicalName: "Epic LT / E1000", rarity: .rare,
+                  modelTokens: ["epic lt", "e1000", "e-1000"],
+                  summary: "Carbon-composite speedster. Kit-built LT to certified E1000.",
+                  representativeTypecode: "EPIC"),
             .init(id: "ftp-pc12", canonicalName: "Pilatus PC-12", rarity: .uncommon,
                   modelTokens: ["pc-12", "pc12"], summary: "The Swiss do-everything single. Charter king.",
                   representativeTypecode: "PC12"),
@@ -892,21 +923,24 @@ nonisolated enum CardSets {
                   representativeTypecode: "DHC2"),
         ]),
         .init(id: "fam-commuter-props", type: .regional, title: "Commuter props", entries: [
-            .init(id: "fcp-islander", canonicalName: "BN-2 Islander", rarity: .common,
+            .init(id: "fcp-islander", canonicalName: "BN-2 Islander", rarity: .uncommon,
                   modelTokens: ["bn-2", "islander"], summary: "Boxy island-hopper. Ten seats, two pistons.",
                   representativeTypecode: "BN2P"),
-            .init(id: "fcp-twinotter", canonicalName: "DHC-6 Twin Otter", rarity: .common,
+            .init(id: "fcp-twinotter", canonicalName: "DHC-6 Twin Otter", rarity: .uncommon,
                   modelTokens: ["dhc-6", "twin otter"], summary: "STOL twin. Skis, floats, gravel bars.",
                   representativeTypecode: "DHC6"),
             .init(id: "fcp-saab340", canonicalName: "Saab 340", rarity: .common,
                   modelTokens: ["saab 340", "sf34"], summary: "Swedish 30-seater. Freight and regionals now.",
                   representativeTypecode: "SF34"),
-            .init(id: "fcp-l410", canonicalName: "L-410 Turbolet", rarity: .common,
+            .init(id: "fcp-l410", canonicalName: "L-410 Turbolet", rarity: .uncommon,
                   modelTokens: ["l-410", "turbolet"], summary: "Czech 19-seat commuter twin.",
                   representativeTypecode: "L410"),
-            .init(id: "fcp-be99", canonicalName: "Beech 99", rarity: .common,
+            .init(id: "fcp-be99", canonicalName: "Beech 99", rarity: .rare,
                   modelTokens: ["99 airliner", "be99"], summary: "Small feeder liner. Cargo runs today.",
                   representativeTypecode: "BE99"),
+            .init(id: "fcp-p2012", canonicalName: "Tecnam P-2012 Traveller", rarity: .rare,
+                  modelTokens: ["p-2012", "p2012"], summary: "Modern 11-seat commuter twin. A small but growing fleet.",
+                  representativeTypecode: "P212"),
         ]),
         .init(id: "fam-military", type: .mil, title: "Military", entries: [
             .init(id: "fm-c130", canonicalName: "C-130 Hercules", rarity: .epic,
@@ -954,6 +988,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "EA50"),
         ]),
         .init(id: "fam-vintage", type: .heritage, title: "Vintage & warbirds", entries: [
+            .init(id: "fv-safir", canonicalName: "Saab 91 Safir", rarity: .rare,
+                  modelTokens: ["saab 91", "91 safir"], summary: "Swedish four-seat trainer from the 1940s.",
+                  representativeTypecode: "SB91"),
             .init(id: "fv-stearman", canonicalName: "Stearman Kaydet", rarity: .common,
                   modelTokens: ["stearman", "kaydet"], summary: "Open-cockpit biplane trainer. Barnstormer look.",
                   representativeTypecode: "ST75"),
@@ -988,9 +1025,16 @@ nonisolated enum CardSets {
             .init(id: "fsc-icon", canonicalName: "Icon A5", rarity: .common,
                   modelTokens: ["icon a-5", "icon a5"], summary: "Folding-wing amphibian jet-ski of the sky.",
                   representativeTypecode: "A5"),
-            .init(id: "fsc-tecnam", canonicalName: "Tecnam", rarity: .common,
-                  modelTokens: ["tecnam"], summary: "Italian lights — trainers to the P2012 commuter.",
-                  representativeTypecode: "P212"),
+            .init(id: "fsc-tecnam", canonicalName: "Tecnam light aircraft", rarity: .common,
+                  modelTokens: ["astore", "p-92", "p-96", "p-2002", "p-2004", "p-2006", "p-2008", "p-2010"],
+                  summary: "Italian light singles and twins — trainers, tourers, and sport aircraft.",
+                  representativeTypecode: "SIRA"),
+        ]),
+        .init(id: "fam-unidentified", type: .ga, title: "Unidentified aircraft", entries: [
+            .init(id: "fu-unidentified", canonicalName: "Unidentified transponder", rarity: .common,
+                  modelTokens: [],
+                  summary: "A real catch whose transponder identity is privacy-blocked, stale, or not yet present in the aircraft registry.",
+                  matchesUnidentified: true),
         ]),
     ]
 
@@ -1068,6 +1112,11 @@ nonisolated enum CardSets {
     /// can only gain), so existing type-set behavior is unchanged for
     /// token-matched catches.
     nonisolated static func matches(key: CatchMatchKey, entry: CardSetEntry) -> Bool {
+        if entry.matchesUnidentified {
+            return (key.typecode?.isEmpty ?? true)
+                && key.rawModelLowercased.isEmpty
+                && key.canonicalLowercased.isEmpty
+        }
         if let tc = entry.representativeTypecode,
            let ctc = key.typecode,
            !ctc.isEmpty,
