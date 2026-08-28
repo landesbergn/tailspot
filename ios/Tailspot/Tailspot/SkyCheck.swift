@@ -87,7 +87,19 @@ nonisolated struct SkyCheck {
         /// ones that already slip through — the learned classifier
         /// (backlogged) remains the real fix for both.
         var warmThreshold: Double = 0.10
-        var luminanceForColorTrust: Double = 0.12
+        /// Raised 0.12 → 0.30 on 2026-08-27 (night false-positive audit):
+        /// 29 of 59 field `notSky` fires in the prior week were DIM frames
+        /// (lum 0.13–0.30) — night spotting under warm artificial light
+        /// (patio string lights, streetlights; photo-verified outdoors on
+        /// Noah's phone), where auto-exposure lifted the frame past the old
+        /// floor and the warm lamps read as an interior. All 10 reviewed
+        /// indoor flags that week were answered Keep. Below this floor the
+        /// verdict is `.uncertain` (passes). Deliberate cost: dim warm
+        /// interiors (e.g. the corpus's lum-0.20 blank ceiling) now slip
+        /// through alongside the cool-lit ones — night spotting must work
+        /// beats catching dim-room cheats (fail open). The learned
+        /// classifier (PLAN §9) remains the real fix for both.
+        var luminanceForColorTrust: Double = 0.30
 
         static let `default` = Thresholds()
     }
