@@ -67,10 +67,17 @@ final class WeeklyRankPrewarm {
         task = nil
     }
 
+    /// The one place that knows the endpoint/window/mapping triple — the
+    /// pre-warm path and the debug forced loop both call it.
+    static func fetchRankNow() async -> Int? {
+        let response = try? await TailspotAccountClient().leaderboard(window: .week, limit: 1)
+        return WeeklyRankArbitration.displayRank(response?.me)
+    }
+
     /// Wait for the catch's upload to confirm (the per-catch sweep runs in
     /// parallel), then fetch the caller's weekly standing. Internally
     /// generous (a slow field upload can still land a rank) — the
-    /// presentation-side `await(budgetSeconds:)` is what keeps the
+    /// presentation-side `awaitRank(budgetSeconds:)` is what keeps the
     /// celebration snappy.
     func start(isUploaded: @escaping @MainActor () -> Bool) {
         cancel()
@@ -80,24 +87,21 @@ final class WeeklyRankPrewarm {
                 try? await Task.sleep(for: .milliseconds(250))
             }
             guard isUploaded(), !Task.isCancelled else { return nil }
-            let response = try? await TailspotAccountClient().leaderboard(window: .week, limit: 1)
-            return WeeklyRankArbitration.displayRank(response?.me)
+            return await Self.fetchRankNow()
         }
     }
 
     /// Race the pre-warmed resolution against the A5 presentation budget.
     func awaitRank(budgetSeconds: Double) async -> Int? {
         guard let task else { return nil }
-        let deadline = Task { () -> Int? in
-            try? await Task.sleep(for: .seconds(budgetSeconds))
-            return nil
-        }
         return await withTaskGroup(of: Int?.self) { group in
             group.addTask { await task.value }
-            group.addTask { await deadline.value }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(budgetSeconds))
+                return nil
+            }
             let first = await group.next() ?? nil
             group.cancelAll()
-            deadline.cancel()
             return first
         }
     }
@@ -125,13 +129,7 @@ struct WeeklyRankCardView: View {
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                     if moment.forced {
-                        Text("FORCED")
-                            .font(Brand.Font.mono(size: 9, weight: .bold))
-                            .tracking(0.8)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Brand.Color.alertAdvisory, in: .capsule)
-                            .foregroundStyle(Brand.Color.bgPrimary)
+                        ForcedBadge()
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {

@@ -614,6 +614,10 @@ struct ContentView: View {
                                 onScreenProjected.map { ($0.icao, $0.position) },
                                 uniquingKeysWith: { first, _ in first }
                             )
+                            // Guided flags, read once per frame (each hides a
+                            // UserDefaults read behind the seam).
+                            let isGuidedActive = guidedModeActive
+                            let isGuidedForced = guidedModeForced
                             // Activation funnel (R9): a label ACTUALLY rendered in
                             // frame — unlike `first_plane_seen`, which fires on the
                             // range filter even for a plane behind the user. Hop out
@@ -623,7 +627,7 @@ struct ContentView: View {
                                 // Forced runs stay silent AND latch-free —
                                 // these are once-per-install events a forced
                                 // run would burn for real (R10/KTD6).
-                                guard !firstLabelSeenLatched, !guidedModeForced,
+                                guard !firstLabelSeenLatched, !isGuidedForced,
                                       !onScreenProjected.isEmpty else { return }
                                 let count = onScreenProjected.count
                                 DispatchQueue.main.async {
@@ -712,14 +716,10 @@ struct ContentView: View {
                             // (never steer on stale extrapolated positions),
                             // and the restore prompt keeps priority.
                             let guidedStep: GuidedCatchStep? = {
-                                guard guidedModeActive,
+                                guard isGuidedActive,
                                       adsb.lastErrorUserMessage == nil,
                                       !restoreManager.isPresenting,
                                       cameraAuthorized else { return nil }
-                                let captureEnabled: Bool = {
-                                    if case .disabled = mode { return false }
-                                    return true
-                                }()
                                 let guidedCandidates = visible
                                     .filter { !$0.grounded && $0.clearsCatchSizeFloor }
                                     .map { obs in
@@ -740,7 +740,7 @@ struct ContentView: View {
                                     headingDeg: location.heading,
                                     cameraElevationDeg: camEl,
                                     onScreenIcaos: Set(onScreenIcaos),
-                                    captureEnabled: captureEnabled
+                                    captureEnabled: mode.isEnabled
                                 ))
                                 guidedTargetHolder.icao24 = derivation.targetIcao24
                                 return derivation.step
@@ -749,7 +749,7 @@ struct ContentView: View {
                                 GuidedCatchChrome(
                                     step: guidedStep,
                                     screenSize: geo.size,
-                                    forced: guidedModeForced
+                                    forced: isGuidedForced
                                 )
                                 .allowsHitTesting(false)
                             }
@@ -1237,6 +1237,11 @@ struct ContentView: View {
         #if DEBUG
         forced = GuidedCatchDebug.isForced()
         #endif
+        // Fast path: mirrors isModeActive's own short-circuit, but skips the
+        // UserDefaults retirement read Swift would otherwise evaluate eagerly
+        // — this is called from the 30 Hz render closure, and for anyone with
+        // catches the answer can never be true.
+        guard forced || catches.isEmpty else { return false }
         return GuidedCatch.isModeActive(
             catchCount: catches.count,
             retired: GuidedCatch.isRetired(),
@@ -1809,6 +1814,14 @@ struct ContentView: View {
             case .single(let i):   return [i]
             case .multi(let list): return list
             }
+        }
+
+        /// One owner for "can the shutter fire" — the capture button's
+        /// tap-gate and the guided-step derivation both read this, so they
+        /// can't drift if a new non-actionable case lands.
+        var isEnabled: Bool {
+            if case .disabled = self { return false }
+            return true
         }
     }
 
@@ -3041,8 +3054,7 @@ struct ContentView: View {
             while unlockCenter.hasPending && Date() < deadline {
                 try? await Task.sleep(for: .milliseconds(250))
             }
-            let response = try? await TailspotAccountClient().leaderboard(window: .week, limit: 1)
-            let rank = WeeklyRankArbitration.displayRank(response?.me)
+            let rank = await WeeklyRankPrewarm.fetchRankNow()
             withAnimation(.easeOut(duration: 0.25)) {
                 weeklyRankMoment = WeeklyRankMoment(rank: rank, forced: true)
             }
@@ -3355,10 +3367,7 @@ struct ContentView: View {
             if case .multi(let icaos) = mode { return icaos.count }
             return 0
         }()
-        let isEnabled: Bool = {
-            if case .disabled = mode { return false }
-            return true
-        }()
+        let isEnabled = mode.isEnabled
 
         return Button {
             guard isEnabled else { return }
@@ -3541,7 +3550,10 @@ struct ContentView: View {
                         Circle()
                             .fill(pillTint)
                             .frame(width: 6, height: 6)
-                            .modifier(EmptyPulse(active: lastErr == nil))
+                            // Liveness breathe on the scanning dot; steady
+                            // when the pill carries an error string (the
+                            // signal shouldn't contradict the message).
+                            .modifier(BreathingPulse(active: lastErr == nil))
                         Text(pillText)
                             .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(1.2)
@@ -4707,31 +4719,6 @@ struct CornerBracket: Shape {
 }
 
 // MARK: - Empty-sky pulse
-
-/// Slow 0.4 → 1.0 opacity breathe at ~1 Hz. Used on the empty-sky
-/// status dot so it telegraphs "actively scanning" without being
-/// a radar sweep. Disabled (`active: false`) when the pill is
-/// surfacing an error string — at that point we don't want the
-/// liveness signal contradicting the message. Reduce Motion: a
-/// steady full-opacity dot, no TimelineView ticking.
-private struct EmptyPulse: ViewModifier {
-    let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if active && !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                // Cosine breathing: 0.4 → 1.0 → 0.4 once per ~1.4 s.
-                let phase = (cos(t * 4.5) + 1) / 2     // 0…1
-                content.opacity(0.4 + 0.6 * phase)
-            }
-        } else {
-            content
-        }
-    }
-}
 
 // MARK: - Empty-tap ripple
 

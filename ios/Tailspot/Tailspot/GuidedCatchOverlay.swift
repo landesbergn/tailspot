@@ -81,13 +81,7 @@ private struct GuidedBanner: View {
         VStack(spacing: 3) {
             HStack(spacing: 6) {
                 if forced {
-                    Text("FORCED")
-                        .font(Brand.Font.mono(size: 9, weight: .bold))
-                        .tracking(0.8)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Brand.Color.alertAdvisory, in: .capsule)
-                        .foregroundStyle(Brand.Color.bgPrimary)
+                    ForcedBadge()
                 }
                 Text(text)
                     .font(Brand.Font.mono(size: 12, weight: .semibold))
@@ -119,7 +113,6 @@ private struct GuidedBanner: View {
 private struct GuidedSteeringCue: View {
     let steer: GuidedSteering
     let screenSize: CGSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var needsTiltUp: Bool {
         abs(steer.turnDeg) < 20 && steer.elevationDeltaDeg > 10
@@ -155,7 +148,8 @@ private struct GuidedSteeringCue: View {
             Image(systemName: chevron)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Brand.Color.cyan)
-                .modifier(EmptyStepPulse(active: !reduceMotion))
+                // Quieter breathe than a capture-grade pulse.
+                .modifier(BreathingPulse(active: true, frequency: 3.5, minOpacity: 0.55))
             Text(tagText)
                 .font(Brand.Font.mono(size: 10, weight: .bold))
                 .tracking(0.6)
@@ -176,22 +170,42 @@ private struct GuidedSteeringCue: View {
     }
 }
 
-/// Slow breathing for the steering chevron — quieter than a capture-grade
-/// pulse; suppressed under Reduce Motion.
-private struct EmptyStepPulse: ViewModifier {
+/// The one cosine-breathing opacity modifier (consolidates the former
+/// `EmptyPulse` in ContentView and the steering cue's copy — one place to
+/// tune the animation math). Breathes `minOpacity → 1.0 → minOpacity` at
+/// `frequency` rad/s; Reduce Motion or `active: false` renders steady
+/// content with no TimelineView ticking.
+struct BreathingPulse: ViewModifier {
     let active: Bool
+    var frequency: Double = 4.5
+    var minOpacity: Double = 0.4
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if active {
+        if active && !reduceMotion {
             TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
                 let t = context.date.timeIntervalSinceReferenceDate
-                let phase = (cos(t * 3.5) + 1) / 2
-                content.opacity(0.55 + 0.45 * phase)
+                let phase = (cos(t * frequency) + 1) / 2     // 0…1
+                content.opacity(minOpacity + (1 - minOpacity) * phase)
             }
         } else {
             content
         }
+    }
+}
+
+/// The debug FORCED marker (R10) — shared by the guided banner and the
+/// weekly-rank card so a lying screen is badged identically everywhere.
+struct ForcedBadge: View {
+    var body: some View {
+        Text("FORCED")
+            .font(Brand.Font.mono(size: 9, weight: .bold))
+            .tracking(0.8)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Brand.Color.alertAdvisory, in: .capsule)
+            .foregroundStyle(Brand.Color.bgPrimary)
     }
 }
 
