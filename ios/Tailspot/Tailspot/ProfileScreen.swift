@@ -660,7 +660,9 @@ struct ProfileScreen: View {
 
     private var sectionLinks: some View {
         VStack(spacing: 0) {
-            sectionLink(label: "Rarity reference", systemImage: "diamond") { RarityReferenceScreen() }
+            sectionLink(label: "Rarity guide", systemImage: "diamond") {
+                RarityReferenceScreen(catches: catches)
+            }
             divider
             sectionLink(label: "Settings", systemImage: "gear") { SettingsScreen() }
         }

@@ -4,8 +4,8 @@
 //
 //  Pins FAMILY-SET COVERAGE against reality: every aircraft type users have
 //  actually caught must land in at least one family set. The fixture below is
-//  a snapshot of the full prod catch census (2026-08-24, 155 distinct
-//  typecodes across 2,439 resolved catches) — the same audit that produced
+//  a snapshot of the full prod catch census (refreshed 2026-08-27, 165 distinct
+//  typecodes across 2,741 resolved catches) — the same audit that produced
 //  gap chunk C in Sets.swift. Before it, 49 of these types (~6% of catches)
 //  matched no set and the catch silently filled nothing.
 //
@@ -25,7 +25,7 @@ import Foundation
 @Suite("Sets coverage")
 struct SetsCoverageTests {
 
-    /// (typecode, manufacturer, model) — prod census snapshot 2026-08-24.
+    /// (typecode, manufacturer, model) — prod census snapshot 2026-08-27.
     private static let prodCensus: [(String, String, String)] = [
         ("B738", "Boeing", "737-800"), ("E75L", "Embraer", "175"),
         ("CRJ9", "Bombardier", "CRJ-900"), ("A321", "Airbus", "A321"),
@@ -105,6 +105,19 @@ struct SetsCoverageTests {
         ("BE95", "Beechcraft", "95 Travel Air"), ("BE24", "Beechcraft", "24 Sierra"),
         ("SF34", "Saab", "340"), ("MD11", "Boeing", "MD-11"),
         ("A5", "Icon", "A-5"),
+        // Newly observed since the 2026-08-24 snapshot. Five required new
+        // slots (A306/C210/EPIC/H500/SB91); the rest exercise existing broad
+        // family tokens or exact typecode entries.
+        ("A306", "Airbus", "A300B4-600"),
+        ("B762", "Boeing", "767-200"),
+        ("BE35", "Beechcraft", "35 Bonanza"),
+        ("C210", "Cessna", "210"),
+        ("C30J", "Lockheed Martin", "C-130J Super Hercules"),
+        ("EPIC", "Epic Aircraft", "Epic LT / E1000"),
+        ("FA7X", "Dassault", "Falcon 7X"),
+        ("H500", "MD Helicopters", "MD 500 / 530"),
+        ("SB91", "Saab", "91 Safir"),
+        ("T206", "Cessna", "T206 Stationair TC"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {

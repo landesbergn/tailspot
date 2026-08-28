@@ -58,12 +58,47 @@ struct RarityResolutionTests {
         #expect(AircraftNaming.rarity(forTypecode: code) == expected)
     }
 
+    @Test(arguments: [
+        ("EPIC", Rarity.rare),       // ~150 LT/E1000-family aircraft; low annual utilization
+        ("ESCA", .rare),             // scarce legacy Epic design
+        ("SB91", .rare),             // vintage Saab trainer
+        ("BE99", .rare),             // small aging feeder/cargo fleet
+        ("P212", .rare),             // young, still-small commuter fleet
+        ("BN2P", .uncommon),         // established utility commuter, not regional-jet frequency
+        ("DHC6", .uncommon),         // active worldwide, but localized STOL operations
+        ("L410", .uncommon),         // established niche commuter fleet
+    ])
+    func rarityAccuracyAudit(_ code: String, _ expected: Rarity) {
+        #expect(AircraftNaming.rarity(forTypecode: code) == expected)
+    }
+
     @Test func unknownTypecode_returnsNil() {
         // Unknown / nil typecode falls through to nil; callers then resolve
         // to the conservative `.common` default (the single-source rule —
         // the string classifier's rarity ladder is no longer a fallback).
         #expect(AircraftNaming.rarity(forTypecode: "ZZZZ") == nil)
         #expect(AircraftNaming.rarity(forTypecode: nil) == nil)
+    }
+
+    @Test func browsableCatalogMirrorsRaritySource() {
+        let catalog = AircraftNaming.catalogAircraft
+
+        #expect(!catalog.isEmpty)
+        #expect(Set(catalog.map(\.typecode)).count == catalog.count)
+        #expect(catalog.allSatisfy {
+            AircraftNaming.rarity(forTypecode: $0.typecode) == $0.rarity
+        })
+
+        let epic = catalog.first { $0.typecode == "EPIC" }
+        #expect(epic?.displayName == "Epic Aircraft Epic LT / E1000")
+        #expect(epic?.rarity == .rare)
+    }
+
+    @Test(arguments: Rarity.allCases)
+    func tierBrowserContainsOnlyRequestedRarity(_ rarity: Rarity) {
+        let planes = AircraftNaming.aircraft(in: rarity)
+        #expect(!planes.isEmpty)
+        #expect(planes.allSatisfy { $0.rarity == rarity })
     }
 
     // MARK: resolvedRarity corrects prior data on read

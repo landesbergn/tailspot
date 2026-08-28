@@ -41,7 +41,8 @@ struct FamilySetsTests {
         for set in CardSets.families {
             for e in set.entries {
                 guard let tc = e.representativeTypecode else {
-                    Issue.record("Family entry '\(e.id)' has no typecode — families are typecode-driven")
+                    #expect(e.matchesUnidentified,
+                            "Only the explicit unidentified fallback may omit a typecode (entry '\(e.id)')")
                     continue
                 }
                 guard let table = AircraftNaming.rarity(forTypecode: tc) else {
@@ -72,6 +73,58 @@ struct FamilySetsTests {
         let classic = mk(typecode: "A320", model: "A320")
         #expect(CardSets.matches(catch: classic, entry: entry("fam-a320", "fa320")))
         #expect(!CardSets.matches(catch: classic, entry: entry("fam-a320", "fa320neo")))
+    }
+
+    @Test func eJetE2DoesNotBleedIntoClassicSlot() {
+        let e190e2 = mk(typecode: "E290", model: "E190-E2")
+        #expect(CardSets.matches(catch: e190e2, entry: entry("fam-ejet", "fe190-e2")))
+        #expect(!CardSets.matches(catch: e190e2, entry: entry("fam-ejet", "fe190")))
+
+        let e195e2 = mk(typecode: "E295", model: "E195-E2")
+        #expect(CardSets.matches(catch: e195e2, entry: entry("fam-ejet", "fe195-e2")))
+        #expect(!CardSets.matches(catch: e195e2, entry: entry("fam-ejet", "fe195")))
+
+        let classic = mk(typecode: "E195", model: "195")
+        #expect(CardSets.matches(catch: classic, entry: entry("fam-ejet", "fe195")))
+        #expect(!CardSets.matches(catch: classic, entry: entry("fam-ejet", "fe195-e2")))
+    }
+
+    @Test(arguments: [
+        ("EPIC", "fam-turboprop-singles", "ftp-epic"),
+        ("A306", "fam-a300", "fa300"),
+        ("C210", "fam-cessna", "fc210"),
+        ("H500", "fam-heli", "fh-h500"),
+        ("SB91", "fam-vintage", "fv-safir"),
+    ])
+    func newlyCaughtTypesFillTheirIntendedFamily(typecode: String, familyId: String, entryId: String) {
+        #expect(CardSets.matches(catch: mk(typecode: typecode), entry: entry(familyId, entryId)))
+    }
+
+    @Test func p2012LivesWithCommutersNotTecnamLightAircraft() {
+        let traveller = mk(typecode: "P212")
+        #expect(CardSets.matches(catch: traveller, entry: entry("fam-commuter-props", "fcp-p2012")))
+        #expect(!CardSets.matches(catch: traveller, entry: entry("fam-sport-classics", "fsc-tecnam")))
+
+        let trainer = mk(typecode: "SIRA")
+        #expect(CardSets.matches(catch: trainer, entry: entry("fam-sport-classics", "fsc-tecnam")))
+        #expect(!CardSets.matches(catch: trainer, entry: entry("fam-commuter-props", "fcp-p2012")))
+    }
+
+    @Test func citationXNameDoesNotBleedIntoXLS() {
+        let topCitation = entry("fam-citation", "fc-longitude")
+        #expect(CardSets.matches(catch: mk(typecode: "C750"), entry: topCitation))
+        #expect(!CardSets.matches(catch: mk(typecode: "C56X"), entry: topCitation),
+                "Citation XLS must not fill the Citation X / Longitude slot")
+    }
+
+    @Test func unidentifiedCatchHasAnHonestFallbackSet() {
+        let unknown = mk(typecode: nil, model: nil)
+        let fallback = entry("fam-unidentified", "fu-unidentified")
+        #expect(CardSets.matches(catch: unknown, entry: fallback))
+
+        #expect(!CardSets.matches(catch: mk(typecode: "B738"), entry: fallback))
+        #expect(!CardSets.matches(catch: mk(typecode: nil, model: "Zorpjet 9000"), entry: fallback),
+                "A named-but-unmapped model should be curated, not hidden in the unidentified slot")
     }
 
     @Test func douglasFamilyTree() {
@@ -151,7 +204,7 @@ struct FamilySetsTests {
             mk(typecode: nil,   model: "Boeing 747-8"),// token-only, no typecode
             mk(typecode: nil,   model: "cessna 172"),  // token-only GA
             mk(typecode: "ZZZZ", model: "SR22"),       // unknown typecode → token path
-            mk(typecode: nil,   model: nil),           // all-nil → matches nothing
+            mk(typecode: nil,   model: nil),           // all-nil → explicit unidentified slot
             mk(typecode: nil,   model: "Zorpjet 9000"),// matches nothing
         ]
         let keys = CardSets.matchKeys(for: catches)

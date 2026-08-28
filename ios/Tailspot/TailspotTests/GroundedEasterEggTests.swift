@@ -149,16 +149,43 @@ struct GroundedEasterEggTests {
     @Test func classifierRoutesGroundedToToastNotReveal() {
         // A grounded plane is ALSO tier-hidden; "grounded" must win over
         // "filtered" or the tap-reveal path would surface a parked plane.
+        // NEAR parked plane only (within `groundedToastMaxSlantMeters`) —
+        // one the user can plausibly be looking at.
         let reason = classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: true, tier: .hidden, onScreen: false,
+            offsetDeg: 10, grounded: true, slantMeters: 400,
+            tier: .hidden, onScreen: false,
             plausiblyRevealable: false
         )
         #expect(reason == "grounded")
     }
 
+    @Test func classifierRoutesFarParkedPlaneToGroundedFarNotToast() {
+        // The Bay Bridge case (2026-08-26): freighters parked at OAK — 18 km
+        // out, dead on the horizon line — must NOT earn the toast; they're
+        // invisible scenery, not the tap's subject.
+        #expect(classifyEmptySkyTapNearest(
+            offsetDeg: 5, grounded: true, slantMeters: 18_000,
+            tier: .hidden, onScreen: false,
+            plausiblyRevealable: false
+        ) == "grounded-far")
+        // The bound is exact: at the threshold the toast still wins.
+        #expect(classifyEmptySkyTapNearest(
+            offsetDeg: 5, grounded: true, slantMeters: groundedToastMaxSlantMeters,
+            tier: .hidden, onScreen: false,
+            plausiblyRevealable: false
+        ) == "grounded")
+    }
+
+    @Test func groundedFarNeverReveals() {
+        // Rescue may hand the tap to an airborne plane, but a far parked
+        // plane itself must never become the reveal subject.
+        #expect(!shouldTapReveal(reason: "grounded-far"))
+    }
+
     @Test func classifierKeepsTapRevealForAirborneFilteredPlanes() {
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .hidden, onScreen: false,
+            offsetDeg: 10, grounded: false, slantMeters: 5_000,
+            tier: .hidden, onScreen: false,
             plausiblyRevealable: true
         ) == "filtered")
     }
@@ -166,22 +193,26 @@ struct GroundedEasterEggTests {
     @Test func classifierIgnoresGroundedPlaneOutsideTapRadius() {
         #expect(classifyEmptySkyTapNearest(
             offsetDeg: emptySkyTapMaxOffsetDeg + 1,
-            grounded: true, tier: .hidden, onScreen: false,
+            grounded: true, slantMeters: 400,
+            tier: .hidden, onScreen: false,
             plausiblyRevealable: false
         ) == "nothing-nearby")
     }
 
     @Test func classifierPreservesLegacyReasons() {
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .full, onScreen: false,
+            offsetDeg: 10, grounded: false, slantMeters: 5_000,
+            tier: .full, onScreen: false,
             plausiblyRevealable: true
         ) == "off-frame")
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .full, onScreen: true,
+            offsetDeg: 10, grounded: false, slantMeters: 5_000,
+            tier: .full, onScreen: true,
             plausiblyRevealable: true
         ) == "on-screen")
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 41, grounded: false, tier: .full, onScreen: true,
+            offsetDeg: 41, grounded: false, slantMeters: 5_000,
+            tier: .full, onScreen: true,
             plausiblyRevealable: true
         ) == "nothing-nearby")
     }

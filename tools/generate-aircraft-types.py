@@ -561,6 +561,20 @@ OVERRIDES = {
     "PA27": ("Piper", "PA-23-250 Aztec"),       # was "U-11 Aztec"
     "PA18": ("Piper", "PA-18 Super Cub"),       # was "U-7 Super Cub"
     "PA11": ("Piper", "PA-11 Cub Special"),     # was "L-18B Cub Special"
+
+    # ----- 2026-08-27 field catch + production-census naming audit -----
+    # Legacy/licensee makes and short military/internal model names beat the
+    # recognizable family names in the deterministic ICAO reduction.
+    "EPIC": ("Epic Aircraft", "Epic LT / E1000"), # was legacy make "Air"
+    "ESCA": ("Epic Aircraft", "Epic Escape"),     # same legacy-make defect
+    "B06":  ("Bell", "206 JetRanger / LongRanger"), # was internal "406"
+    "AS50": ("Airbus Helicopters", "H125 / AS350"), # was military-only "Fennec"
+    "C30J": ("Lockheed Martin", "C-130J Super Hercules"), # was AC-130J only
+    "H47":  ("Boeing", "CH-47 Chinook"),         # was internal Model 114
+    "H500": ("MD Helicopters", "MD 500 / 530"),  # was certification model 369
+    "SB91": ("Saab", "91 Safir"),                # De Schelde was a licensee
+    "BE36": ("Beechcraft", "36 Bonanza"),        # was duplicated "36 Bonanza 36"
+    "C750": ("Cessna", "Citation X"),             # was numeric "750 Citation 10"
 }
 
 
@@ -741,8 +755,8 @@ def polish_model(make, model):
 # Aircraft type classification — driven by DOC 8643 AircraftDescription,
 # EngineType, WTC (wake turbulence category). Priority (highest first):
 #
-#   1. Rotorcraft / tiltrotor → ga  (no separate rotorcraft set in Tailspot)
-#   2. MIL exact-match set → mil   (EXACT match only — C17 ≠ C172)
+#   1. MIL exact-match set → mil   (before rotorcraft so military helis stay military)
+#   2. Rotorcraft / tiltrotor → ga  (no separate civil-rotorcraft type)
 #   3. BIZ exact-match set → biz
 #   4. REGIONAL exact-match set / regional prefix regex → regional
 #   5. Wide prefix regex / WTC H or J → wide
@@ -781,6 +795,9 @@ MIL = {
     'B52','C27J','C295','A400','P3','P8','E3CF','E3TF','E6',
     'C12','C12J','U28','RC12','C160','AN12','IL76','A124','C141',
     'VC25','E4','C32','C40','B1','B2','C2','E2',
+    # Military rotorcraft / tiltrotors. These must be checked before the
+    # generic rotorcraft→GA fallback below.
+    'H47','H60','H64','H53','H46','UH1','V22','NH90','A129','AS65',
 }
 # Regional jets absent from the prefix regex below — BAe 146, Avro RJ,
 # Fokker 70/100/F28, Dornier 328JET, Antonov An-148/158. Exact-match like
@@ -788,6 +805,9 @@ MIL = {
 # commercial regionals that do appear in-app, so the glyph matters.
 REGIONAL = {
     'B461','B462','B463','RJ1H','RJ70','RJ85','F28','F70','F100','J328','A148','A158',
+    # E-Jet E2 + small commuter airliners. Their catch badge should agree
+    # with the Regional family that already owns them.
+    'E275','E290','E295','BN2P','DHC6','L410','BE99','P212',
 }
 
 _REGIONAL_RE = re.compile(r'^(CRJ|E17|E19|E75|E70|DH8|AT4|AT7|AT5|SF3|SB20|J41|E45|E13|E14)')
@@ -805,13 +825,14 @@ def aircraft_type(tc, info):
     eng  = info.get("EngineType", "")
     wtc  = info.get("WTC", "")
 
-    # 1. Rotorcraft → ga
-    if desc in ("Helicopter", "Gyrocopter", "Tiltrotor"):
-        return "ga"
-
-    # 2. Military exact-match
+    # 1. Military exact-match. This intentionally precedes the rotorcraft
+    # fallback so a Chinook/Black Hawk/Osprey reads MIL, not GA.
     if tc in MIL:
         return "mil"
+
+    # 2. Civil rotorcraft → ga
+    if desc in ("Helicopter", "Gyrocopter", "Tiltrotor"):
+        return "ga"
 
     # 3. Bizjet exact-match
     if tc in BIZ:
@@ -862,6 +883,9 @@ def aircraft_type(tc, info):
 # designator; absent designators simply never match (harmless).
 # See docs/archive/superpowers/specs/2026-06-08-activity-rarity-design.md.
 RARITY_OVERRIDES = {
+    # Military category does not automatically imply an epic encounter. The
+    # Coast Guard Dolphin keeps its established, catchable-economy tier.
+    "AS65": "uncommon",
     # ── legendary — icons / extinct / sole-example / no civil signal ──
     # (grounded in 2025-26 fleet data — see docs/archive/plans/2026-06-29-002 plan §R1)
     "VC25": "legendary",  # Air Force One (VC-25A)
@@ -939,6 +963,11 @@ RARITY_OVERRIDES = {
     "P51":  "rare", "T6": "rare", "AT6": "rare",   # P-51 Mustang, T-6 Texan (100+ fly — abundant for warbirds)
     "B25":  "rare",       # B-25 Mitchell
     "DC3":  "rare", "JU52": "rare", "AN2": "rare", "BE18": "rare",   # vintage classics
+    # scarce owner-flown / vintage types and very small commuter fleets
+    "EPIC": "rare", "ESCA": "rare",  # ~150 LT + certified E1000-family aircraft
+    "SB91": "rare",                    # postwar vintage trainer
+    "BE99": "rare",                    # aging feeder/cargo fleet
+    "P212": "rare",                    # young, still-small P-2012 fleet
     # ── uncommon — newer / smaller narrowbody ──
     "BCS1": "uncommon", "BCS3": "uncommon",           # A220
     "E190": "uncommon", "E195": "uncommon",           # E190 / E195
@@ -947,6 +976,9 @@ RARITY_OVERRIDES = {
     "PC12": "uncommon",
     "TBM7": "uncommon", "TBM8": "uncommon", "TBM9": "uncommon",
     "BE20": "uncommon", "BE30": "uncommon", "B350": "uncommon",   # King Air
+    # active utility commuters: globally established, but far less sky
+    # presence than the scheduled regional-jet / ATR defaults
+    "BN2P": "uncommon", "DHC6": "uncommon", "L410": "uncommon",
 }
 
 
@@ -1139,7 +1171,7 @@ def main():
             e = out[desig]
             print(f"  {desig:5s} {e['make']} {e['model']} [{e.get('type','')}]")
 
-    # ── Acceptance fixture: 38 real typecodes ────────────────────────────────
+    # ── Acceptance fixture: representative real typecodes ───────────────────
     FIXTURE = {
         # narrow
         "A21N": "narrow", "B739": "narrow", "B738": "narrow", "B38M": "narrow",
@@ -1148,12 +1180,16 @@ def main():
         # wide
         "B772": "wide", "B788": "wide", "B77W": "wide", "B77L": "wide",
         # regional
-        "E75L": "regional", "CRJ7": "regional",
+        "E75L": "regional", "CRJ7": "regional", "E295": "regional",
+        "BN2P": "regional", "DHC6": "regional", "L410": "regional",
+        "BE99": "regional", "P212": "regional",
         # biz
         "E55P": "biz", "CL30": "biz", "C25B": "biz",
         "GLF5": "biz", "C510": "biz", "GALX": "biz",
         "EA50": "biz",  # Eclipse 500 VLJ — reclassified ga→biz 2026-06-09
                         # (it's a twin jet; "biz" reads truer than "ga")
+        # military rotorcraft (must beat the generic rotorcraft→GA fallback)
+        "H47": "mil", "H60": "mil", "V22": "mil",
         # ga
         "C172": "ga", "P28A": "ga", "C182": "ga", "M20P": "ga", "C310": "ga",
         "C195": "ga", "P28R": "ga", "PA31": "ga",
@@ -1166,7 +1202,7 @@ def main():
         "AR11": "ga",   # Aeronca 11 Chief → heritage piston
         "BE20": "ga",   # Beechcraft King Air 200 → turboprop
     }
-    print("\n── Acceptance fixture (38 typecodes) ──")
+    print("\n── Acceptance fixture ──")
     all_pass = True
     for tc, expected in sorted(FIXTURE.items()):
         got = out.get(tc, {}).get("type", "MISSING")

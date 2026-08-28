@@ -57,8 +57,13 @@ source + each one's focused test file — they're not restated here.
   (`revealedIcao`: a tap pins + force-locks the single nearest in-data plane when
   `shouldTapReveal` says so — reason `filtered` (hidden by the band) **or**
   `off-frame` (a visible-tier plane projected off-screen, usually a compass/heading
-  error; DAL972, 2026-07-11); `grounded` never reveals). The tap's subject is NOT
-  simply the angular-nearest in-data plane: a `filtered-far` winner is rescued by
+  error; DAL972, 2026-07-11); `grounded` never reveals, and the parked-plane
+  toast only fires when the parked plane is within `groundedToastMaxSlantMeters`
+  (1 km) — beyond that it classifies `grounded-far` and is rescued like
+  `filtered-far` (parked OAK freighters on the horizon beat the visible plane
+  on angle; the Bay Bridge case, 2026-08-26)). The tap's subject is NOT
+  simply the angular-nearest in-data plane: a `filtered-far`/`grounded-far`
+  winner is rescued by
   the nearest actionable plane in the cone, and the beyond-eyeshot toast only
   shows when nothing in data is within reveal reach — quoting the
   distance-nearest slant (`chooseEmptySkyTapSubject` / `farTapToastSlantMeters`;
@@ -66,6 +71,13 @@ source + each one's focused test file — they're not restated here.
   beat the visible arrival on angle). **Don't loosen the ambient
   filter to chase one** — it resurfaces the MLAT clutter the precision lean kills
   (see the `FieldReplays` regression).
+- **The catch pipeline reads the shutter-press snapshot, never live sensors.**
+  `runCatch` snapshots pose + observations (`press*`) before its first await;
+  everything downstream — bracket projection, capture diagnostics — uses the
+  snapshot. The shutter can lag the press by seconds (Debug builds especially),
+  and a "current" sensor read then captures the phone being LOWERED: diagnostics
+  recorded a −21.7° elevation, 41.5°-off catch of a dead-centered plane
+  (ASA1374, 2026-08-26). Press→exposure hand drift is the detector snap's job.
 - **Sensor concurrency.** Sensor wrappers are `ObservableObject` classes owned via
   `@StateObject`. All `@Published` mutations on the main thread — background
   callbacks (CMMotion/AVCapture queues, URLSession) hop `DispatchQueue.main.async`

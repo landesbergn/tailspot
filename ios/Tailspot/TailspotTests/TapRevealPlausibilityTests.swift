@@ -112,11 +112,13 @@ struct TapRevealPlausibilityTests {
 
     @Test func classifierSplitsFilteredByPlausibility() {
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .hidden, onScreen: false,
+            offsetDeg: 10, grounded: false, slantMeters: 5_000,
+            tier: .hidden, onScreen: false,
             plausiblyRevealable: true
         ) == "filtered")
         #expect(classifyEmptySkyTapNearest(
-            offsetDeg: 10, grounded: false, tier: .hidden, onScreen: false,
+            offsetDeg: 10, grounded: false, slantMeters: 5_000,
+            tier: .hidden, onScreen: false,
             plausiblyRevealable: false
         ) == "filtered-far")
     }

@@ -58,6 +58,17 @@ nonisolated enum AircraftNaming {
         }
     }
 
+    /// One browsable row from the bundled aircraft catalog. The ICAO
+    /// designator is the stable identity used by both the catalog and Catch,
+    /// so collection state can be joined without fuzzy name matching.
+    struct CatalogAircraft: Identifiable, Equatable, Sendable {
+        let typecode: String
+        let displayName: String
+        let rarity: Rarity
+
+        var id: String { typecode }
+    }
+
     // MARK: - Entry points
 
     static func canonical(
@@ -90,6 +101,27 @@ nonisolated enum AircraftNaming {
         guard let code = typecode?.trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased().nonEmpty else { return nil }
         return table[code]?.rarity
+    }
+
+    /// The complete bundled catalog, ordered by canonical aircraft name and
+    /// then typecode. Entries without a rarity are omitted because they cannot
+    /// belong to a rarity tier; the generated production catalog currently
+    /// assigns one to every entry.
+    static let catalogAircraft: [CatalogAircraft] = table.compactMap { typecode, name in
+        guard let rarity = name.rarity else { return nil }
+        return CatalogAircraft(
+            typecode: typecode,
+            displayName: name.displayName ?? typecode,
+            rarity: rarity
+        )
+    }
+    .sorted {
+        let nameOrder = $0.displayName.localizedCaseInsensitiveCompare($1.displayName)
+        return nameOrder == .orderedSame ? $0.typecode < $1.typecode : nameOrder == .orderedAscending
+    }
+
+    static func aircraft(in rarity: Rarity) -> [CatalogAircraft] {
+        catalogAircraft.filter { $0.rarity == rarity }
     }
 
     // MARK: - Bundled DOC 8643 table

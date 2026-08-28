@@ -27,10 +27,10 @@ describe("parseDoc8643Json", () => {
     expect(rows.map((r) => r.typecode)).not.toContain("a380");
   });
 
-  it("loads the real bundled AircraftTypes.json (2,612 entries)", () => {
+  it("loads the real bundled AircraftTypes.json (2,613 entries)", () => {
     const realPath = join(__dirname, "../../ios/Tailspot/Tailspot/AircraftTypes.json");
     const rows = parseDoc8643Json(readFileSync(realPath, "utf8"));
-    expect(rows.length).toBe(2612);
+    expect(rows.length).toBe(2613);
     // Every row carries an uppercase typecode and the four fields.
     for (const r of rows) {
       expect(r.typecode).toBe(r.typecode?.toUpperCase());
