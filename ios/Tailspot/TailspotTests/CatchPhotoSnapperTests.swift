@@ -89,7 +89,7 @@ struct CatchPhotoSnapperChoiceTests {
     }
 
     @Test func explicitRadiusOverridesReferenceRadius() {
-        // A detection past the 700 px reference radius must be reachable
+        // A detection past the 300 px reference radius must be reachable
         // when the caller passes a scaled radius (the fine pass at 12 MP).
         let d = det(0, 1500)
         #expect(CatchPhotoSnapper.choose(from: [d], predicted: .zero) == nil)
@@ -111,9 +111,9 @@ struct CatchPhotoSnapperResolutionTests {
     @Test func fullResPhotosScaleByWidthRatio() {
         let s = CatchPhotoSnapper.resolutionScale(photoWidth: 3024)
         #expect(abs(s - 2.8) < 0.001)
-        // The scaled snap radius stays proportionate to the frame: 700 px
-        // of a 1080 frame ≈ 1960 px of a 3024 frame.
-        #expect(abs(s * CatchPhotoSnapper.maxSnapRadiusPixels - 1960) < 1)
+        // The scaled snap radius stays proportionate to the frame: 300 px
+        // of a 1080 frame = 840 px of a 3024 frame.
+        #expect(abs(s * CatchPhotoSnapper.maxSnapRadiusPixels - 840) < 1)
     }
 
     @Test func legacyWidthsSkipTheCoarsePass() {
