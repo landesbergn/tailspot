@@ -76,6 +76,39 @@ struct GuidedOverlaySnapshotTests {
         }
     }
 
+    @Test func renderCapturePulseRing() {
+        // AE3's loud-capture signal (review finding: the ring was never
+        // rendered by any test). Static frame of the animated rings over
+        // the capture-button circle geometry.
+        let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let view = ZStack {
+            LinearGradient(
+                colors: [Color(hex: 0x0A0E1A), Color(hex: 0x2A3850)],
+                startPoint: .top, endPoint: .bottom
+            )
+            ZStack {
+                CapturePulseRing()
+                Circle()
+                    .fill(Brand.Color.bgPrimary.opacity(0.7))
+                    .frame(width: 72, height: 72)
+                Circle()
+                    .strokeBorder(Brand.Color.cyan, lineWidth: 2.5)
+                    .frame(width: 72, height: 72)
+            }
+        }
+        .frame(width: 200, height: 200)
+        .environment(\.colorScheme, .dark)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 3
+        guard let ui = renderer.uiImage, let png = ui.pngData() else {
+            Issue.record("render failed for capture_pulse_ring")
+            return
+        }
+        try? png.write(to: dir.appendingPathComponent("capture_pulse_ring.png"))
+    }
+
     @Test func renderWeeklyRankCardStates() {
         let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

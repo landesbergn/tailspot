@@ -31,19 +31,22 @@ nonisolated enum WeeklyRankArbitration {
 
     /// The moment may present only when every prior claimant of the
     /// post-catch sequence has settled: reveal covers down, suspect
-    /// Keep/Discard resolved, trophy queue drained, no sheet on top, and
-    /// nothing already showing or resolving.
+    /// Keep/Discard resolved, trophy queue drained, streak notification
+    /// pre-prompt answered (on a fresh install's first catch the ask is
+    /// staged by default — day-1 streaks are eligible since #213), no
+    /// sheet on top, and nothing already showing or resolving.
     static func canPresent(
         armed: Bool,
         revealUp: Bool,
         suspectReviewUp: Bool,
         trophiesPending: Bool,
+        streakAskUp: Bool,
         sheetUp: Bool,
         alreadyShowing: Bool,
         resolving: Bool
     ) -> Bool {
         armed && !revealUp && !suspectReviewUp && !trophiesPending
-            && !sheetUp && !alreadyShowing && !resolving
+            && !streakAskUp && !sheetUp && !alreadyShowing && !resolving
     }
 
     /// The backend reports `rank: 0` for a device with zero in-window
@@ -61,10 +64,19 @@ nonisolated enum WeeklyRankArbitration {
 @MainActor
 final class WeeklyRankPrewarm {
     var task: Task<Int?, Never>?
+    /// Outer `nil` = not finished; `.some(x)` = finished with rank `x`
+    /// (which is itself nil for the rank-free fallback). `awaitRank` polls
+    /// this instead of awaiting `task.value`: a non-throwing task's value
+    /// cannot be awaited with a deadline (cancelling the awaiting child
+    /// does not make the await return, and `withTaskGroup` waits for all
+    /// children), so a result slot is the only shape that actually bounds
+    /// the celebration's wall-clock wait to the A5 budget.
+    var resolved: Int??
 
     func cancel() {
         task?.cancel()
         task = nil
+        resolved = nil
     }
 
     /// The one place that knows the endpoint/window/mapping triple — the
@@ -86,24 +98,26 @@ final class WeeklyRankPrewarm {
             while !isUploaded() && Date() < uploadDeadline && !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
             }
-            guard isUploaded(), !Task.isCancelled else { return nil }
-            return await Self.fetchRankNow()
+            guard isUploaded(), !Task.isCancelled else {
+                resolved = .some(nil)
+                return nil
+            }
+            let rank = await Self.fetchRankNow()
+            resolved = .some(rank)
+            return rank
         }
     }
 
     /// Race the pre-warmed resolution against the A5 presentation budget.
+    /// Truly bounded: returns the resolved rank, or nil once the budget
+    /// elapses — the underlying task keeps running harmlessly and a later
+    /// call returns its cached result.
     func awaitRank(budgetSeconds: Double) async -> Int? {
-        guard let task else { return nil }
-        return await withTaskGroup(of: Int?.self) { group in
-            group.addTask { await task.value }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(budgetSeconds))
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+        let deadline = Date().addingTimeInterval(budgetSeconds)
+        while resolved == nil && Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
         }
+        return resolved ?? nil
     }
 }
 

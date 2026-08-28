@@ -1414,8 +1414,10 @@ struct ContentView: View {
     @ViewBuilder
     private var indoorHintBanner: some View {
         // The guided GoOutside step carries this hint's copy with coaching
-        // framing — one banner per condition (plan U2).
-        if pointedIndoors && !guidedModeActive {
+        // framing — one banner per condition (plan U2). But when guided
+        // chrome is itself suppressed (feed error → error pill wins), fall
+        // back to this hint rather than showing neither (review finding).
+        if pointedIndoors && !(guidedModeActive && adsb.lastErrorUserMessage == nil) {
             Text("Not many planes indoors.")
                 .font(Brand.Font.mono(size: 12, weight: .semibold))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -1657,41 +1659,57 @@ struct ContentView: View {
                 )
             }
         }
+        // Watch EVERY input the canPresent predicate reads — an unwatched
+        // claimant clearing last would strand the armed card for the whole
+        // session (review finding: the multi-catch reveal and sheet closes
+        // changed no watched value).
         .onChange(of: unlockCenter.hasPending) { presentWeeklyRankIfReady() }
         .onChange(of: pendingSuspectReview == nil) { presentWeeklyRankIfReady() }
         .onChange(of: pendingReveal == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: pendingMultiReveal == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: streakAsk == nil) { presentWeeklyRankIfReady() }
+        .onChange(of: showHangar || showProfile || showCompassSheet) { presentWeeklyRankIfReady() }
         .onChange(of: weeklyRankArmedCatch == nil) { presentWeeklyRankIfReady() }
     }
 
+    private func weeklyRankCanPresentNow() -> Bool {
+        WeeklyRankArbitration.canPresent(
+            armed: weeklyRankArmedCatch != nil,
+            revealUp: pendingReveal != nil || pendingMultiReveal != nil,
+            suspectReviewUp: pendingSuspectReview != nil,
+            trophiesPending: unlockCenter.hasPending,
+            streakAskUp: streakAsk != nil || pendingStreakAsk != nil,
+            sheetUp: showHangar || showProfile || showCompassSheet,
+            alreadyShowing: weeklyRankMoment != nil,
+            resolving: weeklyRankResolving
+        )
+    }
+
     private func presentWeeklyRankIfReady() {
-        guard let row = weeklyRankArmedCatch,
-              WeeklyRankArbitration.canPresent(
-                  armed: true,
-                  revealUp: pendingReveal != nil || pendingMultiReveal != nil,
-                  suspectReviewUp: pendingSuspectReview != nil,
-                  trophiesPending: unlockCenter.hasPending,
-                  sheetUp: showHangar || showProfile || showCompassSheet,
-                  alreadyShowing: weeklyRankMoment != nil,
-                  resolving: weeklyRankResolving
-              ) else { return }
-        // A discarded suspect first catch deletes the row: no landing
-        // moment, no retirement latch — the guided mode re-arms (plan A2).
-        if row.isDeleted {
+        guard let row = weeklyRankArmedCatch, weeklyRankCanPresentNow() else { return }
+        // Belt-and-suspenders: the discard path disarms explicitly (the
+        // authoritative fix — `isDeleted` reads false again after the
+        // delete's save), but a row deleted any other way (Hangar delete
+        // during the celebration) is invalidated: skip the moment.
+        if row.isDeleted || row.modelContext == nil {
             weeklyRankArmedCatch = nil
             weeklyRankPrewarm.cancel()
             return
         }
-        // The kept first catch is completing its celebration: retire the
-        // guided mode here (KTD2 — the single latch write).
-        GuidedCatch.markRetired()
         weeklyRankResolving = true
-        weeklyRankArmedCatch = nil
         Task { @MainActor in
             let rank = await weeklyRankPrewarm.awaitRank(budgetSeconds: 3)
+            weeklyRankResolving = false
+            // Re-validate after the await: a second catch's reveal, a sheet,
+            // or the streak ask may have claimed the moment meanwhile. Keep
+            // the card armed — the watchers re-fire once the claimant
+            // settles, and the resolved rank is cached so the retry is
+            // instant.
+            guard weeklyRankArmedCatch != nil, weeklyRankCanPresentNow() else { return }
+            weeklyRankArmedCatch = nil
             withAnimation(.easeOut(duration: 0.25)) {
                 weeklyRankMoment = WeeklyRankMoment(rank: rank, forced: false)
             }
-            weeklyRankResolving = false
         }
     }
 
@@ -1962,6 +1980,24 @@ struct ContentView: View {
     private func resolveSuspectReview(keep: Bool) {
         guard let review = pendingSuspectReview else { return }
         pendingSuspectReview = nil
+        // Weekly-rank arming resolves HERE, not from `isDeleted` later —
+        // after this function's save, a deleted row reads isDeleted ==
+        // false again, so the present path could take the kept branch for
+        // a discarded catch (review finding). Keep sets the retirement
+        // latch per KTD2 (kept-resolution, not celebration-end, so an
+        // app-kill mid-celebration can't lose it); Discard disarms and
+        // cancels the prewarm poll before the row is deleted, so the
+        // guided mode re-arms (plan A2) and nothing dereferences the
+        // invalidated model.
+        if let armed = weeklyRankArmedCatch,
+           review.rows.contains(where: { $0 === armed }) {
+            if keep {
+                GuidedCatch.markRetired()
+            } else {
+                weeklyRankArmedCatch = nil
+                weeklyRankPrewarm.cancel()
+            }
+        }
         for row in review.rows where !row.isDeleted {
             guard let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) else { continue }
             if keep {
@@ -2708,13 +2744,28 @@ struct ContentView: View {
                 CatchTelemetry.fireFirstCatch(first)
                 // Arm the weekly-rank landing moment (plan U3, R8) and
                 // pre-warm the rank fetch so it resolves during the reveal
-                // (KTD4). Guided-active only — a veteran's manual
-                // delete-everything edge shouldn't celebrate — and never
-                // from a forced run (its loop is fully simulated and must
-                // not write the retirement latch, R10).
-                if guidedModeActive, !guidedModeForced {
+                // (KTD4). Gate on the CAPTURED pre-insert count, not the
+                // live @Query (which may or may not have observed this
+                // tap's insert — the streak note below distrusts it too).
+                // Guided-active only — a veteran's delete-everything edge
+                // shouldn't celebrate — and never from a forced run (its
+                // loop is fully simulated and must not write the latch,
+                // R10). A NON-suspect first catch is already "kept": the
+                // retirement latch is written now per KTD2, so an app-kill
+                // mid-celebration can't leave it unset; a suspect catch
+                // latches in resolveSuspectReview's Keep branch instead.
+                if GuidedCatch.isModeActive(
+                    catchCount: priorCatchCount,
+                    retired: GuidedCatch.isRetired()
+                ), !guidedModeForced {
                     weeklyRankArmedCatch = first
-                    weeklyRankPrewarm.start(isUploaded: { first.uploadedAt != nil })
+                    weeklyRankPrewarm.start(isUploaded: {
+                        !first.isDeleted && first.modelContext != nil
+                            && first.uploadedAt != nil
+                    })
+                    if first.suspectReason == nil {
+                        GuidedCatch.markRetired()
+                    }
                 }
             }
 
@@ -3008,11 +3059,11 @@ struct ContentView: View {
 
     /// Forced guided-mode row (plan U5, R10): toggles the synthetic
     /// zero-catch input (KTD1 — the badge and chrome follow on their own),
-    /// and 🎯 Loop runs the whole celebration on simulated inputs —
-    /// simulated reveal → sample trophy → weekly-rank card with a REAL
-    /// read-only rank fetch, badged FORCED. No Catch rows, no latch
-    /// writes, no activation telemetry (fire sites guard on the forced
-    /// flag).
+    /// and 🎯 Loop runs the celebration on simulated inputs — simulated
+    /// reveal → weekly-rank card with a REAL read-only rank fetch, badged
+    /// FORCED. No Catch rows, no latch writes, no ledger writes, no
+    /// activation telemetry (fire sites guard on the forced flag; trophy
+    /// preview stays on ⚑ Unlock, which has real side effects).
     private var guidedDebugRow: some View {
         HStack(spacing: 8) {
             Text("GUIDED")
@@ -3041,20 +3092,19 @@ struct ContentView: View {
     }
 
     /// The simulated reveal just dismissed with the forced loop armed:
-    /// synthesize the trophy moment, then present the rank card once the
-    /// trophy drains. Real read-only fetch; `forced: true` badges the card
-    /// and keeps every write path (latch, telemetry, rows) untouched.
+    /// present the rank card (real read-only fetch, bounded like the
+    /// production path, badged FORCED). No sample trophy — the unlock
+    /// center's markShown writes the ledger and captures a real
+    /// trophy_unlocked, which would violate the forced loop's
+    /// write-nothing contract (AE8); the ⚑ Unlock debug button remains
+    /// the trophy-preview surface, side effects and all.
     private func advanceForcedGuidedLoopIfArmed() {
         guard forcedLoopArmed, guidedModeForced else { return }
         forcedLoopArmed = false
-        unlockCenter.debugEnqueueSample(secret: false)
         weeklyRankResolving = true
         Task { @MainActor in
-            let deadline = Date().addingTimeInterval(20)
-            while unlockCenter.hasPending && Date() < deadline {
-                try? await Task.sleep(for: .milliseconds(250))
-            }
-            let rank = await WeeklyRankPrewarm.fetchRankNow()
+            weeklyRankPrewarm.start(isUploaded: { true })
+            let rank = await weeklyRankPrewarm.awaitRank(budgetSeconds: 5)
             withAnimation(.easeOut(duration: 0.25)) {
                 weeklyRankMoment = WeeklyRankMoment(rank: rank, forced: true)
             }
