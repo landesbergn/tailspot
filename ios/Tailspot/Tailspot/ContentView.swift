@@ -174,6 +174,10 @@ struct ContentView: View {
     /// latches `StreakReminders.permissionAskedKey` immediately, so a kill
     /// mid-card still counts as asked.
     @State private var streakAsk: Int? = nil
+    /// True while the visible card was forced by the wrench's 🔔 Ask —
+    /// keeps the ask-shown/response events real-promotions-only (the
+    /// debug-seam rule: debug paths stay out of telemetry).
+    @State private var streakAskFromDebug = false
     /// Non-nil → the one-question Keep/Discard review dialog is up.
     @State private var pendingSuspectReview: SuspectReview?
     /// Ambient "you're indoors" hint, shown proactively when the camera
@@ -1548,6 +1552,9 @@ struct ContentView: View {
                     }
                     HStack(spacing: 12) {
                         Button {
+                            if !streakAskFromDebug {
+                                StreakTelemetry.fireAskResponse(accepted: true, streakDays: days)
+                            }
                             withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
                             Task { @MainActor in
                                 _ = await StreakReminderCenter.shared.requestPermission()
@@ -1564,6 +1571,9 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         Button {
+                            if !streakAskFromDebug {
+                                StreakTelemetry.fireAskResponse(accepted: false, streakDays: days)
+                            }
                             withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
                         } label: {
                             Text("Not now")
@@ -1692,6 +1702,8 @@ struct ContentView: View {
             if suspectAwaitingReview.isEmpty, !showHangar,
                pendingReveal == nil, pendingMultiReveal == nil {
                 UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
+                streakAskFromDebug = false
+                StreakTelemetry.fireAskShown(streakDays: askDays)
                 withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
                 momentClaimed = true
             }
@@ -2823,6 +2835,7 @@ struct ContentView: View {
                 }
                 // The one-shot pre-prompt, unlatched so it can be re-tested.
                 Button("🔔 Ask") {
+                    streakAskFromDebug = true
                     withAnimation(.easeOut(duration: 0.25)) {
                         streakAsk = max(streakSummaryNow.current, StreakReminders.minimumStreak)
                     }

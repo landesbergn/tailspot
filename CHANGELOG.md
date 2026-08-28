@@ -5,6 +5,40 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-28 — Streak reminder funnel telemetry — branch `feat/streak-reminder-telemetry`
+
+Two soak days of 1.1.0 couldn't answer "has anyone seen the notification
+pre-prompt, accepted it, or received a reminder?" — the funnel's only
+instrumented step was the system permission dialog (`permission_outcome`),
+which had zero notification outcomes on every device. Now each step reports:
+
+- **`streak_ask_shown`** (`streak_days`) — the pre-prompt card presented.
+  Fired at the real promotion site only; the wrench's 🔔 Ask card sets a
+  `streakAskFromDebug` flag so forced cards stay out of telemetry (the
+  debug-seam rule).
+- **`streak_ask_response`** (`accepted`, `streak_days`) — "Notify me" vs
+  "Not now". Accepts hand off to the system dialog, whose result stays in
+  the existing `permission_outcome` (`permission: "notifications"`).
+- **`streak_reminder_scheduled`** (`day_key`, `streak_days`) — a reminder
+  armed for a NEW (day, stake) pair. `sync` re-arms the slot many times a
+  day, so the fire is deduped through a pure `scheduledStamp` persisted in
+  UserDefaults — re-arming the same evening at the same stake is state
+  maintenance, not news.
+- **`streak_reminder_delivered`** (`foreground`, `presented`,
+  `streak_days`) — at most once per local day, from whichever path sees it
+  first (shared dayKey stamp): the delegate's `willPresent` for foreground
+  deliveries (`presented: false` = the camera-silence rule suppressed the
+  banner — delivered and suppressed are different facts), or a
+  delivered-list scan at the top of `sync` for background deliveries —
+  placed BEFORE sync retires the delivered copy, because a backgrounded
+  delivery runs no app code and that copy is its only evidence. Debug
+  fires have their own identifier and stay invisible here.
+- `streak_reminder_opened` (tap) already existed — the funnel's last step.
+
+Tests: ask-response/delivered property builders, the scheduledStamp dedupe
+identity (new day or new stake = news), and the nil-streak scanned-delivery
+shape. 1,175 tests green.
+
 ## 2026-08-27 — Snap radius 700 → 300 ref px, from a 285-photo labeled eval — branch `worktree-snap-radius-tuning`
 
 Noah asked to re-tune the catch-photo bracket snap now that his phone holds a

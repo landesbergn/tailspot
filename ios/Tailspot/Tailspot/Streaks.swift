@@ -219,6 +219,26 @@ nonisolated enum StreakTelemetry {
     /// Fired when the user opens the app from a streak-protection
     /// reminder — the reminder's effectiveness signal.
     static let reminderOpenedEvent = "streak_reminder_opened"
+    /// Fired when the notification pre-prompt card presents. Real
+    /// promotions only — the wrench's forced card stays out of telemetry
+    /// (the debug-seam rule).
+    static let askShownEvent = "streak_ask_shown"
+    /// The card's resolution. `accepted` true = "Notify me", which hands
+    /// off to the system dialog (whose result is `permission_outcome`);
+    /// false = "Not now". Either way the one-shot ask is spent.
+    static let askResponseEvent = "streak_ask_response"
+    /// Fired when the scheduler arms a reminder for a NEW (day, stake)
+    /// pair. `sync` runs on every catch and foreground, so the fire is
+    /// deduped through `scheduledStamp` — re-arming the same evening at
+    /// the same stake is state maintenance, not news.
+    static let reminderScheduledEvent = "streak_reminder_scheduled"
+    /// Fired at most once per local day when a reminder actually reached
+    /// the device: from the delegate for a foreground delivery (with
+    /// whether the banner presented or the camera rule suppressed it), or
+    /// from the delivered-list scan on the next `sync` for a background
+    /// delivery. Delivery while backgrounded runs no app code, so the
+    /// scan-on-return is as early as that half can be observed.
+    static let reminderDeliveredEvent = "streak_reminder_delivered"
 
     static func extendedProperties(streakDays: Int) -> [String: AnalyticsValue] {
         ["streak_days": .int(streakDays)]
@@ -226,6 +246,51 @@ nonisolated enum StreakTelemetry {
 
     static func fireExtended(streakDays: Int) {
         Analytics.capture(extendedEvent, extendedProperties(streakDays: streakDays))
+    }
+
+    static func fireAskShown(streakDays: Int) {
+        Analytics.capture(askShownEvent, extendedProperties(streakDays: streakDays))
+    }
+
+    static func askResponseProperties(accepted: Bool, streakDays: Int) -> [String: AnalyticsValue] {
+        ["accepted": .bool(accepted), "streak_days": .int(streakDays)]
+    }
+
+    static func fireAskResponse(accepted: Bool, streakDays: Int) {
+        Analytics.capture(askResponseEvent,
+                          askResponseProperties(accepted: accepted, streakDays: streakDays))
+    }
+
+    /// The dedupe identity for a scheduled reminder: fire the telemetry
+    /// only when this differs from the last fired stamp.
+    static func scheduledStamp(dayKey: String, streakDays: Int) -> String {
+        "\(dayKey)|\(streakDays)"
+    }
+
+    static func reminderScheduledProperties(dayKey: String, streakDays: Int) -> [String: AnalyticsValue] {
+        ["day_key": .string(dayKey), "streak_days": .int(streakDays)]
+    }
+
+    static func fireReminderScheduled(dayKey: String, streakDays: Int) {
+        Analytics.capture(reminderScheduledEvent,
+                          reminderScheduledProperties(dayKey: dayKey, streakDays: streakDays))
+    }
+
+    static func reminderDeliveredProperties(
+        streakDays: Int?, foreground: Bool, presented: Bool
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
+            "foreground": .bool(foreground),
+            "presented": .bool(presented),
+        ]
+        if let streakDays { props["streak_days"] = .int(streakDays) }
+        return props
+    }
+
+    static func fireReminderDelivered(streakDays: Int?, foreground: Bool, presented: Bool) {
+        Analytics.capture(reminderDeliveredEvent,
+                          reminderDeliveredProperties(
+                              streakDays: streakDays, foreground: foreground, presented: presented))
     }
 }
 
