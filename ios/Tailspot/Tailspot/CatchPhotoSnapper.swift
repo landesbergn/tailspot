@@ -42,7 +42,8 @@
 //      calibrated gates.
 //    - Gates per crop: confidence ≥ 0.25 (tuned on the labeled corpus —
 //      see `confidenceFloor`), box side ≤ ⅓ crop (kills the giant-FP
-//      class), snap radius ≤ 700 reference px.
+//      class), snap radius ≤ 300 reference px (tightened from 700 by the
+//      2026-08-27 eval — see `maxSnapRadiusPixels`).
 //    - Choose the detection NEAREST the prediction, not the most
 //      confident — at airports several real planes can be in frame.
 //
@@ -72,14 +73,27 @@ nonisolated enum CatchPhotoSnapper {
     /// with catch_photo_snap field data.
     static let confidenceFloor: Float = 0.25
     static let maxDetectionSide: CGFloat = CGFloat(AirplaneDetector.inputSide) / 3
-    /// Calibrated in 1080-px reference space (largest verified real
-    /// correction was 609 px); scale by `resolutionScale(photoWidth:)`
-    /// before comparing native-px distances.
-    static let maxSnapRadiusPixels: CGFloat = 700
+    /// Calibrated in 1080-px reference space; scale by
+    /// `resolutionScale(photoWidth:)` before comparing native-px distances.
+    /// Tightened 700 → 300 by the 2026-08-27 eval over Noah's 285-photo
+    /// labeled corpus: every verified-correct snap corrected ≤ 147 screen
+    /// pt ≈ 248 ref px (32/32, and those brackets land 1–6 px from the
+    /// labeled plane), while every verifiable correction ≥ 207 pt ≈ 350
+    /// ref px chose a wrong object (a streetlight head, a bare twig tip, a
+    /// parked airport tail). 300 splits the two populations with margin on
+    /// both sides. The July 609-px verified correction that justified 700
+    /// predates exposure-time re-projection, which now absorbs pose drift
+    /// before the detector runs — the trade is deliberate: a geometry
+    /// error beyond 300 ref px stays uncorrected (those planes are almost
+    /// never detectable anyway) in exchange for refusing the
+    /// wrong-object snap class prod telemetry shows at 200+ pt.
+    static let maxSnapRadiusPixels: CGFloat = 300
     /// Early-exit: a gated hit this close (reference px) from the center
     /// crop is taken without running the ring (the common case — one
-    /// model pass).
-    static let centerAcceptRadiusPixels: CGFloat = 340
+    /// model pass). Halved alongside the 700 → 300 radius tightening to
+    /// keep the same ~½ proportion (early exit only when the hit needs
+    /// little correction; farther hits let the ring look for a nearer one).
+    static let centerAcceptRadiusPixels: CGFloat = 150
     /// The photo width every distance/radius constant was calibrated
     /// against (the 2026-07-05/07 eval corpus).
     static let referenceWidthPixels: CGFloat = 1080
