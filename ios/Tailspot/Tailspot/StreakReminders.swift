@@ -329,7 +329,16 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     /// child of the root controller, so `presentedViewController == nil` IS
     /// the question, and reading it here keeps a state mirror — and another
     /// modifier link — out of `body` (the type-check budget, PR #184).
-    nonisolated func userNotificationCenter(
+    ///
+    /// MainActor (implicit, via the project's default isolation) on purpose,
+    /// NOT `nonisolated`: UIKit runs snapshot/state-restoration bookkeeping
+    /// inside the completion callback these async witnesses complete into,
+    /// and asserts if that lands off the main thread. A `nonisolated`
+    /// witness completes on the concurrency pool — the cold-start tap
+    /// crashed there every time (SIGABRT, 2026-08-28 field test). Isolating
+    /// the witness makes the generated thunk hop to the main actor first,
+    /// so UIKit's completion runs on main. Same reasoning for `didReceive`.
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
@@ -343,11 +352,11 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         // requests carry a marker and always present; the real scheduled
         // path below is untouched.
         if notification.request.content.userInfo[StreakReminders.debugBypassKey] != nil {
-            await MainActor.run { Self.lastForegroundDecision = "presented (debug bypass)" }
+            Self.lastForegroundDecision = "presented (debug bypass)"
             return [.banner, .sound]
         }
         #endif
-        let onCamera = await MainActor.run { Self.cameraIsFrontmost() }
+        let onCamera = Self.cameraIsFrontmost()
         let options = StreakReminders.foregroundPresentation(cameraFrontmost: onCamera)
         // The foreground half of `streak_reminder_delivered`, on the shared
         // per-day stamp: `presented` false means the camera rule silenced
@@ -366,9 +375,7 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         #if DEBUG
         // Make the invisible visible: without this, "correctly suppressed"
         // and "never arrived" are the same observation.
-        await MainActor.run {
-            Self.lastForegroundDecision = onCamera ? "suppressed (on camera)" : "banner shown"
-        }
+        Self.lastForegroundDecision = onCamera ? "suppressed (on camera)" : "banner shown"
         #endif
         Log.ui.notice("Streak reminder foreground: onCamera=\(onCamera, privacy: .public)")
         return options
@@ -397,9 +404,9 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     /// Reminder tapped → the app opens to the camera (its root), so there is
     /// nothing to route: record that the nudge worked, and hand the toast
     /// line to the view so the user lands with the stake restated instead of
-    /// on a bare viewfinder. The callback arrives on an arbitrary queue,
-    /// hence `nonisolated`.
-    nonisolated func userNotificationCenter(
+    /// on a bare viewfinder. MainActor like `willPresent` above — the
+    /// `nonisolated` witness this replaced crashed UIKit's completion.
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
@@ -407,13 +414,28 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
             return
         }
         let streak = response.notification.request.content.userInfo["streak"] as? Int
+        // A tap is also proof of delivery — and tapping REMOVES the copy
+        // from Notification Center, so the delivered-list scan at the next
+        // sync finds nothing. Without this stamp the happiest path
+        // (delivered → tapped before any foreground run) records opened
+        // with no delivered — exactly the 2026-08-28 field-test gap. Real
+        // reminders only: a wrench debug fire proves nothing about the
+        // scheduled slot, matching the scan's deliberate blindness to it.
+        if response.notification.request.identifier == StreakReminders.notificationId {
+            let dayKey = Streaks.dayKey(for: response.notification.date)
+            if UserDefaults.standard.string(
+                forKey: StreakReminders.deliveredTelemetryKey) != dayKey {
+                UserDefaults.standard.set(dayKey, forKey: StreakReminders.deliveredTelemetryKey)
+                StreakTelemetry.fireReminderDelivered(
+                    streakDays: streak, foreground: false, presented: true
+                )
+            }
+        }
         Analytics.capture(
             StreakTelemetry.reminderOpenedEvent,
             streak.map { ["streak": AnalyticsValue.int($0)] } ?? [:]
         )
-        await MainActor.run {
-            toastRelay?.streakLine = StreakReminders.tapToastLine(streakAtStake: streak)
-        }
+        toastRelay?.streakLine = StreakReminders.tapToastLine(streakAtStake: streak)
     }
 }
 
