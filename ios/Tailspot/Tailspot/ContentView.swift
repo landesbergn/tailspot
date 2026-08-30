@@ -87,11 +87,11 @@ struct ContentView: View {
     /// sets, map, leaderboard, settings, notifications, share).
     /// Opened via the person glyph in the top-trailing corner.
     @State private var showProfile = false
-    /// Becomes true only once Hangar/Profile content has joined the
-    /// presentation hierarchy. The request flags above flip at tap time,
-    /// before SwiftUI has a sheet ready to cover the camera; using them
-    /// directly for camera occlusion detached the preview first and exposed
-    /// a black frame while the destination was still being built.
+    /// Becomes true only once the Hangar/Profile presentation animation has
+    /// settled. The request flags above flip at tap time, and even the sheet
+    /// content's `onAppear` runs before its first visible frame is committed;
+    /// using either signal directly for camera occlusion detaches the preview
+    /// first and exposes a black frame while the destination is still loading.
     @State private var primarySheetVisible = false
     /// Drives the compass calibration sheet. Tapping the AR
     /// caution badge sets this true; the sheet explains what's
@@ -736,11 +736,11 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
-                .onAppear { primarySheetVisible = true }
+                .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
-                .onAppear { primarySheetVisible = true }
+                .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -1090,9 +1090,10 @@ struct ContentView: View {
     /// True when an OPAQUE modal fully covers the camera / AR view — the
     /// standard sheets: Hangar, Profile, compass calibration, the DEBUG
     /// trophy-icon gallery, and the replay report. Hangar/Profile join this
-    /// set only after their content appears: their request flags change before
-    /// SwiftUI has presented anything, and stopping the camera at that earlier
-    /// point exposes its black backing view. While occluded we power
+    /// set only after their presentation animation settles: their request
+    /// flags and content tasks both start before SwiftUI has committed a sheet
+    /// frame, and stopping the camera at either earlier point exposes its black
+    /// backing view. While occluded we power
     /// down the sensors + the 30 Hz render loop the user can't see (see
     /// `.onChange(of: arOccluded)` and the `paused:` TimelineView).
     ///
@@ -1109,6 +1110,17 @@ struct ContentView: View {
             || showCompassSheet
             || showIconGallery
             || replayURL != nil
+    }
+
+    /// SwiftUI starts a sheet content task before the presentation animation
+    /// has produced its first stable frame. Keep the live camera attached for
+    /// that short transition, then retain the existing power-saving shutdown
+    /// for the rest of the opaque sheet's lifetime. The task is cancelled if
+    /// the sheet disappears before the delay completes.
+    private func occludeARAfterPrimarySheetPresents() async {
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled, showHangar || showProfile else { return }
+        primarySheetVisible = true
     }
 
     /// Ambient-label metadata prefetch body (the `.task(id: visibleIcaoSignature)`
