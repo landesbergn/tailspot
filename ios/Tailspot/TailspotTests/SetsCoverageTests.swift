@@ -117,6 +117,27 @@ struct SetsCoverageTests {
         ("H500", "MD Helicopters", "MD 500 / 530"),
         ("SB91", "Saab", "91 Safir"),
         ("T206", "Cessna", "T206 Stationair TC"),
+        // Public catalog coverage additions validated 2026-08-30. Eight
+        // require exact family slots; the rest exercise existing rules.
+        ("BE23", "Beechcraft", "23 Musketeer"),
+        ("BE9L", "Beechcraft", "90 King Air"),
+        ("BN2T", "Britten-Norman", "BN-2T Defender 4000"),
+        ("C177", "Cessna", "177"),
+        ("C525", "Cessna", "525 CitationJet"),
+        ("CLON", "Autogyro", "Cavalon"),
+        ("DA42", "Diamond", "DA-42 Guardian"),
+        ("DC3T", "Professional Aviation", "Jet Prop DC-3"),
+        ("FA50", "Dassault", "Falcon 50"),
+        ("G2CA", "Guimbal", "G-2 Cabri"),
+        ("GL5T", "Bombardier", "BD-700 Global 5000"),
+        ("M20P", "Mooney", "M20"),
+        ("NG5", "Brm Aero", "Bristell HD"),
+        ("P210", "Cessna", "P210 Centurion"),
+        ("P28S", "Piper", "PA-28R-201T Turbo Arrow"),
+        ("PA12", "Piper", "PA-12 Super Cruiser"),
+        ("PAY2", "Piper", "PA-31T-620 Cheyenne"),
+        ("RV9", "Van's", "RV-9"),
+        ("T34P", "Beechcraft", "45 Mentor"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -136,6 +157,27 @@ struct SetsCoverageTests {
             }
             #expect(slotted,
                     "\(row.0) (\(row.1) \(row.2)) matches NO family set")
+        }
+    }
+
+    @Test func newlyCoveredTypesFillTheirIntendedFamilySlots() {
+        let assignments: [((String, String, String), String, String)] = [
+            (("CLON", "Autogyro", "Cavalon"), "fam-sport-classics", "fsc-cavalon"),
+            (("FA50", "Dassault", "Falcon 50"), "fam-falcon", "ffa50"),
+            (("G2CA", "Guimbal", "G-2 Cabri"), "fam-heli", "fh-g2ca"),
+            (("GL5T", "Bombardier", "BD-700 Global 5000"), "fam-bombardier-biz", "fgl5t"),
+            (("NG5", "Brm Aero", "Bristell HD"), "fam-sport-classics", "fsc-bristell"),
+            (("PA12", "Piper", "PA-12 Super Cruiser"), "fam-piper", "fpa12"),
+            (("PAY2", "Piper", "PA-31T-620 Cheyenne"), "fam-piper", "fpay2"),
+            (("T34P", "Beechcraft", "45 Mentor"), "fam-beech", "fbt34"),
+        ]
+
+        for (row, setID, entryID) in assignments {
+            let key = CardSets.matchKey(for: mk(row))
+            let set = CardSets.families.first { $0.id == setID }!
+            let entry = set.entries.first { $0.id == entryID }!
+            #expect(CardSets.matches(key: key, entry: entry),
+                    "\(row.0) must fill \(setID)/\(entryID)")
         }
     }
 
