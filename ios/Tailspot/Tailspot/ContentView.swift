@@ -3188,6 +3188,9 @@ struct ContentView: View {
             if case .disabled = mode { return false }
             return true
         }()
+        let controlTint = isEnabled
+            ? Brand.Color.cyan
+            : Brand.Color.textSecondary.opacity(0.72)
 
         return Button {
             guard isEnabled else { return }
@@ -3196,13 +3199,15 @@ struct ContentView: View {
             ZStack(alignment: .topTrailing) {
                 ZStack {
                     Circle()
-                        .fill(Brand.Color.bgPrimary.opacity(0.7))
+                        .fill(Brand.Color.bgPrimary.opacity(isEnabled ? 0.7 : 0.82))
                         .frame(width: 72, height: 72)
                     Circle()
-                        .strokeBorder(Brand.Color.cyan, lineWidth: 2.5)
+                        .strokeBorder(controlTint, lineWidth: 2.5)
                         .frame(width: 72, height: 72)
                     Circle()
-                        .fill(Brand.Color.cyan.opacity(0.15))
+                        .fill(isEnabled
+                              ? Brand.Color.cyan.opacity(0.15)
+                              : Brand.Color.bgElevated.opacity(0.55))
                         .frame(width: 60, height: 60)
                     // Capturing state: `captureInFlight` was previously a
                     // pure re-entry latch that nothing rendered — now the
@@ -3213,10 +3218,10 @@ struct ContentView: View {
                             .controlSize(.small)
                             .tint(Brand.Color.cyan)
                     } else {
-                        Text("CAPTURE")
+                        Text(isEnabled ? "CAPTURE" : "NO TARGET")
                             .font(Brand.Font.mono(size: 10, weight: .bold))
                             .tracking(0.6)
-                            .foregroundStyle(Brand.Color.cyan)
+                            .foregroundStyle(controlTint)
                     }
                 }
                 if isMulti {
@@ -3234,7 +3239,6 @@ struct ContentView: View {
                         .offset(x: 4, y: -4)
                 }
             }
-            .opacity(isEnabled ? 1.0 : 0.4)
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
