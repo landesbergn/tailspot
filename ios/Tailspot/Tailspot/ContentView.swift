@@ -3282,7 +3282,9 @@ struct ContentView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open hangar (\(catches.count) catches)")
+        .accessibilityLabel(
+            "Open hangar (\(CountCopy.phrase(catches.count, singular: "catch", plural: "catches")))"
+        )
     }
 
     /// Profile button in the bottom bar. Mirrors the hangar button's
