@@ -186,10 +186,10 @@ private struct RarityAircraftRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(plane.displayName)
                     .font(Brand.Font.body)
-                    .foregroundStyle(isCaught ? Brand.Color.textPrimary : Brand.Color.textTertiary.opacity(0.48))
+                    .foregroundStyle(isCaught ? Brand.Color.textPrimary : Brand.Color.textSecondary)
                 Text(plane.typecode)
                     .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption))
-                    .foregroundStyle(isCaught ? Brand.Color.textTertiary : Brand.Color.textTertiary.opacity(0.38))
+                    .foregroundStyle(Brand.Color.textTertiary)
             }
             Spacer(minLength: 8)
             if isCaught {
