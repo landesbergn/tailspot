@@ -138,6 +138,19 @@ struct SetsCoverageTests {
         ("PAY2", "Piper", "PA-31T-620 Cheyenne"),
         ("RV9", "Van's", "RV-9"),
         ("T34P", "Beechcraft", "45 Mentor"),
+        // Public catalog coverage additions validated 2026-08-31. Seven
+        // require exact family slots; the remaining types exercise existing
+        // sport, vintage, and warbird rules.
+        ("C337", "Cessna", "337 Super Skymaster"),
+        ("CRUZ", "Csa", "PiperSport"),
+        ("J328", "Fairchild Dornier", "328JET"),
+        ("NAVI", "North American", "L-17 Navion"),
+        ("P51", "North American", "A-36 Mustang"),
+        ("RV4", "Van's", "RV-4"),
+        ("SLG2", "Sonaca", "S-2"),
+        ("SLG4", "Airplane Factory", "Sling 4"),
+        ("SONX", "Sonex", "Sonex"),
+        ("T6", "North American", "BC-1"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -170,6 +183,13 @@ struct SetsCoverageTests {
             (("PA12", "Piper", "PA-12 Super Cruiser"), "fam-piper", "fpa12"),
             (("PAY2", "Piper", "PA-31T-620 Cheyenne"), "fam-piper", "fpay2"),
             (("T34P", "Beechcraft", "45 Mentor"), "fam-beech", "fbt34"),
+            (("C337", "Cessna", "337 Super Skymaster"), "fam-cessna", "fc337"),
+            (("CRUZ", "Csa", "PiperSport"), "fam-sport-classics", "fsc-cruz"),
+            (("J328", "Fairchild Dornier", "328JET"), "fam-dornier-328", "fd328-jet"),
+            (("NAVI", "North American", "L-17 Navion"), "fam-vintage", "fv-navion"),
+            (("SLG2", "Sonaca", "S-2"), "fam-sport-classics", "fsc-sling2"),
+            (("SLG4", "Airplane Factory", "Sling 4"), "fam-sport-classics", "fsc-sling4"),
+            (("SONX", "Sonex", "Sonex"), "fam-sport-classics", "fsc-sonex"),
         ]
 
         for (row, setID, entryID) in assignments {
