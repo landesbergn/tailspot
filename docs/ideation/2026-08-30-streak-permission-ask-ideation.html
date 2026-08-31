@@ -1,0 +1,446 @@
+<title>The Three-Second No</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --ground: #FAFBFC;
+    --raised: #FFFFFF;
+    --ink: #0F1419;
+    --muted: #56626E;
+    --rule: #DDE4E9;
+    --accent: #0E6E7D;
+    --accent-soft: #E4F1F3;
+    --alarm: #A8410B;
+    --alarm-soft: #FBEDE4;
+    --good: #1B6242;
+    --good-soft: #E6F1EB;
+    --shadow: 0 1px 2px rgba(15, 20, 25, .05), 0 4px 14px rgba(15, 20, 25, .04);
+    --display: "Barlow Condensed", "Helvetica Neue Condensed", Impact, sans-serif;
+    --body: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0E1216;
+      --raised: #161C22;
+      --ink: #E8EDF1;
+      --muted: #97A4B0;
+      --rule: #26313A;
+      --accent: #55C2D2;
+      --accent-soft: #12313A;
+      --alarm: #E8955E;
+      --alarm-soft: #33200F;
+      --good: #6FC79A;
+      --good-soft: #10291D;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0E1216;
+    --raised: #161C22;
+    --ink: #E8EDF1;
+    --muted: #97A4B0;
+    --rule: #26313A;
+    --accent: #55C2D2;
+    --accent-soft: #12313A;
+    --alarm: #E8955E;
+    --alarm-soft: #33200F;
+    --good: #6FC79A;
+    --good-soft: #10291D;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .25);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 60rem;
+    margin-inline: auto;
+    padding: 3rem 1.5rem 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+  }
+  p, li { max-width: 68ch; }
+  a { color: var(--accent); }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .eyebrow {
+    font-family: var(--display);
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(2.6rem, 7vw, 4rem);
+    font-weight: 700;
+    line-height: .97;
+    letter-spacing: -.005em;
+    margin: .4rem 0 0;
+    text-wrap: balance;
+  }
+  .standfirst { font-size: 1.16rem; color: var(--muted); margin: 1rem 0 0; }
+  h2 {
+    font-family: var(--display);
+    font-size: 1.85rem;
+    font-weight: 600;
+    letter-spacing: .01em;
+    margin: 0 0 .25rem;
+    padding-bottom: .5rem;
+    border-bottom: 2px solid var(--rule);
+  }
+  h3 { font-family: var(--display); font-size: 1.3rem; font-weight: 600; margin: 0; }
+  section { display: flex; flex-direction: column; gap: 1rem; }
+
+  .meta {
+    display: flex; flex-wrap: wrap; gap: .5rem 1.5rem;
+    font-family: var(--mono); font-size: .78rem; color: var(--muted);
+    padding-top: 1rem; border-top: 1px solid var(--rule);
+  }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .stat { background: var(--raised); padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: .3rem; }
+  .stat .n { font-family: var(--display); font-size: 2.1rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: .82rem; color: var(--muted); line-height: 1.35; }
+  .stat.is-alarm .n { color: var(--alarm); }
+  .stat.is-good .n { color: var(--good); }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: .6rem; }
+  .figscroll { overflow-x: auto; }
+  figcaption { font-size: .86rem; color: var(--muted); }
+
+  .card {
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1.4rem 1.5rem;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: .85rem;
+  }
+  .card-head { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap; }
+  .rank {
+    font-family: var(--mono); font-size: .8rem; font-weight: 600;
+    background: var(--accent-soft); color: var(--accent);
+    border-radius: 3px; padding: .18rem .5rem;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .chip {
+    font-family: var(--mono); font-size: .72rem; font-weight: 600;
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: .2rem .55rem; color: var(--muted); background: var(--ground);
+  }
+  .chip.hi { background: var(--good-soft); color: var(--good); border-color: transparent; }
+  .chip.mid { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .chip.lo { background: var(--alarm-soft); color: var(--alarm); border-color: transparent; }
+
+  dl { margin: 0; display: flex; flex-direction: column; gap: .7rem; }
+  dt {
+    font-family: var(--display); font-size: .82rem; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    margin-bottom: .1rem;
+  }
+  dd { margin: 0; }
+  code { font-family: var(--mono); font-size: .87em; background: var(--ground); border: 1px solid var(--rule); border-radius: 3px; padding: .05em .32em; }
+  .card code { background: var(--ground); }
+
+  .jump { display: flex; flex-direction: column; gap: .35rem; padding: 1rem 1.2rem; background: var(--raised); border: 1px solid var(--rule); border-radius: 4px; }
+  .jump a { font-family: var(--display); font-size: 1.02rem; text-decoration: none; display: flex; gap: .6rem; }
+  .jump a:hover { text-decoration: underline; }
+  .jump .jn { font-family: var(--mono); font-size: .82rem; color: var(--muted); }
+
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; padding: .6rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--display); font-size: .82rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  td:first-child { font-family: var(--mono); font-size: .82rem; color: var(--muted); white-space: nowrap; }
+  .tscroll { overflow-x: auto; }
+
+  .callout { background: var(--alarm-soft); border: 1px solid transparent; border-radius: 4px; padding: 1.1rem 1.3rem; display: flex; flex-direction: column; gap: .5rem; }
+  .callout .eyebrow { color: var(--alarm); }
+  .callout p { max-width: 66ch; }
+  .callout.is-good { background: var(--good-soft); }
+  .callout.is-good .eyebrow { color: var(--good); }
+
+  footer { font-family: var(--mono); font-size: .76rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 1rem; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Tailspot · streak reminders</div>
+  <h1>The Three-Second No</h1>
+  <p class="standfirst">Seven of eight testers refused notification permission. None of them read the card, and — it turns out — none of them actually spent the iOS prompt either.</p>
+  <div class="meta">
+    <span><b>Date</b> <time datetime="2026-08-30">2026-08-30</time></span>
+    <span><b>Topic</b> streak-permission-ask</span>
+    <span><b>Focus</b> why the pre-prompt is declined, and what to do</span>
+    <span><b>Mode</b> repo-grounded</span>
+  </div>
+</header>
+
+<section>
+  <div class="stats">
+    <div class="stat is-alarm"><span class="n">7 of 8</span><span class="k">testers declined the ask</span></div>
+    <div class="stat is-alarm"><span class="n">3.15s</span><span class="k">median time to decline</span></div>
+    <div class="stat is-good"><span class="n">17.82s</span><span class="k">the one person who accepted</span></div>
+    <div class="stat"><span class="n">0 of 7</span><span class="k">actually spent the iOS prompt</span></div>
+  </div>
+</section>
+
+<section id="grounding">
+  <h2>Codebase Context</h2>
+  <p>Tailspot schedules one local notification at 17:00 on days when a user has a live catch streak and hasn't caught anything yet. Because iOS shows the real permission dialog only once per install, the app gates that dialog behind its own card — <code>streakAskOverlay</code> in <code>ContentView.swift</code> — shown once ever, over the live viewfinder, after a catch reveal closes.</p>
+  <p>The card reads <em>"Protect your streak?"</em> above a line of body copy — <em>"Turn on notifications to help keep your streak going."</em> — with "Notify me" filled in cyan and "Not now" as a plain text button beside it. Its own source comment explains the intent: declining should stay "easy to hit and easy to read, without competing."</p>
+  <p>Across TestFlight builds 88 and 89 on 2026-08-29 and 30, eight testers saw it. Seven declined. Every decline landed between 1.46 and 5.54 seconds; the single acceptance took 17.82 seconds. Three people answered in under 2.5 seconds, which is less time than the card's two lines take to read. Streak size did not predict the answer: declines came at streaks of 1, 3, and 17, and the sole acceptance came from someone at a 1-day streak. The person with a 17-day streak — the most invested user in the sample — declined in 3.28 seconds.</p>
+
+  <figure>
+    <div class="figscroll">
+      <svg viewBox="0 0 760 190" width="760" height="190" role="img" aria-label="Strip plot of decision times: seven declines cluster between 1.46 and 5.54 seconds; one acceptance sits at 17.82 seconds.">
+        <line x1="60" y1="120" x2="720" y2="120" stroke="var(--rule)" stroke-width="1.5"/>
+        <g font-family="JetBrains Mono, monospace" font-size="10" fill="var(--muted)">
+          <text x="60" y="140" text-anchor="middle">0s</text>
+          <text x="235" y="140" text-anchor="middle">5s</text>
+          <text x="410" y="140" text-anchor="middle">10s</text>
+          <text x="585" y="140" text-anchor="middle">15s</text>
+          <text x="700" y="140" text-anchor="middle">20s</text>
+        </g>
+        <rect x="60" y="98" width="194" height="22" fill="var(--alarm-soft)"/>
+        <g fill="var(--alarm)">
+          <circle cx="111" cy="109" r="6"/><circle cx="128" cy="109" r="6"/>
+          <circle cx="146" cy="109" r="6"/><circle cx="170" cy="109" r="6"/>
+          <circle cx="175" cy="109" r="6"/><circle cx="204" cy="109" r="6"/>
+          <circle cx="254" cy="109" r="6"/>
+        </g>
+        <circle cx="683" cy="109" r="7" fill="var(--good)"/>
+        <g font-family="Barlow Condensed, sans-serif" font-size="15" font-weight="600" paint-order="stroke fill" stroke="var(--ground)" stroke-width="3.5">
+          <text x="157" y="78" text-anchor="middle" fill="var(--alarm)">7 declines · 1.46–5.54s</text>
+          <text x="683" y="78" text-anchor="middle" fill="var(--good)">1 accept</text>
+        </g>
+        <g font-family="Source Serif 4, serif" font-size="12" fill="var(--muted)" paint-order="stroke fill" stroke="var(--ground)" stroke-width="3">
+          <text x="157" y="169" text-anchor="middle">faster than the card can be read</text>
+          <text x="683" y="169" text-anchor="middle">read it</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Every refusal landed in the reflex band. The one person who took longer than the card's own reading time is the one person who said yes.</figcaption>
+  </figure>
+
+  <p>Two further facts shape the ideas below. First, the card interrupts 12 to 60 seconds after a catch — while the user has gone back to the viewfinder hunting the next plane. Second, the streak ask and the App&nbsp;Store review prompt are both claimants on the same post-reveal moment, and they fire back to back: the 17-day-streak user got the review prompt <strong>12.5 seconds after he dismissed the streak card</strong> (15.8 seconds after it appeared), and a second tester got it 26.9 seconds after his. The one person who accepted had his two asks separated by seventeen hours.</p>
+
+  <div class="callout is-good">
+    <div class="eyebrow">The finding that changes the options</div>
+    <p><code>requestAuthorization</code> has exactly one call site in the app, inside <code>requestPermission()</code>, and only the "Notify me" branch reaches it. "Not now" fires telemetry and dismisses. <strong>All seven decliners are still <code>.notDetermined</code> at the OS level.</strong> iOS's genuinely scarce one-shot was never spent on any of them. The only thing standing between those users and a legitimate permission dialog is a <code>UserDefaults</code> boolean that Tailspot sets on itself, at the moment the card is <em>presented</em> — before anyone answers.</p>
+  </div>
+</section>
+
+<section id="axes">
+  <h2>Topic Axes</h2>
+  <ol>
+    <li>The interrupting moment — when and where the ask appears in the user's flow</li>
+    <li>The card itself — its copy, buttons, affordances, and how it is dismissed</li>
+    <li>One-shot permanence and recovery — the latch, re-asking, the path back</li>
+    <li>What the reminder promises and delivers — the value proposition being sold</li>
+    <li>Earning the nudge without permission — the same retention outcome, no dialog</li>
+  </ol>
+</section>
+
+<section id="ideas">
+  <h2>Ranked Ideas</h2>
+
+  <nav class="jump" aria-label="Jump to idea">
+    <a href="#i1"><span class="jn">1</span> Settings is telling declined users they're covered</a>
+    <a href="#i2"><span class="jn">2</span> Reclaim the seven — the latch is ours, not Apple's</a>
+    <a href="#i3"><span class="jn">3</span> Stop stacking two asks in twenty seconds</a>
+    <a href="#i4"><span class="jn">4</span> Ask at the loss, not at the win</a>
+    <a href="#i5"><span class="jn">5</span> Show the notification instead of describing it</a>
+    <a href="#i6"><span class="jn">6</span> Make the decline mean what it says</a>
+    <a href="#i7"><span class="jn">7</span> Surfaces that need no permission at all</a>
+  </nav>
+
+  <article class="card" id="i1">
+    <div class="card-head">
+      <span class="rank">1</span>
+      <h3>Settings is telling declined users they're covered</h3>
+    </div>
+    <div class="chips">
+      <span class="chip">Axis 3 · permanence &amp; recovery</span>
+      <span class="chip hi">Confidence 95%</span>
+      <span class="chip hi">Complexity Low</span>
+    </div>
+    <dl>
+      <dt>Description</dt>
+      <dd>Add a <code>.notDetermined</code> state to the REMINDERS section of Settings. Today that section branches only on <code>.denied</code>, so a user who tapped "Not now" — and is therefore <code>.notDetermined</code> — falls through both branches: the "Streak protection" toggle renders ON and undimmed, and the footer reads "Get notified if your streak is at risk." Nothing will ever fire. The only escape is toggling the switch off and back on, which triggers the permission request as a side effect nobody would guess at. The row should say reminders need one more step, and re-trigger <code>requestPermission()</code> on tap.</dd>
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>SettingsScreen.swift</code> — <code>notifDenied</code> is defined as <code>notifStatus == .denied</code>; the disabled-toggle branch, the "Open Settings" recovery row, and the alternate footer are all gated on it. The <code>.onChange</code> handler that calls <code>requestPermission()</code> only runs if the user flips a switch that already appears to be on. Confirmed independently by an adversarial verifier.</dd>
+      <dt>Rationale</dt>
+      <dd>The documented "only recovery path" is not merely hard to find — it is affirmatively misleading for exactly the population it exists to serve. Every other idea here is a judgment call about product design. This one is the app stating something untrue to seven real users, and it is worth fixing regardless of which direction the rest of this document goes.</dd>
+      <dt>Downsides</dt>
+      <dd>Fixes the honesty problem without moving the acceptance rate on its own — a user still has to open Settings and notice the row. Best shipped alongside idea 2.</dd>
+    </dl>
+  </article>
+
+  <article class="card" id="i2">
+    <div class="card-head">
+      <span class="rank">2</span>
+      <h3>Reclaim the seven — the latch is ours, not Apple's</h3>
+    </div>
+    <div class="chips">
+      <span class="chip">Axis 3 · permanence &amp; recovery</span>
+      <span class="chip hi">Confidence 90%</span>
+      <span class="chip mid">Complexity Low–Medium</span>
+    </div>
+    <dl>
+      <dt>Description</dt>
+      <dd>Separate the app's own latch from the operating system's. Replace the single <code>permissionAskedKey</code> boolean with a small ledger — attempts, last-shown date, and how long the answer took — and allow the card to return a bounded number of times, each gated on a genuinely different qualifying event rather than on the same trigger firing twice. Treat an answer that arrives faster than the card can be read as "not meaningfully shown" rather than as a decision. Then ship a one-time migration that clears the latch for any user recorded as declined whose OS status is still <code>.notDetermined</code>, which recovers all seven of the current cohort. Add <code>seconds_to_answer</code> to the ask telemetry so reflex and refusal stop being indistinguishable in the data.</dd>
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>ContentView.swift:1603</code> sets <code>permissionAskedKey</code> at presentation, with the comment "Presenting latches the asked bit immediately, so it can never fire twice." <code>StreakReminders.swift</code> holds the app's only <code>requestAuthorization</code> call site, reachable from "Notify me," the Settings toggle, and a debug path — never from "Not now." <code>shouldOfferAsk</code> already takes <code>alreadyAsked</code> and <code>authStatusIsNotDetermined</code> as separate parameters, so the codebase encodes the distinction it then collapses. <code>askResponseProperties</code> carries no duration field.</dd>
+      <dt>Rationale</dt>
+      <dd>The feature inherited the irreversibility of the thing it was built to protect, for no technical reason. iOS's scarce resource was never at risk from a "Not now" tap. Recovering seven testers costs one migration and a second key, and it changes the value of everything downstream: better copy and better timing are worth far more when the app is allowed a second attempt than when it is chasing a single three-second reflex.</dd>
+      <dt>Downsides</dt>
+      <dd>Re-asking has a real annoyance ceiling; the bounded count and the "different qualifying event" rule are what keep this from becoming nagging, and both need a taste call. A dwell-time floor is a heuristic — someone who genuinely knows their answer and taps fast gets asked twice. The consumer-law analogy one frame offered for the dwell floor does not actually support it; the mechanism stands on the observed data alone.</dd>
+    </dl>
+  </article>
+
+  <article class="card" id="i3">
+    <div class="card-head">
+      <span class="rank">3</span>
+      <h3>Stop stacking two asks in twenty seconds</h3>
+    </div>
+    <div class="chips">
+      <span class="chip">Axis 1 · the interrupting moment</span>
+      <span class="chip mid">Confidence 80%</span>
+      <span class="chip mid">Complexity Medium</span>
+    </div>
+    <dl>
+      <dt>Description</dt>
+      <dd>The streak ask and the App Store review prompt are both scarce, quota-limited requests living in the same post-reveal funnel, and answering the first currently unlocks the second immediately. Build one shared signal for "this is a reflective moment, not a reflex moment" — time since the last camera interaction, whether the app was freshly foregrounded, session depth — and gate both asks behind it, with a minimum quiet period between any two asks of any kind.</dd>
+      <dt>Basis</dt>
+      <dd><code>direct:</code> PostHog, 2026-08-29/30: for the 17-day-streak tester, <code>review_prompt_requested</code> fired 12.5 seconds after he answered the streak card (15.8 seconds after it appeared); a second tester got the review prompt 26.9 seconds after his. The sole accepter's two asks were seventeen hours apart. The funnel's documented priority order places both in the same reveal-dismiss moment.</dd>
+      <dt>Rationale</dt>
+      <dd>Part of what reads as notification fatigue is the app asking for two different things inside half a minute, which primes exactly the dismissal reflex the telemetry captured. This also protects a second scarce resource nobody is currently watching: Apple silently caps review prompts, and the same mistimed moment is spending those too. One piece of shared infrastructure covers both, and any future ask plugs into it.</dd>
+      <dt>Downsides</dt>
+      <dd>The pattern appears clearly in two of eight cases, so it explains part of the decline rate, not all of it. Adding a moment-quality gate risks suppressing asks so effectively that they rarely fire at all — the gate needs a fallback so a user who never hits a "reflective moment" still gets asked eventually.</dd>
+    </dl>
+  </article>
+
+  <article class="card" id="i4">
+    <div class="card-head">
+      <span class="rank">4</span>
+      <h3>Ask at the loss, not at the win</h3>
+    </div>
+    <div class="chips">
+      <span class="chip">Axis 1 · the interrupting moment</span>
+      <span class="chip mid">Confidence 70%</span>
+      <span class="chip mid">Complexity Medium</span>
+    </div>
+    <dl>
+      <dt>Description</dt>
+      <dd>Every ask currently fires at a moment of gain, because <code>shouldOfferAsk</code> requires a live streak — so by construction the card always arrives when nothing has been lost. Move it to the first app open after a streak has actually broken: "Your 6-day streak ended Tuesday. Want a heads-up next time?" The reminder itself still never nags a lapsed user; only the ask relocates. Three weaker variants of the same relocation are worth weighing against it: queue the card until the camera is no longer frontmost (reusing the <code>cameraIsFrontmost()</code> signal the delivery path already computes), stage it for a deliberate visit to the Hangar or Profile, or fire it only on the catch that just rescued an at-risk streak.</dd>
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>StreakReminders.swift</code> — "a lapsed user is NEVER nagged, because a reminder only exists while a streak is alive"; <code>shouldOfferAsk</code> requires <code>currentStreak &gt;= minimumStreak</code>. Catch-to-ask gaps of 12, 18, 62 and 328 seconds put the card in the middle of active spotting. <code>external:</code> prospect theory — losses weigh roughly twice gains, and the streak break is the only moment the loss is real rather than hypothetical.</dd>
+      <dt>Rationale</dt>
+      <dd>This targets the fact the data is loudest about: streak size doesn't move the answer, and nobody in the sample was asked at a moment when the reminder's absence had cost them anything. It also gets the card off the viewfinder, where the user's momentum points at the sky and dismissal is the fastest way back to it. The self-contradiction is worth noting on its own — the app already refuses to interrupt a spotting session with a delivered reminder, then interrupts one with the card asking permission to send it.</dd>
+      <dt>Downsides</dt>
+      <dd>A broken streak may also be the moment a user is closest to churning, so the ask lands on a smaller and less enthusiastic population. It also delays the first ask substantially for users who never break a streak — which argues for pairing it with one of the softer relocations rather than replacing them.</dd>
+    </dl>
+  </article>
+
+  <article class="card" id="i5">
+    <div class="card-head">
+      <span class="rank">5</span>
+      <h3>Show the notification instead of describing it</h3>
+    </div>
+    <div class="chips">
+      <span class="chip">Axis 4 · what the reminder promises</span>
+      <span class="chip mid">Confidence 75%</span>
+      <span class="chip hi">Complexity Low</span>
+    </div>
+    <dl>
+      <dt>Description</dt>
+      <dd>Two changes to what the card communicates. First, render the actual notification — <code>StreakReminders.title</code> and <code>body</code>, filled with this user's real streak number — as a lock-screen-style mock inside the card, instead of the softer paraphrase that has drifted away from it. Second, sell the restraint rather than the category: the scheduler already guarantees at most one message a day, only on days the streak is genuinely at risk, never after a lapse, and never while you are already pointing at the sky. None of those four guarantees is visible to the user. "One message. 5pm. Only when the streak is actually at risk. Never when you've already caught" is a materially different proposition from "turn on notifications."</dd>
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>StreakReminders.swift</code> — <code>title</code> and <code>body</code> are pure static functions already written in the app's dried voice, and the file header documents all four guardrails. The card's own copy is a separate, softer string. Nobody who declined has ever seen a Tailspot notification: <code>streak_reminder_delivered</code> has never fired for a real reminder. <code>external:</code> Breznitz, <em>Cry Wolf: The Psychology of False Alarms</em> (1984) — warning systems derive credibility from demonstrated restraint.</dd>
+      <dt>Rationale</dt>
+      <dd>This is the highest ratio in the feature of value already built to value communicated. The engineering did the restrained, careful work; the copy gives none of it away and asks instead for the one category people hold blanket policies about. It also merges two copy assets that must currently be kept in step by hand — every future edit to the notification retunes the card for free.</dd>
+      <dt>Downsides</dt>
+      <dd>Better copy cannot help a reader who answers in 1.46 seconds, so this is worth little on its own — it pays off only once ideas 2, 3 or 4 have bought the card an audience that actually reads it.</dd>
+    </dl>
+  </article>
+
+  <article class="card" id="i6">
+    <div class="card-head">
+      <span class="rank">6</span>
+      <h3>Make the decline mean what it says</h3>
+    </div>
+    <div class="chips">
+      <span class="chip">Axis 2 · the card itself</span>
+      <span class="chip mid">Confidence 70%</span>
+      <span class="chip hi">Complexity Low</span>
+    </div>
+    <dl>
+      <dt>Description</dt>
+      <dd>"Not now" is false — it latches forever. There are three mutually exclusive resolutions and the choice is a taste call. Ship idea 2 and the label becomes true as written, which is the cheapest fix and the one I'd pick. Or relabel it honestly ("No thanks", with a line noting it can be turned on later in Settings). Or remove the decline button altogether, leaving one affordance — "Notify me" — and dismissal by tapping outside or swiping down, which fires its own event and never latches, making it structurally impossible to spend the ask on a reflex. A fourth framing is worth considering alongside these: replace the yes/no entirely with three time chips — 5pm, 7pm, 9pm — so that choosing an hour <em>is</em> the consent. A preference question has no reflex answer, and it would also fix a reminder hour that is currently hardcoded globally from one person's field test across a tester base spanning several time zones.</dd>
+      <dt>Basis</dt>
+      <dd><code>direct:</code> the button label in <code>ContentView.swift</code> against <code>permissionAskedKey</code>'s own doc comment, "the ask never repeats" — the two statements contradict each other and the user is acting on the button. The decline button's source comment states the design goal plainly: "declining stays easy to hit and easy to read." <code>reminderHour = 17</code> is documented as "Fixed early-evening reminder hour (local). Not a setting in v1."</dd>
+      <dt>Rationale</dt>
+      <dd>The politeness affordance and the permanence mechanism are currently the same button, which is why a courteous design decision turned into seven permanent losses. Whichever resolution is chosen, the label and the behavior need to agree.</dd>
+      <dt>Downsides</dt>
+      <dd>Removing the decline button makes the card harder to escape, which cuts against the project's "gates flag, never block" principle if the dismissal gesture isn't obvious. The time-chip variant adds a persisted preference and a settings surface to maintain, and turns a one-tap ask into a small configuration task.</dd>
+    </dl>
+  </article>
+
+  <article class="card" id="i7">
+    <div class="card-head">
+      <span class="rank">7</span>
+      <h3>Surfaces that need no permission at all</h3>
+    </div>
+    <div class="chips">
+      <span class="chip">Axis 5 · earning the nudge</span>
+      <span class="chip lo">Confidence 65%</span>
+      <span class="chip lo">Complexity High</span>
+    </div>
+    <dl>
+      <dt>Description</dt>
+      <dd>Three complementary ways to deliver the retention outcome without a dialog. A WidgetKit home or lock screen widget showing the flame, the day count, and today's state, cooling visibly as the day runs out — always present, no permission, no one-shot, and it works for the seven decliners today. An in-app toast on an at-risk evening after 17:00, reusing the <code>StreakToastRelay</code> and <code>tapToastLine</code> machinery already shipped for the notification-tap path. And a "sorry we missed you" slip: log locally what the 5pm nudge <em>would</em> have said, and surface it on the next app open — "5:12pm yesterday: your 6-day streak was one catch from ending. We didn't tell you." — with an inline enable control.</dd>
+      <dt>Basis</dt>
+      <dd><code>direct:</code> <code>StreakToastRelay</code> and <code>tapToastLine</code> are shipped, working infrastructure. <code>decision()</code> is a pure function that already computes the at-risk state and stake, and currently drops both when the user is unauthorized — so the counterfactual costs a function call, not new logic. <code>external:</code> Darby, <em>The Effectiveness of Feedback on Energy Consumption</em> (Oxford ECI / DEFRA, 2006) — direct ambient feedback produces 5–15% behavior change against 0–10% for periodic reports.</dd>
+      <dt>Rationale</dt>
+      <dd>Every other idea optimizes a conversion rate on a permission most people appear unwilling to grant. These remove the dependency instead, and the slip has a second payoff: it is the only proposal that measures the counterfactual, telling you how often the reminder <em>would</em> have fired for the seven. That number is currently unknowable, and it is what determines whether this whole problem is worth more engineering.</dd>
+      <dt>Downsides</dt>
+      <dd>The widget is the most expensive item in this document: a new app-extension target plus an App Group entitlement for the SwiftData read, which is a manual Xcode step outside what Claude can do. It also waits to be looked at rather than arriving at 17:00. The toast and the slip are cheap by comparison and can ship first to test whether ambient nudging moves anything before committing to the extension.</dd>
+    </dl>
+  </article>
+</section>
+
+<section id="rejections">
+  <h2>Rejection Summary</h2>
+  <p>Thirty-eight raw candidates were generated across six framing lenses, deduplicated to twenty-five, then checked by a verifier working from a fresh context with no knowledge of how they were produced. What follows was cut, and why.</p>
+  <div class="tscroll">
+    <table>
+      <thead><tr><th>#</th><th>Idea</th><th>Reason rejected</th></tr></thead>
+      <tbody>
+        <tr><td>C4</td><td>Provisional authorization — request <code>.provisional</code> so no dialog is ever shown</td><td>Basis refuted. Two frames independently ranked this first, but the production scheduler gates on <code>authorizationStatus == .authorized</code> only, so a provisional user schedules nothing — the idea is inert without a second edit neither frame disclosed. Worse, its central claim is wrong: <code>.provisional</code> is a <em>determined</em> state, so it forfeits rather than preserves the later full prompt. The debug fire path is the only place the codebase tolerates it.</td></tr>
+        <tr><td>C13</td><td>Fade the buttons in behind the copy's reading time</td><td>Duplicates idea 6 more weakly, and a button that cannot be pressed yet reads as a broken card.</td></tr>
+        <tr><td>C14</td><td>Default-on framing — a pre-checked settings-style row where dismissal grants</td><td>Real dark-pattern exposure: it fires a permission request from a close gesture on a disguised control. The default-effect research behind it is sound, but this needs an explicit product decision, not a build.</td></tr>
+        <tr><td>C19</td><td>Bell glyph on the reveal's streak chip instead of a card</td><td>Overlaps idea 6, and it keeps the ask on the reveal — the winning moment idea 4 argues against.</td></tr>
+        <tr><td>C20</td><td>Spend EventKit's separate permission budget with a calendar reminder</td><td>The independent-budget claim is correct, but it needs new Info.plist privacy strings — a manual Xcode step the idea failed to disclose — and a calendar entry is a poor substitute for an evening nudge.</td></tr>
+        <tr><td>C21</td><td>Move ask parameters to backend config to skip the release cycle</td><td>Genuine leverage and worth doing eventually, but scope overrun for this problem.</td></tr>
+        <tr><td>C24</td><td>Compute the notification body from what's actually in the sky tonight</td><td>Good idea, wrong sequence — it improves a message almost nobody currently receives. Revisit once idea 2 or 7 has an audience.</td></tr>
+        <tr><td>C25</td><td>Only ask users who dwell like the one accepter did</td><td>Built on a single positive observation. Idea 2 ships the instrumentation that would make this testable later.</td></tr>
+        <tr><td>C5, C7, C8</td><td>Queue until off-camera / trigger on the rescue catch / fire in the Hangar</td><td>Not rejected — folded into idea 4, which the verifier correctly identified as one design decision with several candidate answers rather than four shippable ideas.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>Composed 2026-08-30 by ce-ideate · 38 raw candidates → 25 deduplicated → 7 survivors across 5 axes · all five axes represented</footer>
+
+</div>
