@@ -34,6 +34,7 @@ import os
 struct ProfileScreen: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
 
     /// Last server-authoritative standing, CACHED in app storage so the headline
@@ -416,15 +417,29 @@ struct ProfileScreen: View {
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
+    @ViewBuilder
     private func statsRow(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
         // `inputs` is the precomputed value passed in — the filter closure
         // reads that single snapshot instead of re-deriving it per trophy.
         let earnedTrophies = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
-        return HStack(spacing: 0) {
-            statCell(value: stats.totalCatches, label: "Catches")
-            statCell(value: stats.uniqueAirframes, label: "Unique")
-            statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
-            statCell(value: earnedTrophies, label: "Trophies")
+        if dynamicTypeSize.isAccessibilitySize {
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: 14
+            ) {
+                statCell(value: stats.totalCatches, label: "Catches")
+                statCell(value: stats.uniqueAirframes, label: "Unique")
+                statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
+                statCell(value: earnedTrophies, label: "Trophies")
+            }
+            .padding(.horizontal, 10)
+        } else {
+            HStack(spacing: 0) {
+                statCell(value: stats.totalCatches, label: "Catches")
+                statCell(value: stats.uniqueAirframes, label: "Unique")
+                statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
+                statCell(value: earnedTrophies, label: "Trophies")
+            }
         }
     }
 
@@ -438,6 +453,7 @@ struct ProfileScreen: View {
                 .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         // One VoiceOver element per cell ("12, CATCHES"), not value and
