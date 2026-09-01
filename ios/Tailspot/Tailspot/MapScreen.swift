@@ -235,7 +235,7 @@ struct MapScreen: View {
         let span = dateSpanText(for: visible)
         return HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(total) sightings")
+                Text(CountCopy.phrase(total, singular: "sighting"))
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(Brand.Color.textPrimary)
                 if let span {
