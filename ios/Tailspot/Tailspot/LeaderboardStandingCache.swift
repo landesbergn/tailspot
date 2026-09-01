@@ -3,7 +3,7 @@
 //  Tailspot
 //
 //  Device-local cache of the SERVER-truth leaderboard facts that trophies
-//  read: weekly-champion win count and the ever-held-#1-all-time flag.
+//  read: weekly/monthly champion win counts and the ever-held-#1-all-time flag.
 //  Both are computed exclusively by the backend (Monday crowning /
 //  `alltime_toppers` ledger) and reach the device only inside a
 //  GET /v1/leaderboard `me` payload — the app must NEVER infer a win
@@ -16,8 +16,8 @@
 //  call site.
 //
 //  Reads feed `TrophyProgressInputs` (Top Flight / Dynasty / Chart Topper)
-//  and ProfileScreen's WEEKLY CHAMPION laurel (its @AppStorage observes the
-//  same `weeklyWins` key, so a write here refreshes the laurel live).
+//  and ProfileScreen's WEEKLY/MONTHLY CHAMPION laurels (their @AppStorage
+//  values observe the same win-count keys, so a write refreshes them live).
 //  Offline degradation falls out of the storage: the last-fetched values
 //  persist across launches, and a fresh install that has never reached the
 //  backend reads 0 / false — all three trophies locked.
@@ -34,6 +34,7 @@ nonisolated struct LeaderboardStandingCache {
     /// Shared with ProfileScreen's `@AppStorage` laurel — introduced in the
     /// dynamic-leaderboards PR2 round; stable once shipped.
     static let weeklyWinsKey = "tailspot.standing.weeklyWins"
+    static let monthlyWinsKey = "tailspot.standing.monthlyWins"
     static let everToppedAllTimeKey = "tailspot.standing.everToppedAllTime"
 
     private let defaults: UserDefaults
@@ -54,6 +55,9 @@ nonisolated struct LeaderboardStandingCache {
         if let wins = me.weeklyWins {
             defaults.set(wins, forKey: Self.weeklyWinsKey)
         }
+        if let wins = me.monthlyWins {
+            defaults.set(wins, forKey: Self.monthlyWinsKey)
+        }
         if me.everToppedAllTime == true {
             defaults.set(true, forKey: Self.everToppedAllTimeKey)
         }
@@ -63,6 +67,11 @@ nonisolated struct LeaderboardStandingCache {
     /// 0 = none (or never fetched — indistinguishable, and correctly locked).
     var weeklyWins: Int {
         defaults.integer(forKey: Self.weeklyWinsKey)
+    }
+
+    /// Monthly-champion crowns the server has credited this device.
+    var monthlyWins: Int {
+        defaults.integer(forKey: Self.monthlyWinsKey)
     }
 
     /// Whether this device has ever held #1 on the all-time board.

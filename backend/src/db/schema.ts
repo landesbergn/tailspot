@@ -287,6 +287,32 @@ export const weeklyChampions = pgTable(
 );
 
 /**
+ * Monthly champions.
+ *
+ * Mirrors `weekly_champions`, using calendar-month boundaries (the first day
+ * of the month at 00:00 UTC). The first leaderboard read after a month closes
+ * freezes every points-tied winner, so later rescoring cannot rewrite a crown
+ * somebody has already seen.
+ */
+export const monthlyChampions = pgTable(
+  "monthly_champions",
+  {
+    /** The first day (UTC) of the won month. */
+    monthStart: date("month_start").notNull(),
+    deviceId: uuid("device_id")
+      .notNull()
+      .references(() => devices.id),
+    points: integer("points").notNull(),
+    catches: integer("catches").notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    /** Shared crowns are one row per tied device. */
+    pk: primaryKey({ columns: [t.monthStart, t.deviceId] }),
+  }),
+);
+
+/**
  * All-time-topper ledger (dynamic leaderboards PR1, migration 0007).
  *
  * One row per device that has EVER held all-time #1 — the data behind the
