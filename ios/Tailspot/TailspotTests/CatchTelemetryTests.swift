@@ -24,8 +24,10 @@ struct CatchTelemetryTests {
         #expect(p["rarity"]?.jsonValue as? String == "epic")
         #expect(p["aircraft_type"]?.jsonValue as? String == "mil")
         #expect((p["slant_km"]?.jsonValue as? Double) == 12.4)
-        // A first catch is a first catch by construction - never a duplicate.
-        #expect(p["duplicate"]?.jsonValue as? Bool == false)
+        // No duplicate flag: constant-false carries no information, and the
+        // concept already has two spellings (is_duplicate / duplicate).
+        #expect(p["duplicate"] == nil)
+        #expect(p["is_duplicate"] == nil)
     }
 
     @Test func firstCatchCarriesFullAirframeIdentity() {
@@ -60,7 +62,32 @@ struct CatchTelemetryTests {
         }
         // The always-known core survives.
         #expect(p["icao24"]?.jsonValue as? String == "a1b2c3")
-        #expect(p["duplicate"]?.jsonValue as? Bool == false)
+    }
+
+    @Test func deleteRecordsItsSource() {
+        // The two delete paths mean opposite things for the north-star, so
+        // they have to be tellable apart in the data.
+        let discard = CatchTelemetry.deletedProperties(
+            icao24: "a1b2c3", count: 1, rarity: "rare", source: .suspectDiscard
+        )
+        #expect(discard["source"]?.jsonValue as? String == "suspect_discard")
+
+        let hangar = CatchTelemetry.deletedProperties(
+            icao24: "a1b2c3", count: 3, rarity: "common", source: .hangarDelete
+        )
+        #expect(hangar["source"]?.jsonValue as? String == "hangar_delete")
+        #expect(hangar["count"]?.jsonValue as? Int == 3)
+    }
+
+    @Test func deleteOmitsSourceWhenUnknown() {
+        // Additive property: events from builds already on phones carry no
+        // source, so absent must stay absent rather than defaulting to either
+        // value - a default would silently mislabel historical deletes.
+        let p = CatchTelemetry.deletedProperties(
+            icao24: "a1b2c3", count: 1, rarity: nil
+        )
+        #expect(p["source"] == nil)
+        #expect(p["rarity"] == nil)
     }
 
     @Test func firstCatchOmitsPropertiesNotKnownUntilUpload() {
@@ -74,7 +101,7 @@ struct CatchTelemetryTests {
             callsign: "UAL123"
         )
         for key in ["points", "place_name", "first_of_type",
-                    "guess_kind", "guess_correct"] {
+                    "guess_kind", "guess_correct", "duplicate"] {
             #expect(p[key] == nil, "\(key) is not honestly known at catch time")
         }
     }

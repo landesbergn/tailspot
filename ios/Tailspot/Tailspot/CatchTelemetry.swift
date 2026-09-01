@@ -245,10 +245,13 @@ nonisolated enum CatchTelemetry {
     /// of catch converts a user" is answerable from this event alone instead of
     /// requiring a join back to `catch_uploaded`.
     ///
-    /// `duplicate` is hard-coded `false`: this event only ever fires on the tap
-    /// that took the Hangar from empty, so by construction the plane was not
-    /// already collected. It is sent explicitly (rather than omitted) so the
-    /// event's shape matches `catch_uploaded` for a UNION across the two.
+    /// Deliberately carries NO duplicate flag. The audit list asked for
+    /// `duplicate: false` on the reasoning that a first catch cannot be a
+    /// duplicate — which is exactly why it is useless: a property that is
+    /// `false` on every event that will ever be emitted carries no
+    /// information, and it would have introduced a THIRD spelling of a
+    /// concept that already has two (see the naming note on
+    /// `duplicateProperties`). Absence says the same thing for free.
     ///
     /// NOT here, because they do not exist yet at this instant — `fireFirstCatch`
     /// runs on the catch tap, before the upload round-trip:
@@ -278,7 +281,6 @@ nonisolated enum CatchTelemetry {
             "rarity": .string(rarity),
             "aircraft_type": .string(aircraftType),
             "slant_km": .double(slantKm),
-            "duplicate": .bool(false),
         ]
         addNonBlank("registration", registration, to: &props)
         addNonBlank("typecode", typecode, to: &props)
@@ -306,6 +308,19 @@ nonisolated enum CatchTelemetry {
     /// Hangar, so no `Catch` row exists to read rarity/type from. We still
     /// record the attempt (it IS a capture attempt — part of the funnel
     /// denominator) flagged as a duplicate.
+    ///
+    /// NAMING TRAP, do not "fix" by renaming (2026-08-31). Two different
+    /// concepts sit behind two near-identical property names:
+    ///   - `is_duplicate` on **catch_performed** — the LOCAL verdict: this
+    ///     airframe is already in this device's Hangar under the narrowed
+    ///     duplicate rule. ~34% of taps (1788 true / 3479 false over 90 d).
+    ///   - `duplicate` on **catch_uploaded** — the SERVER's verdict on the
+    ///     upload. ~1.8% (59 true / 3288 false over the same window).
+    /// They are an 18x rate apart and answer different questions, so a query
+    /// that treats them as one property will be badly wrong. Renaming either
+    /// would split its own history across two keys and break shipped builds
+    /// that keep sending the old name for months — the same reason
+    /// `manufacturer` was kept over `make`. Document, don't rename.
     static func duplicateProperties(icao24: String) -> [String: AnalyticsValue] {
         [
             "icao24": .string(icao24),
@@ -381,19 +396,40 @@ nonisolated enum CatchTelemetry {
         return props
     }
 
+    /// Where a `catch_deleted` came from. The event fires from two paths that
+    /// mean OPPOSITE things for the catch-confirmation-rate north-star, and
+    /// until now they were indistinguishable in the data: 131 deletes over
+    /// 90 days, of which only 43 were suspect discards — so two thirds of the
+    /// "deny signal" was actually routine tidying.
+    enum DeleteSource: String {
+        /// The user answered Discard to the post-catch Keep/Discard question.
+        /// A real "I don't believe this catch" signal; always count 1, and
+        /// always paired with a `catch_suspect_discarded`.
+        case suspectDiscard = "suspect_discard"
+        /// The user deleted a row from the Hangar. Housekeeping, not a verdict
+        /// on trustworthiness — may group N catches (`count`).
+        case hangarDelete = "hangar_delete"
+    }
+
     /// Properties for a delete. `count` is the number of underlying `Catch`
     /// rows the deleted Hangar row grouped (≥1). `rarity` is omitted when
     /// unknown rather than sent as a placeholder.
+    ///
+    /// `source` (2026-08-31) separates the two callers — see `DeleteSource`.
+    /// Additive: events from builds already on users' phones simply have no
+    /// `source`, so treat absent as "unknown", never as either value.
     static func deletedProperties(
         icao24: String,
         count: Int,
-        rarity: String?
+        rarity: String?,
+        source: DeleteSource? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
             "count": .int(count),
         ]
         if let rarity { props["rarity"] = .string(rarity) }
+        if let source { props["source"] = .string(source.rawValue) }
         return props
     }
 
@@ -579,9 +615,12 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    @MainActor static func fireDeleted(icao24: String, count: Int, rarity: String?) {
+    @MainActor static func fireDeleted(icao24: String,
+                                       count: Int,
+                                       rarity: String?,
+                                       source: DeleteSource? = nil) {
         Analytics.capture(deletedEvent, deletedProperties(
-            icao24: icao24, count: count, rarity: rarity
+            icao24: icao24, count: count, rarity: rarity, source: source
         ))
     }
 

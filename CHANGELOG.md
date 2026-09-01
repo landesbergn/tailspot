@@ -87,8 +87,36 @@ duplicate-person bug it was trying to fix.
   `catch_uploaded` is expected (duplicates and discarded suspects never
   upload), not loss.
 
-10 new tests (7 for the handle decorator, 3 for the enriched first-catch
-properties); full `TailspotTests` suite green.
+**Independent re-review (2026-08-31), not taking the audit list's framing.**
+Three findings the original list missed, one of them a self-correction:
+
+- **Dropped the `duplicate: false` the list asked for on `first_plane_catch`.**
+  It is `false` on every event that will ever be emitted, so it carries no
+  information — and it imported `catch_uploaded`'s *server*-dedup property name
+  onto a local-only event, making a two-name problem a three-name one. Absence
+  says the same thing for free. Caught reviewing my own diff.
+- **`is_duplicate` vs `duplicate` is a real naming trap, now documented.**
+  `is_duplicate` on `catch_performed` is the LOCAL verdict (already in this
+  device's Hangar): 1788 true / 3479 false, ~34% of taps. `duplicate` on
+  `catch_uploaded` is the SERVER's verdict: 59 true / 3288 false, ~1.8%. An 18x
+  rate apart, answering different questions, behind near-identical names — a
+  query conflating them is badly wrong. Not renamed, for the same reason
+  `make` was rejected: renaming splits history and breaks shipped builds.
+  Documented loudly in `duplicateProperties` instead.
+- **`catch_deleted` now carries `source`** (`suspect_discard` | `hangar_delete`).
+  The event fires from two paths that mean OPPOSITE things for the north-star
+  and were indistinguishable in the data: 131 deletes over 90 days, only 43 of
+  them suspect discards — so two thirds of the "deny signal" was routine Hangar
+  tidying. Additive, so events from builds already on phones simply have no
+  `source`; absent means unknown, never either value.
+
+Considered and rejected: merging `catch_local_gate` / `catch_detector_gate` /
+`catch_pipeline_timing`, which fire near 1:1 with `catch_performed` — the
+volume saving is irrelevant at this scale and it would break every existing
+dashboard and all history.
+
+17 new tests (7 for the handle decorator, 5 for the facade wiring that actually
+stamps it, 5 for the catch-property builders); full `TailspotTests` suite green.
 
 ## 2026-08-28 — Streak reminder funnel telemetry — branch `feat/streak-reminder-telemetry`
 
