@@ -57,6 +57,12 @@ export function nextMonthStartUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
 }
 
+/** The 1st 00:00 UTC of the month immediately before the one containing `d`. */
+export function previousMonthStartUtc(d: Date): Date {
+  const start = monthStartUtc(d);
+  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));
+}
+
 /**
  * `d` as a UTC calendar-date string ("YYYY-MM-DD") — the wire/DB format for
  * `weekly_champions.week_start`. Callers pass midnight-UTC Dates (the week

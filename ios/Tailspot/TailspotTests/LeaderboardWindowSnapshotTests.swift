@@ -139,13 +139,18 @@ struct LeaderboardWindowSnapshotTests {
         snapshot(board([.week: quiet], selected: .week, container: container),
                  as: "leaderboard_week_empty_nochamp")
 
-        // Month: countdown date line, no champion banner.
+        // Month: countdown date line + last month's champion banner.
         let month = LeaderboardResponse(
             entries: entries,
-            me: MyStanding(rank: 2, points: 315, weeklyWins: 3, everToppedAllTime: false),
+            me: MyStanding(rank: 2, points: 315, weeklyWins: 3, monthlyWins: 1,
+                           everToppedAllTime: false),
             window: "month",
             resetsAt: monthResetsAt,
-            champions: nil)
+            champions: nil,
+            monthlyChampions: [
+                LeaderboardChampion(handle: "maia", points: 1850,
+                                     monthStart: "2026-06-01")
+            ])
         snapshot(board([.month: month], selected: .month, container: container),
                  as: "leaderboard_month")
 
@@ -175,21 +180,25 @@ struct LeaderboardWindowSnapshotTests {
         let savedPoints = defaults.object(forKey: "tailspot.standing.points")
         let savedRank = defaults.object(forKey: "tailspot.standing.rank")
         let savedWins = defaults.object(forKey: "tailspot.standing.weeklyWins")
+        let savedMonthlyWins = defaults.object(forKey: "tailspot.standing.monthlyWins")
         defaults.set("noah", forKey: SpotterHandle.storageKey)
         defaults.set(1370, forKey: "tailspot.standing.points")
         defaults.set(1, forKey: "tailspot.standing.rank")
         defaults.set(3, forKey: "tailspot.standing.weeklyWins")
+        defaults.set(2, forKey: "tailspot.standing.monthlyWins")
         defer {
             defaults.set(savedHandle, forKey: SpotterHandle.storageKey)
             defaults.set(savedPoints, forKey: "tailspot.standing.points")
             defaults.set(savedRank, forKey: "tailspot.standing.rank")
             defaults.set(savedWins, forKey: "tailspot.standing.weeklyWins")
+            defaults.set(savedMonthlyWins, forKey: "tailspot.standing.monthlyWins")
         }
         let container = try emptyContainer()
         snapshot(ProfileScreen().modelContainer(container), as: "profile_laurel_x3")
 
         // Single win: no "×1" suffix.
         defaults.set(1, forKey: "tailspot.standing.weeklyWins")
+        defaults.set(1, forKey: "tailspot.standing.monthlyWins")
         snapshot(ProfileScreen().modelContainer(container), as: "profile_laurel_x1")
         #expect(true)
     }

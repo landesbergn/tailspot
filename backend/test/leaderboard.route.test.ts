@@ -158,9 +158,15 @@ describe("GET /v1/leaderboard", () => {
     expect(body.entries).toEqual([{ rank: 1, handle: "Named", points: 75, catches: 1 }]);
     // …but `me` reflects the TRUE rank: the ghost (750 pts) outranks Named, so
     // Named is rank 2 overall even though the ghost is hidden from entries.
-    // (weeklyWins/everToppedAllTime are the PR1 trophy counters — no weeks have
+    // (weeklyWins/monthlyWins/everToppedAllTime are trophy facts — no periods have
     // closed with champions here, and the ghost, not Named, is all-time #1.)
-    expect(body.me).toEqual({ rank: 2, points: 75, weeklyWins: 0, everToppedAllTime: false });
+    expect(body.me).toEqual({
+      rank: 2,
+      points: 75,
+      weeklyWins: 0,
+      monthlyWins: 0,
+      everToppedAllTime: false,
+    });
   });
 
   it("hides handle-bearing devices with zero catches (drive-by onboarding claims)", async () => {
@@ -193,6 +199,7 @@ describe("GET /v1/leaderboard", () => {
       rank: 1,
       points: 15,
       weeklyWins: 0,
+      monthlyWins: 0,
       everToppedAllTime: true,
     });
     // The anon device is NOT in entries (no handle).
