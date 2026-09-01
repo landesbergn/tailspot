@@ -24,6 +24,59 @@ struct CatchTelemetryTests {
         #expect(p["rarity"]?.jsonValue as? String == "epic")
         #expect(p["aircraft_type"]?.jsonValue as? String == "mil")
         #expect((p["slant_km"]?.jsonValue as? Double) == 12.4)
+        // A first catch is a first catch by construction - never a duplicate.
+        #expect(p["duplicate"]?.jsonValue as? Bool == false)
+    }
+
+    @Test func firstCatchCarriesFullAirframeIdentity() {
+        // The activation milestone answers "what kind of catch converts a
+        // user", so it carries the same identity vocabulary as catch_uploaded.
+        let p = CatchTelemetry.firstCatchProperties(
+            icao24: "a1b2c3", rarity: "epic", aircraftType: "mil", slantKm: 12.4,
+            registration: "N12345", typecode: "B738", manufacturer: "Boeing",
+            model: "737-800", operatorName: "United", category: "A3",
+            callsign: "UAL123"
+        )
+        #expect(p["registration"]?.jsonValue as? String == "N12345")
+        #expect(p["typecode"]?.jsonValue as? String == "B738")
+        #expect(p["manufacturer"]?.jsonValue as? String == "Boeing")
+        #expect(p["model"]?.jsonValue as? String == "737-800")
+        #expect(p["operator_name"]?.jsonValue as? String == "United")
+        #expect(p["category"]?.jsonValue as? String == "A3")
+        #expect(p["callsign"]?.jsonValue as? String == "UAL123")
+    }
+
+    @Test func firstCatchOmitsBlankAirframeFields() {
+        // Blank-is-absent, matching uploadedProperties: PostHog should only
+        // ever see keys we actually know, never a placeholder.
+        let p = CatchTelemetry.firstCatchProperties(
+            icao24: "a1b2c3", rarity: "common", aircraftType: "narrow", slantKm: 3.0,
+            registration: nil, typecode: "  ", manufacturer: "", model: nil,
+            operatorName: nil, category: nil, callsign: nil
+        )
+        for key in ["registration", "typecode", "manufacturer", "model",
+                    "operator_name", "category", "callsign"] {
+            #expect(p[key] == nil, "\(key) should be omitted when blank")
+        }
+        // The always-known core survives.
+        #expect(p["icao24"]?.jsonValue as? String == "a1b2c3")
+        #expect(p["duplicate"]?.jsonValue as? Bool == false)
+    }
+
+    @Test func firstCatchOmitsPropertiesNotKnownUntilUpload() {
+        // points / place_name / first_of_type / guess_* are decided at upload
+        // or reveal, AFTER this event fires. Sending zeros and blanks would
+        // read as "a 0-point catch in nowhere" instead of "not known yet".
+        let p = CatchTelemetry.firstCatchProperties(
+            icao24: "a1b2c3", rarity: "epic", aircraftType: "mil", slantKm: 12.4,
+            registration: "N12345", typecode: "B738", manufacturer: "Boeing",
+            model: "737-800", operatorName: "United", category: "A3",
+            callsign: "UAL123"
+        )
+        for key in ["points", "place_name", "first_of_type",
+                    "guess_kind", "guess_correct"] {
+            #expect(p[key] == nil, "\(key) is not honestly known at catch time")
+        }
     }
 
     @Test func performedCarriesRarityTypeSlantAndNotDuplicate() {

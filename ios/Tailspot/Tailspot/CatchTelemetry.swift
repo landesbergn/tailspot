@@ -39,6 +39,52 @@
 //  catch_suspect_discarded) these are the numerator + negative signals the
 //  catch-confirmation-rate funnel needs.
 //
+//  THE CATCH-TAP SEQUENCE (verified against the code paths in ContentView and
+//  against production event streams, 2026-08-31 — keep new instrumentation
+//  consistent with this shape):
+//
+//    catch_local_gate            gate telemetry, once per tap
+//      ├─ catch_blocked_outdoors  gate 1 (indoor) raised suspicion
+//      ├─ catch_blocked_size      gate 3 (angular size) raised suspicion
+//      └─ catch_uncertain_aim     aim confidence was low
+//           ↓
+//    catch_detector_gate         L4 detector verdict (shadow), once per tap
+//           ↓
+//    catch_performed             ONE per processed target — the catch is
+//                                committed locally and a `Catch` row exists.
+//                                Duplicates fire this too, with
+//                                is_duplicate=true and no other properties.
+//           ↓
+//    first_plane_catch           only on the tap that took the Hangar from
+//                                empty; latched once per install.
+//           ↓
+//    catch_suspected             ONLY for a row a gate quarantined. Fires
+//                                AFTER catch_performed, not before — under the
+//                                post-catch confirm model (2026-07-04) the
+//                                gates FLAG, they never block, so the catch is
+//                                already committed by the time we record that
+//                                it looked suspicious.
+//           ↓
+//    catch_pipeline_timing       end of the synchronous tap work.
+//           ↓  (the reveal is presented; a guess round may run here —
+//              guess_round_shown / _answered / _skipped)
+//    catch_suspect_kept |        the user's Keep/Discard answer, asked after
+//    catch_suspect_discarded     the reveal and only for a suspected row.
+//           ↓
+//    catch_uploaded              the backend accepted the catch. `duplicate`
+//                                here is the SERVER's verdict, and is the flag
+//                                that makes a row count as a valid catch.
+//
+//  Two traps worth stating explicitly, because both are easy to get backwards:
+//   - `catch_uncertain_aim`, `catch_blocked_outdoors` and `catch_blocked_size`
+//     are NOT dead ends. They mark suspicion, and a suspected catch still
+//     reaches catch_uploaded once the user keeps it — production streams show
+//     catch_uncertain_aim followed by catch_uploaded on the same icao24 nine
+//     seconds later. The only true dead end is `grounded_catch_attempt` (a tap
+//     on a parked plane: no `Catch` row is ever created).
+//   - catch_performed > catch_uploaded is EXPECTED, not loss. Duplicates fire
+//     performed but never upload, and a discarded suspect never uploads either.
+//
 
 import Foundation
 
@@ -192,19 +238,56 @@ nonisolated enum CatchTelemetry {
 
     /// Properties for the activation milestone (`first_plane_catch`): the
     /// identity of the plane that converted this user, in the same vocabulary
-    /// as catch_performed so the two join cleanly.
+    /// as catch_performed / catch_uploaded so the three join cleanly.
+    ///
+    /// Carries the full airframe identity (2026-08-31) — tail number, typecode,
+    /// manufacturer, model, operator, ADS-B category, callsign — so "what kind
+    /// of catch converts a user" is answerable from this event alone instead of
+    /// requiring a join back to `catch_uploaded`.
+    ///
+    /// `duplicate` is hard-coded `false`: this event only ever fires on the tap
+    /// that took the Hangar from empty, so by construction the plane was not
+    /// already collected. It is sent explicitly (rather than omitted) so the
+    /// event's shape matches `catch_uploaded` for a UNION across the two.
+    ///
+    /// NOT here, because they do not exist yet at this instant — `fireFirstCatch`
+    /// runs on the catch tap, before the upload round-trip:
+    ///   - `points` / `first_of_type` — decided by the server at upload.
+    ///   - `place_name` — the reverse-geocode is async and lands post-save.
+    ///   - `guess_kind` / `guess_correct` — the guess round runs at the reveal.
+    /// Sending them here would mean sending zeros and blanks, which reads as
+    /// "a 0-point catch in nowhere" rather than "not known yet". They live on
+    /// this same catch's `catch_uploaded`, joinable on `icao24` + person.
+    ///
+    /// Nil/blank fields are OMITTED, matching `uploadedProperties`.
     static func firstCatchProperties(
         icao24: String,
         rarity: String,
         aircraftType: String,
-        slantKm: Double
+        slantKm: Double,
+        registration: String? = nil,
+        typecode: String? = nil,
+        manufacturer: String? = nil,
+        model: String? = nil,
+        operatorName: String? = nil,
+        category: String? = nil,
+        callsign: String? = nil
     ) -> [String: AnalyticsValue] {
-        [
+        var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
             "rarity": .string(rarity),
             "aircraft_type": .string(aircraftType),
             "slant_km": .double(slantKm),
+            "duplicate": .bool(false),
         ]
+        addNonBlank("registration", registration, to: &props)
+        addNonBlank("typecode", typecode, to: &props)
+        addNonBlank("manufacturer", manufacturer, to: &props)
+        addNonBlank("model", model, to: &props)
+        addNonBlank("operator_name", operatorName, to: &props)
+        addNonBlank("category", category, to: &props)
+        addNonBlank("callsign", callsign, to: &props)
+        return props
     }
 
     /// Properties for a grounded-plane tap (`grounded_catch_attempt`):
@@ -245,6 +328,15 @@ nonisolated enum CatchTelemetry {
     /// Nil/blank string fields are OMITTED (matching `deletedProperties` and
     /// `Catch.preferredAirframeField`'s blank-is-absent rule) — never sent as
     /// null or a placeholder, so PostHog only sees keys we actually know.
+    ///
+    /// The manufacturer key is `manufacturer`, NOT `make` (settled 2026-08-31;
+    /// don't re-propose the rename). `make` is the shorter aviation-convention
+    /// spelling, but renaming the property would: split every historical
+    /// `catch_uploaded` across two keys with no backfill; break shipped builds,
+    /// which keep sending `manufacturer` from users' phones for months (the
+    /// API-changes-are-additive rule in CLAUDE.md applies to analytics keys
+    /// too); and buy nothing a dashboard rename can't. If a doc or dashboard
+    /// says `make`, fix the doc — the event is the source of truth.
     static func uploadedProperties(
         icao24: String,
         rarity: String,
@@ -441,7 +533,14 @@ nonisolated enum CatchTelemetry {
             icao24: row.icao24,
             rarity: row.resolvedRarity.rawValue,
             aircraftType: row.resolvedType.rawValue,
-            slantKm: row.slantDistanceMeters / 1000
+            slantKm: row.slantDistanceMeters / 1000,
+            registration: row.registration,
+            typecode: row.typecode,
+            manufacturer: row.manufacturer,
+            model: row.model,
+            operatorName: row.operatorName,
+            category: row.category,
+            callsign: row.callsign
         ))
     }
 

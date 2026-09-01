@@ -5,6 +5,83 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-08-31 — PostHog instrumentation audit + fixes — branch `worktree-posthog-instrumentation-fixes`
+
+Worked a 7-item external PostHog fix list against the codebase and against
+live project data. **Four of the seven needed no code change** — they were
+already shipped, or rested on a premise the data contradicts. Checking first
+mattered: one item, applied as written, would have re-introduced the
+duplicate-person bug it was trying to fix.
+
+**Verified, no change needed:**
+
+- **Duplicate event names (item 1).** `app_opened` (648 events) and
+  `handle claimed` (13) are real, but every row is from **0.5.0**, last seen
+  2026-08-02 and 2026-07-29 — both were already removed from source, and no
+  shipped version still fires them. The lowercase `Application opened` /
+  `installed` / `backgrounded` variants **do not exist in this project**: they
+  are PostHog's built-in default event *definitions*, listed next to real
+  events in the schema and flagged "not seen in the last 30 days". Only the
+  canonical `Application Opened` / `Installed` / `Backgrounded` are ingested.
+- **Identify at handle-claim (item 2).** Already called at both claim sites
+  (`OnboardingFlow`, `SettingsScreen`), at registration, and re-asserted on
+  every launch from the locally cached handle. The prescribed fix — **use the
+  handle string as the distinct ID** — was rejected: handles are mutable, so
+  every rename would mint a fresh person (more duplicates, not fewer); it
+  breaks the 1:1 person↔backend-device mapping that catches and the
+  leaderboard join on; and swapping distinct_id under the SDK is precisely the
+  bug class #76/#98 fixed. Measured state is already clean: **50 persons, 50
+  distinct handles, 48 with a handle set** across 90 days of `catch_uploaded`.
+- **TestFlight/emulator separation (item 6).** The SDK already sets both flags
+  — 227 TestFlight vs 2589 production events over 30 days, `$is_emulator`
+  uniformly false. Option B (tag + filter) is therefore already satisfied at
+  the source; a separate TestFlight PostHog project was rejected because it
+  splits every funnel across the Ring 2 → Ring 3 boundary and re-opens the
+  gitignored-secrets worktree trap. Remaining work is dashboard-side.
+
+**Changed:**
+
+- **`first_plane_catch` enriched (item 3).** Now carries the full airframe
+  identity in the same vocabulary as `catch_uploaded` — `registration`,
+  `typecode`, `manufacturer`, `model`, `operator_name`, `category`,
+  `callsign`, plus an explicit `duplicate: false` (a first catch cannot be a
+  duplicate) — so "what kind of catch converts a user" is answerable from the
+  event alone. Deliberately **not** carrying `points`, `place_name`,
+  `first_of_type` or `guess_*`: `fireFirstCatch` runs on the catch tap, before
+  the upload round-trip and before the async reverse-geocode, so those values
+  do not exist yet. Sending them would mean zeros and blanks, which read as "a
+  0-point catch in nowhere" rather than "not known yet"; they live on the same
+  catch's `catch_uploaded`, joinable on `icao24` + person.
+- **`manufacturer` kept, `make` rejected (item 4).** Renaming would split every
+  historical `catch_uploaded` across two keys with no backfill, and shipped
+  builds keep sending `manufacturer` from users' phones for months — the
+  additive-only rule applies to analytics keys too. Decision recorded in
+  `CatchTelemetry.uploadedProperties` so it is not re-litigated.
+- **`handle` as an EVENT property (item 5).** Added to the six catch-spine
+  events (`catch_uploaded`, `catch_performed`, `first_plane_catch`,
+  `catch_deleted`, `streak_extended`, `trophy_unlocked`) so leaderboard and
+  "who caught what" SQL is a single-table scan instead of a person join, and
+  so the handle is frozen as it was at catch time. Stamped at the **one shared
+  funnel** (`Analytics.capture` → `AnalyticsIdentity.withHandleProperty`)
+  rather than threaded through each call site: the property builders stay pure
+  and unit-testable, and a new catch-spine event cannot ship missing the
+  handle. Gated by the same claimed-handle rule as identify, so an
+  un-onboarded user never ships the `spotter_42` placeholder.
+- **Catch-tap sequence documented (item 7)** in `CatchTelemetry.swift`. The
+  supplied diagram was wrong in two ways, both corrected against the code and
+  against production event streams: `catch_suspected` fires **after**
+  `catch_performed` (since the 2026-07-04 post-catch-confirm model the gates
+  flag, they never block, so the catch is already committed before we record
+  that it looked suspicious), and `catch_uncertain_aim` / `catch_blocked_*`
+  are **not** dead ends — a real stream shows `catch_uncertain_aim` followed
+  by `catch_uploaded` on the same icao24 nine seconds later. The only true
+  dead end is `grounded_catch_attempt`. Also noted: `catch_performed` >
+  `catch_uploaded` is expected (duplicates and discarded suspects never
+  upload), not loss.
+
+10 new tests (7 for the handle decorator, 3 for the enriched first-catch
+properties); full `TailspotTests` suite green.
+
 ## 2026-08-28 — Streak reminder funnel telemetry — branch `feat/streak-reminder-telemetry`
 
 Two soak days of 1.1.0 couldn't answer "has anyone seen the notification
