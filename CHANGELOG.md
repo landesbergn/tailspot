@@ -37,7 +37,15 @@ duplicate-person bug it was trying to fix.
   uniformly false. Option B (tag + filter) is therefore already satisfied at
   the source; a separate TestFlight PostHog project was rejected because it
   splits every funnel across the Ring 2 → Ring 3 boundary and re-opens the
-  gitignored-secrets worktree trap. Remaining work is dashboard-side.
+  gitignored-secrets worktree trap. **Noah's call (2026-08-31): TestFlight
+  events stay in the production data, unfiltered — no dashboard filters
+  either.** Testers are real users catching real planes, the volume is small,
+  and because `$is_testflight` rides every event the split is available at
+  query time whenever a number needs it. Nothing is lost and the decision is
+  reversible. Worth knowing when reading a rate: TestFlight is ~8% of events
+  but ~20% of *persons* (10 of 49) — testers catch in bursts, so event share
+  understates their weight in any per-user conversion figure. Item closed with
+  no action.
 
 **Changed:**
 
