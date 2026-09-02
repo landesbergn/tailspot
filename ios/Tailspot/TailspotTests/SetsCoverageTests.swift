@@ -103,6 +103,11 @@ struct SetsCoverageTests {
         ("SF34", "Saab", "340"), ("MD11", "Boeing", "MD-11"),
         ("A5", "Icon", "A-5"),
         ("B505", "Bell", "505 Jet Ranger X"),
+        // Public catalog coverage additions validated 2026-09-02.
+        ("CH7B", "Champion", "7GCAA"),
+        ("FA20", "Dassault", "Falcon 20"),
+        ("GB1", "Game Composites", "GB-1 GameBird"),
+        ("SLG4", "Airplane Factory", "Sling 4"),
         // Newly observed since the 2026-08-24 snapshot. Five required new
         // slots (A306/C210/EPIC/H500/SB91); the rest exercise existing broad
         // family tokens or exact typecode entries.
@@ -164,6 +169,10 @@ struct SetsCoverageTests {
     @Test func newlyCoveredTypesFillTheirIntendedFamilySlots() {
         let assignments: [((String, String, String), String, String)] = [
             (("B505", "Bell", "505 Jet Ranger X"), "fam-heli", "fh-b505"),
+            (("CH7B", "Champion", "7GCAA"), "fam-sport-classics", "fsc-citabria"),
+            (("FA20", "Dassault", "Falcon 20"), "fam-falcon", "ffa20"),
+            (("GB1", "Game Composites", "GB-1 GameBird"), "fam-sport-classics", "fsc-gamebird"),
+            (("SLG4", "Airplane Factory", "Sling 4"), "fam-sport-classics", "fsc-sling4"),
             (("CLON", "Autogyro", "Cavalon"), "fam-sport-classics", "fsc-cavalon"),
             (("FA50", "Dassault", "Falcon 50"), "fam-falcon", "ffa50"),
             (("G2CA", "Guimbal", "G-2 Cabri"), "fam-heli", "fh-g2ca"),
@@ -217,6 +226,15 @@ struct SetsCoverageTests {
         let p51Entry = vintageSet.entries.first { $0.id == "fv-p51" }!
         #expect(!CardSets.matches(key: c510Key, entry: p51Entry),
                 "A Citation Mustang must not fill the P-51 slot")
+
+        // Falcon 20 uses exact typecode matching because the obvious model
+        // token is a prefix of Falcon 2000 and would bleed into that slot.
+        let falcon2000 = mk(("F2TH", "Dassault", "Falcon 2000"))
+        let falcon2000Key = CardSets.matchKey(for: falcon2000)
+        let falcon20Entry = CardSets.families.first { $0.id == "fam-falcon" }!
+            .entries.first { $0.id == "ffa20" }!
+        #expect(!CardSets.matches(key: falcon2000Key, entry: falcon20Entry),
+                "A Falcon 2000 must not fill the Falcon 20 slot")
 
         // Exact Cessna tokens keep the C170 piston single and Embraer E170
         // regional jet in their own families despite their shared model number.
