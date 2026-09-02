@@ -132,7 +132,7 @@ struct HangarView: View {
                 .foregroundStyle(Brand.Color.textPrimary)
             Spacer(minLength: 8)
             if !catches.isEmpty {
-                Text("\(catches.count) catches")
+                Text(CountCopy.phrase(catches.count, singular: "catch", plural: "catches"))
                     .font(Brand.Font.mono(size: 11, weight: .bold))
                     .tracking(0.4)
                     .foregroundStyle(Brand.Color.cyan)

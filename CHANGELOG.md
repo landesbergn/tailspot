@@ -5,6 +5,44 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-01 — v1.1.1 train opened — branch `chore/open-1.1.1-train`
+
+v1.1.0 went live on the App Store on **2026-08-29 16:10 UTC as build 89** — the
+first build carrying the streak-reminder tap crash fix (#230, merged 00:29 UTC
+that morning), so the SIGABRT that hit TestFlight builds 86/87 never reached the
+public. That makes **db3d274** the release boundary, and everything on `main`
+after it is the 1.1.1 train. `MARKETING_VERSION` 1.1.0 → 1.1.1 in both
+app-target config blocks; `CURRENT_PROJECT_VERSION` stays 1 (Xcode Cloud's
+`ci_pre_xcodebuild.sh` sets the build number from `CI_BUILD_NUMBER`).
+
+The train is one feature and a run of polish:
+
+- **#241 monthly leaderboard champions.** A MONTHLY CHAMPION laurel on Profile
+  beside the weekly one, and a monthly champions list on the month window.
+  Backend migration `0008_wandering_ultimo.sql` creates `monthly_champions`.
+  Prod is already deployed and migrated — `GET /v1/leaderboard?window=month`
+  returns a populated `monthlyChampions` — so the server-before-client rule is
+  satisfied rather than pending. The API is additive and the client decodes
+  with `decodeIfPresent`, so live 1.1.0 clients are unaffected. Watch item:
+  `ensureMonthsDecided(now)` runs on every leaderboard read, Profile's
+  all-time call included.
+- **#238 top HUD banner stacking.** A tall compass warning overlapped the
+  indoor hint and the transient toast, because all three were separate root
+  overlays pinned at a fixed 60 pt. One layout owner now.
+- **#235 / #233 accessibility text sizes.** The map's rarity filter chips
+  overflowed and clipped; the Profile stats row broke outright. Both hold at
+  the largest Dynamic Type sizes.
+- **#237 singular copy.** "1 catches" / "1 sightings" on Hangar and Map, fixed
+  through a new `CountCopy` helper.
+- **#234 catalog contrast.** Uncaught-aircraft rows were too faint to read.
+- **#231 / #240 set coverage.** Recent aircraft families, plus the Bell 505.
+  Data only, but users see new fillable slots.
+
+No SwiftData schema change in the range, so the local-only Hangar carries no
+migration risk. Suite green (1,180 tests, 0 failures). First-catch onboarding (R4/R5) is
+still unmerged on `worktree-first-catch-brainstorm` (PR #225) and moves to
+v1.2, which is why 1.1.1 is scoped as fixes-and-polish rather than held.
+
 ## 2026-08-31 — PostHog instrumentation audit + fixes — branch `worktree-posthog-instrumentation-fixes`
 
 Worked a 7-item external PostHog fix list against the codebase and against

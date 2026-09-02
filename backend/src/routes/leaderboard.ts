@@ -1,13 +1,14 @@
 /**
- * Leaderboard (WP 1.5; windows + weekly champions in dynamic-leaderboards PR1).
+ * Leaderboard (WP 1.5; calendar windows + weekly/monthly champions).
  *
  *   GET /v1/leaderboard?window=week|month|all&limit=50   (auth OPTIONAL)
  *     → 200 {
  *         entries:   [{ rank, handle, points, catches }…],   // in-window
- *         me:        { rank, points, weeklyWins, everToppedAllTime } | null,
+ *         me:        { rank, points, weeklyWins, monthlyWins, everToppedAllTime } | null,
  *         window:    "week" | "month" | "all",
  *         resetsAt:  ISO-8601 of the next boundary | null (all-time),
- *         champions: [{ handle, points, weekStart }…] | null (week window only)
+ *         champions: [{ handle, points, weekStart }…] | null (week window only),
+ *         monthlyChampions: [{ handle, points, monthStart }…] | null (month window only)
  *       }
  *
  * Windows are CALENDAR windows in UTC (locked design, Noah 2026-07-09): week =
@@ -23,7 +24,7 @@
  * in-window points gets `me.rank` 0 = unranked (the old createdAt tiebreak
  * ranked it behind every device row ever registered, so a new user whose
  * first catch hadn't synced yet saw "458th"). `me.weeklyWins` /
- * `me.everToppedAllTime` are LIFETIME trophy counters (not window-scoped) and
+ * `me.monthlyWins` / `me.everToppedAllTime` are LIFETIME facts (not window-scoped) and
  * ride along on every window for simplicity.
  *
  * `champions` is the LAST CLOSED week's champion(s) — plural on shared crowns
@@ -40,13 +41,19 @@
 
 import type { FastifyInstance } from "fastify";
 import { resolveDevice } from "../identity/auth.js";
-import type { CatchStore, ChampionEntry, IdentityStore } from "../identity/store.js";
+import type {
+  CatchStore,
+  ChampionEntry,
+  IdentityStore,
+  MonthlyChampionEntry,
+} from "../identity/store.js";
 import {
   addDaysUtc,
   monthStartUtc,
   nextMonthStartUtc,
   nextWeekStartUtc,
   parseWindow,
+  previousMonthStartUtc,
   utcDateString,
   weekStartUtc,
 } from "../identity/windows.js";
@@ -86,6 +93,13 @@ export function registerLeaderboardRoute(
     let since: Date | undefined;
     let resetsAt: string | null = null;
     let champions: ChampionEntry[] | null = null;
+    let monthlyChampions: MonthlyChampionEntry[] | null = null;
+
+    // Monthly crowns also feed Profile, which requests the all-time standing.
+    // Decide them on every leaderboard read so opening Profile after a month
+    // boundary is sufficient to reveal the new badge. The steady-state cost is
+    // one indexed point read.
+    await catchStore.ensureMonthsDecided(now);
 
     if (window === "week") {
       since = weekStartUtc(now);
@@ -97,6 +111,9 @@ export function registerLeaderboardRoute(
     } else if (window === "month") {
       since = monthStartUtc(now);
       resetsAt = nextMonthStartUtc(now).toISOString();
+      monthlyChampions = await catchStore.monthlyChampions(
+        utcDateString(previousMonthStartUtc(now)),
+      );
     }
 
     const entries = await catchStore.leaderboard(limit, since);
@@ -116,6 +133,7 @@ export function registerLeaderboardRoute(
       rank: number;
       points: number;
       weeklyWins: number;
+      monthlyWins: number;
       everToppedAllTime: boolean;
     } | null = null;
     if (device) {
@@ -125,11 +143,19 @@ export function registerLeaderboardRoute(
           rank: standing.rank,
           points: standing.points,
           weeklyWins: await catchStore.weeklyWins(device.id),
+          monthlyWins: await catchStore.monthlyWins(device.id),
           everToppedAllTime: await catchStore.everToppedAllTime(device.id),
         };
       }
     }
 
-    return reply.code(200).send({ entries, me, window, resetsAt, champions });
+    return reply.code(200).send({
+      entries,
+      me,
+      window,
+      resetsAt,
+      champions,
+      monthlyChampions,
+    });
   });
 }

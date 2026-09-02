@@ -287,6 +287,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ensureWeeksDecided: (now) => getCatchStore().ensureWeeksDecided(now),
     champions: (weekStart) => getCatchStore().champions(weekStart),
     weeklyWins: (id) => getCatchStore().weeklyWins(id),
+    ensureMonthsDecided: (now) => getCatchStore().ensureMonthsDecided(now),
+    monthlyChampions: (monthStart) => getCatchStore().monthlyChampions(monthStart),
+    monthlyWins: (id) => getCatchStore().monthlyWins(id),
     everToppedAllTime: (id) => getCatchStore().everToppedAllTime(id),
     recordAlltimeTopper: (now) => getCatchStore().recordAlltimeTopper(now),
   };

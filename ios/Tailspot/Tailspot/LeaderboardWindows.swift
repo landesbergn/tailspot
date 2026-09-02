@@ -66,14 +66,16 @@ nonisolated enum LeaderboardCountdown {
 
 // MARK: - Champion banner copy
 
-/// Copy rules for the LAST WEEK'S CHAMPION banner. Shared crowns exist —
+/// Copy rules for the LAST WEEK/MONTH CHAMPION banner. Shared crowns exist —
 /// the champions array may carry several names — and a champion who never
 /// claimed a handle displays as "anonymous spotter".
 nonisolated enum ChampionBanner {
 
     /// Eyebrow line: singular/plural on the crown count.
-    static func eyebrow(count: Int) -> String {
-        count > 1 ? "LAST WEEK'S CHAMPIONS" : "LAST WEEK'S CHAMPION"
+    static func eyebrow(count: Int, window: LeaderboardWindow = .week) -> String {
+        let period = window == .month ? "MONTH" : "WEEK"
+        let noun = count > 1 ? "CHAMPIONS" : "CHAMPION"
+        return "LAST \(period)'S \(noun)"
     }
 
     /// Names line: "@skykid" / "@a & @b" / "@a, @b +1 more".
@@ -90,5 +92,8 @@ nonisolated enum ChampionBanner {
     /// The zero-champion week (empty `champions` array — the board reset
     /// with nobody on it).
     static let noChampionTitle = "NO CHAMPION CROWNED"
-    static let noChampionSubtitle = "The sky was quiet last week."
+
+    static func noChampionSubtitle(window: LeaderboardWindow) -> String {
+        window == .month ? "The sky was quiet last month." : "The sky was quiet last week."
+    }
 }

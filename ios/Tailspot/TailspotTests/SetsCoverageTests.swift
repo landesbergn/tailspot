@@ -102,6 +102,7 @@ struct SetsCoverageTests {
         ("BE95", "Beechcraft", "95 Travel Air"), ("BE24", "Beechcraft", "24 Sierra"),
         ("SF34", "Saab", "340"), ("MD11", "Boeing", "MD-11"),
         ("A5", "Icon", "A-5"),
+        ("B505", "Bell", "505 Jet Ranger X"),
         // Newly observed since the 2026-08-24 snapshot. Five required new
         // slots (A306/C210/EPIC/H500/SB91); the rest exercise existing broad
         // family tokens or exact typecode entries.
@@ -162,6 +163,7 @@ struct SetsCoverageTests {
 
     @Test func newlyCoveredTypesFillTheirIntendedFamilySlots() {
         let assignments: [((String, String, String), String, String)] = [
+            (("B505", "Bell", "505 Jet Ranger X"), "fam-heli", "fh-b505"),
             (("CLON", "Autogyro", "Cavalon"), "fam-sport-classics", "fsc-cavalon"),
             (("FA50", "Dassault", "Falcon 50"), "fam-falcon", "ffa50"),
             (("G2CA", "Guimbal", "G-2 Cabri"), "fam-heli", "fh-g2ca"),
@@ -247,5 +249,13 @@ struct SetsCoverageTests {
         // ...and never the Bell 407 slot next door.
         let b407 = heliSet.entries.first { $0.id == "fh-b407" }!
         #expect(!CardSets.matches(key: key, entry: b407))
+
+        // Bell's 505 Jet Ranger X is its own type and must not collapse into
+        // the older 206 JetRanger slot merely because the names are similar.
+        let b505 = mk(("B505", "Bell", "505 Jet Ranger X"))
+        let b505Key = CardSets.matchKey(for: b505)
+        let b505Entry = heliSet.entries.first { $0.id == "fh-b505" }!
+        #expect(CardSets.matches(key: b505Key, entry: b505Entry))
+        #expect(!CardSets.matches(key: b505Key, entry: b206))
     }
 }
