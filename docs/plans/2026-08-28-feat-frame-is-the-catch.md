@@ -50,13 +50,21 @@ the screen edge becomes the only boundary.
 
 ## What was deleted / kept
 
-**Deleted:** `LockOnEngine` (idle/locked/sticky) + its tests, `pinnedIcao` /
-`revealedIcao`, `catchZoneRadius` (100 pt), the 80 px lock zone, the 250 px
-wide-tap search, `icaosInZone` / `catchCandidates` / `dominantAimTarget` /
-`aimProminence` / `aimConfidence` (the A319 selection machinery), the
-lone-plane rule (#145 — subsumed by the general rule), the
+**Deleted from the frame mode:** `LockOnEngine` (idle/locked/sticky) + its
+tests, `pinnedIcao` / `revealedIcao`, `catchZoneRadius` (100 pt), the 80 px
+lock zone, the 250 px wide-tap search, `icaosInZone` / `catchCandidates` /
+`dominantAimTarget` / `aimProminence` / `aimConfidence` (the A319 selection
+machinery), the lone-plane rule (#145 — subsumed by the general rule), the
 disabled-with-planes state, Gate 5, pre-press detector targeting, the
 pinned/dimmed label hierarchy.
+
+**Restored behind a switch (2026-09-02):** all of the above is back as
+`CatchMode.legacy` (`CatchMode.swift`, `LockOnEngine.swift`) so the shipped
+model and this one can be compared on ONE Ring 0 build from the wrench panel.
+Debug builds only — Release resolves to `.frame` regardless of the stored
+value. Every catch event carries `catch_mode`. The deletion above is still
+the plan; it happens when the comparison is decided, by removing the two
+files, the legacy tests, and the `.legacy` branches in `ContentView`.
 
 **Kept unchanged:** the visibility filter + precision doctrine, gates 1–3 +
 post-reveal Keep/Discard, the same-day-same-flight duplicate rule, the combo
@@ -90,4 +98,9 @@ ranking), mode 8 is the membership-chose-invisible invariant tripwire. Missed
 - Tap promotion + rescue still land; grounded/far toasts intact.
 - Multi-catch photo: three brackets, no double-assignment.
 - `catch_pipeline_timing` unchanged (the D1·2 condition) — Release-class
-  build or accept the Debug skew when reading.
+  build or accept the Debug skew when reading. Split by `catch_mode`.
+- Head-to-head vs the shipped model: flip the wrench-panel `Catch mode` row
+  (FRAME ↔ LEGACY, persists on the phone), run the same sky under both, and
+  compare `catch_performed` / `catch_pipeline_timing` / capture diagnostics
+  (`selector` = `membership-v1` vs `prominence-v1`) by `catch_mode`. The
+  LEGACY CATCH MODE badge under the zoom pill says which one is live.

@@ -85,6 +85,21 @@ the source + each one's focused test file — they're not restated here.
   (`docs/plans/2026-08-28-feat-frame-is-the-catch.md`). The detector runs at
   catch time only; `VisualConfirmationPipeline.updateTarget` is the kept-but-
   unarmed live-tracking upgrade path.
+- **Catch-mode A/B switch (2026-09-02, Ring 0 only).** `CatchMode.swift`:
+  `.frame` (the model above) vs `.legacy` (the shipped v1.1.x zones-and-pins
+  model — `LockOnEngine.swift` + its zone/dominance helpers, restored for the
+  comparison). UserDefaults-backed (`tailspot.debug.catchMode`), **honored
+  only in DEBUG builds** — `CatchMode.effective` is `.frame` on Release, so a
+  flipped phone can't leak the legacy model into TestFlight. The wrench-panel
+  `catchModeRow` is the only writer (`setCatchMode` clears the other mode's
+  state); a LEGACY CATCH MODE badge sits under the zoom pill while it's on.
+  Both modes branch at ONE render funnel (`resolveFrameSelection` →
+  `FrameSelection`) plus the tap handler, Gate 5, and the diagnostics
+  selector; `catch_performed` / `catch_pipeline_timing` carry `catch_mode`.
+  The legacy invariants above ("no selection", "bright = in the press") hold
+  for `.frame` only — legacy renders pinned/dimmed, no chosen highlight.
+  Delete `LockOnEngine.swift`, `CatchMode.swift` and the legacy tests once
+  the comparison is decided.
 - **The catch pipeline reads the shutter-press snapshot, never live sensors.**
   `runCatch` snapshots pose + observations (`press*`) before its first await;
   everything downstream — bracket projection, capture diagnostics — uses the

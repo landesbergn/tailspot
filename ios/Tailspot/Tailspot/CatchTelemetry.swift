@@ -137,7 +137,8 @@ nonisolated enum CatchTelemetry {
         callsign: String? = nil,
         category: String? = nil,
         originIcao: String? = nil,
-        destIcao: String? = nil
+        destIcao: String? = nil,
+        catchMode: CatchMode? = nil
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "icao24": .string(icao24),
@@ -175,6 +176,12 @@ nonisolated enum CatchTelemetry {
         addNonBlank("category", category, to: &props)
         addNonBlank("origin_icao", originIcao, to: &props)
         addNonBlank("dest_icao", destIcao, to: &props)
+        // Catch-mode A/B (2026-09-02): which interaction produced this catch
+        // — "frame" (frame-is-the-catch, PR #229) or "legacy" (the shipped
+        // zones-and-pins model), so the two streams split in HogQL. Omitted
+        // when the caller didn't say (older call sites / tests) — absent
+        // means "frame" on any build that can't run legacy (Release).
+        if let catchMode { props["catch_mode"] = .string(catchMode.rawValue) }
         return props
     }
 
@@ -378,7 +385,8 @@ nonisolated enum CatchTelemetry {
         visualFixConfidence: Float?,
         multiN: Int = 1,
         angularSizeArcmin: Double? = nil,
-        detectorVerdict: DetectorGateVerdict? = nil
+        detectorVerdict: DetectorGateVerdict? = nil,
+        catchMode: CatchMode? = nil
     ) {
         Analytics.capture(performedEvent, performedProperties(
             icao24: row.icao24,
@@ -399,7 +407,8 @@ nonisolated enum CatchTelemetry {
             callsign: row.callsign,
             category: row.category,
             originIcao: row.originIcao,
-            destIcao: row.destIcao
+            destIcao: row.destIcao,
+            catchMode: catchMode
         ))
     }
 
@@ -417,7 +426,8 @@ nonisolated enum CatchTelemetry {
         snapMs: Int?,
         composeMs: Int?,
         presentMs: Int,
-        totalMs: Int
+        totalMs: Int,
+        catchMode: CatchMode? = nil
     ) {
         var props: [String: AnalyticsValue] = [
             "mode": .string(mode),
@@ -427,6 +437,9 @@ nonisolated enum CatchTelemetry {
         ]
         if let snapMs { props["snap_ms"] = .int(snapMs) }
         if let composeMs { props["compose_ms"] = .int(composeMs) }
+        // Catch-mode A/B (2026-09-02) — the D1·2 condition is "timing
+        // unchanged vs. the shipped model", so the two must be separable.
+        if let catchMode { props["catch_mode"] = .string(catchMode.rawValue) }
         Analytics.capture("catch_pipeline_timing", props)
     }
 

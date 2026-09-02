@@ -51,6 +51,17 @@ struct ContentView: View {
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
+    /// LEGACY catch mode only (`CatchMode.legacy`): the tap-to-pin state
+    /// machine. Stays `.idle` for the whole session while the frame mode
+    /// is live — nothing calls `update`/`forceLock` on it there.
+    @StateObject private var lockOn = LockOnEngine()
+    /// Catch-mode A/B switch (2026-09-02, see `CatchMode.swift`). The raw
+    /// stored choice; `catchMode` below is what the view actually runs
+    /// (Release builds ignore the store). The wrench-panel `catchModeRow`
+    /// is the only writer — via `setCatchMode`, which also clears the
+    /// mode-specific state the other mode left behind.
+    @AppStorage(CatchMode.storageKey) private var catchModeRaw: String = CatchMode.default.rawValue
+    private var catchMode: CatchMode { CatchMode.effective(stored: catchModeRaw) }
     /// Field-session recorder for replay/regression. Off by default;
     /// the debug overlay carries a tap-to-start row. When active a 1 Hz
     /// task captures the current sensor state + visible aircraft and
@@ -131,6 +142,18 @@ struct ContentView: View {
     /// `assertedGraceSeconds` off-frame or the moment it leaves the
     /// data — pruned at 1 Hz in the ambient poll task, never in `body`.
     @State private var assertedPlanes: [String: Date] = [:]
+    /// LEGACY catch mode only: the tap-pinned plane. Overrides the
+    /// center-driven closest-target heuristic; tap-elsewhere clears,
+    /// tap-same-plane toggles off, the plane leaving visibility clears
+    /// (via the 1 Hz `pruneLegacyPin`). Taps drive `forceLock()` on the
+    /// engine — the only way into `.locked`. Always nil in the frame mode.
+    @State private var pinnedIcao: String?
+    /// LEGACY catch mode only: tap-to-reveal (2026-06-19) — a plane the
+    /// user tapped even though the visibility filter hid it (the FDX1268
+    /// class). Surfaced as visible for labeling / lock / catch only while
+    /// it is the pin; always kept equal to `pinnedIcao` while set, cleared
+    /// together with it. The frame mode's equivalent is `assertedPlanes`.
+    @State private var revealedIcao: String?
     /// The AR view's current size, captured from the GeometryReader so
     /// the 1 Hz asserted-plane prune can project without a body pass.
     @State private var arScreenSize: CGSize = .zero
@@ -387,35 +410,25 @@ struct ContentView: View {
                             onScreenProjected.map { ($0.icao, $0.position) },
                             uniquingKeysWith: { first, _ in first }
                         )
-                        // Press membership: bright (.full-tier) planes on
-                        // frame, occlusion-demoted via the live sky grid,
-                        // asserted planes guaranteed, ranked by apparent size,
-                        // capped at `maxCatchTargets`. Pure — see
-                        // `chooseCatchMembers` for the D1·2/D3·2 rules.
-                        let localGrid = visualConfirm.latestLocalGrid
-                        let occlusionDemotes = visualConfirm.localGateEnforcing
-                        let membership = chooseCatchMembers(
-                            visible.compactMap { obs -> MembershipCandidate? in
-                                let icao = obs.aircraft.icao24
-                                guard let pos = onScreenPositions[icao] else { return nil }
-                                let asserted = assertedPlanes[icao] != nil
-                                let occluded: Bool = {
-                                    guard occlusionDemotes, !asserted,
-                                          let grid = localGrid else { return false }
-                                    let f = grid.features(atScreenPoint: pos, screenSize: geo.size)
-                                    return LocalSkyGate().verdict(f) == .notSky
-                                }()
-                                return MembershipCandidate(
-                                    icao24: icao,
-                                    arcmin: obs.apparentSizeArcminutes,
-                                    isFullTier: obs.visibilityTier == .full,
-                                    isAsserted: asserted,
-                                    isOccluded: occluded
-                                )
-                            }
+                        // The per-frame selection — label styles, the
+                        // capture mode, the pinned-label draw override —
+                        // resolved in ONE place for whichever catch mode is
+                        // live (`resolveFrameSelection`): frame mode runs
+                        // `chooseCatchMembers` (D1·2/D3·2); legacy mode runs
+                        // the LockOnEngine tick + zone/dominance selection.
+                        // Pulled out of `body` so the branch costs the
+                        // type-checker nothing (ContentView is at budget).
+                        let frame = resolveFrameSelection(
+                            visible: visible,
+                            onScreenPositions: onScreenPositions,
+                            screenSize: geo.size,
+                            headingDeg: heading,
+                            cameraElevationDeg: camEl,
+                            rollDeg: roll,
+                            hfovDeg: effectiveHfov,
+                            vfovDeg: effectiveVfov,
+                            now: now
                         )
-                        let chosenSet = Set(membership.chosen)
-                        let overflowSet = Set(membership.overflow)
 
                         ZStack {
                             // Background tap-and-pinch layer. Color.clear +
@@ -472,11 +485,13 @@ struct ContentView: View {
                             // plane behind them.
                             ForEach(visible, id: \.aircraft.icao24) { obs in
                                 let icao = obs.aircraft.icao24
-                                if let pos = onScreenPositions[icao] {
-                                    let style: PlaneLabel.Style =
-                                        chosenSet.contains(icao) ? .chosen
-                                        : overflowSet.contains(icao) ? .quiet
-                                        : .faint
+                                // Legacy mode draws the pinned label at the
+                                // detector's live fix when one exists (pre-
+                                // catch only — the photo path keeps
+                                // `onScreenPositions`); frame mode has no
+                                // override, so this IS the projection.
+                                if let pos = frame.labelPositions[icao] {
+                                    let style = frame.style(for: icao)
                                     let metaForPlane: AircraftMetadata? =
                                         ambientMetadata[icao] ?? nil
                                     PlaneLabel(
@@ -485,17 +500,22 @@ struct ContentView: View {
                                         style: style,
                                         metadata: metaForPlane
                                     )
-                                    // VoiceOver reads the plane's details
-                                    // (D7): activation carries no behavior —
-                                    // catching is the capture button, and a
-                                    // chosen plane says so in the value.
+                                    // VoiceOver: frame mode reads the plane's
+                                    // details (D7 — activation carries no
+                                    // behavior; a chosen plane says so in the
+                                    // value); legacy mode keeps its pin/unpin
+                                    // action. One bundled modifier so the
+                                    // chain length is the same in both.
                                     // Nearest plane reads first via sort
                                     // priority.
                                     .accessibilityElement(children: .ignore)
                                     .accessibilityLabel(planeAccessibilityLabel(
                                         obs, metadata: metaForPlane))
-                                    .accessibilityValue(
-                                        style == .chosen ? "In capture." : "")
+                                    .modifier(PlaneLabelAccessibility(
+                                        style: style,
+                                        legacyPinToggle: catchMode == .legacy
+                                            ? { accessibilityTogglePin(icao: icao) }
+                                            : nil))
                                     .accessibilitySortPriority(-obs.slantDistanceMeters)
                                 }
                             }
@@ -550,17 +570,12 @@ struct ContentView: View {
                             // non-empty, ×N badge = chosen count, disabled
                             // only on a genuinely member-less frame. A
                             // press catches exactly the chosen set the
-                            // labels are showing full-bright.
-                            let mode: CaptureMode = {
-                                switch membership.chosen.count {
-                                case 0:  return .disabled
-                                case 1:  return .single(membership.chosen[0])
-                                default: return .multi(membership.chosen)
-                                }
-                            }()
+                            // labels are showing full-bright. (Legacy mode:
+                            // pin / lone plane / zone + dominance — see
+                            // `legacyCaptureMode`.)
                             VStack {
                                 Spacer()
-                                captureButton(mode: mode, screenSize: geo.size,
+                                captureButton(mode: frame.mode, screenSize: geo.size,
                                               positions: onScreenPositions)
                                 // Clear the home-indicator gesture zone: pad
                                 // from the safe-area bottom when there is one
@@ -615,6 +630,12 @@ struct ContentView: View {
                     VStack(spacing: 8) {
                         cautionBadge
                         zoomPill
+                        #if DEBUG
+                        // "Badge the lying screen": while the legacy mode is
+                        // live the AR view behaves like the App Store build,
+                        // not this branch — say so on screen, always.
+                        catchModeBadge
+                        #endif
                     }
                     // Keep the loud compass banner off the screen edges
                     // without narrowing the notice/toast region below it.
@@ -770,12 +791,17 @@ struct ContentView: View {
         // 30 Hz motion feed and the 1 Hz re-annotation. The 10 s ADS-B poll
         // keeps running so data stays fresh. Resume both when the sheet
         // dismisses. Clear-background reveals never flip arOccluded, so they
-        // don't reach here (see `arOccluded`). (The detector runs only at
-        // catch time now — there is no live target to clear.)
+        // don't reach here (see `arOccluded`). The detector target is
+        // cleared too (a nil target makes the pipeline skip inference) —
+        // only the legacy mode ever sets one (pre-press tracking of the
+        // pinned plane); the frame mode runs the detector at catch time
+        // only, so for it this is a no-op. The render loop re-establishes
+        // the legacy target on its next tick.
         .onChange(of: arOccluded) { _, occluded in
             if occluded {
                 motion.stop()
                 adsb.pauseReAnnotation()
+                visualConfirm.updateTarget(nil)
             } else {
                 motion.start()
                 adsb.resumeReAnnotation()
@@ -804,6 +830,7 @@ struct ContentView: View {
             case .inactive, .background:
                 motion.stop()
                 adsb.stop()
+                visualConfirm.updateTarget(nil)
             @unknown default:
                 break
             }
@@ -1008,6 +1035,7 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(1))
                 indoorHintTick()
                 pruneAssertedPlanes()
+                pruneLegacyPin()
             }
         }
         .sheet(isPresented: replaySheetPresented) {
@@ -1047,7 +1075,23 @@ struct ContentView: View {
         observed.filter {
             ($0.isLikelyVisibleToObserver && !pointedIndoors)
                 || (!$0.grounded && assertedPlanes[$0.aircraft.icao24] != nil)
+                // Legacy mode's tap-reveal (frame mode never sets it).
+                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
         }
+    }
+
+    /// LEGACY catch mode: pin housekeeping, 1 Hz. If the engine moved off
+    /// the pinned plane (target left visibility → sticky → idle), clear the
+    /// pin so the view stops fighting the engine. The pre-#229 app did
+    /// this from an `.onChange(of: lockOn.state.targetIcao24)`; it rides
+    /// the existing 1 Hz task here so `body`'s modifier chain (at the
+    /// type-check budget) doesn't grow — the engine's own 2 s sticky hold
+    /// already dominates the latency. A revealed plane is only visible
+    /// *because* it's pinned, so the reveal drops with the pin.
+    private func pruneLegacyPin() {
+        guard let pin = pinnedIcao, lockOn.state.targetIcao24 != pin else { return }
+        pinnedIcao = nil
+        revealedIcao = nil
     }
 
     /// 1 Hz lifetime keeper for `assertedPlanes` (D5: on frame + grace).
@@ -1089,6 +1133,253 @@ struct ContentView: View {
         }
         if next != assertedPlanes { assertedPlanes = next }
     }
+
+    // MARK: - Per-frame selection (catch-mode funnel)
+
+    /// Everything the 30 Hz AR frame needs from the live catch mode's
+    /// selection rules: which labels render at which style, where the
+    /// labels draw, and what the capture button would catch. Built once
+    /// per frame by `resolveFrameSelection` — the single place both
+    /// catch modes branch for rendering.
+    private struct FrameSelection {
+        /// Capture button mode (the press payload).
+        let mode: CaptureMode
+        /// Full-bright labels: frame mode's chosen set (≤ maxCatchTargets)
+        /// or legacy mode's pinned plane.
+        let bright: Set<String>
+        /// Stepped-down (but not faint) labels: frame mode's overflow —
+        /// bright-tier planes past the cap — or, in legacy mode, every
+        /// unpinned bright-tier plane (there is no chosen highlight there:
+        /// the button's payload is invisible until the press, as shipped).
+        let quiet: Set<String>
+        /// Label draw positions: the geometric projection, except legacy
+        /// mode's pinned plane snaps to the detector's live fix.
+        let labelPositions: [String: CGPoint]
+        /// Legacy mode: the engine's current target (pin / sticky).
+        let pinned: String?
+
+        func style(for icao: String) -> PlaneLabel.Style {
+            if icao == pinned { return .pinned }
+            if bright.contains(icao) { return .chosen }
+            if quiet.contains(icao) { return .quiet }
+            return .faint
+        }
+    }
+
+    /// Resolve the frame's selection for whichever catch mode is live.
+    /// Called from inside the TimelineView body every frame, so it must
+    /// stay free of @State writes: the legacy path's `lockOn.update` is a
+    /// pure idempotent state-machine tick (the pre-#229 app called it
+    /// from exactly this spot) and `visualConfirm.updateTarget` is a
+    /// lock-only write by design.
+    private func resolveFrameSelection(
+        visible: [ObservedAircraft],
+        onScreenPositions: [String: CGPoint],
+        screenSize: CGSize,
+        headingDeg: Double,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double,
+        now: Date
+    ) -> FrameSelection {
+        switch catchMode {
+        case .frame:
+            // Press membership: bright (.full-tier) planes on frame,
+            // occlusion-demoted via the live sky grid, asserted planes
+            // guaranteed, ranked by apparent size, capped at
+            // `maxCatchTargets`. Pure — see `chooseCatchMembers` for the
+            // D1·2/D3·2 rules.
+            let localGrid = visualConfirm.latestLocalGrid
+            let occlusionDemotes = visualConfirm.localGateEnforcing
+            let membership = chooseCatchMembers(
+                visible.compactMap { obs -> MembershipCandidate? in
+                    let icao = obs.aircraft.icao24
+                    guard let pos = onScreenPositions[icao] else { return nil }
+                    let asserted = assertedPlanes[icao] != nil
+                    let occluded: Bool = {
+                        guard occlusionDemotes, !asserted,
+                              let grid = localGrid else { return false }
+                        let f = grid.features(atScreenPoint: pos, screenSize: screenSize)
+                        return LocalSkyGate().verdict(f) == .notSky
+                    }()
+                    return MembershipCandidate(
+                        icao24: icao,
+                        arcmin: obs.apparentSizeArcminutes,
+                        isFullTier: obs.visibilityTier == .full,
+                        isAsserted: asserted,
+                        isOccluded: occluded
+                    )
+                }
+            )
+            let mode: CaptureMode
+            switch membership.chosen.count {
+            case 0:  mode = .disabled
+            case 1:  mode = .single(membership.chosen[0])
+            default: mode = .multi(membership.chosen)
+            }
+            return FrameSelection(
+                mode: mode,
+                bright: Set(membership.chosen),
+                quiet: Set(membership.overflow),
+                labelPositions: onScreenPositions,
+                pinned: nil
+            )
+
+        case .legacy:
+            // Target choice: the explicit tap-pinned plane (if still
+            // visible) wins; otherwise fall back to whichever visible
+            // plane is nearest to screen center. A pin pointing at a
+            // no-longer-visible plane is ignored here; `pruneLegacyPin`
+            // clears it once the engine lets go.
+            let centerClosest = closestTargetIcao24(
+                in: visible,
+                phoneHeadingDeg: headingDeg,
+                cameraElevationDeg: cameraElevationDeg,
+                rollDeg: rollDeg,
+                screenSize: screenSize,
+                hfovDeg: hfovDeg,
+                vfovDeg: vfovDeg
+            )
+            let pinStillVisible = pinnedIcao.map { id in
+                visible.contains { $0.aircraft.icao24 == id }
+            } ?? false
+            let engineTarget = pinStillVisible ? pinnedIcao : centerClosest
+            lockOn.update(closestTargetIcao24: engineTarget, now: now)
+            let pinned = lockOn.state.targetIcao24
+
+            // Visual confirmation: tell the detector where the current
+            // lock target is predicted to be; it picks it up on its next
+            // frame. `arOccluded` guard: a PAUSED TimelineView still
+            // re-renders on external state changes, and an unguarded write
+            // would re-arm the detector behind an open sheet right after
+            // the occlusion handler cleared it.
+            visualConfirm.updateTarget(
+                arOccluded ? nil : pinned.flatMap { icao in
+                    onScreenPositions[icao].map {
+                        .init(icao24: icao, predictedScreen: $0, screenSize: screenSize)
+                    }
+                }
+            )
+            // The pinned plane's bracket snaps to the detector's fix when
+            // one is live; everything else stays at the geometric
+            // prediction. Pre-catch only — the photo path uses the
+            // geometric `onScreenPositions`.
+            var labelPositions = onScreenPositions
+            if let pinned, let fix = visualConfirm.fixes[pinned]?.screenPoint,
+               labelPositions[pinned] != nil {
+                labelPositions[pinned] = fix
+            }
+            // Unpinned bright-tier planes render at the shipped ambient
+            // weight; faint tier (and everything else while a pin is set)
+            // dims — the pinned/dimmed hierarchy as shipped.
+            let quiet: Set<String> = pinned == nil
+                ? Set(visible.filter { $0.visibilityTier == .full }.map(\.aircraft.icao24))
+                : []
+            return FrameSelection(
+                mode: legacyCaptureMode(
+                    visible: visible, onScreenPositions: onScreenPositions,
+                    pinned: pinned, screenSize: screenSize,
+                    headingDeg: headingDeg, cameraElevationDeg: cameraElevationDeg,
+                    rollDeg: rollDeg, hfovDeg: hfovDeg, vfovDeg: vfovDeg
+                ),
+                bright: [],
+                quiet: quiet,
+                labelPositions: labelPositions,
+                pinned: pinned
+            )
+        }
+    }
+
+    /// LEGACY catch mode's capture-button payload (the shipped spec § 3.2
+    /// + the 2026-07 refinements): an explicit pin still on screen wins;
+    /// else the TIGHT central catch zone (anti-cheat L1 — aim, don't
+    /// spray); a lone on-frame plane stays catchable when the zone is
+    /// empty (#145); multiple in-zone planes single-catch the visually
+    /// dominant one (the A319-class fix) or multi-catch a comparable
+    /// cluster.
+    private func legacyCaptureMode(
+        visible: [ObservedAircraft],
+        onScreenPositions: [String: CGPoint],
+        pinned: String?,
+        screenSize: CGSize,
+        headingDeg: Double,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double
+    ) -> CaptureMode {
+        if let pin = pinned, onScreenPositions[pin] != nil {
+            return .single(pin)
+        }
+        let candidates = catchCandidates(
+            in: visible,
+            phoneHeadingDeg: headingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
+            screenSize: screenSize,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg,
+            zoneRadius: Self.catchZoneRadius
+        )
+        if candidates.isEmpty {
+            // Central catch zone empty, but a LONE plane anywhere on frame
+            // stays catchable (fix/lone-plane-catchable #145). Two+ on
+            // frame still require aim or a tap.
+            if onScreenPositions.count == 1, let only = onScreenPositions.keys.first {
+                return .single(only)
+            }
+            return .disabled
+        }
+        if candidates.count == 1 {
+            return .single(candidates[0].icao24)
+        }
+        if let dominant = dominantAimTarget(
+            candidates, headingAccuracyDeg: location.headingAccuracy
+        ) {
+            return .single(dominant)
+        }
+        return .multi(candidates.map(\.icao24))
+    }
+
+    #if DEBUG
+    /// Wrench-panel row: the catch-mode A/B switch. FRAME (this branch's
+    /// frame-is-the-catch) ↔ LEGACY (the shipped zones-and-pins model).
+    /// Tap to flip; persists across launches on this Debug install only.
+    private var catchModeRow: some View {
+        HStack(spacing: 8) {
+            Text("Catch mode:")
+            Text("[\(catchMode.label)]")
+                .foregroundStyle(catchMode == .legacy
+                                 ? Brand.Color.alertCaution
+                                 : Brand.Color.textTertiary)
+                .bold()
+            Text(catchMode == .frame ? "membership · tap asserts"
+                                     : "zone · pin · dominance")
+                .foregroundStyle(Brand.Color.textTertiary)
+            Spacer()
+        }
+        .contentShape(.rect)
+        .onTapGesture { setCatchMode(catchMode.toggled) }
+    }
+
+    /// Always-on screen badge while the LEGACY mode is live, so a field
+    /// session (and its screenshots) can't mistake shipped behaviour for
+    /// this branch's. Nothing renders in the frame mode.
+    @ViewBuilder
+    private var catchModeBadge: some View {
+        if catchMode == .legacy {
+            Text("LEGACY CATCH MODE")
+                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .foregroundStyle(Brand.Color.alertCaution)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+                .accessibilityLabel("Legacy catch mode is on")
+        }
+    }
+    #endif
 
     /// True when an OPAQUE modal fully covers the camera / AR view — the
     /// standard sheets: Hangar, Profile, compass calibration, the DEBUG
@@ -1590,6 +1881,22 @@ struct ContentView: View {
     /// field test.
     private static let assertedGraceSeconds: TimeInterval = 15
 
+    /// LEGACY catch mode — anti-cheat L1: radius (screen points) of the
+    /// central catch zone the capture button draws its targets from.
+    /// Tighter than whole-frame so a catch means "I aimed at this plane."
+    /// In points (not degrees) so it scales with zoom. The lock zone is
+    /// 80; this starts a touch wider so a centred plane with mild compass
+    /// drift still qualifies.
+    private static let catchZoneRadius: CGFloat = 100
+
+    /// LEGACY catch mode — aim-confidence floor for the uncertain-aim flag
+    /// (Gate 5). Below this, a CENTER (non-tapped) catch made under a poor
+    /// compass, off the crosshair, and on a small target is flagged as
+    /// maybe-the-wrong-plane → Keep/Discard after the reveal (never
+    /// blocks). Conservative so it flags only clearly marginal catches
+    /// (fail-open). See `aimConfidence`.
+    private static let uncertainAimConfidenceFloor: Double = 0.3
+
     /// Payload for the post-catch Keep/Discard review dialog: the suspected
     /// rows of the just-revealed catch and the one question asked about them.
     private struct SuspectReview {
@@ -1790,7 +2097,7 @@ struct ContentView: View {
             wasTapped: wasTapped,
             candidateCount: candidates.count,
             alternatives: alts.isEmpty ? nil : Array(alts),
-            selector: "membership-v1"
+            selector: catchMode == .legacy ? "prominence-v1" : "membership-v1"
         )
         return diag.jsonString()
     }
@@ -1877,13 +2184,58 @@ struct ContentView: View {
             }
         }
 
-        // (Gate 5 — uncertain aim — retired with the crosshair, 2026-08-28.
-        // Its premise was "the reticle says which plane you meant"; under
-        // frame-is-the-catch there is no picking, so there is no mis-pick.
-        // Per-plane honesty stays with gates 1–3 above.)
+        // Gate 5 — uncertain aim — LEGACY mode only. Retired from the frame
+        // mode with the crosshair (2026-08-28): its premise was "the reticle
+        // says which plane you meant"; under frame-is-the-catch there is no
+        // picking, so there is no mis-pick. Per-plane honesty stays with
+        // gates 1–3 above.
+        if catchMode == .legacy {
+            applyUncertainAimGate(icaos: icaos, observedByIcao: observedByIcao,
+                                  suspicions: &suspicions)
+        }
 
         runCatch(icaos: icaos, screenSize: screenSize, positions: positions,
                  suspicions: suspicions)
+    }
+
+    /// Gate 5 (LEGACY catch mode, 2026-07-13). A CENTER (non-tapped) catch
+    /// whose target sits off the crosshair AND is too small to resolve, made
+    /// under a POOR compass, may be the WRONG plane — the reticle can't be
+    /// trusted to say which plane you meant (the A319 field mis-catch:
+    /// bagged a 12.9 km cruise jet instead of a closer, lower plane). Flag,
+    /// never block: the reveal proceeds, then one Keep/Discard question. An
+    /// explicit tap (`lockOn.state.targetIcao24`) is a deliberate choice and
+    /// is exempt.
+    private func applyUncertainAimGate(
+        icaos: [String],
+        observedByIcao: [String: ObservedAircraft],
+        suspicions: inout [String: CatchSuspicion]
+    ) {
+        guard let acc = location.headingAccuracy, acc >= Self.compassGoodThreshold,
+              let heading = location.heading else { return }
+        let roll = Geo.rollDeg(
+            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+        )
+        let basis = Geo.cameraBasis(
+            headingDeg: heading, cameraElevationDeg: motion.cameraElevationDeg, rollDeg: roll
+        )
+        for icao in icaos where icao != lockOn.state.targetIcao24 {
+            guard let obs = observedByIcao[icao] else { continue }
+            let v = Geo.cameraFrameVector(
+                targetBearingDeg: obs.bearingDeg, targetElevationDeg: obs.elevationDeg, basis: basis
+            )
+            let offsetDeg = v.z <= 0 ? 180.0
+                : atan2((v.x*v.x + v.y*v.y).squareRoot(), v.z) * 180 / .pi
+            let conf = aimConfidence(
+                offsetDeg: offsetDeg, arcmin: obs.apparentSizeArcminutes, headingAccuracyDeg: acc
+            )
+            guard conf < Self.uncertainAimConfidenceFloor else { continue }
+            CatchTelemetry.fireUncertainAim(
+                offsetDeg: offsetDeg, arcmin: obs.apparentSizeArcminutes,
+                headingAccuracyDeg: acc, confidence: conf
+            )
+            suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .uncertainAim)
+        }
     }
 
     /// Project an aircraft's shutter-press observation through the
@@ -2177,10 +2529,13 @@ struct ContentView: View {
                 }
             }
             if let snap = singleSnap, let icao = icaos.first {
+                // A live preview fix also corroborates (fresh by construction
+                // — it expires after ~1 s of detector misses). Only the
+                // legacy mode tracks pre-press, so in the frame mode this is
+                // always false and the still search is the whole evidence.
+                let liveFix = visualConfirm.fixes[icao] != nil
                 // Envelope footprint only when the still was actually
-                // searched — an undecodable photo must fail open. (The old
-                // live-preview fix corroboration is gone with pre-press
-                // tracking; the still search is the evidence now.)
+                // searched — an undecodable photo must fail open.
                 let footprintPx: Double? = snap.searched
                     ? visibleByIcao[icao].flatMap { obs in
                         snap.photoWidthPx.flatMap { photoWidth in
@@ -2195,14 +2550,14 @@ struct ContentView: View {
                     : nil
                 let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
                 let verdict = DetectorGate().verdict(
-                    sawPlane: singleSnapped != nil,
+                    sawPlane: singleSnapped != nil || liveFix,
                     expectedFootprintPx: footprintPx,
                     meanLuminance: meanLum
                 )
                 detectorVerdict = verdict
                 let enforcing = visualConfirm.detectorGateEnforcing
                 CatchTelemetry.fireDetectorGate(
-                    verdict: verdict, snapHit: singleSnapped != nil, liveFix: false,
+                    verdict: verdict, snapHit: singleSnapped != nil, liveFix: liveFix,
                     expectedFootprintPx: footprintPx, meanLuminance: meanLum,
                     enforcing: enforcing
                 )
@@ -2229,12 +2584,22 @@ struct ContentView: View {
                 headingDeg: pressHeading ?? 0,
                 cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg
             )
-            let diagCandidates = frameDiagCandidates(
-                in: pressObserved, phoneHeadingDeg: pressHeading ?? 0,
-                cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg,
-                screenSize: screenSize,
-                hfovDeg: Self.baseHfovDeg / pressZoom, vfovDeg: Self.baseVfovDeg / pressZoom
-            )
+            // Frame mode: every on-frame plane (the frame is the zone).
+            // Legacy mode: the 100 pt central catch zone, as shipped.
+            let diagCandidates: [CatchCandidate] = catchMode == .legacy
+                ? catchCandidates(
+                    in: pressObserved, phoneHeadingDeg: pressHeading ?? 0,
+                    cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg,
+                    screenSize: screenSize,
+                    hfovDeg: Self.baseHfovDeg / pressZoom, vfovDeg: Self.baseVfovDeg / pressZoom,
+                    zoneRadius: Self.catchZoneRadius
+                )
+                : frameDiagCandidates(
+                    in: pressObserved, phoneHeadingDeg: pressHeading ?? 0,
+                    cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg,
+                    screenSize: screenSize,
+                    hfovDeg: Self.baseHfovDeg / pressZoom, vfovDeg: Self.baseVfovDeg / pressZoom
+                )
 
             var newCatches: [Catch] = []
             var duplicates: [String] = []
@@ -2386,7 +2751,9 @@ struct ContentView: View {
                     cameraElevationDeg: pressElevationDeg,
                     rollDeg: pressRollDeg,
                     zoom: pressZoom,
+                    // Frame mode: a user assertion; legacy mode: the pin.
                     wasTapped: assertedPlanes[icao] != nil
+                        || icao == lockOn.state.targetIcao24
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -2452,7 +2819,8 @@ struct ContentView: View {
                     angularSizeArcmin: visibleByIcao[row.icao24]?.apparentSizeArcminutes,
                     // Only ever non-nil for a single-target catch, so it can't
                     // mislabel a multi-catch row.
-                    detectorVerdict: detectorVerdict
+                    detectorVerdict: detectorVerdict,
+                    catchMode: catchMode
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
@@ -2604,7 +2972,8 @@ struct ContentView: View {
                 snapMs: snapMs,
                 composeMs: composeMs,
                 presentMs: presentMs,
-                totalMs: Int(Date().timeIntervalSince(tapAt) * 1000)
+                totalMs: Int(Date().timeIntervalSince(tapAt) * 1000),
+                catchMode: catchMode
             )
         }
     }
@@ -3329,6 +3698,9 @@ struct ContentView: View {
                 gateDebugRow
                 localGateRow
                 detectorGateRow
+                #if DEBUG
+                catchModeRow
+                #endif
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -3787,6 +4159,77 @@ struct ContentView: View {
         ])
     }
 
+    /// The empty-sky tap's rescue, for whichever catch mode is live: the
+    /// diagnosed `filtered` / `off-frame` plane becomes labeled + catchable.
+    /// Frame mode asserts it (`assertPlane`); legacy mode reveals + pins it
+    /// and force-locks the engine (the pre-#229 `tap_reveal` path). Same
+    /// replay event and analytics either way.
+    private func revealPlane(
+        _ icao: String, at now: Date, tapPoint: CGPoint?, reason: String
+    ) {
+        switch catchMode {
+        case .frame:
+            assertPlane(icao, at: now, tapPoint: tapPoint, reason: reason)
+        case .legacy:
+            revealedIcao = icao
+            pinnedIcao = icao
+            recorder.recordTapPin(icao24: icao, at: now, tapPoint: tapPoint)
+            lockOn.forceLock(targetIcao24: icao, now: now)
+            Analytics.capture("tap_reveal", [
+                "icao24": .string(icao), "reason": .string(reason),
+            ])
+        }
+    }
+
+    /// LEGACY catch mode: pin a visible plane (a normal pin is a visible
+    /// plane, not a reveal). `forceLock` is the only way into `.locked` —
+    /// the user just pointed at this plane, so the engine jumps straight
+    /// to a locked state.
+    private func legacyPin(_ icao: String, at now: Date, tapPoint: CGPoint?) {
+        pinnedIcao = icao
+        revealedIcao = nil
+        recorder.recordTapPin(icao24: icao, at: now, tapPoint: tapPoint)
+        lockOn.forceLock(targetIcao24: icao, now: now)
+    }
+
+    /// LEGACY catch mode: explicit "cancel". Both writes required — the
+    /// 1 Hz `pruneLegacyPin` covers engine → view only; without `unpin()`
+    /// the engine would still hold `.locked` until forced.
+    private func legacyUnpin(at now: Date) {
+        recorder.recordUnpin(at: now)
+        pinnedIcao = nil
+        revealedIcao = nil
+        lockOn.unpin()
+    }
+
+    /// LEGACY catch mode: VoiceOver's route into pin/unpin — the same
+    /// effect as a direct tap on a labeled plane minus the screen-geometry
+    /// hit-test, which accessibility activation doesn't need: the element
+    /// the user activated already names the plane.
+    private func accessibilityTogglePin(icao: String) {
+        let now = Date()
+        if icao == pinnedIcao {
+            legacyUnpin(at: now)
+        } else {
+            legacyPin(icao, at: now, tapPoint: nil)
+        }
+    }
+
+    /// The ONLY writer of the catch-mode switch (wrench-panel row). Clears
+    /// the state the outgoing mode owns so nothing leaks across: legacy's
+    /// pin / reveal / engine lock / live detector target, frame's
+    /// assertions. Persisted via `@AppStorage`; Release builds ignore it.
+    private func setCatchMode(_ mode: CatchMode) {
+        guard mode != catchMode else { return }
+        pinnedIcao = nil
+        revealedIcao = nil
+        lockOn.unpin()
+        visualConfirm.updateTarget(nil)
+        assertedPlanes = [:]
+        catchModeRaw = mode.rawValue
+        Log.ui.notice("Catch mode → \(mode.label, privacy: .public)")
+    }
+
     /// Spoken summary for a plane's AR label: callsign, airframe model
     /// when the metadata cache has it, rarity tier, and slant distance.
     private func planeAccessibilityLabel(
@@ -3856,6 +4299,14 @@ struct ContentView: View {
         //      planes are asserted into the frame (the rescue classes),
         //      grounded / beyond-eyeshot classes get their honest toasts,
         //      and truly empty sky ripples.
+        //
+        // LEGACY catch mode (the shipped spec § 3.1, four branches):
+        //   1. Tap directly on a plane (≤100 px) → pin (toggle if same).
+        //   2. Tap empty sky while pinned        → clear pin.
+        //   3. Tap empty sky while not pinned    → widen radius to 250 px
+        //      and pin the nearest visible plane to the tap.
+        //   4. Truly empty frame                 → the shared diagnosis
+        //      below (reveal → pin + force-lock; toasts; ripple).
         let cap = min(screenSize.width, screenSize.height) / 2
         let hitRadius = min(100 * zoom, cap)
         if let icao = closestTargetIcao24(
@@ -3869,11 +4320,45 @@ struct ContentView: View {
             vfovDeg: vfovDeg,
             lockZoneRadius: hitRadius
         ) {
-            let obs = visible.first { $0.aircraft.icao24 == icao }
-            if let obs, obs.visibilityTier == .faint, assertedPlanes[icao] == nil {
-                assertPlane(icao, at: now, tapPoint: point, reason: "faint")
+            switch catchMode {
+            case .frame:
+                let obs = visible.first { $0.aircraft.icao24 == icao }
+                if let obs, obs.visibilityTier == .faint, assertedPlanes[icao] == nil {
+                    assertPlane(icao, at: now, tapPoint: point, reason: "faint")
+                }
+            case .legacy:
+                if icao == pinnedIcao {
+                    legacyUnpin(at: now)
+                } else {
+                    legacyPin(icao, at: now, tapPoint: point)
+                }
             }
             return
+        }
+
+        if catchMode == .legacy {
+            // (legacy 2) Empty sky while pinned → clear the pin.
+            if pinnedIcao != nil {
+                legacyUnpin(at: now)
+                return
+            }
+            // (legacy 3) Empty sky, no pin → "try harder": widen to 250 px
+            // and pin the nearest visible plane (if any falls inside).
+            let wideRadius = min(250 * zoom, cap)
+            if let icao = closestTargetIcao24(
+                in: visible,
+                at: point,
+                phoneHeadingDeg: phoneHeadingDeg,
+                cameraElevationDeg: cameraElevationDeg,
+                rollDeg: rollDeg,
+                screenSize: screenSize,
+                hfovDeg: hfovDeg,
+                vfovDeg: vfovDeg,
+                lockZoneRadius: wideRadius
+            ) {
+                legacyPin(icao, at: now, tapPoint: nil)
+                return
+            }
         }
 
         // (2) No labeled plane under the tap. Diagnose the nearest in-data
@@ -3931,7 +4416,7 @@ struct ContentView: View {
             return
         }
         if let d = diagnosis, shouldTapReveal(reason: d.reason) {
-            assertPlane(d.obs.aircraft.icao24, at: now, tapPoint: point, reason: d.reason)
+            revealPlane(d.obs.aircraft.icao24, at: now, tapPoint: point, reason: d.reason)
             return
         }
 
@@ -4280,7 +4765,10 @@ private struct PlaneLabel: View {
     ///              the ×N badge always equals the full-bright count.
     ///   `faint`  — beyond-confidence tier (2026-06-12 doctrine): in the
     ///              data, not in the press. Tap to promote.
-    enum Style: Equatable { case chosen, quiet, faint }
+    ///   `pinned` — LEGACY catch mode only: the tap-pinned plane, at the
+    ///              shipped weight (larger than `chosen`: 140 pt box,
+    ///              3.5 pt strokes) with the expanded points label.
+    enum Style: Equatable { case chosen, quiet, faint, pinned }
 
     let aircraft: ObservedAircraft
     let position: CGPoint
@@ -4301,13 +4789,13 @@ private struct PlaneLabel: View {
             .trimmingCharacters(in: .whitespaces)
             .nonEmpty
             ?? aircraft.aircraft.icao24.uppercased()
-        let isChosen = style == .chosen
-        let bracketBoxSize: CGFloat = isChosen ? 110 : 96
+        let isChosen = style == .chosen || style == .pinned
+        let bracketBoxSize: CGFloat = style == .pinned ? 140 : (isChosen ? 110 : 96)
         // Wider cyan strokes so the blue reads as the focus. The dark
         // halo in `LockBrackets` is drawn at `lineWidth + 2 * haloWidth`,
         // so a ~1.5 px black outline still rings the thicker blue and
         // keeps the bracket legible against a bright sky.
-        let bracketLineWidth: CGFloat = isChosen ? 3 : 2.0
+        let bracketLineWidth: CGFloat = style == .pinned ? 3.5 : (isChosen ? 3 : 2.0)
         let bracketOpacity: Double = isChosen ? 1.0 : 0.55
         // Dim applies to FOREGROUND strokes/text only — never to the pill's
         // dark scrim or the brackets' halo. A whole-view .opacity multiplied
@@ -4347,6 +4835,32 @@ private struct PlaneLabel: View {
         }
         .position(position)
         .allowsHitTesting(false)
+    }
+}
+
+/// The plane label's VoiceOver semantics, one modifier for both catch
+/// modes so the label's modifier chain stays the same length either
+/// way (ContentView.body is at the type-check budget).
+///   - frame mode (`legacyPinToggle == nil`): D7 — activation carries no
+///     behavior; a chosen plane says "In capture." in its value.
+///   - legacy mode: the label is a (selected) button whose action toggles
+///     the pin, exactly as shipped.
+private struct PlaneLabelAccessibility: ViewModifier {
+    let style: PlaneLabel.Style
+    let legacyPinToggle: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let legacyPinToggle {
+            let isPinned = style == .pinned
+            content
+                .accessibilityAddTraits(isPinned ? [.isButton, .isSelected] : .isButton)
+                .accessibilityHint(isPinned ? "Unpins this plane."
+                                            : "Pins this plane for capture.")
+                .accessibilityAction { legacyPinToggle() }
+        } else {
+            content
+                .accessibilityValue(style == .chosen ? "In capture." : "")
+        }
     }
 }
 
