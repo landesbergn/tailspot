@@ -51,7 +51,6 @@ struct ContentView: View {
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
-    @StateObject private var lockOn = LockOnEngine()
     /// Field-session recorder for replay/regression. Off by default;
     /// the debug overlay carries a tap-to-start row. When active a 1 Hz
     /// task captures the current sensor state + visible aircraft and
@@ -88,6 +87,12 @@ struct ContentView: View {
     /// sets, map, leaderboard, settings, notifications, share).
     /// Opened via the person glyph in the top-trailing corner.
     @State private var showProfile = false
+    /// Becomes true only once the Hangar/Profile presentation animation has
+    /// settled. The request flags above flip at tap time, and even the sheet
+    /// content's `onAppear` runs before its first visible frame is committed;
+    /// using either signal directly for camera occlusion detaches the preview
+    /// first and exposes a black frame while the destination is still loading.
+    @State private var primarySheetVisible = false
     /// Drives the compass calibration sheet. Tapping the AR
     /// caution badge sets this true; the sheet explains what's
     /// wrong and shows the figure-8 calibration motion.
@@ -97,14 +102,6 @@ struct ContentView: View {
     /// actual list — keeping these separate means ContentView's body
     /// doesn't re-evaluate the full sorted list on every catch.
     @Query private var catches: [Catch]
-    /// Metadata for whatever plane the lock engine is currently
-    /// tracking. Fetched lazily through ADSBManager.metadata(for:),
-    /// which consults its in-memory cache first; only first time we
-    /// see an icao24 actually hits OpenSky. Kicked off the moment a
-    /// pin lands (driven by .task(id:) on targetIcao24) so by the
-    /// time the lock visuals render, the label content is usually
-    /// already populated.
-    @State private var lockedMetadata: AircraftMetadata?
     /// Cache of metadata for every visible plane. Powers the ambient
     /// per-plane label's rarity teaser — without prefetch, every
     /// non-pinned label would render "COMMON" until that plane became
@@ -122,22 +119,21 @@ struct ContentView: View {
     /// `magnification` value is a *relative* scale (1.0 at gesture
     /// start), so we multiply against this to get the new absolute zoom.
     @State private var zoomGestureBase: CGFloat = 1.0
-    /// When the user taps a plane directly, we pin the lock to that
-    /// icao24 — overriding the center-driven closest-target heuristic.
-    /// Tap-elsewhere clears; tap-same-plane toggles off; the plane
-    /// leaving visibility also clears. Taps drive `forceLock()` on
-    /// the engine — the only way into `.locked` after Task 4.
-    @State private var pinnedIcao: String?
-    /// Tap-to-reveal (2026-06-19): a plane the user explicitly tapped even
-    /// though the visibility filter hid it (an `empty-tap` with reason
-    /// "filtered"). FDX1268 — a clearly-visible freighter on approach at
-    /// 10.9 km — sits in the same low/fast/large-airframe class as the MLAT
-    /// firehose the precision band kills, so it can't be ambient-labeled
-    /// without resurfacing that clutter. A tap is the explicit intent the
-    /// ambient filter lacks: we surface THIS one plane (and only while it's
-    /// the pin) by treating it as visible for labeling / lock / catch.
-    /// Always kept equal to `pinnedIcao` while set; cleared together with it.
-    @State private var revealedIcao: String?
+    /// User-asserted planes (frame-is-the-catch, 2026-08-28): icao24 →
+    /// the last instant the plane was confirmed on frame (or the assert
+    /// time, until the 1 Hz prune first sees it). An assertion is the
+    /// user saying "there's a plane here you're not showing me" — a tap
+    /// on a faint-tier label, or an empty-sky tap whose diagnosis says
+    /// `filtered` / `off-frame` (the FDX1268 / DAL972 rescue classes).
+    /// Asserted planes label bright, are guaranteed a press slot, and
+    /// are exempt from the occlusion demote. Lifetime (D5): refreshed
+    /// while the plane projects onto the frame, dropped after
+    /// `assertedGraceSeconds` off-frame or the moment it leaves the
+    /// data — pruned at 1 Hz in the ambient poll task, never in `body`.
+    @State private var assertedPlanes: [String: Date] = [:]
+    /// The AR view's current size, captured from the GeometryReader so
+    /// the 1 Hz asserted-plane prune can project without a body pass.
+    @State private var arScreenSize: CGSize = .zero
     /// URL of the recording the user wants to analyze. Non-nil →
     /// `ReplayReportView` sheet is presented for that file.
     @State private var replayURL: URL?
@@ -327,17 +323,16 @@ struct ContentView: View {
                     permissionRecoveryOverlay
                 }
 
-                // Lock-on AR overlay. The view is clean by default — no
-                // crosshair, no per-aircraft labels (Task 5 will add
-                // ambient labels). The user taps a plane to pin it; the
-                // engine jumps straight to .locked via forceLock(), and
-                // the label renders at the pinned plane's projected
-                // position. Tap the locked label to open the detail
-                // sheet (with the Catch button).
+                // AR overlay (frame-is-the-catch, 2026-08-28). Every
+                // visible plane carries an ambient label; press membership
+                // (bright tier, size-ranked, ≤ maxCatchTargets) decides
+                // which render full-bright — those are exactly what the
+                // capture button catches. Taps assert planes the app
+                // isn't showing (faint promotion / hidden rescue); they
+                // never select a target.
                 //
-                // The 30 Hz TimelineView drives engine state transitions
-                // (e.g., pinned plane leaving the lock zone → sticky →
-                // idle). The engine is a pure state machine — repeated
+                // The 30 Hz TimelineView re-derives projections and
+                // membership every frame. Membership is pure — repeated
                 // update() calls with the same target are idempotent —
                 // so calling it from inside the TimelineView body is safe.
                 GeometryReader { geo in
@@ -354,21 +349,19 @@ struct ContentView: View {
                         let now = context.date
                         // Interactive-visible set: the ambient visibility tier
                         // (suppressed while `pointedIndoors`) PLUS any
-                        // tap-revealed plane — see `interactiveVisible`. The
-                        // revealed plane rides the existing pinned-plane path —
-                        // labeled, lockable, catchable — without loosening the
-                        // ambient filter for everyone else. GROUNDED planes are
-                        // excluded even from the reveal clause: a parked plane
-                        // must never label, lock, or catch (the tap path never
-                        // reveals one — this guard is belt-and-suspenders).
+                        // user-asserted plane — see `interactiveVisible`.
+                        // GROUNDED planes are excluded even from the asserted
+                        // clause: a parked plane must never label or catch
+                        // (the tap path never asserts one — this guard is
+                        // belt-and-suspenders).
                         let visible = interactiveVisible(adsb.observed)
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
                         // Camera roll from the gravity vector (robust at the
                         // portrait hold where Euler roll is unreliable). The
                         // basis is built once per frame and reused for every
-                        // label projection below; lock/zone/tap take `roll`
-                        // and rebuild the identical basis internally.
+                        // label projection below; the tap path takes `roll`
+                        // and rebuilds the identical basis internally.
                         let roll = Geo.rollDeg(
                             gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
                         )
@@ -376,28 +369,53 @@ struct ContentView: View {
                             headingDeg: heading, cameraElevationDeg: camEl, rollDeg: roll
                         )
 
-                        // Target choice: the explicit tap-pinned plane (if
-                        // still visible) wins; otherwise fall back to
-                        // whichever visible plane is nearest to screen
-                        // center. A pin pointing at a no-longer-visible
-                        // plane is ignored here; the .onChange on lockOn
-                        // state clears it for next frame.
-                        let centerClosest = closestTargetIcao24(
-                            in: visible,
-                            phoneHeadingDeg: heading,
-                            cameraElevationDeg: camEl,
-                            rollDeg: roll,
-                            screenSize: geo.size,
-                            hfovDeg: effectiveHfov,
-                            vfovDeg: effectiveVfov
+                        // Frame-is-the-catch (2026-08-28): project every
+                        // visible plane once; the projections drive the label
+                        // layer, the press membership, and the bracket
+                        // overlays baked into the saved photo. The frame IS
+                        // the zone — there is no catch radius and no pin.
+                        let onScreenProjected: [(icao: String, position: CGPoint)] = visible.compactMap { obs in
+                            guard let pos = obs.screenPosition(
+                                basis: basis,
+                                in: geo.size,
+                                hfovDeg: effectiveHfov,
+                                vfovDeg: effectiveVfov
+                            ) else { return nil }
+                            return (obs.aircraft.icao24, pos)
+                        }
+                        let onScreenPositions: [String: CGPoint] = Dictionary(
+                            onScreenProjected.map { ($0.icao, $0.position) },
+                            uniquingKeysWith: { first, _ in first }
                         )
-                        let pinStillVisible = pinnedIcao.map { id in
-                            visible.contains { $0.aircraft.icao24 == id }
-                        } ?? false
-                        let engineTarget = pinStillVisible ? pinnedIcao : centerClosest
-                        // `let _` so the void-returning call is legal
-                        // inside @ViewBuilder (statements aren't otherwise).
-                        let _ = lockOn.update(closestTargetIcao24: engineTarget, now: now)
+                        // Press membership: bright (.full-tier) planes on
+                        // frame, occlusion-demoted via the live sky grid,
+                        // asserted planes guaranteed, ranked by apparent size,
+                        // capped at `maxCatchTargets`. Pure — see
+                        // `chooseCatchMembers` for the D1·2/D3·2 rules.
+                        let localGrid = visualConfirm.latestLocalGrid
+                        let occlusionDemotes = visualConfirm.localGateEnforcing
+                        let membership = chooseCatchMembers(
+                            visible.compactMap { obs -> MembershipCandidate? in
+                                let icao = obs.aircraft.icao24
+                                guard let pos = onScreenPositions[icao] else { return nil }
+                                let asserted = assertedPlanes[icao] != nil
+                                let occluded: Bool = {
+                                    guard occlusionDemotes, !asserted,
+                                          let grid = localGrid else { return false }
+                                    let f = grid.features(atScreenPoint: pos, screenSize: geo.size)
+                                    return LocalSkyGate().verdict(f) == .notSky
+                                }()
+                                return MembershipCandidate(
+                                    icao24: icao,
+                                    arcmin: obs.apparentSizeArcminutes,
+                                    isFullTier: obs.visibilityTier == .full,
+                                    isAsserted: asserted,
+                                    isOccluded: occluded
+                                )
+                            }
+                        )
+                        let chosenSet = Set(membership.chosen)
+                        let overflowSet = Set(membership.overflow)
 
                         ZStack {
                             // Background tap-and-pinch layer. Color.clear +
@@ -434,14 +452,17 @@ struct ContentView: View {
                                         }
                                 )
 
-                            // All-frame ambient labels. Every visible
-                            // plane gets a faint cyan corner-bracket
-                            // pair + small "callsign · RARITY" label
-                            // at its projected screen position. The
-                            // pinned plane (if any) renders brighter +
-                            // thicker brackets and an expanded label
-                            // that includes points; other planes dim
-                            // to ~35 % so the pin reads as primary.
+                            // All-frame labels (frame-is-the-catch, D3·2).
+                            // Three states, driven by press membership:
+                            //   chosen   — full-bright, expanded label with
+                            //              points: what a press catches, ≤3.
+                            //   quiet    — bright-tier but unchosen. Only
+                            //              exists on a >3-bright frame; steps
+                            //              down so the ×N badge always equals
+                            //              the full-bright count.
+                            //   faint    — beyond-confidence tier (2026-06-12
+                            //              doctrine): in the data, not in the
+                            //              press. Tap to promote.
                             //
                             // Tap handling lives on the underlying
                             // Color.clear background layer above
@@ -449,65 +470,33 @@ struct ContentView: View {
                             // `.allowsHitTesting(false)` so they
                             // don't intercept taps meant for the
                             // plane behind them.
-                            let pinnedIcaoForLabels = lockOn.state.targetIcao24
                             ForEach(visible, id: \.aircraft.icao24) { obs in
-                                if let pos = obs.screenPosition(
-                                    basis: basis,
-                                    in: geo.size,
-                                    hfovDeg: effectiveHfov,
-                                    vfovDeg: effectiveVfov
-                                ) {
-                                    let icao = obs.aircraft.icao24
-                                    let isPinned = icao == pinnedIcaoForLabels
-                                    // For the pinned plane prefer the
-                                    // already-loaded lockedMetadata
-                                    // (which the .task(id:) path keeps
-                                    // current); fall back to the
-                                    // ambient prefetch dict. The dict
-                                    // also catches every other visible
-                                    // plane.
-                                    let metaForPlane: AircraftMetadata? = isPinned
-                                        ? (lockedMetadata ?? (ambientMetadata[icao] ?? nil))
-                                        : (ambientMetadata[icao] ?? nil)
-                                    // Visual confirmation: the locked plane's
-                                    // bracket snaps to the detector's fix when
-                                    // one is live; everything else (and the
-                                    // fallback) stays at the geometric
-                                    // prediction. Pre-catch only — the catch
-                                    // photo path still uses onScreenPositions.
-                                    let drawPos = (isPinned
-                                        ? visualConfirm.fixes[icao]?.screenPoint
-                                        : nil) ?? pos
+                                let icao = obs.aircraft.icao24
+                                if let pos = onScreenPositions[icao] {
+                                    let style: PlaneLabel.Style =
+                                        chosenSet.contains(icao) ? .chosen
+                                        : overflowSet.contains(icao) ? .quiet
+                                        : .faint
+                                    let metaForPlane: AircraftMetadata? =
+                                        ambientMetadata[icao] ?? nil
                                     PlaneLabel(
                                         aircraft: obs,
-                                        position: drawPos,
-                                        isPinned: isPinned,
-                                        // Faint visibility tier (2026-06-12
-                                        // doctrine): beyond-confidence planes
-                                        // render quiet instead of hidden.
-                                        isDimmed: (pinnedIcaoForLabels != nil && !isPinned)
-                                            || obs.visibilityTier == .faint,
+                                        position: pos,
+                                        style: style,
                                         metadata: metaForPlane
                                     )
-                                    // VoiceOver path into the pin loop. The
-                                    // label stays `.allowsHitTesting(false)`
-                                    // for touch (taps hit-test screen geometry
-                                    // on the gesture layer), but accessibility
-                                    // activation needs no geometry — the
-                                    // element itself names the plane. Nearest
-                                    // plane reads first via sort priority.
+                                    // VoiceOver reads the plane's details
+                                    // (D7): activation carries no behavior —
+                                    // catching is the capture button, and a
+                                    // chosen plane says so in the value.
+                                    // Nearest plane reads first via sort
+                                    // priority.
                                     .accessibilityElement(children: .ignore)
                                     .accessibilityLabel(planeAccessibilityLabel(
                                         obs, metadata: metaForPlane))
-                                    .accessibilityAddTraits(
-                                        isPinned ? [.isButton, .isSelected] : .isButton)
-                                    .accessibilityHint(
-                                        isPinned ? "Unpins this plane."
-                                                 : "Pins this plane for capture.")
+                                    .accessibilityValue(
+                                        style == .chosen ? "In capture." : "")
                                     .accessibilitySortPriority(-obs.slantDistanceMeters)
-                                    .accessibilityAction {
-                                        accessibilityTogglePin(icao: icao)
-                                    }
                                 }
                             }
 
@@ -551,129 +540,28 @@ struct ContentView: View {
                                     .allowsHitTesting(false)
                             }
 
-                            // Bottom capture bar: hangar tray (left),
-                            // big central capture button, profile
-                            // (right). Built inside the TimelineView
-                            // so the capture button's appearance and
-                            // payload react to the per-frame visible
-                            // set + pin state.
-                            //
-                            // Spec § 3.2: a single always-present
-                            // capture button. The visible-count + pin
-                            // drive the mode (disabled / single /
-                            // multi). When in multi-mode a small
-                            // magenta ×N badge appears in the
-                            // top-right corner of the circle. The
-                            // floating magenta capture-zone overlay
-                            // was removed — the badge on the unified
-                            // button replaces it as the multi-mode
-                            // affordance.
-                            // CaptureMode is derived from planes that
-                            // actually project onto the camera frame at
-                            // the current heading/zoom — NOT from the
-                            // wider bbox set. `isLikelyVisibleToObserver`
-                            // alone includes everything above-horizon
-                            // within 30 km, even if it's behind the user;
-                            // that produced a persistent `×N` badge for
-                            // ambient traffic the user wasn't pointing at.
-                            // Project each visible plane to screen once
-                            // and stash the icao→position pair. Drives
-                            // both the capture-mode decision and the
-                            // bracket-overlay snapshot that the catch
-                            // path draws onto the saved photo.
-                            let onScreenProjected: [(icao: String, position: CGPoint)] = visible.compactMap { obs in
-                                guard let pos = obs.screenPosition(
-                                    basis: basis,
-                                    in: geo.size,
-                                    hfovDeg: effectiveHfov,
-                                    vfovDeg: effectiveVfov
-                                ) else { return nil }
-                                return (obs.aircraft.icao24, pos)
-                            }
-                            let onScreenIcaos: [String] = onScreenProjected.map(\.icao)
-                            let onScreenPositions: [String: CGPoint] = Dictionary(
-                                onScreenProjected.map { ($0.icao, $0.position) },
-                                uniquingKeysWith: { first, _ in first }
-                            )
-                            // Visual confirmation: tell the detector where
-                            // the current lock target is predicted to be.
-                            // Lock-only write (safe inside body); the
-                            // detector picks it up on its next frame.
-                            // `arOccluded` guard: a PAUSED TimelineView still
-                            // re-renders on external state changes (poll
-                            // publishes, SwiftData saves), and an unguarded
-                            // write here would re-arm the detector behind an
-                            // open sheet right after the occlusion handler
-                            // cleared it.
-                            let _ = visualConfirm.updateTarget(
-                                arOccluded ? nil : lockOn.state.targetIcao24.flatMap { icao in
-                                    onScreenPositions[icao].map {
-                                        .init(icao24: icao, predictedScreen: $0,
-                                              screenSize: geo.size)
-                                    }
-                                }
-                            )
-                            // Anti-cheat L1 — aim, don't spray. The catch set is
-                            // the planes inside a TIGHT central zone around the
-                            // reticle, not the whole frame: you have to point AT
-                            // a plane to catch it, which kills the dense-airspace
-                            // "tap anywhere, bag a fistful" exploit. `onScreen*`
-                            // above still spans the full frame for bracket
-                            // rendering; only catchability narrows here.
-                            let candidates = catchCandidates(
-                                in: visible,
-                                phoneHeadingDeg: heading,
-                                cameraElevationDeg: camEl,
-                                rollDeg: roll,
-                                screenSize: geo.size,
-                                hfovDeg: effectiveHfov,
-                                vfovDeg: effectiveVfov,
-                                zoneRadius: Self.catchZoneRadius
-                            )
-                            let pinForCapture = lockOn.state.targetIcao24
+                            // The central capture button stays inside the
+                            // TimelineView because its appearance and payload
+                            // react to per-frame membership. Hangar/Profile are
+                            // rendered once outside this 30 Hz subtree below.
+                            // A single always-present capture button with
+                            // ONE cause (frame-is-the-catch, D-round 1):
+                            // lit exactly when the press membership is
+                            // non-empty, ×N badge = chosen count, disabled
+                            // only on a genuinely member-less frame. A
+                            // press catches exactly the chosen set the
+                            // labels are showing full-bright.
                             let mode: CaptureMode = {
-                                // An explicit tap-pin is a deliberate choice — it
-                                // stays catchable while on screen even if the user
-                                // has drifted slightly off it.
-                                if let pin = pinForCapture,
-                                   onScreenIcaos.contains(pin) {
-                                    return .single(pin)
+                                switch membership.chosen.count {
+                                case 0:  return .disabled
+                                case 1:  return .single(membership.chosen[0])
+                                default: return .multi(membership.chosen)
                                 }
-                                if candidates.isEmpty {
-                                    // Central catch zone empty, but a LONE plane
-                                    // anywhere on frame stays catchable
-                                    // (fix/lone-plane-catchable #145, Portland
-                                    // field report: reticle passive, the plane
-                                    // plainly in frame, shutter dead). Two+ on
-                                    // frame still require aim or a tap, so the
-                                    // dense-airspace spray exploit stays closed.
-                                    if onScreenIcaos.count == 1 {
-                                        return .single(onScreenIcaos[0])
-                                    }
-                                    return .disabled
-                                }
-                                if candidates.count == 1 {
-                                    return .single(candidates[0].icao24)
-                                }
-                                // Multiple in-zone: if one plane is far more
-                                // visually prominent than the rest (a close/big
-                                // plane beside a distant speck), catch just it —
-                                // the A319-class fix. A cluster of comparable
-                                // planes (formation / approach pair) still multis.
-                                if let dominant = dominantAimTarget(
-                                    candidates, headingAccuracyDeg: location.headingAccuracy
-                                ) {
-                                    return .single(dominant)
-                                }
-                                return .multi(candidates.map(\.icao24))
                             }()
                             VStack {
                                 Spacer()
-                                captureBar(
-                                    mode: mode,
-                                    screenSize: geo.size,
-                                    positions: onScreenPositions
-                                )
+                                captureButton(mode: mode, screenSize: geo.size,
+                                              positions: onScreenPositions)
                                 // Clear the home-indicator gesture zone: pad
                                 // from the safe-area bottom when there is one
                                 // (`geo` sits inside .ignoresSafeArea(), so the
@@ -688,6 +576,33 @@ struct ContentView: View {
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                     }
+                    // Mirror the AR view's size into state (initial: true
+                    // covers first layout) for the 1 Hz asserted-plane
+                    // prune, which projects on-frame checks outside any
+                    // GeometryReader.
+                    .onChange(of: geo.size, initial: true) { _, size in
+                        arScreenSize = size
+                    }
+
+                    // Static navigation controls must not inherit the AR
+                    // TimelineView's 30 Hz invalidation cadence. A clear
+                    // capture-sized spacer preserves the established layout
+                    // while taps fall through to the live capture button.
+                    VStack {
+                        Spacer()
+                        HStack {
+                            bottomHangarButton
+                            Spacer()
+                            Color.clear
+                                .frame(width: 72, height: 72)
+                                .allowsHitTesting(false)
+                            Spacer()
+                            bottomProfileButton
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 12))
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
                 .ignoresSafeArea()
 
@@ -815,7 +730,10 @@ struct ContentView: View {
         // When the Hangar closes, re-diff — a country backfill done inside
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
         .onChange(of: showHangar) { _, isShowing in
-            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
+            if !isShowing {
+                primarySheetVisible = false
+                unlockCenter.enqueueNewUnlocks(from: catches)
+            }
         }
         // Same on Profile close — the leaderboard fetches inside that sheet
         // (ProfileScreen standing + LeaderboardScreen boards) refresh the
@@ -823,13 +741,18 @@ struct ContentView: View {
         // Dynasty / Chart Topper while it's open. Re-diffing here makes the
         // FIRST live crossing celebrate as soon as the sheet dismisses.
         .onChange(of: showProfile) { _, isShowing in
-            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
+            if !isShowing {
+                primarySheetVisible = false
+                unlockCenter.enqueueNewUnlocks(from: catches)
+            }
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
+                .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
+                .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -844,18 +767,15 @@ struct ContentView: View {
             adsb.start { location.cllocation }
         }
         // Occlusion gating: while an opaque sheet covers the AR view, stop the
-        // 30 Hz motion feed and the 1 Hz re-annotation, and clear the detector
-        // target (a nil target makes the pipeline skip inference). The 10 s
-        // ADS-B poll keeps running so data stays fresh. Resume all three when
-        // the sheet dismisses — the render loop re-establishes the detector
-        // target on its next tick (visualConfirm.updateTarget in the
-        // TimelineView body). Clear-background reveals never flip arOccluded,
-        // so they don't reach here (see `arOccluded`).
+        // 30 Hz motion feed and the 1 Hz re-annotation. The 10 s ADS-B poll
+        // keeps running so data stays fresh. Resume both when the sheet
+        // dismisses. Clear-background reveals never flip arOccluded, so they
+        // don't reach here (see `arOccluded`). (The detector runs only at
+        // catch time now — there is no live target to clear.)
         .onChange(of: arOccluded) { _, occluded in
             if occluded {
                 motion.stop()
                 adsb.pauseReAnnotation()
-                visualConfirm.updateTarget(nil)
             } else {
                 motion.start()
                 adsb.resumeReAnnotation()
@@ -884,7 +804,6 @@ struct ContentView: View {
             case .inactive, .background:
                 motion.stop()
                 adsb.stop()
-                visualConfirm.updateTarget(nil)
             @unknown default:
                 break
             }
@@ -894,16 +813,6 @@ struct ContentView: View {
         // directory on every body eval.
         .onChange(of: showDebug) { _, isShowing in
             if isShowing { latestRecordingURL = ReplayRecorder.mostRecentRecording() }
-        }
-        // Re-runs whenever the lock engine switches to (or away from)
-        // a target icao. Hits ADSBManager.metadata(for:) — instant on
-        // a cache hit, single OpenSky call on miss.
-        .task(id: lockOn.state.targetIcao24) {
-            if let icao = lockOn.state.targetIcao24 {
-                lockedMetadata = await adsb.metadata(for: icao)
-            } else {
-                lockedMetadata = nil
-            }
         }
         // Ambient metadata prefetch for all-frame labels. The id is a
         // content-keyed signature of the currently-visible icao24
@@ -918,19 +827,6 @@ struct ContentView: View {
             // error), and a named function with explicit types is clearer
             // anyway.
             await prefetchAmbientMetadata()
-        }
-        // Pin housekeeping. If the engine moved off the pinned plane
-        // (target left visibility → sticky → idle, or center-driven
-        // logic switched onto a different plane), clear the pin so
-        // we stop fighting the engine on the next frame.
-        .onChange(of: lockOn.state.targetIcao24) { _, newIcao in
-            if let pin = pinnedIcao, newIcao != pin {
-                pinnedIcao = nil
-                // A revealed plane is only visible *because* it's pinned; once
-                // the engine moves off it (it left the data / sticky expired),
-                // drop the reveal so it falls back out of the visible set.
-                revealedIcao = nil
-            }
         }
         // Compass-warning debounce. Watches CL's heading accuracy
         // and only flips the badge on after a sustained-bad streak.
@@ -1111,6 +1007,7 @@ struct ContentView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 indoorHintTick()
+                pruneAssertedPlanes()
             }
         }
         .sheet(isPresented: replaySheetPresented) {
@@ -1133,7 +1030,7 @@ struct ContentView: View {
     }
 
     /// The interactive-visible set: the ambient visibility tier PLUS any
-    /// tap-revealed plane. One definition for the label render loop, the
+    /// user-asserted plane. One definition for the label render loop, the
     /// metadata prefetch, and its signature — they must agree or labels
     /// render without their metadata.
     ///
@@ -1142,20 +1039,64 @@ struct ContentView: View {
     /// walls, and dense airspace (Manhattan: river-corridor GA at 2–3 km,
     /// LGA finals at 8 km) keeps planes inside the band that are plainly
     /// invisible from indoors. When the whole frame reads not-sky for the
-    /// sustained streak, no ambient label renders; the tap-revealed plane
-    /// survives (explicit intent — and dropping it would fight the lock).
-    /// Same 5 s-debounced signal as the "Not many planes indoors." hint, so
+    /// sustained streak, no ambient label renders; asserted planes survive
+    /// (explicit intent — the user just said they can see one). Same
+    /// 5 s-debounced signal as the "Not many planes indoors." hint, so
     /// the labels disappear exactly when that hint explains why.
     private func interactiveVisible(_ observed: [ObservedAircraft]) -> [ObservedAircraft] {
         observed.filter {
             ($0.isLikelyVisibleToObserver && !pointedIndoors)
-                || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
+                || (!$0.grounded && assertedPlanes[$0.aircraft.icao24] != nil)
         }
+    }
+
+    /// 1 Hz lifetime keeper for `assertedPlanes` (D5: on frame + grace).
+    /// Refreshes the stamp while the plane still projects onto the AR
+    /// frame at the current pose; once off frame, the assertion expires
+    /// `assertedGraceSeconds` after the last on-frame instant. Leaves the
+    /// data entirely (or turns up grounded) → dropped immediately. Runs
+    /// from the 1 Hz ambient poll task, never inside `body`.
+    private func pruneAssertedPlanes(now: Date = Date()) {
+        guard !assertedPlanes.isEmpty else { return }
+        let observedByIcao = Dictionary(
+            adsb.observed.map { ($0.aircraft.icao24, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let heading = location.heading ?? 0
+        let roll = Geo.rollDeg(
+            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+        )
+        let basis = Geo.cameraBasis(
+            headingDeg: heading,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: roll
+        )
+        var next = assertedPlanes
+        for (icao, lastOnFrame) in assertedPlanes {
+            guard let obs = observedByIcao[icao], !obs.grounded else {
+                next.removeValue(forKey: icao)
+                continue
+            }
+            let onFrame = arScreenSize != .zero && obs.screenPosition(
+                basis: basis, in: arScreenSize,
+                hfovDeg: Self.baseHfovDeg / zoom, vfovDeg: Self.baseVfovDeg / zoom
+            ) != nil
+            if onFrame {
+                next[icao] = now
+            } else if now.timeIntervalSince(lastOnFrame) > Self.assertedGraceSeconds {
+                next.removeValue(forKey: icao)
+            }
+        }
+        if next != assertedPlanes { assertedPlanes = next }
     }
 
     /// True when an OPAQUE modal fully covers the camera / AR view — the
     /// standard sheets: Hangar, Profile, compass calibration, the DEBUG
-    /// trophy-icon gallery, and the replay report. While occluded we power
+    /// trophy-icon gallery, and the replay report. Hangar/Profile join this
+    /// set only after their presentation animation settles: their request
+    /// flags and content tasks both start before SwiftUI has committed a sheet
+    /// frame, and stopping the camera at either earlier point exposes its black
+    /// backing view. While occluded we power
     /// down the sensors + the 30 Hz render loop the user can't see (see
     /// `.onChange(of: arOccluded)` and the `paused:` TimelineView).
     ///
@@ -1168,11 +1109,21 @@ struct ContentView: View {
     /// builds, so reading them here compiles everywhere and stays false in
     /// Release.)
     private var arOccluded: Bool {
-        showHangar
-            || showProfile
+        primarySheetVisible
             || showCompassSheet
             || showIconGallery
             || replayURL != nil
+    }
+
+    /// SwiftUI starts a sheet content task before the presentation animation
+    /// has produced its first stable frame. Keep the live camera attached for
+    /// that short transition, then retain the existing power-saving shutdown
+    /// for the rest of the opaque sheet's lifetime. The task is cancelled if
+    /// the sheet disappears before the delay completes.
+    private func occludeARAfterPrimarySheetPresents() async {
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled, showHangar || showProfile else { return }
+        primarySheetVisible = true
     }
 
     /// Ambient-label metadata prefetch body (the `.task(id: visibleIcaoSignature)`
@@ -1632,22 +1583,12 @@ struct ContentView: View {
         }
     }
 
-    /// Anti-cheat L1 — radius (screen points) of the central catch zone the
-    /// capture button draws its targets from. Tighter than the old whole-frame
-    /// behaviour so a catch means "I aimed at this plane." In points (not
-    /// degrees) so it scales with zoom — at higher zoom the same radius covers
-    /// a narrower angular wedge, exactly right for disambiguating spread-apart
-    /// planes. The lock zone is 80; this starts a touch wider so a centred
-    /// plane with mild compass drift still qualifies. Tunable in field test.
-    private static let catchZoneRadius: CGFloat = 100
-
-    /// Aim-confidence floor for the uncertain-aim flag (Gate 5). Below this, a
-    /// CENTER (non-tapped) catch made under a poor compass, off the crosshair,
-    /// and on a small target is flagged as maybe-the-wrong-plane → Keep/Discard
-    /// after the reveal (never blocks). Conservative so it flags only clearly
-    /// marginal catches (fail-open); tune up from `catch_uncertain_aim`
-    /// telemetry. See `aimConfidence`.
-    private static let uncertainAimConfidenceFloor: Double = 0.3
+    /// How long a user assertion survives OFF frame (D5, 2026-08-28): the
+    /// asserted plane stays labeled + catchable while it projects onto the
+    /// frame, plus this grace once it slips off (pan away and back without
+    /// re-tapping). Leaves the data → dropped immediately. Tunable in
+    /// field test.
+    private static let assertedGraceSeconds: TimeInterval = 15
 
     /// Payload for the post-catch Keep/Discard review dialog: the suspected
     /// rows of the just-revealed catch and the one question asked about them.
@@ -1792,25 +1733,6 @@ struct ContentView: View {
         }
     }
 
-    /// Bottom capture bar — hangar (left), big central capture
-    /// button, profile (right). The central button is a single
-    /// always-present circle; mode drives its enabled state and
-    /// whether a `×N` badge appears in the top-right corner.
-    private func captureBar(
-        mode: CaptureMode,
-        screenSize: CGSize,
-        positions: [String: CGPoint]
-    ) -> some View {
-        HStack {
-            bottomHangarButton
-            Spacer()
-            captureButton(mode: mode, screenSize: screenSize, positions: positions)
-            Spacer()
-            bottomProfileButton
-        }
-        .padding(.horizontal, 28)
-    }
-
     /// Merged capture path. Single entry point used by the unified
     /// capture button regardless of whether the user is catching one
     /// plane (pin or lone visible) or several (≥2 visible, no pin).
@@ -1868,7 +1790,7 @@ struct ContentView: View {
             wasTapped: wasTapped,
             candidateCount: candidates.count,
             alternatives: alts.isEmpty ? nil : Array(alts),
-            selector: "prominence-v1"
+            selector: "membership-v1"
         )
         return diag.jsonString()
     }
@@ -1955,40 +1877,10 @@ struct ContentView: View {
             }
         }
 
-        // Gate 5 — uncertain aim (2026-07-13). A CENTER (non-tapped) catch
-        // whose target sits off the crosshair AND is too small to resolve, made
-        // under a POOR compass, may be the WRONG plane — the reticle can't be
-        // trusted to say which plane you meant (the A319 field mis-catch:
-        // bagged a 12.9 km cruise jet instead of a closer, lower plane). Flag,
-        // never block: the reveal proceeds, then one Keep/Discard question. An
-        // explicit tap (`lockOn.state.targetIcao24`) is a deliberate choice and
-        // is exempt.
-        if let acc = location.headingAccuracy, acc >= Self.compassGoodThreshold,
-           let heading = location.heading {
-            let roll = Geo.rollDeg(
-                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
-            )
-            let basis = Geo.cameraBasis(
-                headingDeg: heading, cameraElevationDeg: motion.cameraElevationDeg, rollDeg: roll
-            )
-            for icao in icaos where icao != lockOn.state.targetIcao24 {
-                guard let obs = observedByIcao[icao] else { continue }
-                let v = Geo.cameraFrameVector(
-                    targetBearingDeg: obs.bearingDeg, targetElevationDeg: obs.elevationDeg, basis: basis
-                )
-                let offsetDeg = v.z <= 0 ? 180.0
-                    : atan2((v.x*v.x + v.y*v.y).squareRoot(), v.z) * 180 / .pi
-                let conf = aimConfidence(
-                    offsetDeg: offsetDeg, arcmin: obs.apparentSizeArcminutes, headingAccuracyDeg: acc
-                )
-                guard conf < Self.uncertainAimConfidenceFloor else { continue }
-                CatchTelemetry.fireUncertainAim(
-                    offsetDeg: offsetDeg, arcmin: obs.apparentSizeArcminutes,
-                    headingAccuracyDeg: acc, confidence: conf
-                )
-                suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .uncertainAim)
-            }
-        }
+        // (Gate 5 — uncertain aim — retired with the crosshair, 2026-08-28.
+        // Its premise was "the reticle says which plane you meant"; under
+        // frame-is-the-catch there is no picking, so there is no mis-pick.
+        // Per-plane honesty stays with gates 1–3 above.)
 
         runCatch(icaos: icaos, screenSize: screenSize, positions: positions,
                  suspicions: suspicions)
@@ -2195,18 +2087,21 @@ struct ContentView: View {
             var snapMs: Int? = nil
             var composeMs: Int? = nil
 
-            // Bracket snap (single-target catches): geometry places the
-            // bracket, but compass wobble plus hand drift during the
-            // ~0.2-0.6 s shutter latency leaves it off the plane in the
-            // saved photo (field reports 2026-07-04/05; offline eval over
-            // the real catch corpus in PR). Two corrections, in order:
-            //   1. Re-project from the CURRENT pose — tap-time screen
+            // Bracket snap (D4·2 — catch-time-only assignment, 2026-08-28):
+            // geometry places each bracket, but compass wobble plus hand
+            // drift during the ~0.2-0.6 s shutter latency leaves it off the
+            // plane in the saved photo (field reports 2026-07-04/05). Per
+            // chosen target (the press is capped at `maxCatchTargets`):
+            //   1. Re-project from the SHUTTER-PRESS pose — tap-time screen
             //      coordinates are stale by the time the photo exists.
-            //   2. Run the YOLOX detector over the captured still around
-            //      the prediction (CatchPhotoSnapper) and snap to the
-            //      plane it finds. No detection -> keep the projection.
-            // Multi-catches keep tap-time geometry: one search per plane
-            // could snap two brackets onto the same detection.
+            //   2. Ring-search the captured still around that prediction
+            //      (CatchPhotoSnapper), anchored per plane, and snap to the
+            //      plane it finds.
+            //   3. Enforce unique assignment across targets — no detection
+            //      serves two brackets (`resolveSnapConflicts`); the loser
+            //      falls back to its geometric prediction. Membership is
+            //      already frozen: vision moves brackets, never edits the
+            //      caught set.
             var bracketPositions = positions
             // Gate 4 — L4 detector soft-gate (anti-cheat PR3), fed by the
             // SAME still search: the snapper's ring pass is the strongest
@@ -2218,56 +2113,74 @@ struct ContentView: View {
             // always fires, suspicion only when the debug flag enforces.
             var suspicions = suspicions
             var detectorVerdict: DetectorGateVerdict?
-            if let data = photoData, icaos.count == 1, let icao = icaos.first,
-               let tapTimePosition = positions[icao] {
-                let predicted = pressScreenPosition(
-                    for: icao, in: pressObserved, screenSize: screenSize,
-                    headingDeg: pressHeading, cameraElevationDeg: pressElevationDeg,
-                    rollDeg: pressRollDeg, zoom: pressZoom
-                ) ?? tapTimePosition
-                // Detached: up to ~19 CoreML passes (fine ring + coarse
-                // ring + refine) plus a 12 MP resample; never on the
-                // MainActor.
+            var singleSnap: CatchPhotoSnapper.Snap?
+            var singleSnapped: CGPoint?
+            if let data = photoData, !icaos.isEmpty {
+                let predictions: [(icao: String, predicted: CGPoint)] = icaos.compactMap { icao in
+                    let predicted = pressScreenPosition(
+                        for: icao, in: pressObserved, screenSize: screenSize,
+                        headingDeg: pressHeading, cameraElevationDeg: pressElevationDeg,
+                        rollDeg: pressRollDeg, zoom: pressZoom
+                    ) ?? positions[icao]
+                    return predicted.map { (icao, $0) }
+                }
+                // Detached: each search is up to ~19 CoreML passes (fine
+                // ring + coarse ring + refine) plus a 12 MP resample; never
+                // on the MainActor. Sequential inside the one task — CoreML
+                // serializes on the ANE anyway.
                 let snapStart = Date()
-                let snap = await Task.detached(priority: .userInitiated) {
-                    CatchPhotoSnapper.snapOutcome(
-                        jpegData: data,
-                        predictedScreen: predicted,
-                        screenSize: screenSize
-                    )
+                let outcomes = await Task.detached(priority: .userInitiated) {
+                    () -> [(icao: String, predicted: CGPoint, snap: CatchPhotoSnapper.Snap)] in
+                    predictions.map { p in
+                        (p.icao, p.predicted, CatchPhotoSnapper.snapOutcome(
+                            jpegData: data,
+                            predictedScreen: p.predicted,
+                            screenSize: screenSize
+                        ))
+                    }
                 }.value
                 snapMs = Int(Date().timeIntervalSince(snapStart) * 1000)
-                let snapped = snap.screenPoint
-                let outcome: String
-                if let snapped {
-                    bracketPositions[icao] = snapped
-                    outcome = "snapped"
-                } else if CGRect(origin: .zero, size: screenSize).contains(predicted) {
-                    bracketPositions[icao] = predicted
-                    outcome = "fallback"
-                } else {
-                    // The re-projected target was outside the frame at
-                    // exposure and the detector found nothing — baking a
-                    // clipped bracket at the frame edge points at nothing
-                    // and reads as a bug (2026-07-08 ACA708 field photo).
-                    // Save the photo bracket-free instead.
-                    bracketPositions.removeValue(forKey: icao)
-                    outcome = "offframe"
+                let resolved = resolveSnapConflicts(outcomes.map {
+                    TargetSnap(icao24: $0.icao, predicted: $0.predicted,
+                               snapped: $0.snap.screenPoint)
+                })
+                for snap in resolved {
+                    let outcome: String
+                    if let snapped = snap.snapped {
+                        bracketPositions[snap.icao24] = snapped
+                        outcome = "snapped"
+                    } else if CGRect(origin: .zero, size: screenSize).contains(snap.predicted) {
+                        bracketPositions[snap.icao24] = snap.predicted
+                        outcome = "fallback"
+                    } else {
+                        // The re-projected target was outside the frame at
+                        // exposure and the detector found nothing — baking a
+                        // clipped bracket at the frame edge points at nothing
+                        // and reads as a bug (2026-07-08 ACA708 field photo).
+                        // Save the photo bracket-free instead.
+                        bracketPositions.removeValue(forKey: snap.icao24)
+                        outcome = "offframe"
+                    }
+                    let correction = snap.snapped.map {
+                        Int(hypot($0.x - snap.predicted.x, $0.y - snap.predicted.y).rounded())
+                    }
+                    Log.adsb.notice("Catch photo snap: \(outcome, privacy: .public) correction=\(correction ?? 0, privacy: .public)pt")
+                    Analytics.capture("catch_photo_snap", [
+                        "outcome": .string(outcome),
+                        "correction_pt": .int(correction ?? 0),
+                        "targets": .int(icaos.count),
+                    ])
                 }
-                let correction = snapped.map {
-                    Int(hypot($0.x - predicted.x, $0.y - predicted.y).rounded())
+                if icaos.count == 1 {
+                    singleSnap = outcomes.first?.snap
+                    singleSnapped = resolved.first?.snapped
                 }
-                Log.adsb.notice("Catch photo snap: \(outcome, privacy: .public) correction=\(correction ?? 0, privacy: .public)pt")
-                Analytics.capture("catch_photo_snap", [
-                    "outcome": .string(outcome),
-                    "correction_pt": .int(correction ?? 0),
-                ])
-
-                // A live preview fix also corroborates (fresh by construction
-                // — it expires after ~1 s of detector misses).
-                let liveFix = visualConfirm.fixes[icao] != nil
+            }
+            if let snap = singleSnap, let icao = icaos.first {
                 // Envelope footprint only when the still was actually
-                // searched — an undecodable photo must fail open.
+                // searched — an undecodable photo must fail open. (The old
+                // live-preview fix corroboration is gone with pre-press
+                // tracking; the still search is the evidence now.)
                 let footprintPx: Double? = snap.searched
                     ? visibleByIcao[icao].flatMap { obs in
                         snap.photoWidthPx.flatMap { photoWidth in
@@ -2282,14 +2195,14 @@ struct ContentView: View {
                     : nil
                 let meanLum = visualConfirm.latestSkyFeatures?.meanLuminance
                 let verdict = DetectorGate().verdict(
-                    sawPlane: snapped != nil || liveFix,
+                    sawPlane: singleSnapped != nil,
                     expectedFootprintPx: footprintPx,
                     meanLuminance: meanLum
                 )
                 detectorVerdict = verdict
                 let enforcing = visualConfirm.detectorGateEnforcing
                 CatchTelemetry.fireDetectorGate(
-                    verdict: verdict, snapHit: snapped != nil, liveFix: liveFix,
+                    verdict: verdict, snapHit: singleSnapped != nil, liveFix: false,
                     expectedFootprintPx: footprintPx, meanLuminance: meanLum,
                     enforcing: enforcing
                 )
@@ -2316,12 +2229,11 @@ struct ContentView: View {
                 headingDeg: pressHeading ?? 0,
                 cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg
             )
-            let diagCandidates = catchCandidates(
+            let diagCandidates = frameDiagCandidates(
                 in: pressObserved, phoneHeadingDeg: pressHeading ?? 0,
                 cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg,
                 screenSize: screenSize,
-                hfovDeg: Self.baseHfovDeg / pressZoom, vfovDeg: Self.baseVfovDeg / pressZoom,
-                zoneRadius: Self.catchZoneRadius
+                hfovDeg: Self.baseHfovDeg / pressZoom, vfovDeg: Self.baseVfovDeg / pressZoom
             )
 
             var newCatches: [Catch] = []
@@ -2351,16 +2263,10 @@ struct ContentView: View {
                     duplicates.append(icao)
                     continue
                 }
-                // Metadata: prefer the locked one (pinned plane,
-                // manually resolved on lock) when this icao is the
-                // pin, then the ambient prefetch cache, then a direct
-                // manager lookup. Reordered so the pinned-snapshot
-                // wins over a possibly-stale ambient hit.
+                // Metadata: the ambient prefetch cache (which covers every
+                // labeled plane), then a direct manager lookup.
                 let metadata: AircraftMetadata?
-                if let locked = lockedMetadata,
-                   icao == lockOn.state.targetIcao24 {
-                    metadata = locked
-                } else if let cached = ambientMetadata[icao] ?? nil {
+                if let cached = ambientMetadata[icao] ?? nil {
                     metadata = cached
                 } else {
                     metadata = await adsb.metadata(for: icao)
@@ -2480,7 +2386,7 @@ struct ContentView: View {
                     cameraElevationDeg: pressElevationDeg,
                     rollDeg: pressRollDeg,
                     zoom: pressZoom,
-                    wasTapped: icao == lockOn.state.targetIcao24
+                    wasTapped: assertedPlanes[icao] != nil
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -3158,15 +3064,12 @@ struct ContentView: View {
         )
     }
 
-    /// Metadata already on hand at tap time — the locked snapshot for the
-    /// pinned plane, else the ambient prefetch cache. Never the network: the
-    /// shell can't wait, and the pipeline's own `adsb.metadata(for:)`
-    /// fallback fills the row (and thus the loader's final snapshot) later.
+    /// Metadata already on hand at tap time — the ambient prefetch cache,
+    /// which covers every labeled plane. Never the network: the shell
+    /// can't wait, and the pipeline's own `adsb.metadata(for:)` fallback
+    /// fills the row (and thus the loader's final snapshot) later.
     private func cachedMetadata(for icao: String) -> AircraftMetadata? {
-        if let locked = lockedMetadata, icao == lockOn.state.targetIcao24 {
-            return locked
-        }
-        return ambientMetadata[icao] ?? nil
+        ambientMetadata[icao] ?? nil
     }
 
     /// Big central capture button. A single circle that is always
@@ -3867,23 +3770,21 @@ struct ContentView: View {
 
     // MARK: - Tap-to-ID
 
-    /// VoiceOver's route into pin/unpin — the same effect as a direct tap
-    /// on a labeled plane (`handleTap` branch 1) minus the screen-geometry
-    /// hit-test, which accessibility activation doesn't need: the element
-    /// the user activated already names the plane.
-    private func accessibilityTogglePin(icao: String) {
-        let now = Date()
-        if icao == pinnedIcao {
-            recorder.recordUnpin(at: now)
-            pinnedIcao = nil
-            revealedIcao = nil
-            lockOn.unpin()
-        } else {
-            pinnedIcao = icao
-            revealedIcao = nil   // a normal pin is a visible plane, not a reveal
-            recorder.recordTapPin(icao24: icao, at: now)
-            lockOn.forceLock(targetIcao24: icao, now: now)
-        }
+    /// Record a user assertion: this plane is visibly THERE. It labels
+    /// bright, is guaranteed a press slot, and is exempt from the
+    /// occlusion demote; lifetime is `pruneAssertedPlanes`' job (on frame
+    /// + grace). `recordTapPin` stays the replay event on purpose — a pin
+    /// in a recording has always meant "the observer saw this plane
+    /// here", which is exactly what an assertion is, so the offline
+    /// regression bench keeps its ground-truth stream unchanged.
+    private func assertPlane(
+        _ icao: String, at now: Date, tapPoint: CGPoint?, reason: String
+    ) {
+        assertedPlanes[icao] = now
+        recorder.recordTapPin(icao24: icao, at: now, tapPoint: tapPoint)
+        Analytics.capture("tap_reveal", [
+            "icao24": .string(icao), "reason": .string(reason),
+        ])
     }
 
     /// Spoken summary for a plane's AR label: callsign, airframe model
@@ -3913,14 +3814,14 @@ struct ContentView: View {
         return parts.joined(separator: ", ")
     }
 
-    /// Tap handler for the AR overlay. Three outcomes:
-    ///   - Tapped on (or very near) the currently-pinned plane → toggle
-    ///     off, fall back to center-driven lock.
-    ///   - Tapped near a different visible plane → pin to it and
-    ///     `forceLock` the engine straight to a locked state (the tap
-    ///     is an explicit choice, no acquisition delay).
-    ///   - Tapped in empty sky (no plane within the tap zone) → clear
-    ///     any active pin.
+    /// Tap handler for the AR overlay (frame-is-the-catch): a tap is an
+    /// ASSERTION, never a selection.
+    ///   - Tapped near a faint-tier labeled plane → promote it ("I can
+    ///     see it"): bright label, guaranteed press slot.
+    ///   - Tapped near a bright plane → deliberate no-op (D7).
+    ///   - Tapped empty sky → diagnose: `filtered` / `off-frame` planes
+    ///     assert into the frame; grounded / far classes toast; truly
+    ///     empty sky ripples.
     ///
     /// `tapZoneRadius` scales with the current zoom (`100 × zoom`, capped
     /// at half the smaller screen dimension). The reason: brackets are
@@ -3945,19 +3846,18 @@ struct ContentView: View {
         vfovDeg: Double,
         now: Date
     ) {
-        // Spec § 3.1: four-branch behavior.
-        //   1. Tap directly on a plane (≤100 px) → pin (toggle if same).
-        //   2. Tap empty sky while pinned        → clear pin.
-        //   3. Tap empty sky while not pinned    → widen radius to
-        //      250 px and pin the nearest visible plane to the tap.
-        //   4. Truly empty frame                 → ripple at tap point.
+        // Frame-is-the-catch tap model (2026-08-28): a tap never selects a
+        // catch target — it asserts a plane the app isn't showing right.
+        //   1. Tap on/near a labeled plane (≤100 px, zoom-scaled): a
+        //      FAINT-tier plane promotes to bright ("I can see it"); a
+        //      bright plane is a deliberate no-op (D7 — catching is the
+        //      capture button's job).
+        //   2. Otherwise diagnose the empty tap: `filtered` / `off-frame`
+        //      planes are asserted into the frame (the rescue classes),
+        //      grounded / beyond-eyeshot classes get their honest toasts,
+        //      and truly empty sky ripples.
         let cap = min(screenSize.width, screenSize.height) / 2
-        let pinned = pinnedIcao
-
-        // (1) Narrow-radius hit-test: ≤100 px (scaled by zoom, capped
-        // at half the screen) so a deliberate tap on a labeled plane
-        // pins immediately.
-        let narrowRadius = min(100 * zoom, cap)
+        let hitRadius = min(100 * zoom, cap)
         if let icao = closestTargetIcao24(
             in: visible,
             at: point,
@@ -3967,60 +3867,16 @@ struct ContentView: View {
             screenSize: screenSize,
             hfovDeg: hfovDeg,
             vfovDeg: vfovDeg,
-            lockZoneRadius: narrowRadius
+            lockZoneRadius: hitRadius
         ) {
-            if icao == pinned {
-                // Tap-same-plane toggles off — explicit "cancel."
-                // Both writes required: T5's .onChange housekeeping
-                // covers engine → view only; without unpin() the engine
-                // would still hold .locked until forced.
-                recorder.recordUnpin(at: now)
-                pinnedIcao = nil
-                revealedIcao = nil
-                lockOn.unpin()
-            } else {
-                pinnedIcao = icao
-                revealedIcao = nil   // a normal pin is a visible plane, not a reveal
-                recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
-                // forceLock is the only way into .locked — the user
-                // just pointed at this plane, so the engine jumps
-                // straight to a locked state.
-                lockOn.forceLock(targetIcao24: icao, now: now)
+            let obs = visible.first { $0.aircraft.icao24 == icao }
+            if let obs, obs.visibilityTier == .faint, assertedPlanes[icao] == nil {
+                assertPlane(icao, at: now, tapPoint: point, reason: "faint")
             }
             return
         }
 
-        // (2) Empty sky while pinned → clear the pin.
-        if pinned != nil {
-            recorder.recordUnpin(at: now)
-            pinnedIcao = nil
-            revealedIcao = nil
-            lockOn.unpin()
-            return
-        }
-
-        // (3) Empty sky, no pin → "try harder": widen to 250 px and
-        // pin the nearest visible plane (if any falls inside).
-        let wideRadius = min(250 * zoom, cap)
-        if let icao = closestTargetIcao24(
-            in: visible,
-            at: point,
-            phoneHeadingDeg: phoneHeadingDeg,
-            cameraElevationDeg: cameraElevationDeg,
-            rollDeg: rollDeg,
-            screenSize: screenSize,
-            hfovDeg: hfovDeg,
-            vfovDeg: vfovDeg,
-            lockZoneRadius: wideRadius
-        ) {
-            pinnedIcao = icao
-            revealedIcao = nil   // a normal pin is a visible plane, not a reveal
-            recorder.recordTapPin(icao24: icao, at: now)
-            lockOn.forceLock(targetIcao24: icao, now: now)
-            return
-        }
-
-        // (4) No visible plane under the tap. Diagnose the nearest in-data
+        // (2) No labeled plane under the tap. Diagnose the nearest in-data
         // plane (ALL tiers, including hidden) and record the miss signal —
         // the frustrated tap is the most honest miss signal we have
         // (2026-06-12, after three field misses). If that nearest plane is one
@@ -4075,12 +3931,7 @@ struct ContentView: View {
             return
         }
         if let d = diagnosis, shouldTapReveal(reason: d.reason) {
-            let icao = d.obs.aircraft.icao24
-            revealedIcao = icao
-            pinnedIcao = icao
-            recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
-            lockOn.forceLock(targetIcao24: icao, now: now)
-            Analytics.capture("tap_reveal", ["icao24": .string(icao), "reason": .string(d.reason)])
+            assertPlane(d.obs.aircraft.icao24, at: now, tapPoint: point, reason: d.reason)
             return
         }
 
@@ -4420,12 +4271,20 @@ nonisolated func resolveAROverlayRarity(
 /// gesture layer in ContentView (which handles pin/unpin). The
 /// dim/bright pin contrast is the only signal that a tap landed.
 private struct PlaneLabel: View {
+    /// Label states under frame-is-the-catch (D3·2):
+    ///   `chosen` — in the press: full-bright brackets, expanded label
+    ///              with points. What you see full-bright is exactly
+    ///              what the capture button catches.
+    ///   `quiet`  — bright-tier but past the `maxCatchTargets` cap.
+    ///              Only ever exists on a >3-bright frame; steps down so
+    ///              the ×N badge always equals the full-bright count.
+    ///   `faint`  — beyond-confidence tier (2026-06-12 doctrine): in the
+    ///              data, not in the press. Tap to promote.
+    enum Style: Equatable { case chosen, quiet, faint }
+
     let aircraft: ObservedAircraft
     let position: CGPoint
-    let isPinned: Bool
-    /// True when something ELSE is pinned. Dims this label to ~35 %
-    /// so the pinned plane reads as primary.
-    let isDimmed: Bool
+    let style: Style
     /// Cached metadata for this plane, if available. Drives the
     /// rarity classification — without metadata the classifier
     /// falls back to (.common, .narrow).
@@ -4442,19 +4301,20 @@ private struct PlaneLabel: View {
             .trimmingCharacters(in: .whitespaces)
             .nonEmpty
             ?? aircraft.aircraft.icao24.uppercased()
-        let bracketBoxSize: CGFloat = isPinned ? 140 : 96
+        let isChosen = style == .chosen
+        let bracketBoxSize: CGFloat = isChosen ? 110 : 96
         // Wider cyan strokes so the blue reads as the focus. The dark
         // halo in `LockBrackets` is drawn at `lineWidth + 2 * haloWidth`,
         // so a ~1.5 px black outline still rings the thicker blue and
         // keeps the bracket legible against a bright sky.
-        let bracketLineWidth: CGFloat = isPinned ? 3.5 : 2.0
-        let bracketOpacity: Double = isPinned ? 1.0 : 0.55
+        let bracketLineWidth: CGFloat = isChosen ? 3 : 2.0
+        let bracketOpacity: Double = isChosen ? 1.0 : 0.55
         // Dim applies to FOREGROUND strokes/text only — never to the pill's
         // dark scrim or the brackets' halo. A whole-view .opacity multiplied
         // the 0.55 scrim down to ~0.19, leaving dimmed 8–9 pt cyan text
         // nearly scrim-less over a bright sky (and defeated the halo's
         // "held at full opacity" design).
-        let dimFactor: Double = isDimmed ? 0.35 : 1.0
+        let dimFactor: Double = style == .faint ? 0.35 : 1.0
 
         VStack(spacing: 2) {
             LockBrackets(
@@ -4465,9 +4325,9 @@ private struct PlaneLabel: View {
             )
             HStack(spacing: 4) {
                 Text(callsign)
-                    .font(Brand.Font.mono(size: isPinned ? 11 : 9, weight: .bold))
+                    .font(Brand.Font.mono(size: isChosen ? 11 : 9, weight: .bold))
                     .foregroundStyle(Brand.Color.cyan)
-                if isPinned {
+                if isChosen {
                     Text("· \(rarity.label) +\(rarity.basePoints)")
                         .font(Brand.Font.mono(size: 9, weight: .semibold))
                         .foregroundStyle(rarity.tint)

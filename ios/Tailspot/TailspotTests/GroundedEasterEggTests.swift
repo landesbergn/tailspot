@@ -63,8 +63,8 @@ struct GroundedEasterEggTests {
         )
     }
 
-    /// A hand-built ObservedAircraft for the projection-based helpers
-    /// (`icaosInZone`), mirroring CatchZoneTests' builder + a grounded flag.
+    /// A hand-built ObservedAircraft for the membership invariant below —
+    /// deliberate geometry (5° elevation, ~5 km slant) plus a grounded flag.
     private func obs(
         icao: String, bearingDeg: Double, grounded: Bool = false
     ) -> ObservedAircraft {
@@ -130,18 +130,26 @@ struct GroundedEasterEggTests {
 
     // MARK: - Never catchable
 
-    @Test func groundedPlaneAtScreenCenterIsNotInCatchZone() {
-        // Dead-center grounded plane + an airborne one 5° off: the catch
-        // zone must contain only the airborne plane.
+    @Test func groundedPlaneIsNeverAPressMember() {
+        // Dead-center grounded plane + an airborne one 5° off: press
+        // membership (frame-is-the-catch) must contain only the airborne
+        // plane — grounded pins to the hidden tier, and hidden is never a
+        // candidate without an assertion (which the tap path never grants
+        // a parked plane).
         let planes = [
             obs(icao: "PARKED", bearingDeg: 0, grounded: true),
             obs(icao: "FLYING", bearingDeg: 5),
         ]
-        let zone = icaosInZone(
-            in: planes, phoneHeadingDeg: 0, cameraElevationDeg: 0,
-            screenSize: CGSize(width: 393, height: 852), zoneRadius: 180
-        )
-        #expect(zone == ["FLYING"])
+        let members = chooseCatchMembers(planes.map { o in
+            MembershipCandidate(
+                icao24: o.aircraft.icao24,
+                arcmin: o.apparentSizeArcminutes,
+                isFullTier: o.visibilityTier == .full,
+                isAsserted: false,
+                isOccluded: false
+            )
+        })
+        #expect(members.chosen == ["FLYING"])
     }
 
     // MARK: - Never revealable (the empty-tap classifier routes to the toast)

@@ -116,16 +116,17 @@ extension ReplayAnalyzer {
             let pin = i < pinStates.count ? pinStates[i] : nil
             let visible = Set(tick.aircraft.filter(\.isVisible).map(\.icao24))
 
-            // Phantom (8): the engine *committed* a lock (not the brief
-            // sticky grace period) on an icao that isn't visible. This is a
-            // partial proxy — the live app's true phantom is a catch on a
-            // not-in-view plane, which lives in the catch flow, not the tick
-            // stream. Sticky-on-gone is the engine's intended flicker grace,
-            // so it is deliberately NOT flagged.
-            if let locked = Self.committedLockIcao(tick.lockState), !visible.contains(locked) {
+            // Phantom (8): the press membership chose an icao that isn't
+            // visible AND isn't the user's own assertion (the pin) — a
+            // structural invariant of `chooseCatchMembers`, kept as a
+            // tripwire. Still a partial proxy — the live app's true phantom
+            // is a catch on a not-in-view plane, which lives in the catch
+            // flow, not the tick stream.
+            for chosen in tick.chosenIcaos
+            where !visible.contains(chosen) && chosen != pin?.icao {
                 findings.append(.init(mode: .phantomCapture, tickIndex: i,
-                    timestamp: tick.timestamp, icao24: locked,
-                    detail: "engine locked \(locked), which is not visible"))
+                    timestamp: tick.timestamp, icao24: chosen,
+                    detail: "membership chose \(chosen), which is not visible"))
             }
 
             guard let pin else {
@@ -163,17 +164,21 @@ extension ReplayAnalyzer {
                 lastOffset[pin.icao] = offset
             }
 
-            // Mis-association (5): the pinned plane (ground truth) is visible,
-            // but the app's center-driven auto-pick — what the ambient/lock
-            // path chooses *without* the pin — is a different visible plane.
-            // The pin overrides the lock live, so we compare against the
-            // auto-pick, not the pin-following lock state.
-            if let pinned, pinned.isVisible,
-               let appPick = tick.closestToCenterIcao24,
-               appPick != pin.icao, visible.contains(appPick) {
+            // Mis-association (5): the pinned plane (ground truth — the
+            // observer testified they saw it) is full-tier and on frame,
+            // yet the AMBIENT membership — what the app would choose
+            // without the user's tap — excluded it: an unaided press at
+            // this tick would not have caught the plane the user was
+            // looking at (crowded out by the size ranking). The asserted
+            // membership always contains the pin by construction, so the
+            // counterfactual is the comparable, not `chosenIcaos`. A
+            // faint-tier pin is excluded on purpose (tap-promotion working
+            // as designed, not a failure).
+            if let pinned, pinned.isFullTier, pinned.screenPosition != nil,
+               !tick.ambientChosenIcaos.contains(pin.icao) {
                 findings.append(.init(mode: .misAssociation, tickIndex: i,
-                    timestamp: tick.timestamp, icao24: appPick,
-                    detail: "center-pick \(appPick), expected \(pin.icao)"))
+                    timestamp: tick.timestamp, icao24: pin.icao,
+                    detail: "ambient membership excluded \(pin.icao); chose \(tick.ambientChosenIcaos.joined(separator: ","))"))
             }
         }
 
@@ -250,12 +255,6 @@ extension ReplayAnalyzer {
             }
         }
         return perTick
-    }
-
-    /// Committed lock only — excludes the sticky grace period.
-    private static func committedLockIcao(_ state: LockOnEngine.State) -> String? {
-        if case .locked(let icao, _) = state { return icao }
-        return nil
     }
 
 }
