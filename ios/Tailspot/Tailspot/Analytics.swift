@@ -139,8 +139,30 @@ nonisolated enum Analytics {
 
     /// Capture a named event with structured properties. Fire-and-forget —
     /// never throws, never blocks. No-op when the API key is absent.
+    ///
+    /// The claimed `handle` is stamped on here — at the ONE shared funnel every
+    /// event already passes through — rather than threaded through each call
+    /// site. That keeps the `CatchTelemetry` / `Streaks` property builders pure
+    /// and unit-testable, and means a new catch-spine event can never ship
+    /// missing the handle because someone forgot to pass it. Which events get
+    /// it (and why not all of them) is `AnalyticsIdentity.eventsCarryingHandle`.
     static func capture(_ event: String, _ properties: [String: AnalyticsValue] = [:]) {
-        sink?.capture(event, properties)
+        sink?.capture(event, decorate(event: event, properties: properties))
+    }
+
+    /// The stored handle, stamped onto the catch-spine events. Read from
+    /// `UserDefaults` (never the network) so it is available synchronously on
+    /// any thread and costs nothing on the events that don't want it — the
+    /// event-name check short-circuits before the read for every other event.
+    private static func decorate(event: String,
+                                 properties: [String: AnalyticsValue]) -> [String: AnalyticsValue] {
+        guard AnalyticsIdentity.eventsCarryingHandle.contains(event) else { return properties }
+        return AnalyticsIdentity.withHandleProperty(
+            event: event,
+            properties: properties,
+            handle: UserDefaults.standard.string(forKey: SpotterHandle.storageKey),
+            placeholder: SpotterHandle.defaultPlaceholder
+        )
     }
 
     /// Identify the current install as `distinctId` (the canonical server-minted

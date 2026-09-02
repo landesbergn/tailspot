@@ -1780,7 +1780,8 @@ struct ContentView: View {
                 CatchTelemetry.fireSuspectDiscarded(icao24: row.icao24, reason: reason)
                 // A discard IS a delete — fire the north-star deny signal too.
                 CatchTelemetry.fireDeleted(
-                    icao24: row.icao24, count: 1, rarity: row.resolvedRarity.rawValue
+                    icao24: row.icao24, count: 1, rarity: row.resolvedRarity.rawValue,
+                    source: .suspectDiscard
                 )
                 CatchPhotoStore.delete(filename: row.photoFilename)
                 modelContext.delete(row)

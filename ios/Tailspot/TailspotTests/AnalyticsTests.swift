@@ -98,6 +98,83 @@ struct AnalyticsFacadeTests {
         body(sink)
     }
 
+    /// Run `body` with the stored spotter handle set to `handle` (or cleared),
+    /// restoring whatever was there before. The facade reads the handle from
+    /// UserDefaults, so these tests have to drive that same global.
+    private func withStoredHandle(_ handle: String?, _ body: () -> Void) {
+        let defaults = UserDefaults.standard
+        let previous = defaults.string(forKey: SpotterHandle.storageKey)
+        defer {
+            if let previous { defaults.set(previous, forKey: SpotterHandle.storageKey) }
+            else { defaults.removeObject(forKey: SpotterHandle.storageKey) }
+        }
+        if let handle { defaults.set(handle, forKey: SpotterHandle.storageKey) }
+        else { defaults.removeObject(forKey: SpotterHandle.storageKey) }
+        body()
+    }
+
+    // MARK: - handle stamping (the facade WIRING, not the pure decorator)
+
+    // AnalyticsIdentityTests covers withHandleProperty in isolation. These pin
+    // the seam it hangs off: that Analytics.capture actually reads the stored
+    // handle and hands the decorated properties to the sink. Without these the
+    // decorator could be perfect and still never run in production.
+
+    @Test func captureStampsHandleOnCatchSpineEvents() {
+        withStoredHandle("mach_6415") {
+            withSink { sink in
+                Analytics.capture("catch_uploaded", ["icao24": .string("a1b2c3")])
+                let props = sink.captured.first?.properties
+                #expect(props?["handle"]?.jsonValue as? String == "mach_6415")
+                #expect(props?["icao24"]?.jsonValue as? String == "a1b2c3")
+            }
+        }
+    }
+
+    @Test func captureStampsHandleOnEveryDeclaredEvent() {
+        withStoredHandle("mach_6415") {
+            withSink { sink in
+                for event in AnalyticsIdentity.eventsCarryingHandle {
+                    Analytics.capture(event)
+                }
+                #expect(sink.captured.count == AnalyticsIdentity.eventsCarryingHandle.count)
+                for row in sink.captured {
+                    #expect(row.properties["handle"]?.jsonValue as? String == "mach_6415",
+                            "\(row.event) lost the handle through the facade")
+                }
+            }
+        }
+    }
+
+    @Test func captureLeavesUndeclaredEventsUntouched() {
+        withStoredHandle("mach_6415") {
+            withSink { sink in
+                Analytics.capture("catch_local_gate", ["verdict": .string("pass")])
+                let props = sink.captured.first?.properties
+                #expect(props?["handle"] == nil)
+                #expect(props?.count == 1)
+            }
+        }
+    }
+
+    @Test func captureNeverStampsThePlaceholderHandle() {
+        withStoredHandle(SpotterHandle.defaultPlaceholder) {
+            withSink { sink in
+                Analytics.capture("catch_uploaded")
+                #expect(sink.captured.first?.properties["handle"] == nil)
+            }
+        }
+    }
+
+    @Test func captureOmitsHandleWhenNoneStored() {
+        withStoredHandle(nil) {
+            withSink { sink in
+                Analytics.capture("catch_uploaded")
+                #expect(sink.captured.first?.properties["handle"] == nil)
+            }
+        }
+    }
+
     @Test func captureForwardsEventAndProperties() {
         withSink { sink in
             Analytics.capture("app_opened", ["app_build": .string("99"), "n": .int(3)])
