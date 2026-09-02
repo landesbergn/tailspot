@@ -925,14 +925,18 @@ struct TrophiesWinnerTests {
         // Old-backend payload (nil fields) writes nothing.
         cache.update(from: MyStanding(rank: 5, points: 100))
         #expect(cache.weeklyWins == 0)
+        #expect(cache.monthlyWins == 0)
         #expect(cache.everToppedAllTime == false)
         // Server facts land.
-        cache.update(from: MyStanding(rank: 1, points: 900, weeklyWins: 2, everToppedAllTime: true))
+        cache.update(from: MyStanding(rank: 1, points: 900, weeklyWins: 2,
+                                      monthlyWins: 1, everToppedAllTime: true))
         #expect(cache.weeklyWins == 2)
+        #expect(cache.monthlyWins == 1)
         #expect(cache.everToppedAllTime)
         // Wins mirror the server as-is (it may correct the count)…
         cache.update(from: MyStanding(rank: 1, points: 900, weeklyWins: 1, everToppedAllTime: false))
         #expect(cache.weeklyWins == 1)
+        #expect(cache.monthlyWins == 1)
         // …but the monotonic "ever topped" flag never un-latches.
         #expect(cache.everToppedAllTime)
     }

@@ -15,17 +15,79 @@ import Foundation
 import Testing
 @testable import Tailspot
 
+/// Exact pre-monthly-winners response model. Keeping this fixture local makes
+/// the compatibility test exercise what an already-shipped app decodes, rather
+/// than the current model's new optional properties.
+private struct LegacyLeaderboardResponse: Decodable {
+    struct Entry: Decodable {
+        let rank: Int
+        let handle: String
+        let points: Int
+        let catches: Int
+    }
+
+    struct Standing: Decodable {
+        let rank: Int
+        let points: Int
+        let weeklyWins: Int?
+        let everToppedAllTime: Bool?
+    }
+
+    struct Champion: Decodable {
+        let handle: String?
+        let points: Int
+        let weekStart: String
+    }
+
+    let entries: [Entry]
+    let me: Standing?
+    let window: String?
+    let resetsAt: String?
+    let champions: [Champion]?
+}
+
 // MARK: - Payload decoding
 
 @Suite("Leaderboard windowed payload decoding")
 struct LeaderboardWindowDecodingTests {
+
+    /// A build shipped before monthly winners must ignore the two additive
+    /// keys and continue rendering the month board with its legacy fields.
+    @Test func newMonthlyPayloadDecodesWithLegacyAppModel() throws {
+        let json = """
+        {
+          "entries": [{ "rank": 1, "handle": "maia", "points": 100, "catches": 8 }],
+          "me": {
+            "rank": 1, "points": 100, "weeklyWins": 2,
+            "monthlyWins": 1, "everToppedAllTime": true
+          },
+          "window": "month",
+          "resetsAt": "2026-10-01T00:00:00.000Z",
+          "champions": null,
+          "monthlyChampions": [
+            { "handle": "maia", "points": 1850, "monthStart": "2026-08-01" }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let legacy = try JSONDecoder().decode(LegacyLeaderboardResponse.self, from: json)
+        #expect(legacy.entries.count == 1)
+        #expect(legacy.entries[0].handle == "maia")
+        #expect(legacy.entries[0].catches == 8)
+        #expect(legacy.me?.rank == 1)
+        #expect(legacy.me?.weeklyWins == 2)
+        #expect(legacy.me?.everToppedAllTime == true)
+        #expect(legacy.window == "month")
+        #expect(legacy.resetsAt == "2026-10-01T00:00:00.000Z")
+        #expect(legacy.champions == nil)
+    }
 
     /// The pinned backend-PR1 contract, verbatim shape.
     @Test func decodesWindowedWeekPayload() throws {
         let json = """
         {
           "entries": [{ "rank": 1, "handle": "skykid", "points": 840, "catches": 12 }],
-          "me": { "rank": 2, "points": 315, "weeklyWins": 3, "everToppedAllTime": true },
+          "me": { "rank": 2, "points": 315, "weeklyWins": 3, "monthlyWins": 2, "everToppedAllTime": true },
           "window": "week",
           "resetsAt": "2026-07-13T00:00:00.000Z",
           "champions": [{ "handle": "skykid", "points": 840, "weekStart": "2026-06-29" }]
@@ -38,6 +100,7 @@ struct LeaderboardWindowDecodingTests {
         #expect(r.supportsWindows)
         #expect(r.me?.rank == 2)
         #expect(r.me?.weeklyWins == 3)
+        #expect(r.me?.monthlyWins == 2)
         #expect(r.me?.everToppedAllTime == true)
         #expect(r.champions?.count == 1)
         #expect(r.champions?.first?.handle == "skykid")
@@ -71,6 +134,7 @@ struct LeaderboardWindowDecodingTests {
         #expect(r.champions == nil)
         #expect(r.me?.rank == 3)
         #expect(r.me?.weeklyWins == nil)
+        #expect(r.me?.monthlyWins == nil)
         #expect(r.me?.everToppedAllTime == nil)
     }
 
@@ -91,6 +155,28 @@ struct LeaderboardWindowDecodingTests {
         #expect(r.window == "all")
         #expect(r.resetsAtDate == nil)
         #expect(r.champions == nil)
+        #expect(r.monthlyChampions == nil)
+    }
+
+    @Test func decodesMonthlyChampionPayload() throws {
+        let json = """
+        {
+          "entries": [],
+          "me": { "rank": 1, "points": 100, "weeklyWins": 0, "monthlyWins": 1, "everToppedAllTime": false },
+          "window": "month",
+          "resetsAt": "2026-08-01T00:00:00.000Z",
+          "champions": null,
+          "monthlyChampions": [{ "handle": "maia", "points": 1850, "monthStart": "2026-06-01" }]
+        }
+        """.data(using: .utf8)!
+
+        let r = try JSONDecoder().decode(LeaderboardResponse.self, from: json)
+        #expect(r.me?.monthlyWins == 1)
+        #expect(r.champions == nil)
+        #expect(r.monthlyChampions?.first?.handle == "maia")
+        #expect(r.monthlyChampions?.first?.points == 1850)
+        #expect(r.monthlyChampions?.first?.monthStart == "2026-06-01")
+        #expect(r.monthlyChampions?.first?.weekStart == nil)
     }
 
     /// An anonymous champion (null handle) decodes; empty champions array
@@ -246,6 +332,8 @@ struct ChampionBannerCopyTests {
         #expect(ChampionBanner.eyebrow(count: 1) == "LAST WEEK'S CHAMPION")
         #expect(ChampionBanner.eyebrow(count: 2) == "LAST WEEK'S CHAMPIONS")
         #expect(ChampionBanner.eyebrow(count: 5) == "LAST WEEK'S CHAMPIONS")
+        #expect(ChampionBanner.eyebrow(count: 1, window: .month) == "LAST MONTH'S CHAMPION")
+        #expect(ChampionBanner.eyebrow(count: 2, window: .month) == "LAST MONTH'S CHAMPIONS")
     }
 
     @Test func singleChampion() {
@@ -276,5 +364,7 @@ struct ChampionBannerCopyTests {
 
     @Test func emptyChampions() {
         #expect(ChampionBanner.names([]) == "")
+        #expect(ChampionBanner.noChampionSubtitle(window: .week) == "The sky was quiet last week.")
+        #expect(ChampionBanner.noChampionSubtitle(window: .month) == "The sky was quiet last month.")
     }
 }

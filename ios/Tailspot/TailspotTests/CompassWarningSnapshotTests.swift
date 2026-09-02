@@ -4,8 +4,9 @@
 //
 //  Visual-pass harness for the LOUD compass-caution banner
 //  (TailCardSnapshotTests pattern): renders the banner over a bright-sky
-//  and a dark backdrop so the amber pop + dark-on-amber contrast can be
-//  eyeballed off-device. NOT an assertion test: writes PNGs to
+//  and a dark backdrop, plus the banner stacked with the indoor hint, so
+//  contrast and top-overlay spacing can be eyeballed off-device. NOT an
+//  assertion test: writes PNGs to
 //  /private/tmp/tailspot_snaps and passes — review the images after running.
 //
 //  Mirrors ContentView.cautionBadge's label markup. If that banner's look
@@ -59,6 +60,34 @@ struct CompassWarningSnapshotTests {
         .frame(width: 390, height: 180)
     }
 
+    private var indoorHint: some View {
+        Text("Not many planes indoors.")
+            .font(Brand.Font.mono(size: 12, weight: .semibold))
+            .foregroundStyle(Brand.Color.textPrimary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+            .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+    }
+
+    private func stackedScene(sky: [Color]) -> some View {
+        ZStack(alignment: .top) {
+            LinearGradient(colors: sky, startPoint: .top, endPoint: .bottom)
+            VStack(spacing: 8) {
+                VStack(spacing: 8) {
+                    banner(accuracyText: "±40°")
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 40, alignment: .top)
+
+                indoorHint
+                Spacer()
+            }
+            .padding(.top, 12)
+        }
+        .frame(width: 390, height: 240)
+    }
+
     @Test func renderCompassBanner() {
         let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -78,6 +107,17 @@ struct CompassWarningSnapshotTests {
             }
             try? png.write(to: dir.appendingPathComponent("\(name).png"))
         }
+
+        let stacked = stackedScene(sky: cases[0].1)
+            .environment(\.colorScheme, .dark)
+        let stackedRenderer = ImageRenderer(content: stacked)
+        stackedRenderer.scale = 3
+        guard let image = stackedRenderer.uiImage,
+              let png = image.pngData() else {
+            Issue.record("render failed for compass_banner_stacked")
+            return
+        }
+        try? png.write(to: dir.appendingPathComponent("compass_banner_stacked.png"))
     }
 }
 #endif

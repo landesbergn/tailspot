@@ -117,7 +117,54 @@ Nothing is used for **Tracking** (Apple's cross-app/ad sense) — `NSPrivacyTrac
   (Bali field data). Mitigation is expectation-setting: the description's
   coverage paragraph + the in-app empty-sky messaging.
 
-## What's New — v1.1.0 (train opened 2026-08-25)
+## What's New — v1.1.1 (train opened 2026-09-01) ← NEXT SUBMISSION
+
+Covers everything on `main` after **db3d274**, the last commit in the shipped
+1.1.0 build 89. A polish-and-accessibility release with one feature (monthly
+champions). Backend for that feature is already deployed and migrated in prod.
+
+App Store "What's New" (paste into ASC):
+
+> Monthly champions are here. Catch the most planes in a calendar month and
+> your name goes up on the leaderboard's monthly roll, with a laurel on your
+> profile to match.
+>
+> Also in this release:
+> • New sets to fill, including the Bell 505 and a batch of recent aircraft
+>   families.
+> • The catalog of aircraft you haven't caught yet is readable again.
+> • Large text sizes now fit properly. The map's rarity filters and the
+>   profile stats row no longer clip or overflow.
+> • Warnings at the top of the camera no longer stack on top of each other.
+> • "1 catch" instead of "1 catches."
+
+TestFlight "What to Test" (tester-notes voice):
+
+> • catch more planes than anyone this month and I'll hang your name in
+>   laurels. the month tab on the leaderboard is where to look
+> • crank your text size to the maximum and go hunting for something clipped.
+>   i dare you
+> • the top of the camera used to pile its warnings on top of each other.
+>   it doesn't anymore
+
+## What's New — v1.1.0 — ✅ SHIPPED 2026-08-29 (build 89)
+
+**Released to the App Store 2026-08-29 16:10 UTC.** The notes actually pasted
+into App Store Connect were shorter than the draft below — recorded here as
+the shipped record:
+
+> Streaks are here. Catch a plane every day to keep the run alive!
+>
+> Also in this release:
+> - Route guessing now shows up 2x as often, and route guesses are worth even more
+> - Get points for seeing the same tail number across different days rather than
+>   having them marked as duplicates
+> - Pinch to zoom on recent catches to see them up close
+> - Added new sets, with increased coverage for helicopters and rare planes
+
+The fuller draft that was written for the train, kept for reference:
+
+### v1.1.0 draft (train opened 2026-08-25)
 
 Covers everything since the public v1.0.0 (build 83): the never-submitted
 1.0.1 accumulation plus the v1.1 "Habits & housekeeping" train.

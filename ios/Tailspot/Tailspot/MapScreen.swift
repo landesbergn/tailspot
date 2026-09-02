@@ -119,32 +119,47 @@ struct MapScreen: View {
 
     // MARK: - Filter strip
 
-    // Horizontally scrollable: six chips don't quite fit a 393pt screen,
-    // and letting the row wrap hyphenated LEGENDARY across two lines
-    // ("LEGENDAR-Y"). Chips are lineLimit(1)+fixedSize so they can never
-    // wrap; overflow scrolls instead.
+    // Keep every direct-access chip visible when the row fits. Compact widths
+    // and large Dynamic Type fall back to one menu instead of silently hiding
+    // filters past the clipped edge of an indicator-less horizontal scroller.
     private var filterStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                filterChip(label: "ALL", tint: Brand.Color.textPrimary, active: minRarityFilter == nil) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) {
+                filterChip(
+                    label: "ALL",
+                    accessibilityLabel: "All aircraft",
+                    tint: Brand.Color.textPrimary,
+                    active: minRarityFilter == nil
+                ) {
                     minRarityFilter = nil
                 }
-                ForEach(Rarity.allCases, id: \.self) { r in
-                    filterChip(label: r.label, tint: r.tint, active: minRarityFilter == r) {
-                        minRarityFilter = minRarityFilter == r ? nil : r
+                ForEach(Rarity.allCases, id: \.self) { rarity in
+                    filterChip(
+                        label: rarity == .legendary ? "LEGEND" : rarity.label,
+                        accessibilityLabel: rarity.label,
+                        tint: rarity.tint,
+                        active: minRarityFilter == rarity
+                    ) {
+                        minRarityFilter = minRarityFilter == rarity ? nil : rarity
                     }
                 }
             }
-            // Chips carry a 44 pt hit frame (below), so the strip needs
-            // almost no vertical padding of its own to stay a slim capsule.
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 4)
             .padding(.vertical, 2)
+            .fixedSize(horizontal: true, vertical: false)
+            .background(.thinMaterial, in: .capsule)
+
+            filterMenu
         }
-        .background(.thinMaterial, in: .capsule)
-        .clipShape(.capsule)
     }
 
-    private func filterChip(label: String, tint: Color, active: Bool, action: @escaping () -> Void) -> some View {
+    private func filterChip(
+        label: String,
+        accessibilityLabel: String,
+        tint: Color,
+        active: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(label)
                 // 11 pt is the HIG text floor; these are interactive labels,
@@ -154,15 +169,62 @@ struct MapScreen: View {
                 .lineLimit(1)
                 .fixedSize()
                 .foregroundStyle(active ? .black.opacity(0.85) : tint)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 4)
                 .padding(.vertical, 4)
                 .background(active ? tint : .clear, in: .capsule)
                 // The visible capsule stays slim; the frame is the hit area.
-                .frame(minHeight: 44)
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Button {
+                minRarityFilter = nil
+            } label: {
+                filterMenuLabel("All aircraft", selected: minRarityFilter == nil)
+            }
+            ForEach(Rarity.allCases, id: \.self) { rarity in
+                Button {
+                    minRarityFilter = rarity
+                } label: {
+                    filterMenuLabel(rarity.label, selected: minRarityFilter == rarity)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("RARITY")
+                    .foregroundStyle(Brand.Color.textSecondary)
+                Spacer(minLength: 8)
+                Text(minRarityFilter?.label ?? "ALL")
+                    .foregroundStyle(minRarityFilter?.tint ?? Brand.Color.textPrimary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .accessibilityHidden(true)
+            }
+            .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
+            .tracking(0.8)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(.thinMaterial, in: .capsule)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Rarity filter")
+        .accessibilityValue(minRarityFilter?.label ?? "All aircraft")
+    }
+
+    @ViewBuilder
+    private func filterMenuLabel(_ label: String, selected: Bool) -> some View {
+        if selected {
+            Label(label, systemImage: "checkmark")
+        } else {
+            Text(label)
+        }
     }
 
     // MARK: - Summary panel
@@ -173,7 +235,7 @@ struct MapScreen: View {
         let span = dateSpanText(for: visible)
         return HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(total) sightings")
+                Text(CountCopy.phrase(total, singular: "sighting"))
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(Brand.Color.textPrimary)
                 if let span {

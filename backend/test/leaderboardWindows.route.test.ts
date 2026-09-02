@@ -2,12 +2,18 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { Database } from "../src/db/client.js";
-import { alltimeToppers, catches, devices, weeklyChampions } from "../src/db/schema.js";
+import {
+  alltimeToppers,
+  catches,
+  devices,
+  monthlyChampions,
+  weeklyChampions,
+} from "../src/db/schema.js";
 import { DrizzleCatchStore, DrizzleIdentityStore } from "../src/identity/store.js";
 import { makeTestDb } from "./helpers/pgliteDb.js";
 
 /**
- * Leaderboard WINDOWS + weekly champions (dynamic-leaderboards PR1), end to
+ * Leaderboard WINDOWS + weekly/monthly champions, end to
  * end over PGlite.
  *
  * The clock is frozen at Sat 2026-07-11 12:00 UTC, so:
@@ -29,7 +35,7 @@ function utc(y: number, m1: number, d: number, h = 0): Date {
   return new Date(Date.UTC(y, m1 - 1, d, h));
 }
 
-describe("GET /v1/leaderboard windows + weekly champions", () => {
+describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
   let app: FastifyInstance;
   let db: Database;
   let uuidSeq = 0;
@@ -161,7 +167,38 @@ describe("GET /v1/leaderboard windows + weekly champions", () => {
     expect(month.me.points).toBe(20);
     expect(month.window).toBe("month");
     expect(month.resetsAt).toBe("2026-08-01T00:00:00.000Z");
-    expect(month.champions).toBeNull(); // champions ride the week window only
+    expect(month.champions).toBeNull();
+    expect(month.monthlyChampions).toEqual([
+      { handle: "Alice", points: 50, monthStart: "2026-06-01" },
+    ]);
+    expect(month.me.monthlyWins).toBe(1);
+  });
+
+  it("freezes shared monthly crowns and exposes them to Profile's all-time fetch", async () => {
+    const alice = await register();
+    const bob = await register();
+    const carol = await register();
+    await claim(alice.token, "Alice");
+    await claim(bob.token, "Bob");
+    await claim(carol.token, "Carol");
+    await seedCatch(alice.deviceId, 75, utc(2026, 6, 2));
+    await seedCatch(bob.deviceId, 25, utc(2026, 6, 3));
+    await seedCatch(bob.deviceId, 50, utc(2026, 6, 29));
+    await seedCatch(carol.deviceId, 30, utc(2026, 6, 15));
+
+    // Profile requests window=all. That alone must decide last month so its
+    // cached monthly-champion laurel is current without visiting Month first.
+    const profileStanding = await get("/v1/leaderboard?window=all&limit=1", alice.token);
+    expect(profileStanding.me.monthlyWins).toBe(1);
+
+    const month = await get("/v1/leaderboard?window=month", bob.token);
+    expect(month.monthlyChampions).toHaveLength(2);
+    expect(new Set(month.monthlyChampions.map((c: { handle: string }) => c.handle))).toEqual(
+      new Set(["Alice", "Bob"]),
+    );
+    expect(month.me.monthlyWins).toBe(1);
+    expect((await get("/v1/leaderboard?window=all", carol.token)).me.monthlyWins).toBe(0);
+    expect(await db.select().from(monthlyChampions)).toHaveLength(2);
   });
 
   it("a device with no in-window catches drops out of entries and is unranked (rank 0) in `me`", async () => {
@@ -200,11 +237,13 @@ describe("GET /v1/leaderboard windows + weekly champions", () => {
         "champions",
         "entries",
         "me",
+        "monthlyChampions",
         "resetsAt",
         "window",
       ]);
       expect(Object.keys(body.me).sort()).toEqual([
         "everToppedAllTime",
+        "monthlyWins",
         "points",
         "rank",
         "weeklyWins",
@@ -212,6 +251,7 @@ describe("GET /v1/leaderboard windows + weekly champions", () => {
       expect(body.window).toBe("all");
       expect(body.resetsAt).toBeNull();
       expect(body.champions).toBeNull();
+      expect(body.monthlyChampions).toBeNull();
     }
   });
 

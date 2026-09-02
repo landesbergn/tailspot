@@ -36,11 +36,19 @@ import {
   alltimeToppers,
   catches,
   devices,
+  monthlyChampions,
   registry,
   typecodes,
   weeklyChampions,
 } from "../db/schema.js";
-import { addDaysUtc, utcDateString, weekStartUtc } from "./windows.js";
+import {
+  addDaysUtc,
+  monthStartUtc,
+  nextMonthStartUtc,
+  previousMonthStartUtc,
+  utcDateString,
+  weekStartUtc,
+} from "./windows.js";
 
 // ── Identity (devices + handles) ─────────────────────────────────────────────
 
@@ -292,6 +300,13 @@ export interface ChampionEntry {
   weekStart: string;
 }
 
+/** One champion of a closed calendar month. */
+export interface MonthlyChampionEntry {
+  handle: string | null;
+  points: number;
+  monthStart: string;
+}
+
 export interface CatchStore {
   /**
    * Resolve typecode + rarity for an icao24 from the metadata tables. Returns
@@ -378,6 +393,12 @@ export interface CatchStore {
   champions(weekStart: string): Promise<ChampionEntry[]>;
   /** Total weekly crowns this device has ever won (all weeks, shared crowns count). */
   weeklyWins(deviceId: string): Promise<number>;
+  /** Freeze every closed calendar month's champion(s), backfilling history. */
+  ensureMonthsDecided(now: Date): Promise<number>;
+  /** The champion(s) of the month starting `monthStart` ("YYYY-MM-DD"). */
+  monthlyChampions(monthStart: string): Promise<MonthlyChampionEntry[]>;
+  /** Total monthly crowns this device has ever won (shared crowns count). */
+  monthlyWins(deviceId: string): Promise<number>;
   /** Whether this device has EVER held all-time #1 (per the topper ledger). */
   everToppedAllTime(deviceId: string): Promise<boolean>;
   /**
@@ -843,6 +864,105 @@ export class DrizzleCatchStore implements CatchStore {
         .select({ n: sql<number>`count(*)` })
         .from(weeklyChampions)
         .where(eq(weeklyChampions.deviceId, deviceId)),
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
+
+  async ensureMonthsDecided(now: Date): Promise<number> {
+    const lastClosed = previousMonthStartUtc(now);
+    const lastClosedIso = utcDateString(lastClosed);
+
+    const already = await withDbRetry(() =>
+      this.db
+        .select({ monthStart: monthlyChampions.monthStart })
+        .from(monthlyChampions)
+        .where(eq(monthlyChampions.monthStart, lastClosedIso))
+        .limit(1),
+    );
+    if (already.length > 0) return 0;
+
+    const minRows = await withDbRetry(() =>
+      this.db.select({ min: sql<Date | string | null>`min(${catches.caughtAt})` }).from(catches),
+    );
+    const earliest = minRows[0]?.min;
+    if (earliest === null || earliest === undefined) return 0;
+
+    const decidedRows = await withDbRetry(() =>
+      this.db.selectDistinct({ monthStart: monthlyChampions.monthStart }).from(monthlyChampions),
+    );
+    const decided = new Set(decidedRows.map((r) => r.monthStart));
+
+    let decidedCount = 0;
+    for (
+      let ms = monthStartUtc(new Date(earliest));
+      ms.getTime() <= lastClosed.getTime();
+      ms = nextMonthStartUtc(ms)
+    ) {
+      const iso = utcDateString(ms);
+      if (decided.has(iso)) continue;
+      const me = nextMonthStartUtc(ms);
+
+      const anyCatch = await withDbRetry(() =>
+        this.db
+          .select({ id: catches.id })
+          .from(catches)
+          .where(and(gte(catches.caughtAt, ms), lt(catches.caughtAt, me)))
+          .limit(1),
+      );
+      if (anyCatch.length === 0) continue;
+
+      const msIso = ms.toISOString();
+      const meIso = me.toISOString();
+      await withDbRetry(() =>
+        this.db.execute(sql`
+        insert into monthly_champions (month_start, device_id, points, catches, decided_at)
+        select ${iso}::date, device_id, sum(points)::int, count(*)::int, ${now.toISOString()}::timestamptz
+        from catches
+        where caught_at >= ${msIso}::timestamptz and caught_at < ${meIso}::timestamptz
+        group by device_id
+        having sum(points) = (
+          select max(total) from (
+            select sum(points) as total
+            from catches
+            where caught_at >= ${msIso}::timestamptz and caught_at < ${meIso}::timestamptz
+            group by device_id
+          ) as month_totals
+        )
+        on conflict (month_start, device_id) do nothing
+      `),
+      );
+      decidedCount += 1;
+    }
+
+    return decidedCount;
+  }
+
+  async monthlyChampions(monthStart: string): Promise<MonthlyChampionEntry[]> {
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({
+          handle: devices.handle,
+          points: monthlyChampions.points,
+          monthStart: monthlyChampions.monthStart,
+        })
+        .from(monthlyChampions)
+        .innerJoin(devices, eq(devices.id, monthlyChampions.deviceId))
+        .where(eq(monthlyChampions.monthStart, monthStart))
+        .orderBy(devices.createdAt, devices.id),
+    );
+    return rows.map((r) => ({
+      handle: r.handle,
+      points: r.points,
+      monthStart: r.monthStart,
+    }));
+  }
+
+  async monthlyWins(deviceId: string): Promise<number> {
+    const rows = await withDbRetry(() =>
+      this.db
+        .select({ n: sql<number>`count(*)` })
+        .from(monthlyChampions)
+        .where(eq(monthlyChampions.deviceId, deviceId)),
     );
     return Number(rows[0]?.n ?? 0);
   }

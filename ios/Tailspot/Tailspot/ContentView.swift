@@ -606,18 +606,30 @@ struct ContentView: View {
                 }
                 .ignoresSafeArea()
 
-                // Top-center floating affordances: compass-caution
-                // badge (when the heading reading is unreliable) and
-                // the zoom indicator (when zoomed past 1×). Stacked so
-                // both can be present at once.
+                // Top-center floating surfaces share one layout owner so
+                // SwiftUI can stack their measured heights. The indoor hint
+                // and transient toast used to be separate root overlays with
+                // a fixed 60 pt top offset; a tall compass warning therefore
+                // overlapped them instead of pushing them down.
                 VStack(spacing: 8) {
-                    cautionBadge
-                    zoomPill
+                    VStack(spacing: 8) {
+                        cautionBadge
+                        zoomPill
+                    }
+                    // Keep the loud compass banner off the screen edges
+                    // without narrowing the notice/toast region below it.
+                    .padding(.horizontal, 16)
+                    // Preserve the notices' old 60 pt resting offset when no
+                    // compass/zoom affordance is showing: 12 outer padding +
+                    // 40 reserved here + 8 stack spacing = 60. When an
+                    // affordance is taller, its measured height wins.
+                    .frame(minHeight: 40, alignment: .top)
+
+                    indoorHintBanner
+                    topToastBanner
                     Spacer()
                 }
                 .padding(.top, 12)
-                // Keep the loud compass banner off the screen edges.
-                .padding(.horizontal, 16)
                 .animation(.easeInOut(duration: 0.2), value: isHeadingAccuracyBad)
                 .animation(.easeInOut(duration: 0.2), value: zoom > 1.01)
                 // One-shot warning haptic the moment the compass latches
@@ -823,15 +835,6 @@ struct ContentView: View {
         .onChange(of: location.headingAccuracy ?? -1) { _, newAcc in
             updateCompassWarning(accuracy: newAcc)
         }
-        // Success haptic — counter (not Bool) lets multiple catches
-        // each fire.
-        .overlay(alignment: .top) { indoorHintBanner }
-        // ONE transient toast slot for grounded / far-tap / save-fail /
-        // streak. Collapsing the two former links into one SHRINKS body's
-        // modifier chain (it sits at the type-check budget — PR #184), and
-        // the shared `topToast` state means capsules can never stack. The
-        // streak-relay watch rides inside the container for the same reason.
-        .overlay(alignment: .top) { topToastBanner }
         // Catch feedback surface: pipeline-end success haptic + tap-time
         // impact haptic + shutter flash (see `performCatch`). Bundled into
         // ONE modifier because `body` is a single expression already at the
@@ -1240,10 +1243,9 @@ struct ContentView: View {
                 .foregroundStyle(Brand.Color.textPrimary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-            .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
-            .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
-            .padding(.top, 60)
-            .transition(.move(edge: .top).combined(with: .opacity))
+                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
+                .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
@@ -1267,7 +1269,6 @@ struct ContentView: View {
                     .padding(.vertical, 8)
                     .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
                     .overlay(Capsule().strokeBorder(toast.kind.borderColor, lineWidth: 1))
-                    .padding(.top, 60)
                     .padding(.horizontal, 24)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -3185,7 +3186,9 @@ struct ContentView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open hangar (\(catches.count) catches)")
+        .accessibilityLabel(
+            "Open hangar (\(CountCopy.phrase(catches.count, singular: "catch", plural: "catches")))"
+        )
     }
 
     /// Profile button in the bottom bar. Mirrors the hangar button's

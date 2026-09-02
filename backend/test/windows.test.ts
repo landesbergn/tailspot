@@ -5,6 +5,7 @@ import {
   nextMonthStartUtc,
   nextWeekStartUtc,
   parseWindow,
+  previousMonthStartUtc,
   utcDateString,
   weekStartUtc,
 } from "../src/identity/windows.js";
@@ -74,7 +75,7 @@ describe("nextWeekStartUtc", () => {
   });
 });
 
-describe("monthStartUtc / nextMonthStartUtc", () => {
+describe("monthStartUtc / previousMonthStartUtc / nextMonthStartUtc", () => {
   it("clamps to the 1st and rolls to the next 1st across month lengths", () => {
     expect(monthStartUtc(utc(2026, 7, 11, 12)).toISOString()).toBe("2026-07-01T00:00:00.000Z");
     expect(nextMonthStartUtc(utc(2026, 7, 11)).toISOString()).toBe("2026-08-01T00:00:00.000Z");
@@ -91,6 +92,7 @@ describe("monthStartUtc / nextMonthStartUtc", () => {
 
   it("wraps the year: December's next month is January of the next year", () => {
     expect(nextMonthStartUtc(utc(2026, 12, 15)).toISOString()).toBe("2027-01-01T00:00:00.000Z");
+    expect(previousMonthStartUtc(utc(2027, 1, 15)).toISOString()).toBe("2026-12-01T00:00:00.000Z");
   });
 });
 

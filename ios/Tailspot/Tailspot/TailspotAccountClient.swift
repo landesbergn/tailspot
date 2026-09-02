@@ -284,7 +284,7 @@ nonisolated enum LeaderboardWindow: String, CaseIterable, Identifiable, Sendable
 
 /// The caller's own standing in GET /v1/leaderboard (`me` key).
 ///
-/// `weeklyWins` / `everToppedAllTime` are ADDITIVE keys (dynamic-leaderboards
+/// `weeklyWins` / `monthlyWins` / `everToppedAllTime` are ADDITIVE keys (dynamic-leaderboards
 /// backend PR1): old payloads simply lack them and `decodeIfPresent` makes
 /// them nil — same old-payload contract as `UploadCatchResponse.firstOfType`.
 nonisolated struct MyStanding: Decodable {
@@ -293,14 +293,22 @@ nonisolated struct MyStanding: Decodable {
     /// How many weekly-champion crowns this device has accumulated — feeds
     /// the Profile laurel ("WEEKLY CHAMPION ×3"). Nil on the old backend.
     let weeklyWins: Int?
+    /// How many monthly-champion crowns this device has accumulated. Nil on
+    /// backends that predate monthly champion history.
+    let monthlyWins: Int?
     /// Whether this device has ever held #1 on the all-time board (fuel for
     /// the PR3 winner trophies; decoded now so the contract is pinned).
     let everToppedAllTime: Bool?
 
-    init(rank: Int, points: Int, weeklyWins: Int? = nil, everToppedAllTime: Bool? = nil) {
+    init(rank: Int,
+         points: Int,
+         weeklyWins: Int? = nil,
+         monthlyWins: Int? = nil,
+         everToppedAllTime: Bool? = nil) {
         self.rank = rank
         self.points = points
         self.weeklyWins = weeklyWins
+        self.monthlyWins = monthlyWins
         self.everToppedAllTime = everToppedAllTime
     }
 }
@@ -313,12 +321,18 @@ nonisolated struct LeaderboardChampion: Decodable {
     let handle: String?
     let points: Int
     /// ISO calendar date ("2026-06-29") — the Monday the crowned week began.
-    let weekStart: String
+    let weekStart: String?
+    /// ISO calendar date for a monthly crown (the first of the won month).
+    let monthStart: String?
 
-    init(handle: String?, points: Int, weekStart: String) {
+    init(handle: String?,
+         points: Int,
+         weekStart: String? = nil,
+         monthStart: String? = nil) {
         self.handle = handle
         self.points = points
         self.weekStart = weekStart
+        self.monthStart = monthStart
     }
 }
 
@@ -343,17 +357,22 @@ nonisolated struct LeaderboardResponse: Decodable {
     /// empty = the week ended with zero catches (the quiet no-champion
     /// line); one-or-more = crowned (shared crown when > 1).
     let champions: [LeaderboardChampion]?
+    /// Last completed month's champion(s). Same three-valued semantics as
+    /// `champions`, but only populated on the month window.
+    let monthlyChampions: [LeaderboardChampion]?
 
     init(entries: [LeaderboardEntry],
          me: MyStanding?,
          window: String? = nil,
          resetsAt: String? = nil,
-         champions: [LeaderboardChampion]? = nil) {
+         champions: [LeaderboardChampion]? = nil,
+         monthlyChampions: [LeaderboardChampion]? = nil) {
         self.entries = entries
         self.me = me
         self.window = window
         self.resetsAt = resetsAt
         self.champions = champions
+        self.monthlyChampions = monthlyChampions
     }
 
     /// The fail-soft signal: the windows-aware backend always echoes

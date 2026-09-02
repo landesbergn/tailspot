@@ -6,8 +6,8 @@
 //
 //   - LeaderboardScreen — live global leaderboard from the backend, now
 //     windowed (dynamic-leaderboards PR2): WEEK (default) / MONTH / ALL TIME
-//     tabs, a reset countdown, and a LAST WEEK'S CHAMPION banner on the week
-//     tab. Shows rank/handle/points/catches, highlights "me" row (works
+//     tabs, reset countdowns, and previous-period champion banners on the week
+//     and month tabs. Shows rank/handle/points/catches, highlights "me" row (works
 //     even handle-less, with a "claim a handle to appear" hint).
 //     Loading / error / empty states follow Brand patterns.
 //     Pull-to-refresh supported.
@@ -181,9 +181,13 @@ struct LeaderboardScreen: View {
     private func windowList(_ window: LeaderboardWindow) -> some View {
         List {
             if let response = responses[window] {
-                if window == .week, windowsSupported == true,
-                   let champions = response.champions {
-                    championSection(champions)
+                if windowsSupported == true {
+                    if window == .week, let champions = response.champions {
+                        championSection(champions, window: .week)
+                    } else if window == .month,
+                              let champions = response.monthlyChampions {
+                        championSection(champions, window: .month)
+                    }
                 }
                 if response.entries.isEmpty {
                     emptySection
@@ -246,14 +250,15 @@ struct LeaderboardScreen: View {
         }
     }
 
-    // MARK: - Champion banner (week tab)
+    // MARK: - Champion banner (week/month tabs)
 
     /// Gold-accented banner above the podium. Three states: crowned (one or
     /// more champions — a shared crown lists names side by side), and the
     /// quiet zero-champion week. (`champions == nil` — old backend or a
     /// non-week window — never reaches here.)
     @ViewBuilder
-    private func championSection(_ champions: [LeaderboardChampion]) -> some View {
+    private func championSection(_ champions: [LeaderboardChampion],
+                                 window: LeaderboardWindow) -> some View {
         Section {
             if champions.isEmpty {
                 HStack(spacing: 10) {
@@ -266,7 +271,7 @@ struct LeaderboardScreen: View {
                             .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
                             .tracking(1.0)
                             .foregroundStyle(Brand.Color.textSecondary)
-                        Text(ChampionBanner.noChampionSubtitle)
+                        Text(ChampionBanner.noChampionSubtitle(window: window))
                             .font(Brand.Font.caption)
                             .foregroundStyle(Brand.Color.textTertiary)
                     }
@@ -282,7 +287,7 @@ struct LeaderboardScreen: View {
                         .foregroundStyle(Brand.Color.podiumGold)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(ChampionBanner.eyebrow(count: champions.count))
+                        Text(ChampionBanner.eyebrow(count: champions.count, window: window))
                             .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                             .tracking(1.2)
                             .foregroundStyle(Brand.Color.podiumGold)

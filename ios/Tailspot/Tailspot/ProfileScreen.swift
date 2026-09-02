@@ -34,6 +34,7 @@ import os
 struct ProfileScreen: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
 
     /// Last server-authoritative standing, CACHED in app storage so the headline
@@ -52,6 +53,7 @@ struct ProfileScreen: View {
     /// (same key — @AppStorage observes the change), which also feeds the
     /// Top Flight / Dynasty trophies.
     @AppStorage(LeaderboardStandingCache.weeklyWinsKey) private var cachedWeeklyWins: Int = 0
+    @AppStorage(LeaderboardStandingCache.monthlyWinsKey) private var cachedMonthlyWins: Int = 0
     private let accountClient = TailspotAccountClient()
 
     var body: some View {
@@ -84,8 +86,15 @@ struct ProfileScreen: View {
                 GlassEffectContainer {
                     VStack(spacing: 16) {
                         identityHeader(stats: stats)
-                        if cachedWeeklyWins >= 1 {
-                            championLaurelRow
+                        if cachedWeeklyWins >= 1 || cachedMonthlyWins >= 1 {
+                            VStack(spacing: 8) {
+                                if cachedWeeklyWins >= 1 {
+                                    championLaurelRow(period: "WEEKLY", wins: cachedWeeklyWins)
+                                }
+                                if cachedMonthlyWins >= 1 {
+                                    championLaurelRow(period: "MONTHLY", wins: cachedMonthlyWins)
+                                }
+                            }
                         }
                         statsAndStreak(stats: stats, inputs: inputs, streak: streak)
                         if let best = Self.bestCatch(in: catches) {
@@ -335,23 +344,23 @@ struct ProfileScreen: View {
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
-    // MARK: - Weekly-champion laurel (dynamic-leaderboards L6)
+    // MARK: - Champion laurels
 
-    /// Quiet gold laurel under the identity header — renders only once the
-    /// device has at least one weekly-champion crown ("WEEKLY CHAMPION",
-    /// "WEEKLY CHAMPION ×3"…). Deliberately a flat non-glass row: a new
+    /// Quiet gold laurel under the identity header — one row for each period
+    /// where the device has at least one crown ("MONTHLY CHAMPION",
+    /// "WEEKLY CHAMPION ×3"…). Deliberately flat and non-glass: a new
     /// glass surface would have to live inside the GlassEffectContainer
     /// above (the hit-testing lesson), and a trophy accent doesn't need to
     /// refract anything.
-    private var championLaurelRow: some View {
+    private func championLaurelRow(period: String, wins: Int) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "laurel.leading")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.podiumGold)
                 .accessibilityHidden(true)
-            Text(cachedWeeklyWins > 1
-                 ? "WEEKLY CHAMPION ×\(cachedWeeklyWins)"
-                 : "WEEKLY CHAMPION")
+            Text(wins > 1
+                 ? "\(period) CHAMPION ×\(wins)"
+                 : "\(period) CHAMPION")
                 .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.podiumGold)
@@ -416,15 +425,29 @@ struct ProfileScreen: View {
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
+    @ViewBuilder
     private func statsRow(stats: ProfileStats, inputs: TrophyProgressInputs) -> some View {
         // `inputs` is the precomputed value passed in — the filter closure
         // reads that single snapshot instead of re-deriving it per trophy.
         let earnedTrophies = Trophies.roster.filter { !$0.isLocked(inputs: inputs) }.count
-        return HStack(spacing: 0) {
-            statCell(value: stats.totalCatches, label: "Catches")
-            statCell(value: stats.uniqueAirframes, label: "Unique")
-            statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
-            statCell(value: earnedTrophies, label: "Trophies")
+        if dynamicTypeSize.isAccessibilitySize {
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: 14
+            ) {
+                statCell(value: stats.totalCatches, label: "Catches")
+                statCell(value: stats.uniqueAirframes, label: "Unique")
+                statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
+                statCell(value: earnedTrophies, label: "Trophies")
+            }
+            .padding(.horizontal, 10)
+        } else {
+            HStack(spacing: 0) {
+                statCell(value: stats.totalCatches, label: "Catches")
+                statCell(value: stats.uniqueAirframes, label: "Unique")
+                statCell(value: stats.rarePlusUnique, label: "Rare+", valueColor: Brand.Color.alertAdvisory)
+                statCell(value: earnedTrophies, label: "Trophies")
+            }
         }
     }
 
@@ -438,6 +461,7 @@ struct ProfileScreen: View {
                 .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
         // One VoiceOver element per cell ("12, CATCHES"), not value and
