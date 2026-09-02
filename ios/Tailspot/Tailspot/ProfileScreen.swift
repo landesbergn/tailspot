@@ -86,16 +86,6 @@ struct ProfileScreen: View {
                 GlassEffectContainer {
                     VStack(spacing: 16) {
                         identityHeader(stats: stats)
-                        if cachedWeeklyWins >= 1 || cachedMonthlyWins >= 1 {
-                            VStack(spacing: 8) {
-                                if cachedWeeklyWins >= 1 {
-                                    championLaurelRow(period: "WEEKLY", wins: cachedWeeklyWins)
-                                }
-                                if cachedMonthlyWins >= 1 {
-                                    championLaurelRow(period: "MONTHLY", wins: cachedMonthlyWins)
-                                }
-                            }
-                        }
                         statsAndStreak(stats: stats, inputs: inputs, streak: streak)
                         if let best = Self.bestCatch(in: catches) {
                             bestCatchCard(best)
@@ -239,6 +229,7 @@ struct ProfileScreen: View {
         // only until the very first fetch ever lands.
         let displayPoints = cachedServerPoints >= 0 ? cachedServerPoints : stats.totalPoints
         let rankLabel = cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : "—"
+        let hasChampionWins = cachedWeeklyWins >= 1 || cachedMonthlyWins >= 1
         return VStack(spacing: 14) {
             HStack(spacing: 14) {
                 ZStack {
@@ -331,12 +322,21 @@ struct ProfileScreen: View {
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                    Text("GLOBAL RANK")
+                    Text("ALL-TIME RANK")
                         .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
                 .accessibilityElement(children: .combine)
+            }
+            if hasChampionWins {
+                VStack(spacing: 12) {
+                    Rectangle()
+                        .fill(Brand.Color.bgPrimary.opacity(0.5))
+                        .frame(height: 1)
+                    championSummary
+                }
+                .padding(.top, 2)
             }
         }
         .frame(maxWidth: .infinity)
@@ -344,39 +344,83 @@ struct ProfileScreen: View {
         .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
     }
 
-    // MARK: - Champion laurels
+    // MARK: - Champion summary
 
-    /// Quiet gold laurel under the identity header — one row for each period
-    /// where the device has at least one crown ("MONTHLY CHAMPION",
-    /// "WEEKLY CHAMPION ×3"…). Deliberately flat and non-glass: a new
-    /// glass surface would have to live inside the GlassEffectContainer
-    /// above (the hit-testing lesson), and a trophy accent doesn't need to
-    /// refract anything.
-    private func championLaurelRow(period: String, wins: Int) -> some View {
-        HStack(spacing: 8) {
+    /// A compact career-wins footer inside the standing hero. Weekly/monthly
+    /// crowns are supporting accolades, not separate cards competing with the
+    /// all-time points and rank. A zero cache value means none or never fetched,
+    /// so that period stays absent rather than presenting a possibly-false zero.
+    private var championSummary: some View {
+        HStack(spacing: 10) {
             Image(systemName: "laurel.leading")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.podiumGold)
                 .accessibilityHidden(true)
-            Text(wins > 1
-                 ? "\(period) CHAMPION ×\(wins)"
-                 : "\(period) CHAMPION")
-                .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption2))
-                .tracking(1.2)
-                .foregroundStyle(Brand.Color.podiumGold)
+            HStack(spacing: 0) {
+                if cachedWeeklyWins >= 1 {
+                    championSummaryCell(wins: cachedWeeklyWins, period: "WEEKLY")
+                }
+                if cachedWeeklyWins >= 1 && cachedMonthlyWins >= 1 {
+                    Rectangle()
+                        .fill(Brand.Color.bgPrimary.opacity(0.55))
+                        .frame(width: 1, height: 28)
+                        .padding(.horizontal, 10)
+                }
+                if cachedMonthlyWins >= 1 {
+                    championSummaryCell(wins: cachedMonthlyWins, period: "MONTHLY")
+                }
+            }
+            .frame(maxWidth: .infinity)
             Image(systemName: "laurel.trailing")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.podiumGold)
                 .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(Brand.Color.podiumGold.opacity(0.10), in: .rect(cornerRadius: Brand.Radius.row))
-        .overlay(
-            RoundedRectangle(cornerRadius: Brand.Radius.row)
-                .strokeBorder(Brand.Color.podiumGold.opacity(0.25), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(championSummaryAccessibilityLabel)
+    }
+
+    @ViewBuilder
+    private func championSummaryCell(wins: Int, period: String) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 2) {
+                championWinsValue(wins)
+                championWinsLabel(period)
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                championWinsValue(wins)
+                championWinsLabel(period)
+            }
+        }
+    }
+
+    private func championWinsValue(_ wins: Int) -> some View {
+        Text(wins.formatted(.number))
+            .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .caption))
+            .foregroundStyle(Brand.Color.podiumGold)
+            .monospacedDigit()
+            .lineLimit(1)
+    }
+
+    private func championWinsLabel(_ period: String) -> some View {
+        Text("\(period) WINS")
+            .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
+            .tracking(1.0)
+            .foregroundStyle(Brand.Color.textTertiary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    private var championSummaryAccessibilityLabel: String {
+        var summaries: [String] = []
+        if cachedWeeklyWins >= 1 {
+            summaries.append("\(cachedWeeklyWins) weekly \(cachedWeeklyWins == 1 ? "win" : "wins")")
+        }
+        if cachedMonthlyWins >= 1 {
+            summaries.append("\(cachedMonthlyWins) monthly \(cachedMonthlyWins == 1 ? "win" : "wins")")
+        }
+        return summaries.joined(separator: ", ")
     }
 
     // MARK: - Glass treatment

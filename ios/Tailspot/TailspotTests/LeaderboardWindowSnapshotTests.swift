@@ -5,7 +5,7 @@
 //  Visual-pass harness for the windowed leaderboard (dynamic-leaderboards
 //  PR2): tabs per window, the reset countdown, the champion-banner variants
 //  (1 / 2 / 3+ / anonymous / none), the fail-soft old-backend board, and the
-//  Profile weekly-champion laurel. NOT an assertion test: writes PNGs to
+//  Profile champion summary. NOT an assertion test: writes PNGs to
 //  /private/tmp/tailspot_snaps and passes — review the images after running.
 //
 //  LeaderboardScreen is List-based, which ImageRenderer can't render, so this
@@ -172,9 +172,9 @@ struct LeaderboardWindowSnapshotTests {
         #expect(true)
     }
 
-    /// Profile hub with the weekly-champion laurel (L6): cached weeklyWins
-    /// renders the gold row under the identity header, offline-capable.
-    @Test func renderProfileLaurel() throws {
+    /// Profile hub with offline-cached weekly/monthly wins folded into the
+    /// identity hero, including a large-Dynamic-Type layout pass.
+    @Test func renderProfileChampionSummary() throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         let savedPoints = defaults.object(forKey: "tailspot.standing.points")
@@ -194,12 +194,14 @@ struct LeaderboardWindowSnapshotTests {
             defaults.set(savedMonthlyWins, forKey: "tailspot.standing.monthlyWins")
         }
         let container = try emptyContainer()
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_laurel_x3")
+        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_x3_x2")
+        snapshot(ProfileScreen().modelContainer(container).dynamicTypeSize(.accessibility2),
+                 as: "profile_champion_summary_a11y2")
 
-        // Single win: no "×1" suffix.
+        // Single wins retain the same compact count + period treatment.
         defaults.set(1, forKey: "tailspot.standing.weeklyWins")
         defaults.set(1, forKey: "tailspot.standing.monthlyWins")
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_laurel_x1")
+        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_x1_x1")
         #expect(true)
     }
 }
