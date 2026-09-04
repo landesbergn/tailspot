@@ -370,7 +370,6 @@ struct ProfileScreen: View {
                     championSummaryCell(wins: cachedMonthlyWins, period: "MONTHLY")
                 }
             }
-            .frame(maxWidth: .infinity)
             Image(systemName: "laurel.trailing")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Brand.Color.podiumGold)
