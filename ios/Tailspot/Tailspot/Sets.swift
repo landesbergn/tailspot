@@ -840,6 +840,13 @@ nonisolated enum CardSets {
                   modelTokens: ["h-125", "h125", "as350", "as 350", "as-350"],
                   summary: "The AStar. Tour and utility single.",
                   representativeTypecode: "AS50"),
+            // AS50 also includes the single-engine AS550 Fennec, so avoid a
+            // bare "Fennec" token here. AS55 is the twin-engine AS355/AS555.
+            .init(id: "fh-as355", canonicalName: "Airbus AS355 / AS555", rarity: .uncommon,
+                  modelTokens: ["as-355 ecureuil 2", "as355 ecureuil 2", "as-355 twinstar", "as355 twinstar",
+                                "as-555 fennec", "as555 fennec"],
+                  summary: "Twin-engine Ecureuil / TwinStar and military Fennec.",
+                  representativeTypecode: "AS55"),
             // No "ec-130" token here or on H130 below: Lockheed's EC-130
             // Hercules variant canonicalizes to "EC-130 …" and would bleed in.
             .init(id: "fh-h130", canonicalName: "Airbus H130", rarity: .uncommon,
