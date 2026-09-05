@@ -4141,7 +4141,8 @@ struct ContentView: View {
                 grounded: obs.grounded,
                 slantMeters: obs.slantDistanceMeters,
                 tier: obs.visibilityTier,
-                plausiblyRevealable: obs.isPlausiblyRevealable
+                plausiblyRevealable: obs.isPlausiblyRevealable,
+                aboveHorizon: obs.elevationDeg > 0
             ))
         }
 
@@ -4207,6 +4208,26 @@ struct ContentView: View {
 /// tap-reveal radius. Beyond it the tap is truly empty sky.
 let emptySkyTapMaxOffsetDeg: Double = 40
 
+/// Angular radius (degrees) inside which a tap on a hidden plane BEYOND
+/// reveal reach still reveals it — the precision-tap escape hatch
+/// (2026-09-05, Berkeley): a Western Global 747 freighter at cruise
+/// (10.7 km altitude, 33 km slant, 18.7° elevation, contrail-visible) sat
+/// 4 km past `revealReachMeters`, and six taps landing 0.5–3.5° from its
+/// projection all dead-ended in the empty ripple. A tap that tight, that
+/// far out, is not a guess: the user sees a plane exactly where the sky
+/// model says one is. The distance band stays authoritative for AMBIENT
+/// labels; only the explicit, precisely-aimed tap overrides it.
+///
+/// Sized against the recorded miss sessions: the WGN211 taps measured
+/// 0.5–1.0° at 3.9× zoom and 1.8–3.5° unzoomed; the Dumbarton-drive taps
+/// (2026-07-19) were all ≥ 9.6° off; and of the 12 NYC couch taps
+/// (2026-07-12, indoors, nothing visible) 11 were ≥ 5.3° off and one
+/// (N7571P, 45.7 km) was 1.8°. 2.5° admits that single couch tap — an
+/// accepted trade, since a wrongly revealed plane still has to survive the
+/// catch-time gates and the Keep/Discard confirm, whereas a refused real
+/// sighting is a lost catch with no recourse. Tunable.
+let precisionTapRevealMaxOffsetDeg: Double = 2.5
+
 /// Slant bound (meters) inside which a grounded angular winner counts as
 /// "the parked plane you are actually looking at" and earns the playful
 /// toast. Beyond it the parked plane is invisible scenery — the Bay Bridge
@@ -4245,6 +4266,12 @@ let groundedToastMaxSlantMeters: Double = 1_000
 ///                         `chooseEmptySkyTapSubject` rescue and the
 ///                         `farTapToastSlantMeters` honesty guard — see both
 ///                         (the Dumbarton drive, 2026-07-20).
+///   - "filtered-precise" → would be `filtered-far`, but the tap landed
+///                         within `precisionTapRevealMaxOffsetDeg` of an
+///                         airborne, above-horizon plane: the user is
+///                         pointing straight at it, so it reveals (the
+///                         WGN211 747 at 33 km, 2026-09-05). Never applies
+///                         below the horizon or to a grounded plane.
 ///   - "off-frame"       → visible tier but projected outside the screen.
 ///   - "on-screen"       → visible and on screen (tap just missed it).
 ///   - "nothing-nearby"  → nearest plane is too far off the tap direction.
@@ -4259,13 +4286,23 @@ func classifyEmptySkyTapNearest(
     slantMeters: Double,
     tier: ObservedAircraft.VisibilityTier,
     onScreen: Bool,
-    plausiblyRevealable: Bool
+    plausiblyRevealable: Bool,
+    aboveHorizon: Bool = false
 ) -> String {
     guard offsetDeg <= emptySkyTapMaxOffsetDeg else { return "nothing-nearby" }
     if grounded {
         return slantMeters <= groundedToastMaxSlantMeters ? "grounded" : "grounded-far"
     }
-    if tier == .hidden { return plausiblyRevealable ? "filtered" : "filtered-far" }
+    if tier == .hidden {
+        if plausiblyRevealable { return "filtered" }
+        // Precision tap: past reveal reach, but the tap sits right on the
+        // plane's projection. `aboveHorizon` defaults false so a caller
+        // that doesn't know the elevation opts OUT of the override.
+        if aboveHorizon && offsetDeg <= precisionTapRevealMaxOffsetDeg {
+            return "filtered-precise"
+        }
+        return "filtered-far"
+    }
     if !onScreen { return "off-frame" }
     return "on-screen"
 }
@@ -4286,6 +4323,31 @@ struct EmptySkyTapCandidate {
     let slantMeters: Double
     let tier: ObservedAircraft.VisibilityTier
     let plausiblyRevealable: Bool
+    /// Strictly above the horizon (`elevationDeg > 0`) — the precondition
+    /// for the precision-tap override. Defaults false: a caller that
+    /// doesn't supply it gets the pre-2026-09-05 behavior (no override).
+    let aboveHorizon: Bool
+
+    init(
+        index: Int, offsetDeg: Double, onScreen: Bool, grounded: Bool,
+        slantMeters: Double, tier: ObservedAircraft.VisibilityTier,
+        plausiblyRevealable: Bool, aboveHorizon: Bool = false
+    ) {
+        self.index = index
+        self.offsetDeg = offsetDeg
+        self.onScreen = onScreen
+        self.grounded = grounded
+        self.slantMeters = slantMeters
+        self.tier = tier
+        self.plausiblyRevealable = plausiblyRevealable
+        self.aboveHorizon = aboveHorizon
+    }
+
+    /// Whether the precision-tap override applies to this candidate on its
+    /// own facts (airborne, above horizon, tap within the precision radius).
+    var isPrecisionRevealable: Bool {
+        !grounded && aboveHorizon && offsetDeg <= precisionTapRevealMaxOffsetDeg
+    }
 }
 
 /// Pick the plane an empty-sky tap is ABOUT. Normally the angular-nearest —
@@ -4299,9 +4361,13 @@ struct EmptySkyTapCandidate {
 /// Rule: take the angular-nearest; if (and only if) it classifies
 /// `filtered-far` or `grounded-far`, look for the angular-nearest plane in
 /// the tap cone that the tap could actually act on — airborne AND
-/// (visible-tier OR plausibly revealable) — and make THAT the subject
-/// instead (`rescued: true`). Its own classification then drives the normal
-/// branch: `filtered`/`off-frame` reveal, `on-screen` ripples.
+/// (visible-tier OR plausibly revealable OR precision-revealable) — and make
+/// THAT the subject instead (`rescued: true`). Its own classification then
+/// drives the normal branch: `filtered`/`filtered-precise`/`off-frame`
+/// reveal, `on-screen` ripples. (Precision-revealable alternatives only
+/// matter when the primary is a below-horizon plane angularly nearer than
+/// the above-horizon one under the tap — the primary is otherwise already
+/// `filtered-precise` itself.)
 ///
 /// `grounded-far` joined the rescue on 2026-08-26 (the Bay Bridge case):
 /// freighters parked at OAK — 18 km out, exactly on the horizon line the
@@ -4323,7 +4389,8 @@ func chooseEmptySkyTapSubject(
         classifyEmptySkyTapNearest(
             offsetDeg: c.offsetDeg, grounded: c.grounded,
             slantMeters: c.slantMeters, tier: c.tier,
-            onScreen: c.onScreen, plausiblyRevealable: c.plausiblyRevealable
+            onScreen: c.onScreen, plausiblyRevealable: c.plausiblyRevealable,
+            aboveHorizon: c.aboveHorizon
         )
     }
     guard let primary = candidates.min(by: { $0.offsetDeg < $1.offsetDeg }) else {
@@ -4336,7 +4403,7 @@ func chooseEmptySkyTapSubject(
     let alt = candidates
         .filter {
             $0.offsetDeg <= emptySkyTapMaxOffsetDeg && !$0.grounded
-                && ($0.tier != .hidden || $0.plausiblyRevealable)
+                && ($0.tier != .hidden || $0.plausiblyRevealable || $0.isPrecisionRevealable)
         }
         .min(by: { $0.offsetDeg < $1.offsetDeg })
     guard let alt else { return (primary, primaryReason, false) }
@@ -4371,13 +4438,18 @@ func farTapToastSlantMeters(
 ///                   because a compass/heading error (or high zoom) rotated the
 ///                   sky-model off where the plane visually sits (DAL972,
 ///                   2026-07-11). The user is pointed at it; the tap grabs it.
+///   - "filtered-precise" → past reveal reach, but the tap landed within
+///                   `precisionTapRevealMaxOffsetDeg` of the plane's projection
+///                   (WGN211, a 747 at 33 km / 18.7°, 2026-09-05). Pointing
+///                   that precisely at a plane the model can place is the
+///                   strongest intent signal the app receives.
 /// "grounded" is handled earlier (a parked plane is never revealed);
 /// "filtered-far" gets the beyond-eyeshot hint (a hidden plane past plausible
-/// reveal reach must NOT become catchable — the NYC couch session caught a
-/// Piper 75.8 km away through a wall); "grounded-far", "on-screen" and
-/// "nothing-nearby" fall through to the empty-tap ripple.
+/// reveal reach must NOT become catchable on a loose tap — the NYC couch
+/// session caught a Piper 75.8 km away through a wall); "grounded-far",
+/// "on-screen" and "nothing-nearby" fall through to the empty-tap ripple.
 func shouldTapReveal(reason: String) -> Bool {
-    reason == "filtered" || reason == "off-frame"
+    reason == "filtered" || reason == "filtered-precise" || reason == "off-frame"
 }
 
 // MARK: - AR-overlay rarity resolution

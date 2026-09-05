@@ -57,7 +57,12 @@ source + each one's focused test file — they're not restated here.
   (`revealedIcao`: a tap pins + force-locks the single nearest in-data plane when
   `shouldTapReveal` says so — reason `filtered` (hidden by the band) **or**
   `off-frame` (a visible-tier plane projected off-screen, usually a compass/heading
-  error; DAL972, 2026-07-11); `grounded` never reveals, and the parked-plane
+  error; DAL972, 2026-07-11) **or** `filtered-precise` (past reveal reach, but the
+  tap landed within `precisionTapRevealMaxOffsetDeg` = 2.5° of the plane's
+  projection — a dead-on tap is explicit intent even beyond the band; the WGN211
+  747 freighter at 33 km / 18.7°, 2026-09-05. Requires airborne + above the
+  horizon; the ambient band is untouched, and the couch/Dumbarton replays pin the
+  false-positive budget); `grounded` never reveals, and the parked-plane
   toast only fires when the parked plane is within `groundedToastMaxSlantMeters`
   (1 km) — beyond that it classifies `grounded-far` and is rescued like
   `filtered-far` (parked OAK freighters on the horizon beat the visible plane

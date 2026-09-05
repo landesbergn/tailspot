@@ -43,74 +43,16 @@ struct FarToastRegressionTests {
     private static let baseHfovDeg = 56.0
     private static let baseVfovDeg = 72.0
 
-    /// Rebuild the empty-sky-tap candidate set for one recorded tap,
-    /// mirroring `recordEmptySkyTapDiagnosis` exactly: annotate the aligned
-    /// tick's raw aircraft with the tick's observer pose, compute each
-    /// plane's angular offset from the tapped direction under the tick's
-    /// heading/elevation/zoom, and snapshot tier/reveal facts.
+    /// Rebuild the empty-sky-tap candidate set for one recorded tap through
+    /// the shared harness (`EmptySkyTapReplayHarness.swift`), which mirrors
+    /// `recordEmptySkyTapDiagnosis` exactly.
     private func candidates(
         tap: ReplayEvent.EmptyTap, tick: ReplayEvent.Tick
     ) throws -> (candidates: [EmptySkyTapCandidate], observed: [ObservedAircraft]) {
-        let s = tick.sensor
-        let lat = try #require(s.latitude)
-        let lon = try #require(s.longitude)
-        let heading = try #require(s.headingDeg)
-        let observer = CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-            altitude: s.altitudeMeters ?? 0,
-            horizontalAccuracy: s.horizontalAccuracyMeters ?? 10,
-            verticalAccuracy: 10,
-            timestamp: tick.timestamp
+        try emptySkyTapCandidates(
+            tap: tap, tick: tick, screenSize: Self.screenSize,
+            baseHfovDeg: Self.baseHfovDeg, baseVfovDeg: Self.baseVfovDeg
         )
-        let observed = tick.aircraft.compactMap {
-            ObservedAircraft.annotate(Aircraft($0), observer: observer, now: tick.timestamp)
-        }
-        let zoom = s.zoomFactor ?? 1.0
-        let hfovDeg = Self.baseHfovDeg / zoom
-        let vfovDeg = Self.baseVfovDeg / zoom
-        // Gravity-derived roll, matching ReplayAnalyzer (Euler rollRad is
-        // unreliable at the portrait hold).
-        let rollDeg: Double
-        if let gx = s.gravityX, let gy = s.gravityY, let gz = s.gravityZ {
-            rollDeg = Geo.rollDeg(gravityX: gx, gravityY: gy, gravityZ: gz)
-        } else {
-            rollDeg = 0
-        }
-        let basis = Geo.cameraBasis(
-            headingDeg: heading,
-            cameraElevationDeg: s.cameraElevationDeg,
-            rollDeg: rollDeg
-        )
-        let tapAzDeg = (Double(tap.x) / Double(Self.screenSize.width) - 0.5) * hfovDeg
-        let tapElDeg = (0.5 - Double(tap.y) / Double(Self.screenSize.height)) * vfovDeg
-
-        var out: [EmptySkyTapCandidate] = []
-        for (i, obs) in observed.enumerated() {
-            let v = Geo.cameraFrameVector(
-                targetBearingDeg: obs.bearingDeg,
-                targetElevationDeg: obs.elevationDeg,
-                basis: basis
-            )
-            let azDeg = atan2(v.x, max(v.z, 1e-6)) * 180 / .pi
-            let elDeg = atan2(v.y, max(v.z, 1e-6)) * 180 / .pi
-            let off = v.z <= 0
-                ? 180.0
-                : ((azDeg - tapAzDeg) * (azDeg - tapAzDeg)
-                    + (elDeg - tapElDeg) * (elDeg - tapElDeg)).squareRoot()
-            out.append(EmptySkyTapCandidate(
-                index: i,
-                offsetDeg: off,
-                onScreen: obs.screenPosition(
-                    basis: basis, in: Self.screenSize,
-                    hfovDeg: hfovDeg, vfovDeg: vfovDeg
-                ) != nil,
-                grounded: obs.grounded,
-                slantMeters: obs.slantDistanceMeters,
-                tier: obs.visibilityTier,
-                plausiblyRevealable: obs.isPlausiblyRevealable
-            ))
-        }
-        return (out, observed)
     }
 
     @Test(.enabled(if: FarToastRegressionTests.fixtureURL != nil))
