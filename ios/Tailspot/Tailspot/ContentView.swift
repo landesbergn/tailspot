@@ -298,16 +298,15 @@ struct ContentView: View {
             // Main AR view and overlays (camera, lock brackets, debug panels, etc.)
             ZStack {
                 if cameraAuthorized {
-                    // isActive: the capture session powers down while an
-                    // opaque sheet covers the AR view or the app resigns
-                    // active — the ISP + 30 fps frame delivery were the
-                    // biggest controllable battery drain (audit HIGH;
-                    // Noah green-lit the camera lever 2026-07-19). Clear-
-                    // background reveals don't occlude, so the live sky
-                    // stays visible behind them.
+                    // Hangar/Profile keep the capture session attached even
+                    // while their heavier AR work is paused. Their native
+                    // presentation exposes the root through its translucency
+                    // and rounded corners; detaching the preview at the end of
+                    // that transition visibly flips the live background to
+                    // black. Truly opaque utility sheets still power it down.
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
                                   frameBridge: frameBridge,
-                                  isActive: scenePhase == .active && !arOccluded)
+                                  isActive: scenePhase == .active && !cameraOccluded)
                         .ignoresSafeArea()
                         // PRIVACY (GA posture, 2026-07-11): the live camera view
                         // is excluded from PostHog session replay STRUCTURALLY,
@@ -1223,9 +1222,14 @@ struct ContentView: View {
     /// Release.)
     private var arOccluded: Bool {
         primarySheetVisible
-            || showCompassSheet
-            || showIconGallery
-            || replayURL != nil
+            || cameraOccluded
+    }
+
+    /// Presentations that fully hide the root may safely stop the capture
+    /// session. Hangar/Profile are deliberately excluded: their system sheet
+    /// transition reveals the presenting view, including around the top edge.
+    private var cameraOccluded: Bool {
+        showCompassSheet || showIconGallery || replayURL != nil
     }
 
     /// A sheet's content tree is mounted before its presentation starts, so

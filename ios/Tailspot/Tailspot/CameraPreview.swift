@@ -75,15 +75,11 @@ struct CameraPreview: UIViewRepresentable {
     /// video-frame delivery (the output isn't even added to the session).
     var frameBridge: CameraFrameBridge?
 
-    /// Whether the capture session should be running. ContentView drives
-    /// this from occlusion + scene state (2026-07-19 field report: the
-    /// camera kept the ISP hot at 1080p/30 fps — plus a per-frame BGRA
-    /// conversion — the whole time a Hangar/Profile sheet covered the AR
-    /// view; the audit rated it the biggest controllable battery drain).
-    /// While false the preview freezes on its last frame (invisible behind
-    /// an opaque sheet); restarting takes ~0.3–0.5 s, mostly masked by the
-    /// sheet's dismiss animation because SwiftUI flips this the moment the
-    /// sheet state changes, before the animation finishes.
+    /// Whether the capture session should be running. ContentView drives this
+    /// from scene state and fully-opaque utility presentations. Its primary
+    /// Hangar/Profile sheets intentionally leave the session attached because
+    /// the system transition exposes the presenting view around and through
+    /// the sheet; detaching there produces a visible black-background flip.
     var isActive: Bool = true
 
     /// Supported zoom range. Wide-camera digital zoom past ~5× shows
@@ -207,14 +203,11 @@ final class PreviewView: UIView {
     /// config block's startRunning.
     private var wantsRunning = true
 
-    /// Start or stop the capture session. Stopping powers down the ISP +
-    /// the 30 fps frame delivery while an opaque sheet covers the AR view
-    /// (see `CameraPreview.isActive`). The preview layer is DETACHED while
-    /// stopped: a stopped layer otherwise freezes on its last frame, which
-    /// peeked out around sheet edges and through the dismiss animation
-    /// (Noah, 2026-07-19 — wants plain black). Detached, the layer clears
-    /// to the view's black; on reactivation it stays black until the first
-    /// live frame lands, so there's no frozen-frame flash either.
+    /// Start or stop the capture session. Stopping powers down the ISP + the
+    /// 30 fps frame delivery while the app is inactive or a fully opaque
+    /// utility presentation covers the AR view (see `CameraPreview.isActive`).
+    /// The preview layer is detached while stopped so it cannot expose a stale
+    /// frozen frame when one of those presentations dismisses.
     func setSessionActive(_ wanted: Bool) {
         guard wanted != wantsRunning else { return }
         wantsRunning = wanted
