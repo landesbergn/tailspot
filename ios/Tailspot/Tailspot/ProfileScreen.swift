@@ -298,7 +298,7 @@ struct ProfileScreen: View {
                 }
                 Spacer()
             }
-            HStack(spacing: 16) {
+            HStack(spacing: 0) {
                 VStack(spacing: 2) {
                     Text(displayPoints.formatted(.number))
                         .font(Brand.Font.mono(size: 32, weight: .heavy, relativeTo: .title2))
@@ -311,10 +311,12 @@ struct ProfileScreen: View {
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
+                .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .combine)
                 Rectangle()
                     .fill(Brand.Color.bgPrimary.opacity(0.55))
                     .frame(width: 1, height: 40)
+                    .padding(.horizontal, 16)
                 VStack(spacing: 2) {
                     Text(rankLabel)
                         .font(Brand.Font.mono(size: 32, weight: .heavy, relativeTo: .title2))
@@ -327,6 +329,7 @@ struct ProfileScreen: View {
                         .tracking(1.2)
                         .foregroundStyle(Brand.Color.textTertiary)
                 }
+                .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .combine)
             }
             if hasChampionWins {
@@ -350,33 +353,47 @@ struct ProfileScreen: View {
     /// crowns are supporting accolades, not separate cards competing with the
     /// all-time points and rank. A zero cache value means none or never fetched,
     /// so that period stays absent rather than presenting a possibly-false zero.
+    @ViewBuilder
     private var championSummary: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "laurel.leading")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Brand.Color.podiumGold)
-                .accessibilityHidden(true)
+        if cachedWeeklyWins >= 1 && cachedMonthlyWins >= 1 {
             HStack(spacing: 0) {
-                if cachedWeeklyWins >= 1 {
+                HStack(spacing: 8) {
+                    championLaurel("laurel.leading")
                     championSummaryCell(wins: cachedWeeklyWins, period: "WEEKLY")
                 }
-                if cachedWeeklyWins >= 1 && cachedMonthlyWins >= 1 {
-                    Rectangle()
-                        .fill(Brand.Color.bgPrimary.opacity(0.55))
-                        .frame(width: 1, height: 28)
-                        .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(Brand.Color.bgPrimary.opacity(0.55))
+                    .frame(width: 1, height: 28)
+                    .padding(.horizontal, 10)
+                HStack(spacing: 8) {
+                    championSummaryCell(wins: cachedMonthlyWins, period: "MONTHLY")
+                    championLaurel("laurel.trailing")
                 }
-                if cachedMonthlyWins >= 1 {
+                .frame(maxWidth: .infinity)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(championSummaryAccessibilityLabel)
+        } else {
+            HStack(spacing: 8) {
+                championLaurel("laurel.leading")
+                if cachedWeeklyWins >= 1 {
+                    championSummaryCell(wins: cachedWeeklyWins, period: "WEEKLY")
+                } else if cachedMonthlyWins >= 1 {
                     championSummaryCell(wins: cachedMonthlyWins, period: "MONTHLY")
                 }
+                championLaurel("laurel.trailing")
             }
-            Image(systemName: "laurel.trailing")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Brand.Color.podiumGold)
-                .accessibilityHidden(true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(championSummaryAccessibilityLabel)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(championSummaryAccessibilityLabel)
+    }
+
+    private func championLaurel(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Brand.Color.podiumGold)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder
