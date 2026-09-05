@@ -9,6 +9,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 import AVFoundation
 import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
 import StoreKit       // \.requestReview environment action (the review ask)
@@ -88,14 +89,15 @@ struct ContentView: View {
     /// sets, map, leaderboard, settings, notifications, share).
     /// Opened via the person glyph in the top-trailing corner.
     @State private var showProfile = false
-    /// Becomes true only after the Hangar/Profile presentation animation has
-    /// settled. Their request flags flip at tap time, before SwiftUI has a
-    /// sheet ready to cover the camera; using those flags directly for camera
-    /// occlusion detaches the preview and exposes its black backing view.
+    /// Becomes true only after the Hangar/Profile presentation controller has
+    /// completed its opening transition. Their request flags flip at tap time,
+    /// before SwiftUI has a sheet ready to cover the camera; using those flags
+    /// directly for camera occlusion detaches the preview and exposes its black
+    /// backing view.
     @State private var primarySheetVisible = false
-    /// Turns the primary sheet's content on partway through the native opening
-    /// motion. Kept separate from `primarySheetVisible` so the content can fade
-    /// in before it is safe to stop the camera behind the presentation.
+    /// Turns the primary sheet's content on as the native opening transition
+    /// begins. Kept separate from `primarySheetVisible` so the content can fade
+    /// with the sheet while the camera remains live behind it.
     @State private var primarySheetContentVisible = false
     /// Drives the compass calibration sheet. Tapping the AR
     /// caution badge sets this true; the sheet explains what's
@@ -862,12 +864,22 @@ struct ContentView: View {
         .sheet(isPresented: $showHangar) {
             HangarView()
                 .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
-                .task { await stagePrimarySheetPresentation() }
+                .background {
+                    PrimarySheetPresentationObserver(
+                        onWillAppear: primarySheetWillAppear,
+                        onDidAppear: primarySheetDidAppear
+                    )
+                }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
                 .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
-                .task { await stagePrimarySheetPresentation() }
+                .background {
+                    PrimarySheetPresentationObserver(
+                        onWillAppear: primarySheetWillAppear,
+                        onDidAppear: primarySheetDidAppear
+                    )
+                }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -1216,18 +1228,17 @@ struct ContentView: View {
             || replayURL != nil
     }
 
-    /// SwiftUI starts a sheet content task before the presentation animation
-    /// has produced its first stable frame. Keep the live camera attached for
-    /// that short transition, then retain the existing power-saving shutdown
-    /// for the rest of the opaque sheet's lifetime. The task is cancelled if
-    /// the sheet disappears before the delay completes.
-    private func stagePrimarySheetPresentation() async {
-        try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled, showHangar || showProfile else { return }
+    /// A sheet's content tree is mounted before its presentation starts, so
+    /// `.task` and `.onAppear` are too early to coordinate a visible fade. The
+    /// presentation observer calls these at the matching UIKit lifecycle
+    /// boundaries instead of relying on device-specific delays.
+    private func primarySheetWillAppear() {
+        guard showHangar || showProfile else { return }
         primarySheetContentVisible = true
+    }
 
-        try? await Task.sleep(for: .milliseconds(200))
-        guard !Task.isCancelled, showHangar || showProfile else { return }
+    private func primarySheetDidAppear() {
+        guard showHangar || showProfile else { return }
         primarySheetVisible = true
     }
 
@@ -4261,6 +4272,42 @@ private struct PrimarySheetReveal: ViewModifier {
                     contentVisible = true
                 }
             }
+        }
+    }
+}
+
+/// Reports the actual lifecycle of SwiftUI's native sheet host. SwiftUI does
+/// not expose presentation start/completion callbacks, and view-level
+/// `onAppear` runs while the sheet is still being prepared offscreen.
+private struct PrimarySheetPresentationObserver: UIViewControllerRepresentable {
+    let onWillAppear: () -> Void
+    let onDidAppear: () -> Void
+
+    func makeUIViewController(context: Context) -> ObserverViewController {
+        let controller = ObserverViewController()
+        controller.view.backgroundColor = .clear
+        controller.onWillAppear = onWillAppear
+        controller.onDidAppear = onDidAppear
+        return controller
+    }
+
+    func updateUIViewController(_ controller: ObserverViewController, context: Context) {
+        controller.onWillAppear = onWillAppear
+        controller.onDidAppear = onDidAppear
+    }
+
+    final class ObserverViewController: UIViewController {
+        var onWillAppear: (() -> Void)?
+        var onDidAppear: (() -> Void)?
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            onWillAppear?()
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            onDidAppear?()
         }
     }
 }
