@@ -9,6 +9,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 import AVFoundation
 import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
 import StoreKit       // \.requestReview environment action (the review ask)
@@ -88,6 +89,16 @@ struct ContentView: View {
     /// sets, map, leaderboard, settings, notifications, share).
     /// Opened via the person glyph in the top-trailing corner.
     @State private var showProfile = false
+    /// Becomes true only after the Hangar/Profile presentation controller has
+    /// completed its opening transition. Their request flags flip at tap time,
+    /// before SwiftUI has a sheet ready to cover the camera; using those flags
+    /// directly for camera occlusion detaches the preview and exposes its black
+    /// backing view.
+    @State private var primarySheetVisible = false
+    /// Turns the primary sheet's content on as the native opening transition
+    /// begins. Kept separate from `primarySheetVisible` so the content can fade
+    /// with the sheet while the camera remains live behind it.
+    @State private var primarySheetContentVisible = false
     /// Drives the compass calibration sheet. Tapping the AR
     /// caution badge sets this true; the sheet explains what's
     /// wrong and shows the figure-8 calibration motion.
@@ -287,16 +298,15 @@ struct ContentView: View {
             // Main AR view and overlays (camera, lock brackets, debug panels, etc.)
             ZStack {
                 if cameraAuthorized {
-                    // isActive: the capture session powers down while an
-                    // opaque sheet covers the AR view or the app resigns
-                    // active — the ISP + 30 fps frame delivery were the
-                    // biggest controllable battery drain (audit HIGH;
-                    // Noah green-lit the camera lever 2026-07-19). Clear-
-                    // background reveals don't occlude, so the live sky
-                    // stays visible behind them.
+                    // Hangar/Profile keep the capture session attached even
+                    // while their heavier AR work is paused. Their native
+                    // presentation exposes the root through its translucency
+                    // and rounded corners; detaching the preview at the end of
+                    // that transition visibly flips the live background to
+                    // black. Truly opaque utility sheets still power it down.
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
                                   frameBridge: frameBridge,
-                                  isActive: scenePhase == .active && !arOccluded)
+                                  isActive: scenePhase == .active && !cameraOccluded)
                         .ignoresSafeArea()
                         // PRIVACY (GA posture, 2026-07-11): the live camera view
                         // is excluded from PostHog session replay STRUCTURALLY,
@@ -551,13 +561,10 @@ struct ContentView: View {
                                     .allowsHitTesting(false)
                             }
 
-                            // Bottom capture bar: hangar tray (left),
-                            // big central capture button, profile
-                            // (right). Built inside the TimelineView
-                            // so the capture button's appearance and
-                            // payload react to the per-frame visible
-                            // set + pin state.
-                            //
+                            // The central capture button stays inside the
+                            // TimelineView because its appearance and payload
+                            // react to per-frame state. Hangar/Profile render
+                            // once outside this 30 Hz subtree below.
                             // Spec § 3.2: a single always-present
                             // capture button. The visible-count + pin
                             // drive the mode (disabled / single /
@@ -669,7 +676,7 @@ struct ContentView: View {
                             }()
                             VStack {
                                 Spacer()
-                                captureBar(
+                                captureButton(
                                     mode: mode,
                                     screenSize: geo.size,
                                     positions: onScreenPositions
@@ -688,6 +695,26 @@ struct ContentView: View {
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                     }
+
+                    // Static navigation controls must not inherit the AR
+                    // TimelineView's 30 Hz invalidation cadence. A clear
+                    // capture-sized spacer preserves the established layout
+                    // while taps fall through to the live capture button.
+                    VStack {
+                        Spacer()
+                        HStack {
+                            bottomHangarButton
+                            Spacer()
+                            Color.clear
+                                .frame(width: 72, height: 72)
+                                .allowsHitTesting(false)
+                            Spacer()
+                            bottomProfileButton
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 12))
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
                 .ignoresSafeArea()
 
@@ -815,7 +842,11 @@ struct ContentView: View {
         // When the Hangar closes, re-diff — a country backfill done inside
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
         .onChange(of: showHangar) { _, isShowing in
-            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
+            if !isShowing {
+                primarySheetVisible = false
+                primarySheetContentVisible = false
+                unlockCenter.enqueueNewUnlocks(from: catches)
+            }
         }
         // Same on Profile close — the leaderboard fetches inside that sheet
         // (ProfileScreen standing + LeaderboardScreen boards) refresh the
@@ -823,13 +854,31 @@ struct ContentView: View {
         // Dynasty / Chart Topper while it's open. Re-diffing here makes the
         // FIRST live crossing celebrate as soon as the sheet dismisses.
         .onChange(of: showProfile) { _, isShowing in
-            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
+            if !isShowing {
+                primarySheetVisible = false
+                primarySheetContentVisible = false
+                unlockCenter.enqueueNewUnlocks(from: catches)
+            }
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
+                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
+                .background {
+                    PrimarySheetPresentationObserver(
+                        onWillAppear: primarySheetWillAppear,
+                        onDidAppear: primarySheetDidAppear
+                    )
+                }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
+                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
+                .background {
+                    PrimarySheetPresentationObserver(
+                        onWillAppear: primarySheetWillAppear,
+                        onDidAppear: primarySheetDidAppear
+                    )
+                }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -1155,7 +1204,11 @@ struct ContentView: View {
 
     /// True when an OPAQUE modal fully covers the camera / AR view — the
     /// standard sheets: Hangar, Profile, compass calibration, the DEBUG
-    /// trophy-icon gallery, and the replay report. While occluded we power
+    /// trophy-icon gallery, and the replay report. Hangar/Profile join this
+    /// set only after their presentation animation settles: their request
+    /// flags and content tasks start before SwiftUI commits the sheet's first
+    /// stable frame, and stopping the camera earlier exposes black. While
+    /// occluded we power
     /// down the sensors + the 30 Hz render loop the user can't see (see
     /// `.onChange(of: arOccluded)` and the `paused:` TimelineView).
     ///
@@ -1168,11 +1221,29 @@ struct ContentView: View {
     /// builds, so reading them here compiles everywhere and stays false in
     /// Release.)
     private var arOccluded: Bool {
-        showHangar
-            || showProfile
-            || showCompassSheet
-            || showIconGallery
-            || replayURL != nil
+        primarySheetVisible
+            || cameraOccluded
+    }
+
+    /// Presentations that fully hide the root may safely stop the capture
+    /// session. Hangar/Profile are deliberately excluded: their system sheet
+    /// transition reveals the presenting view, including around the top edge.
+    private var cameraOccluded: Bool {
+        showCompassSheet || showIconGallery || replayURL != nil
+    }
+
+    /// A sheet's content tree is mounted before its presentation starts, so
+    /// `.task` and `.onAppear` are too early to coordinate a visible fade. The
+    /// presentation observer calls these at the matching UIKit lifecycle
+    /// boundaries instead of relying on device-specific delays.
+    private func primarySheetWillAppear() {
+        guard showHangar || showProfile else { return }
+        primarySheetContentVisible = true
+    }
+
+    private func primarySheetDidAppear() {
+        guard showHangar || showProfile else { return }
+        primarySheetVisible = true
     }
 
     /// Ambient-label metadata prefetch body (the `.task(id: visibleIcaoSignature)`
@@ -1791,25 +1862,6 @@ struct ContentView: View {
         if keep {
             Task { await CatchUploader().uploadPending(context: modelContext) }
         }
-    }
-
-    /// Bottom capture bar — hangar (left), big central capture
-    /// button, profile (right). The central button is a single
-    /// always-present circle; mode drives its enabled state and
-    /// whether a `×N` badge appears in the top-right corner.
-    private func captureBar(
-        mode: CaptureMode,
-        screenSize: CGSize,
-        positions: [String: CGPoint]
-    ) -> some View {
-        HStack {
-            bottomHangarButton
-            Spacer()
-            captureButton(mode: mode, screenSize: screenSize, positions: positions)
-            Spacer()
-            bottomProfileButton
-        }
-        .padding(.horizontal, 28)
     }
 
     /// Merged capture path. Single entry point used by the unified
@@ -4196,6 +4248,70 @@ struct ContentView: View {
             if let r = emptyRipple, r.1 == now {
                 emptyRipple = nil
             }
+        }
+    }
+}
+
+/// Softens the handoff from the live AR view to the two content-heavy primary
+/// sheets. The brand background paints immediately, then the finished sheet
+/// content fades in during the native presentation instead of appearing as a
+/// hard late frame. Kept outside `ContentView.body` because that expression is
+/// already near Swift's type-check budget.
+private struct PrimarySheetReveal: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var contentVisible = false
+    let isReady: Bool
+
+    func body(content: Content) -> some View {
+        ZStack {
+            Brand.Color.bgPrimary
+                .ignoresSafeArea()
+            content
+                .opacity(reduceMotion || contentVisible ? 1 : 0)
+        }
+        .onChange(of: isReady, initial: true) { _, ready in
+            guard ready, !contentVisible else { return }
+            if !reduceMotion {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    contentVisible = true
+                }
+            }
+        }
+    }
+}
+
+/// Reports the actual lifecycle of SwiftUI's native sheet host. SwiftUI does
+/// not expose presentation start/completion callbacks, and view-level
+/// `onAppear` runs while the sheet is still being prepared offscreen.
+private struct PrimarySheetPresentationObserver: UIViewControllerRepresentable {
+    let onWillAppear: () -> Void
+    let onDidAppear: () -> Void
+
+    func makeUIViewController(context: Context) -> ObserverViewController {
+        let controller = ObserverViewController()
+        controller.view.backgroundColor = .clear
+        controller.onWillAppear = onWillAppear
+        controller.onDidAppear = onDidAppear
+        return controller
+    }
+
+    func updateUIViewController(_ controller: ObserverViewController, context: Context) {
+        controller.onWillAppear = onWillAppear
+        controller.onDidAppear = onDidAppear
+    }
+
+    final class ObserverViewController: UIViewController {
+        var onWillAppear: (() -> Void)?
+        var onDidAppear: (() -> Void)?
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            onWillAppear?()
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            onDidAppear?()
         }
     }
 }

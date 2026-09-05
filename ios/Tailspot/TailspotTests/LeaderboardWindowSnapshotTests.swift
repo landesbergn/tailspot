@@ -5,8 +5,8 @@
 //  Visual-pass harness for the windowed leaderboard (dynamic-leaderboards
 //  PR2): tabs per window, the reset countdown, the champion-banner variants
 //  (1 / 2 / 3+ / anonymous / none), the fail-soft old-backend board, and the
-//  Profile weekly-champion laurel. NOT an assertion test: writes PNGs to
-//  /private/tmp/tailspot_snaps and passes — review the images after running.
+//  Profile champion summary. NOT an assertion test: writes PNGs to the test
+//  runner's temporary `tailspot_snaps` directory — review them after running.
 //
 //  LeaderboardScreen is List-based, which ImageRenderer can't render, so this
 //  hosts each screen in a real UIWindow and snapshots via drawHierarchy
@@ -24,7 +24,8 @@ import UIKit
 @Suite("Leaderboard window snapshots (visual pass)", .serialized)
 struct LeaderboardWindowSnapshotTests {
 
-    private static let snapDir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
+    private static let snapDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("tailspot_snaps", isDirectory: true)
 
     private func snapshot<V: View>(_ view: V, as name: String) {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
@@ -40,7 +41,7 @@ struct LeaderboardWindowSnapshotTests {
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
         }
-        try? png.write(to: Self.snapDir.appendingPathComponent("\(name).png"))
+        try! png.write(to: Self.snapDir.appendingPathComponent("\(name).png"))
         window.isHidden = true
     }
 
@@ -172,9 +173,10 @@ struct LeaderboardWindowSnapshotTests {
         #expect(true)
     }
 
-    /// Profile hub with the weekly-champion laurel (L6): cached weeklyWins
-    /// renders the gold row under the identity header, offline-capable.
-    @Test func renderProfileLaurel() throws {
+    /// Profile hub with offline-cached weekly/monthly wins folded into the
+    /// identity hero. Render every visibility combination so a visual pass
+    /// covers the absent footer, both single-period layouts, and both periods.
+    @Test func renderProfileChampionSummary() throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
         let savedPoints = defaults.object(forKey: "tailspot.standing.points")
@@ -184,8 +186,6 @@ struct LeaderboardWindowSnapshotTests {
         defaults.set("noah", forKey: SpotterHandle.storageKey)
         defaults.set(1370, forKey: "tailspot.standing.points")
         defaults.set(1, forKey: "tailspot.standing.rank")
-        defaults.set(3, forKey: "tailspot.standing.weeklyWins")
-        defaults.set(2, forKey: "tailspot.standing.monthlyWins")
         defer {
             defaults.set(savedHandle, forKey: SpotterHandle.storageKey)
             defaults.set(savedPoints, forKey: "tailspot.standing.points")
@@ -194,12 +194,22 @@ struct LeaderboardWindowSnapshotTests {
             defaults.set(savedMonthlyWins, forKey: "tailspot.standing.monthlyWins")
         }
         let container = try emptyContainer()
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_laurel_x3")
 
-        // Single win: no "×1" suffix.
-        defaults.set(1, forKey: "tailspot.standing.weeklyWins")
-        defaults.set(1, forKey: "tailspot.standing.monthlyWins")
-        snapshot(ProfileScreen().modelContainer(container), as: "profile_laurel_x1")
+        defaults.set(0, forKey: "tailspot.standing.weeklyWins")
+        defaults.set(0, forKey: "tailspot.standing.monthlyWins")
+        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_no_wins")
+
+        defaults.set(3, forKey: "tailspot.standing.weeklyWins")
+        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_weekly_only")
+
+        defaults.set(0, forKey: "tailspot.standing.weeklyWins")
+        defaults.set(2, forKey: "tailspot.standing.monthlyWins")
+        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_monthly_only")
+
+        defaults.set(3, forKey: "tailspot.standing.weeklyWins")
+        snapshot(ProfileScreen().modelContainer(container), as: "profile_champion_summary_both")
+        snapshot(ProfileScreen().modelContainer(container).dynamicTypeSize(.accessibility2),
+                 as: "profile_champion_summary_both_a11y2")
         #expect(true)
     }
 }
