@@ -146,6 +146,9 @@ struct SetsCoverageTests {
         ("PAY2", "Piper", "PA-31T-620 Cheyenne"),
         ("RV9", "Van's", "RV-9"),
         ("T34P", "Beechcraft", "45 Mentor"),
+        // Public catalog coverage additions validated 2026-09-05.
+        ("AEST", "Aerostar", "600"),
+        ("PA31", "Piper", "PA-31-300 Navajo"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -184,6 +187,8 @@ struct SetsCoverageTests {
             (("PA12", "Piper", "PA-12 Super Cruiser"), "fam-piper", "fpa12"),
             (("PAY2", "Piper", "PA-31T-620 Cheyenne"), "fam-piper", "fpay2"),
             (("T34P", "Beechcraft", "45 Mentor"), "fam-beech", "fbt34"),
+            (("AEST", "Aerostar", "600"), "fam-piper", "fpa60"),
+            (("PA31", "Piper", "PA-31-300 Navajo"), "fam-piper", "fpa31"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -263,6 +268,18 @@ struct SetsCoverageTests {
         let b206Entry = heliSet.entries.first { $0.id == "fh-b206" }!
         #expect(!CardSets.matches(key: c406Key, entry: b206Entry),
                 "A Cessna 406 must not fill the Bell 206 slot")
+
+        // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
+        // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
+        let piperSet = CardSets.families.first { $0.id == "fam-piper" }!
+        let navajoEntry = piperSet.entries.first { $0.id == "fpa31" }!
+        let aerostarEntry = piperSet.entries.first { $0.id == "fpa60" }!
+        let cheyenne = mk(("PAY2", "Piper", "PA-31T-620 Cheyenne"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: cheyenne), entry: navajoEntry),
+                "A PA-31T Cheyenne must not fill the piston PA-31 Navajo slot")
+        let festival = mk(("FEST", "Aerostar", "01 Festival"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: festival), entry: aerostarEntry),
+                "An unrelated Aerostar-branded type must not fill the PA-60 Aerostar slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
