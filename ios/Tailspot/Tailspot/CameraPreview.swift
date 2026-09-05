@@ -75,11 +75,10 @@ struct CameraPreview: UIViewRepresentable {
     /// video-frame delivery (the output isn't even added to the session).
     var frameBridge: CameraFrameBridge?
 
-    /// Whether the capture session should be running. ContentView drives this
-    /// from scene state and fully-opaque utility presentations. Its primary
-    /// Hangar/Profile sheets intentionally leave the session attached because
-    /// the system transition exposes the presenting view around and through
-    /// the sheet; detaching there produces a visible black-background flip.
+    /// Whether the capture session should be running. ContentView first fades
+    /// an opaque brand wash over the live preview, then turns this off after a
+    /// primary sheet finishes presenting. The wash remains while the session
+    /// restarts during dismissal, so neither transition exposes black.
     var isActive: Bool = true
 
     /// Supported zoom range. Wide-camera digital zoom past ~5× shows
