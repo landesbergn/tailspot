@@ -855,10 +855,12 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
+                .modifier(PrimarySheetReveal())
                 .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
+                .modifier(PrimarySheetReveal())
                 .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showCompassSheet) {
@@ -4220,6 +4222,39 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             if let r = emptyRipple, r.1 == now {
                 emptyRipple = nil
+            }
+        }
+    }
+}
+
+/// Softens the handoff from the live AR view to the two content-heavy primary
+/// sheets. The brand background paints immediately, then the finished sheet
+/// content fades in during the native presentation instead of appearing as a
+/// hard late frame. Kept outside `ContentView.body` because that expression is
+/// already near Swift's type-check budget.
+private struct PrimarySheetReveal: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var contentVisible = false
+
+    func body(content: Content) -> some View {
+        ZStack {
+            Brand.Color.bgPrimary
+                .ignoresSafeArea()
+            content
+                .opacity(contentVisible ? 1 : 0)
+        }
+        .task {
+            // Sheet content tasks begin before the native presentation has
+            // reached the screen. A short beat places this fade inside that
+            // motion instead of letting it complete invisibly beforehand.
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            if reduceMotion {
+                contentVisible = true
+            } else {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    contentVisible = true
+                }
             }
         }
     }
