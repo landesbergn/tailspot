@@ -88,6 +88,11 @@ struct ContentView: View {
     /// sets, map, leaderboard, settings, notifications, share).
     /// Opened via the person glyph in the top-trailing corner.
     @State private var showProfile = false
+    /// Becomes true only after the Hangar/Profile presentation animation has
+    /// settled. Their request flags flip at tap time, before SwiftUI has a
+    /// sheet ready to cover the camera; using those flags directly for camera
+    /// occlusion detaches the preview and exposes its black backing view.
+    @State private var primarySheetVisible = false
     /// Drives the compass calibration sheet. Tapping the AR
     /// caution badge sets this true; the sheet explains what's
     /// wrong and shows the figure-8 calibration motion.
@@ -551,13 +556,10 @@ struct ContentView: View {
                                     .allowsHitTesting(false)
                             }
 
-                            // Bottom capture bar: hangar tray (left),
-                            // big central capture button, profile
-                            // (right). Built inside the TimelineView
-                            // so the capture button's appearance and
-                            // payload react to the per-frame visible
-                            // set + pin state.
-                            //
+                            // The central capture button stays inside the
+                            // TimelineView because its appearance and payload
+                            // react to per-frame state. Hangar/Profile render
+                            // once outside this 30 Hz subtree below.
                             // Spec § 3.2: a single always-present
                             // capture button. The visible-count + pin
                             // drive the mode (disabled / single /
@@ -669,7 +671,7 @@ struct ContentView: View {
                             }()
                             VStack {
                                 Spacer()
-                                captureBar(
+                                captureButton(
                                     mode: mode,
                                     screenSize: geo.size,
                                     positions: onScreenPositions
@@ -688,6 +690,26 @@ struct ContentView: View {
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                     }
+
+                    // Static navigation controls must not inherit the AR
+                    // TimelineView's 30 Hz invalidation cadence. A clear
+                    // capture-sized spacer preserves the established layout
+                    // while taps fall through to the live capture button.
+                    VStack {
+                        Spacer()
+                        HStack {
+                            bottomHangarButton
+                            Spacer()
+                            Color.clear
+                                .frame(width: 72, height: 72)
+                                .allowsHitTesting(false)
+                            Spacer()
+                            bottomProfileButton
+                        }
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 12))
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
                 .ignoresSafeArea()
 
@@ -815,7 +837,10 @@ struct ContentView: View {
         // When the Hangar closes, re-diff — a country backfill done inside
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
         .onChange(of: showHangar) { _, isShowing in
-            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
+            if !isShowing {
+                primarySheetVisible = false
+                unlockCenter.enqueueNewUnlocks(from: catches)
+            }
         }
         // Same on Profile close — the leaderboard fetches inside that sheet
         // (ProfileScreen standing + LeaderboardScreen boards) refresh the
@@ -823,13 +848,18 @@ struct ContentView: View {
         // Dynasty / Chart Topper while it's open. Re-diffing here makes the
         // FIRST live crossing celebrate as soon as the sheet dismisses.
         .onChange(of: showProfile) { _, isShowing in
-            if !isShowing { unlockCenter.enqueueNewUnlocks(from: catches) }
+            if !isShowing {
+                primarySheetVisible = false
+                unlockCenter.enqueueNewUnlocks(from: catches)
+            }
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
+                .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
+                .task { await occludeARAfterPrimarySheetPresents() }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -1155,7 +1185,11 @@ struct ContentView: View {
 
     /// True when an OPAQUE modal fully covers the camera / AR view — the
     /// standard sheets: Hangar, Profile, compass calibration, the DEBUG
-    /// trophy-icon gallery, and the replay report. While occluded we power
+    /// trophy-icon gallery, and the replay report. Hangar/Profile join this
+    /// set only after their presentation animation settles: their request
+    /// flags and content tasks start before SwiftUI commits the sheet's first
+    /// stable frame, and stopping the camera earlier exposes black. While
+    /// occluded we power
     /// down the sensors + the 30 Hz render loop the user can't see (see
     /// `.onChange(of: arOccluded)` and the `paused:` TimelineView).
     ///
@@ -1168,11 +1202,21 @@ struct ContentView: View {
     /// builds, so reading them here compiles everywhere and stays false in
     /// Release.)
     private var arOccluded: Bool {
-        showHangar
-            || showProfile
+        primarySheetVisible
             || showCompassSheet
             || showIconGallery
             || replayURL != nil
+    }
+
+    /// SwiftUI starts a sheet content task before the presentation animation
+    /// has produced its first stable frame. Keep the live camera attached for
+    /// that short transition, then retain the existing power-saving shutdown
+    /// for the rest of the opaque sheet's lifetime. The task is cancelled if
+    /// the sheet disappears before the delay completes.
+    private func occludeARAfterPrimarySheetPresents() async {
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled, showHangar || showProfile else { return }
+        primarySheetVisible = true
     }
 
     /// Ambient-label metadata prefetch body (the `.task(id: visibleIcaoSignature)`
@@ -1791,25 +1835,6 @@ struct ContentView: View {
         if keep {
             Task { await CatchUploader().uploadPending(context: modelContext) }
         }
-    }
-
-    /// Bottom capture bar — hangar (left), big central capture
-    /// button, profile (right). The central button is a single
-    /// always-present circle; mode drives its enabled state and
-    /// whether a `×N` badge appears in the top-right corner.
-    private func captureBar(
-        mode: CaptureMode,
-        screenSize: CGSize,
-        positions: [String: CGPoint]
-    ) -> some View {
-        HStack {
-            bottomHangarButton
-            Spacer()
-            captureButton(mode: mode, screenSize: screenSize, positions: positions)
-            Spacer()
-            bottomProfileButton
-        }
-        .padding(.horizontal, 28)
     }
 
     /// Merged capture path. Single entry point used by the unified
