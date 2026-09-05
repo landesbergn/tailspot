@@ -93,6 +93,10 @@ struct ContentView: View {
     /// sheet ready to cover the camera; using those flags directly for camera
     /// occlusion detaches the preview and exposes its black backing view.
     @State private var primarySheetVisible = false
+    /// Turns the primary sheet's content on partway through the native opening
+    /// motion. Kept separate from `primarySheetVisible` so the content can fade
+    /// in before it is safe to stop the camera behind the presentation.
+    @State private var primarySheetContentVisible = false
     /// Drives the compass calibration sheet. Tapping the AR
     /// caution badge sets this true; the sheet explains what's
     /// wrong and shows the figure-8 calibration motion.
@@ -839,6 +843,7 @@ struct ContentView: View {
         .onChange(of: showHangar) { _, isShowing in
             if !isShowing {
                 primarySheetVisible = false
+                primarySheetContentVisible = false
                 unlockCenter.enqueueNewUnlocks(from: catches)
             }
         }
@@ -850,18 +855,19 @@ struct ContentView: View {
         .onChange(of: showProfile) { _, isShowing in
             if !isShowing {
                 primarySheetVisible = false
+                primarySheetContentVisible = false
                 unlockCenter.enqueueNewUnlocks(from: catches)
             }
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
-                .modifier(PrimarySheetReveal())
-                .task { await occludeARAfterPrimarySheetPresents() }
+                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
+                .task { await stagePrimarySheetPresentation() }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
-                .modifier(PrimarySheetReveal())
-                .task { await occludeARAfterPrimarySheetPresents() }
+                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
+                .task { await stagePrimarySheetPresentation() }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -1215,8 +1221,12 @@ struct ContentView: View {
     /// that short transition, then retain the existing power-saving shutdown
     /// for the rest of the opaque sheet's lifetime. The task is cancelled if
     /// the sheet disappears before the delay completes.
-    private func occludeARAfterPrimarySheetPresents() async {
-        try? await Task.sleep(for: .milliseconds(500))
+    private func stagePrimarySheetPresentation() async {
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled, showHangar || showProfile else { return }
+        primarySheetContentVisible = true
+
+        try? await Task.sleep(for: .milliseconds(200))
         guard !Task.isCancelled, showHangar || showProfile else { return }
         primarySheetVisible = true
     }
@@ -4235,23 +4245,18 @@ struct ContentView: View {
 private struct PrimarySheetReveal: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var contentVisible = false
+    let isReady: Bool
 
     func body(content: Content) -> some View {
         ZStack {
             Brand.Color.bgPrimary
                 .ignoresSafeArea()
             content
-                .opacity(contentVisible ? 1 : 0)
+                .opacity(reduceMotion || contentVisible ? 1 : 0)
         }
-        .task {
-            // Sheet content tasks begin before the native presentation has
-            // reached the screen. A short beat places this fade inside that
-            // motion instead of letting it complete invisibly beforehand.
-            try? await Task.sleep(for: .milliseconds(100))
-            guard !Task.isCancelled else { return }
-            if reduceMotion {
-                contentVisible = true
-            } else {
+        .onChange(of: isReady, initial: true) { _, ready in
+            guard ready, !contentVisible else { return }
+            if !reduceMotion {
                 withAnimation(.easeOut(duration: 0.22)) {
                     contentVisible = true
                 }
