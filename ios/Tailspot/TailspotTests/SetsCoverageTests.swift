@@ -48,7 +48,9 @@ struct SetsCoverageTests {
         ("C402", "Cessna", "402"), ("A339", "Airbus", "A330-900"),
         ("GLEX", "Bombardier", "BD-700 Global Express"), ("C700", "Cessna", "700 Citation Longitude"),
         ("A332", "Airbus", "A330-200"), ("A35K", "Airbus", "A350-1000"),
-        ("AS50", "Airbus Helicopters", "H-125 Fennec"), ("GLF4", "Gulfstream", "IV"),
+        ("AS50", "Airbus Helicopters", "H-125 Fennec"),
+        ("AS55", "Airbus Helicopters", "AS-555 Fennec"),
+        ("GLF4", "Gulfstream", "IV"),
         ("SR20", "Cirrus", "SR20"), ("E190", "Embraer", "190"),
         ("BCS1", "Airbus", "A220-100"), ("H25B", "Hawker", "800XP"),
         ("E545", "Embraer", "EMB-545 Legacy 450"), ("B753", "Boeing", "757-300"),
@@ -169,6 +171,7 @@ struct SetsCoverageTests {
     @Test func newlyCoveredTypesFillTheirIntendedFamilySlots() {
         let assignments: [((String, String, String), String, String)] = [
             (("B505", "Bell", "505 Jet Ranger X"), "fam-heli", "fh-b505"),
+            (("AS55", "Airbus Helicopters", "AS-555 Fennec"), "fam-heli", "fh-as355"),
             (("CH7B", "Champion", "7GCAA"), "fam-sport-classics", "fsc-citabria"),
             (("FA20", "Dassault", "Falcon 20"), "fam-falcon", "ffa20"),
             (("GB1", "Game Composites", "GB-1 GameBird"), "fam-sport-classics", "fsc-gamebird"),
@@ -211,6 +214,13 @@ struct SetsCoverageTests {
         let h130Entry = heliSet.entries.first { $0.id == "fh-h130" }!
         #expect(!CardSets.matches(key: hercKey, entry: h130Entry),
                 "A C-130 Hercules must not fill the H130 helicopter slot")
+
+        // AS50 covers the single-engine AS350/AS550 family; AS55 is the
+        // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
+        let as50 = mk(("AS50", "Airbus Helicopters", "H-125 Fennec"))
+        let as55Entry = heliSet.entries.first { $0.id == "fh-as355" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: as50), entry: as55Entry),
+                "An AS50 single-engine Fennec must not fill the AS55 twin slot")
 
         // A P-51 (canonical "A-36 Mustang") must not fill Citation Mustang,
         // and a Citation Mustang must not fill the P-51 warbird slot.
