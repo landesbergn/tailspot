@@ -5,6 +5,29 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-05 — Precision-tap reveal — PR #248
+
+Field miss, Berkeley 08:46 PDT: Noah tapped six times on a plane he could
+plainly see — WGN211, a Western Global 747-400 freighter at 35,000 ft, 33 km
+out over the coast — and got the NO AIRCRAFT HERE ripple every time. The
+replay + PostHog showed the app knew exactly which plane it was (each tap
+0.5–3.5° from its projection, compass fine, position fresh) and hid it on
+purpose: the 18.7° elevation put the visibility cap at ≈ 9.7 km and tap-reveal
+reach at ≈ 29 km, 4 km short; the contrail allowance only starts at 30°. The
+beyond-eyeshot toast was suppressed too, because a 16 km plane 55° off-aim
+counted as revealable.
+
+Decision: keep default visibility as is, but a targeted tap must reveal and
+make the plane catchable. New classifier reason `filtered-precise` — a hidden,
+airborne, above-horizon plane within `precisionTapRevealMaxOffsetDeg` (2.5°) of
+the tap reveals + force-locks like `filtered`. Sized on recorded offsets:
+Dumbarton ≥ 9.6° (untouched), NYC couch 11/12 ≥ 5.3° with one 1.8° admission
+(accepted trade, pinned by `couchTapsStayRefusedExceptTheOneDeadOn`). Today's
+recording is redacted and committed as a permanent `FieldReplays` regression,
+run through a new shared `emptySkyTapCandidates` test harness. Diagnosis
+lesson: HogQL datetime literals are project-local time, not UTC — a UTC window
+returned zero rows and briefly looked like a missing session.
+
 ## 2026-09-01 — v1.1.1 train opened — branch `chore/open-1.1.1-train`
 
 v1.1.0 went live on the App Store on **2026-08-29 16:10 UTC as build 89** — the
