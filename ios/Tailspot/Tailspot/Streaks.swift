@@ -89,18 +89,6 @@ nonisolated enum Streaks {
         catches: [Catch],
         timeZone: TimeZone = .current
     ) -> Set<String> {
-        #if DEBUG
-        // The wrench panel's streak override (see `StreakDebug`). It is
-        // applied HERE, at the one funnel every display reader shares, and
-        // not inside `summary` — that is the bug from 2026-08-21: the
-        // Profile went through `summary` and saw the forced 12, the catch
-        // reveal called `currentStreak` directly and saw the real 26, and
-        // the app confidently showed two different streaks minutes apart.
-        // A debug seam that only some readers honour is worse than none.
-        if let forced = StreakDebug.override {
-            return StreakDebug.syntheticDays(for: forced, timeZone: timeZone)
-        }
-        #endif
         return realDaySet(catches: catches, timeZone: timeZone)
     }
 
@@ -219,9 +207,7 @@ nonisolated enum StreakTelemetry {
     /// Fired when the user opens the app from a streak-protection
     /// reminder — the reminder's effectiveness signal.
     static let reminderOpenedEvent = "streak_reminder_opened"
-    /// Fired when the notification pre-prompt card presents. Real
-    /// promotions only — the wrench's forced card stays out of telemetry
-    /// (the debug-seam rule).
+    /// Fired when the notification pre-prompt card presents.
     static let askShownEvent = "streak_ask_shown"
     /// The card's resolution. `accepted` true = "Notify me", which hands
     /// off to the system dialog (whose result is `permission_outcome`);
@@ -294,103 +280,3 @@ nonisolated enum StreakTelemetry {
     }
 }
 
-#if DEBUG
-
-// MARK: - Debug override (wrench panel only)
-
-/// Forces `Streaks.summary` to a chosen value so the streak surfaces can
-/// be exercised on-device without waiting out real days. DEBUG-only — the
-/// whole wrench panel is `#if DEBUG`, so none of this exists in the
-/// TestFlight or App Store builds.
-nonisolated enum StreakDebug {
-    /// UserDefaults-backed so it survives the relaunch that a notification
-    /// test usually involves (background the app, wait for delivery, tap).
-    static let daysKey = "tailspot.debug.streakDays"
-    static let bestKey = "tailspot.debug.streakBest"
-    static let caughtTodayKey = "tailspot.debug.streakCaughtToday"
-
-    /// nil = off, real catches decide.
-    static var override: Streaks.Summary? {
-        let d = UserDefaults.standard
-        guard d.object(forKey: daysKey) != nil else { return nil }
-        let days = d.integer(forKey: daysKey)
-        return Streaks.Summary(
-            current: days,
-            longest: max(d.integer(forKey: bestKey), days),
-            caughtToday: d.bool(forKey: caughtTodayKey)
-        )
-    }
-
-    /// Step the forced streak: nil → minimumStreak → … → 12 → nil. Starts
-    /// at `StreakReminders.minimumStreak`, the first length where the chip,
-    /// the reminder and the ask all switch on.
-    static func cycle() {
-        let d = UserDefaults.standard
-        guard let current = override?.current else {
-            d.set(StreakReminders.minimumStreak, forKey: daysKey)
-            d.set(7, forKey: bestKey)
-            d.set(false, forKey: caughtTodayKey)
-            return
-        }
-        if current >= 12 { clear() } else { d.set(current + 1, forKey: daysKey) }
-    }
-
-    /// Flip today between caught (streak safe) and uncaught (at risk) —
-    /// the two states the Profile card and the reminder planner branch on.
-    static func toggleCaughtToday() {
-        let d = UserDefaults.standard
-        guard override != nil else { return }
-        d.set(!d.bool(forKey: caughtTodayKey), forKey: caughtTodayKey)
-    }
-
-    static func clear() {
-        let d = UserDefaults.standard
-        d.removeObject(forKey: daysKey)
-        d.removeObject(forKey: bestKey)
-        d.removeObject(forKey: caughtTodayKey)
-    }
-
-    /// A day set that reproduces `summary` under the real streak maths, so
-    /// a forced streak flows THROUGH `currentStreak`/`longestStreak` rather
-    /// than replacing their answer. The maths stays the thing under test,
-    /// and every reader of `daySet` agrees by construction.
-    static func syntheticDays(
-        for summary: Streaks.Summary,
-        now: Date = Date(),
-        timeZone: TimeZone = .current
-    ) -> Set<String> {
-        guard summary.current > 0 else { return [] }
-        var days = Set<String>()
-        // Anchor at today when today is "caught", else yesterday — the two
-        // anchors `currentStreak` looks for under the grace rule.
-        var cursor = Streaks.dayKey(for: now, timeZone: timeZone)
-        if !summary.caughtToday {
-            guard let yesterday = Streaks.key(byAdding: -1, to: cursor) else { return [] }
-            cursor = yesterday
-        }
-        for _ in 0..<summary.current {
-            days.insert(cursor)
-            guard let prev = Streaks.key(byAdding: -1, to: cursor) else { break }
-            cursor = prev
-        }
-        // A separate older run so `longestStreak` can report the forced
-        // best without touching the live run.
-        if summary.longest > summary.current,
-           var gap = Streaks.key(byAdding: -2, to: cursor) {
-            for _ in 0..<summary.longest {
-                days.insert(gap)
-                guard let prev = Streaks.key(byAdding: -1, to: gap) else { break }
-                gap = prev
-            }
-        }
-        return days
-    }
-
-    /// One-line panel readout, amber whenever the override is live.
-    static var label: String {
-        guard let o = override else { return "off" }
-        return "\(o.current)d best \(o.longest) \(o.caughtToday ? "safe" : "at-risk")"
-    }
-}
-
-#endif

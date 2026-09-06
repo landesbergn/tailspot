@@ -66,26 +66,10 @@ nonisolated enum StreakReminders {
     /// 17, not 18 (Noah, 2026-08-25): 5pm leaves a full daylight-ish hour
     /// more to act on the nudge before the evening swallows it.
     static let reminderHour = 17
-    #if DEBUG
-    /// `userInfo` marker set only by the wrench panel's 🔔 Fire, so the
-    /// delegate can present it even on the camera. Never set on the real
-    /// scheduled request.
-    static let debugBypassKey = "tailspot.debug.bypassForegroundRule"
-    /// A SEPARATE identifier for the debug fire. Sharing `notificationId`
-    /// meant the next `sync()` — which runs on every foreground and clears
-    /// that slot — silently deleted the pending test notification, so
-    /// backgrounding the app to watch for the banner and coming straight
-    /// back is exactly what stopped it arriving. Its own slot can't collide.
-    static let debugNotificationId = "tailspot.streak.reminder.debug"
-    #endif
-
-    /// Identifiers the delegate answers for.
+    /// Identifiers the delegate answers for. (The wrench panel's separate
+    /// debug-fire identifier went with the streak row, 2026-09-05.)
     static func isStreakReminder(_ identifier: String) -> Bool {
-        #if DEBUG
-        return identifier == notificationId || identifier == debugNotificationId
-        #else
-        return identifier == notificationId
-        #endif
+        identifier == notificationId
     }
     /// The smallest streak worth protecting — also the reveal-chip and
     /// permission-ask threshold, so the three surfaces agree on when a
@@ -345,17 +329,6 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         guard StreakReminders.isStreakReminder(notification.request.identifier) else {
             return [.banner, .sound]
         }
-        #if DEBUG
-        // The wrench's 🔔 Fire lives ON the camera, which is the one place
-        // the rule below deliberately shows nothing — so a debug fire that
-        // obeyed it would look exactly like a broken notification. Debug
-        // requests carry a marker and always present; the real scheduled
-        // path below is untouched.
-        if notification.request.content.userInfo[StreakReminders.debugBypassKey] != nil {
-            Self.lastForegroundDecision = "presented (debug bypass)"
-            return [.banner, .sound]
-        }
-        #endif
         let onCamera = Self.cameraIsFrontmost()
         let options = StreakReminders.foregroundPresentation(cameraFrontmost: onCamera)
         // The foreground half of `streak_reminder_delivered`, on the shared
@@ -372,20 +345,9 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
                 presented: !onCamera
             )
         }
-        #if DEBUG
-        // Make the invisible visible: without this, "correctly suppressed"
-        // and "never arrived" are the same observation.
-        Self.lastForegroundDecision = onCamera ? "suppressed (on camera)" : "banner shown"
-        #endif
         Log.ui.notice("Streak reminder foreground: onCamera=\(onCamera, privacy: .public)")
         return options
     }
-
-    #if DEBUG
-    /// What the delegate did with the most recent foreground delivery, for
-    /// the wrench panel's readout.
-    @MainActor static var lastForegroundDecision: String?
-    #endif
 
     /// True when nothing is covering the viewfinder.
     @MainActor
@@ -439,90 +401,3 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
-#if DEBUG
-
-extension StreakReminderCenter {
-    /// Deliver the REAL reminder in `after` seconds. Same identifier, same
-    /// content builder, same delegate — only the trigger differs, plus a
-    /// `userInfo` marker that lets it through the camera-silence rule (the
-    /// button is ON the camera; obeying the rule would make a working
-    /// notification look broken).
-    ///
-    /// Ten seconds, not the reflexive two: it has to be long enough to
-    /// background the app or open the Hangar and still catch the delivery.
-    func debugFireReminder(streakAtStake: Int, after seconds: TimeInterval = 10) async -> String {
-        let center = UNUserNotificationCenter.current()
-        var settings = await center.notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            _ = await requestPermission()
-            settings = await center.notificationSettings()
-        }
-        guard settings.authorizationStatus == .authorized
-                || settings.authorizationStatus == .provisional else {
-            return "\(Self.describe(settings.authorizationStatus)) — allow in iOS Settings"
-        }
-        // Authorized but alerts off ("Deliver Quietly", or banners disabled)
-        // swallows this exactly as silently as a bug would. Say so.
-        if settings.alertSetting == .disabled {
-            return "authorized but BANNERS OFF — iOS Settings › Notifications"
-        }
-        await MainActor.run { Self.lastForegroundDecision = nil }
-        let content = Self.content(streakAtStake: streakAtStake)
-        content.userInfo[StreakReminders.debugBypassKey] = true
-        let request = UNNotificationRequest(
-            identifier: StreakReminders.debugNotificationId,
-            content: content,
-            trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
-        )
-        do {
-            try await center.add(request)
-            Log.ui.notice("DEBUG streak reminder in \(Int(seconds), privacy: .public)s, streak \(streakAtStake, privacy: .public)")
-            return "firing in \(Int(seconds))s — Focus/DND will hide it"
-        } catch {
-            return "failed: \(error.localizedDescription)"
-        }
-    }
-
-    static func describe(_ status: UNAuthorizationStatus) -> String {
-        switch status {
-        case .notDetermined: return "not-asked"
-        case .denied:        return "DENIED"
-        case .authorized:    return "ok"
-        case .provisional:   return "provisional"
-        case .ephemeral:     return "ephemeral"
-        @unknown default:    return "?"
-        }
-    }
-
-    /// Panel readout: permission state, banner style, what's queued, and
-    /// what the delegate did with the last foreground delivery. Every one
-    /// of those can silently eat a notification, so all four are printed.
-    func debugStatusLine() async -> String {
-        let center = UNUserNotificationCenter.current()
-        let settings = await center.notificationSettings()
-        var parts = [Self.describe(settings.authorizationStatus)]
-        if settings.alertSetting == .disabled { parts.append("BANNERS OFF") }
-        let pending = await center.pendingNotificationRequests()
-            .filter { StreakReminders.isStreakReminder($0.identifier) }
-            // Debug fire first — while one is armed it is what you're
-            // waiting on, not the real evening slot.
-            .sorted { $0.identifier != StreakReminders.notificationId
-                      && $1.identifier == StreakReminders.notificationId }
-        if let trigger = pending.first?.trigger as? UNCalendarNotificationTrigger,
-           let date = trigger.nextTriggerDate() {
-            let f = DateFormatter()
-            f.dateFormat = "MMM d HH:mm"
-            parts.append("queued \(f.string(from: date))")
-        } else if let t = pending.first?.trigger as? UNTimeIntervalNotificationTrigger {
-            parts.append("queued \(Int(t.timeInterval))s")
-        } else {
-            parts.append("queued none")
-        }
-        if let decision = await MainActor.run(body: { Self.lastForegroundDecision }) {
-            parts.append(decision)
-        }
-        return parts.joined(separator: " · ")
-    }
-}
-
-#endif

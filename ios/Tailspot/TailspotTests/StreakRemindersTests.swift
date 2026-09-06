@@ -209,15 +209,12 @@ struct StreakRemindersTests {
                 == "Streak at risk — catch one before midnight")
     }
 
-    /// The debug fire must NOT share the real slot. `sync()` clears
-    /// `notificationId` on every foreground, so a debug request filed there
-    /// was deleted by backgrounding the app and coming back — which is
-    /// exactly what you do while waiting for a test notification.
-    @Test func debugReminderUsesItsOwnSlot() {
-        #expect(StreakReminders.debugNotificationId != StreakReminders.notificationId)
-        // The delegate still answers for both.
+    /// The delegate answers for the real reminder slot and nothing else.
+    /// (The wrench panel's separate debug-fire slot went with the streak
+    /// row in the 2026-09-05 declutter.)
+    @Test func delegateAnswersForTheReminderSlotOnly() {
         #expect(StreakReminders.isStreakReminder(StreakReminders.notificationId))
-        #expect(StreakReminders.isStreakReminder(StreakReminders.debugNotificationId))
+        #expect(!StreakReminders.isStreakReminder("tailspot.streak.reminder.debug"))
         #expect(!StreakReminders.isStreakReminder("com.example.other"))
     }
 }

@@ -82,15 +82,7 @@ struct ContentView: View {
     #if DEBUG
     /// Cycles the debug "Simulate catch" preset (tier) on each tap.
     @State private var simCatchIndex = 0
-    /// Bumped to force the wrench panel's STREAK row to re-read the
-    /// override, which lives in UserDefaults where SwiftUI can't see it.
-    @State private var streakDebugRefresh = 0
-    /// Last line the STREAK row printed (permission state, what's queued,
-    /// or the result of a manual fire).
-    @State private var streakDebugStatus = "—"
     #endif
-    /// DEBUG-only: presents the trophy-icon gallery for visual review.
-    @State private var showIconGallery = false
     /// Drives the Hangar sheet (collection of past catches). Opened
     /// via the tray glyph in the top-trailing corner.
     @State private var showHangar = false
@@ -157,9 +149,6 @@ struct ContentView: View {
     /// The AR view's current size, captured from the GeometryReader so
     /// the 1 Hz asserted-plane prune can project without a body pass.
     @State private var arScreenSize: CGSize = .zero
-    /// URL of the recording the user wants to analyze. Non-nil →
-    /// `ReplayReportView` sheet is presented for that file.
-    @State private var replayURL: URL?
     /// Bridges to `PreviewView` so the auto-catch path can grab a
     /// still photo. `PreviewView.bridgeCapture(to:)` installs the
     /// capture closure at `makeUIView` time. Held via `@State` (not
@@ -193,10 +182,6 @@ struct ContentView: View {
     /// latches `StreakReminders.permissionAskedKey` immediately, so a kill
     /// mid-card still counts as asked.
     @State private var streakAsk: Int? = nil
-    /// True while the visible card was forced by the wrench's 🔔 Ask —
-    /// keeps the ask-shown/response events real-promotions-only (the
-    /// debug-seam rule: debug paths stay out of telemetry).
-    @State private var streakAskFromDebug = false
     /// Non-nil → the one-question Keep/Discard review dialog is up.
     @State private var pendingSuspectReview: SuspectReview?
     /// Ambient "you're indoors" hint, shown proactively when the camera
@@ -296,10 +281,6 @@ struct ContentView: View {
     /// itself is once-per-install (persisted), but this short-circuits the
     /// per-tick filter work in `.onReceive(adsb.$observed)` after it's latched.
     @State private var firstPlaneSeenLatched = false
-    /// Cached most-recent replay recording for the debug `analyzeRow`, so that
-    /// row doesn't do a FileManager directory scan on every body eval. Refreshed
-    /// when the debug panel opens and after a recording is toggled off.
-    @State private var latestRecordingURL: URL?
 
     var body: some View {
         ZStack {
@@ -670,26 +651,22 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         #if DEBUG
-                        // Force the trophy-unlock moment so the animation /
-                        // haptic / a11y / hidden-reveal path can be eyeballed
-                        // on-device without waiting for an organic crossing.
+                        // Panel declutter (2026-09-05): only the affordances
+                        // a field session still reaches for. ✦ Catch fakes a
+                        // reveal without a plane overhead; ★ Rearm un-burns
+                        // the once-per-version review-ask stamp so the
+                        // trophy → rating-sheet path can be exercised again
+                        // (dev builds always show the sheet; ReviewPrompt.swift).
+                        // The trophy-unlock / icon-gallery previews and the
+                        // streak override went with their features shipping.
                         HStack(spacing: 8) {
                             Button("✦ Catch") { simulateCatch() }
-                            Button("⚑ Unlock") { unlockCenter.debugEnqueueSample(secret: false) }
-                            Button("⚑ Secret") { unlockCenter.debugEnqueueSample(secret: true) }
-                            Button("⚑ Icons") { showIconGallery = true }
-                            // Un-burn the once-per-version review-ask stamp so
-                            // the tap-through-a-trophy → rating-sheet path can
-                            // be exercised repeatedly (dev builds always show
-                            // the sheet; see ReviewPrompt.swift).
                             Button("★ Rearm") { ReviewPrompter.shared.debugClearStamp() }
                         }
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .buttonStyle(.bordered)
                         .tint(Brand.Color.cyan)
                         .padding(.horizontal, 12)
-
-                        streakDebugRow
                         #endif
 
                         Spacer(minLength: 0)
@@ -778,9 +755,6 @@ struct ContentView: View {
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
         }
-        #if DEBUG
-        .sheet(isPresented: $showIconGallery) { TrophyIconGallery() }
-        #endif
         .task {
             await requestCameraPermission()
             location.requestPermissionAndStart()
@@ -834,12 +808,6 @@ struct ContentView: View {
             @unknown default:
                 break
             }
-        }
-        // Refresh the cached most-recent recording when the debug panel opens
-        // (and see `toggleRecording`) so `analyzeRow` doesn't scan the replays
-        // directory on every body eval.
-        .onChange(of: showDebug) { _, isShowing in
-            if isShowing { latestRecordingURL = ReplayRecorder.mostRecentRecording() }
         }
         // Ambient metadata prefetch for all-frame labels. The id is a
         // content-keyed signature of the currently-visible icao24
@@ -1038,23 +1006,6 @@ struct ContentView: View {
                 pruneLegacyPin()
             }
         }
-        .sheet(isPresented: replaySheetPresented) {
-            if let replayURL {
-                ReplayReportView(url: replayURL)
-            } else {
-                EmptyView()
-            }
-        }
-    }
-
-    /// Extracted from `body` for the same type-check-budget reason as
-    /// `suspectReviewPresented` — inline derived Bindings in the modifier
-    /// chain are what pushed CI's compiler past its time limit.
-    private var replaySheetPresented: Binding<Bool> {
-        Binding<Bool>(
-            get: { replayURL != nil },
-            set: { if !$0 { replayURL = nil } }
-        )
     }
 
     /// The interactive-visible set: the ambient visibility tier PLUS any
@@ -1382,8 +1333,7 @@ struct ContentView: View {
     #endif
 
     /// True when an OPAQUE modal fully covers the camera / AR view — the
-    /// standard sheets: Hangar, Profile, compass calibration, the DEBUG
-    /// trophy-icon gallery, and the replay report. Hangar/Profile join this
+    /// standard sheets: Hangar, Profile, and compass calibration. Hangar/Profile join this
     /// set only after their presentation animation settles: their request
     /// flags and content tasks both start before SwiftUI has committed a sheet
     /// frame, and stopping the camera at either earlier point exposes its black
@@ -1395,15 +1345,10 @@ struct ContentView: View {
     /// DELIBERATELY EXCLUDED: they present with `.presentationBackground(.clear)`
     /// so the live AR shows THROUGH the card — pausing labels/motion under
     /// them would visibly freeze the sky behind the reveal (a regression).
-    /// Only fully-opaque presentations belong here. (`showIconGallery` and
-    /// `replayURL` are only ever set in DEBUG, but their state exists in all
-    /// builds, so reading them here compiles everywhere and stays false in
-    /// Release.)
+    /// Only fully-opaque presentations belong here.
     private var arOccluded: Bool {
         primarySheetVisible
             || showCompassSheet
-            || showIconGallery
-            || replayURL != nil
     }
 
     /// SwiftUI starts a sheet content task before the presentation animation
@@ -1795,9 +1740,7 @@ struct ContentView: View {
                     }
                     HStack(spacing: 12) {
                         Button {
-                            if !streakAskFromDebug {
-                                StreakTelemetry.fireAskResponse(accepted: true, streakDays: days)
-                            }
+                            StreakTelemetry.fireAskResponse(accepted: true, streakDays: days)
                             withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
                             Task { @MainActor in
                                 _ = await StreakReminderCenter.shared.requestPermission()
@@ -1814,9 +1757,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         Button {
-                            if !streakAskFromDebug {
-                                StreakTelemetry.fireAskResponse(accepted: false, streakDays: days)
-                            }
+                            StreakTelemetry.fireAskResponse(accepted: false, streakDays: days)
                             withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
                         } label: {
                             Text("Not now")
@@ -1951,7 +1892,6 @@ struct ContentView: View {
             if suspectAwaitingReview.isEmpty, !showHangar,
                pendingReveal == nil, pendingMultiReveal == nil {
                 UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
-                streakAskFromDebug = false
                 StreakTelemetry.fireAskShown(streakDays: askDays)
                 withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
                 momentClaimed = true
@@ -3054,109 +2994,6 @@ struct ContentView: View {
     /// so the catch / reveal / economy can be eyeballed on-device without a
     /// real plane (the synthetic ADS-B source was removed). Non-persisting —
     /// shows the reveal card without writing to the Hangar.
-    #if DEBUG
-    /// STREAK row of the wrench panel. The feature's three surfaces all key
-    /// off streak LENGTH and an evening clock, so without this the only way to
-    /// see any of them is to catch planes on N consecutive days and then
-    /// wait for the evening. The override is DEBUG-only and printed back on
-    /// the line above in amber whenever it's live — a stuck override that
-    /// quietly makes the Profile lie is the mock-mode failure mode.
-    @ViewBuilder
-    private var streakDebugRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("STREAK")
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text(StreakDebug.label)
-                    .foregroundStyle(StreakDebug.override == nil
-                                     ? Brand.Color.textTertiary
-                                     : Brand.Color.alertCaution)
-                Text("·")
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text(streakDebugStatus)
-                    .foregroundStyle(Brand.Color.textTertiary)
-            }
-            .font(Brand.Font.mono(size: 10, weight: .semibold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-
-            HStack(spacing: 8) {
-                // nil → 2 → 3 → … → 12 → nil. Re-plans on every step so the
-                // pending reminder always matches what the panel claims.
-                Button("🔥 \(StreakDebug.override.map { "\($0.current)d" } ?? "Set")") {
-                    StreakDebug.cycle()
-                    streakDebugRefresh &+= 1
-                    Task { await StreakReminderCenter.shared.sync(context: modelContext) }
-                }
-                // At-risk vs safe — the branch the card's state line and the
-                // planner's "today" test both hang off.
-                Button(streakSummaryNow.caughtToday ? "🔥 Safe" : "🔥 Risk") {
-                    StreakDebug.toggleCaughtToday()
-                    streakDebugRefresh &+= 1
-                    Task { await StreakReminderCenter.shared.sync(context: modelContext) }
-                }
-                .disabled(StreakDebug.override == nil)
-                // The real notification, 10 s out: same id, same content, same
-                // delegate — only the trigger differs, plus a marker that
-                // lets it through the camera-silence rule (this button IS on
-                // the camera). Re-reads the status once it has landed so the
-                // row reports what the delegate actually did with it.
-                Button("🔔 Fire") {
-                    let streak = max(streakSummaryNow.current, StreakReminders.minimumStreak)
-                    Task {
-                        streakDebugStatus = await StreakReminderCenter.shared
-                            .debugFireReminder(streakAtStake: streak)
-                        try? await Task.sleep(for: .seconds(13))
-                        streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
-                    }
-                }
-                // The one-shot pre-prompt, unlatched so it can be re-tested.
-                Button("🔔 Ask") {
-                    streakAskFromDebug = true
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        streakAsk = max(streakSummaryNow.current, StreakReminders.minimumStreak)
-                    }
-                }
-                // Clear the override AND the asked latch, then re-plan from
-                // the real Hangar — back to a truthful device.
-                Button("↺ Reset") {
-                    StreakDebug.clear()
-                    UserDefaults.standard.removeObject(forKey: StreakReminders.permissionAskedKey)
-                    // The debug fire has its own slot, so `sync` below won't
-                    // clear it — Reset has to.
-                    UNUserNotificationCenter.current().removePendingNotificationRequests(
-                        withIdentifiers: [StreakReminders.debugNotificationId])
-                    UNUserNotificationCenter.current().removeDeliveredNotifications(
-                        withIdentifiers: [StreakReminders.debugNotificationId])
-                    StreakReminderCenter.lastForegroundDecision = nil
-                    streakDebugRefresh &+= 1
-                    Task {
-                        await StreakReminderCenter.shared.sync(context: modelContext)
-                        streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
-                    }
-                }
-            }
-            .font(Brand.Font.mono(size: 11, weight: .bold))
-            .buttonStyle(.bordered)
-            .tint(Brand.Color.cyan)
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        // `streakDebugRefresh` is read here so mutating it re-evaluates the
-        // row — the override lives in UserDefaults, which SwiftUI can't
-        // observe on its own.
-        .id(streakDebugRefresh)
-        .task {
-            streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
-        }
-    }
-
-    /// The live summary the panel reports and its buttons act on — override
-    /// included, since that is the whole point of the row.
-    private var streakSummaryNow: Streaks.Summary {
-        Streaks.summary(catches: catches)
-    }
-    #endif
 
     private func simulateCatch() {
         struct Sim {
@@ -3661,11 +3498,12 @@ struct ContentView: View {
     private var sensorReadout: some View {
         VStack(alignment: .leading, spacing: 8) {
 
-            // SOURCE section
+            // SOURCE section — the feed's poll age / error line. (The
+            // provider label went in the 2026-09-05 declutter: there has
+            // been exactly one source since the 2026-06-21 cutover.)
             Text("SOURCE")
                 .font(Brand.Font.mono(size: 10))
                 .foregroundStyle(Brand.Color.textTertiary)
-            sourceRow
             Text(formatADSBStatus())
                 .font(Brand.Font.mono(size: 12))
                 .foregroundStyle(Brand.Color.textPrimary)
@@ -3692,11 +3530,16 @@ struct ContentView: View {
                 .font(Brand.Font.mono(size: 10))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .padding(.top, 8)
+            // Declutter (2026-09-05): rows that stopped testing anything
+            // real are gone — the on-device replay analyzer (the offline
+            // bench + FieldReplays own that now), the raw Gate-1 sky
+            // features (shipped 2026-07; `indoor_hint_shown` telemetry
+            // covers it), and the visual-confirm ON/OFF toggle (it only
+            // gated the legacy mode's live pre-press tracking and the
+            // `visual_confirm_enabled` property — under the frame mode it
+            // changed nothing observable while still flipping telemetry).
             Group {
                 recordingRow
-                analyzeRow
-                visualConfirmRow
-                gateDebugRow
                 localGateRow
                 detectorGateRow
                 #if DEBUG
@@ -3923,67 +3766,6 @@ struct ContentView: View {
     /// were removed in the 2026-06-21 cutover — so this is a label, not a
     /// toggle. Kept as a debug-overlay sanity line ("yes, the app is talking
     /// to api.tailspot.app").
-    private var sourceRow: some View {
-        HStack(spacing: 8) {
-            Text("[TAILSPOT API]")
-                .font(Brand.Font.mono(size: 12, weight: .bold))
-                .foregroundStyle(Brand.Color.cyan)
-            Spacer()
-        }
-    }
-
-    /// Tap-to-toggle row for visual confirmation. Shows availability
-    /// (model in bundle), the on/off state, and — when a fix is live —
-    /// a cyan FIX tag with its confidence, so a field session can see at
-    /// a glance whether the detector is locked onto the real plane.
-    private var visualConfirmRow: some View {
-        HStack(spacing: 8) {
-            Text("Visual confirm:")
-            if !visualConfirm.isAvailable {
-                Text("[NO MODEL]").foregroundStyle(Brand.Color.alertWarning).bold()
-            } else {
-                Text(visualConfirm.enabled ? "[ON]" : "[OFF]")
-                    .foregroundStyle(visualConfirm.enabled
-                                     ? Brand.Color.alertNormal
-                                     : Brand.Color.textTertiary)
-                    .bold()
-                if let fix = visualConfirm.fixes.values.first {
-                    Text(String(format: "[FIX %.2f]", fix.confidence))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .bold()
-                }
-            }
-            Spacer()
-        }
-        .contentShape(.rect)
-        .onTapGesture {
-            guard visualConfirm.isAvailable else { return }
-            visualConfirm.enabled.toggle()
-        }
-    }
-
-    /// Live gate readout (debug): the current SkyCheck verdict + raw
-    /// features off the latest camera frame, so the gate can be eyeballed
-    /// in the field. "(no frame)" means the frame tap isn't delivering.
-    private var gateDebugRow: some View {
-        let f = visualConfirm.latestSkyFeatures
-        let v = computeOutdoorVerdict(features: f, gps: location.horizontalAccuracy)
-        return HStack(spacing: 8) {
-            Text("Gate:")
-            Text(v.rawValue)
-                .foregroundStyle(v == .notSky ? Brand.Color.alertCaution : Brand.Color.textTertiary)
-                .bold()
-            if let f {
-                Text(String(format: "e%.2f v%.3f w%+.2f l%.2f",
-                            f.edgeDensity, f.tileVariance, f.warmth, f.meanLuminance))
-                    .foregroundStyle(Brand.Color.textTertiary)
-            } else {
-                Text("(no frame)").foregroundStyle(Brand.Color.alertWarning).bold()
-            }
-            Spacer()
-        }
-    }
-
     /// Tap-to-toggle row for the L2 localized sky gate (debug). SHADOW
     /// (telemetry only, ships this way) ↔ ENFORCE (blocks a bracket aimed at
     /// a building/tree). Lets a field session flip enforcement on to feel the
@@ -4063,9 +3845,6 @@ struct ContentView: View {
         if recorder.isRecording {
             recorder.stop()
             logCapture.stop()
-            // A just-finished recording becomes the newest on disk — refresh
-            // the cache so `analyzeRow` points at it without a per-frame scan.
-            latestRecordingURL = ReplayRecorder.mostRecentRecording()
         } else {
             do {
                 let url = try recorder.start()
@@ -4076,30 +3855,6 @@ struct ContentView: View {
             } catch {
                 Log.ui.error("Failed to start replay recording: \(error.localizedDescription, privacy: .public)")
             }
-        }
-    }
-
-    /// Debug-overlay row that loads the most recent recording from
-    /// `Documents/replays/` and presents `ReplayReportView`. Disabled
-    /// (greyed) when there are no recordings on disk. Reads the CACHED
-    /// `latestRecordingURL` (refreshed when the debug panel opens and after
-    /// `toggleRecording`) rather than scanning the replays directory on every
-    /// body eval — the debug panel re-renders often (sensor readout).
-    private var analyzeRow: some View {
-        let latest = latestRecordingURL
-        return HStack(spacing: 8) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .foregroundStyle(latest == nil ? Brand.Color.textTertiary : Brand.Color.textPrimary.opacity(0.85))
-            Text(latest.map { "Analyze \($0.lastPathComponent)" }
-                 ?? "No recordings yet")
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer()
-        }
-        .contentShape(.rect)
-        .opacity(latest == nil ? 0.5 : 1.0)
-        .onTapGesture {
-            if let latest { replayURL = latest }
         }
     }
 
