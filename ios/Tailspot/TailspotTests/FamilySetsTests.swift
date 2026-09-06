@@ -41,8 +41,8 @@ struct FamilySetsTests {
         for set in CardSets.families {
             for e in set.entries {
                 guard let tc = e.representativeTypecode else {
-                    #expect(e.matchesUnidentified,
-                            "Only the explicit unidentified fallback may omit a typecode (entry '\(e.id)')")
+                    #expect(e.matchesUnidentified || !e.exactTypecodes.isEmpty,
+                            "Only explicit fallbacks or special designators may omit a catalog typecode (entry '\(e.id)')")
                     continue
                 }
                 guard let table = AircraftNaming.rarity(forTypecode: tc) else {
@@ -125,6 +125,12 @@ struct FamilySetsTests {
         #expect(!CardSets.matches(catch: mk(typecode: "B738"), entry: fallback))
         #expect(!CardSets.matches(catch: mk(typecode: nil, model: "Zorpjet 9000"), entry: fallback),
                 "A named-but-unmapped model should be curated, not hidden in the unidentified slot")
+    }
+
+    @Test func genericGliderDesignatorMatchesExactly() {
+        let sailplane = entry("fam-sport-classics", "fsc-glider")
+        #expect(CardSets.matches(catch: mk(typecode: "GLID", model: "DG 300"), entry: sailplane))
+        #expect(!CardSets.matches(catch: mk(typecode: "GLIM", model: "DG 300"), entry: sailplane))
     }
 
     @Test func douglasFamilyTree() {

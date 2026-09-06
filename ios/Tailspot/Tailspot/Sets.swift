@@ -27,6 +27,10 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
     let curatedRarity: Rarity
     let modelTokens: [String]       // case-insensitive substring match
     let summary: String             // tap-to-reveal blurb
+    /// Exact ICAO special designators that are not concrete aircraft rows in
+    /// AircraftTypes.json (for example GLID). These match without replacing a
+    /// catch's more-specific registry make/model with generic catalog copy.
+    let exactTypecodes: [String]
     /// Opt-in fallback for catches with no usable typecode or model identity.
     /// Kept explicit so an unknown catch cannot accidentally fill a real model.
     let matchesUnidentified: Bool
@@ -49,6 +53,7 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
 
     init(id: String, canonicalName: String, rarity: Rarity,
          modelTokens: [String], summary: String,
+         exactTypecodes: [String] = [],
          representativeTypecode: String? = nil,
          matchesUnidentified: Bool = false) {
         self.id = id
@@ -56,6 +61,7 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
         self.curatedRarity = rarity
         self.modelTokens = modelTokens
         self.summary = summary
+        self.exactTypecodes = exactTypecodes
         self.representativeTypecode = representativeTypecode
         self.matchesUnidentified = matchesUnidentified
     }
@@ -1107,7 +1113,7 @@ nonisolated enum CardSets {
             .init(id: "fsc-glider", canonicalName: "Sailplane", rarity: .common,
                   modelTokens: [],
                   summary: "Unpowered soaring aircraft using ICAO's generic GLID designator.",
-                  representativeTypecode: "GLID"),
+                  exactTypecodes: ["GLID"]),
         ]),
         .init(id: "fam-unidentified", type: .ga, title: "Unidentified aircraft", entries: [
             .init(id: "fu-unidentified", canonicalName: "Unidentified transponder", rarity: .common,
@@ -1195,6 +1201,12 @@ nonisolated enum CardSets {
             return (key.typecode?.isEmpty ?? true)
                 && key.rawModelLowercased.isEmpty
                 && key.canonicalLowercased.isEmpty
+        }
+        if let ctc = key.typecode,
+           entry.exactTypecodes.contains(where: {
+               $0.caseInsensitiveCompare(ctc) == .orderedSame
+           }) {
+            return true
         }
         if let tc = entry.representativeTypecode,
            let ctc = key.typecode,
