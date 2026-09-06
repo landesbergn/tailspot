@@ -100,8 +100,10 @@ and tests inject a PGlite-backed store. See **Database & ingestion** below.
 ### `GET /v1/stats`
 
 The marketing site's "N planes caught so far" counter. No device auth; instead
-the request's browser `Origin` must be `https://tailspot.app` /
-`https://www.tailspot.app` (plus anything in `STATS_ALLOWED_ORIGINS`), and the
+the request's browser `Origin` must be `https://tailspot.app`,
+`https://www.tailspot.app`, or the preview site
+`https://tailspot-www-preview.fly.dev` (plus anything in
+`STATS_ALLOWED_ORIGINS`), and the
 response echoes it as `Access-Control-Allow-Origin` with `Vary: Origin`. Any
 other origin, or no origin at all, gets a `404` so the route doesn't advertise
 itself. A forged Origin from curl still works — the number is printed on the
@@ -123,7 +125,7 @@ Postgres at most once a minute.
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
 | `DATABASE_URL` | — | Postgres connection string. Required for `/v1/metadata` and the ingest jobs; read lazily (the position-only endpoints don't need it). |
-| `STATS_ALLOWED_ORIGINS` | — | Comma-separated extra browser origins allowed to read `/v1/stats` (the two tailspot.app origins are always allowed). |
+| `STATS_ALLOWED_ORIGINS` | — | Comma-separated extra browser origins allowed to read `/v1/stats` (tailspot.app, www, and the preview site are always allowed). |
 
 **Providers.** The primary is **adsb.lol** (`https://api.adsb.lol`), whose only
 geographic query is point+radius (`GET /v2/point/{lat}/{lon}/{radius}`, radius

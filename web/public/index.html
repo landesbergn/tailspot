@@ -49,6 +49,18 @@
   <div class="hero-inner">
     <div class="hero-copy">
       <h1 class="hero-title">Catch the planes flying overhead.</h1>
+      <!-- The running total of catches synced to the backend, fetched from
+           GET /v1/stats (Origin-gated to this site, cached 5 min). It sits
+           between the headline and the badge as the proof line for the
+           claim above it. Space is reserved from first paint and the line
+           fades in once the number arrives, so the badge never jumps; if the
+           fetch fails it stays invisible — a zero would be a lie, not a
+           fallback. -->
+      <p class="hero-stat" aria-live="polite">
+        <span class="hero-stat-dot" aria-hidden="true"></span>
+        <span class="hero-stat-count">0</span>
+        <span class="hero-stat-label">planes caught so far</span>
+      </p>
       <div class="cta-row">
         <!-- Apple's badge artwork, used verbatim (app-store-badge.svg is
              Apple's black.svg byte-for-byte — the PREFERRED variant; white is
@@ -69,17 +81,6 @@
                alt="Download Tailspot on the App Store">
         </a>
       </div>
-
-      <!-- The running total of catches synced to the backend, fetched from
-           GET /v1/stats (Origin-gated to this site, cached 5 min). Space is
-           reserved from first paint and the line fades in once the number
-           arrives, so the hero never reflows; if the fetch fails it simply
-           stays invisible — a zero here would be a lie, not a fallback. -->
-      <p class="hero-stat" aria-live="polite">
-        <span class="hero-stat-dot" aria-hidden="true"></span>
-        <span class="hero-stat-count">0</span>
-        <span class="hero-stat-label">planes caught so far</span>
-      </p>
     </div>
 
     <!-- Real catches, cross-fading. These are Noah's own photographs, straight

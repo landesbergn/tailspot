@@ -119,6 +119,26 @@ describe("GET /v1/stats", () => {
     expect(res.headers["access-control-allow-origin"]).toBe("https://www.tailspot.app");
   });
 
+  it("allows the preview site by default (no allowlist override)", async () => {
+    const plain = await buildApp({
+      identityStore: new DrizzleIdentityStore(db),
+      catchStore: new DrizzleCatchStore(db),
+      nowSeconds: () => NOW,
+      rateLimitNow: () => 0,
+    });
+    try {
+      const res = await plain.inject({
+        method: "GET",
+        url: "/v1/stats",
+        headers: { origin: "https://tailspot-www-preview.fly.dev" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["access-control-allow-origin"]).toBe("https://tailspot-www-preview.fly.dev");
+    } finally {
+      await plain.close();
+    }
+  });
+
   it("memoises the count until the TTL elapses", async () => {
     expect((await stats(SITE)).json().catches).toBe(0);
     await postCatch();

@@ -174,7 +174,9 @@ body > * { position: relative; z-index: 1; }
    first paint (visibility, not display) so the fade-in never reflows the hero;
    tabular digits so the count-up doesn't jitter the label sideways. */
 .hero-stat {
-  display: inline-flex;
+  /* Block-level flex, not inline-flex: an inline box picks up the parent's
+     line-height strut above and below, which turned a 12px gap into 25. */
+  display: flex;
   align-items: center;
   gap: 0.55rem;
   font-family: var(--mono);
@@ -182,7 +184,9 @@ body > * { position: relative; z-index: 1; }
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
-  margin-top: 0.15rem;
+  /* Between the title (margin-bottom 1.25rem) and the badge: pull up so the
+     line reads as the title's proof (0.75rem), then a full step to the CTA. */
+  margin: -0.5rem 0 1.25rem;
   visibility: hidden;
   opacity: 0;
   transition: opacity 400ms ease-out;
@@ -556,9 +560,9 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   .hero-inner { gap: 1.25rem; }
   .hero-title { font-size: clamp(1.85rem, 5.2vw, 3.4rem); margin-bottom: 1rem; }
   .cta-row { margin-bottom: 0; }
-  /* The CTA's margin is zeroed above, so the stat line brings its own gap
-     from the badge (matches the 16px title->badge step). */
-  .hero-stat { margin-top: 1rem; }
+  /* Title margin drops to 1rem on phones; keep the same title->stat->badge
+     proportions (0.75rem, then 1rem) at the tighter scale. */
+  .hero-stat { margin: -0.25rem 0 1rem; justify-content: center; }
   .catch { gap: 0.75rem; }
   .catch-meta { gap: 2px; }
   /* Mobile only: tier and model on one line. They are one fact about one

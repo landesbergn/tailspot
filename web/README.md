@@ -46,9 +46,10 @@ never a zero. The count-up starts at 92% of the total rather than 0 so it
 doesn't read as a slot machine.
 
 Because the API decides by `Origin`, a local `python3 -m http.server` preview
-gets a 404 and an invisible line. To preview it, mock the request (Playwright
-`page.route`) or add your local origin to the backend's
-`STATS_ALLOWED_ORIGINS`.
+gets a 404 and an invisible line. The Fly preview site
+(`tailspot-www-preview.fly.dev`) is allowlisted, so staging there shows the
+real number. For a local preview, mock the request (Playwright `page.route`)
+or add your local origin to the backend's `STATS_ALLOWED_ORIGINS`.
 
 ## Deploy
 

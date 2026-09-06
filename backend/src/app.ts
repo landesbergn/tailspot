@@ -91,8 +91,8 @@ export interface BuildAppOptions {
   rateLimitNow?: () => number;
   /**
    * Browser origins allowed to read GET /v1/stats (tests override). Production
-   * defaults to the marketing site; `STATS_ALLOWED_ORIGINS` (comma-separated)
-   * extends it without a redeploy of code.
+   * defaults to the marketing site and its preview deployment;
+   * `STATS_ALLOWED_ORIGINS` (comma-separated) extends it without a code change.
    */
   statsAllowedOrigins?: readonly string[];
   /**
@@ -346,7 +346,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   return app;
 }
 
-const DEFAULT_STATS_ORIGINS = ["https://tailspot.app", "https://www.tailspot.app"];
+// The preview site (web/fly.preview.toml) is on the list so a staged landing
+// page shows the real number — the whole point of having a preview.
+const DEFAULT_STATS_ORIGINS = [
+  "https://tailspot.app",
+  "https://www.tailspot.app",
+  "https://tailspot-www-preview.fly.dev",
+];
 
 /** The default site origins plus any from `STATS_ALLOWED_ORIGINS` (comma-separated). */
 function statsOriginsFromEnv(): string[] {
