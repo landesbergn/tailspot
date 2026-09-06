@@ -22,8 +22,8 @@ the source + each one's focused test file — they're not restated here.
 - **One ADS-B source, injectable.** `ADSBManager.init(source:)` takes a single
   `ADSBSource`; the protocol seam exists only so tests substitute a fixture and a
   future provider can drop in — there is **no runtime source toggle** (the
-  LIVE/MOCK/OpenSky cycle was removed; the debug row is a static `[TAILSPOT API]`
-  indicator). If the backend is unreachable the app shows an error / empty sky
+  LIVE/MOCK/OpenSky cycle was removed, and the wrench panel's static source
+  label went in the 2026-09-05 declutter). If the backend is unreachable the app shows an error / empty sky
   rather than degrading — intended, for debugging clarity.
 - **Split fetch from annotation.** `ADSBManager` runs two loops: `pollTask` (every
   ~10 s, matching the backend tile cache's TTL — `/v1/aircraft` has no rate limit)
@@ -99,7 +99,12 @@ the source + each one's focused test file — they're not restated here.
   only in DEBUG builds** — `CatchMode.effective` is `.frame` on Release, so a
   flipped phone can't leak the legacy model into TestFlight. The wrench-panel
   `catchModeRow` is the only writer (`setCatchMode` clears the other mode's
-  state); a LEGACY CATCH MODE badge sits under the zoom pill while it's on.
+  state); an OLD CATCH RULE badge sits under the zoom pill while it's on.
+  **Wrench-panel wording is plain language on purpose** (Noah, 2026-09-05):
+  rows say what the CURRENT state does in one sentence ("Building/tree
+  check [ON]", "Plane-in-photo check [LOG ONLY]", "Catch rule [NEW]/[OLD]"),
+  never internal names like L2/L4/enforce/shadow/membership — keep new rows
+  on `debugSwitchRow`.
   Both modes branch at ONE render funnel (`resolveFrameSelection` →
   `FrameSelection`) plus the tap handler, Gate 5, and the diagnostics
   selector; `catch_performed` / `catch_pipeline_timing` carry `catch_mode`.

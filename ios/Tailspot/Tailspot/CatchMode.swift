@@ -55,11 +55,23 @@ nonisolated enum CatchMode: String, CaseIterable, Sendable {
         #endif
     }
 
-    /// Short label for the debug row / screen badge / telemetry.
+    /// Short label for the debug row / screen badge. (Telemetry uses
+    /// `rawValue`, which stays "frame" / "legacy".)
     var label: String {
         switch self {
-        case .frame:  return "FRAME"
-        case .legacy: return "LEGACY"
+        case .frame:  return "NEW"
+        case .legacy: return "OLD"
+        }
+    }
+
+    /// One plain sentence on what a press and a tap do under this rule —
+    /// the wrench row's explanation line.
+    var plainDescription: String {
+        switch self {
+        case .frame:
+            return "Press catches every bright-labeled plane on screen (up to 3, biggest first). A tap only rescues a plane the app is hiding."
+        case .legacy:
+            return "App Store behavior: aim the center of the screen at a plane, or tap a plane to pin it, then press."
         }
     }
 

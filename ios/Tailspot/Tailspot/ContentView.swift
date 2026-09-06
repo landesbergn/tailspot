@@ -660,8 +660,8 @@ struct ContentView: View {
                         // The trophy-unlock / icon-gallery previews and the
                         // streak override went with their features shipping.
                         HStack(spacing: 8) {
-                            Button("✦ Catch") { simulateCatch() }
-                            Button("★ Rearm") { ReviewPrompter.shared.debugClearStamp() }
+                            Button("✦ Fake a catch") { simulateCatch() }
+                            Button("★ Reset rating prompt") { ReviewPrompter.shared.debugClearStamp() }
                         }
                         .font(Brand.Font.mono(size: 11, weight: .bold))
                         .buttonStyle(.bordered)
@@ -1294,24 +1294,16 @@ struct ContentView: View {
     }
 
     #if DEBUG
-    /// Wrench-panel row: the catch-mode A/B switch. FRAME (this branch's
-    /// frame-is-the-catch) ↔ LEGACY (the shipped zones-and-pins model).
+    /// Wrench-panel row: the catch-mode A/B switch. NEW (this branch's
+    /// frame-is-the-catch) ↔ OLD (the shipped zones-and-pins model).
     /// Tap to flip; persists across launches on this Debug install only.
     private var catchModeRow: some View {
-        HStack(spacing: 8) {
-            Text("Catch mode:")
-            Text("[\(catchMode.label)]")
-                .foregroundStyle(catchMode == .legacy
-                                 ? Brand.Color.alertCaution
-                                 : Brand.Color.textTertiary)
-                .bold()
-            Text(catchMode == .frame ? "membership · tap asserts"
-                                     : "zone · pin · dominance")
-                .foregroundStyle(Brand.Color.textTertiary)
-            Spacer()
-        }
-        .contentShape(.rect)
-        .onTapGesture { setCatchMode(catchMode.toggled) }
+        debugSwitchRow(
+            title: "Catch rule",
+            state: catchMode.label,
+            highlighted: catchMode == .legacy,
+            detail: catchMode.plainDescription
+        ) { setCatchMode(catchMode.toggled) }
     }
 
     /// Always-on screen badge while the LEGACY mode is live, so a field
@@ -1320,14 +1312,14 @@ struct ContentView: View {
     @ViewBuilder
     private var catchModeBadge: some View {
         if catchMode == .legacy {
-            Text("LEGACY CATCH MODE")
+            Text("OLD CATCH RULE (App Store behavior)")
                 .font(Brand.Font.mono(size: 10, weight: .bold))
                 .foregroundStyle(Brand.Color.alertCaution)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
                 .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
-                .accessibilityLabel("Legacy catch mode is on")
+                .accessibilityLabel("Old catch rule is on")
         }
     }
     #endif
@@ -3526,7 +3518,7 @@ struct ContentView: View {
             .foregroundStyle(Brand.Color.textPrimary)
 
             // TOOLS section
-            Text("TOOLS")
+            Text("TOOLS — the amber state is the non-default one")
                 .font(Brand.Font.mono(size: 10))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .padding(.top, 8)
@@ -3771,17 +3763,15 @@ struct ContentView: View {
     /// a building/tree). Lets a field session flip enforcement on to feel the
     /// occlusion nudge before the on-device threshold is calibrated.
     private var localGateRow: some View {
-        HStack(spacing: 8) {
-            Text("L2 gate:")
-            Text(visualConfirm.localGateEnforcing ? "[ENFORCE]" : "[SHADOW]")
-                .foregroundStyle(visualConfirm.localGateEnforcing
-                                 ? Brand.Color.alertCaution
-                                 : Brand.Color.textTertiary)
-                .bold()
-            Spacer()
-        }
-        .contentShape(.rect)
-        .onTapGesture { visualConfirm.localGateEnforcing.toggle() }
+        let on = visualConfirm.localGateEnforcing
+        return debugSwitchRow(
+            title: "Building/tree check",
+            state: on ? "ON" : "LOG ONLY",
+            highlighted: !on,   // shipped ON; log-only is the unusual state
+            detail: on
+                ? "Camera says the bracket sits on a building or tree → the catch gets the Keep/Discard question, and the plane drops out of the press."
+                : "Same check runs, but only records its verdict. Nothing is flagged or dropped."
+        ) { visualConfirm.localGateEnforcing.toggle() }
     }
 
     /// Tap-to-toggle row for the L4 detector soft-gate (debug). SHADOW
@@ -3790,17 +3780,48 @@ struct ContentView: View {
     /// field session feel the doubt question before the shadow stream
     /// justifies flipping the default.
     private var detectorGateRow: some View {
-        HStack(spacing: 8) {
-            Text("L4 gate:")
-            Text(visualConfirm.detectorGateEnforcing ? "[ENFORCE]" : "[SHADOW]")
-                .foregroundStyle(visualConfirm.detectorGateEnforcing
-                                 ? Brand.Color.alertCaution
-                                 : Brand.Color.textTertiary)
-                .bold()
-            Spacer()
+        let on = visualConfirm.detectorGateEnforcing
+        return debugSwitchRow(
+            title: "Plane-in-photo check",
+            state: on ? "ON" : "LOG ONLY",
+            highlighted: on,    // ships log-only; ON is the unusual state
+            detail: on
+                ? "Single catches where the detector can't find a plane in the photo get the Keep/Discard question."
+                : "Same check runs on every single catch, but only records its verdict. Nothing is flagged."
+        ) { visualConfirm.detectorGateEnforcing.toggle() }
+    }
+
+    /// One tap-to-flip switch row for the wrench panel, in plain language
+    /// (Noah, 2026-09-05: "I don't know L2 gate from L4 gate and what
+    /// enforce means"). Title + bracketed state on the first line, a
+    /// one-sentence explanation of what the CURRENT state does under it.
+    /// `highlighted` paints the state amber for the non-default choice.
+    private func debugSwitchRow(
+        title: String,
+        state: String,
+        highlighted: Bool,
+        detail: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text(title)
+                Text("[\(state)]")
+                    .foregroundStyle(highlighted ? Brand.Color.alertCaution : Brand.Color.alertNormal)
+                    .bold()
+                Spacer()
+                Text("tap to switch")
+                    .font(Brand.Font.mono(size: 10))
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+            Text(detail)
+                .font(Brand.Font.mono(size: 10))
+                .foregroundStyle(Brand.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.vertical, 4)
         .contentShape(.rect)
-        .onTapGesture { visualConfirm.detectorGateEnforcing.toggle() }
+        .onTapGesture(perform: action)
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record
@@ -3820,7 +3841,7 @@ struct ContentView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             } else {
-                Text("Record session")
+                Text("Record replay session (sensors + planes → file)")
             }
             Spacer()
         }
