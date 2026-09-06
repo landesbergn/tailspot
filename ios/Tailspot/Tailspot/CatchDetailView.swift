@@ -405,7 +405,8 @@ struct CatchDetailView: View {
         CatchTelemetry.fireDeleted(
             icao24: row.icao24,
             count: row.count,
-            rarity: row.allCatches.first?.resolvedRarity.rawValue
+            rarity: row.allCatches.first?.resolvedRarity.rawValue,
+            source: .hangarDelete
         )
         for c in row.allCatches {
             CatchPhotoStore.delete(filename: c.photoFilename)

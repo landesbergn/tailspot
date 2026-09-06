@@ -123,4 +123,57 @@ nonisolated enum AnalyticsIdentity {
               let handle = handle?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
         return ["handle": handle]
     }
+
+    // MARK: - Handle as an EVENT property
+
+    /// Events that carry the claimed `handle` as an **event** property, on top
+    /// of the person property `$set` at identify time.
+    ///
+    /// Why both: `handle` as a *person* property is the canonical, mutable
+    /// "who is this" — correct for segmentation, but it forces a person join
+    /// (and, under person-on-events, resolves to the value at ingest time) for
+    /// simple "who caught what" SQL and leaderboard reporting. Stamping the
+    /// handle onto the events below makes those queries a single-table scan
+    /// and freezes the handle *as it was at the moment of the catch*, which is
+    /// what a leaderboard row actually wants.
+    ///
+    /// Deliberately NOT every event: this is the catch/collection spine
+    /// (the north-star funnel) plus the two progression events. Gate, timing,
+    /// onboarding and permission events stay lean — they are analysed in
+    /// aggregate, never per-user.
+    ///
+    /// `handle_claimed` is absent on purpose: the handle it reports is already
+    /// in its own `result` flow, and the claim event is precisely the moment
+    /// the stored value is mid-change.
+    static let eventsCarryingHandle: Set<String> = [
+        "catch_uploaded",
+        "catch_performed",
+        "first_plane_catch",
+        "catch_deleted",
+        "streak_extended",
+        "trophy_unlocked",
+    ]
+
+    /// Stamp the claimed `handle` onto `properties` when `event` is one of
+    /// `eventsCarryingHandle`. Pure (the handle and placeholder are passed in)
+    /// so it is unit-testable without UserDefaults or the PostHog SDK — the
+    /// facade reads the stored handle and calls this on every capture.
+    ///
+    /// Adds nothing when the event is not in the set, when the handle is the
+    /// untouched onboarding placeholder / empty (same gate as `isClaimedHandle`,
+    /// so an un-onboarded user never ships a fake handle), or when the caller
+    /// already supplied a `handle` property — an explicit value always wins.
+    static func withHandleProperty(event: String,
+                                   properties: [String: AnalyticsValue],
+                                   handle: String?,
+                                   placeholder: String) -> [String: AnalyticsValue] {
+        guard eventsCarryingHandle.contains(event),
+              properties["handle"] == nil,
+              isClaimedHandle(handle, placeholder: placeholder),
+              let handle = handle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        else { return properties }
+        var properties = properties
+        properties["handle"] = .string(handle)
+        return properties
+    }
 }

@@ -48,7 +48,9 @@ struct SetsCoverageTests {
         ("C402", "Cessna", "402"), ("A339", "Airbus", "A330-900"),
         ("GLEX", "Bombardier", "BD-700 Global Express"), ("C700", "Cessna", "700 Citation Longitude"),
         ("A332", "Airbus", "A330-200"), ("A35K", "Airbus", "A350-1000"),
-        ("AS50", "Airbus Helicopters", "H-125 Fennec"), ("GLF4", "Gulfstream", "IV"),
+        ("AS50", "Airbus Helicopters", "H-125 Fennec"),
+        ("AS55", "Airbus Helicopters", "AS-555 Fennec"),
+        ("GLF4", "Gulfstream", "IV"),
         ("SR20", "Cirrus", "SR20"), ("E190", "Embraer", "190"),
         ("BCS1", "Airbus", "A220-100"), ("H25B", "Hawker", "800XP"),
         ("E545", "Embraer", "EMB-545 Legacy 450"), ("B753", "Boeing", "757-300"),
@@ -103,6 +105,11 @@ struct SetsCoverageTests {
         ("SF34", "Saab", "340"), ("MD11", "Boeing", "MD-11"),
         ("A5", "Icon", "A-5"),
         ("B505", "Bell", "505 Jet Ranger X"),
+        // Public catalog coverage additions validated 2026-09-02.
+        ("CH7B", "Champion", "7GCAA"),
+        ("FA20", "Dassault", "Falcon 20"),
+        ("GB1", "Game Composites", "GB-1 GameBird"),
+        ("SLG4", "Airplane Factory", "Sling 4"),
         // Newly observed since the 2026-08-24 snapshot. Five required new
         // slots (A306/C210/EPIC/H500/SB91); the rest exercise existing broad
         // family tokens or exact typecode entries.
@@ -139,6 +146,9 @@ struct SetsCoverageTests {
         ("PAY2", "Piper", "PA-31T-620 Cheyenne"),
         ("RV9", "Van's", "RV-9"),
         ("T34P", "Beechcraft", "45 Mentor"),
+        // Public catalog coverage additions validated 2026-09-05.
+        ("AEST", "Aerostar", "600"),
+        ("PA31", "Piper", "PA-31-300 Navajo"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -164,6 +174,11 @@ struct SetsCoverageTests {
     @Test func newlyCoveredTypesFillTheirIntendedFamilySlots() {
         let assignments: [((String, String, String), String, String)] = [
             (("B505", "Bell", "505 Jet Ranger X"), "fam-heli", "fh-b505"),
+            (("AS55", "Airbus Helicopters", "AS-555 Fennec"), "fam-heli", "fh-as355"),
+            (("CH7B", "Champion", "7GCAA"), "fam-sport-classics", "fsc-citabria"),
+            (("FA20", "Dassault", "Falcon 20"), "fam-falcon", "ffa20"),
+            (("GB1", "Game Composites", "GB-1 GameBird"), "fam-sport-classics", "fsc-gamebird"),
+            (("SLG4", "Airplane Factory", "Sling 4"), "fam-sport-classics", "fsc-sling4"),
             (("CLON", "Autogyro", "Cavalon"), "fam-sport-classics", "fsc-cavalon"),
             (("FA50", "Dassault", "Falcon 50"), "fam-falcon", "ffa50"),
             (("G2CA", "Guimbal", "G-2 Cabri"), "fam-heli", "fh-g2ca"),
@@ -172,6 +187,8 @@ struct SetsCoverageTests {
             (("PA12", "Piper", "PA-12 Super Cruiser"), "fam-piper", "fpa12"),
             (("PAY2", "Piper", "PA-31T-620 Cheyenne"), "fam-piper", "fpay2"),
             (("T34P", "Beechcraft", "45 Mentor"), "fam-beech", "fbt34"),
+            (("AEST", "Aerostar", "600"), "fam-piper", "fpa60"),
+            (("PA31", "Piper", "PA-31-300 Navajo"), "fam-piper", "fpa31"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -203,6 +220,13 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: hercKey, entry: h130Entry),
                 "A C-130 Hercules must not fill the H130 helicopter slot")
 
+        // AS50 covers the single-engine AS350/AS550 family; AS55 is the
+        // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
+        let as50 = mk(("AS50", "Airbus Helicopters", "H-125 Fennec"))
+        let as55Entry = heliSet.entries.first { $0.id == "fh-as355" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: as50), entry: as55Entry),
+                "An AS50 single-engine Fennec must not fill the AS55 twin slot")
+
         // A P-51 (canonical "A-36 Mustang") must not fill Citation Mustang,
         // and a Citation Mustang must not fill the P-51 warbird slot.
         let p51 = mk(("P51", "North American", "A-36 Mustang"))
@@ -217,6 +241,15 @@ struct SetsCoverageTests {
         let p51Entry = vintageSet.entries.first { $0.id == "fv-p51" }!
         #expect(!CardSets.matches(key: c510Key, entry: p51Entry),
                 "A Citation Mustang must not fill the P-51 slot")
+
+        // Falcon 20 uses exact typecode matching because the obvious model
+        // token is a prefix of Falcon 2000 and would bleed into that slot.
+        let falcon2000 = mk(("F2TH", "Dassault", "Falcon 2000"))
+        let falcon2000Key = CardSets.matchKey(for: falcon2000)
+        let falcon20Entry = CardSets.families.first { $0.id == "fam-falcon" }!
+            .entries.first { $0.id == "ffa20" }!
+        #expect(!CardSets.matches(key: falcon2000Key, entry: falcon20Entry),
+                "A Falcon 2000 must not fill the Falcon 20 slot")
 
         // Exact Cessna tokens keep the C170 piston single and Embraer E170
         // regional jet in their own families despite their shared model number.
@@ -235,6 +268,18 @@ struct SetsCoverageTests {
         let b206Entry = heliSet.entries.first { $0.id == "fh-b206" }!
         #expect(!CardSets.matches(key: c406Key, entry: b206Entry),
                 "A Cessna 406 must not fill the Bell 206 slot")
+
+        // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
+        // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
+        let piperSet = CardSets.families.first { $0.id == "fam-piper" }!
+        let navajoEntry = piperSet.entries.first { $0.id == "fpa31" }!
+        let aerostarEntry = piperSet.entries.first { $0.id == "fpa60" }!
+        let cheyenne = mk(("PAY2", "Piper", "PA-31T-620 Cheyenne"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: cheyenne), entry: navajoEntry),
+                "A PA-31T Cheyenne must not fill the piston PA-31 Navajo slot")
+        let festival = mk(("FEST", "Aerostar", "01 Festival"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: festival), entry: aerostarEntry),
+                "An unrelated Aerostar-branded type must not fill the PA-60 Aerostar slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the

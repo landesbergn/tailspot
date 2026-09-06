@@ -198,7 +198,7 @@ extension ReplayAnalyzer {
     }
 
     /// Missed-plane findings derived from `empty-tap` events with
-    /// `reason == "filtered"`. Aligns each tap to the tick on screen when it
+    /// `reason == "filtered"` (or `"filtered-precise"`). Aligns each tap to the tick on screen when it
     /// fired (the latest tick at or before the tap), and only scores it if the
     /// named plane is genuinely present-but-hidden in that tick's analysis —
     /// so the finding tracks the CURRENT engine behavior (fix the filter and
@@ -215,7 +215,10 @@ extension ReplayAnalyzer {
         var out: [FailureModeFinding] = []
         let ordered = events.sorted { $0.timestamp < $1.timestamp }
         for case .emptyTap(let tap) in ordered {
-            guard tap.reason == "filtered", let icao = tap.nearestIcao24 else { continue }
+            // "filtered-precise" (2026-09-05) is the same miss — a hidden
+            // plane the user was pointing at — that a precise tap rescued.
+            guard tap.reason == "filtered" || tap.reason == "filtered-precise",
+                  let icao = tap.nearestIcao24 else { continue }
             let ti = tickIndex(at: tap.timestamp, in: tickTimes)
             guard let ar = report.ticks[ti].aircraft.first(where: { $0.icao24 == icao }),
                   !ar.isVisible else { continue }
