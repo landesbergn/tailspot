@@ -100,11 +100,11 @@ the source + each one's focused test file — they're not restated here.
   flipped phone can't leak the legacy model into TestFlight. The wrench-panel
   `catchModeRow` is the only writer (`setCatchMode` clears the other mode's
   state); an OLD CATCH RULE badge sits under the zoom pill while it's on.
-  **Wrench-panel wording is plain language on purpose** (Noah, 2026-09-05):
-  rows say what the CURRENT state does in one sentence ("Building/tree
-  check [ON]", "Plane-in-photo check [LOG ONLY]", "Catch rule [NEW]/[OLD]"),
-  never internal names like L2/L4/enforce/shadow/membership — keep new rows
-  on `debugSwitchRow`.
+  **Wrench-panel toggles are feature flags in plain language** (Noah,
+  2026-09-05): a real `Toggle` per flag via `debugFlagRow` — title + one
+  "On: … Off: …" sentence ("Building/tree check", "Plane-in-photo check",
+  "New catch rule") — never internal names like L2/L4/enforce/shadow/
+  membership on screen, no per-row hint text, one consistent look.
   Both modes branch at ONE render funnel (`resolveFrameSelection` →
   `FrameSelection`) plus the tap handler, Gate 5, and the diagnostics
   selector; `catch_performed` / `catch_pipeline_timing` carry `catch_mode`.

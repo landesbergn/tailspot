@@ -647,7 +647,8 @@ struct ContentView: View {
                 if showDebug {
                     VStack(spacing: 0) {
                         sensorReadout
-                            .padding(12)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 6)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         #if DEBUG
@@ -1298,12 +1299,14 @@ struct ContentView: View {
     /// frame-is-the-catch) ↔ OLD (the shipped zones-and-pins model).
     /// Tap to flip; persists across launches on this Debug install only.
     private var catchModeRow: some View {
-        debugSwitchRow(
-            title: "Catch rule",
-            state: catchMode.label,
-            highlighted: catchMode == .legacy,
-            detail: catchMode.plainDescription
-        ) { setCatchMode(catchMode.toggled) }
+        debugFlagRow(
+            title: "New catch rule",
+            detail: "On: a press catches every bright-labeled plane on screen (up to 3, biggest first); a tap only rescues a plane the app is hiding. Off: App Store behavior — aim the center at a plane or tap to pin it, then press.",
+            isOn: Binding(
+                get: { catchMode == .frame },
+                set: { setCatchMode($0 ? .frame : .legacy) }
+            )
+        )
     }
 
     /// Always-on screen badge while the LEGACY mode is live, so a field
@@ -3516,9 +3519,12 @@ struct ContentView: View {
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
+            // One readout per line, always: shrink a hair rather than wrap.
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
 
             // TOOLS section
-            Text("TOOLS — the amber state is the non-default one")
+            Text("TOOLS")
                 .font(Brand.Font.mono(size: 10))
                 .foregroundStyle(Brand.Color.textTertiary)
                 .padding(.top, 8)
@@ -3543,9 +3549,10 @@ struct ContentView: View {
         }
         // Inner padding so content isn't jammed against the panel edge, plus a
         // hairline border for definition — declutter pass (on-device feedback
-        // that the readout looked busy/ugly). Content is unchanged; it's useful
-        // in shared screenshots.
-        .padding(14)
+        // that the readout looked busy/ugly). Horizontal padding is tight on
+        // purpose (2026-09-05): the GPS readout has to fit on one line.
+        .padding(.vertical, 12)
+        .padding(.horizontal, 10)
         .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: Brand.Radius.card))
         .overlay(
             RoundedRectangle(cornerRadius: Brand.Radius.card)
@@ -3667,7 +3674,7 @@ struct ContentView: View {
         }
         let alt = location.altitude ?? 0
         let acc = location.horizontalAccuracy ?? -1
-        return String(format: "GPS:     %.5f°, %.5f°  alt %.0fm  ±%.0fm", lat, lon, alt, acc)
+        return String(format: "GPS:     %.5f°, %.5f° alt %.0fm ±%.0fm", lat, lon, alt, acc)
     }
 
     private func formatHeading() -> String {
@@ -3753,75 +3760,53 @@ struct ContentView: View {
         return "ADSB:    fetching…"
     }
 
-    /// Static source indicator for the debug overlay. There's exactly one
-    /// ADS-B source now (the Tailspot backend) — OpenSky and the mock source
-    /// were removed in the 2026-06-21 cutover — so this is a label, not a
-    /// toggle. Kept as a debug-overlay sanity line ("yes, the app is talking
-    /// to api.tailspot.app").
-    /// Tap-to-toggle row for the L2 localized sky gate (debug). SHADOW
-    /// (telemetry only, ships this way) ↔ ENFORCE (blocks a bracket aimed at
-    /// a building/tree). Lets a field session flip enforcement on to feel the
-    /// occlusion nudge before the on-device threshold is calibrated.
+    /// Feature flag: the L2 localized sky gate's enforcement (ships ON since
+    /// 2026-07-04). Off = shadow: telemetry only, no flag, no demote.
     private var localGateRow: some View {
-        let on = visualConfirm.localGateEnforcing
-        return debugSwitchRow(
+        debugFlagRow(
             title: "Building/tree check",
-            state: on ? "ON" : "LOG ONLY",
-            highlighted: !on,   // shipped ON; log-only is the unusual state
-            detail: on
-                ? "Camera says the bracket sits on a building or tree → the catch gets the Keep/Discard question, and the plane drops out of the press."
-                : "Same check runs, but only records its verdict. Nothing is flagged or dropped."
-        ) { visualConfirm.localGateEnforcing.toggle() }
+            detail: "On: when the camera says a bracket sits on a building or tree, the plane drops out of the press and the catch gets the Keep/Discard question. Off: the check only logs.",
+            isOn: Binding(
+                get: { visualConfirm.localGateEnforcing },
+                set: { visualConfirm.localGateEnforcing = $0 }
+            )
+        )
     }
 
-    /// Tap-to-toggle row for the L4 detector soft-gate (debug). SHADOW
-    /// (telemetry only, ships this way) ↔ ENFORCE (an in-envelope catch the
-    /// detector can't corroborate gets the post-reveal Keep/Discard). Lets a
-    /// field session feel the doubt question before the shadow stream
-    /// justifies flipping the default.
+    /// Feature flag: the L4 detector soft-gate's enforcement (ships OFF =
+    /// shadow, telemetry only). On = an in-envelope single catch the still
+    /// search can't corroborate gets the post-reveal Keep/Discard.
     private var detectorGateRow: some View {
-        let on = visualConfirm.detectorGateEnforcing
-        return debugSwitchRow(
+        debugFlagRow(
             title: "Plane-in-photo check",
-            state: on ? "ON" : "LOG ONLY",
-            highlighted: on,    // ships log-only; ON is the unusual state
-            detail: on
-                ? "Single catches where the detector can't find a plane in the photo get the Keep/Discard question."
-                : "Same check runs on every single catch, but only records its verdict. Nothing is flagged."
-        ) { visualConfirm.detectorGateEnforcing.toggle() }
+            detail: "On: a single catch whose photo shows no detectable plane gets the Keep/Discard question. Off: the check only logs.",
+            isOn: Binding(
+                get: { visualConfirm.detectorGateEnforcing },
+                set: { visualConfirm.detectorGateEnforcing = $0 }
+            )
+        )
     }
 
-    /// One tap-to-flip switch row for the wrench panel, in plain language
-    /// (Noah, 2026-09-05: "I don't know L2 gate from L4 gate and what
-    /// enforce means"). Title + bracketed state on the first line, a
-    /// one-sentence explanation of what the CURRENT state does under it.
-    /// `highlighted` paints the state amber for the non-default choice.
-    private func debugSwitchRow(
+    /// One feature-flag row for the wrench panel (Noah, 2026-09-05: plain
+    /// language, consistent on/off, "think of them like feature flags").
+    /// A real switch — same look for every flag — with the title and a
+    /// one-sentence "On: … Off: …" description under it.
+    private func debugFlagRow(
         title: String,
-        state: String,
-        highlighted: Bool,
         detail: String,
-        action: @escaping () -> Void
+        isOn: Binding<Bool>
     ) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 8) {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                Text("[\(state)]")
-                    .foregroundStyle(highlighted ? Brand.Color.alertCaution : Brand.Color.alertNormal)
-                    .bold()
-                Spacer()
-                Text("tap to switch")
+                Text(detail)
                     .font(Brand.Font.mono(size: 10))
                     .foregroundStyle(Brand.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(detail)
-                .font(Brand.Font.mono(size: 10))
-                .foregroundStyle(Brand.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
         }
+        .tint(Brand.Color.cyan)
         .padding(.vertical, 4)
-        .contentShape(.rect)
-        .onTapGesture(perform: action)
     }
 
     /// Tap-to-toggle row for the replay recorder. Idle → "Record

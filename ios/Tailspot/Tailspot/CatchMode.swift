@@ -64,17 +64,6 @@ nonisolated enum CatchMode: String, CaseIterable, Sendable {
         }
     }
 
-    /// One plain sentence on what a press and a tap do under this rule —
-    /// the wrench row's explanation line.
-    var plainDescription: String {
-        switch self {
-        case .frame:
-            return "Press catches every bright-labeled plane on screen (up to 3, biggest first). A tap only rescues a plane the app is hiding."
-        case .legacy:
-            return "App Store behavior: aim the center of the screen at a plane, or tap a plane to pin it, then press."
-        }
-    }
-
     /// The other mode — what the debug row switches to.
     var toggled: CatchMode {
         self == .frame ? .legacy : .frame
