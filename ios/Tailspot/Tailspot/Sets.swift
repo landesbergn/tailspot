@@ -968,6 +968,12 @@ nonisolated enum CardSets {
                   modelTokens: ["dhc-2", "beaver"], summary: "The classic bush plane. Often on floats.",
                   representativeTypecode: "DHC2"),
         ]),
+        .init(id: "fam-avanti", type: .ga, title: "Piaggio Avanti", entries: [
+            .init(id: "fav-p180", canonicalName: "Piaggio P.180 Avanti", rarity: .rare,
+                  modelTokens: ["p-180 avanti", "p.180 avanti"],
+                  summary: "Twin pusher-prop business aircraft with three lifting surfaces.",
+                  representativeTypecode: "P180"),
+        ]),
         .init(id: "fam-commuter-props", type: .regional, title: "Commuter props", entries: [
             .init(id: "fcp-islander", canonicalName: "BN-2 Islander", rarity: .uncommon,
                   modelTokens: ["bn-2", "islander"], summary: "Boxy island-hopper. Ten seats, two pistons.",
@@ -1049,6 +1055,10 @@ nonisolated enum CardSets {
             .init(id: "fv-t6", canonicalName: "T-6 Texan", rarity: .rare,
                   modelTokens: ["texan", "harvard", "at-6"], summary: "WWII advanced trainer. The airshow growl.",
                   representativeTypecode: "T6"),
+            .init(id: "fv-cj6", canonicalName: "Nanchang CJ-6", rarity: .rare,
+                  modelTokens: ["nanchang cj-6", "hongdu cj-6", "hongdu bt-6"],
+                  summary: "Chinese military trainer now commonly flown as a warbird.",
+                  representativeTypecode: "CJ6"),
             // "p-51" only, never "mustang" — the Citation Mustang would
             // bleed into this slot (and vice versa; see fc-mustang).
             .init(id: "fv-p51", canonicalName: "P-51 Mustang", rarity: .rare,
@@ -1094,6 +1104,10 @@ nonisolated enum CardSets {
                   modelTokens: ["autogyro cavalon", "rotorsport cavalon"],
                   summary: "Enclosed side-by-side touring gyroplane.",
                   representativeTypecode: "CLON"),
+            .init(id: "fsc-glider", canonicalName: "Sailplane", rarity: .common,
+                  modelTokens: [],
+                  summary: "Unpowered soaring aircraft using ICAO's generic GLID designator.",
+                  representativeTypecode: "GLID"),
         ]),
         .init(id: "fam-unidentified", type: .ga, title: "Unidentified aircraft", entries: [
             .init(id: "fu-unidentified", canonicalName: "Unidentified transponder", rarity: .common,

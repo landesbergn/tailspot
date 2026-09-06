@@ -149,6 +149,10 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-05.
         ("AEST", "Aerostar", "600"),
         ("PA31", "Piper", "PA-31-300 Navajo"),
+        // Public catalog coverage additions validated 2026-09-06.
+        ("CJ6", "Hongdu", "BT-6"),
+        ("GLID", "Glaser-Dirks", "DG 300"),
+        ("P180", "Piaggio", "P-180 Avanti"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -189,6 +193,9 @@ struct SetsCoverageTests {
             (("T34P", "Beechcraft", "45 Mentor"), "fam-beech", "fbt34"),
             (("AEST", "Aerostar", "600"), "fam-piper", "fpa60"),
             (("PA31", "Piper", "PA-31-300 Navajo"), "fam-piper", "fpa31"),
+            (("CJ6", "Hongdu", "BT-6"), "fam-vintage", "fv-cj6"),
+            (("GLID", "Glaser-Dirks", "DG 300"), "fam-sport-classics", "fsc-glider"),
+            (("P180", "Piaggio", "P-180 Avanti"), "fam-avanti", "fav-p180"),
         ]
 
         for (row, setID, entryID) in assignments {
