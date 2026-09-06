@@ -3826,7 +3826,7 @@ struct ContentView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             } else {
-                Text("Record replay session (sensors + planes → file)")
+                Text("Record replay session")
             }
             Spacer()
         }
