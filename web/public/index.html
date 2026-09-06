@@ -49,6 +49,18 @@
   <div class="hero-inner">
     <div class="hero-copy">
       <h1 class="hero-title">Catch the planes flying overhead.</h1>
+      <!-- The running total of catches synced to the backend, fetched from
+           GET /v1/stats (Origin-gated to this site, cached 5 min). It sits
+           between the headline and the badge as the proof line for the
+           claim above it. Space is reserved from first paint and the line
+           fades in once the number arrives, so the badge never jumps; if the
+           fetch fails it stays invisible — a zero would be a lie, not a
+           fallback. -->
+      <p class="hero-stat" aria-live="polite">
+        <span class="hero-stat-dot" aria-hidden="true"></span>
+        <span class="hero-stat-count">0</span>
+        <span class="hero-stat-label">planes caught so far</span>
+      </p>
       <div class="cta-row">
         <!-- Apple's badge artwork, used verbatim (app-store-badge.svg is
              Apple's black.svg byte-for-byte — the PREFERRED variant; white is
@@ -209,6 +221,48 @@
     }
 
     setInterval(advance, HOLD_MS);
+  })();
+
+  // Live-ish catch counter. One cross-origin GET; the API answers only when
+  // the browser's Origin is this site. (curl with a forged Origin still gets
+  // the number, but it is printed right here, so that protects nothing worth
+  // protecting — the fence keeps other SITES from embedding the endpoint.)
+  (function () {
+    var el  = document.querySelector('.hero-stat');
+    var num = document.querySelector('.hero-stat-count');
+    if (!el || !num || !window.fetch || !window.requestAnimationFrame) return;
+
+    fetch('https://api.tailspot.app/v1/stats')
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (s) {
+        var target = Math.floor(Number(s && s.catches));
+        if (!(target > 0)) return;          // zero / garbage: stay invisible
+
+        var reduce = window.matchMedia &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (reduce) {
+          num.textContent = target.toLocaleString();
+          el.classList.add('is-live');
+          return;
+        }
+
+        // Count up from NEAR the total, not from zero: a run-up from 0 on a
+        // five-digit number spends its first second on values nobody believes
+        // and reads as a slot machine. The last 8% eases out over ~1.4 s.
+        var from = Math.floor(target * 0.92);
+        var DUR = 1400, start = null;
+        num.textContent = from.toLocaleString();
+        el.classList.add('is-live');
+        function tick(t) {
+          if (start === null) start = t;
+          var p = Math.min(1, (t - start) / DUR);
+          var e = 1 - Math.pow(1 - p, 3);      // ease-out cubic
+          num.textContent = Math.round(from + (target - from) * e).toLocaleString();
+          if (p < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      })
+      .catch(function () { /* stays invisible */ });
   })();
 </script>
 

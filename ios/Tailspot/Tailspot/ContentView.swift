@@ -9,6 +9,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 import AVFoundation
 import CoreLocation   // CLAuthorizationStatus cases in the denied-recovery check
 import StoreKit       // \.requestReview environment action (the review ask)
@@ -90,12 +91,20 @@ struct ContentView: View {
     /// sets, map, leaderboard, settings, notifications, share).
     /// Opened via the person glyph in the top-trailing corner.
     @State private var showProfile = false
-    /// Becomes true only once the Hangar/Profile presentation animation has
-    /// settled. The request flags above flip at tap time, and even the sheet
-    /// content's `onAppear` runs before its first visible frame is committed;
-    /// using either signal directly for camera occlusion detaches the preview
-    /// first and exposes a black frame while the destination is still loading.
+    /// Becomes true only after the Hangar/Profile presentation controller has
+    /// completed its opening transition. Their request flags flip at tap time,
+    /// before SwiftUI has a sheet ready to cover the camera; using those flags
+    /// directly for camera occlusion detaches the preview and exposes its black
+    /// backing view.
     @State private var primarySheetVisible = false
+    /// Turns the primary sheet's content on as the native opening transition
+    /// begins. Kept separate from `primarySheetVisible` so the content can fade
+    /// with the sheet before the camera is stopped at presentation completion.
+    @State private var primarySheetContentVisible = false
+    /// Opaque brand wash over the presenting AR view. It fades over the live
+    /// camera as Hangar/Profile enters, then stays in place while the capture
+    /// session is stopped so the preview's black backing is never exposed.
+    @State private var primarySheetBackdropOpaque = false
     /// Drives the compass calibration sheet. Tapping the AR
     /// caution badge sets this true; the sheet explains what's
     /// wrong and shows the figure-8 calibration motion.
@@ -287,16 +296,13 @@ struct ContentView: View {
             // Main AR view and overlays (camera, lock brackets, debug panels, etc.)
             ZStack {
                 if cameraAuthorized {
-                    // isActive: the capture session powers down while an
-                    // opaque sheet covers the AR view or the app resigns
-                    // active — the ISP + 30 fps frame delivery were the
-                    // biggest controllable battery drain (audit HIGH;
-                    // Noah green-lit the camera lever 2026-07-19). Clear-
-                    // background reveals don't occlude, so the live sky
-                    // stays visible behind them.
+                    // Hangar/Profile keep the capture session attached during
+                    // their entrance while an opaque brand wash fades over the
+                    // live preview. The session stops only after presentation
+                    // completes, when that wash fully hides its black backing.
                     CameraPreview(zoomFactor: zoom, captureBridge: captureBridge,
                                   frameBridge: frameBridge,
-                                  isActive: scenePhase == .active && !arOccluded)
+                                  isActive: scenePhase == .active && !cameraOccluded)
                         .ignoresSafeArea()
                         // PRIVACY (GA posture, 2026-07-11): the live camera view
                         // is excluded from PostHog session replay STRUCTURALLY,
@@ -698,6 +704,8 @@ struct ContentView: View {
                 }
                 #endif
             }
+
+            PrimarySheetBackdrop(isOpaque: primarySheetBackdropOpaque)
         }
         .overlay { trophyUnlockOverlay }
         // Restore prompt + streak pre-prompt share one overlay link — body's
@@ -730,7 +738,6 @@ struct ContentView: View {
         // CatchDetailView can cross Mr. Worldwide while the sheet was open.
         .onChange(of: showHangar) { _, isShowing in
             if !isShowing {
-                primarySheetVisible = false
                 unlockCenter.enqueueNewUnlocks(from: catches)
             }
         }
@@ -741,17 +748,32 @@ struct ContentView: View {
         // FIRST live crossing celebrate as soon as the sheet dismisses.
         .onChange(of: showProfile) { _, isShowing in
             if !isShowing {
-                primarySheetVisible = false
                 unlockCenter.enqueueNewUnlocks(from: catches)
             }
         }
         .sheet(isPresented: $showHangar) {
             HangarView()
-                .task { await occludeARAfterPrimarySheetPresents() }
+                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
+                .background {
+                    PrimarySheetPresentationObserver(
+                        onWillAppear: primarySheetWillAppear,
+                        onDidAppear: primarySheetDidAppear,
+                        onWillDisappear: primarySheetWillDisappear,
+                        onDidDisappear: primarySheetDidDisappear
+                    )
+                }
         }
         .sheet(isPresented: $showProfile) {
             ProfileScreen()
-                .task { await occludeARAfterPrimarySheetPresents() }
+                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
+                .background {
+                    PrimarySheetPresentationObserver(
+                        onWillAppear: primarySheetWillAppear,
+                        onDidAppear: primarySheetDidAppear,
+                        onWillDisappear: primarySheetWillDisappear,
+                        onDidDisappear: primarySheetDidDisappear
+                    )
+                }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -1342,19 +1364,42 @@ struct ContentView: View {
     /// them would visibly freeze the sky behind the reveal (a regression).
     /// Only fully-opaque presentations belong here.
     private var arOccluded: Bool {
+        cameraOccluded
+    }
+
+    /// Presentations that fully hide the root may safely stop the capture
+    /// session. Hangar/Profile enter this state only after their native
+    /// presentation completes and the brand wash has covered the preview.
+    private var cameraOccluded: Bool {
         primarySheetVisible
             || showCompassSheet
     }
 
-    /// SwiftUI starts a sheet content task before the presentation animation
-    /// has produced its first stable frame. Keep the live camera attached for
-    /// that short transition, then retain the existing power-saving shutdown
-    /// for the rest of the opaque sheet's lifetime. The task is cancelled if
-    /// the sheet disappears before the delay completes.
-    private func occludeARAfterPrimarySheetPresents() async {
-        try? await Task.sleep(for: .milliseconds(500))
-        guard !Task.isCancelled, showHangar || showProfile else { return }
+    /// A sheet's content tree is mounted before its presentation starts, so
+    /// `.task` and `.onAppear` are too early to coordinate a visible fade. The
+    /// presentation observer calls these at the matching UIKit lifecycle
+    /// boundaries instead of relying on device-specific delays.
+    private func primarySheetWillAppear() {
+        guard showHangar || showProfile else { return }
+        primarySheetContentVisible = true
+        primarySheetBackdropOpaque = true
+    }
+
+    private func primarySheetDidAppear() {
+        guard showHangar || showProfile else { return }
         primarySheetVisible = true
+    }
+
+    private func primarySheetWillDisappear() {
+        // Restart the camera behind the still-opaque wash. Its startup runs in
+        // parallel with the native dismissal and is hidden from the user.
+        primarySheetVisible = false
+    }
+
+    private func primarySheetDidDisappear() {
+        guard !showHangar, !showProfile else { return }
+        primarySheetContentVisible = false
+        primarySheetBackdropOpaque = false
     }
 
     /// Ambient-label metadata prefetch body (the `.task(id: visibleIcaoSignature)`
@@ -4294,6 +4339,110 @@ struct ContentView: View {
             if let r = emptyRipple, r.1 == now {
                 emptyRipple = nil
             }
+        }
+    }
+}
+
+/// Softens the handoff from the live AR view to the two content-heavy primary
+/// sheets. The brand background paints immediately, then the finished sheet
+/// content fades in during the native presentation instead of appearing as a
+/// hard late frame. Kept outside `ContentView.body` because that expression is
+/// already near Swift's type-check budget.
+private struct PrimarySheetReveal: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var contentVisible = false
+    let isReady: Bool
+
+    func body(content: Content) -> some View {
+        ZStack {
+            Brand.Color.bgPrimary
+                .ignoresSafeArea()
+            content
+                .opacity(reduceMotion || contentVisible ? 1 : 0)
+        }
+        .onChange(of: isReady, initial: true) { _, ready in
+            guard ready, !contentVisible else { return }
+            if !reduceMotion {
+                withAnimation(.easeOut(duration: 0.22)) {
+                    contentVisible = true
+                }
+            }
+        }
+    }
+}
+
+/// Lives in the presenting view, below the native sheet. The sheet exposes its
+/// presenter during the opening transition and around its rounded top edge, so
+/// this wash makes the live camera fade to the app background before the
+/// capture session is stopped. On dismissal it remains opaque until the camera
+/// has had the entire native transition to restart, then fades away.
+private struct PrimarySheetBackdrop: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isOpaque: Bool
+
+    var body: some View {
+        Brand.Color.bgPrimary
+            .ignoresSafeArea()
+            .opacity(isOpaque ? 1 : 0)
+            .animation(
+                reduceMotion ? nil : .easeInOut(duration: 0.32),
+                value: isOpaque
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Reports the actual lifecycle of SwiftUI's native sheet host. SwiftUI does
+/// not expose presentation start/completion callbacks, and view-level
+/// `onAppear` runs while the sheet is still being prepared offscreen.
+private struct PrimarySheetPresentationObserver: UIViewControllerRepresentable {
+    let onWillAppear: () -> Void
+    let onDidAppear: () -> Void
+    let onWillDisappear: () -> Void
+    let onDidDisappear: () -> Void
+
+    func makeUIViewController(context: Context) -> ObserverViewController {
+        let controller = ObserverViewController()
+        controller.view.backgroundColor = .clear
+        controller.onWillAppear = onWillAppear
+        controller.onDidAppear = onDidAppear
+        controller.onWillDisappear = onWillDisappear
+        controller.onDidDisappear = onDidDisappear
+        return controller
+    }
+
+    func updateUIViewController(_ controller: ObserverViewController, context: Context) {
+        controller.onWillAppear = onWillAppear
+        controller.onDidAppear = onDidAppear
+        controller.onWillDisappear = onWillDisappear
+        controller.onDidDisappear = onDidDisappear
+    }
+
+    final class ObserverViewController: UIViewController {
+        var onWillAppear: (() -> Void)?
+        var onDidAppear: (() -> Void)?
+        var onWillDisappear: (() -> Void)?
+        var onDidDisappear: (() -> Void)?
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            onWillAppear?()
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            onDidAppear?()
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            onWillDisappear?()
+        }
+
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            onDidDisappear?()
         }
     }
 }
