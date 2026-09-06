@@ -408,10 +408,23 @@ export interface CatchStore {
    * no device has a catch.
    */
   recordAlltimeTopper(now: Date): Promise<void>;
+  /**
+   * Every catch ever synced, all devices — the public "planes caught" total
+   * for the marketing site (GET /v1/stats). Discards after the reveal never
+   * reach the server (there is no delete route), so this is kept catches only.
+   */
+  countCatches(): Promise<number>;
 }
 
 export class DrizzleCatchStore implements CatchStore {
   constructor(private readonly db: Database) {}
+
+  async countCatches(): Promise<number> {
+    const rows = await withDbRetry(() =>
+      this.db.select({ n: sql<number>`count(*)::int` }).from(catches),
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
 
   async resolveRarity(icao24: string): Promise<RarityResolution> {
     // Same chain as the metadata store: registry → typecode → DOC 8643 rarity.
