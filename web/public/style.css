@@ -170,6 +170,50 @@ body > * { position: relative; z-index: 1; }
   margin-bottom: 1rem;
 }
 
+/* "N planes caught so far" — the site's one live number. Reserved height from
+   first paint (visibility, not display) so the fade-in never reflows the hero;
+   tabular digits so the count-up doesn't jitter the label sideways. */
+.hero-stat {
+  /* Block-level flex, not inline-flex: an inline box picks up the parent's
+     line-height strut above and below, which turned a 12px gap into 25. */
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  /* Between the title (margin-bottom 1.25rem) and the badge: pull up so the
+     line reads as the title's proof (0.75rem), then a full step to the CTA. */
+  margin: -0.5rem 0 1.25rem;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+}
+.hero-stat.is-live { visibility: visible; opacity: 1; }
+.hero-stat-count {
+  color: var(--cyan);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.hero-stat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: stat-pulse 2.4s ease-out infinite;
+}
+@keyframes stat-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(0, 212, 255, 0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(0, 212, 255, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(0, 212, 255, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-stat-dot { animation: none; }
+  .hero-stat { transition: none; }
+}
+
 .btn {
   display: inline-block;
   font-family: var(--mono);
@@ -516,6 +560,9 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   .hero-inner { gap: 1.25rem; }
   .hero-title { font-size: clamp(1.85rem, 5.2vw, 3.4rem); margin-bottom: 1rem; }
   .cta-row { margin-bottom: 0; }
+  /* Title margin drops to 1rem on phones; keep the same title->stat->badge
+     proportions (0.75rem, then 1rem) at the tighter scale. */
+  .hero-stat { margin: -0.25rem 0 1rem; justify-content: center; }
   .catch { gap: 0.75rem; }
   .catch-meta { gap: 2px; }
   /* Mobile only: tier and model on one line. They are one fact about one
