@@ -133,7 +133,9 @@ describe("GET /v1/stats", () => {
         headers: { origin: "https://tailspot-www-preview.fly.dev" },
       });
       expect(res.statusCode).toBe(200);
-      expect(res.headers["access-control-allow-origin"]).toBe("https://tailspot-www-preview.fly.dev");
+      expect(res.headers["access-control-allow-origin"]).toBe(
+        "https://tailspot-www-preview.fly.dev",
+      );
     } finally {
       await plain.close();
     }
