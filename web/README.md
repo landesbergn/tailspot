@@ -35,6 +35,21 @@ To refresh them, re-run the resize from `marketing/catch-photos/` and keep the
 `.catch-frame` aspect ratio (900/567) in sync with `style.css` — the
 single-screen height budget is computed from it.
 
+## The catch counter
+
+The hero's "N planes caught so far" line is the site's one live number. It is
+fetched from `GET https://api.tailspot.app/v1/stats` (see `backend/README.md`),
+which answers only when the browser's `Origin` is this site and caches the
+count for five minutes. The line reserves its height from first paint and
+fades in when the number arrives; if the fetch fails it stays invisible —
+never a zero. The count-up starts at 92% of the total rather than 0 so it
+doesn't read as a slot machine.
+
+Because the API decides by `Origin`, a local `python3 -m http.server` preview
+gets a 404 and an invisible line. To preview it, mock the request (Playwright
+`page.route`) or add your local origin to the backend's
+`STATS_ALLOWED_ORIGINS`.
+
 ## Deploy
 
 ```sh

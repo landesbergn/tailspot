@@ -26,6 +26,7 @@ import { registerHandlesRoute } from "./routes/handles.js";
 import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
 import { registerRoutesRoute } from "./routes/routes.js";
+import { registerStatsRoute } from "./routes/stats.js";
 
 // Resolve the package.json version at startup so /healthz can report it.
 // __dirname equivalent in ESM:
@@ -88,6 +89,12 @@ export interface BuildAppOptions {
   nowSeconds?: () => number;
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
+  /**
+   * Browser origins allowed to read GET /v1/stats (tests override). Production
+   * defaults to the marketing site; `STATS_ALLOWED_ORIGINS` (comma-separated)
+   * extends it without a redeploy of code.
+   */
+  statsAllowedOrigins?: readonly string[];
   /**
    * Handle-suggestion candidate generator override (tests force a known set,
    * including a pre-claimed handle, to assert availability filtering). Production
@@ -292,6 +299,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     monthlyWins: (id) => getCatchStore().monthlyWins(id),
     everToppedAllTime: (id) => getCatchStore().everToppedAllTime(id),
     recordAlltimeTopper: (now) => getCatchStore().recordAlltimeTopper(now),
+    countCatches: () => getCatchStore().countCatches(),
   };
 
   // Rate limiters: in-memory token buckets (single-instance caveat documented in
@@ -327,7 +335,26 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: nowSeconds ? () => new Date(nowSeconds() * 1000) : undefined,
   });
 
+  // GET /v1/stats — the marketing site's catch counter. Origin-gated + cached;
+  // the rate limiters' clock doubles as the memo clock so tests can expire it.
+  registerStatsRoute(app, {
+    catchStore: catchesStore,
+    allowedOrigins: options.statsAllowedOrigins ?? statsOriginsFromEnv(),
+    now: rlNow,
+  });
+
   return app;
+}
+
+const DEFAULT_STATS_ORIGINS = ["https://tailspot.app", "https://www.tailspot.app"];
+
+/** The default site origins plus any from `STATS_ALLOWED_ORIGINS` (comma-separated). */
+function statsOriginsFromEnv(): string[] {
+  const extra = (process.env.STATS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  return [...DEFAULT_STATS_ORIGINS, ...extra];
 }
 
 /** Parse an int env var, or undefined when unset/blank (lets defaults apply). */
