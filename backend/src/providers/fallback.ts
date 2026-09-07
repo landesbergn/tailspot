@@ -25,10 +25,21 @@ export interface FallbackProviderOptions {
    *  the app logger; without visibility a dead primary looks like a healthy
    *  system. */
   onFallback?: (primaryError: unknown) => void;
+  /**
+   * Called on the first primary success AFTER one or more fallbacks — the
+   * "primary recovered" edge. `onFallback` alone can't tell a five-minute
+   * outage from five scattered blips, because nothing reports the good news;
+   * this is the other half of that signal (see SustainedFallbackAlerter).
+   * Edge-triggered, not level: a primary that never failed never fires it.
+   */
+  onRecovered?: () => void;
 }
 
 export class FallbackProvider implements PositionProvider {
   readonly name: string;
+
+  /** True once a fallback has engaged, until the primary serves again. */
+  private engaged = false;
 
   constructor(
     private readonly primary: PositionProvider,
@@ -40,11 +51,23 @@ export class FallbackProvider implements PositionProvider {
 
   async aircraftInBbox(bbox: Bbox): Promise<ProviderSnapshot> {
     let primaryError: unknown;
+    let snapshot: ProviderSnapshot | undefined;
     try {
-      return await this.primary.aircraftInBbox(bbox);
+      snapshot = await this.primary.aircraftInBbox(bbox);
     } catch (err) {
       primaryError = err;
     }
+    if (snapshot !== undefined) {
+      // The recovery notice runs OUTSIDE the try (same as onFallback below) so
+      // a broken listener can't masquerade as a failed primary and silently
+      // send every request to the secondary.
+      if (this.engaged) {
+        this.engaged = false;
+        this.options.onRecovered?.();
+      }
+      return snapshot;
+    }
+    this.engaged = true;
     this.options.onFallback?.(primaryError);
     try {
       return await this.secondary.aircraftInBbox(bbox);

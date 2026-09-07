@@ -15,8 +15,7 @@
 //  catch→reveal pacing is protected by cadence, not by a timer:
 //    - only ELIGIBLE catches can fire: a fresh single catch — not a duplicate
 //      ("already caught" awards no points, so there's nothing to bonus), not
-//      part of a multi-catch, and not gate-suspect (don't stack a game on top
-//      of the post-reveal Keep/Discard question);
+//      part of a multi-catch, and not a legacy gate-suspect row;
 //    - ~1-in-2 roll on eligible catches (was 1-in-3 through v1.0 — raised
 //      2026-08-25 per Noah: measured only ~10% of recorded catches actually
 //      got a round, and players answer 90% of the ones shown);
@@ -95,9 +94,7 @@ final class GuessScheduler {
     ///     `MultiCatchReveal` batch).
     ///   - isDuplicate: the tap re-caught an already-caught airframe (no new
     ///     row, no points — nothing to bonus).
-    ///   - isSuspect: the authenticity gates flagged the catch
-    ///     (`Catch.suspectReason != nil`) — the post-reveal Keep/Discard
-    ///     question owns that moment.
+    ///   - isSuspect: a legacy row carries `Catch.suspectReason != nil`.
     ///   - routeAvailable: frozen route on the row AND
     ///     `GuessOptions.routeAvailable` says honest chips can be built.
     ///   - priorCatchCount: recorded catches BEFORE this one (0 → this is the

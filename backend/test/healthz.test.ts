@@ -21,11 +21,18 @@ describe("GET /healthz", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("returns { status: 'ok', version: <string> }", async () => {
+  it("returns exactly { status: 'ok' }", async () => {
     const res = await app.inject({ method: "GET", url: "/healthz" });
-    const body = res.json<{ status: string; version: string }>();
-    expect(body.status).toBe("ok");
-    expect(typeof body.version).toBe("string");
-    expect(body.version.length).toBeGreaterThan(0);
+    expect(res.json()).toEqual({ status: "ok" });
+  });
+
+  it("does not leak the build version to unauthenticated callers", async () => {
+    // The version used to be in this body. It told anyone who asked which
+    // build is running, which is the first step in matching a dependency CVE
+    // to a live target — and nothing consumed it. Asserted, not just deleted,
+    // so a future "handy for debugging" re-add trips a test.
+    const res = await app.inject({ method: "GET", url: "/healthz" });
+    expect(Object.keys(res.json<Record<string, unknown>>())).toEqual(["status"]);
+    expect(res.body).not.toMatch(/\d+\.\d+\.\d+/);
   });
 });

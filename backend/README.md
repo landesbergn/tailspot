@@ -18,7 +18,10 @@ identity and claimable handles — no sign-in, no PII beyond a self-chosen handl
 
 ### `GET /healthz`
 
-Liveness probe. Returns `{ "status": "ok", "version": "<pkg version>" }`.
+Liveness probe. Returns `{ "status": "ok" }`. It used to include the package
+version; that was free reconnaissance for an unauthenticated caller and nothing
+consumed it, so it was removed (2026-09-06). For the running version, use
+`fly image show -a tailspot-api`.
 
 ### `GET /v1/aircraft?lamin=&lomin=&lamax=&lomax=` (WP 1.2 + 1.3)
 
@@ -244,6 +247,42 @@ mismatch), then reports **code-weighted and tail-weighted coverage** (the
 MASTER.txt download is only needed for the tail-weighted number — omit `--master`
 to skip it). `MASTER.txt`/`ACFTREF.txt` are **never committed**; only the
 generated map is.
+
+## Operator tools
+
+### Disabling a device (`npm run device:disable`)
+
+Identity here is anonymous — a device registers, gets a bearer token once, and
+that's the whole account. There is no email, no password, and so no "ban the
+account" lever. `devices.disabled_at` (migration `0009_device-disabled-at`) is
+that lever: when it's set, the device's token resolves to nothing, so **every
+bearer route answers 401**, the leaderboard answers "no me", and the device
+drops out of the public leaderboard entries.
+
+**Disable, never delete.** `catches`, `weekly_champions`, `monthly_champions`
+and `alltime_toppers` all reference `devices.id`, so deleting a device either
+fails on the foreign key or takes real catch history with it and silently
+rewrites frozen crowns other players have already seen. Disabling touches one
+column; every row the device ever wrote stays exactly where it is, and the
+switch is **reversible** (`--enable`) — which matters, because an anonymous
+user has no way to appeal a mistake.
+
+The device is addressed by its uuid **or** its handle (matched
+case-insensitively). The script **dry-runs by default**; pass `--apply` to write.
+
+```sh
+DATABASE_URL=… npm run device:disable -- <uuid|handle>                  # dry run: show what it would do
+DATABASE_URL=… npm run device:disable -- <uuid|handle> --apply          # disable
+DATABASE_URL=… npm run device:disable -- <uuid|handle> --enable --apply # undo
+```
+
+Re-disabling an already-disabled device is a reported no-op, so the original
+`disabled_at` timestamp (the audit trail) is never stomped.
+
+> **Migrations are applied to production MANUALLY** — there is no Fly
+> `release_command`, so a deploy does *not* run them. `0009_device-disabled-at`
+> must be applied (`DATABASE_URL=… npm run db:migrate`) **before** deploying the
+> code that reads `disabled_at`, or every auth lookup 500s on a missing column.
 
 ## Tests
 

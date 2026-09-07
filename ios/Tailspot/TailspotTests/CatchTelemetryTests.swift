@@ -342,9 +342,9 @@ struct CatchTelemetryTests {
         #expect(CatchTelemetry.indoorHintClearedEvent == "indoor_hint_cleared")
     }
 
-    @Test func indoorHintShownSharesTheOutdoorGatePayload() {
+    @Test func labelSuppressionSharesTheOutdoorGatePayload() {
         // The hint's shown event reuses outdoorGateProperties verbatim
-        // (fireIndoorHintShown passes verdict .notSky), so the two surfaces
+        // (the historically named helper passes verdict .notSky), so both streams
         // stay join-compatible in HogQL: same keys, same value shapes.
         let f = SkyFeatures(edgeDensity: 0.09, tileVariance: 0.03, warmth: 0.19, meanLuminance: 0.13)
         let p = CatchTelemetry.outdoorGateProperties(
@@ -408,7 +408,7 @@ struct CatchTelemetryTests {
         #expect(CatchTelemetry.localGateEvent == "catch_local_gate")
     }
 
-    // MARK: - Post-catch confirm (suspected → kept / discarded)
+    // MARK: - Authenticity shadow telemetry
 
     @Test func suspectEventNamesAreStable() {
         #expect(CatchTelemetry.suspectedEvent == "catch_suspected")
@@ -433,8 +433,8 @@ struct CatchTelemetryTests {
     }
 
     @Test func suspicionRawValuesArePersistedStrings() {
-        // Raw values ARE the on-disk Catch.suspectReason strings + the
-        // PostHog reason property — renaming one silently orphans rows.
+        // Raw values remain compatible with legacy Catch.suspectReason rows
+        // and the PostHog reason property.
         #expect(CatchSuspicion.occluded.rawValue == "occluded")
         #expect(CatchSuspicion.noDetection.rawValue == "no_detection")
         #expect(CatchSuspicion.tooFar.rawValue == "too_far")
@@ -451,23 +451,6 @@ struct CatchTelemetryTests {
         #expect(CatchSuspicion.preferred(.tooFar, .noDetection) == .noDetection)
         #expect(CatchSuspicion.preferred(.noDetection, .occluded) == .occluded)
         #expect(CatchSuspicion.preferred(.noDetection, .indoor) == .noDetection)
-    }
-
-    @Test func everySuspicionHasReviewCopy() {
-        // A reason with no question would present an empty Keep/Discard
-        // dialog — catch it at the enum, not in the field.
-        for reason in CatchSuspicion.allCases {
-            #expect(!reason.question(slantKm: nil).isEmpty)
-            #expect(reason.question(slantKm: nil).hasSuffix("?"))
-        }
-    }
-
-    @Test func tooFarQuestionCarriesTheDistance() {
-        // The JA10VA case: the review question must say how far out it was.
-        #expect(CatchSuspicion.tooFar.question(slantKm: 62.6).contains("63 km"))
-        // Degenerate slant (0 — no observation at catch time) falls back
-        // to distance-free copy rather than "0 km".
-        #expect(!CatchSuspicion.tooFar.question(slantKm: 0).contains("0 km"))
     }
 
     // MARK: - Bonus round (game-layer PR3)

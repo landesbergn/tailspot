@@ -56,6 +56,43 @@ was already at the edge on the SE.
 - **Audience (PostHog, 30 d):** 2 SE users + 2 iPad users running the iPhone
   app in a 375×667 compatibility window, of ~110.
 
+## 2026-09-06 — API hardening, phase 1 — branch `feat/api-hardening`
+
+Noah asked whether the API was publicly queryable. Reading the routes said no
+user data leaks without the owning device's bearer token, but the follow-up
+"is it secure?" audit — three reviewer agents (security on Opus, infra, iOS)
+over a draft plan — overturned the draft's order and found two live problems:
+every per-IP rate limit was bypassable by spoofing `X-Forwarded-For`
+(`trustProxy: true` trusted the whole chain; reproduced against prod), and the
+rate-limiter and tile-cache maps grew without bound. Shipped as one backend PR:
+`Fly-Client-IP` keying via a single helper with `trustProxy` off; bounded maps;
+limits on the unmetered aircraft/metadata/catch-list routes plus a pre-auth
+per-IP limiter on bearer routes; request/connection/statement timeouts, a 64 KB
+body limit, a Fly concurrency block, Node heap sizing; version off `/healthz`;
+Sentry scrub of the token and observer coordinates; sustained-fallback alert;
+and `devices.disabled_at` (migration 0009) as the revocation lever with an
+operator script. App Attest and Cloudflare were argued down to "in reserve";
+anti-cheat enforcement was shown to be a no-op until the app sends pose data.
+Tests 350 → 391.
+
+## 2026-09-05 — authenticity warnings retired; strong indoor suppression retained
+
+The user-facing authenticity prompts were doing more interrupting than
+correcting, so the catch path is now fail-open throughout: no pre-catch warning,
+no post-reveal Keep/Discard question, and no upload quarantine. Legacy rows with
+`suspectReason` set are released by `CatchUploader`; the field remains only for
+SwiftData migration compatibility.
+
+Strong whole-frame `.notSky` evidence still suppresses all aircraft labels after
+five sustained one-second samples, including explicit tap reveals, and clears
+the current lock so it cannot remain silently catchable. The suppression is
+silent and ambiguous or dark frames fail open. Existing gate event names
+continue for historical trend continuity, while `catch_performed.sky_verdict`
+ties the whole-frame result to the exact catch. A private PostHog review queue
+can use that catch-spine event to flag repeated strong indoor signals across
+multiple days. That queue is intentionally a human-review lead, never an
+automatic cheating verdict.
+
 ## 2026-09-01 — v1.1.1 train opened — branch `chore/open-1.1.1-train`
 
 v1.1.0 went live on the App Store on **2026-08-29 16:10 UTC as build 89** — the

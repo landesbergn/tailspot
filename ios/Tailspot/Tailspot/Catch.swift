@@ -141,14 +141,10 @@ final class Catch {
     /// migration (every pre-WP-1.7 row is "pending" and uploads on the
     /// next launch, which is the intended backfill behavior).
     var uploadedAt: Date?
-    /// Why the authenticity gates doubted this catch at capture time
-    /// (`"occluded"` / `"too_far"` / `"indoor"`), or nil for a clean or
-    /// user-kept catch. Post-catch confirm model (2026-07-04): gates never
-    /// block — a suspected catch records + reveals instantly, then gets one
-    /// Keep/Discard question after the reveal. While non-nil the row is
-    /// quarantined from upload (`CatchUploader` skips it); Keep clears the
-    /// flag (uploads next scene-activation), Discard deletes the row.
-    /// Added 2026-07-04 — optional + nil-default for lightweight migration.
+    /// Legacy marker written by the retired post-catch authenticity review.
+    /// Kept for lightweight schema compatibility; new catches leave it nil
+    /// and `CatchUploader` intentionally ignores it so old pending rows can
+    /// upload. Added 2026-07-04 — optional + nil-default for migration.
     var suspectReason: String?
     /// Where the caught plane sits inside the saved catch photo, as
     /// NORMALIZED photo coordinates (0…1, top-left origin) — the same point

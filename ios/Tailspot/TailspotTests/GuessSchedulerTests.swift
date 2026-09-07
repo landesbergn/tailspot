@@ -67,8 +67,7 @@ struct GuessSchedulerCoreTests {
     }
 
     @Test func suspectCatchNeverFires() {
-        // A gate-flagged catch gets the Keep/Discard question after the
-        // reveal — never a quiz stacked on top.
+        // Legacy gate-flagged rows remain ineligible for compatibility.
         var rng = ConstantRNG(value: 0)
         #expect(decide(isSuspect: true, rng: &rng) == nil)
     }

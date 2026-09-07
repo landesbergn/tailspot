@@ -15,8 +15,8 @@
 //       dark-but-smooth; a dim room is dark-but-cluttered. Deciding on
 //       darkness would re-break night spotting.
 //    2. Fail OPEN. Only a confident interior returns `.notSky` (the
-//       only verdict that blocks, and only when enforcing). Anything
-//       ambiguous returns `.uncertain`, which allows the catch. Better
+//       only verdict that suppresses ambient labels). Anything ambiguous
+//       returns `.uncertain`, which leaves labels visible. Better
 //       to miss a few cheats than strand a real outdoor catch.
 //
 //  The decision logic (`verdict(features:gpsAccuracyMeters:)`) is pure
@@ -28,8 +28,8 @@
 import Foundation
 import CoreVideo
 
-/// Verdict for "pointed at open sky?". Only `.notSky` blocks a catch
-/// (when enforcing); `.sky` and `.uncertain` both allow.
+/// Verdict for "pointed at open sky?". Only `.notSky` can suppress ambient
+/// plane labels; no verdict blocks a catch.
 nonisolated enum SkyVerdict: String, Sendable {
     case sky
     case notSky
@@ -64,7 +64,7 @@ nonisolated struct SkyCheck {
     /// test: block on WARM light rather than clutter, because a blank
     /// ceiling is as smooth as the sky — structure can't separate them,
     /// but the room's warm light can. Cost: warm/golden skies can
-    /// false-block (recoverable via "Catch anyway"); cool-lit interiors
+    /// false-suppress labels; cool-lit interiors
     /// still slip through — a learned classifier is the real fix (PLAN §9).
     /// `warmThreshold` is the dial. Retune only against new labeled images.
     struct Thresholds: Sendable, Equatable {
@@ -122,8 +122,8 @@ nonisolated struct SkyCheck {
         let colorTrustworthy = f.meanLuminance >= thresholds.luminanceForColorTrust
         let warm = colorTrustworthy && f.warmth >= thresholds.warmThreshold
 
-        // Warm-lit → interior (or a warm/golden sky, which "Catch anyway"
-        // recovers). GPS is recorded in telemetry but never blocks — a
+        // Warm-lit → interior (or a warm/golden sky). GPS is recorded in
+        // telemetry but never changes the verdict — a
         // degraded fix is common outdoors and must not strand a real catch.
         if warm { return .notSky }
 
