@@ -71,8 +71,8 @@ extension ObservedAircraft {
     /// catch *regardless of occlusion* (which the localized sky gate owns).
     ///
     /// Deliberately DECOUPLED from `isLikelyVisibleToObserver`: labels stay
-    /// as generous as ever (a far contrail still shows) — only *catching* a
-    /// speck is gated, with a "Catch anyway" override on the block.
+    /// as generous as ever (a far contrail still shows). At catch time this
+    /// produces shadow telemetry only; it does not block the action.
     var clearsCatchSizeFloor: Bool {
         apparentSizeArcminutes >= ObservedAircraft.catchSizeFloorArcminutes
     }
