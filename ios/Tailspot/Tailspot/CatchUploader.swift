@@ -15,8 +15,8 @@
 //    response (server already saw that UUID) is treated as success and marks
 //    the row uploaded — idempotent by design.
 //  - Hooks: TailspotApp fires `uploadPending` on `scenePhase → .active` (the
-//    retry net), and ContentView fires it right after a catch saves / a
-//    suspect Keep (per-catch immediate upload, 2026-08-24 — so the server
+//    retry net), and ContentView fires it right after a catch saves
+//    (per-catch immediate upload, 2026-08-24 — so the server
 //    knows the points before the user first opens Profile/Leaderboard).
 //    Overlapping sweeps are safe: both run on the MainActor over the same
 //    context, and the serverUuid assigned before the first POST makes any
@@ -45,13 +45,11 @@ class CatchUploader {
     ///   2. Call `ensureRegistered()` — no-op if already registered.
     ///   3. POST the catch; on success or duplicate, set `uploadedAt = now`.
     ///   4. On any error, log and continue — the row stays pending.
-    /// What "pending upload" means: never uploaded AND not quarantined as a
-    /// gate suspect (post-catch confirm, 2026-07-04) — a suspected catch must
-    /// not touch the server/leaderboard until the user answers Keep (clears
-    /// `suspectReason`); Discard deletes the row. Static so the quarantine
-    /// rule is unit-testable against an in-memory store.
+    /// `suspectReason` is a legacy field from the retired post-catch review
+    /// flow. It deliberately does not participate here, which also releases
+    /// old rows that were left pending by that flow.
     static let pendingPredicate = #Predicate<Catch> {
-        $0.uploadedAt == nil && $0.suspectReason == nil
+        $0.uploadedAt == nil
     }
 
     func uploadPending(context: ModelContext) async {

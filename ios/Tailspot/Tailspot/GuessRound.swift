@@ -58,7 +58,8 @@ nonisolated struct GuessRoundQuestion: Equatable, Sendable {
 ///
 /// NOTE the round is offered ONLY for a fresh single catch (a duplicate awards
 /// no points to bonus; a multi-catch owns its own `MultiCatchReveal`; a
-/// suspect stacks a Keep/Discard question we don't game on top of). The
+/// legacy suspect is excluded for compatibility with rows from the retired
+/// review flow). The
 /// scheduler still owns cadence — this only derives its inputs.
 nonisolated enum GuessRoundPlanner {
 
@@ -67,7 +68,7 @@ nonisolated enum GuessRoundPlanner {
         /// Exactly one fresh row and no duplicates — the only shape eligible
         /// for a round (the batch gate).
         let isFreshSingle: Bool
-        /// The row was gate-flagged (`Catch.suspectReason != nil`).
+        /// The row carries a legacy gate flag (`Catch.suspectReason != nil`).
         let isSuspect: Bool
         /// A route question can be built from the row's frozen endpoints.
         let routeAvailable: Bool

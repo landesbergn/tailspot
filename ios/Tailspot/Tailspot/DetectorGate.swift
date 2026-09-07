@@ -2,9 +2,9 @@
 //  DetectorGate.swift
 //  Tailspot
 //
-//  Anti-cheat Lever 4 — the detector soft-gate (docs/anti-cheat-plan.md §5),
-//  adapted to the post-catch confirm model (2026-07-04): it raises SUSPICION
-//  on a catch the camera should have corroborated but didn't; it never blocks.
+//  Anti-cheat Lever 4 — the detector soft-gate (docs/anti-cheat-plan.md §5).
+//  It records a shadow signal when the camera should have corroborated a
+//  catch but didn't; it never blocks or prompts.
 //
 //  The gate only judges INSIDE the detector's competence envelope:
 //    - enough light (the detector was never validated at night — a dark-sky

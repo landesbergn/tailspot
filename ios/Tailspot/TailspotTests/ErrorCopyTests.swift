@@ -56,11 +56,4 @@ struct ErrorCopyTests {
         // honest for both, "no internet" only for one.
         #expect(!ErrorCopy.isOffline(URLError(.timedOut)))
     }
-
-    @Test func multiCatchQuestionReadsPlural() {
-        let q = CatchSuspicion.multiQuestion(count: 3)
-        #expect(q == "3 of those were hidden or very far — did you really see them?")
-        // Same shape contract the per-reason questions are pinned to.
-        #expect(q.hasSuffix("?"))
-    }
 }

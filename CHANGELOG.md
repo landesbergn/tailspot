@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-05 — authenticity warnings retired; strong indoor suppression retained
+
+The user-facing authenticity prompts were doing more interrupting than
+correcting, so the catch path is now fail-open throughout: no pre-catch warning,
+no post-reveal Keep/Discard question, and no upload quarantine. Legacy rows with
+`suspectReason` set are released by `CatchUploader`; the field remains only for
+SwiftData migration compatibility.
+
+Strong whole-frame `.notSky` evidence still suppresses all aircraft labels after
+five sustained one-second samples, including explicit tap reveals, and clears
+the current lock so it cannot remain silently catchable. The suppression is
+silent and ambiguous or dark frames fail open. Existing gate event names
+continue for historical trend continuity, while `catch_performed.sky_verdict`
+ties the whole-frame result to the exact catch. A private PostHog review queue
+can use that catch-spine event to flag repeated strong indoor signals across
+multiple days. That queue is intentionally a human-review lead, never an
+automatic cheating verdict.
+
 ## 2026-09-01 — v1.1.1 train opened — branch `chore/open-1.1.1-train`
 
 v1.1.0 went live on the App Store on **2026-08-29 16:10 UTC as build 89** — the
