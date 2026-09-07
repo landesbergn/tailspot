@@ -24,7 +24,8 @@
  * Malformed values are ignored (position is an enhancement, never a 400).
  */
 
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { ipKey } from "../identity/clientIp.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { RouteResolver } from "../providers/adsblolRoutes.js";
 
@@ -38,10 +39,6 @@ export interface RoutesRouteOptions {
  *  pattern gates obvious garbage before it reaches the upstream lookup. */
 const CALLSIGN_PATTERN = /^[A-Za-z0-9]{2,10}$/;
 
-function clientIp(request: FastifyRequest): string {
-  return request.ip;
-}
-
 /** The query value as a finite number within [lo, hi], else undefined. */
 function finiteInRange(v: unknown, lo: number, hi: number): number | undefined {
   if (typeof v !== "string" || v.trim() === "") return undefined;
@@ -53,7 +50,7 @@ export function registerRoutesRoute(app: FastifyInstance, opts: RoutesRouteOptio
   const { resolver, routeLimiter } = opts;
 
   app.get("/v1/routes/:callsign", async (request, reply) => {
-    const rl = routeLimiter.take(`ip:${clientIp(request)}`);
+    const rl = routeLimiter.take(ipKey(request));
     if (!rl.allowed) {
       reply.header("Retry-After", String(rl.retryAfterSeconds));
       return reply.code(429).send({ error: "rate limited" });

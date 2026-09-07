@@ -22,6 +22,27 @@ primary_region = "sjc"
   min_machines_running = 1
   processes = ["app"]
 
+  # Load shedding at the edge. Fly's default is `type = "connections"` with a
+  # soft limit of 20 and NO hard limit — which is wrong for us twice over.
+  # First, connections is the wrong unit for a Node API: iOS clients hold
+  # keep-alive sockets open between 10-second polls, so a machine can sit at 20
+  # "connections" while doing essentially nothing, and the proxy starts spilling
+  # to (or cold-starting) the second machine for no reason. Requests measures
+  # the work actually in flight. Second, with no hard limit the proxy will keep
+  # queueing onto a machine that is already saturated, so a burst turns into an
+  # OOM on a 256 MB VM instead of a fast 503.
+  #
+  # 100 soft / 200 hard: a single Node process on one shared vCPU handles these
+  # handlers (cache reads, one-row DB lookups) in tens of ms, so 100 concurrent
+  # requests is already far past normal — steady state with a few hundred users
+  # polling every 10 s is a couple of requests per second. Soft 100 spreads load
+  # to the second machine before latency shows; hard 200 refuses the rest rather
+  # than accepting work it cannot finish.
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 100
+    hard_limit = 200
+
   [[http_service.checks]]
     grace_period = "5s"
     interval = "15s"

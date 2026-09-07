@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
 import { getDb } from "./db/client.js";
@@ -18,6 +15,7 @@ import {
   type RouteEnricher,
   type RouteResolver,
 } from "./providers/adsblolRoutes.js";
+import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
@@ -27,13 +25,6 @@ import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
 import { registerRoutesRoute } from "./routes/routes.js";
 import { registerStatsRoute } from "./routes/stats.js";
-
-// Resolve the package.json version at startup so /healthz can report it.
-// __dirname equivalent in ESM:
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8")) as {
-  version: string;
-};
 
 /**
  * buildApp() is an app factory — it creates and configures a Fastify instance
@@ -111,23 +102,84 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test",
-    // Behind Fly.io's edge proxy the TCP peer is the proxy, not the client.
-    // trustProxy makes request.ip read X-Forwarded-For — without it the
-    // per-IP rate limit on POST /v1/devices would put EVERY client in one
-    // bucket (a global 429 the moment two users register in the same minute).
-    // Security-review fix, 2026-06-10.
-    trustProxy: true,
+    // ── Resource ceilings (256 MB shared-cpu VM — see fly.toml) ──────────────
+    // Fastify ships with NO request timeout and NO connection timeout, so a
+    // client that opens a socket and dribbles bytes (or never finishes a body)
+    // holds a connection and its buffers indefinitely. On a single small VM
+    // that is a free denial-of-service. Every real request here finishes in
+    // tens of milliseconds; the upstream ADS-B fetch is the slow path and it
+    // has its own timeout well under 15 s.
+    requestTimeout: 15_000,
+    // Idle-socket ceiling: kills sockets that connect and then say nothing.
+    // Longer than requestTimeout so it never pre-empts a legitimate slow
+    // request — it only reaps sockets that aren't making one.
+    connectionTimeout: 30_000,
+    // 64 KB, down from Fastify's 1 MB default. Every body this API accepts is
+    // tiny: POST /v1/devices is literally `{}`, a handle claim is a few dozen
+    // bytes, and POST /v1/catches is ~300–400 bytes. 64 KB leaves ~150× head-
+    // room over the largest real request while making a memory-exhaustion
+    // upload pointless. Raising this needs a matching look at the VM size.
+    bodyLimit: 65_536,
+    // DELIBERATELY FALSE (was true from 2026-06-10 until 2026-09-06).
+    // `trustProxy: true` makes `request.ip` the LEFTMOST X-Forwarded-For entry
+    // — a value the client writes. Verified against production on 2026-09-06:
+    // 30 GETs to /v1/handles/suggestions returned 429, then the same request
+    // with `X-Forwarded-For: 10.9.8.1` returned 200, and every subsequent
+    // invented value bought another full bucket. Every per-IP limit was
+    // decorative. With this false, `request.ip` is the real TCP peer and can't
+    // be forged; the "everyone shares one bucket behind the proxy" problem the
+    // 2026-06-10 fix was solving is now solved properly, by reading the
+    // Fly-Proxy-set `Fly-Client-IP` header — see src/identity/clientIp.ts,
+    // which is the ONLY thing rate limiters key on.
+    trustProxy: false,
   });
 
   // Provider is selected ONCE at build time (env read here, not per-request).
   // The default is adsb.lol with an airplanes.live fallback; every engaged
   // fallback is logged — a silently-dead primary must not look healthy (the
   // client-side silent-failover lesson from the 2026-06-21 cutover).
+  //
+  // A log line is enough to explain an incident after the fact, but nobody
+  // watches the Fly log live, so a primary that stays dead for hours reads as
+  // a healthy system. The alerter turns the engage/recover edges into ONE
+  // Sentry message per hour once the fallback has been continuously engaged
+  // for five minutes — the timing logic lives in SustainedFallbackAlerter and
+  // is unit-tested with an injected clock.
+  const fallbackAlerter = new SustainedFallbackAlerter({
+    // Shares the rate limiters' injectable clock (same unix-ms units), the way
+    // the /v1/stats memo does — one fake clock per test, not three.
+    now: options.rateLimitNow,
+    onAlert: ({ engagedForMs, primaryError }) => {
+      const minutes = Math.round(engagedForMs / 60_000);
+      app.log.error(
+        { err: primaryError, engagedForMs },
+        `primary position feed has been down for ~${minutes} min; still serving the fallback`,
+      );
+      // Imported lazily so app.ts's static graph stays Sentry-free (the test
+      // suite builds this app constantly and should never load the SDK). This
+      // path only runs after a five-minute production outage; captureMessage
+      // is itself a no-op when SENTRY_DSN is unset — see instrument.ts.
+      void import("@sentry/node")
+        .then((Sentry) =>
+          Sentry.captureMessage(
+            `Position feed fallback sustained for ~${minutes} min`,
+            "error" as const,
+          ),
+        )
+        .catch((err) => app.log.warn({ err }, "could not report sustained fallback to Sentry"));
+    },
+  });
   const provider =
     options.provider ??
     selectProvider(process.env, {
-      onFallback: (err) =>
-        app.log.warn({ err }, "primary position feed failed; serving airplanes.live fallback"),
+      onFallback: (err) => {
+        app.log.warn({ err }, "primary position feed failed; serving airplanes.live fallback");
+        fallbackAlerter.recordFallback(err);
+      },
+      onRecovered: () => {
+        app.log.info("primary position feed recovered; fallback disengaged");
+        fallbackAlerter.recordRecovery();
+      },
     });
 
   // Cache TTL / staleness from env, overridable per-build (tests pass explicit
@@ -138,6 +190,46 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     tileSizeDeg: envFloat("CACHE_TILE_SIZE_DEG"),
   };
 
+  // ── Rate limiters ─────────────────────────────────────────────────────────
+  //
+  // In-memory token buckets, one per concern, declared here because several
+  // routes share one instance. Read RateLimiter's header for the two caveats
+  // that shape these numbers: limits are PER MACHINE (we run two, so the real
+  // ceiling is 2× everything below — accepted), and buckets are keyed by the
+  // Fly-Proxy-observed client IP (src/identity/clientIp.ts), never by anything
+  // the client can set.
+  //
+  // Per-IP limits are deliberately generous because MANY PHONES SHARE ONE IPv4
+  // (carrier CGNAT, airport and café Wi-Fi) — a limit tuned to one device would
+  // 429 a whole coffee shop. Per-device limits can be tight, since a device
+  // token maps to exactly one phone.
+  //
+  // The clock is injectable so tests drive the buckets deterministically; the
+  // limiters live as long as the app instance.
+  const rlNow = options.rateLimitNow;
+  const registerLimiter = new RateLimiter({ capacity: 20, windowMs: 60_000 }, rlNow); // 20/min per IP
+  const handleLimiter = new RateLimiter({ capacity: 5, windowMs: 60_000 }, rlNow); // 5/min per device
+  const catchLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per device
+  const suggestLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
+  // 120/min per IP on the position poll. The client polls every 10 s normally
+  // and every 2 s when data-starved (30/min worst case per phone), so this is
+  // headroom for ~4 simultaneously-starved phones on one IP — and a hard stop
+  // on a runaway loop, which is what actually threatens the upstream quota.
+  const aircraftLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
+  // 300/min per IP on metadata. Sized off the real burst: the ambient prefetch
+  // can fire 40–60 lookups in a few seconds on a first launch near SFO, and the
+  // app renders a 429 as an error pill, so being stingy here is a visible bug.
+  const metadataLimiter = new RateLimiter({ capacity: 300, windowMs: 60_000 }, rlNow);
+  // 30/min per DEVICE on the Hangar restore read (one probe + 500-row pages per
+  // launch in the honest client).
+  const catchesListLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow);
+  // 120/min per IP across ALL bearer routes, taken BEFORE the token lookup so
+  // unauthenticated probing is metered — previously a bad token cost the
+  // attacker one request and cost us a database round-trip, unbounded. Shared
+  // by PUT /v1/devices/me/handle, GET /v1/catches and POST /v1/catches; the
+  // per-device limiters still apply after auth.
+  const bearerIpLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
+
   // ── Routes ────────────────────────────────────────────────────────────────
 
   /**
@@ -147,9 +239,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    * restarts machines that fail this check, and restarting the API because the
    * *database* is down would just add churn on top of the real outage. End-to-end
    * readiness (process + DB) lives at /readyz.
+   *
+   * The body is deliberately just `{ status: "ok" }`. It used to include the
+   * package version, which told an unauthenticated caller exactly which build
+   * is running — free reconnaissance for anyone matching a dependency CVE to a
+   * release. Nothing consumed it — no deploy script, no iOS code path, and no
+   * Sentry release tag (instrument.ts sets no `release`) — so it's gone rather
+   * than moved behind auth. Version at a glance: `fly image show -a tailspot-api`.
    */
   app.get("/healthz", async () => {
-    return { status: "ok", version: pkg.version };
+    return { status: "ok" };
   });
 
   /**
@@ -222,6 +321,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       : undefined);
   registerAircraftRoute(app, {
     provider,
+    ipLimiter: aircraftLimiter,
     cacheConfig,
     now: options.now,
     onFreshSnapshot,
@@ -237,7 +337,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.routeResolver ??
     (routeEnricher instanceof AdsbLolRouteService ? routeEnricher : undefined);
   if (routeResolver) {
-    const routeLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, options.rateLimitNow); // 120/min per IP — one backfill pass over an old Hangar is ~1/callsign
+    // 120/min per IP — one backfill pass over an old Hangar is ~1/callsign.
+    const routeLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
     registerRoutesRoute(app, { resolver: routeResolver, routeLimiter });
   }
 
@@ -251,6 +352,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // no database) never touches DATABASE_URL.
   let metadataStore = options.metadataStore;
   registerMetadataRoute(app, {
+    ipLimiter: metadataLimiter,
     store: {
       lookup: (icao24) => {
         metadataStore ??= new DrizzleMetadataStore(getDb());
@@ -302,16 +404,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     countCatches: () => getCatchStore().countCatches(),
   };
 
-  // Rate limiters: in-memory token buckets (single-instance caveat documented in
-  // RateLimiter). One per concern, with the contract's limits. The clock is
-  // injectable for deterministic tests; the limiters share one app's lifetime.
-  const rlNow = options.rateLimitNow;
-  const registerLimiter = new RateLimiter({ capacity: 20, windowMs: 60_000 }, rlNow); // 20/min per IP
-  const handleLimiter = new RateLimiter({ capacity: 5, windowMs: 60_000 }, rlNow); // 5/min per device
-  const catchLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per device
-  const suggestLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
-
-  registerDevicesRoutes(app, { store: identity, registerLimiter, handleLimiter });
+  registerDevicesRoutes(app, { store: identity, registerLimiter, handleLimiter, bearerIpLimiter });
   registerHandlesRoute(app, {
     store: identity,
     suggestLimiter,
@@ -321,6 +414,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     identityStore: identity,
     catchStore: catchesStore,
     catchLimiter,
+    listLimiter: catchesListLimiter,
+    bearerIpLimiter,
     // Route-guess verification shares the /v1/routes resolver (same cache).
     routeResolver,
     nowSeconds: options.nowSeconds,

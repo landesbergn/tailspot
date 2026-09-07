@@ -5,6 +5,25 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-06 — API hardening, phase 1 — branch `feat/api-hardening`
+
+Noah asked whether the API was publicly queryable. Reading the routes said no
+user data leaks without the owning device's bearer token, but the follow-up
+"is it secure?" audit — three reviewer agents (security on Opus, infra, iOS)
+over a draft plan — overturned the draft's order and found two live problems:
+every per-IP rate limit was bypassable by spoofing `X-Forwarded-For`
+(`trustProxy: true` trusted the whole chain; reproduced against prod), and the
+rate-limiter and tile-cache maps grew without bound. Shipped as one backend PR:
+`Fly-Client-IP` keying via a single helper with `trustProxy` off; bounded maps;
+limits on the unmetered aircraft/metadata/catch-list routes plus a pre-auth
+per-IP limiter on bearer routes; request/connection/statement timeouts, a 64 KB
+body limit, a Fly concurrency block, Node heap sizing; version off `/healthz`;
+Sentry scrub of the token and observer coordinates; sustained-fallback alert;
+and `devices.disabled_at` (migration 0009) as the revocation lever with an
+operator script. App Attest and Cloudflare were argued down to "in reserve";
+anti-cheat enforcement was shown to be a no-op until the app sends pose data.
+Tests 350 → 391.
+
 ## 2026-09-05 — authenticity warnings retired; strong indoor suppression retained
 
 The user-facing authenticity prompts were doing more interrupting than

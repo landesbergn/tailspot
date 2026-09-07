@@ -40,6 +40,20 @@ export function getDb(): Database {
     idle_timeout: 30,
     max_lifetime: 60 * 5,
     connect_timeout: 10,
+    // Server-side statement timeout, applied by Postgres to every query on
+    // every connection in this pool. `connection` holds run-time parameters
+    // postgres.js sends at connect time, so this needs no per-query plumbing.
+    //
+    // Why: the pool is 10 connections wide. Without a ceiling, one pathological
+    // query (a seq scan over catches during a lock wait, say) holds its slot
+    // for as long as Postgres is willing to run it — ten of those and the API
+    // stops answering entirely, while the app-side `connect_timeout` above says
+    // nothing because connecting was never the problem. 5 s is ~50× the slowest
+    // real query here (the leaderboard aggregate); anything past it is a bug or
+    // an outage, and failing fast turns it into a 500 we can see instead of a
+    // wedged pool. The unit is milliseconds (Postgres's default for a bare
+    // number), so this is 5 s, not 5 s of anything else.
+    connection: { statement_timeout: 5_000 },
   });
   cached = drizzle(sqlClient, { schema });
   return cached;
