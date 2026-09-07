@@ -118,6 +118,32 @@ export const devices = pgTable(
      */
     handle: text("handle"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+    /**
+     * Operator kill switch: when non-null, this device is REVOKED (the value is
+     * when it happened, kept as an audit trail). Null = normal, active device.
+     *
+     * WHY THIS COLUMN EXISTS. Identity here is anonymous by design — no email,
+     * no password, no account recovery — so there is no "reset the password" or
+     * "ban the account" lever. Without this column the only way to stop one
+     * abusive device (a leaked token being replayed, a handle-squatter, a
+     * cheater sitting on top of the public board) would be to DELETE its rows —
+     * and the catches table references `devices.id`, so that either cascades
+     * away real catch history or fails on the FK. Deleting also silently
+     * rewrites the leaderboard past: frozen `weekly_champions` /
+     * `monthly_champions` / `alltime_toppers` rows point at the device id, and a
+     * crown that vanishes makes history inconsistent for everyone else.
+     *
+     * So: disable, don't delete. Setting `disabled_at` makes the device's token
+     * resolve to nothing (see `DrizzleIdentityStore.findByTokenHash`) — every
+     * bearer route answers 401, the leaderboard answers "no me" — and hides it
+     * from live leaderboard entries, while every row it ever wrote stays exactly
+     * where it is. It is fully REVERSIBLE (set back to null) precisely because
+     * an anonymous user has no way to appeal a mistake.
+     *
+     * Set/cleared by the operator script `src/tools/disable-device.ts`
+     * (`npm run device:disable`). Nothing in the request path ever writes it.
+     */
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
   },
   (t) => ({
     /**

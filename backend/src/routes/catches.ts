@@ -41,7 +41,7 @@
  * regardless of the verdict, so a cheater gets no oracle to probe the validator.
  */
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { type GuessKind, isGuessKind } from "../catches/points.js";
 import {
   type AircraftPosition,
@@ -50,6 +50,7 @@ import {
   validateCatch,
 } from "../catches/validateCatch.js";
 import { resolveDevice } from "../identity/auth.js";
+import { ipKey } from "../identity/clientIp.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { CatchStore, IdentityStore } from "../identity/store.js";
 import type { RouteResolver } from "../providers/adsblolRoutes.js";
@@ -59,6 +60,20 @@ export interface CatchesRouteOptions {
   catchStore: CatchStore;
   /** Per-device write limiter for catches. */
   catchLimiter: RateLimiter;
+  /**
+   * Per-device read limiter for GET /v1/catches. The honest client reads this
+   * endpoint a handful of times per launch (one probe, then 500-row pages), so
+   * 30/min is far above real use while stopping a paging loop from turning one
+   * token into unbounded database work.
+   */
+  listLimiter: RateLimiter;
+  /**
+   * Per-IP limiter for BOTH bearer routes here, applied before the token
+   * lookup — the same shared instance the handle route uses. Meters
+   * unauthenticated probing, which otherwise costs the prober nothing and costs
+   * us a DB round-trip per attempt.
+   */
+  bearerIpLimiter: RateLimiter;
   /**
    * Route-guess verifier — the SAME resolver behind GET /v1/routes/:callsign
    * (in production the adsb.lol standing-data lookup, shared cache). Optional:
@@ -106,18 +121,42 @@ function intParam(v: unknown, fallback: number, max?: number): number {
 }
 
 export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOptions): void {
-  const { identityStore, catchStore, catchLimiter, routeResolver } = opts;
+  const { identityStore, catchStore, catchLimiter, listLimiter, bearerIpLimiter, routeResolver } =
+    opts;
   const nowSeconds = opts.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
+
+  /**
+   * The pre-auth meter both routes below share: per-IP, taken BEFORE the token
+   * lookup. Returns true when it answered the request (429 already sent).
+   * Ordering matters — a limiter behind the auth check only ever meters
+   * requests that already paid for a DB read.
+   */
+  function ipLimited(request: FastifyRequest, reply: FastifyReply): boolean {
+    const rl = bearerIpLimiter.take(ipKey(request));
+    if (rl.allowed) return false;
+    reply.header("Retry-After", String(rl.retryAfterSeconds));
+    reply.code(429).send({ error: "rate limited" });
+    return true;
+  }
 
   // ── GET /v1/catches — the device's own catches, for Hangar restore ────────
   // Auth REQUIRED (the bearer token both authenticates and scopes: a device
   // can only ever list itself — there is no deviceId parameter to probe).
-  // No rate limiter, matching the read-only GET pattern (leaderboard).
+  // Metered twice: per-IP before auth (anti-probing), per-device after.
   app.get("/v1/catches", async (request, reply) => {
+    if (ipLimited(request, reply)) return reply;
+
     const device = await resolveDevice(identityStore, request.headers.authorization);
     if (!device) {
       return reply.code(401).send({ error: "unauthorized" });
     }
+
+    const rl = listLimiter.take(`device:${device.id}`);
+    if (!rl.allowed) {
+      reply.header("Retry-After", String(rl.retryAfterSeconds));
+      return reply.code(429).send({ error: "rate limited" });
+    }
+
     const q = request.query as Record<string, unknown>;
     const limit = Math.max(1, intParam(q.limit, LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT));
     const offset = intParam(q.offset, 0);
@@ -127,6 +166,8 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
   });
 
   app.post("/v1/catches", async (request, reply) => {
+    if (ipLimited(request, reply)) return reply;
+
     const device = await resolveDevice(identityStore, request.headers.authorization);
     if (!device) {
       return reply.code(401).send({ error: "unauthorized" });

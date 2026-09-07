@@ -22,7 +22,7 @@
  * capacity problem); it covers the sub-second blip.
  */
 
-import { and, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import {
   CURRENT_SCORING_VERSION,
   type GuessKind,
@@ -64,7 +64,13 @@ export type HandleClaimResult = { ok: true; handle: string } | { ok: false; reas
 export interface IdentityStore {
   /** Insert a new device with the given token hash; returns its generated id. */
   createDevice(tokenHash: string): Promise<{ id: string }>;
-  /** Find a device by its token hash (the auth point-lookup). Null if none. */
+  /**
+   * Find a device by its token hash (the auth point-lookup). Null if none —
+   * and also null for a device an operator has DISABLED (`devices.disabled_at`
+   * non-null), which is what makes the kill switch bite: callers can't tell a
+   * revoked token from a bogus one, so a disabled device gets 401 on every
+   * bearer route and "no me" on the leaderboard.
+   */
   findByTokenHash(tokenHash: string): Promise<DeviceIdentity | null>;
   /**
    * Claim/replace `deviceId`'s handle. Case-insensitive uniqueness: returns
@@ -97,7 +103,13 @@ export class DrizzleIdentityStore implements IdentityStore {
       this.db
         .select({ id: devices.id, handle: devices.handle })
         .from(devices)
-        .where(eq(devices.tokenHash, tokenHash))
+        // The revocation lever (see `devices.disabled_at` in schema.ts). A
+        // disabled device's token resolves to NOTHING rather than to a device
+        // with a flag the routes might forget to check — one WHERE here turns
+        // off every authenticated surface at once, present and future. The row
+        // and all of its catches stay in the DB; only the credential stops
+        // working, and clearing `disabled_at` turns it back on.
+        .where(and(eq(devices.tokenHash, tokenHash), isNull(devices.disabledAt)))
         .limit(1),
     );
     return rows[0] ?? null;
@@ -668,7 +680,16 @@ export class DrizzleCatchStore implements CatchStore {
         })
         .from(devices)
         .leftJoin(catches, joinOn)
-        .where(isNotNull(devices.handle))
+        // Disabled devices are dropped from the PUBLIC board entirely. The
+        // usual reason to disable somebody is that they're cheating their way
+        // up this very list, so leaving the row visible would defeat the point
+        // of the switch. This is a DISPLAY filter only: their catches are still
+        // in the DB, their frozen `weekly_champions` / `monthly_champions` rows
+        // still stand (history is not rewritten — a past crown they actually
+        // won stays won), and re-enabling them puts them straight back on the
+        // board at their real standing. Ranks are 1-based row positions, so
+        // removing an entry closes the gap rather than leaving a hole.
+        .where(and(isNotNull(devices.handle), isNull(devices.disabledAt)))
         .groupBy(devices.id, devices.handle, devices.createdAt)
         // A claimed handle alone doesn't put you on the public board — onboarding
         // mints handles for drive-by installs (suggestion chips), and those
@@ -728,6 +749,16 @@ export class DrizzleCatchStore implements CatchStore {
     // tiebreaker keeps the order total even on identical timestamps). This counts
     // ALL devices (handle-less included), so the rank reflects true standing —
     // the leaderboard ENTRIES hide handle-less devices, but they still occupy ranks.
+    //
+    // KNOWN GAP (migration 0009): a DISABLED device also still occupies a rank
+    // here, even though `leaderboard()` now hides it from the entries. So a
+    // disabled cheater sitting on a big score still pushes everyone else's
+    // `me.rank` down by one while being invisible on the board. Left as-is
+    // deliberately: this method's contract is "true standing among every device
+    // that has points", the same reason handle-less devices count, and changing
+    // it shifts the rank of every user — a wider blast radius than the kill
+    // switch needs. Revisit if a disabled device is ever ranked high enough for
+    // the off-by-one to be visible to real players.
     const ranked = await withDbRetry(() =>
       this.db
         .select({
