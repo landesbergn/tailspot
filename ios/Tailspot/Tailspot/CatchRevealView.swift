@@ -686,7 +686,7 @@ struct CatchRevealView: View {
                     let bt = bonusStart.map { revClamp(context.date.timeIntervalSince($0) / bonusCountUpDuration) } ?? 0
                     let gt = chipsStart.map { revClamp(context.date.timeIntervalSince($0) / chipPopDuration) }
                         ?? (chipsPhase == .shown ? 1 : 0)
-                    layout(t: t, bt: bt, gt: gt, width: width)
+                    layout(t: t, bt: bt, gt: gt, width: width, height: geo.size.height)
                 }
 
                 // Morph layer for the hero's zoom transition — above the
@@ -745,8 +745,17 @@ struct CatchRevealView: View {
     /// The card's frame fills the space above the CTA and centers its content;
     /// card taps fall through (hit-testing off) to the dismiss catcher behind,
     /// while the CTA captures its own taps.
+    ///
+    /// The card region SCROLLS (`revealColumn`) since 2026-09-06: on an iPhone
+    /// SE (375×667, 647 pt safe area) a three-line name + ledger makes the card
+    /// ~624 pt, and card + CTA (~71 pt) overflowed the column. The overflow
+    /// spilled off the BOTTOM (the GeometryReader top-aligns its child), so the
+    /// CTA was entirely off-screen and a TestFlight tester had "no way to
+    /// proceed". Pinning the CTA below a scroll view keeps it on screen for
+    /// every card height; on a tall phone nothing changes (the card still
+    /// centers, the scroll view never engages).
     @ViewBuilder
-    private func layout(t: Double, bt: Double, gt: Double, width: CGFloat) -> some View {
+    private func layout(t: Double, bt: Double, gt: Double, width: CGFloat, height: CGFloat) -> some View {
         // Map the live bonus-round @State into the immutable per-frame render.
         let render: GuessRender? = liveGuess.map {
             GuessRender(question: $0,
@@ -754,8 +763,7 @@ struct CatchRevealView: View {
                         chipsInLayout: chipsPhase == .shown,
                         popClock: gt)
         }
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
+        revealColumn(height: height, card: {
             // While the chips are up the card holds real controls, so its
             // children must stay exposed to VoiceOver (FlapRow flattens the
             // name itself); at rest the card collapses to a single element
@@ -778,7 +786,7 @@ struct CatchRevealView: View {
                 // margin/chrome taps still fall through to the catcher and
                 // dismiss (or skip-then-dismiss).
                 .allowsHitTesting(chipsPhase == .shown || (settled && zoomablePhotoURL != nil))
-            Spacer(minLength: 0)
+        }, cta: {
             // The streak lives INSIDE the card (the entry-stamp row) since
             // 2026-08-26 — as a free line here it crowded the card's outline
             // on tall cards (the spacers collapse) and packed against the CTA.
@@ -787,8 +795,78 @@ struct CatchRevealView: View {
             ctaRow
                 .opacity(settled ? 1 : 0)
                 .allowsHitTesting(settled)
-                .padding(.top, 26)
-                .padding(.bottom, 30)
+        })
+    }
+
+    /// Vertical padding of the CTA strip, plus its ~15 pt text line — the
+    /// fallback viewport estimate for the first layout pass, before
+    /// `onGeometryChange` reports the real scroll-viewport height.
+    private static let ctaStripPadding: (top: CGFloat, bottom: CGFloat) = (26, 30)
+    private static let ctaStripEstimate: CGFloat = ctaStripPadding.top + 15 + ctaStripPadding.bottom
+
+    /// Measured height of the scroll viewport above the CTA strip; nil until
+    /// the first layout pass reports it. It is the scroll content's MINIMUM
+    /// height, so a card that fits centers exactly as it did in the fixed
+    /// column and only a taller card scrolls.
+    @State private var cardViewportHeight: CGFloat?
+
+    /// The reveal's column: a scrollable card region with the CTA pinned below.
+    /// The dismiss/skip catcher lives in the scroll content's BACKGROUND, so
+    /// the hit-testing contract is unchanged — taps on the margins, and card
+    /// taps while the card is tap-through, reach it; while the card captures
+    /// (chips up / settled photo) only its attached controls fire. The
+    /// full-screen catcher in `body` still covers the CTA strip's own margins.
+    /// Shared by the live `layout` and the DEBUG `_snapshotScreen` so the
+    /// visual-pass renders can't drift from the device layout. `scrolls:
+    /// false` is the snapshot's mirror: ImageRenderer cannot draw UIScrollView-
+    /// backed content (the card came out blank), so the render substitutes a
+    /// top-aligned, clipped frame — exactly what the scroll viewport shows at
+    /// rest, overflow cut at the bottom edge.
+    private func revealColumn<Card: View, CTA: View>(
+        height: CGFloat,
+        scrolls: Bool = true,
+        @ViewBuilder card: () -> Card,
+        @ViewBuilder cta: () -> CTA
+    ) -> some View {
+        // No padding or Spacers around the card: anything that adds to the
+        // content's height past the card itself becomes a phantom scroll on a
+        // phone where the card only JUST fits (a three-line name on a 6.1"
+        // phone has ~4 pt to spare). The min-height frame centers a fitting
+        // card by itself; a taller card scrolls, flush at the top exactly as
+        // the pre-scroll column sat.
+        let content = card()
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: cardViewportHeight ?? max(0, height - Self.ctaStripEstimate))
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { advanceOrDismiss() }
+        }
+        return VStack(spacing: 0) {
+            Group {
+                if scrolls {
+                    ScrollView(.vertical) { content }
+                        // No rubber-banding when the card fits — the tall-phone
+                        // reveal must feel exactly as fixed as before the scroll view.
+                        .scrollBounceBehavior(.basedOnSize)
+                } else {
+                    // A scroll view proposes UNBOUNDED height to its content
+                    // (`fixedSize` reproduces that) and shows the top
+                    // `viewport` points of it. The viewport is a CONCRETE
+                    // frame on purpose: a flexible `maxHeight` frame adopts an
+                    // oversized child instead of clamping it, which let the
+                    // overflow spill into the CTA strip in earlier renders.
+                    content
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: max(0, height - Self.ctaStripEstimate), alignment: .top)
+                        .clipped()
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardViewportHeight = $0 }
+            cta()
+                .padding(.top, Self.ctaStripPadding.top)
+                .padding(.bottom, Self.ctaStripPadding.bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -972,17 +1050,14 @@ struct CatchRevealView: View {
     @MainActor func _snapshotScreen(
         width: CGFloat, size: CGSize, guessState: GuessSnapshotState? = nil
     ) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
+        revealColumn(height: size.height, scrolls: false, card: {
             card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render)
-            Spacer(minLength: 0)
+        }, cta: {
             // Settled-state chrome, mirrored from `layout` (which gates it
             // on the live `settled` flag this static render never flips).
             // The streak renders inside the card's entry-stamp row.
             ctaRow
-                .padding(.top, 26)
-                .padding(.bottom, 30)
-        }
+        })
         .frame(width: size.width, height: size.height)
         .background(RP.bg)
     }

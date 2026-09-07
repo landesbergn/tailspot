@@ -2981,6 +2981,13 @@ struct ContentView: View {
                 mfr: "Boeing", op: "U.S. Air Force", typecode: "B52",
                 alt: 12200, vel: 244, dist: 31000, origin: "KBAD", dest: nil,
                 originName: "Barksdale AFB", destName: nil),
+            // Three-line name: the tallest card a real catch has produced (a
+            // TestFlight SE tester, 2026-09-06). Previews the reveal's scroll +
+            // pinned-CTA behaviour, which a 6.1" phone otherwise never triggers.
+            Sim(icao: "a1d5c8", callsign: "N217MH", model: "Bell 206 JetRanger / LongRanger",
+                mfr: "Bell", op: "Private", typecode: "B06",
+                alt: 600, vel: 33, dist: 600, origin: nil, dest: nil,
+                originName: nil, destName: nil),
         ]
         let s = presets[simCatchIndex % presets.count]
         simCatchIndex += 1
