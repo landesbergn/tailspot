@@ -60,10 +60,9 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// shadow telemetry confirmed the texture dial transfers on-device (sky
     /// ≤ 0.0116 vs the 0.014 threshold) and the two real false-block classes
     /// it surfaced (night patches, golden-hour warmth) are guarded in
-    /// `LocalSkyGate.verdict`. A block always offers one-tap "Catch anyway";
-    /// `catch_occluded_override` is the live false-block signal to watch.
-    /// Debug-overlay toggle can drop back to shadow; no user-facing control
-    /// by design.
+    /// `LocalSkyGate.verdict`. The verdict is shadow telemetry only; the debug
+    /// toggle still controls whether it joins the combined suspicion event.
+    /// There is no user-facing control by design.
     var localGateEnforcing: Bool {
         get { UserDefaults.standard.object(forKey: Self.localGateKey) as? Bool ?? true }
         set {
@@ -75,9 +74,8 @@ final class VisualConfirmationPipeline: ObservableObject {
 
     /// L4 detector soft-gate ENFORCEMENT. Ships in SHADOW (default OFF, the
     /// same rollout the L2 gate used): `catch_detector_gate` telemetry fires
-    /// on every single-target catch either way, but only enforcement raises
-    /// the `no_detection` suspicion (post-catch Keep/Discard — never a
-    /// block). Flip after the shadow stream shows the in-envelope
+    /// on every single-target catch either way, but only enforcement adds
+    /// `no_detection` to the combined shadow signal. Flip after the stream shows the in-envelope
     /// no-detection rate is a cheat signal, not a detector-recall artifact.
     /// Debug-overlay toggle; no user-facing control by design.
     var detectorGateEnforcing: Bool {

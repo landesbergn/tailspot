@@ -162,4 +162,19 @@ struct DetectorGateTests {
         )
         #expect(unjudged["detector_verdict"] == nil)
     }
+
+    @Test func performedPropertiesCarryTheSkyVerdictAtCatchTime() {
+        let judged = CatchTelemetry.performedProperties(
+            icao24: "a1b2c3", rarity: "common", aircraftType: "narrow",
+            slantKm: 4.2, visualConfirmEnabled: true, visualFixConfidence: nil,
+            skyVerdict: .notSky
+        )
+        #expect(judged["sky_verdict"]?.jsonValue as? String == "notSky")
+
+        let absent = CatchTelemetry.performedProperties(
+            icao24: "a1b2c3", rarity: "common", aircraftType: "narrow",
+            slantKm: 4.2, visualConfirmEnabled: true, visualFixConfidence: nil
+        )
+        #expect(absent["sky_verdict"] == nil)
+    }
 }

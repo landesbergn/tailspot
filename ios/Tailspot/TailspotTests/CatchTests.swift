@@ -50,11 +50,10 @@ struct CatchTests {
         #expect(fetched.first?.operatorName == "United Airlines")
     }
 
-    @Test func suspectedRowsAreQuarantinedFromUpload() throws {
-        // Post-catch confirm (2026-07-04): a gate-suspected catch must not
-        // upload until the user answers Keep. Pins the uploader's pending
-        // predicate against an in-memory store: clean rows are pending,
-        // suspected rows are not — and clearing the flag (Keep) re-pends.
+    @Test func legacySuspectedRowsAreReleasedForUpload() throws {
+        // The post-catch review is retired. Pin the uploader's pending
+        // predicate against an in-memory store: a legacy suspectReason must
+        // no longer strand a catch locally.
         let container = try makeContainer()
         let context = ModelContext(container)
 
@@ -74,12 +73,7 @@ struct CatchTests {
         try context.save()
 
         let pending = FetchDescriptor<Catch>(predicate: CatchUploader.pendingPredicate)
-        #expect(try context.fetch(pending).map(\.icao24) == ["aaaaaa"])
-
-        // Keep: clearing the flag un-quarantines the row.
-        suspected.suspectReason = nil
-        try context.save()
-        #expect(try context.fetch(pending).count == 2)
+        #expect(Set(try context.fetch(pending).map(\.icao24)) == ["aaaaaa", "bbbbbb"])
     }
 
     @Test func operatorNameDefaultsToNilWhenOmitted() throws {

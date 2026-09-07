@@ -81,7 +81,7 @@ struct SkyCheckVerdictTests {
     @Test func warmEveningOutdoorsIsNotBlocked() {
         // The 2026-07-20 GA-moderation retune: 30 of 36 field `notSky`
         // blocks sat at warmth 0.04–0.096 — warm evening/golden outdoor
-        // light, reported as false "Not many planes indoors." nags (which
+        // light, reported as false indoor label suppressions (which
         // also suppress every ambient label). Below the 0.10 bar they must
         // not block; the clearly-indoor cluster (0.11–0.19) still does.
         let evening = SkyFeatures(edgeDensity: 0.13, tileVariance: 0.05, warmth: 0.08, meanLuminance: 0.50)

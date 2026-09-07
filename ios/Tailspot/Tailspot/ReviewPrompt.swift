@@ -21,10 +21,10 @@
 //  crowd is simply deferred to their next catch day, which ~91% reach.
 //
 //  Timing contract: the ONLY trigger is the post-reveal moment funnel in
-//  ContentView (`presentSuspectReviewIfNeeded`), and the ask is that
+//  ContentView (`presentPostRevealMomentIfNeeded`), and the ask is that
 //  funnel's LOWEST priority — the save-failure toast, the streak
-//  pre-prompt, the suspect Keep/Discard review, a jump to the Hangar, and
-//  a pending trophy celebration all claim the moment first. A contested
+//  pre-prompt, a jump to the Hangar, and a pending trophy celebration all
+//  claim the moment first. A contested
 //  moment DROPS the ask rather than queueing it; eligibility is durable,
 //  so it simply re-tries when the next catch's reveal closes.
 //
