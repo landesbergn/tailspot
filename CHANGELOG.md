@@ -19,11 +19,23 @@ was already at the edge on the SE.
 
 - **Fix:** the card region is a vertical `ScrollView` with the CTA strip pinned
   below it (`revealColumn`); the dismiss/skip catcher moves into the scroll
-  content's background so tap semantics are unchanged. No padding or Spacer
-  inside the scroll content — under the unbounded proposal even
-  `Spacer(minLength: 0)` reports 8 pt, and a three-line card on a 6.1" phone has
-  ~4 pt to spare, so anything extra became a phantom scroll. Tall phones: no
-  visible change.
+  content's background so tap semantics are unchanged. The card goes through a
+  tiny `CompressedHeightLayout` (proposes zero height, reports the child's
+  size) so it takes **the same size it always has**: the old
+  `VStack { Spacer; card; Spacer; cta }` offered the card about a third of the
+  screen, so the card has always laid out at its compressed minimum — route
+  codes/names and the readouts (`minimumScaleFactor` text) scaled down — on
+  every device. That is the card every user has seen. A bare scroll view
+  proposes unbounded height, un-squeezes it, and made cards that used to fit (a
+  one-line name on the SE, a two-line one on a 6.1") scroll by a few points —
+  caught by the before/after device matrix. A min-height frame then does what
+  the two Spacers did: a fitting card centers, a taller one scrolls. No padding
+  or Spacer inside the scroll content: under the unbounded proposal even
+  `Spacer(minLength: 0)` reports 8 pt, a phantom scroll where a card just fits.
+  **Open design question surfaced:** the card's intended type sizes (21 pt
+  route codes, full-size readouts) have never rendered on a phone; whether to
+  keep the squeeze as the design or re-tune the card to fit unsqueezed is a
+  separate call.
 - **Tests:** `RevealShortScreenTests` hosts the live view in a `UIWindow` at the
   SE (375×647) and iPhone 16 (393×759) safe-area sizes — ImageRenderer draws
   `ScrollView` content blank. Lessons that cost iterations: async sleeps, not
@@ -31,10 +43,15 @@ was already at the edge on the SE.
   `ignoresSafeArea` on the root so the window size means the device safe area;
   poll for state under the parallel full suite. Three 375×647 static cases
   added to `RevealSnapshotTests` through a `scrolls: false` mirror. Debug
-  ✦ Catch gains the three-line Bell 206 preset.
-- **Found, not changed:** the chips-up bonus-round card is ~833 pt at 393 wide,
-  taller than a 6.1" safe area before this fix too; the ledger and CTA were
-  off-screen for the round. It now scrolls with the CTA pinned. A live test for
+  ✦ Catch gains the three-line Bell 206 preset. **Device matrix:** the opt-in
+  `RevealDeviceMatrixRenderTests` (`TEST_RUNNER_TAILSPOT_MATRIX=<tag>`) hosts
+  the live reveal at five safe-area sizes × four card configurations; the
+  before/after sheets are in `docs/ui-sweeps/2026-09-06/reveal-short-screens/`.
+- **Found, not changed:** the chips-up bonus-round card is taller than EVERY
+  phone's safe area even squeezed (the 16 Pro Max included — the matrix's
+  "before" row has no CTA on any device): "tap to continue" was off-screen for
+  the whole round everywhere, the ledger cut, and on the SE the last chip and
+  SKIP were unreachable. It now scrolls with the CTA pinned. A live test for
   that state was not stable under the parallel suite and was dropped.
 - **Audience (PostHog, 30 d):** 2 SE users + 2 iPad users running the iPhone
   app in a 375×667 compatibility window, of ~110.

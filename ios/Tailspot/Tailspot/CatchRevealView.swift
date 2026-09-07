@@ -478,6 +478,23 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
 
 // MARK: - CatchRevealView
 
+/// Lays out its single child at the child's compressed minimum height and
+/// reports THAT size — proposing zero height, the way the reveal's old
+/// `VStack { Spacer; card; Spacer; cta }` column effectively did (see
+/// `CatchRevealView.revealColumn`). Keeps the card pixel-identical to what
+/// shipped while the column around it changes; width passes through.
+nonisolated struct CompressedHeightLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return child.sizeThatFits(ProposedViewSize(width: proposal.width, height: 0))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
+                              proposal: ProposedViewSize(width: bounds.width, height: 0))
+    }
+}
+
 struct CatchRevealView: View {
     let plane: CardPlane
     /// "ENTRY #N" — caller passes the count of unique icao24 after the catch.
@@ -828,20 +845,33 @@ struct CatchRevealView: View {
         @ViewBuilder card: () -> Card,
         @ViewBuilder cta: () -> CTA
     ) -> some View {
-        // No padding or Spacers around the card: anything that adds to the
-        // content's height past the card itself becomes a phantom scroll on a
-        // phone where the card only JUST fits (a three-line name on a 6.1"
-        // phone has ~4 pt to spare). The min-height frame centers a fitting
-        // card by itself; a taller card scrolls, flush at the top exactly as
-        // the pre-scroll column sat.
-        let content = card()
+        let viewport = cardViewportHeight ?? max(0, height - Self.ctaStripEstimate)
+        // The card is laid out through `CompressedHeightLayout` so it takes the
+        // SAME size it always has. The pre-scroll column was
+        // `VStack { Spacer; card; Spacer; cta }`: a VStack offers each child a
+        // share of the remaining space in order of flexibility, so the card
+        // was proposed about a third of the screen and always laid out at its
+        // compressed MINIMUM — route codes/names and the readouts (all
+        // `minimumScaleFactor` text) scaled down — on every device. That is
+        // the card every user has seen; a bare scroll view proposes unbounded
+        // height, which un-squeezes it and made cards that used to fit (a
+        // one-line name on the SE, a two-line one on a 6.1") start scrolling
+        // by a few points. (Whether the design should render at its intended
+        // sizes is a separate call — see the PR.)
+        //
+        // Around it, a min-height frame does what the two Spacers did: a card
+        // that fits is centered; a taller card sets the content height and
+        // scrolls. No padding or Spacers here: under the scroll view's
+        // unbounded proposal even `Spacer(minLength: 0)` reports 8 pt, a
+        // phantom scroll where a card just fits.
+        let content = CompressedHeightLayout { card() }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: cardViewportHeight ?? max(0, height - Self.ctaStripEstimate))
-        .background {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { advanceOrDismiss() }
-        }
+            .frame(minHeight: viewport)
+            .background {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceOrDismiss() }
+            }
         return VStack(spacing: 0) {
             Group {
                 if scrolls {
@@ -850,16 +880,13 @@ struct CatchRevealView: View {
                         // reveal must feel exactly as fixed as before the scroll view.
                         .scrollBounceBehavior(.basedOnSize)
                 } else {
-                    // A scroll view proposes UNBOUNDED height to its content
-                    // (`fixedSize` reproduces that) and shows the top
-                    // `viewport` points of it. The viewport is a CONCRETE
-                    // frame on purpose: a flexible `maxHeight` frame adopts an
-                    // oversized child instead of clamping it, which let the
-                    // overflow spill into the CTA strip in earlier renders.
+                    // ImageRenderer mirror (it draws UIScrollView content
+                    // blank): the same content, cut to a CONCRETE viewport
+                    // frame, top-aligned — what the scroll view shows at rest.
+                    // Concrete on purpose: a flexible `maxHeight` frame adopts
+                    // an oversized child instead of clamping it.
                     content
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: max(0, height - Self.ctaStripEstimate), alignment: .top)
+                        .frame(height: viewport, alignment: .top)
                         .clipped()
                 }
             }
