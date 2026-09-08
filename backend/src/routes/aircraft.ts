@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { ipKey } from "../identity/clientIp.js";
+import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { RouteEnricher } from "../providers/adsblolRoutes.js";
 import { validateBbox } from "../providers/geo.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/types.js";
@@ -13,6 +15,7 @@ import { NoFreshDataError, TileCache, type TileCacheConfig } from "./tileCache.j
  *
  *   200 { fetchedAt, aircraft: [...] }   // fetchedAt = upstream snapshot time
  *   400 { error }                        // missing/invalid/oversized/inverted bbox
+ *   429 { error: "rate limited" }        // per-IP flood control (+ Retry-After)
  *   503 { error: "upstream unavailable" } // upstream down AND no fresh cache
  */
 
@@ -36,6 +39,14 @@ export interface AircraftRouteOptions {
    * later poll. Omitted (route tests, non-adsblol provider) → no `route` field.
    */
   routeEnricher?: RouteEnricher;
+  /**
+   * Per-IP limiter. This is the hottest endpoint in the product — every phone
+   * polls it on a timer — and until 2026-09-06 it was completely unmetered, so
+   * a single loop could pin the machine and (worse) push our upstream quota.
+   * Optional so a bare registration in a future tool/test can skip it; app.ts
+   * always supplies one.
+   */
+  ipLimiter?: RateLimiter;
 }
 
 /** Parse a query value to a finite number, or undefined if absent/non-numeric. */
@@ -52,6 +63,13 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
   const cache = new TileCache(opts.provider, opts.cacheConfig, opts.now, opts.onFreshSnapshot);
 
   app.get("/v1/aircraft", async (request, reply) => {
+    // Meter before parsing: a flood shouldn't get any work out of us at all.
+    const rl = opts.ipLimiter?.take(ipKey(request));
+    if (rl && !rl.allowed) {
+      reply.header("Retry-After", String(rl.retryAfterSeconds));
+      return reply.code(429).send({ error: "rate limited" });
+    }
+
     const q = request.query as Record<string, unknown>;
     const bbox: Partial<Bbox> = {
       lamin: parseCoord(q.lamin),

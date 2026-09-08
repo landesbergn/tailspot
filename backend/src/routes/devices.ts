@@ -16,8 +16,9 @@
  * tests can drive them with a fake clock. The route is ignorant of Postgres.
  */
 
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { resolveDevice } from "../identity/auth.js";
+import { ipKey } from "../identity/clientIp.js";
 import { containsProfanity } from "../identity/profanity.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { IdentityStore } from "../identity/store.js";
@@ -29,23 +30,24 @@ export interface DevicesRouteOptions {
   registerLimiter: RateLimiter;
   /** Per-device limiter for handle changes. */
   handleLimiter: RateLimiter;
+  /**
+   * Per-IP limiter shared by every bearer route, applied BEFORE the token
+   * lookup. Without it, a bad token costs the attacker one request and costs us
+   * a database round-trip — unauthenticated probing was the one path with no
+   * meter on it at all. See app.ts for the shared instance.
+   */
+  bearerIpLimiter: RateLimiter;
 }
 
 /** Handle format: 3–20 chars of [A-Za-z0-9_]. */
 const HANDLE_RE = /^[A-Za-z0-9_]{3,20}$/;
 
-/** Client IP for rate limiting. Fastify's `request.ip` honors trustProxy config. */
-function clientIp(request: FastifyRequest): string {
-  return request.ip;
-}
-
 export function registerDevicesRoutes(app: FastifyInstance, opts: DevicesRouteOptions): void {
-  const { store, registerLimiter, handleLimiter } = opts;
+  const { store, registerLimiter, handleLimiter, bearerIpLimiter } = opts;
 
   // ── POST /v1/devices ───────────────────────────────────────────────────────
   app.post("/v1/devices", async (request, reply) => {
-    const ip = clientIp(request);
-    const rl = registerLimiter.take(`ip:${ip}`);
+    const rl = registerLimiter.take(ipKey(request));
     if (!rl.allowed) {
       reply.header("Retry-After", String(rl.retryAfterSeconds));
       return reply.code(429).send({ error: "rate limited" });
@@ -60,6 +62,15 @@ export function registerDevicesRoutes(app: FastifyInstance, opts: DevicesRouteOp
 
   // ── PUT /v1/devices/me/handle ────────────────────────────────────────────────
   app.put("/v1/devices/me/handle", async (request, reply) => {
+    // Per-IP meter FIRST: an unauthenticated prober must not be able to make us
+    // hash-and-look-up a token for free. The per-device limiter below still
+    // does its job for an authenticated caller.
+    const ipRl = bearerIpLimiter.take(ipKey(request));
+    if (!ipRl.allowed) {
+      reply.header("Retry-After", String(ipRl.retryAfterSeconds));
+      return reply.code(429).send({ error: "rate limited" });
+    }
+
     const device = await resolveDevice(store, request.headers.authorization);
     if (!device) {
       return reply.code(401).send({ error: "unauthorized" });

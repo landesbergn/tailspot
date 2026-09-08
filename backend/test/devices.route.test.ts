@@ -1,9 +1,23 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, LightMyRequestResponse } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { Database } from "../src/db/client.js";
 import { DrizzleCatchStore, DrizzleIdentityStore } from "../src/identity/store.js";
+import { disableDevice } from "../src/tools/disable-device.js";
 import { makeTestDb } from "./helpers/pgliteDb.js";
+
+/** Pull just the two leaderboard facts the revocation tests care about. */
+function leaderboardOf(res: LightMyRequestResponse): {
+  handles: string[];
+  me: unknown;
+} {
+  expect(res.statusCode).toBe(200);
+  const body = res.json();
+  return {
+    handles: (body.entries as { handle: string }[]).map((e) => e.handle),
+    me: body.me ?? null,
+  };
+}
 
 /**
  * Device registration + handle-claim, end to end via app.inject() with
@@ -160,6 +174,179 @@ describe("devices routes", () => {
         payload: { handle: "shithead" },
       });
       expect(res.statusCode).toBe(422);
+    });
+  });
+
+  /**
+   * The operator kill switch (`devices.disabled_at`, migration 0009).
+   *
+   * A disabled device must go dark on every authenticated surface WITHOUT
+   * losing data: its catches stay in the DB, so this suite asserts both halves
+   * — the doors close, and a second, still-enabled device is untouched (the
+   * switch is per-device, not a global outage).
+   */
+  describe("disabled devices (the revocation lever)", () => {
+    const NOW_SECONDS = 1_700_000_000;
+
+    /** A minimal valid catch body; points land on the unknown floor (10). */
+    function catchBody(catchUuid: string) {
+      return {
+        catchUuid,
+        icao24: "c0c0c0",
+        callsign: null,
+        caughtAt: NOW_SECONDS,
+        observer: {
+          lat: 37.8,
+          lon: -122.27,
+          headingDeg: 0,
+          elevationDeg: 15.05,
+          headingAccuracyDeg: 5,
+        },
+        aircraft: {
+          lat: 37.9,
+          lon: -122.27,
+          altitudeMeters: 3000,
+          positionTimestamp: NOW_SECONDS,
+        },
+      };
+    }
+
+    /** Register, claim a handle, and post one catch so the device is boardable. */
+    async function boardedDevice(handle: string, catchUuid: string) {
+      const { deviceId, deviceToken } = await register();
+      const claim = await app.inject({
+        method: "PUT",
+        url: "/v1/devices/me/handle",
+        headers: { authorization: `Bearer ${deviceToken}` },
+        payload: { handle },
+      });
+      expect(claim.statusCode).toBe(200);
+      const posted = await app.inject({
+        method: "POST",
+        url: "/v1/catches",
+        headers: { authorization: `Bearer ${deviceToken}` },
+        payload: catchBody(catchUuid),
+      });
+      expect(posted.statusCode).toBe(201);
+      return { deviceId, deviceToken };
+    }
+
+    function leaderboard(token: string) {
+      return app.inject({
+        method: "GET",
+        url: "/v1/leaderboard",
+        headers: { authorization: `Bearer ${token}` },
+      });
+    }
+
+    it("closes every bearer door but leaves the other device alone", async () => {
+      const cheater = await boardedDevice("Cheater", "00000000-0000-4000-8000-00000000c0de");
+      const honest = await boardedDevice("Honest", "00000000-0000-4000-8000-00000000600d");
+
+      // Both are on the board and see themselves before anything is disabled.
+      const before = leaderboardOf(await leaderboard(cheater.deviceToken));
+      expect(before.handles).toEqual(expect.arrayContaining(["Cheater", "Honest"]));
+      expect(before.me).not.toBeNull();
+
+      const result = await disableDevice(db, "cheater", { apply: true });
+      expect(result.outcome).toBe("disabled");
+      expect(result.deviceId).toBe(cheater.deviceId);
+
+      // 1. Auth-required routes 401 — the token now resolves to nothing, so a
+      //    revoked token is indistinguishable from a bogus one.
+      const listing = await app.inject({
+        method: "GET",
+        url: "/v1/catches",
+        headers: { authorization: `Bearer ${cheater.deviceToken}` },
+      });
+      expect(listing.statusCode).toBe(401);
+
+      const rename = await app.inject({
+        method: "PUT",
+        url: "/v1/devices/me/handle",
+        headers: { authorization: `Bearer ${cheater.deviceToken}` },
+        payload: { handle: "Cheater2" },
+      });
+      expect(rename.statusCode).toBe(401);
+
+      // 2. The leaderboard treats it as anonymous ("no me") and drops its row.
+      const after = leaderboardOf(await leaderboard(cheater.deviceToken));
+      expect(after.me).toBeNull();
+      expect(after.handles).not.toContain("Cheater");
+
+      // 3. The still-enabled device is completely unaffected.
+      const honestView = leaderboardOf(await leaderboard(honest.deviceToken));
+      expect(honestView.me).not.toBeNull();
+      expect(honestView.handles).toEqual(["Honest"]);
+      const honestList = await app.inject({
+        method: "GET",
+        url: "/v1/catches",
+        headers: { authorization: `Bearer ${honest.deviceToken}` },
+      });
+      expect(honestList.statusCode).toBe(200);
+      expect(honestList.json().total).toBe(1);
+    });
+
+    it("keeps the catches and re-enables cleanly (the switch is reversible)", async () => {
+      const device = await boardedDevice("Reinstated", "00000000-0000-4000-8000-0000000b0000");
+
+      await disableDevice(db, "Reinstated", { apply: true });
+      expect(leaderboardOf(await leaderboard(device.deviceToken)).handles).toEqual([]);
+
+      const back = await disableDevice(db, device.deviceId, { enable: true, apply: true });
+      expect(back.outcome).toBe("enabled");
+
+      // The catch was never deleted, so the device returns at its real standing.
+      const view = leaderboardOf(await leaderboard(device.deviceToken));
+      expect(view.handles).toEqual(["Reinstated"]);
+      expect(view.me).not.toBeNull();
+      const listing = await app.inject({
+        method: "GET",
+        url: "/v1/catches",
+        headers: { authorization: `Bearer ${device.deviceToken}` },
+      });
+      expect(listing.statusCode).toBe(200);
+      expect(listing.json().total).toBe(1);
+    });
+
+    it("the operator script dry-runs by default and is a no-op when already in state", async () => {
+      const device = await boardedDevice("Dryrun", "00000000-0000-4000-8000-00000000d001");
+
+      // No --apply → reports the intent, writes nothing, token still works.
+      const dry = await disableDevice(db, "dryrun");
+      expect(dry.outcome).toBe("dry-run");
+      expect(dry.deviceId).toBe(device.deviceId);
+      const stillWorks = await app.inject({
+        method: "GET",
+        url: "/v1/catches",
+        headers: { authorization: `Bearer ${device.deviceToken}` },
+      });
+      expect(stillWorks.statusCode).toBe(200);
+
+      // Disabling twice must not stomp the original `disabled_at` timestamp.
+      const first = await disableDevice(db, "dryrun", {
+        apply: true,
+        now: () => new Date("2026-09-06T00:00:00Z"),
+      });
+      expect(first.outcome).toBe("disabled");
+      const second = await disableDevice(db, "dryrun", { apply: true });
+      expect(second.outcome).toBe("already");
+      expect(second.wasDisabledAt?.toISOString()).toBe("2026-09-06T00:00:00.000Z");
+
+      // Enabling an already-enabled device is likewise a reported no-op.
+      await disableDevice(db, "dryrun", { enable: true, apply: true });
+      expect((await disableDevice(db, "dryrun", { enable: true, apply: true })).outcome).toBe(
+        "already",
+      );
+    });
+
+    it("an unknown selector matches nothing rather than guessing", async () => {
+      const missingHandle = await disableDevice(db, "nobody-has-this-handle", { apply: true });
+      expect(missingHandle.outcome).toBe("not-found");
+      const missingId = await disableDevice(db, "11111111-2222-4333-8444-555555555555", {
+        apply: true,
+      });
+      expect(missingId.outcome).toBe("not-found");
     });
   });
 

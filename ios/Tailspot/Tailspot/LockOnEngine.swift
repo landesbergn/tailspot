@@ -195,9 +195,9 @@ func icaosInZone(
 //      prominent than the rest, catch just it (single) instead of multi-bagging
 //      the cluster. Reduces to the old behavior in sparse sky (~1% of ticks
 //      changed in the corpus, always toward the closer/bigger plane).
-//   2. aimConfidence — a post-catch (never blocking) flag for a center catch
+//   2. aimConfidence — a silent shadow flag for a center catch
 //      that is off-crosshair AND small AND made under a poor compass: the
-//      hallmark of "wrong plane," surfaced as a Keep/Discard question.
+//      hallmark of "wrong plane," recorded for calibration.
 
 /// In-zone visible planes with full geometry, sorted by pixel offset — the
 /// same membership as `icaosInZone`, carrying the angular offset + apparent

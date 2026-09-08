@@ -5,6 +5,94 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-06 — Reveal CTA off-screen on iPhone SE — branch `fix/reveal-cta-short-screens` (PR #254, draft)
+
+First TestFlight report from a small phone: an iPhone SE (3rd gen) tester on
+1.1.1 (90) caught a Bell 206 JetRanger / LongRanger — a name that wraps to three
+split-flap rows — and had "no way to proceed": the reveal filled the screen with
+no "tap to continue / View in Hangar" row. Cause: the reveal stacked the card
+above the CTA in a fixed column; the card (~624 pt) plus the CTA strip (~71 pt)
+overflowed the SE's 647 pt safe area, and the `GeometryReader` top-aligns an
+overflowing child, so the whole strip fell below the screen edge. The static
+snapshot harness only ever rendered at 393×852. Any two-line name with a route
+was already at the edge on the SE.
+
+- **Fix:** the card region is a vertical `ScrollView` with the CTA strip pinned
+  below it (`revealColumn`); the dismiss/skip catcher moves into the scroll
+  content's background so tap semantics are unchanged. The card goes through a
+  tiny `CompressedHeightLayout` (proposes zero height, reports the child's
+  size) so it takes **the same size it always has**: the old
+  `VStack { Spacer; card; Spacer; cta }` offered the card about a third of the
+  screen, so the card has always laid out at its compressed minimum — route
+  codes/names and the readouts (`minimumScaleFactor` text) scaled down — on
+  every device. That is the card every user has seen. A bare scroll view
+  proposes unbounded height, un-squeezes it, and made cards that used to fit (a
+  one-line name on the SE, a two-line one on a 6.1") scroll by a few points —
+  caught by the before/after device matrix. A min-height frame then does what
+  the two Spacers did: a fitting card centers, a taller one scrolls. No padding
+  or Spacer inside the scroll content: under the unbounded proposal even
+  `Spacer(minLength: 0)` reports 8 pt, a phantom scroll where a card just fits.
+  **Open design question surfaced:** the card's intended type sizes (21 pt
+  route codes, full-size readouts) have never rendered on a phone; whether to
+  keep the squeeze as the design or re-tune the card to fit unsqueezed is a
+  separate call.
+- **Tests:** `RevealShortScreenTests` hosts the live view in a `UIWindow` at the
+  SE (375×647) and iPhone 16 (393×759) safe-area sizes — ImageRenderer draws
+  `ScrollView` content blank. Lessons that cost iterations: async sleeps, not
+  `RunLoop` spins (a spin blocks the main-actor `.task` that flips `settled`);
+  `ignoresSafeArea` on the root so the window size means the device safe area;
+  poll for state under the parallel full suite. Three 375×647 static cases
+  added to `RevealSnapshotTests` through a `scrolls: false` mirror. Debug
+  ✦ Catch gains the three-line Bell 206 preset. **Device matrix:** the opt-in
+  `RevealDeviceMatrixRenderTests` (`TEST_RUNNER_TAILSPOT_MATRIX=<tag>`) hosts
+  the live reveal at five safe-area sizes × four card configurations; the
+  before/after sheets are in `docs/ui-sweeps/2026-09-06/reveal-short-screens/`.
+- **Found, not changed:** the chips-up bonus-round card is taller than EVERY
+  phone's safe area even squeezed (the 16 Pro Max included — the matrix's
+  "before" row has no CTA on any device): "tap to continue" was off-screen for
+  the whole round everywhere, the ledger cut, and on the SE the last chip and
+  SKIP were unreachable. It now scrolls with the CTA pinned. A live test for
+  that state was not stable under the parallel suite and was dropped.
+- **Audience (PostHog, 30 d):** 2 SE users + 2 iPad users running the iPhone
+  app in a 375×667 compatibility window, of ~110.
+
+## 2026-09-06 — API hardening, phase 1 — branch `feat/api-hardening`
+
+Noah asked whether the API was publicly queryable. Reading the routes said no
+user data leaks without the owning device's bearer token, but the follow-up
+"is it secure?" audit — three reviewer agents (security on Opus, infra, iOS)
+over a draft plan — overturned the draft's order and found two live problems:
+every per-IP rate limit was bypassable by spoofing `X-Forwarded-For`
+(`trustProxy: true` trusted the whole chain; reproduced against prod), and the
+rate-limiter and tile-cache maps grew without bound. Shipped as one backend PR:
+`Fly-Client-IP` keying via a single helper with `trustProxy` off; bounded maps;
+limits on the unmetered aircraft/metadata/catch-list routes plus a pre-auth
+per-IP limiter on bearer routes; request/connection/statement timeouts, a 64 KB
+body limit, a Fly concurrency block, Node heap sizing; version off `/healthz`;
+Sentry scrub of the token and observer coordinates; sustained-fallback alert;
+and `devices.disabled_at` (migration 0009) as the revocation lever with an
+operator script. App Attest and Cloudflare were argued down to "in reserve";
+anti-cheat enforcement was shown to be a no-op until the app sends pose data.
+Tests 350 → 391.
+
+## 2026-09-05 — authenticity warnings retired; strong indoor suppression retained
+
+The user-facing authenticity prompts were doing more interrupting than
+correcting, so the catch path is now fail-open throughout: no pre-catch warning,
+no post-reveal Keep/Discard question, and no upload quarantine. Legacy rows with
+`suspectReason` set are released by `CatchUploader`; the field remains only for
+SwiftData migration compatibility.
+
+Strong whole-frame `.notSky` evidence still suppresses all aircraft labels after
+five sustained one-second samples, including explicit tap reveals, and clears
+the current lock so it cannot remain silently catchable. The suppression is
+silent and ambiguous or dark frames fail open. Existing gate event names
+continue for historical trend continuity, while `catch_performed.sky_verdict`
+ties the whole-frame result to the exact catch. A private PostHog review queue
+can use that catch-spine event to flag repeated strong indoor signals across
+multiple days. That queue is intentionally a human-review lead, never an
+automatic cheating verdict.
+
 ## 2026-09-05 — Precision-tap reveal — PR #248
 
 Field miss, Berkeley 08:46 PDT: Noah tapped six times on a plane he could

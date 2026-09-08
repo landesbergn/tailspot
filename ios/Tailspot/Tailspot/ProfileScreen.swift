@@ -815,7 +815,12 @@ struct ProfileStats {
 
 // MARK: - Spotter handle (stored)
 
-enum SpotterHandle {
+// `nonisolated`: the project's default actor isolation is MainActor, which
+// would make these three string constants MainActor-only. `Analytics` is a
+// `nonisolated enum` and reads them off-main when decorating events, so
+// isolating them buys nothing and costs two build warnings. Immutable
+// `let` Strings are Sendable; there is nothing to protect.
+nonisolated enum SpotterHandle {
     static let storageKey = "tailspot.spotter.handle"
     /// The handle value the backend has confirmed for THIS device. Written by
     /// the claim paths (onboarding/Settings) on success and by `HandleSyncer`.

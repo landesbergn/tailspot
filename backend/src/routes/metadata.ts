@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { ipKey } from "../identity/clientIp.js";
+import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { MetadataStore } from "../metadata/store.js";
 
 /**
@@ -13,6 +15,7 @@ import type { MetadataStore } from "../metadata/store.js";
  *   }
  *   404 { error: "unknown aircraft" }   // no source knows the airframe
  *   400 { error }                       // malformed icao24
+ *   429 { error: "rate limited" }       // per-IP flood control (+ Retry-After)
  *
  * Storage is injected as a `MetadataStore` (mirrors the aircraft route's
  * injected `PositionProvider`), so the route is ignorant of Postgres vs. an
@@ -21,6 +24,15 @@ import type { MetadataStore } from "../metadata/store.js";
 
 export interface MetadataRouteOptions {
   store: MetadataStore;
+  /**
+   * Per-IP limiter. Every lookup is a database round-trip on an
+   * attacker-supplied key, so this one is about protecting Postgres more than
+   * the API process. The limit is generous on purpose: the client's ambient
+   * prefetch can legitimately fire 40–60 lookups in a few seconds on a first
+   * launch near a busy airport, and many phones share one IPv4 behind carrier
+   * CGNAT or airport Wi-Fi. Optional; app.ts always supplies one.
+   */
+  ipLimiter?: RateLimiter;
 }
 
 /** A lowercase 24-bit hex Mode-S address: exactly six hex digits. */
@@ -30,6 +42,12 @@ export function registerMetadataRoute(app: FastifyInstance, opts: MetadataRouteO
   const { store } = opts;
 
   app.get("/v1/metadata/:icao24", async (request, reply) => {
+    const rl = opts.ipLimiter?.take(ipKey(request));
+    if (rl && !rl.allowed) {
+      reply.header("Retry-After", String(rl.retryAfterSeconds));
+      return reply.code(429).send({ error: "rate limited" });
+    }
+
     const { icao24: raw } = request.params as { icao24: string };
 
     // Normalize to lowercase before validating so an uppercase-hex request is

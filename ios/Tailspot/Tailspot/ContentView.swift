@@ -154,6 +154,7 @@ struct ContentView: View {
     /// class). Surfaced as visible for labeling / lock / catch only while
     /// it is the pin; always kept equal to `pinnedIcao` while set, cleared
     /// together with it. The frame mode's equivalent is `assertedPlanes`.
+    /// Strong whole-frame not-sky suppression overrides both escape hatches.
     @State private var revealedIcao: String?
     /// The AR view's current size, captured from the GeometryReader so
     /// the 1 Hz asserted-plane prune can project without a body pass.
@@ -176,30 +177,24 @@ struct ContentView: View {
     /// the multi-button chrome. T8 will re-wire inside the new merged
     /// `performCatch(mode:)`. Reveal-dismiss callbacks still clear it.
     @State private var captureInFlight = false
-    /// Post-catch confirm (2026-07-04, replaces the pre-catch block nudge):
-    /// the suspected rows of the just-revealed catch, stashed by `runCatch`
-    /// and promoted into `pendingSuspectReview` when the reveal dismisses —
-    /// the review must never interrupt the reveal moment itself.
-    @State private var suspectAwaitingReview: [Catch] = []
     /// Streak notification pre-prompt, staged by the catch path when the
     /// just-landed catch made the streak worth protecting (eligibility in
-    /// `StreakReminders.shouldOfferAsk`) and promoted at reveal dismiss —
-    /// never shown over the reveal ceremony or a Keep/Discard review.
+    /// `StreakReminders.shouldOfferAsk`) and promoted at reveal dismiss.
     /// The value is the current streak the card quotes.
     @State private var pendingStreakAsk: Int? = nil
     /// The presented pre-prompt card (nil = hidden). One-shot: presenting
     /// latches `StreakReminders.permissionAskedKey` immediately, so a kill
     /// mid-card still counts as asked.
     @State private var streakAsk: Int? = nil
-    /// Non-nil → the one-question Keep/Discard review dialog is up.
-    @State private var pendingSuspectReview: SuspectReview?
-    /// Ambient "you're indoors" hint, shown proactively when the camera
-    /// has read a confident not-sky frame for a sustained spell (so a
-    /// brief misread doesn't nag). Auto-clears the moment it sees sky.
-    @State private var pointedIndoors = false
-    @State private var indoorStreak = 0
-    /// When the hint appeared — feeds `indoor_hint_cleared`'s duration.
-    @State private var indoorHintShownAt: Date?
+    /// Strong whole-frame not-sky evidence suppresses ambient labels after
+    /// a sustained spell. There is deliberately no user-facing warning:
+    /// the classifier is useful as a conservative visibility guard, not as
+    /// an accusation or a catch gate.
+    @State private var suppressAmbientLabels = false
+    @State private var notSkyStreak = 0
+    /// When suppression began — feeds the legacy `indoor_hint_cleared`
+    /// duration event so the historical signal stays continuous.
+    @State private var labelsSuppressedAt: Date?
     /// Latched compass warning. Set true after `compassBadDebounce`
     /// seconds of continuously-bad readings; cleared when accuracy
     /// crosses back under `compassGoodThreshold`. Drives the
@@ -358,12 +353,13 @@ struct ContentView: View {
                     TimelineView(.animation(minimumInterval: 1.0/30.0, paused: arOccluded)) { context in
                         let now = context.date
                         // Interactive-visible set: the ambient visibility tier
-                        // (suppressed while `pointedIndoors`) PLUS any
-                        // user-asserted plane — see `interactiveVisible`.
-                        // GROUNDED planes are excluded even from the asserted
-                        // clause: a parked plane must never label or catch
-                        // (the tap path never asserts one — this guard is
-                        // belt-and-suspenders).
+                        // plus any user-asserted plane — see `interactiveVisible`.
+                        // Strong whole-frame not-sky evidence suppresses the
+                        // entire set, including asserted planes and the legacy
+                        // pin, so a blank-wall tap cannot restore a label or
+                        // catch target. GROUNDED planes remain excluded from
+                        // the asserted clause (the tap path never asserts one —
+                        // this guard is belt-and-suspenders).
                         let visible = interactiveVisible(adsb.observed)
                         let heading = location.heading ?? 0
                         let camEl = motion.cameraElevationDeg
@@ -609,10 +605,10 @@ struct ContentView: View {
                 .ignoresSafeArea()
 
                 // Top-center floating surfaces share one layout owner so
-                // SwiftUI can stack their measured heights. The indoor hint
-                // and transient toast used to be separate root overlays with
-                // a fixed 60 pt top offset; a tall compass warning therefore
-                // overlapped them instead of pushing them down.
+                // SwiftUI can stack their measured heights. The transient
+                // toast used to be a separate root overlay with a fixed 60 pt
+                // top offset; a tall compass warning therefore overlapped it
+                // instead of pushing it down.
                 VStack(spacing: 8) {
                     VStack(spacing: 8) {
                         cautionBadge
@@ -633,7 +629,6 @@ struct ContentView: View {
                     // affordance is taller, its measured height wins.
                     .frame(minHeight: 40, alignment: .top)
 
-                    indoorHintBanner
                     topToastBanner
                     Spacer()
                 }
@@ -874,14 +869,14 @@ struct ContentView: View {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
-                    presentSuspectReviewIfNeeded()
+                    presentPostRevealMomentIfNeeded()
                 },
                 onViewInHangar: {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
                     showHangar = true
-                    presentSuspectReviewIfNeeded()
+                    presentPostRevealMomentIfNeeded()
                 },
                 isDuplicate: reveal.isDuplicate,
                 // In-card BONUS ROUND (game-layer PR3; in-card per Noah
@@ -936,29 +931,16 @@ struct ContentView: View {
                 onDismiss: {
                     pendingMultiReveal = nil
                     captureInFlight = false
-                    presentSuspectReviewIfNeeded()
+                    presentPostRevealMomentIfNeeded()
                 },
                 onViewInHangar: {
                     pendingMultiReveal = nil
                     captureInFlight = false
                     showHangar = true
-                    presentSuspectReviewIfNeeded()
+                    presentPostRevealMomentIfNeeded()
                 }
             )
             .presentationBackground(.clear)
-        }
-        // Post-catch confirm: one Keep/Discard question for the suspected
-        // rows of the catch that just revealed. Keep vouches (un-quarantines
-        // → uploads next scene-activation); Discard deletes — the earned
-        // confirm/deny signal. Cancel-free by design: dismissing without
-        // answering leaves the rows quarantined locally, re-asked never
-        // (they stay in the Hangar, off the leaderboard).
-        .confirmationDialog(
-            suspectReviewQuestion,
-            isPresented: suspectReviewPresented,
-            titleVisibility: .visible
-        ) {
-            suspectReviewActions
         }
         // 1 Hz replay capture loop. Re-launches whenever the recorder
         // toggles on; tears down when it toggles off (Task is cancelled
@@ -989,7 +971,7 @@ struct ContentView: View {
         // Activation funnel: the first time any plane label is actually
         // visible (post-filter), the user has something to catch. ~1 Hz
         // re-annotation cadence; once-per-install latch inside the fire.
-        // Skipped while pointedIndoors — no label rendered means the user
+        // Skipped while labels are suppressed — no label rendered means the user
         // did NOT see a plane, and this latch fires once per install.
         .onReceive(adsb.$observed) { observed in
             // Recompute the prefetch-task signature HERE (~1 Hz, on each
@@ -1006,25 +988,25 @@ struct ContentView: View {
             // `firstPlaneSeenLatched` short-circuits the per-tick filter work
             // for the rest of this session once we've reached that point.
             guard !firstPlaneSeenLatched else { return }
-            guard !pointedIndoors else { return }
+            guard !suppressAmbientLabels else { return }
             let visible = observed.filter(\.isLikelyVisibleToObserver)
             guard !visible.isEmpty else { return }
             ActivationTelemetry.fireFirstPlaneSeenOnce(visibleCount: visible.count)
             firstPlaneSeenLatched = true
         }
-        // Ambient indoor hint: poll the gate verdict ~1 Hz off the
-        // already-computed sky features (no extra camera work) and
-        // debounce a sustained not-sky read into `pointedIndoors`.
+        // Ambient-label suppression: poll the gate verdict ~1 Hz off the
+        // already-computed sky features (no extra camera work) and debounce
+        // sustained, strong not-sky evidence before hiding labels.
         .task {
             // Sleep FIRST: SwiftUI runs a `.task` body synchronously inside
             // the view update that attaches it, up to the first suspension —
-            // so a compute-then-sleep loop mutates @State (`indoorStreak`)
+            // so a compute-then-sleep loop mutates @State (`notSkyStreak`)
             // mid-update on its first tick ("Modifying state during view
             // update", 2026-07-20). The streak needs 5 ticks before anything
-            // shows, so a first-tick delay changes nothing observable.
+            // suppresses, so a first-tick delay changes nothing observable.
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                indoorHintTick()
+                labelSuppressionTick()
                 pruneAssertedPlanes()
                 pruneLegacyPin()
             }
@@ -1036,18 +1018,21 @@ struct ContentView: View {
     /// metadata prefetch, and its signature — they must agree or labels
     /// render without their metadata.
     ///
-    /// The ambient tier is suppressed entirely while `pointedIndoors`
+    /// The ambient tier is suppressed entirely while `suppressAmbientLabels`
     /// (2026-07-12, NYC couch session): the geometric band can't know about
     /// walls, and dense airspace (Manhattan: river-corridor GA at 2–3 km,
     /// LGA finals at 8 km) keeps planes inside the band that are plainly
     /// invisible from indoors. When the whole frame reads not-sky for the
-    /// sustained streak, no ambient label renders; asserted planes survive
-    /// (explicit intent — the user just said they can see one). Same
-    /// 5 s-debounced signal as the "Not many planes indoors." hint, so
-    /// the labels disappear exactly when that hint explains why.
+    /// sustained streak, no label renders — not even an asserted plane or
+    /// the legacy pin (an indoor wall tap must not recreate a label or a
+    /// catch target; main's 2026-09-05 rule, which supersedes this branch's
+    /// earlier "asserted planes survive"). Five consecutive strong reads are
+    /// required. No banner accompanies the suppression: the signal is
+    /// intentionally conservative and non-accusatory.
     private func interactiveVisible(_ observed: [ObservedAircraft]) -> [ObservedAircraft] {
-        observed.filter {
-            ($0.isLikelyVisibleToObserver && !pointedIndoors)
+        guard !suppressAmbientLabels else { return [] }
+        return observed.filter {
+            $0.isLikelyVisibleToObserver
                 || (!$0.grounded && assertedPlanes[$0.aircraft.icao24] != nil)
                 // Legacy mode's tap-reveal (frame mode never sets it).
                 || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
@@ -1505,26 +1490,6 @@ struct ContentView: View {
     // MARK: - Top-center overlays
 
 
-    /// Proactive ambient hint while the phone is pointed indoors — so the
-    /// user knows to head outside before they even try to catch. Driven by
-    /// the debounced `pointedIndoors`; auto-clears when aimed at sky.
-    /// Copy is the app's dry-clinical voice (Noah, 2026-07-10 — the
-    /// winking-emoji draft was off-voice), same register as the grounded
-    /// toast below.
-    @ViewBuilder
-    private var indoorHintBanner: some View {
-        if pointedIndoors {
-            Text("Not many planes indoors.")
-                .font(Brand.Font.mono(size: 12, weight: .semibold))
-                .foregroundStyle(Brand.Color.textPrimary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
-                .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
-                .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
     /// The single transient top toast (grounded / far-tap / save-fail /
     /// streak). One shared capsule, one shared state: message and border
     /// vary by kind — save-fail is `alertWarning` RED, because losing a
@@ -1732,7 +1697,7 @@ struct ContentView: View {
     }
 
     /// Streak notification pre-prompt: a bottom card, presented once ever
-    /// (see `presentSuspectReviewIfNeeded`), asking to protect the streak
+    /// (see `presentPostRevealMomentIfNeeded`), asking to protect the streak
     /// with the evening nudge. Accepting fires the SYSTEM permission prompt
     /// — the pre-prompt exists so that prompt lands with context instead of
     /// ambushing at cold launch. Solid card, not `.glassEffect` (bare glass
@@ -1870,49 +1835,17 @@ struct ContentView: View {
     /// drift still qualifies.
     private static let catchZoneRadius: CGFloat = 100
 
-    /// LEGACY catch mode — aim-confidence floor for the uncertain-aim flag
-    /// (Gate 5). Below this, a CENTER (non-tapped) catch made under a poor
-    /// compass, off the crosshair, and on a small target is flagged as
-    /// maybe-the-wrong-plane → Keep/Discard after the reveal (never
-    /// blocks). Conservative so it flags only clearly marginal catches
+    /// LEGACY catch mode — aim-confidence floor for the uncertain-aim
+    /// shadow signal (Gate 5). Below this, a CENTER (non-tapped) catch made
+    /// under a poor compass, off the crosshair, and on a small target is
+    /// recorded for calibration but never interrupts or quarantines the
+    /// catch. Conservative so it flags only clearly marginal catches
     /// (fail-open). See `aimConfidence`.
     private static let uncertainAimConfidenceFloor: Double = 0.3
 
-    /// Payload for the post-catch Keep/Discard review dialog: the suspected
-    /// rows of the just-revealed catch and the one question asked about them.
-    private struct SuspectReview {
-        let rows: [Catch]
-        let question: String
-    }
-
-    /// The review dialog's presentation binding, question, and actions —
-    /// extracted from `body`'s modifier chain: an inline derived `Binding`
-    /// there pushed the whole-body expression past the CI compiler's
-    /// type-check time limit (the faster dev Mac squeaked through).
-    private var suspectReviewPresented: Binding<Bool> {
-        Binding<Bool>(
-            get: { pendingSuspectReview != nil },
-            set: { if !$0 { pendingSuspectReview = nil } }
-        )
-    }
-
-    private var suspectReviewQuestion: String {
-        pendingSuspectReview?.question ?? ""
-    }
-
-    @ViewBuilder
-    private var suspectReviewActions: some View {
-        // Buttons agree in number with the question — "did you really see
-        // them?" answered by "I saw it" read like different conversations.
-        let plural = (pendingSuspectReview?.rows.count ?? 1) > 1
-        Button(plural ? "I saw them — keep" : "I saw it — keep") { resolveSuspectReview(keep: true) }
-        Button(plural ? "Discard them" : "Discard it", role: .destructive) { resolveSuspectReview(keep: false) }
-    }
-
-    /// Promote the stashed suspected rows into the review dialog. Called from
-    /// the reveal's dismiss callbacks so the question lands right AFTER the
-    /// card moment, never on top of it (post-catch confirm, 2026-07-04).
-    private func presentSuspectReviewIfNeeded() {
+    /// Resolve the optional moments that may follow a catch reveal. Authenticity
+    /// signals no longer claim this moment: they remain silent telemetry.
+    private func presentPostRevealMomentIfNeeded() {
         // Also the reveal-dismissal flush point for the save-failure toast:
         // presenting it at catch time would hide it behind the full-screen
         // reveal and it would expire unseen.
@@ -1922,39 +1855,20 @@ struct ContentView: View {
             presentSaveFailToast()
             momentClaimed = true
         }
-        // Streak notification pre-prompt (one-shot). Only an UNCONTESTED
-        // dismissal promotes it: a pending Keep/Discard review or a jump to
-        // the Hangar wins the moment and the ask is dropped, not queued —
-        // eligibility re-stages it on the next streak catch. Presenting
-        // latches the asked bit immediately, so it can never fire twice.
+        // Streak notification pre-prompt (one-shot). Only an uncontested
+        // dismissal promotes it: a jump to the Hangar wins the moment and the
+        // ask is dropped, not queued. Presenting latches the asked bit
+        // immediately, so it can never fire twice.
         if let askDays = pendingStreakAsk {
             pendingStreakAsk = nil
-            if suspectAwaitingReview.isEmpty, !showHangar,
-               pendingReveal == nil, pendingMultiReveal == nil {
+            if !showHangar, pendingReveal == nil, pendingMultiReveal == nil {
                 UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
                 StreakTelemetry.fireAskShown(streakDays: askDays)
                 withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
                 momentClaimed = true
             }
         }
-        guard !suspectAwaitingReview.isEmpty else {
-            maybeRequestReview(momentClaimed: momentClaimed)
-            return
-        }
-        let rows = suspectAwaitingReview.filter { !$0.isDeleted && $0.suspectReason != nil }
-        suspectAwaitingReview = []
-        guard !rows.isEmpty else {
-            maybeRequestReview(momentClaimed: momentClaimed)
-            return
-        }
-        let question: String
-        if rows.count == 1, let row = rows.first,
-           let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) {
-            question = reason.question(slantKm: row.slantDistanceMeters / 1000)
-        } else {
-            question = CatchSuspicion.multiQuestion(count: rows.count)
-        }
-        pendingSuspectReview = SuspectReview(rows: rows, question: question)
+        maybeRequestReview(momentClaimed: momentClaimed)
     }
 
     /// The SwiftUI review-request action — Apple's canonical StoreKit
@@ -1965,14 +1879,14 @@ struct ContentView: View {
 
     /// Lowest-priority claimant of the post-reveal moment (v1.1 R7): the
     /// App Store rating ask, only when nothing else took the moment — no
-    /// toast, no streak pre-prompt, no suspect Keep/Discard, no Hangar
-    /// jump, no pending trophy celebration. Contested → drop, not queue;
+    /// toast, no streak pre-prompt, no Hangar jump, and no pending trophy
+    /// celebration. Contested → drop, not queue;
     /// eligibility is durable (the Hangar), so it re-tries when the next
     /// catch's reveal closes. Thresholds + the once-per-version stamp live
     /// in `ReviewPrompt.swift`.
     private func maybeRequestReview(momentClaimed: Bool) {
-        guard !momentClaimed, streakAsk == nil, pendingSuspectReview == nil,
-              !showHangar, pendingReveal == nil, pendingMultiReveal == nil,
+        guard !momentClaimed, streakAsk == nil, !showHangar,
+              pendingReveal == nil, pendingMultiReveal == nil,
               !unlockCenter.hasPending else { return }
         ReviewPrompter.shared.catchMomentEnded(
             totalCatches: catches.count,
@@ -1990,35 +1904,6 @@ struct ContentView: View {
                 }
             }
         )
-    }
-
-    /// Apply the review answer to every row it covered. Keep vouches — the
-    /// flag clears and the row uploads immediately (same per-catch sweep the
-    /// non-suspect path fires; the scene-activation sweep stays the retry
-    /// net). Discard deletes the row + photo and fires the deny signals.
-    private func resolveSuspectReview(keep: Bool) {
-        guard let review = pendingSuspectReview else { return }
-        pendingSuspectReview = nil
-        for row in review.rows where !row.isDeleted {
-            guard let reason = row.suspectReason.flatMap(CatchSuspicion.init(rawValue:)) else { continue }
-            if keep {
-                CatchTelemetry.fireSuspectKept(icao24: row.icao24, reason: reason)
-                row.suspectReason = nil
-            } else {
-                CatchTelemetry.fireSuspectDiscarded(icao24: row.icao24, reason: reason)
-                // A discard IS a delete — fire the north-star deny signal too.
-                CatchTelemetry.fireDeleted(
-                    icao24: row.icao24, count: 1, rarity: row.resolvedRarity.rawValue,
-                    source: .suspectDiscard
-                )
-                CatchPhotoStore.delete(filename: row.photoFilename)
-                modelContext.delete(row)
-            }
-        }
-        try? modelContext.save()
-        if keep {
-            Task { await CatchUploader().uploadPending(context: modelContext) }
-        }
     }
 
     /// Merged capture path. Single entry point used by the unified
@@ -2104,32 +1989,32 @@ struct ContentView: View {
             withAnimation(.easeOut(duration: 0.3)) { captureFlash = false }
         }
 
-        // Post-catch confirm model (2026-07-04): the gates below RAISE
-        // SUSPICION instead of blocking — the catch + reveal always proceed
-        // instantly. A pre-catch nudge interrupted a moving target, and its
-        // "Catch anyway" re-ran seconds later against stale aim (the JA10VA
-        // field case: override caught an invisible plane 62.6 km out).
-        // Suspected rows quarantine from upload and get one Keep/Discard
-        // question after the reveal (`presentSuspectReviewIfNeeded`).
-        var suspicions: [String: CatchSuspicion] = [:]
+        // Authenticity gates are silent shadow signals. They never block,
+        // quarantine, or interrupt a catch; their only product effect is the
+        // separate strong whole-frame label suppression while the camera is
+        // confidently not pointed at sky.
+        var authenticitySignals: [String: CatchSuspicion] = [:]
 
         // Gate 1 — indoor (v1 whole-frame authenticity gate). A confident
         // "not sky" suspects the whole tap; everything else passes (fail open).
         let skyFeatures = visualConfirm.latestSkyFeatures
         let gpsAccuracy = location.horizontalAccuracy
-        if computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy) == .notSky {
+        let skyVerdict = computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy)
+        if skyVerdict == .notSky {
             CatchTelemetry.fireBlockedOutdoors(
                 verdict: .notSky, features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
             )
             for icao in icaos {
-                suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .indoor)
+                authenticitySignals[icao] = CatchSuspicion.preferred(
+                    authenticitySignals[icao], .indoor
+                )
             }
         }
 
         // Gate 2 — angular-size floor (L3). A plane too small-and-distant to
         // resolve by eye is doubtful (independent of occlusion, which the
         // localized sky gate owns). Per-target: specks are caught + flagged,
-        // never dropped — the review question owns the outcome now.
+        // never dropped.
         let observedByIcao = Dictionary(
             adsb.observed.map { ($0.aircraft.icao24, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -2141,7 +2026,9 @@ struct ContentView: View {
                 arcmin: obs.apparentSizeArcminutes,
                 slantKm: obs.slantDistanceMeters / 1000
             )
-            suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .tooFar)
+            authenticitySignals[icao] = CatchSuspicion.preferred(
+                authenticitySignals[icao], .tooFar
+            )
         }
 
         // Gate 3 — localized sky gate (L2). Judge the patch under each
@@ -2160,7 +2047,9 @@ struct ContentView: View {
                     verdict: v, features: f, wouldBlock: wouldBlock, enforcing: enforcing
                 )
                 if wouldBlock, enforcing {
-                    suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .occluded)
+                    authenticitySignals[icao] = CatchSuspicion.preferred(
+                        authenticitySignals[icao], .occluded
+                    )
                 }
             }
         }
@@ -2169,28 +2058,33 @@ struct ContentView: View {
         // mode with the crosshair (2026-08-28): its premise was "the reticle
         // says which plane you meant"; under frame-is-the-catch there is no
         // picking, so there is no mis-pick. Per-plane honesty stays with
-        // gates 1–3 above.
+        // gates 1–3 above. Like every gate since 2026-09-05 it is a silent
+        // shadow signal: it records, never blocks or prompts.
         if catchMode == .legacy {
             applyUncertainAimGate(icaos: icaos, observedByIcao: observedByIcao,
-                                  suspicions: &suspicions)
+                                  signals: &authenticitySignals)
         }
 
-        runCatch(icaos: icaos, screenSize: screenSize, positions: positions,
-                 suspicions: suspicions)
+        runCatch(
+            icaos: icaos,
+            screenSize: screenSize,
+            positions: positions,
+            skyVerdict: skyVerdict,
+            authenticitySignals: authenticitySignals
+        )
     }
 
     /// Gate 5 (LEGACY catch mode, 2026-07-13). A CENTER (non-tapped) catch
     /// whose target sits off the crosshair AND is too small to resolve, made
     /// under a POOR compass, may be the WRONG plane — the reticle can't be
     /// trusted to say which plane you meant (the A319 field mis-catch:
-    /// bagged a 12.9 km cruise jet instead of a closer, lower plane). Flag,
-    /// never block: the reveal proceeds, then one Keep/Discard question. An
-    /// explicit tap (`lockOn.state.targetIcao24`) is a deliberate choice and
-    /// is exempt.
+    /// bagged a 12.9 km cruise jet instead of a closer, lower plane). Record
+    /// it silently and never block. An explicit tap
+    /// (`lockOn.state.targetIcao24`) is a deliberate choice and is exempt.
     private func applyUncertainAimGate(
         icaos: [String],
         observedByIcao: [String: ObservedAircraft],
-        suspicions: inout [String: CatchSuspicion]
+        signals: inout [String: CatchSuspicion]
     ) {
         guard let acc = location.headingAccuracy, acc >= Self.compassGoodThreshold,
               let heading = location.heading else { return }
@@ -2215,7 +2109,7 @@ struct ContentView: View {
                 offsetDeg: offsetDeg, arcmin: obs.apparentSizeArcminutes,
                 headingAccuracyDeg: acc, confidence: conf
             )
-            suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .uncertainAim)
+            signals[icao] = CatchSuspicion.preferred(signals[icao], .uncertainAim)
         }
     }
 
@@ -2254,14 +2148,14 @@ struct ContentView: View {
     }
 
     /// The actual catch — capture the JPEG, build + save the rows, fire
-    /// `catch_performed`, present the reveal. Bypasses the authenticity
-    /// gate (the gate decision lives in `performCatch`; the nudge's
-    /// "Catch anyway" calls this directly).
+    /// `catch_performed`, present the reveal. Authenticity decisions live in
+    /// `performCatch`; this method only records their shadow telemetry.
     private func runCatch(
         icaos: [String],
         screenSize: CGSize,
         positions: [String: CGPoint],
-        suspicions: [String: CatchSuspicion] = [:]
+        skyVerdict: SkyVerdict,
+        authenticitySignals: [String: CatchSuspicion] = [:]
     ) {
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
@@ -2443,8 +2337,9 @@ struct ContentView: View {
             // competence envelope (daylight + expected footprint above the
             // model's resolution floor — DetectorGate); out-of-envelope and
             // multi-catches are never doubted. SHADOW by default: telemetry
-            // always fires, suspicion only when the debug flag enforces.
-            var suspicions = suspicions
+            // always fires, and the debug flag controls whether a no-detection
+            // outcome joins the combined shadow signal.
+            var authenticitySignals = authenticitySignals
             var detectorVerdict: DetectorGateVerdict?
             var singleSnap: CatchPhotoSnapper.Snap?
             var singleSnapped: CGPoint?
@@ -2543,7 +2438,9 @@ struct ContentView: View {
                     enforcing: enforcing
                 )
                 if verdict == .noDetection, enforcing {
-                    suspicions[icao] = CatchSuspicion.preferred(suspicions[icao], .noDetection)
+                    authenticitySignals[icao] = CatchSuspicion.preferred(
+                        authenticitySignals[icao], .noDetection
+                    )
                 }
             }
 
@@ -2717,10 +2614,9 @@ struct ContentView: View {
                     destIata: observed?.aircraft.destIata ?? resolvedRoute?.destIata,
                     originName: observed?.aircraft.originName ?? resolvedRoute?.originName,
                     destName: observed?.aircraft.destName ?? resolvedRoute?.destName,
-                    // Post-catch confirm: a gate-suspected row is born
-                    // quarantined (skipped by CatchUploader) until the
-                    // post-reveal review clears or deletes it.
-                    suspectReason: suspicions[icao]?.rawValue,
+                    // Authenticity signals are analytics-only. New catches
+                    // are never quarantined from upload.
+                    suspectReason: nil,
                     photoFocusX: photoFocus.map { Double($0.x) },
                     photoFocusY: photoFocus.map { Double($0.y) }
                 )
@@ -2746,7 +2642,7 @@ struct ContentView: View {
                 } catch {
                     Log.adsb.error("Catch save failed: \(error.localizedDescription, privacy: .public)")
                     // Surfaced after the reveal dismisses (see
-                    // `presentSuspectReviewIfNeeded`) — silently losing a
+                    // `presentPostRevealMomentIfNeeded`) — silently losing a
                     // catch the reveal just celebrated reads as success.
                     pendingSaveFailToast = true
                 }
@@ -2755,7 +2651,7 @@ struct ContentView: View {
                 catchHaptic &+= 1
                 Log.adsb.notice("Caught \(newCatches.count, privacy: .public) plane(s); \(duplicates.count, privacy: .public) duplicate(s)")
                 // Per-catch immediate upload (2026-08-24): push the fresh
-                // non-suspect row(s) to the backend NOW instead of waiting
+                // row(s) to the backend NOW instead of waiting
                 // for the next foreground transition — a first-time user
                 // otherwise opened Profile/Leaderboard with 0 server-side
                 // points and no rank. Fire-and-forget; uploadPending is
@@ -2801,7 +2697,8 @@ struct ContentView: View {
                     // Only ever non-nil for a single-target catch, so it can't
                     // mislabel a multi-catch row.
                     detectorVerdict: detectorVerdict,
-                    catchMode: catchMode
+                    catchMode: catchMode,
+                    skyVerdict: skyVerdict
                 )
             }
             for icao in duplicates { CatchTelemetry.fireDuplicate(icao24: icao) }
@@ -2871,13 +2768,10 @@ struct ContentView: View {
                 }
             }
 
-            // Post-catch confirm: record each quarantined row and stash the
-            // suspected set — the reveal's dismiss callbacks promote it into
-            // the Keep/Discard dialog (never shown on top of the reveal).
-            let suspected = newCatches.filter { $0.suspectReason != nil }
-            for row in suspected {
-                guard let reason = row.suspectReason
-                    .flatMap(CatchSuspicion.init(rawValue:)) else { continue }
+            // Preserve one combined shadow signal per affected catch for
+            // aggregate integrity trends. This has no upload or UI effect.
+            for row in newCatches {
+                guard let reason = authenticitySignals[row.icao24] else { continue }
                 CatchTelemetry.fireSuspected(
                     icao24: row.icao24,
                     reason: reason,
@@ -2885,7 +2779,6 @@ struct ContentView: View {
                     slantKm: row.slantDistanceMeters / 1000
                 )
             }
-            suspectAwaitingReview = suspected
 
             // In-card BONUS ROUND (game-layer PR3; in-card per Noah 2026-07-10).
             // Only a fresh SINGLE catch is eligible — a duplicate awards no
@@ -2930,10 +2823,10 @@ struct ContentView: View {
                     if let payload = guessPayload { loader.guess = payload.question }
                 }
                 // If the user tap-skipped and dismissed the shell before the
-                // pipeline finished, the dismiss callbacks already ran — any
-                // late-arriving suspicion review must present itself.
+                // pipeline finished, the dismiss callbacks already ran — flush
+                // any other post-reveal moment that became ready meanwhile.
                 if pendingReveal == nil {
-                    presentSuspectReviewIfNeeded()
+                    presentPostRevealMomentIfNeeded()
                 }
                 revealPresented = (pendingReveal != nil)
                 presentMs = 0
@@ -2973,35 +2866,36 @@ struct ContentView: View {
         ).map { GuessRoundQuestion(route: $0) }
     }
 
-    /// One ~1 Hz tick of the ambient indoor-hint debounce: read the gate
-    /// verdict, advance the streak, flip `pointedIndoors` on a sustained
-    /// change, and fire the hint telemetry on each flip. Lives OUTSIDE
+    /// One ~1 Hz tick of the ambient-label suppression debounce: read the
+    /// gate verdict, advance the streak, flip suppression on a sustained
+    /// change, and fire the legacy hint telemetry on each flip. Lives OUTSIDE
     /// `body` — inlining this work in the `.task` closure pushed
     /// ContentView.body over the compiler's type-check budget (2026-08-27;
     /// see the ~880-line lesson from PR #184).
     ///
-    /// Telemetry (2026-08-27 night-FP audit): the hint rode the same
-    /// verdict as the catch gate but was invisible in analytics. Shown
-    /// carries the tripping frame's features (same payload as
-    /// catch_blocked_outdoors); cleared carries how long it was up. Rapid
-    /// show/clear pairs are the flapping signature — deliberately not
-    /// smoothed here.
-    private func indoorHintTick() {
+    /// `indoor_hint_shown` / `_cleared` keep their historical names for
+    /// continuity, but now describe label suppression rather than visible UI.
+    private func labelSuppressionTick() {
         let skyFeatures = visualConfirm.latestSkyFeatures
         let gpsAccuracy = location.horizontalAccuracy
         let verdict = computeOutdoorVerdict(features: skyFeatures, gps: gpsAccuracy)
-        indoorStreak = verdict == .notSky ? indoorStreak + 1 : 0
-        let indoors = indoorStreak >= 5   // ~5 s sustained (was 3 —
-                                          // the ambient nag was too eager, 2026-07-01)
-        guard indoors != pointedIndoors else { return }
-        withAnimation { pointedIndoors = indoors }
-        if indoors {
-            indoorHintShownAt = Date()
+        notSkyStreak = verdict == .notSky ? notSkyStreak + 1 : 0
+        let shouldSuppress = notSkyStreak >= 5
+        guard shouldSuppress != suppressAmbientLabels else { return }
+        suppressAmbientLabels = shouldSuppress
+        if shouldSuppress {
+            // Suppression applies to the full interactive set. Clear an
+            // existing explicit reveal immediately so it cannot remain a
+            // hidden-but-catchable lock while the camera points at a wall.
+            pinnedIcao = nil
+            revealedIcao = nil
+            lockOn.unpin()
+            labelsSuppressedAt = Date()
             CatchTelemetry.fireIndoorHintShown(
                 features: skyFeatures, gpsAccuracyMeters: gpsAccuracy
             )
-        } else if let shownAt = indoorHintShownAt {
-            indoorHintShownAt = nil
+        } else if let shownAt = labelsSuppressedAt {
+            labelsSuppressedAt = nil
             CatchTelemetry.fireIndoorHintCleared(
                 shownSeconds: Int(Date().timeIntervalSince(shownAt).rounded())
             )
@@ -3011,8 +2905,8 @@ struct ContentView: View {
     /// v1 authenticity gate decision. Pure: maps the latest camera-frame
     /// sky features + GPS accuracy to the "pointed at open sky?" verdict.
     /// Missing features (camera not warmed up) → `.uncertain`, which
-    /// always allows (fail open). Telemetry + the enforce/block decision
-    /// live at the call site (`performCatch`).
+    /// always allows (fail open). Telemetry and label suppression live at
+    /// their call sites; the verdict never blocks or quarantines a catch.
     private func computeOutdoorVerdict(features: SkyFeatures?, gps: Double?) -> SkyVerdict {
         features.map { SkyCheck().verdict(features: $0, gpsAccuracyMeters: gps) } ?? .uncertain
     }
@@ -3062,6 +2956,13 @@ struct ContentView: View {
                 mfr: "Boeing", op: "U.S. Air Force", typecode: "B52",
                 alt: 12200, vel: 244, dist: 31000, origin: "KBAD", dest: nil,
                 originName: "Barksdale AFB", destName: nil),
+            // Three-line name: the tallest card a real catch has produced (a
+            // TestFlight SE tester, 2026-09-06). Previews the reveal's scroll +
+            // pinned-CTA behaviour, which a 6.1" phone otherwise never triggers.
+            Sim(icao: "a1d5c8", callsign: "N217MH", model: "Bell 206 JetRanger / LongRanger",
+                mfr: "Bell", op: "Private", typecode: "B06",
+                alt: 600, vel: 33, dist: 600, origin: nil, dest: nil,
+                originName: nil, destName: nil),
         ]
         let s = presets[simCatchIndex % presets.count]
         simCatchIndex += 1
@@ -3820,7 +3721,8 @@ struct ContentView: View {
 
     /// Feature flag: the L4 detector soft-gate's enforcement (ships OFF =
     /// shadow, telemetry only). On = an in-envelope single catch the still
-    /// search can't corroborate gets the post-reveal Keep/Discard.
+    /// search can't corroborate joins the combined shadow signal — never a
+    /// prompt, never a block.
     private var detectorGateRow: some View {
         debugFlagRow(
             title: "Plane-in-photo check",
@@ -4096,6 +3998,11 @@ struct ContentView: View {
         vfovDeg: Double,
         now: Date
     ) {
+        // Whole-frame not-sky suppression has no tap escape hatch in either
+        // catch mode: an indoor wall/ceiling tap must not recreate a label or
+        // catch target.
+        guard !suppressAmbientLabels else { return }
+
         // Frame-is-the-catch tap model (2026-08-28): a tap never selects a
         // catch target — it asserts a plane the app isn't showing right.
         //   1. Tap on/near a labeled plane (≤100 px, zoom-scaled): a

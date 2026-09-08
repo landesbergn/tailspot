@@ -35,9 +35,10 @@
 //    - catch_deleted    — fires once per delete action (a HangarRow may
 //                         group N icao rows; `count` records how many).
 //
-//  Together with the post-catch confirm outcomes (catch_suspect_kept /
-//  catch_suspect_discarded) these are the numerator + negative signals the
-//  catch-confirmation-rate funnel needs.
+//  Authenticity gates are shadow telemetry: they never block a catch or ask
+//  the user to validate one. A strong whole-frame not-sky verdict is also
+//  copied onto catch_performed so private integrity review can distinguish a
+//  caught plane from a gate sample without joining on timing.
 //
 //  THE CATCH-TAP SEQUENCE (verified against the code paths in ContentView and
 //  against production event streams, 2026-08-31 — keep new instrumentation
@@ -58,32 +59,24 @@
 //    first_plane_catch           only on the tap that took the Hangar from
 //                                empty; latched once per install.
 //           ↓
-//    catch_suspected             ONLY for a row a gate quarantined. Fires
-//                                AFTER catch_performed, not before — under the
-//                                post-catch confirm model (2026-07-04) the
-//                                gates FLAG, they never block, so the catch is
-//                                already committed by the time we record that
-//                                it looked suspicious.
+//    catch_suspected             combined shadow signal for an affected row.
+//                                Fires AFTER catch_performed and has no UI or
+//                                upload effect.
 //           ↓
 //    catch_pipeline_timing       end of the synchronous tap work.
 //           ↓  (the reveal is presented; a guess round may run here —
 //              guess_round_shown / _answered / _skipped)
-//    catch_suspect_kept |        the user's Keep/Discard answer, asked after
-//    catch_suspect_discarded     the reveal and only for a suspected row.
-//           ↓
 //    catch_uploaded              the backend accepted the catch. `duplicate`
 //                                here is the SERVER's verdict, and is the flag
 //                                that makes a row count as a valid catch.
 //
 //  Two traps worth stating explicitly, because both are easy to get backwards:
 //   - `catch_uncertain_aim`, `catch_blocked_outdoors` and `catch_blocked_size`
-//     are NOT dead ends. They mark suspicion, and a suspected catch still
-//     reaches catch_uploaded once the user keeps it — production streams show
-//     catch_uncertain_aim followed by catch_uploaded on the same icao24 nine
-//     seconds later. The only true dead end is `grounded_catch_attempt` (a tap
+//     are NOT dead ends. They are silent shadow signals and the catch proceeds
+//     normally. The only true dead end is `grounded_catch_attempt` (a tap
 //     on a parked plane: no `Catch` row is ever created).
 //   - catch_performed > catch_uploaded is EXPECTED, not loss. Duplicates fire
-//     performed but never upload, and a discarded suspect never uploads either.
+//     performed but never upload.
 //
 
 import Foundation
@@ -93,15 +86,12 @@ nonisolated enum CatchTelemetry {
     static let performedEvent = "catch_performed"
     static let uploadedEvent = "catch_uploaded"
     static let deletedEvent = "catch_deleted"
-    // Gate-positive streams. Post-catch confirm model (2026-07-04): the gates
-    // no longer block the catch, so these record "the gate raised suspicion",
-    // not a user-facing wall. Names kept for dashboard continuity with the
-    // pre-2026-07-04 blocking era; the *_override events retired with it.
+    // Gate-positive shadow streams. Names remain for dashboard continuity
+    // with the pre-2026-07-04 blocking era; they do not describe current UI.
     static let blockedOutdoorsEvent = "catch_blocked_outdoors"
-    /// Ambient "Not many planes indoors." hint appearing / clearing. Added
-    /// 2026-08-27: the hint rides the same whole-frame verdict as the catch
-    /// gate but was invisible in analytics — the one surface users see most
-    /// couldn't be evaluated for false triggers.
+    /// Strong whole-frame label-suppression state entering / clearing. Event
+    /// names remain for historical dashboard continuity; there is no visible
+    /// indoor hint in current builds.
     static let indoorHintShownEvent = "indoor_hint_shown"
     static let indoorHintClearedEvent = "indoor_hint_cleared"
     static let blockedSizeEvent = "catch_blocked_size"
@@ -118,11 +108,9 @@ nonisolated enum CatchTelemetry {
     // signals — the calibration stream that decides when enforcement is safe
     // to flip (watch the in-envelope no-detection rate on real catches).
     static let detectorGateEvent = "catch_detector_gate"
-    // Post-catch confirm outcomes: a suspected catch records + reveals
-    // instantly, then gets one Keep/Discard question after the reveal.
-    // `catch_suspected` fires when a row is quarantined; kept/discarded record
-    // the answer — the EARNED confirm/deny signal for the north-star (a
-    // discard also fires `catch_deleted`, so the headline rate absorbs it).
+    // Combined authenticity shadow signal. The kept/discarded names are
+    // retained as historical analytics constants only; new builds do not emit
+    // them because the post-catch question is retired.
     static let suspectedEvent = "catch_suspected"
     static let suspectKeptEvent = "catch_suspect_kept"
     static let suspectDiscardedEvent = "catch_suspect_discarded"
@@ -174,6 +162,7 @@ nonisolated enum CatchTelemetry {
         multiN: Int = 1,
         angularSizeArcmin: Double? = nil,
         detectorVerdict: DetectorGateVerdict? = nil,
+        skyVerdict: SkyVerdict? = nil,
         basePoints: Int? = nil,
         registration: String? = nil,
         typecode: String? = nil,
@@ -208,6 +197,11 @@ nonisolated enum CatchTelemetry {
         // L4 detector soft-gate verdict for this target; omitted when the
         // gate didn't run (multi-catch, no photo) so absent means "not judged".
         if let v = detectorVerdict { props["detector_verdict"] = .string(v.rawValue) }
+        // Whole-frame sky verdict at the exact catch moment. Unlike the
+        // one-per-tap gate stream, this makes repeated strong indoor catches
+        // directly queryable per caught row. Ambiguous results remain visible
+        // in aggregate; only `notSky` enters the strict review queue.
+        if let v = skyVerdict { props["sky_verdict"] = .string(v.rawValue) }
         // The tier's base value at catch time — the pre-bonus floor of what
         // this catch is worth (server-authoritative total on catch_uploaded).
         if let basePoints { props["base_points"] = .int(basePoints) }
@@ -403,15 +397,11 @@ nonisolated enum CatchTelemetry {
         return props
     }
 
-    /// Where a `catch_deleted` came from. The event fires from two paths that
-    /// mean OPPOSITE things for the catch-confirmation-rate north-star, and
-    /// until now they were indistinguishable in the data: 131 deletes over
-    /// 90 days, of which only 43 were suspect discards — so two thirds of the
-    /// "deny signal" was actually routine tidying.
+    /// Where a `catch_deleted` came from. `suspectDiscard` is retained for
+    /// historical analytics compatibility; current builds only emit explicit
+    /// Hangar deletes.
     enum DeleteSource: String {
-        /// The user answered Discard to the post-catch Keep/Discard question.
-        /// A real "I don't believe this catch" signal; always count 1, and
-        /// always paired with a `catch_suspect_discarded`.
+        /// Historical post-catch review discard; no longer emitted.
         case suspectDiscard = "suspect_discard"
         /// The user deleted a row from the Hangar. Housekeeping, not a verdict
         /// on trustworthiness — may group N catches (`count`).
@@ -514,7 +504,8 @@ nonisolated enum CatchTelemetry {
         multiN: Int = 1,
         angularSizeArcmin: Double? = nil,
         detectorVerdict: DetectorGateVerdict? = nil,
-        catchMode: CatchMode? = nil
+        catchMode: CatchMode? = nil,
+        skyVerdict: SkyVerdict? = nil
     ) {
         Analytics.capture(performedEvent, performedProperties(
             icao24: row.icao24,
@@ -526,6 +517,7 @@ nonisolated enum CatchTelemetry {
             multiN: multiN,
             angularSizeArcmin: angularSizeArcmin,
             detectorVerdict: detectorVerdict,
+            skyVerdict: skyVerdict,
             basePoints: row.resolvedRarity.basePoints,
             registration: row.registration,
             typecode: row.typecode,
@@ -637,8 +629,8 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    /// Fired when the indoor gate suspects a catch (verdict `.notSky`).
-    /// Post-catch confirm: raises suspicion, never blocks.
+    /// Fired when the whole-frame check reads `.notSky` at catch time. This is
+    /// a shadow integrity signal and never blocks or prompts.
     static func fireBlockedOutdoors(
         verdict: SkyVerdict, features: SkyFeatures?, gpsAccuracyMeters: Double?
     ) {
@@ -647,7 +639,7 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    /// Fired when the ambient indoor hint appears (whole-frame verdict has
+    /// Fired when ambient labels become suppressed (whole-frame verdict has
     /// read `.notSky` for the sustained streak). Same payload shape as
     /// `catch_blocked_outdoors` so both surfaces analyze identically in
     /// HogQL (warmth/luminance banding, the night-false-positive audit).
@@ -657,9 +649,9 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    /// Fired when the ambient indoor hint clears — how long it was up. A
-    /// burst of short show/clear pairs is the flapping signature; a long
-    /// show over an active catching session is a label blackout.
+    /// Fired when ambient label suppression clears — how long it lasted. A
+    /// burst of short enter/clear pairs is the flapping signature; a long
+    /// interval over an active catching session is a label blackout.
     static func fireIndoorHintCleared(shownSeconds: Int) {
         Analytics.capture(indoorHintClearedEvent, [
             "shown_seconds": .int(shownSeconds),
@@ -783,9 +775,9 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    // MARK: - Post-catch confirm (suspected → kept / discarded)
+    // MARK: - Combined authenticity shadow signal
 
-    /// Properties for the post-catch confirm events: the reason plus the
+    /// Properties for the shadow event: the reason plus the
     /// target's size/distance context when the size floor supplied it.
     static func suspectProperties(
         icao24: String, reason: CatchSuspicion,
@@ -800,8 +792,8 @@ nonisolated enum CatchTelemetry {
         return props
     }
 
-    /// Fired when a catch is quarantined as suspected (once per suspected row,
-    /// at catch time — alongside the gate-positive stream that raised it).
+    /// Combined shadow signal, once per affected row at catch time. It does
+    /// not persist a flag, alter upload, or prompt the user.
     static func fireSuspected(
         icao24: String, reason: CatchSuspicion,
         arcmin: Double? = nil, slantKm: Double? = nil
@@ -811,20 +803,10 @@ nonisolated enum CatchTelemetry {
         ))
     }
 
-    /// The user vouched for a suspected catch — it un-quarantines and uploads.
-    static func fireSuspectKept(icao24: String, reason: CatchSuspicion) {
-        Analytics.capture(suspectKeptEvent, suspectProperties(icao24: icao24, reason: reason))
-    }
-
-    /// The user agreed the catch wasn't real — the row is deleted. The caller
-    /// also fires `catch_deleted` so the north-star headline absorbs it.
-    static func fireSuspectDiscarded(icao24: String, reason: CatchSuspicion) {
-        Analytics.capture(suspectDiscardedEvent, suspectProperties(icao24: icao24, reason: reason))
-    }
 }
 
-/// Why the authenticity gates doubted a catch. Raw values are the persisted
-/// `Catch.suspectReason` strings and the telemetry `reason` property.
+/// Why the authenticity gates produced a shadow signal. Raw values remain
+/// compatible with legacy `Catch.suspectReason` rows and PostHog history.
 nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
     case occluded            // L2: the patch under the bracket reads building/tree
     case noDetection = "no_detection"  // L4: camera should have seen it, didn't
@@ -833,7 +815,7 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
     case indoor              // whole-frame SkyCheck: not pointed at open sky
 
     /// Precedence when several gates fire on one target — the most specific,
-    /// most actionable reason wins the review copy
+    /// most actionable reason wins the combined shadow event
     /// (occluded > noDetection > tooFar > uncertainAim > indoor).
     static func preferred(_ current: CatchSuspicion?, _ new: CatchSuspicion) -> CatchSuspicion {
         guard let current else { return new }
@@ -848,32 +830,5 @@ nonisolated enum CatchSuspicion: String, Sendable, CaseIterable {
         case .uncertainAim: return 2
         case .indoor: return 1
         }
-    }
-
-    /// The post-reveal review question for a single suspected catch. Keeps the
-    /// playful product tone — a doubt, not an accusation.
-    func question(slantKm: Double?) -> String {
-        switch self {
-        case .occluded:
-            return "Looks like something was between you and that one — did you really see it?"
-        case .noDetection:
-            return "The camera couldn't spot that one — did you really see it?"
-        case .tooFar:
-            if let km = slantKm, km.isFinite, km > 0 {
-                return "That one was \(Int(km.rounded())) km out — could you really see it?"
-            }
-            return "That one was a long way out — could you really see it?"
-        case .uncertainAim:
-            return "Your compass was off and that one wasn't dead-center — is it the plane you meant?"
-        case .indoor:
-            return "Looks like you were indoors — did you really see it?"
-        }
-    }
-
-    /// The review question when several rows are suspected in one
-    /// multi-catch — same tone, plural. Lives here with its five siblings
-    /// (it used to be inline in ContentView, the one stray).
-    static func multiQuestion(count: Int) -> String {
-        "\(count) of those were hidden or very far — did you really see them?"
     }
 }

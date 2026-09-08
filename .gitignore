@@ -104,6 +104,8 @@ tools/replay-harness/recordings/
 # Deploy-loop artifacts and per-user overrides
 /build/
 tools/deploy/config.local.sh
+# Xcode Cloud CLI: the App Store Connect API key config lives here, never committed.
+tools/xcode-cloud/config.local.sh
 
 # OpenSky OAuth credentials baked into the build via xcconfig
 # substitution. The real secrets file lives next to the project at

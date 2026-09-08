@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../src/providers/types.js";
-import { DEFAULT_TILE_CONFIG, TileCache } from "../src/routes/tileCache.js";
+import { DEFAULT_TILE_CONFIG, MAX_TILE_ENTRIES, TileCache } from "../src/routes/tileCache.js";
 
 /**
  * Regression tests for the tile-fetch/cache-key agreement.
@@ -77,5 +77,63 @@ describe("TileCache tile-fetch agreement", () => {
     await cache.get({ lamin: 89.9, lomin: 179.9, lamax: 90, lomax: 180 });
     expect(calls[0].lamax).toBe(90);
     expect(calls[0].lomax).toBe(180);
+  });
+});
+
+/**
+ * Memory bounds (hardening, 2026-09-06). The tile key comes from a
+ * client-supplied bbox, so the number of distinct entries is chosen by the
+ * caller — ~1.04M tiles at the default 0.25° grid, each holding a whole
+ * snapshot, on a 256 MB VM. Both bounds are applied on insert, and both are
+ * driven here with the injected clock.
+ */
+describe("TileCache memory bounds", () => {
+  /** Spread-out bboxes, one distinct tile each. */
+  function bboxAt(i: number): Bbox {
+    const lat = -80 + (i % 150);
+    const lon = -170 + Math.floor(i / 150);
+    return { lamin: lat, lomin: lon, lamax: lat + 0.1, lomax: lon + 0.1 };
+  }
+
+  it("drops entries past staleMaxSeconds, which can never be served again", async () => {
+    const { provider } = recordingProvider();
+    let ms = 0;
+    const cache = new TileCache(provider, { ttlSeconds: 10, staleMaxSeconds: 60 }, () => ms);
+
+    await cache.get(bboxAt(0));
+    await cache.get(bboxAt(1));
+    expect(cache.size).toBe(2);
+
+    // Past STALE_MAX an entry is un-servable — too old for a fresh hit (TTL)
+    // AND too old for the last-good fallback — so keeping it is pure leak.
+    ms = 120_000;
+    await cache.get(bboxAt(2));
+    expect(cache.size).toBe(1);
+  });
+
+  it("keeps an entry that is stale-but-still-servable", async () => {
+    const { provider } = recordingProvider();
+    let ms = 0;
+    const cache = new TileCache(provider, { ttlSeconds: 10, staleMaxSeconds: 60 }, () => ms);
+
+    await cache.get(bboxAt(0));
+    ms = 30_000; // past the TTL, but INSIDE the last-good window
+    await cache.get(bboxAt(1));
+    expect(cache.size).toBe(2); // entry 0 is still a legal upstream-failure fallback
+  });
+
+  it("caps the map at MAX_TILE_ENTRIES under a bbox walk", async () => {
+    const { provider } = recordingProvider();
+    // Clock frozen: nothing ages out, so ONLY the hard cap can bound this.
+    const cache = new TileCache(provider, { ttlSeconds: 10, staleMaxSeconds: 60 }, () => 0);
+
+    for (let i = 0; i < MAX_TILE_ENTRIES + 50; i++) await cache.get(bboxAt(i));
+
+    expect(cache.size).toBe(MAX_TILE_ENTRIES);
+    // Eviction is least-recently-written first: the newest tile is still cached
+    // (a fresh hit, no refetch) while the oldest ones are gone.
+    const hit = await cache.get(bboxAt(MAX_TILE_ENTRIES + 49));
+    expect(hit.stale).toBe(false);
+    expect(cache.size).toBe(MAX_TILE_ENTRIES);
   });
 });

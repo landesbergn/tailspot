@@ -18,7 +18,8 @@
  * pre-claimed one) and assert the filtering; the store is the IdentityStore seam.
  */
 
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
+import { ipKey } from "../identity/clientIp.js";
 import { generateHandleCandidates } from "../identity/handleSuggester.js";
 import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { IdentityStore } from "../identity/store.js";
@@ -36,11 +37,6 @@ const MAX_COUNT = 10;
 /** Filtering rounds before we return whatever we have (guards a saturated DB). */
 const MAX_ROUNDS = 4;
 
-/** Client IP for rate limiting. Fastify's `request.ip` honors trustProxy config. */
-function clientIp(request: FastifyRequest): string {
-  return request.ip;
-}
-
 /** Parse + clamp the count query param to [1, MAX_COUNT], defaulting on garbage. */
 function parseCount(raw: unknown): number {
   const n = typeof raw === "string" ? Number.parseInt(raw, 10) : Number.NaN;
@@ -53,7 +49,7 @@ export function registerHandlesRoute(app: FastifyInstance, opts: HandlesRouteOpt
   const generate = opts.generateCandidates ?? ((n: number) => generateHandleCandidates(n));
 
   app.get("/v1/handles/suggestions", async (request, reply) => {
-    const rl = suggestLimiter.take(`ip:${clientIp(request)}`);
+    const rl = suggestLimiter.take(ipKey(request));
     if (!rl.allowed) {
       reply.header("Retry-After", String(rl.retryAfterSeconds));
       return reply.code(429).send({ error: "rate limited" });

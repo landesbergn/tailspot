@@ -26,6 +26,19 @@ import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/type
  * tile as long as it's younger than STALE_MAX — carrying its *true* fetchedAt
  * so the client can see how old it is. Only when there's no acceptably-fresh
  * cache do we surface the failure (the route maps that to 503).
+ *
+ * WHY THE CACHE IS BOUNDED (hardening, 2026-09-06): the tile key is derived from
+ * a CLIENT-SUPPLIED bbox, so the number of distinct keys is chosen by whoever is
+ * calling. At 0.25° there are ~1.04M tiles covering the planet, each holding a
+ * whole aircraft snapshot — walking them all would exhaust the 256 MB VM long
+ * before it finished. Two rules keep the map small, both applied on insert (the
+ * only moment it can grow):
+ *   1. Drop entries older than `staleMaxSeconds`. Such an entry can NEVER be
+ *      served — it's past the fresh TTL and past the last-good window — so it is
+ *      pure garbage; the fallback path already rejects it on age.
+ *   2. Hard cap at MAX_TILE_ENTRIES, evicting least-recently-written first.
+ * Real traffic doesn't notice: a busy metro is a handful of tiles, and rule 1
+ * usually empties the map on its own between bursts.
  */
 
 export interface TileCacheConfig {
@@ -42,6 +55,14 @@ export const DEFAULT_TILE_CONFIG: TileCacheConfig = {
   ttlSeconds: 10,
   staleMaxSeconds: 60,
 };
+
+/**
+ * Ceiling on cached tiles. 500 × one metro-sized snapshot (a few hundred KB at
+ * the very worst) is single-digit MB — safe on the 256 MB VM — while being far
+ * more than the handful of tiles any real population of users occupies. It is a
+ * backstop for a deliberate bbox walk, not a tuning knob for normal traffic.
+ */
+export const MAX_TILE_ENTRIES = 500;
 
 interface CacheEntry {
   snapshot: ProviderSnapshot;
@@ -163,7 +184,7 @@ export class TileCache {
     const fetchPromise = this.provider
       .aircraftInBbox(this.tileBbox(bbox))
       .then((snapshot) => {
-        this.entries.set(key, { snapshot, storedAt: Math.floor(this.now() / 1000) });
+        this.store(key, snapshot);
         // Opportunistic registry enrichment — best-effort, never breaks the fetch.
         try {
           this.onFreshSnapshot?.(snapshot);
@@ -182,6 +203,41 @@ export class TileCache {
       return { snapshot, stale: false };
     } catch (err) {
       return this.fallbackOrThrow(key, nowSec, err);
+    }
+  }
+
+  /** How many tiles are currently cached. Exposed for tests + future metrics. */
+  get size(): number {
+    return this.entries.size;
+  }
+
+  /**
+   * Store a fresh snapshot and enforce the two bounds (see the header comment).
+   *
+   * The delete-then-set is deliberate: `Map.set` on an existing key keeps its
+   * ORIGINAL insertion position, so without the delete the iteration order would
+   * drift away from write recency and the oldest-first eviction would start
+   * throwing out hot tiles. With it, iteration order is exactly
+   * least-recently-written first, which is what both bounds want.
+   */
+  private store(key: string, snapshot: ProviderSnapshot): void {
+    const nowSec = Math.floor(this.now() / 1000);
+    this.entries.delete(key);
+    this.entries.set(key, { snapshot, storedAt: nowSec });
+
+    // 1. Un-servable by age. Full scan rather than "stop at the first young
+    // entry": it costs nothing at this size, and it stays correct even if the
+    // injected clock ever moves backwards (tests do that).
+    for (const [k, entry] of this.entries) {
+      if (nowSec - entry.storedAt >= this.config.staleMaxSeconds) this.entries.delete(k);
+    }
+
+    // 2. Hard cap, least-recently-written first.
+    if (this.entries.size > MAX_TILE_ENTRIES) {
+      for (const k of this.entries.keys()) {
+        if (this.entries.size <= MAX_TILE_ENTRIES) break;
+        this.entries.delete(k);
+      }
     }
   }
 
