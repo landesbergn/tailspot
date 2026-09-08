@@ -350,3 +350,27 @@ DATABASE_URL=… npm run db:migrate
 DATABASE_URL=… npm run ingest:doc8643 -- <path-to-AircraftTypes.json>
 DATABASE_URL=… npm run ingest:faa -- <extracted-FAA-dir>
 ```
+
+## Alerting (phase 2 of the 2026-09-06 hardening — click-through checklist)
+
+Sentry (org `noah-lc`, project `broken-darkness-5055`) already has the `/readyz`
+uptime monitor and an issue rule for high-priority issues. The sustained-fallback
+alerter (`src/providers/fallbackAlert.ts`) reports through Sentry, so a dead
+adsb.lol primary surfaces as an issue after five minutes. What is **not** yet
+configured — and can only be set up in a browser, not from the CLI — are the
+traffic-shape alerts below. Fly exposes the metrics in its hosted Grafana
+(`fly dashboard metrics` opens it, or https://fly-metrics.net); create each as a
+Grafana alert rule on the `tailspot-api` app with a notification to email.
+
+| Signal | Metric (Fly Grafana) | Threshold | Why |
+|---|---|---|---|
+| 5xx ratio | `fly_app_http_responses_count{status=~"5.."}` / total | > 2 % for 5 min | A broken deploy or a dead DB shows up here before users report it. |
+| 429 volume | `fly_app_http_responses_count{status="429"}` | > 30/min for 10 min | Either abuse hitting the limiters or a shipped client in a retry storm — both need eyes. |
+| API memory | `fly_instance_memory_mem_available{app="tailspot-api"}` | < 40 MB for 5 min | The VM is 256 MB; the limiter and tile-cache maps are bounded now, but this is the tripwire if anything else grows. |
+| DB memory | `fly_instance_memory_mem_available{app="tailspot-db"}` | < 40 MB for 5 min | The DB OOM'd once (2026-07-11). |
+| Request rate | `sum(rate(fly_app_http_responses_count[5m]))` | > 3× the trailing-7-day same-hour median for 15 min | Volumetric abuse or a runaway client. Start with a fixed threshold (e.g. > 50 req/s) if the relative rule is awkward in Grafana. |
+
+Keep the in-code signals as they are: `/readyz` for liveness+DB, Sentry issues
+for exceptions, the fallback alerter for the upstream feed. Do not add a
+challenge-based CDN in front of the API: the iOS client's `URLSession` cannot
+solve one, and Fly's edge already absorbs L3/L4 floods (see PLAN §9, 2026-09-06).
