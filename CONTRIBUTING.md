@@ -99,10 +99,14 @@ cycle. It is also the only place the app runs on hardware that isn't Noah's
 iPhone 16, which matters — every device-compatibility assumption in this
 codebase has exactly one data point behind it.
 
-To cut a build: App Store Connect → Xcode Cloud → the workflow → **Start
-Build** on `main` (or Xcode: **Integrate → Start Build**). One build → external
-TestFlight, bundling everything merged since the last build, so testers get one
-notification per release rather than one per merge.
+To cut a build: `bin/xcode-cloud-build` from the terminal (`--watch` polls it
+to completion, `--list` shows workflows and recent runs). It needs an App Store
+Connect API key with the **App Manager** role in the gitignored
+`tools/xcode-cloud/config.local.sh` — see `tools/xcode-cloud/config.sh` for the
+three values. The manual routes still work: App Store Connect → Xcode Cloud →
+the workflow → **Start Build** on `main`, or Xcode: **Integrate → Start Build**.
+One build → external TestFlight, bundling everything merged since the last
+build, so testers get one notification per release rather than one per merge.
 
 **Soak before promoting to Ring 3:**
 
