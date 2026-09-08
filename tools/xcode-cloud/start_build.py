@@ -212,6 +212,9 @@ def watch_run(client: Client, run_id: str) -> None:
 
 
 def main() -> None:
+    # Line-buffer stdout even when piped or backgrounded, so --watch streams
+    # each state change as it happens instead of at exit.
+    sys.stdout.reconfigure(line_buffering=True)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--branch", default=os.environ.get("XCODE_CLOUD_DEFAULT_BRANCH", "main"))
     ap.add_argument("--workflow", help="workflow name (needed only if the product has several enabled)")
