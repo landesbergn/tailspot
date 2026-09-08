@@ -123,6 +123,13 @@ Covers everything on `main` after **db3d274**, the last commit in the shipped
 1.1.0 build 89. A polish-and-accessibility release with one feature (monthly
 champions). Backend for that feature is already deployed and migrated in prod.
 
+Builds: **90** (2026-09-01, 64182b3) soaked a week with 11 testers and no
+crashes, then an iPhone SE tester found the reveal CTA unreachable (#254).
+**91** (2026-09-07, 099ceae) carried that fix plus the retired authenticity
+prompts (#252), the Profile leaderboard consolidation (#244) and more sets.
+**92** (2026-09-08, 785453b) is 91 plus a build-warning fix (#259) — the
+submission candidate.
+
 App Store "What's New" (paste into ASC):
 
 > Monthly champions are here. Catch the most planes in a calendar month and
@@ -130,22 +137,24 @@ App Store "What's New" (paste into ASC):
 > profile to match.
 >
 > Also in this release:
-> • New sets to fill, including the Bell 505 and a batch of recent aircraft
->   families.
+> • No more "did you really catch this?" prompts. Catch, reveal, done.
+> • On iPhone SE and other small screens the catch reveal now scrolls, so
+>   the button to continue is always reachable.
+> • New sets to fill: the Bell 505, sailplanes, the Piaggio Avanti, the
+>   Aerostar and Navajo, and a few more helicopters.
+> • Your leaderboard record now lives in one place at the top of your profile.
 > • The catalog of aircraft you haven't caught yet is readable again.
 > • Large text sizes now fit properly. The map's rarity filters and the
 >   profile stats row no longer clip or overflow.
 > • Warnings at the top of the camera no longer stack on top of each other.
 > • "1 catch" instead of "1 catches."
 
-TestFlight "What to Test" (tester-notes voice):
+TestFlight "What to Test" (tester-notes voice, build 91/92):
 
+> • small phones can finally get past the reveal. sorry, SE folks
+> • i stopped asking whether you really caught it. you did
 > • catch more planes than anyone this month and I'll hang your name in
 >   laurels. the month tab on the leaderboard is where to look
-> • crank your text size to the maximum and go hunting for something clipped.
->   i dare you
-> • the top of the camera used to pile its warnings on top of each other.
->   it doesn't anymore
 
 ## What's New — v1.1.0 — ✅ SHIPPED 2026-08-29 (build 89)
 
