@@ -86,6 +86,46 @@ enum RP {
     static let flapUnsettled = Color(hex: 0x6B7886)
 }
 
+/// Shared frame treatment for the live reveal, saved catch, and share render.
+/// Rarity lives on the frames; the card's information uses neutral ink.
+struct CatchRarityBorder: View {
+    let rarity: Rarity
+    let cornerRadius: CGFloat
+    var emphasis: Double = 0.65
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .strokeBorder(RP.rule, lineWidth: 1)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(rarity.tint.opacity(emphasis), lineWidth: 1)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+struct CatchRarityFrame: ViewModifier {
+    let rarity: Rarity
+    let scale: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RP.bg.overlay(alignment: .top) {
+                    LinearGradient(colors: [rarity.tint.opacity(0.09), .clear],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 90 * scale)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.hero))
+            .overlay {
+                CatchRarityBorder(rarity: rarity, cornerRadius: Brand.Radius.hero)
+            }
+            .shadow(color: rarity.tint.opacity(0.08), radius: 8 * scale)
+    }
+}
+
 // MARK: - Split-flap row
 
 struct FlapRow: View {
@@ -408,7 +448,7 @@ func splitUnit(_ s: String?) -> (value: String, unit: String?) {
     return (s, nil)
 }
 
-/// A labelled stat — big monospaced value with a smaller tinted unit suffix.
+/// A labelled stat — big monospaced value with a smaller neutral unit suffix.
 func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) -> some View {
     let parts = splitUnit(raw)
     return VStack(alignment: .leading, spacing: 3 * scale) {
@@ -422,7 +462,7 @@ func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) ->
             if let unit = parts.unit {
                 Text(unit)
                     .font(.system(size: 12 * scale, weight: .medium, design: .monospaced))
-                    .foregroundColor(accent)
+                    .foregroundStyle(RP.muted)
             }
         }
         .lineLimit(1).minimumScaleFactor(0.6)
@@ -446,7 +486,7 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
         if parts.isEmpty {
             Text(rarity.label.uppercased())
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                .tracking(3).foregroundColor(rarity.tint)
+                .tracking(3).foregroundStyle(RP.ink)
         } else {
             Text(parts.joined(separator: " · "))
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
@@ -456,7 +496,7 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
         if isDuplicate {
             Text("· ALREADY CAUGHT")
                 .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
-                .tracking(1).foregroundColor(Brand.Color.duplicateRose)
+                .tracking(1).foregroundStyle(RP.muted)
                 .lineLimit(1).fixedSize(horizontal: true, vertical: false)
         }
     }
@@ -1171,8 +1211,8 @@ struct CatchRevealView: View {
                                              focus: livePlane.photoFocus,
                                              enabled: settled))
                     .overlay(
-                        RoundedRectangle(cornerRadius: Brand.Radius.card)
-                            .stroke(accent.opacity(livePlane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
+                        CatchRarityBorder(rarity: livePlane.rarity,
+                                          cornerRadius: Brand.Radius.card, emphasis: 0.55)
                     )
                     // Tap-to-zoom: the settled hero opens the full-res viewer
                     // instead of falling through to the dismiss catcher. The
@@ -1219,7 +1259,7 @@ struct CatchRevealView: View {
                         } else {
                             ledgerRow(livePlane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
                             if firstOfTypeBonus > 0 {
-                                ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
+                                ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.muted, ss(0.82, 0.9, t), scale: scale)
                             }
                             // Route-guess bonus. In the live in-card round it
                             // appears ONLY on a correct call and fades in with
@@ -1228,14 +1268,14 @@ struct CatchRevealView: View {
                             // BONUS" (Noah 2026-07-09; 25% since 2026-08-12).
                             if let render {
                                 if render.resolution?.correct == true, routeBonus > 0 {
-                                    ledgerRow("25% ROUTE BONUS", "+\(routeBonus)", RP.gold, ss(0.0, 0.4, bt), scale: scale)
+                                    ledgerRow("25% ROUTE BONUS", "+\(routeBonus)", RP.muted, ss(0.0, 0.4, bt), scale: scale)
                                 }
                             } else if frozenGuessBonus > 0 {
-                                ledgerRow("25% ROUTE BONUS", "+\(frozenGuessBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
+                                ledgerRow("25% ROUTE BONUS", "+\(frozenGuessBonus)", RP.muted, ss(0.83, 0.91, t), scale: scale)
                             }
                         }
                         Rectangle().fill(RP.rule).frame(height: 1)
-                        ledgerRow("TOTAL", "+\(total)", accent, ss(0.84, 0.92, t), scale: scale, big: true)
+                        ledgerRow("TOTAL", "+\(total)", RP.ink, ss(0.84, 0.92, t), scale: scale, big: true)
                     }
 
                     // Entry stamp — streak left, entry number right — hidden
@@ -1258,15 +1298,13 @@ struct CatchRevealView: View {
                 .padding(.horizontal, hPad)
                 .padding(.bottom, 22 * scale)
             }
-            .background(RP.bg)
             .frame(width: width)
-            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.hero))
-            .overlay(RoundedRectangle(cornerRadius: Brand.Radius.hero).stroke(RP.rule, lineWidth: 1))
+            .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))
         }
     }
 
     // ALT / SPD as a two-column top row, then (when there's route data) a
-    // rule and a full-width ROUTE row: big ICAO codes with a tinted arrow and
+    // rule and a full-width ROUTE row: big ICAO codes with a neutral arrow and
     // the human-readable city names underneath. No route → DIST joins row one.
     //
     // With a bonus round in play, the route slot renders MASKED (the question
@@ -1346,11 +1384,11 @@ struct CatchRevealView: View {
                 if let o = livePlane.originIcao {
                     Text(o).font(codeFont).foregroundColor(RP.ink)
                     if let d = livePlane.destIcao {
-                        Text("→").font(arrowFont).foregroundColor(accent)
+                        Text("→").font(arrowFont).foregroundStyle(RP.muted)
                         Text(d).font(codeFont).foregroundColor(RP.ink)
                     }
                 } else if let d = livePlane.destIcao {
-                    Text("→").font(arrowFont).foregroundColor(accent)
+                    Text("→").font(arrowFont).foregroundStyle(RP.muted)
                     Text(d).font(codeFont).foregroundColor(RP.ink)
                 }
             }
