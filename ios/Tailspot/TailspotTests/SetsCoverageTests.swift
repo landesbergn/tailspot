@@ -156,6 +156,9 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-07.
         ("A119", "Agusta", "A-119 Koala"),
         ("MX2", "Mx Aircraft", "MX-2"),
+        // Public catalog coverage additions validated 2026-09-11.
+        ("C162", "Cessna", "162 Skycatcher"),
+        ("UH1", "Bell", "204"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -201,6 +204,8 @@ struct SetsCoverageTests {
             (("P180", "Piaggio", "P-180 Avanti"), "fam-avanti", "fav-p180"),
             (("A119", "Agusta", "A-119 Koala"), "fam-heli", "fh-a119"),
             (("MX2", "Mx Aircraft", "MX-2"), "fam-sport-classics", "fsc-mx2"),
+            (("C162", "Cessna", "162 Skycatcher"), "fam-cessna", "fc162"),
+            (("UH1", "Bell", "204"), "fam-military", "fm-uh1"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -292,6 +297,18 @@ struct SetsCoverageTests {
         let festival = mk(("FEST", "Aerostar", "01 Festival"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: festival), entry: aerostarEntry),
                 "An unrelated Aerostar-branded type must not fill the PA-60 Aerostar slot")
+
+        // Exact public designators and narrow name tokens keep adjacent
+        // aircraft from being absorbed by the new Skycatcher and Huey slots.
+        let c162Entry = cessnaSet.entries.first { $0.id == "fc162" }!
+        let transall = mk(("C160", "Transall", "C-160"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: transall), entry: c162Entry),
+                "A Transall C-160 must not fill the Cessna 162 slot")
+        let hueyEntry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-uh1" }!
+        let venom = mk(("UH1Y", "Bell", "UH-1Y"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: venom), entry: hueyEntry),
+                "A Bell UH-1Y must not fill the legacy UH1 designator slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
