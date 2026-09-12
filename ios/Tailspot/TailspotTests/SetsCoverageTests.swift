@@ -156,6 +156,14 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-07.
         ("A119", "Agusta", "A-119 Koala"),
         ("MX2", "Mx Aircraft", "MX-2"),
+        // Public catalog coverage addition validated 2026-09-10.
+        ("C27J", "Alenia Aermacchi", "C-27J Spartan"),
+        // Public catalog coverage additions validated 2026-09-11.
+        ("C162", "Cessna", "162 Skycatcher"),
+        ("UH1", "Bell", "204"),
+        // Public catalog coverage additions validated 2026-09-12.
+        ("G150", "Gulfstream", "G150"),
+        ("GLST", "Glasair", "GlaStar"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -201,6 +209,11 @@ struct SetsCoverageTests {
             (("P180", "Piaggio", "P-180 Avanti"), "fam-avanti", "fav-p180"),
             (("A119", "Agusta", "A-119 Koala"), "fam-heli", "fh-a119"),
             (("MX2", "Mx Aircraft", "MX-2"), "fam-sport-classics", "fsc-mx2"),
+            (("C27J", "Alenia Aermacchi", "C-27J Spartan"), "fam-military", "fm-c27j"),
+            (("C162", "Cessna", "162 Skycatcher"), "fam-cessna", "fc162"),
+            (("UH1", "Bell", "204"), "fam-military", "fm-uh1"),
+            (("G150", "Gulfstream", "G150"), "fam-gulfstream", "fg-150"),
+            (("GLST", "Glasair", "GlaStar"), "fam-sport-classics", "fsc-glastar"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -281,6 +294,13 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: c406Key, entry: b206Entry),
                 "A Cessna 406 must not fill the Bell 206 slot")
 
+        // GlaStar is a distinct ICAO type from the similarly named Glasair.
+        let glasair = mk(("GLAS", "Glasair", "Glasair"))
+        let glastarEntry = CardSets.families.first { $0.id == "fam-sport-classics" }!
+            .entries.first { $0.id == "fsc-glastar" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: glasair), entry: glastarEntry),
+                "A GLAS Glasair must not fill the GLST GlaStar slot")
+
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
         let piperSet = CardSets.families.first { $0.id == "fam-piper" }!
@@ -292,6 +312,18 @@ struct SetsCoverageTests {
         let festival = mk(("FEST", "Aerostar", "01 Festival"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: festival), entry: aerostarEntry),
                 "An unrelated Aerostar-branded type must not fill the PA-60 Aerostar slot")
+
+        // Exact public designators and narrow name tokens keep adjacent
+        // aircraft from being absorbed by the new Skycatcher and Huey slots.
+        let c162Entry = cessnaSet.entries.first { $0.id == "fc162" }!
+        let transall = mk(("C160", "Transall", "C-160"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: transall), entry: c162Entry),
+                "A Transall C-160 must not fill the Cessna 162 slot")
+        let hueyEntry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-uh1" }!
+        let venom = mk(("UH1Y", "Bell", "UH-1Y"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: venom), entry: hueyEntry),
+                "A Bell UH-1Y must not fill the legacy UH1 designator slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
