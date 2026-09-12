@@ -22,8 +22,12 @@
 //  hand (`access` / `withMutation`) instead of as plain stored properties so
 //  each write also lands in `UserDefaults`.
 //
-//  New-install defaults: feet, knots, kilometers — exactly what every card
-//  showed before the preference existed.
+//  First-launch defaults are LOCALIZED (Noah's call, 2026-09-12): they follow
+//  the phone's measurement system (iOS Settings → General → Language & Region
+//  → Measurement System, surfaced as `Locale.measurementSystem`). Metric →
+//  m / km/h / km; US and UK → ft / mph / mi. `DisplayUnits.localized(for:)`
+//  is the one place that mapping lives. A stored choice always wins; the
+//  locale is only consulted for a key that's missing or unreadable.
 //
 
 import Foundation
@@ -34,7 +38,6 @@ nonisolated enum AltitudeUnit: String, CaseIterable, Identifiable, Sendable {
     case feet, meters
 
     static let storageKey = "tailspot.units.altitude"
-    static let `default`: AltitudeUnit = .feet
 
     var id: String { rawValue }
 
@@ -70,7 +73,6 @@ nonisolated enum SpeedUnit: String, CaseIterable, Identifiable, Sendable {
     case knots, mph, kph
 
     static let storageKey = "tailspot.units.speed"
-    static let `default`: SpeedUnit = .knots
 
     var id: String { rawValue }
 
@@ -108,7 +110,6 @@ nonisolated enum DistanceUnit: String, CaseIterable, Identifiable, Sendable {
     case kilometers, miles
 
     static let storageKey = "tailspot.units.distance"
-    static let `default`: DistanceUnit = .kilometers
 
     var id: String { rawValue }
 
@@ -152,8 +153,18 @@ nonisolated struct DisplayUnits: Equatable, Sendable {
     var speed: SpeedUnit
     var distance: DistanceUnit
 
-    /// Feet, knots, kilometers — the new-install defaults.
-    static let `default` = DisplayUnits(altitude: .default, speed: .default, distance: .default)
+    /// The first-launch choice for a locale. Metric regions get metric
+    /// everywhere; the US and UK (miles on the road, mph on the signs) get
+    /// feet / mph / miles. Knots — the cards' historical unit — is never a
+    /// default: a casual spotter reads mph or km/h, and pilots can switch.
+    static func localized(for locale: Locale) -> DisplayUnits {
+        switch locale.measurementSystem {
+        case .metric:
+            DisplayUnits(altitude: .meters, speed: .kph, distance: .kilometers)
+        default:   // .us, .uk, and anything Foundation adds later
+            DisplayUnits(altitude: .feet, speed: .mph, distance: .miles)
+        }
+    }
 }
 
 /// The live preference. Views read `UnitPreferences.shared` (tracked by
@@ -168,14 +179,17 @@ final class UnitPreferences {
     @ObservationIgnored private var speedStorage: SpeedUnit
     @ObservationIgnored private var distanceStorage: DistanceUnit
 
-    init(defaults: UserDefaults = .standard) {
+    /// `locale` only matters for keys that aren't stored yet (first launch,
+    /// or a value a future build can't read); a saved choice always wins.
+    init(defaults: UserDefaults = .standard, locale: Locale = .current) {
         self.defaults = defaults
+        let fallback = DisplayUnits.localized(for: locale)
         altitudeStorage = defaults.string(forKey: AltitudeUnit.storageKey)
-            .flatMap(AltitudeUnit.init(rawValue:)) ?? .default
+            .flatMap(AltitudeUnit.init(rawValue:)) ?? fallback.altitude
         speedStorage = defaults.string(forKey: SpeedUnit.storageKey)
-            .flatMap(SpeedUnit.init(rawValue:)) ?? .default
+            .flatMap(SpeedUnit.init(rawValue:)) ?? fallback.speed
         distanceStorage = defaults.string(forKey: DistanceUnit.storageKey)
-            .flatMap(DistanceUnit.init(rawValue:)) ?? .default
+            .flatMap(DistanceUnit.init(rawValue:)) ?? fallback.distance
     }
 
     var altitude: AltitudeUnit {

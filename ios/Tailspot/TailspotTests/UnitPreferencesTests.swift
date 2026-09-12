@@ -80,12 +80,35 @@ struct UnitPreferencesTests {
         return d
     }
 
-    @Test func defaultsToFeetKnotsAndKilometers() {
-        let prefs = UnitPreferences(defaults: freshDefaults())
+    // MARK: Localized first-launch defaults
+
+    @Test func localizedDefaultsFollowTheMeasurementSystem() {
+        let us = DisplayUnits(altitude: .feet, speed: .mph, distance: .miles)
+        let metric = DisplayUnits(altitude: .meters, speed: .kph, distance: .kilometers)
+        #expect(DisplayUnits.localized(for: Locale(identifier: "en_US")) == us)
+        // The UK is its own measurement system (miles + mph on the road).
+        #expect(DisplayUnits.localized(for: Locale(identifier: "en_GB")) == us)
+        #expect(DisplayUnits.localized(for: Locale(identifier: "fr_FR")) == metric)
+        #expect(DisplayUnits.localized(for: Locale(identifier: "id_ID")) == metric)   // Bali field tests
+        #expect(DisplayUnits.localized(for: Locale(identifier: "en_AU")) == metric)
+    }
+
+    @Test func firstLaunchUsesTheLocaleDefault() {
+        let us = UnitPreferences(defaults: freshDefaults(), locale: Locale(identifier: "en_US"))
+        #expect(us.units == DisplayUnits(altitude: .feet, speed: .mph, distance: .miles))
+        let de = UnitPreferences(defaults: freshDefaults(), locale: Locale(identifier: "de_DE"))
+        #expect(de.units == DisplayUnits(altitude: .meters, speed: .kph, distance: .kilometers))
+    }
+
+    @Test func aStoredChoiceBeatsTheLocale() {
+        let d = freshDefaults()
+        d.set("feet", forKey: AltitudeUnit.storageKey)
+        d.set("knots", forKey: SpeedUnit.storageKey)
+        // Distance deliberately unset → falls to the locale (metric here).
+        let prefs = UnitPreferences(defaults: d, locale: Locale(identifier: "de_DE"))
         #expect(prefs.altitude == .feet)
         #expect(prefs.speed == .knots)
         #expect(prefs.distance == .kilometers)
-        #expect(prefs.units == .default)
     }
 
     @Test func roundTripsThroughUserDefaults() {
@@ -109,10 +132,10 @@ struct UnitPreferencesTests {
         d.set("furlongs", forKey: AltitudeUnit.storageKey)
         d.set("warp", forKey: SpeedUnit.storageKey)
         d.set("leagues", forKey: DistanceUnit.storageKey)
-        let prefs = UnitPreferences(defaults: d)
+        let prefs = UnitPreferences(defaults: d, locale: Locale(identifier: "en_US"))
         #expect(prefs.altitude == .feet)
-        #expect(prefs.speed == .knots)
-        #expect(prefs.distance == .kilometers)
+        #expect(prefs.speed == .mph)
+        #expect(prefs.distance == .miles)
     }
 
     // MARK: Trophy copy

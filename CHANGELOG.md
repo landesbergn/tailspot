@@ -21,8 +21,14 @@ and four trophy summaries with units baked into the copy.
   raw value is the persisted form), each with `format(...)` from the SI
   value, and an `@Observable` `UnitPreferences.shared` backed by
   `UserDefaults` (`tailspot.units.altitude` / `.speed` / `.distance`).
-  **New-install defaults: feet, knots, kilometers** — what every card showed
-  before. Storage stays SI everywhere — `Aircraft`, `Catch`, the wire DTO,
+  **First-launch defaults are localized** (Noah's call, third round): they
+  follow the phone's measurement system (`Locale.measurementSystem`, i.e.
+  iOS Settings → Language & Region → Measurement System) via
+  `DisplayUnits.localized(for:)` — metric → m / km/h / km, US and UK → ft /
+  mph / mi. Knots is never a default. A stored choice always wins, so this
+  only affects a key that was never written — which means **existing users
+  who never opened Settings → UNITS also move** from the old ft / kt / km to
+  their locale's set on update. Storage stays SI everywhere — `Aircraft`, `Catch`, the wire DTO,
   replays, telemetry are untouched; only formatting changes.
 - **`CardPlane.altText(fromMeters:unit:)` / `speedText(fromMps:unit:)`** take
   the unit as a defaulted parameter that reads the shared preference. Because
