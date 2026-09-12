@@ -3473,7 +3473,10 @@ struct ContentView: View {
                 .frame(width: 76, alignment: .leading)
             Text(String(format: "%4.1fkm", dKm))
                 .frame(width: 60, alignment: .leading)
-            Text(String(format: "FL%03.0f", altKm * 32.8))
+            // Flight-level shorthand in feet mode; whole meters otherwise.
+            Text(UnitPreferences.shared.altitude == .feet
+                 ? String(format: "FL%03.0f", altKm * 32.8)
+                 : String(format: "%5.0fm", obs.aircraft.altitudeMeters))
                 .foregroundStyle(Brand.Color.textPrimary.opacity(0.7))
         }
         .font(Brand.Font.mono(size: 11))

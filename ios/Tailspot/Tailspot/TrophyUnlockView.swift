@@ -114,7 +114,7 @@ struct TrophyUnlockView: View {
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.7)
 
-            Text(event.achievement.summary)
+            Text(event.achievement.displaySummary)
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -128,7 +128,7 @@ struct TrophyUnlockView: View {
         .onTapGesture { center.advance() }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isModal)
-        .accessibilityLabel("\(event.achievement.title) unlocked. \(event.achievement.summary)")
+        .accessibilityLabel("\(event.achievement.title) unlocked. \(event.achievement.displaySummary)")
         .accessibilityAction(named: "Dismiss") { center.advance() }
     }
 

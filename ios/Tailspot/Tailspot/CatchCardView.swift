@@ -446,15 +446,20 @@ struct CatchCardView: View {
 // MARK: - CardPlane builders
 
 extension CardPlane {
-    /// "500 ft" from meters MSL. Shared by the live catch reveal and
-    /// the stored-catch builder so the two can't drift apart.
-    static func altText(fromMeters m: Double?) -> String? {
-        m.map { "\(Int(($0 * 3.28084).rounded()).formatted(.number)) ft" }
+    /// "500 ft" (or "152 m") from meters MSL. Shared by the live catch reveal
+    /// and the stored-catch builder so the two can't drift apart. `unit`
+    /// defaults to the Settings → UNITS choice; reading it here inside a
+    /// SwiftUI body registers the view with Observation, so a change in
+    /// Settings re-formats every live card (see UnitPreferences.swift).
+    static func altText(fromMeters m: Double?,
+                        unit: AltitudeUnit = UnitPreferences.shared.altitude) -> String? {
+        m.map { unit.format(meters: $0) }
     }
 
-    /// "200 kt" from m/s ground speed.
-    static func speedText(fromMps v: Double?) -> String? {
-        v.map { "\(Int(($0 * 1.94384).rounded())) kt" }
+    /// "200 kt" (or "230 mph" / "370 km/h") from m/s ground speed.
+    static func speedText(fromMps v: Double?,
+                          unit: SpeedUnit = UnitPreferences.shared.speed) -> String? {
+        v.map { unit.format(mps: $0) }
     }
 
     /// "12.3 km" from a slant distance — nil (→ the card's "—") when the
