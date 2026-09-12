@@ -156,6 +156,8 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-07.
         ("A119", "Agusta", "A-119 Koala"),
         ("MX2", "Mx Aircraft", "MX-2"),
+        // Public catalog coverage addition validated 2026-09-10.
+        ("C27J", "Alenia Aermacchi", "C-27J Spartan"),
         // Public catalog coverage additions validated 2026-09-11.
         ("C162", "Cessna", "162 Skycatcher"),
         ("UH1", "Bell", "204"),
@@ -204,6 +206,7 @@ struct SetsCoverageTests {
             (("P180", "Piaggio", "P-180 Avanti"), "fam-avanti", "fav-p180"),
             (("A119", "Agusta", "A-119 Koala"), "fam-heli", "fh-a119"),
             (("MX2", "Mx Aircraft", "MX-2"), "fam-sport-classics", "fsc-mx2"),
+            (("C27J", "Alenia Aermacchi", "C-27J Spartan"), "fam-military", "fm-c27j"),
             (("C162", "Cessna", "162 Skycatcher"), "fam-cessna", "fc162"),
             (("UH1", "Bell", "204"), "fam-military", "fm-uh1"),
         ]
