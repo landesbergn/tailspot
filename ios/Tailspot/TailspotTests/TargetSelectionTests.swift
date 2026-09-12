@@ -139,5 +139,40 @@ struct TargetSelectionTests {
         let json = d.jsonString()
         #expect(json != nil)
         #expect(CatchCaptureDiagnostics.from(json: json) == d)
+        // No aircraft position recorded -> those keys stay nil.
+        #expect(CatchCaptureDiagnostics.from(json: json)?.aircraftLat == nil)
+    }
+
+    @Test func diagnosticsRoundTripsWithTheAircraftPosition() {
+        let ts = Date(timeIntervalSince1970: 1_757_200_000)
+        let d = CatchCaptureDiagnostics(
+            headingDeg: 200.0, cameraElevationDeg: 64.0, rollDeg: 1.0, zoom: 1.0,
+            headingAccuracyDeg: 15.0, targetOffsetDeg: 6.4, targetArcmin: 10.7,
+            wasTapped: false, candidateCount: 1,
+            alternatives: nil,
+            selector: "prominence-v1",
+            aircraftLat: 37.71234, aircraftLon: -122.21876,
+            aircraftAltitudeMeters: 3048, aircraftPositionTimestamp: ts
+        )
+        let json = d.jsonString()
+        #expect(CatchCaptureDiagnostics.from(json: json) == d)
+        // The timestamp goes out as UNIX seconds, not Foundation's default
+        // seconds-since-2001 — so the blob reads the same as every other
+        // timestamp in the system (and as the wire wants it).
+        #expect(json?.contains("\"aircraftPositionTimestamp\":1757200000") == true)
+    }
+
+    @Test func oldDiagnosticsBlobWithoutAircraftKeysStillDecodes() {
+        // A blob written before the aircraft-position fields existed. Absent
+        // keys must decode to nil, never fail — a decode failure here would
+        // silently drop the pose on every pre-2026-09-07 catch.
+        let legacy = #"{"headingDeg":200,"cameraElevationDeg":64,"rollDeg":1,"zoom":1,"headingAccuracyDeg":15,"targetOffsetDeg":6.4,"targetArcmin":10.7,"wasTapped":false,"candidateCount":2,"selector":"prominence-v1"}"#
+        let d = CatchCaptureDiagnostics.from(json: legacy)
+        #expect(d?.headingDeg == 200)
+        #expect(d?.cameraElevationDeg == 64)
+        #expect(d?.aircraftLat == nil)
+        #expect(d?.aircraftLon == nil)
+        #expect(d?.aircraftAltitudeMeters == nil)
+        #expect(d?.aircraftPositionTimestamp == nil)
     }
 }

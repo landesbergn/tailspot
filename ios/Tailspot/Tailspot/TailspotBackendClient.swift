@@ -270,6 +270,9 @@ nonisolated struct TailspotBackendClient: ADSBSource {
         }
         switch http.statusCode {
         case 200: return data
+        // 429 gets its own case so callers can tell "slow down" apart from a
+        // real failure — the metadata lookup treats it as a silent retry.
+        case 429: throw ADSBSourceError.rateLimited
         default: throw ADSBSourceError.http(status: http.statusCode)
         }
     }

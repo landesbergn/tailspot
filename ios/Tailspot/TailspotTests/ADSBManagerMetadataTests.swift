@@ -24,11 +24,18 @@ private final class CountingMetadataSource: ADSBSource, @unchecked Sendable {
     // `errors`; otherwise returns the value in `results`.
     var results: [String: AircraftMetadata?] = [:]
     var errors: Set<String> = []
+    /// icao24s the source answers with a 429 (the backend caps
+    /// GET /v1/metadata at 300/min/IP). A test clears the entry to simulate
+    /// the bucket refilling and assert the retry succeeds.
+    var rateLimited: Set<String> = []
 
     private(set) var callCounts: [String: Int] = [:]
 
     func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? {
         callCounts[icao24, default: 0] += 1
+        if rateLimited.contains(icao24) {
+            throw ADSBSourceError.rateLimited
+        }
         if errors.contains(icao24) {
             throw ADSBSourceError.http(status: 503)
         }
@@ -109,5 +116,50 @@ struct ADSBManagerMetadataTests {
 
         #expect(second?.model == "A320")
         #expect(src.callCounts["err"] == 2)   // error did not cache
+    }
+
+    @Test func sourceErrorRaisesTheStatusPill() async {
+        // The baseline the 429 case below is measured against: a REAL
+        // transport failure still puts the red pill up.
+        let src = CountingMetadataSource()
+        src.errors.insert("err")
+
+        let mgr = ADSBManager(source: src)
+        _ = await mgr.metadata(for: "err")
+
+        #expect(mgr.lastErrorUserMessage != nil)
+    }
+
+    // ── 429: a silent retry, not an error ────────────────────────────────
+    // GET /v1/metadata is capped at 300/min/IP (backend API hardening,
+    // 2026-09-06). Being told to slow down is not "Tailspot unreachable" —
+    // it must not raise the pill, and it must not poison the cache.
+
+    @Test func rateLimitedReturnsNilWithoutRaisingThePill() async {
+        let src = CountingMetadataSource()
+        src.rateLimited.insert("busy")
+
+        let mgr = ADSBManager(source: src)
+        let got = await mgr.metadata(for: "busy")
+
+        #expect(got == nil)
+        #expect(mgr.lastErrorUserMessage == nil)
+        #expect(mgr.lastError == nil)
+    }
+
+    @Test func rateLimitedDoesNotCacheSoALaterLookupRetries() async {
+        let src = CountingMetadataSource()
+        src.rateLimited.insert("busy")
+
+        let mgr = ADSBManager(source: src)
+        #expect(await mgr.metadata(for: "busy") == nil)
+
+        // Bucket refilled — the next lookup must reach the source again.
+        src.rateLimited.remove("busy")
+        src.results["busy"] = makeMetadata(icao24: "busy", model: "A350")
+        let second = await mgr.metadata(for: "busy")
+
+        #expect(second?.model == "A350")
+        #expect(src.callCounts["busy"] == 2)   // 429 did not cache
     }
 }
