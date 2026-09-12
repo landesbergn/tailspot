@@ -570,6 +570,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "C510"),
         ]),
         .init(id: "fam-gulfstream", type: .biz, title: "Gulfstream", entries: [
+            .init(id: "fg-150", canonicalName: "Gulfstream G150", rarity: .uncommon,
+                  modelTokens: ["gulfstream g150", "g-150"], summary: "Mid-size Gulfstream from the Israeli-built Astra line.",
+                  representativeTypecode: "G150"),
             .init(id: "fg-iv", canonicalName: "Gulfstream IV", rarity: .uncommon,
                   modelTokens: ["gulfstream iv", "g-iv", "giv"], summary: "Classic large-cabin Gulfstream.",
                   representativeTypecode: "GLF4"),
@@ -1122,6 +1125,10 @@ nonisolated enum CardSets {
                   modelTokens: [],
                   summary: "Unpowered soaring aircraft using ICAO's generic GLID designator.",
                   exactTypecodes: ["GLID"]),
+            .init(id: "fsc-glastar", canonicalName: "Glasair GlaStar", rarity: .common,
+                  modelTokens: ["glasair glastar", "new glastar glastar"],
+                  summary: "Two-seat kit-built sport aircraft designed for short-field versatility.",
+                  representativeTypecode: "GLST"),
         ]),
         .init(id: "fam-unidentified", type: .ga, title: "Unidentified aircraft", entries: [
             .init(id: "fu-unidentified", canonicalName: "Unidentified transponder", rarity: .common,
