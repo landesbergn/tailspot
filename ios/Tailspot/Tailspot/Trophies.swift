@@ -81,7 +81,7 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     /// For the few trophies whose copy quotes an altitude or speed: the
     /// summary re-phrased in the user's display units. nil = `summary` is
     /// unit-free. Views read `displaySummary` (UnitPreferences.swift).
-    let unitSummary: (@Sendable (AltitudeUnit, SpeedUnit) -> String)?
+    let unitSummary: (@Sendable (DisplayUnits) -> String)?
     /// Maps to a SwiftUI icon shape in `TrophyIcon`.
     let iconName: String
     /// Tiers in ascending order of `at`.
@@ -113,7 +113,7 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
         id: String,
         title: String,
         summary: String,
-        unitSummary: (@Sendable (AltitudeUnit, SpeedUnit) -> String)? = nil,
+        unitSummary: (@Sendable (DisplayUnits) -> String)? = nil,
         iconName: String,
         tiers: [AchievementTier],
         secret: Bool = false,
@@ -135,8 +135,8 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
 
     /// `summary` in the given units — the plain `summary` unless this
     /// achievement carries a `unitSummary`.
-    func summary(altitude: AltitudeUnit, speed: SpeedUnit) -> String {
-        unitSummary?(altitude, speed) ?? summary
+    func summary(units: DisplayUnits) -> String {
+        unitSummary?(units) ?? summary
     }
 }
 
@@ -531,7 +531,11 @@ nonisolated enum Trophies {
         Achievement(id: "streak", title: "Streak", summary: "Caught planes seven days in a row",
                     iconName: "streak", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.longestDayStreak >= 7 ? 1 : 0 }),
+        // 25 km = 15.5 mi (15.53; the copy rounds, the threshold doesn't).
         Achievement(id: "longshot", title: "Long Lens", summary: "Five catches past 25 km",
+                    unitSummary: { u in
+                        u.distance == .kilometers ? "Five catches past 25 km" : "Five catches past 15.5 mi"
+                    },
                     iconName: "longlens", tiers: [.init(tier: .gold, at: 5)], secret: true,
                     progress: { $0.farCatchCount }),
         Achievement(id: "multi", title: "Constellation", summary: "Catch 2+ planes in one frame",
@@ -555,16 +559,16 @@ nonisolated enum Trophies {
         // formats as "2,999 ft", and the copy should say the round number the
         // threshold was chosen from. 12,192 m / 914 m ARE the exact figures.
         Achievement(id: "milehigh", title: "Sky High", summary: "Catch one above 40,000 ft",
-                    unitSummary: { alt, _ in
-                        alt == .feet ? "Catch one above 40,000 ft" : "Catch one above 12,192 m"
+                    unitSummary: { u in
+                        u.altitude == .feet ? "Catch one above 40,000 ft" : "Catch one above 12,192 m"
                     },
                     iconName: "altitude", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.highestAltitudeM >= 12_192 ? 1 : 0 }),
         // 268 m/s = 521 kt = 600 mph = 965 km/h. The cards used to say kt while
         // this copy said mph; with a speed unit the copy follows the cards.
         Achievement(id: "speeddemon", title: "Speed Demon", summary: "Catch one doing 600+ mph",
-                    unitSummary: { _, spd in
-                        switch spd {
+                    unitSummary: { u in
+                        switch u.speed {
                         case .knots: "Catch one doing 520+ kt"
                         case .mph: "Catch one doing 600+ mph"
                         case .kph: "Catch one doing 965+ km/h"
@@ -581,8 +585,8 @@ nonisolated enum Trophies {
         // Same exact-conversion fix as Sky High: 3,000 ft = 914 m (the rounded
         // 1_000 m was ~280 ft more generous than the copy).
         Achievement(id: "ondeck", title: "On the Deck", summary: "Catch one below 3,000 ft",
-                    unitSummary: { alt, _ in
-                        alt == .feet ? "Catch one below 3,000 ft" : "Catch one below 914 m"
+                    unitSummary: { u in
+                        u.altitude == .feet ? "Catch one below 3,000 ft" : "Catch one below 914 m"
                     },
                     iconName: "approach", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.lowestAltitudeM <= 914 ? 1 : 0 }),

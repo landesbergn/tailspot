@@ -1357,7 +1357,7 @@ struct ContentView: View {
     private var topToastBanner: some View {
         ZStack(alignment: .top) {
             if let toast = topToast {
-                Text(toast.kind.message)
+                Text(toast.kind.message(distanceUnit: UnitPreferences.shared.distance))
                     .font(Brand.Font.mono(size: 12, weight: .semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .multilineTextAlignment(.center)
@@ -3049,7 +3049,7 @@ struct ContentView: View {
             type: row.resolvedType,
             altText: CardPlane.altText(fromMeters: observed?.aircraft.altitudeMeters ?? row.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: observed?.aircraft.velocityMps ?? row.velocityMps),
-            distText: String(format: "%.1f km", distMeters / 1000),
+            distText: CardPlane.distText(fromMeters: distMeters),
             photoURL: row.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
             photoFocus: row.photoFocus,
             originIcao: origin,
@@ -3118,7 +3118,7 @@ struct ContentView: View {
             type: type,
             altText: CardPlane.altText(fromMeters: aircraft.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
-            distText: String(format: "%.1f km", observed.slantDistanceMeters / 1000),
+            distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
             isFirstOfType: isFirstOfType
         )
     }
@@ -3461,7 +3461,8 @@ struct ContentView: View {
     private func aircraftRow(_ obs: ObservedAircraft) -> some View {
         let cs = obs.aircraft.callsign ?? obs.aircraft.icao24
         let altKm = obs.aircraft.altitudeMeters / 1000
-        let dKm = obs.slantDistanceMeters / 1000
+        let distUnit = UnitPreferences.shared.distance
+        let dist = distUnit.value(meters: obs.slantDistanceMeters)
 
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(cs)
@@ -3471,7 +3472,7 @@ struct ContentView: View {
                 .frame(width: 86, alignment: .leading)
             Text(String(format: "el %+5.1f°", obs.elevationDeg))
                 .frame(width: 76, alignment: .leading)
-            Text(String(format: "%4.1fkm", dKm))
+            Text(String(format: "%4.1f%@", dist, distUnit.symbol))
                 .frame(width: 60, alignment: .leading)
             // Flight-level shorthand in feet mode; whole meters otherwise.
             Text(UnitPreferences.shared.altitude == .feet
@@ -3870,14 +3871,15 @@ struct ContentView: View {
             model: metadata?.model,
             operatorName: metadata?.operatorName
         )
-        let km = obs.slantDistanceMeters / 1000
-        let distance = km < 9.95
-            ? String(format: "%.1f", km)
-            : String(Int(km.rounded()))
+        let unit = UnitPreferences.shared.distance
+        let range = unit.value(meters: obs.slantDistanceMeters)
+        let distance = range < 9.95
+            ? String(format: "%.1f", range)
+            : String(Int(range.rounded()))
         var parts = [callsign]
         if let model = metadata?.model?.nonEmpty { parts.append(model) }
         parts.append(rarity.label.capitalized)
-        parts.append("\(distance) kilometers away")
+        parts.append("\(distance) \(unit.spokenName) away")
         return parts.joined(separator: ", ")
     }
 
@@ -4764,12 +4766,15 @@ nonisolated enum TopToast: Equatable {
     /// A streak-reminder tap landed; the line names the streak at stake.
     case streak(line: String)
 
-    var message: String {
+    /// `distanceUnit` phrases the far-tap line; the enum is nonisolated so
+    /// the MainActor preference is read by the caller, not here.
+    func message(distanceUnit: DistanceUnit) -> String {
         switch self {
         case .grounded:
             return "Tailspot only works with planes in the air"
         case .farTap(let slantMeters):
-            return "Nearest plane is \(Int((slantMeters / 1000).rounded())) km out — beyond eyeshot"
+            let range = Int(distanceUnit.value(meters: slantMeters).rounded())
+            return "Nearest plane is \(range) \(distanceUnit.symbol) out — beyond eyeshot"
         case .saveFail:
             return "That catch didn't save — try again."
         case .streak(let line):

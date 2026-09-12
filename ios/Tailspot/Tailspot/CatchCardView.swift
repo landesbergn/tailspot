@@ -462,13 +462,15 @@ extension CardPlane {
         v.map { unit.format(mps: $0) }
     }
 
-    /// "12.3 km" from a slant distance — nil (→ the card's "—") when the
-    /// distance is the 0 unknown-sentinel. `Catch.slantDistanceMeters` is
-    /// non-optional, so rows the server restored (which never stored a
-    /// distance) carry 0 instead of nil; "0.0 km" would read as a plane
-    /// caught on your head.
-    static func distText(fromMeters m: Double) -> String? {
-        m > 0 ? String(format: "%.1f km", m / 1000) : nil
+    /// "12.3 km" (or "7.6 mi") from a slant distance — nil (→ the card's
+    /// "—") when the distance is the 0 unknown-sentinel.
+    /// `Catch.slantDistanceMeters` is non-optional, so rows the server
+    /// restored (which never stored a distance) carry 0 instead of nil;
+    /// "0.0 km" would read as a plane caught on your head. `unit` defaults
+    /// to the Settings → UNITS choice like `altText`.
+    static func distText(fromMeters m: Double,
+                         unit: DistanceUnit = UnitPreferences.shared.distance) -> String? {
+        m > 0 ? unit.format(meters: m) : nil
     }
 
     /// Build a card from a persisted Catch. Reads the snapshotted

@@ -9,8 +9,9 @@
 //    REMINDERS — the streak-protection mute toggle (StreakReminders.swift),
 //                with an honest permission-denied state that routes to iOS
 //                Settings and heals on return.
-//    UNITS     — altitude (ft / m) and speed (kt / mph / km/h) pickers bound
-//                to UnitPreferences; every card re-formats live.
+//    UNITS     — altitude (ft / m), speed (kt / mph / km/h) and distance
+//                (km / mi) pickers bound to UnitPreferences; every card
+//                re-formats live.
 //    ABOUT     — legal links (Privacy Policy, Terms, Attributions —
 //                ODbL attribution for adsb.lol data is a licence
 //                obligation), data-source credits, plus the tap-to-copy
@@ -201,14 +202,13 @@ struct SettingsScreen: View {
             Section {
                 unitRow("Altitude", selection: $units.altitude, accessibilityLabel: "Altitude unit")
                 unitRow("Speed", selection: $units.speed, accessibilityLabel: "Speed unit")
+                unitRow("Distance", selection: $units.distance, accessibilityLabel: "Distance unit")
             } header: {
                 Text("UNITS")
                     .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                     .textCase(nil)
-            } footer: {
-                Text("Used wherever a catch shows altitude or speed: the reveal, the Hangar, and shared cards.")
             }
             .listRowBackground(Brand.Color.bgElevated)
 
@@ -385,6 +385,7 @@ struct SettingsScreen: View {
         switch unit {
         case let u as AltitudeUnit: u.symbol
         case let u as SpeedUnit: u.symbol
+        case let u as DistanceUnit: u.symbol
         default: "\(unit)"
         }
     }

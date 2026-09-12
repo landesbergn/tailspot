@@ -4,7 +4,7 @@
 //
 //  The Settings → UNITS preference: formatting per unit, persistence through
 //  UserDefaults, the CardPlane formatters honouring an explicit unit, and the
-//  three trophies whose copy quotes an altitude/speed.
+//  trophies whose copy quotes an altitude, speed or distance.
 //
 
 import Testing
@@ -38,12 +38,27 @@ struct UnitPreferencesTests {
     @Test func symbolsAreSingleTokens() {
         for u in AltitudeUnit.allCases { #expect(!u.symbol.contains(" ")) }
         for u in SpeedUnit.allCases { #expect(!u.symbol.contains(" ")) }
+        for u in DistanceUnit.allCases { #expect(!u.symbol.contains(" ")) }
         let parts = splitUnit(SpeedUnit.kph.format(mps: 280))
         #expect(parts.value == "1,008")
         #expect(parts.unit == "km/h")
     }
 
     // MARK: CardPlane honours an explicit unit
+
+    @Test func distanceFormatsPerUnit() {
+        #expect(DistanceUnit.kilometers.format(meters: 12_000) == "12.0 km")
+        #expect(DistanceUnit.miles.format(meters: 12_000) == "7.5 mi")
+        #expect(DistanceUnit.miles.format(meters: 1609.344) == "1.0 mi")
+        #expect(DistanceUnit.kilometers.spokenName == "kilometers")
+        #expect(DistanceUnit.miles.spokenName == "miles")
+    }
+
+    @Test func farTapToastFollowsTheDistanceUnit() {
+        let toast = TopToast.farTap(slantMeters: 52_000)
+        #expect(toast.message(distanceUnit: .kilometers) == "Nearest plane is 52 km out — beyond eyeshot")
+        #expect(toast.message(distanceUnit: .miles) == "Nearest plane is 32 mi out — beyond eyeshot")
+    }
 
     @Test func cardPlaneFormattersTakeAUnit() {
         #expect(CardPlane.altText(fromMeters: 152.4, unit: .feet) == "500 ft")
@@ -52,6 +67,8 @@ struct UnitPreferencesTests {
         #expect(CardPlane.speedText(fromMps: 102.889, unit: .mph) == "230 mph")
         #expect(CardPlane.speedText(fromMps: 102.889, unit: .kph) == "370 km/h")
         #expect(CardPlane.speedText(fromMps: nil, unit: .kph) == nil)
+        #expect(CardPlane.distText(fromMeters: 12_000, unit: .miles) == "7.5 mi")
+        #expect(CardPlane.distText(fromMeters: 0, unit: .miles) == nil)   // unknown sentinel
     }
 
     // MARK: Persistence
@@ -63,10 +80,12 @@ struct UnitPreferencesTests {
         return d
     }
 
-    @Test func defaultsToFeetAndKnots() {
+    @Test func defaultsToFeetKnotsAndKilometers() {
         let prefs = UnitPreferences(defaults: freshDefaults())
         #expect(prefs.altitude == .feet)
         #expect(prefs.speed == .knots)
+        #expect(prefs.distance == .kilometers)
+        #expect(prefs.units == .default)
     }
 
     @Test func roundTripsThroughUserDefaults() {
@@ -74,21 +93,26 @@ struct UnitPreferencesTests {
         let prefs = UnitPreferences(defaults: d)
         prefs.altitude = .meters
         prefs.speed = .kph
+        prefs.distance = .miles
         #expect(d.string(forKey: AltitudeUnit.storageKey) == "meters")
         #expect(d.string(forKey: SpeedUnit.storageKey) == "kph")
+        #expect(d.string(forKey: DistanceUnit.storageKey) == "miles")
         // A second instance over the same store reads the choice back.
         let reread = UnitPreferences(defaults: d)
         #expect(reread.altitude == .meters)
         #expect(reread.speed == .kph)
+        #expect(reread.distance == .miles)
     }
 
     @Test func unknownStoredValueFallsBackToDefault() {
         let d = freshDefaults()
         d.set("furlongs", forKey: AltitudeUnit.storageKey)
         d.set("warp", forKey: SpeedUnit.storageKey)
+        d.set("leagues", forKey: DistanceUnit.storageKey)
         let prefs = UnitPreferences(defaults: d)
         #expect(prefs.altitude == .feet)
         #expect(prefs.speed == .knots)
+        #expect(prefs.distance == .kilometers)
     }
 
     // MARK: Trophy copy
@@ -97,25 +121,36 @@ struct UnitPreferencesTests {
         Trophies.roster.first { $0.id == id }!
     }
 
+    private func units(_ alt: AltitudeUnit = .feet, _ spd: SpeedUnit = .knots,
+                       _ dist: DistanceUnit = .kilometers) -> DisplayUnits {
+        DisplayUnits(altitude: alt, speed: spd, distance: dist)
+    }
+
     @Test func altitudeTrophiesFollowTheAltitudeUnit() {
         let high = trophy("milehigh")
-        #expect(high.summary(altitude: .feet, speed: .knots) == "Catch one above 40,000 ft")
-        #expect(high.summary(altitude: .meters, speed: .knots) == "Catch one above 12,192 m")
+        #expect(high.summary(units: units(.feet)) == "Catch one above 40,000 ft")
+        #expect(high.summary(units: units(.meters)) == "Catch one above 12,192 m")
         let low = trophy("ondeck")
-        #expect(low.summary(altitude: .feet, speed: .kph) == "Catch one below 3,000 ft")
-        #expect(low.summary(altitude: .meters, speed: .kph) == "Catch one below 914 m")
+        #expect(low.summary(units: units(.feet, .kph)) == "Catch one below 3,000 ft")
+        #expect(low.summary(units: units(.meters, .kph)) == "Catch one below 914 m")
     }
 
     @Test func speedTrophyFollowsTheSpeedUnit() {
         let fast = trophy("speeddemon")
-        #expect(fast.summary(altitude: .feet, speed: .knots) == "Catch one doing 520+ kt")
-        #expect(fast.summary(altitude: .feet, speed: .mph) == "Catch one doing 600+ mph")
-        #expect(fast.summary(altitude: .feet, speed: .kph) == "Catch one doing 965+ km/h")
+        #expect(fast.summary(units: units(.feet, .knots)) == "Catch one doing 520+ kt")
+        #expect(fast.summary(units: units(.feet, .mph)) == "Catch one doing 600+ mph")
+        #expect(fast.summary(units: units(.feet, .kph)) == "Catch one doing 965+ km/h")
+    }
+
+    @Test func distanceTrophyFollowsTheDistanceUnit() {
+        let far = trophy("longshot")
+        #expect(far.summary(units: units(.feet, .knots, .kilometers)) == "Five catches past 25 km")
+        #expect(far.summary(units: units(.feet, .knots, .miles)) == "Five catches past 15.5 mi")
     }
 
     @Test func unitFreeTrophiesKeepTheirSummary() {
         let first = trophy("firstcatch")
         #expect(first.unitSummary == nil)
-        #expect(first.summary(altitude: .meters, speed: .kph) == first.summary)
+        #expect(first.summary(units: units(.meters, .kph, .miles)) == first.summary)
     }
 }

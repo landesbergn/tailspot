@@ -2,13 +2,15 @@
 //  UnitPreferences.swift
 //  Tailspot
 //
-//  The user's display units for altitude (ft / m) and speed (kt / mph /
-//  km/h), chosen in Settings → UNITS. Storage stays SI everywhere
-//  (`Aircraft.altitudeMeters`, `Catch.velocityMps`, the wire DTO, replay
-//  snapshots, telemetry) — the preference only changes how a value is
-//  FORMATTED, at the one chokepoint every card goes through
-//  (`CardPlane.altText` / `CardPlane.speedText`). Distance (km) is not
-//  covered yet; it stays metric.
+//  The user's display units — altitude (ft / m), speed (kt / mph / km/h) and
+//  distance (km / mi) — chosen in Settings → UNITS. Storage stays SI
+//  everywhere (`Aircraft.altitudeMeters`, `Catch.velocityMps`,
+//  `Catch.slantDistanceMeters`, the wire DTO, replay snapshots, telemetry) —
+//  the preference only changes how a value is FORMATTED, at the chokepoints
+//  every card goes through (`CardPlane.altText` / `speedText` / `distText`),
+//  plus the few loose strings that quote a distance (the AR overlay's
+//  VoiceOver label, the beyond-eyeshot toast, the Debug aircraft list) and
+//  the trophies whose copy quotes a value.
 //
 //  Explain-as-we-go: `UnitPreferences` is an `@Observable` class — the
 //  Observation framework (iOS 17) that succeeds `ObservableObject` +
@@ -16,9 +18,12 @@
 //  — even indirectly, through a formatter's default argument — is tracked and
 //  re-renders when the value changes. That's what lets a Hangar detail card
 //  that's still alive in another tab re-format itself the moment the picker
-//  flips in Settings, with no manual plumbing. The two properties are written
-//  by hand (`access` / `withMutation`) instead of as plain stored properties so
+//  flips in Settings, with no manual plumbing. The properties are written by
+//  hand (`access` / `withMutation`) instead of as plain stored properties so
 //  each write also lands in `UserDefaults`.
+//
+//  New-install defaults: feet, knots, kilometers — exactly what every card
+//  showed before the preference existed.
 //
 
 import Foundation
@@ -98,6 +103,59 @@ nonisolated enum SpeedUnit: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Distance (slant range) display unit. Raw values are persisted — don't rename.
+nonisolated enum DistanceUnit: String, CaseIterable, Identifiable, Sendable {
+    case kilometers, miles
+
+    static let storageKey = "tailspot.units.distance"
+    static let `default`: DistanceUnit = .kilometers
+
+    var id: String { rawValue }
+
+    /// Card suffix (single space-free token — see `AltitudeUnit.symbol`).
+    var symbol: String {
+        switch self {
+        case .kilometers: "km"
+        case .miles: "mi"
+        }
+    }
+
+    /// Spelled-out name for VoiceOver and the Settings row.
+    var name: String {
+        switch self {
+        case .kilometers: "Kilometers"
+        case .miles: "Miles"
+        }
+    }
+
+    /// Lower-case plural for spoken sentences ("12 kilometers away").
+    var spokenName: String { name.lowercased() }
+
+    /// The distance in this unit (statute miles for `.miles`).
+    func value(meters m: Double) -> Double {
+        switch self {
+        case .kilometers: m / 1000
+        case .miles: m / 1609.344
+        }
+    }
+
+    /// "12.3 km" / "7.6 mi" from a slant distance in meters — one decimal,
+    /// the card's historical form.
+    func format(meters m: Double) -> String {
+        String(format: "%.1f \(symbol)", value(meters: m))
+    }
+}
+
+/// One snapshot of all three choices — what trophy copy is phrased in.
+nonisolated struct DisplayUnits: Equatable, Sendable {
+    var altitude: AltitudeUnit
+    var speed: SpeedUnit
+    var distance: DistanceUnit
+
+    /// Feet, knots, kilometers — the new-install defaults.
+    static let `default` = DisplayUnits(altitude: .default, speed: .default, distance: .default)
+}
+
 /// The live preference. Views read `UnitPreferences.shared` (tracked by
 /// Observation); Settings binds to it with `@Bindable`. Tests build their
 /// own instance over a throwaway `UserDefaults` suite.
@@ -108,6 +166,7 @@ final class UnitPreferences {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var altitudeStorage: AltitudeUnit
     @ObservationIgnored private var speedStorage: SpeedUnit
+    @ObservationIgnored private var distanceStorage: DistanceUnit
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -115,6 +174,8 @@ final class UnitPreferences {
             .flatMap(AltitudeUnit.init(rawValue:)) ?? .default
         speedStorage = defaults.string(forKey: SpeedUnit.storageKey)
             .flatMap(SpeedUnit.init(rawValue:)) ?? .default
+        distanceStorage = defaults.string(forKey: DistanceUnit.storageKey)
+            .flatMap(DistanceUnit.init(rawValue:)) ?? .default
     }
 
     var altitude: AltitudeUnit {
@@ -142,6 +203,24 @@ final class UnitPreferences {
             }
         }
     }
+
+    var distance: DistanceUnit {
+        get {
+            access(keyPath: \.distance)
+            return distanceStorage
+        }
+        set {
+            withMutation(keyPath: \.distance) {
+                distanceStorage = newValue
+                defaults.set(newValue.rawValue, forKey: DistanceUnit.storageKey)
+            }
+        }
+    }
+
+    /// All three choices at once (each read is tracked).
+    var units: DisplayUnits {
+        DisplayUnits(altitude: altitude, speed: speed, distance: distance)
+    }
 }
 
 // MARK: - Achievement copy in the user's units
@@ -149,11 +228,10 @@ final class UnitPreferences {
 // Not `nonisolated`: this extension reads the MainActor-isolated
 // `UnitPreferences.shared`, and its only callers are SwiftUI bodies.
 extension Achievement {
-    /// `summary` re-phrased in the chosen units for the three trophies whose
-    /// copy quotes an altitude or speed (Sky High, Speed Demon, On the Deck);
-    /// every other achievement returns its plain `summary`.
+    /// `summary` re-phrased in the chosen units for the trophies whose copy
+    /// quotes an altitude, speed or distance (Sky High, Speed Demon, On the
+    /// Deck, Long Lens); every other achievement returns its plain `summary`.
     var displaySummary: String {
-        summary(altitude: UnitPreferences.shared.altitude,
-                speed: UnitPreferences.shared.speed)
+        summary(units: UnitPreferences.shared.units)
     }
 }
