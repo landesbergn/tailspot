@@ -170,8 +170,8 @@ struct HangarRestoreTests {
 
     @Test func zeroSlantRendersAsUnknownNotZeroKm() {
         // The display seam for the 0 sentinel: cards show "—", never "0.0 km".
-        #expect(CardPlane.distText(fromMeters: 0) == nil)
-        #expect(CardPlane.distText(fromMeters: 12_000) == "12.0 km")
+        #expect(CardPlane.distText(fromMeters: 0, unit: .kilometers) == nil)
+        #expect(CardPlane.distText(fromMeters: 12_000, unit: .kilometers) == "12.0 km")
         let plane = CardPlane(catchRecord: HangarRestore.makeCatch(from: fullRow()))
         #expect(plane.distText == nil)
     }

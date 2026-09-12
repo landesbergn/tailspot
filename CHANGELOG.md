@@ -5,6 +5,62 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-12 — Altitude + speed units in Settings — branch `feat/unit-settings`
+
+Noah asked for a units preference: altitude in feet or meters, speed in knots,
+mph or km/h, and (second round, same day) distance in km or miles, honoured
+everywhere the app shows any of them. The audit found one formatting
+chokepoint — `CardPlane.altText` / `speedText` / `distText` in
+`CatchCardView.swift` — that every reveal, settled card, Hangar detail, model
+slot and share card flows through, plus a handful of loose strings (the AR
+overlay's VoiceOver label, the beyond-eyeshot toast, the Debug aircraft list)
+and four trophy summaries with units baked into the copy.
+
+- **New `UnitPreferences.swift`:** `AltitudeUnit` (ft / m), `SpeedUnit`
+  (kt / mph / km/h) and `DistanceUnit` (km / mi) as `String`-raw enums (the
+  raw value is the persisted form), each with `format(...)` from the SI
+  value, and an `@Observable` `UnitPreferences.shared` backed by
+  `UserDefaults` (`tailspot.units.altitude` / `.speed` / `.distance`).
+  **First-launch defaults are localized** (Noah's call, third round): they
+  follow the phone's measurement system (`Locale.measurementSystem`, i.e.
+  iOS Settings → Language & Region → Measurement System) via
+  `DisplayUnits.localized(for:)` — metric → m / km/h / km, US and UK → ft /
+  mph / mi. Knots is never a default. A stored choice always wins, so this
+  only affects a key that was never written — which means **existing users
+  who never opened Settings → UNITS also move** from the old ft / kt / km to
+  their locale's set on update. Storage stays SI everywhere — `Aircraft`, `Catch`, the wire DTO,
+  replays, telemetry are untouched; only formatting changes.
+- **`CardPlane.altText(fromMeters:unit:)` / `speedText(fromMps:unit:)`** take
+  the unit as a defaulted parameter that reads the shared preference. Because
+  that read happens inside a SwiftUI body, Observation re-renders any live
+  card (a Hangar detail open in another tab) the moment the picker flips.
+  Speed now groups thousands like altitude ("1,008 km/h").
+- **Settings → UNITS** section between REMINDERS and ABOUT: three rows
+  ("Altitude", "Speed", "Distance") with trailing segmented pickers bound via
+  `@Bindable`, same header treatment as the other sections, no footer (Noah
+  cut the explanatory copy).
+- **Distance** goes through `CardPlane.distText(fromMeters:unit:)`; the two
+  inline `"%.1f km"` duplicates in `ContentView`'s card builders now route
+  through it too (so the 0-sentinel renders "—" on those paths as well).
+  The AR overlay's VoiceOver line ("12 kilometers away" / "7 miles away"),
+  the far-tap toast ("Nearest plane is 52 km out" / "32 mi out" —
+  `TopToast.message(distanceUnit:)`, the enum is nonisolated so the caller
+  passes the unit) and the Debug list's range column follow it.
+- **Trophy copy follows the units:** Sky High ("40,000 ft" / "12,192 m"),
+  On the Deck ("3,000 ft" / "914 m"), Speed Demon ("520+ kt" / "600+ mph"
+  / "965+ km/h") and Long Lens ("25 km" / "15.5 mi") gain a `unitSummary`
+  over a `DisplayUnits` snapshot; `Achievement.displaySummary` renders it in
+  `HangarTrophiesView` and `TrophyUnlockView`. The Speed Demon copy used to
+  say mph while every card said kt; it now matches whichever the user
+  picked. Thresholds are unchanged.
+- **Debug aircraft list** shows `FLxxx` in feet mode and whole meters
+  otherwise.
+- **Tests:** new `UnitPreferencesTests` (formatting per unit, persistence
+  round-trip through a throwaway suite, fallback on unknown stored values,
+  trophy copy). `CatchTests` pins the shared preference around the
+  stored-catch formatter assertion and adds a metric case. Metric renders
+  added to the Settings, settled-card and reveal snapshot harnesses.
+
 ## 2026-09-06 — Reveal CTA off-screen on iPhone SE — branch `fix/reveal-cta-short-screens` (PR #254, draft)
 
 First TestFlight report from a small phone: an iPhone SE (3rd gen) tester on

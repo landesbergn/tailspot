@@ -91,6 +91,16 @@ struct ProfileSettingsSnapshotTests {
         let container = try seededContainer()
         snapshot(ProfileScreen().modelContainer(container), as: "profile_hub")
         snapshot(NavigationStack { SettingsScreen() }, as: "settings")
+        // UNITS section with the non-default choices selected.
+        let prefs = UnitPreferences.shared
+        let (savedAlt, savedSpd, savedDist) = (prefs.altitude, prefs.speed, prefs.distance)
+        prefs.altitude = .meters
+        prefs.speed = .kph
+        prefs.distance = .miles
+        snapshot(NavigationStack { SettingsScreen() }, as: "settings_metric")
+        prefs.altitude = savedAlt
+        prefs.speed = savedSpd
+        prefs.distance = savedDist
         snapshot(NavigationStack { RarityReferenceScreen() }, as: "reference_rarity")
         snapshot(NavigationStack { MapScreen() }.modelContainer(container), as: "map")
         #expect(true)

@@ -78,6 +78,10 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     let id: String
     let title: String
     let summary: String
+    /// For the few trophies whose copy quotes an altitude or speed: the
+    /// summary re-phrased in the user's display units. nil = `summary` is
+    /// unit-free. Views read `displaySummary` (UnitPreferences.swift).
+    let unitSummary: (@Sendable (DisplayUnits) -> String)?
     /// Maps to a SwiftUI icon shape in `TrophyIcon`.
     let iconName: String
     /// Tiers in ascending order of `at`.
@@ -109,6 +113,7 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
         id: String,
         title: String,
         summary: String,
+        unitSummary: (@Sendable (DisplayUnits) -> String)? = nil,
         iconName: String,
         tiers: [AchievementTier],
         secret: Bool = false,
@@ -118,6 +123,7 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
         self.id = id
         self.title = title
         self.summary = summary
+        self.unitSummary = unitSummary
         self.iconName = iconName
         self.tiers = tiers
         self.secret = secret
@@ -126,6 +132,12 @@ nonisolated struct Achievement: Identifiable, Equatable, Sendable {
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+
+    /// `summary` in the given units — the plain `summary` unless this
+    /// achievement carries a `unitSummary`.
+    func summary(units: DisplayUnits) -> String {
+        unitSummary?(units) ?? summary
+    }
 }
 
 /// All the totals an achievement might want to read, pre-computed
@@ -519,7 +531,11 @@ nonisolated enum Trophies {
         Achievement(id: "streak", title: "Streak", summary: "Caught planes seven days in a row",
                     iconName: "streak", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.longestDayStreak >= 7 ? 1 : 0 }),
+        // 25 km = 15.5 mi (15.53; the copy rounds, the threshold doesn't).
         Achievement(id: "longshot", title: "Long Lens", summary: "Five catches past 25 km",
+                    unitSummary: { u in
+                        u.distance == .kilometers ? "Five catches past 25 km" : "Five catches past 15.5 mi"
+                    },
                     iconName: "longlens", tiers: [.init(tier: .gold, at: 5)], secret: true,
                     progress: { $0.farCatchCount }),
         Achievement(id: "multi", title: "Constellation", summary: "Catch 2+ planes in one frame",
@@ -539,10 +555,25 @@ nonisolated enum Trophies {
         // would re-fire the unlock for existing holders. Threshold is the exact
         // conversion — 40,000 ft = 12,192 m; the old rounded 12_000 m unlocked
         // at 39,370 ft (field report, 2026-08-16).
+        // The unit copy is hand-written, not derived from the threshold: 914 m
+        // formats as "2,999 ft", and the copy should say the round number the
+        // threshold was chosen from. 12,192 m / 914 m ARE the exact figures.
         Achievement(id: "milehigh", title: "Sky High", summary: "Catch one above 40,000 ft",
+                    unitSummary: { u in
+                        u.altitude == .feet ? "Catch one above 40,000 ft" : "Catch one above 12,192 m"
+                    },
                     iconName: "altitude", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.highestAltitudeM >= 12_192 ? 1 : 0 }),
+        // 268 m/s = 521 kt = 600 mph = 965 km/h. The cards used to say kt while
+        // this copy said mph; with a speed unit the copy follows the cards.
         Achievement(id: "speeddemon", title: "Speed Demon", summary: "Catch one doing 600+ mph",
+                    unitSummary: { u in
+                        switch u.speed {
+                        case .knots: "Catch one doing 520+ kt"
+                        case .mph: "Catch one doing 600+ mph"
+                        case .kph: "Catch one doing 965+ km/h"
+                        }
+                    },
                     iconName: "speed", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.fastestVelocityMps >= 268 ? 1 : 0 }),
         Achievement(id: "marathon", title: "Marathon", summary: "Catch 10 planes in one day",
@@ -554,6 +585,9 @@ nonisolated enum Trophies {
         // Same exact-conversion fix as Sky High: 3,000 ft = 914 m (the rounded
         // 1_000 m was ~280 ft more generous than the copy).
         Achievement(id: "ondeck", title: "On the Deck", summary: "Catch one below 3,000 ft",
+                    unitSummary: { u in
+                        u.altitude == .feet ? "Catch one below 3,000 ft" : "Catch one below 914 m"
+                    },
                     iconName: "approach", tiers: [.init(tier: .gold, at: 1)], secret: true,
                     progress: { $0.lowestAltitudeM <= 914 ? 1 : 0 }),
         Achievement(id: "weekend", title: "Weekend Warrior", summary: "Catch on a Saturday and a Sunday",

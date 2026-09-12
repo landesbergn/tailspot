@@ -116,7 +116,7 @@ struct TrophyCardRow: View {
                 Text(masked ? "???" : ach.title)
                     .font(Brand.Font.cardTitle)
                     .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
-                Text(masked ? "Hidden achievement" : ach.summary)
+                Text(masked ? "Hidden achievement" : ach.displaySummary)
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
                     // Two lines, not one: at larger Dynamic Type sizes a
@@ -139,7 +139,7 @@ struct TrophyCardRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(masked
             ? "Hidden achievement, locked"
-            : "\(ach.title), \(earned ? "earned" : "locked"). \(ach.summary)")
+            : "\(ach.title), \(earned ? "earned" : "locked"). \(ach.displaySummary)")
     }
 
     @ViewBuilder
