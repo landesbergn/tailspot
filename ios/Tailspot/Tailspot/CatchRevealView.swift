@@ -87,7 +87,7 @@ enum RP {
 }
 
 /// Shared frame treatment for the live reveal, saved catch, and share render.
-/// Rarity lives on the frames; the card's information uses neutral ink.
+/// Rarity lives on the frames and score ledger; flight details use neutral ink.
 struct CatchRarityBorder: View {
     let rarity: Rarity
     let cornerRadius: CGFloat
@@ -507,7 +507,7 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
         Text(label)
             .font(.system(size: (big ? 12 : 11) * scale, weight: big ? .heavy : .regular, design: .monospaced))
             .tracking(big ? 1.5 : 0)
-            .foregroundColor(big ? RP.ink : RP.muted)
+            .foregroundColor(big ? RP.ink : color)
         Spacer()
         Text(amount)
             .font(.system(size: (big ? 24 : 13) * scale, weight: big ? .bold : .semibold, design: .monospaced))
@@ -1257,9 +1257,9 @@ struct CatchRevealView: View {
                         if isDuplicate {
                             ledgerRow("ALREADY IN HANGAR", "", RP.muted, ss(0.78, 0.86, t), scale: scale)
                         } else {
-                            ledgerRow(livePlane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
+                            ledgerRow(livePlane.rarity.label.uppercased(), "+\(base)", accent, ss(0.78, 0.86, t), scale: scale)
                             if firstOfTypeBonus > 0 {
-                                ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.muted, ss(0.82, 0.9, t), scale: scale)
+                                ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
                             }
                             // Route-guess bonus. In the live in-card round it
                             // appears ONLY on a correct call and fades in with
@@ -1275,7 +1275,7 @@ struct CatchRevealView: View {
                             }
                         }
                         Rectangle().fill(RP.rule).frame(height: 1)
-                        ledgerRow("TOTAL", "+\(total)", RP.ink, ss(0.84, 0.92, t), scale: scale, big: true)
+                        ledgerRow("TOTAL", "+\(total)", accent, ss(0.84, 0.92, t), scale: scale, big: true)
                     }
 
                     // Entry stamp — streak left, entry number right — hidden

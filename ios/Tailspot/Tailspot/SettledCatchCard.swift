@@ -118,12 +118,12 @@ struct SettledCatchCard: View {
 
                 VStack(spacing: 8 * scale) {
                     Rectangle().fill(RP.rule).frame(height: 1).padding(.top, 4 * scale)
-                    ledgerRow(plane.rarity.label.uppercased(), "+\(base)", RP.muted, 1, scale: scale)
+                    ledgerRow(plane.rarity.label.uppercased(), "+\(base)", accent, 1, scale: scale)
                     if bonus > 0 {
-                        ledgerRow("FIRST OF TYPE", "+\(bonus)", RP.muted, 1, scale: scale)
+                        ledgerRow("FIRST OF TYPE", "+\(bonus)", RP.gold, 1, scale: scale)
                     }
                     Rectangle().fill(RP.rule).frame(height: 1)
-                    ledgerRow("EARNED", "+\(base + bonus)", RP.ink, 1, scale: scale, big: true)
+                    ledgerRow("EARNED", "+\(base + bonus)", accent, 1, scale: scale, big: true)
                 }
             }
             .padding(.horizontal, hPad)
