@@ -42,11 +42,12 @@ struct ObservedAircraft: Identifiable, Sendable {
     /// grounded easter egg (2026-07-09) they are annotated into the hidden
     /// tier instead, so the empty-tap diagnosis can recognize "you pointed at
     /// a parked plane" and answer with a toast. They must NEVER become
-    /// visible, catchable, or tap-to-revealable: `visibilityTier` pins them
+    /// visible, catchable, or tap-assertable: `visibilityTier` pins them
     /// `.hidden` unconditionally (before any distance/elevation math), which
-    /// keeps them out of the ambient overlay, out of `icaosInZone`
-    /// catchability, and out of the hysteresis shown set — the field-tuned
-    /// visibility curve itself is untouched.
+    /// keeps them out of the ambient overlay, out of press membership
+    /// (`chooseCatchMembers` — hidden tier is never a candidate), and out of
+    /// the hysteresis shown set — the field-tuned visibility curve itself is
+    /// untouched.
     var grounded: Bool = false
 
     var id: String { aircraft.icao24 }

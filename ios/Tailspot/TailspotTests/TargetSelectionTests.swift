@@ -13,6 +13,10 @@
 //    - aimConfidence: the post-catch uncertain-aim flag's score.
 //  plus the CatchCaptureDiagnostics round-trip.
 //
+//
+//  LEGACY CATCH MODE (`CatchMode.legacy`): this covers the pre-#229 catch
+//  interaction, restored 2026-09-02 for the wrench-panel A/B against
+//  frame-is-the-catch. Goes when `LockOnEngine.swift` goes.
 
 import Testing
 import Foundation

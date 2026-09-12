@@ -10,6 +10,10 @@
 //  Labels for visible planes are rendered ambiently per-plane by the
 //  AR overlay (see Task 5), not driven off engine state.
 //
+//
+//  LEGACY CATCH MODE (`CatchMode.legacy`): this covers the pre-#229 catch
+//  interaction, restored 2026-09-02 for the wrench-panel A/B against
+//  frame-is-the-catch. Goes when `LockOnEngine.swift` goes.
 
 import Testing
 import Foundation
