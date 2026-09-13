@@ -164,6 +164,11 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-12.
         ("G150", "Gulfstream", "G150"),
         ("GLST", "Glasair", "GlaStar"),
+        // Public catalog coverage additions validated 2026-09-13.
+        ("AC11", "Rockwell", "112 Commander 112"),
+        ("B412", "Bell", "412"),
+        ("C320", "Cessna", "320 Skyknight"),
+        ("C421", "Cessna", "421"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -214,6 +219,10 @@ struct SetsCoverageTests {
             (("UH1", "Bell", "204"), "fam-military", "fm-uh1"),
             (("G150", "Gulfstream", "G150"), "fam-gulfstream", "fg-150"),
             (("GLST", "Glasair", "GlaStar"), "fam-sport-classics", "fsc-glastar"),
+            (("AC11", "Rockwell", "112 Commander 112"), "fam-sport-classics", "fsc-commander112"),
+            (("B412", "Bell", "412"), "fam-heli", "fh-b412"),
+            (("C320", "Cessna", "320 Skyknight"), "fam-cessna", "fc320"),
+            (("C421", "Cessna", "421"), "fam-cessna", "fc421"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -293,6 +302,12 @@ struct SetsCoverageTests {
         let b206Entry = heliSet.entries.first { $0.id == "fh-b206" }!
         #expect(!CardSets.matches(key: c406Key, entry: b206Entry),
                 "A Cessna 406 must not fill the Bell 206 slot")
+
+        // Bare numeric Cessna tokens must not absorb Airbus model names.
+        let a320Key = CardSets.matchKey(for: mk(("A320", "Airbus", "A320")))
+        let c320Entry = cessnaSet.entries.first { $0.id == "fc320" }!
+        #expect(!CardSets.matches(key: a320Key, entry: c320Entry),
+                "An Airbus A320 must not fill the Cessna 320 slot")
 
         // GlaStar is a distinct ICAO type from the similarly named Glasair.
         let glasair = mk(("GLAS", "Glasair", "Glasair"))
