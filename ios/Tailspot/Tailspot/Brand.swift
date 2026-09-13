@@ -144,14 +144,33 @@ nonisolated enum Brand {
         /// face — the whole of our mono bold-text adaptation (there is no
         /// heavier face to step up to).
         ///
-        /// `relativeTo:` opts a call site into Dynamic Type scaling; nil
-        /// (the default) keeps the fixed cockpit-instrument size. Rule of
-        /// thumb: mono in a ScrollView/List passes an anchor, mono over
-        /// the camera or on a fixed card canvas doesn't.
+        /// `relativeTo:` picks the Dynamic Type anchor. NOTE: nil does NOT
+        /// freeze the size — SwiftUI's `Font.custom(_:size:)` scales with
+        /// the user's text setting relative to `.body` (Apple's documented
+        /// default), so a nil call site still grows at larger text sizes.
+        /// A view that must stay a fixed instrument size (e.g. a label
+        /// inside a fixed-diameter ring) uses `mono(fixedSize:)` instead.
         static func mono(size: CGFloat,
                          weight: SwiftUI.Font.Weight = .regular,
                          italic: Bool = false,
                          relativeTo textStyle: SwiftUI.Font.TextStyle? = nil) -> SwiftUI.Font {
+            let name = monoFace(weight: weight, italic: italic)
+            if let textStyle {
+                return .custom(name, size: size, relativeTo: textStyle)
+            }
+            return .custom(name, size: size)
+        }
+
+        /// The mono face at a size that ignores Dynamic Type entirely. Use
+        /// when the caller already scales the size itself (see
+        /// `CompletionRing`, which grows its diameter and label together).
+        static func mono(fixedSize: CGFloat,
+                         weight: SwiftUI.Font.Weight = .regular,
+                         italic: Bool = false) -> SwiftUI.Font {
+            .custom(monoFace(weight: weight, italic: italic), fixedSize: fixedSize)
+        }
+
+        private static func monoFace(weight: SwiftUI.Font.Weight, italic: Bool) -> String {
             var isBold: Bool
             switch weight {
             case .ultraLight, .thin, .light, .regular, .medium:
@@ -160,17 +179,12 @@ nonisolated enum Brand {
                 isBold = true
             }
             if boldTextPreferred { isBold = true }
-            let name: String
             switch (isBold, italic) {
-            case (false, false): name = "B612Mono-Regular"
-            case (true,  false): name = "B612Mono-Bold"
-            case (false, true):  name = "B612Mono-Italic"
-            case (true,  true):  name = "B612Mono-BoldItalic"
+            case (false, false): return "B612Mono-Regular"
+            case (true,  false): return "B612Mono-Bold"
+            case (false, true):  return "B612Mono-Italic"
+            case (true,  true):  return "B612Mono-BoldItalic"
             }
-            if let textStyle {
-                return .custom(name, size: size, relativeTo: textStyle)
-            }
-            return .custom(name, size: size)
         }
 
         // Computed (not `static let`) so a Bold Text toggle mid-session is
