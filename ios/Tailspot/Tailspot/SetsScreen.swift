@@ -89,7 +89,7 @@ struct SetsScreen: View {
 
 // MARK: - Completion card (browser row)
 
-private struct SetCompletionCard: View {
+struct SetCompletionCard: View {   // internal: rendered by SetsRingSnapshotTests
     let set: CardSet
     let progress: (caught: Int, total: Int)
 
@@ -97,8 +97,7 @@ private struct SetCompletionCard: View {
         let frac = progress.total == 0 ? 0 : Double(progress.caught) / Double(progress.total)
         let complete = progress.total > 0 && progress.caught == progress.total
         return HStack(spacing: 14) {
-            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 5)
-                .frame(width: 44, height: 44)
+            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 5, diameter: 44)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -192,8 +191,7 @@ struct SetDetailScreen: View {
         let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
         let complete = p.total > 0 && p.caught == p.total
         return HStack(spacing: 16) {
-            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 7)
-                .frame(width: 64, height: 64)
+            CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 7, diameter: 64)
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(p.caught) of \(p.total) collected")
                     .font(.system(size: 18, weight: .bold))
@@ -329,8 +327,26 @@ struct CompletionRing: View {
     let progress: Double          // 0…1
     var tint: Color = Brand.Color.cyan
     var lineWidth: CGFloat = 7
+    /// Diameter at the default (Large) text size. The ring owns its frame
+    /// (rather than the caller stamping a fixed `.frame`) so it can grow
+    /// with the user's Dynamic Type setting — see `typeScale`.
+    var diameter: CGFloat = 44
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // Dynamic Type: the ring and its label scale TOGETHER, from one
+    // multiplier. `@ScaledMetric(relativeTo: .body)` on a base of 1 yields
+    // the user's body-text multiplier (1.0 at the default, ~1.35 at the top
+    // of the standard slider, ~3.1 at the largest accessibility size).
+    // Before this, the ring was a fixed 44 pt while the label — a
+    // `Font.custom(_:size:)`, which scales with body text — grew on its
+    // own, so "100%" wrapped to "100 / %" at larger text settings
+    // (2026-09-13 report). Growth is capped at 2×: past that the ring
+    // would crowd the set title out of the row, and the label is sized
+    // from the same capped value (a fixed-size font) so the proportion
+    // seen at the default never changes.
+    @ScaledMetric(relativeTo: .body) private var typeScale: CGFloat = 1
+    private var ringScale: CGFloat { min(typeScale, 2) }
 
     var body: some View {
         ZStack {
@@ -341,10 +357,16 @@ struct CompletionRing: View {
                 .stroke(tint, style: .init(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text("\(Int((progress * 100).rounded()))%")
-                .font(Brand.Font.mono(size: lineWidth >= 8 ? 18 : 13, weight: .heavy))
+                .font(Brand.Font.mono(fixedSize: (lineWidth >= 8 ? 18 : 13) * ringScale,
+                                      weight: .heavy))
                 .foregroundStyle(Brand.Color.textPrimary)
                 .monospacedDigit()
+                // Backstop only (Bold Text swaps in a wider face): never
+                // wrap the percentage, shrink it instead.
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
+        .frame(width: diameter * ringScale, height: diameter * ringScale)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: progress)
     }
 }
