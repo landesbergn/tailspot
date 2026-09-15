@@ -43,6 +43,12 @@ nonisolated enum ChallengeJSON {
         fractionalISO8601.string(from: date)
     }
 
+    /// The decoder's date rule as a plain function, for callers that hold a
+    /// raw ISO string (the fixture service re-parsing a create request).
+    static func date(from raw: String) -> Date? {
+        fractionalISO8601.date(from: raw) ?? plainISO8601.date(from: raw)
+    }
+
     private static let fractionalISO8601: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
