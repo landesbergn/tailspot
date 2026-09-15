@@ -6,7 +6,7 @@
  *
  *   GET  /v1/challenges/config             (no auth)  → { enabled, availability, minBuild, appStoreURL }
  *   POST /v1/challenges                    (bearer + handle) → 201 { challenge }
- *   GET  /v1/challenges                    (bearer)   → { open: [...], history: [...] }
+ *   GET  /v1/challenges?scope=open|history (bearer)   → { open: [...], history: [...] } (default both; 50 per bucket)
  *   GET  /v1/challenges/:id                (bearer, participant) → { challenge, standings, me, winners }
  *   GET  /v1/challenges/:id/log/:handle    (bearer, participant) → { handle, catches: [...] }
  *   POST /v1/challenges/:id/leave          (bearer, participant) → 204
@@ -21,6 +21,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   type Challenge,
   type ChallengeStore,
+  type ListScope,
   type Standing,
   challengeStatus,
   isDurationPreset,
@@ -68,6 +69,8 @@ const NAME_MIN = 3;
 const NAME_MAX = 24;
 const SCHEDULE_MIN_LEAD_MS = 15 * 60 * 1000;
 const SCHEDULE_MAX_LEAD_MS = 14 * 24 * 60 * 60 * 1000;
+/** Per-bucket cap on GET /v1/challenges. */
+const LIST_LIMIT = 50;
 
 /** Wire shape of a challenge, as every route serves it. */
 export function serializeChallenge(
@@ -120,13 +123,16 @@ export async function challengeDetail(
 ) {
   const { challenge, standings, outcome } = await store.standings(c, now);
   const mine = standings.find((s) => s.deviceId === device.id) ?? null;
+  // ACTIVE participants, not frozen rows: after finalization the two can
+  // differ (a device disabled since), and the list route counts the same way.
+  const participantCount = await store.participantCount(challenge.id);
   const winners =
     challenge.finalizedAt && outcome === "decided"
       ? standings.filter((s) => s.placement === 1).map((s) => s.handle)
       : [];
   return {
     challenge: serializeChallenge(challenge, now, {
-      participantCount: standings.length,
+      participantCount,
       isCreator: challenge.creatorDeviceId === device.id,
       isParticipant: mine !== null,
       inviteBaseURL,
@@ -261,40 +267,31 @@ export function registerChallengesRoutes(app: FastifyInstance, opts: ChallengesR
   });
 
   // ── GET /v1/challenges ────────────────────────────────────────────────────
-  // Everything the device is in, split into open (upcoming + live) and history
-  // (finished + cancelled). Finished ones get finalized on the way through so
-  // a placement is always available for the history row.
+  // Everything the device is in, split into open (upcoming + live, soonest end
+  // first) and history (finished + cancelled, newest first). `?scope=open` or
+  // `?scope=history` returns just that bucket (the other comes back empty);
+  // default is both. Each bucket is capped at LIST_LIMIT — the hub shows the
+  // top of each, and nobody has fifty open races. The store batches the
+  // creator handle, participant count and the caller's frozen result into
+  // the read and finalizes anything due first, so this is a fixed number of
+  // queries however many challenges the device is in.
   app.get("/v1/challenges", async (request, reply) => {
     const device = await authed(request, reply, opts.readLimiter);
     if (!device) return reply;
+    const q = request.query as { scope?: unknown };
+    const scope: ListScope = q.scope === "open" || q.scope === "history" ? q.scope : "both";
     const t = now();
-    const mine = await store.listForDevice(device.id);
-    const open: unknown[] = [];
-    const history: unknown[] = [];
-    for (const raw of mine) {
-      const c = await store.finalizeIfDue(raw, t);
-      const status = challengeStatus(c, t);
-      const participantCount = await store.participantCount(c.id);
-      const base = serializeChallenge(c, t, {
-        participantCount,
-        isCreator: c.creatorDeviceId === device.id,
+    const list = await store.listForDevice(device.id, t, { scope, limit: LIST_LIMIT });
+    const row = (r: (typeof list.open)[number]) => ({
+      ...serializeChallenge(r.challenge, t, {
+        participantCount: r.participantCount,
+        isCreator: r.challenge.creatorDeviceId === device.id,
         isParticipant: true,
         inviteBaseURL,
-      });
-      if (status === "upcoming" || status === "live") {
-        open.push(base);
-      } else {
-        const result = c.finalizedAt ? await store.myResult(c.id, device.id) : null;
-        history.push({ ...base, myResult: result });
-      }
-    }
-    // Open: soonest end first (the live one you care about is on top).
-    open.sort((a, b) =>
-      String((a as { endsAt: string }).endsAt).localeCompare(
-        String((b as { endsAt: string }).endsAt),
-      ),
-    );
-    return { open, history };
+      }),
+      myResult: r.myResult,
+    });
+    return { open: list.open.map(row), history: list.history.map(row) };
   });
 
   // ── GET /v1/challenges/:id ────────────────────────────────────────────────

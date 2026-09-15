@@ -479,8 +479,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     cancel: (c, t) => getChallengeStore().cancel(c, t),
     standings: (c, t) => getChallengeStore().standings(c, t),
     finalizeIfDue: (c, t) => getChallengeStore().finalizeIfDue(c, t),
-    listForDevice: (d) => getChallengeStore().listForDevice(d),
-    myResult: (id, d) => getChallengeStore().myResult(id, d),
+    listForDevice: (d, t, o) => getChallengeStore().listForDevice(d, t, o),
     catchLog: (c, d) => getChallengeStore().catchLog(c, d),
   };
   const challengesEnabled = options.challengesEnabled ?? challengesEnabledFromEnv();
