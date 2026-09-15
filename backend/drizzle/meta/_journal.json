@@ -71,6 +71,13 @@
       "when": 1788737849239,
       "tag": "0009_device-disabled-at",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789480007571,
+      "tag": "0010_challenges",
+      "breakpoints": true
     }
   ]
 }
