@@ -104,6 +104,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
   <a href="#ia">3. Information architecture</a>
   <a href="#flows">4. Flows</a>
   <a href="#notifications" style="padding-left:22px">4.7 Notifications</a>
+  <a href="#onboarding" style="padding-left:22px">4.8 New users</a>
   <a href="#rules">5. Rules of play</a>
   <a href="#screens">6. Screen and state inventory</a>
   <a href="#visual">7. Visual design</a>
@@ -111,6 +112,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
   <a href="#privacy">9. Privacy and authorization</a>
   <a href="#backend">10. Backend model and API</a>
   <a href="#links">11. Invite links and install</a>
+  <a href="#versions" style="padding-left:22px">11.2 Older builds</a>
   <a href="#analytics">12. Analytics and metrics</a>
   <a href="#testing">13. Testing</a>
   <a href="#phases">14. Phases and rollout</a>
@@ -135,8 +137,8 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
   <li><b>The spec is below.</b> Where I disagree with the current direction I say so and give a recommendation. The disagreements are small: keep the bottom bar as proposed, but make the account button open the existing Profile rather than a new half-height menu, and put the live-challenge entry on the Leaders screen itself rather than only behind a toolbar flag.</li>
 </ul>
 
-<div class="callout decide"><span class="tag">What I need from you</span>
-<p>D1 to D16 are settled (section 15 records each answer). Three new ones need a call: D17 how much push ships in v1 (local time-based alerts in phase 2, remote push in phase 3 is my recommendation), D18 whether to lay the quest seams now (one column and one interface, recommended), and D19 how invite growth is attributed (server-side referral on the device row, recommended). Answer those and phase 0 and phase 1 start.</p></div>
+<div class="callout ok"><span class="tag">Revision 3 · build approved</span>
+<p>D17 to D19 approved as recommended, so the build has started (phase 0 on <code>feat/challenges-nav</code>, phase 1 on <code>feat/challenges-backend</code>). Two late inputs are folded in: Challenges is part of the new-user experience (section 4.8), and because the first round of testing is between TestFlight users, invite links must fail gracefully for people on older builds (section 11.2, with one config endpoint the client and the landing page both read).</p></div>
 
 <h2 id="poc">1. The POC, ported and reviewed</h2>
 
@@ -285,6 +287,14 @@ Challenges hub
 <tr><td>Challenge cancelled</td><td>Server</td><td>Remote push; until then the hub shows Cancelled on next open</td><td>3</td></tr>
 </table></div>
 <p>Rules for the local ones: their own identifiers (<code>tailspot.challenge.&lt;id&gt;.&lt;moment&gt;</code>), never touching the streak reminder's single-pending rule; one Settings toggle "Challenges" under REMINDERS, default on, sharing the streak toggle's authorization state; suppressed while the app is frontmost like the streak reminder; a tap opens that challenge. Remote push in phase 3 needs from you the APNs key in the developer portal and the Push Notifications capability in Xcode. On the server it is a <code>push_tokens</code> table, a token-registration route, and an APNs HTTP/2 client with a JWT signed by the key, sent from the request path that observed the event (a join, a finalization), so no background job is required. That APNs foundation is the one PLAN §9 already wanted for leaderboard and plane-overhead alerts, so it is a shared investment, not a challenges tax. Decision D17.</p>
+
+<h3 id="onboarding">4.8 Challenges in the new-user experience</h3>
+<p>Two kinds of new user meet Challenges, and they need different things.</p>
+<ul>
+  <li><b>Invited new user</b> (installed from a challenge link). They arrive with a code and a reason. The Welcome step of onboarding shows a small banner when a pending invite exists: "@eli invited you to Weekend Flyoff. Finish setup and you're in." Onboarding otherwise runs unchanged (camera, location, the first-catch steps when R4/R5 land). The Join sheet appears immediately after the last step with the handle claim inline, so the first thing they do after setup is join. Their first catch then shows the challenge ledger line on the reveal, which is the moment the feature explains itself. If the pending invite came from a typed code rather than a link, the same path applies.</li>
+  <li><b>Organic new user.</b> Nobody should be asked to race before they have caught a plane. After the first catch, the Profile's Challenges tile carries the subtitle "Race a friend" until they have created or joined one, and the hub's empty state is the three-line intro with Create and Join with code. No interstitial, no coachmark tour. If the first-catch onboarding (R4/R5) lands in the same train, its closing card gets one line: "Want a rival? Challenge a friend from your Profile."</li>
+  <li><b>What onboarding must not do:</b> hold the invite hostage behind permissions. If the user declines camera or location, the Join sheet still appears; they join, and the AR view's existing permission recovery handles the rest.</li>
+</ul>
 
 <h2 id="rules">5. Rules of play</h2>
 <div class="tbl"><table>
@@ -444,6 +454,7 @@ ORDER BY points DESC, d.handle ASC;
 <tr><td><code>POST /v1/invites/:code/join</code></td><td>bearer + handle</td><td>30/hour/device</td><td>200 challenge; 409 full; 410 ended or cancelled; 422 no handle. Sets <code>joined_as_new_device</code> and the device's <code>referred_by_challenge_id</code> when the device registered within 7 days and has no earlier participation.</td></tr>
 <tr><td><code>GET /v1/invites/:code/preview</code></td><td>none, Origin allowlist</td><td>30/min/IP, 60 s memo</td><td>{name, creator, startsAt, endsAt, count, status} for the landing page</td></tr>
 <tr><td><code>PUT /v1/devices/me/push-token</code></td><td>bearer</td><td>10/hour/device</td><td>204. Phase 3.</td></tr>
+<tr><td><code>GET /v1/challenges/config</code></td><td>none, Origin allowlist for browsers</td><td>60/min/IP, 60 s memo</td><td>{enabled, availability, minBuild, appStoreURL}. Section 11.2.</td></tr>
 </table></div>
 <p>Every bearer route follows the hardening pattern: per-IP limiter before the token lookup, <code>resolveDevice</code>, per-device limiter, then work. Responses use additive JSON so a future field never breaks a shipped client. A <code>CHALLENGES_ENABLED</code> env flag makes every challenge route 404 when off, which is the kill switch and the dark-deploy switch.</p>
 
@@ -467,6 +478,24 @@ ORDER BY points DESC, d.handle ASC;
   <li><b>PostHog</b> gets <code>new_user: true</code> on <code>challenge_joined</code> so the funnel from landing to first catch can be read per cohort.</li>
 </ul>
 <p>The code typed after install is what carries the referral across the App Store gap, so the landing page must make the code impossible to miss. Decision D19.</p>
+
+<h3 id="versions">11.2 Older builds and the TestFlight-only period</h3>
+<p>The first challenges will run between TestFlight testers while the App Store still has 1.1.1. A tester will send a link to someone on the App Store build, or to someone with no app at all. Every one of those cases must land somewhere sensible.</p>
+<div class="tbl"><table>
+<tr><th>Who opens the link</th><th>What happens</th><th>Why it works</th></tr>
+<tr><td>Tester on the new build</td><td>Universal link opens the app into the Join sheet.</td><td>Only the new build carries the Associated Domains entitlement.</td></tr>
+<tr><td>App Store user on 1.1.1 or older</td><td>iOS opens Safari, because the old build has no entitlement. The landing page shows the challenge card and, during the TestFlight period, "Challenges is testing on TestFlight right now. If you're a tester, update in TestFlight and enter this code." After public release it shows "Update Tailspot from the App Store, then enter this code."</td><td>Old builds never see a challenge route and cannot enter a code, so nothing half-works.</td></tr>
+<tr><td>No app installed</td><td>Same landing page. During the TestFlight period the App Store badge is replaced by the TestFlight note, so nobody installs 1.1.1 expecting to join. After release the badge returns.</td><td></td></tr>
+<tr><td>New build, server flag off</td><td>The hub shows "Challenges aren't available right now"; the Join sheet says the same and keeps the code so it can be retried.</td><td>Kill switch.</td></tr>
+<tr><td>Future: build older than the server's minimum</td><td>The hub and Join sheet show "Update Tailspot to keep using Challenges" with a link to the App Store, and nothing else.</td><td>One config read.</td></tr>
+</table></div>
+<p>The mechanism is one small unauthenticated endpoint that both the app and the landing page read:</p>
+<pre><code>GET /v1/challenges/config          (no auth; Origin allowlist for browsers; 60 s cache)
+{ "enabled": true,
+  "availability": "testflight",    // 'testflight' | 'public', from CHALLENGES_AVAILABILITY
+  "minBuild": 95,                  // CFBundleVersion the client must meet
+  "appStoreURL": "https://apps.apple.com/..." }</code></pre>
+<p>The app reads it when the hub, the Profile tile or a pending invite needs it, caches the last answer, and compares <code>minBuild</code> with its own build number. Flipping availability or raising the minimum is an env change on Fly with no web or app deploy. This replaces the earlier "routes 404 when disabled" rule: the routes still refuse when disabled, but the client learns why from the config, not from a 404.</p>
 
 <h2 id="analytics">12. Analytics events, success metrics and guardrails</h2>
 <h3>Events (snake_case, PostHog, no names or codes)</h3>
@@ -547,11 +576,11 @@ ORDER BY points DESC, d.handle ASC;
 <p>The server flag is the safety net: if anything about the feature is wrong after launch, turning it off makes the tile and flag disappear on the next fetch and the hub shows "Challenges aren't available right now", with no client release.</p>
 
 <h2 id="decisions">15. Decisions</h2>
-<p>D1 to D16 were answered on 2026-09-15: every recommendation holds except D7, D9 and D15, whose resolutions are recorded in place. D17 to D19 are new and open.</p>
+<p>D1 to D16 were answered on 2026-09-15: every recommendation holds except D7, D9 and D15, whose resolutions are recorded in place. D17 to D19 were approved as recommended the same day. Nothing is open.</p>
 <div class="decisions">
-  <div class="dec"><span class="id">D17 · open</span><h4>How much push ships in v1</h4><p>Local time-based reminders only (starts, ending soon, finished) in phase 2; or those plus remote push (someone joined, finished with placement, cancelled) in phase 3; or hold all notifications for a later release.</p><p class="rec"><b>Recommend</b> local in phase 2 and remote in phase 3, with phase 3 push allowed to slip past the v1.2 submission if the APNs setup drags. The local set covers the moments Noah named except "you were invited", which the text message already is.</p></div>
-  <div class="dec"><span class="id">D18 · open</span><h4>Quest seams now</h4><p>Write <code>challenges.kind</code> and the scorer interface in phase 1; or build v1 strictly private and refactor when quests come.</p><p class="rec"><b>Recommend</b> write them now. One default column and one interface with one implementation; the refactor later would touch every route.</p></div>
-  <div class="dec"><span class="id">D19 · open</span><h4>Invite growth attribution</h4><p>Server-side referral (device registered within 7 days, first join, stamped once) plus the App Store campaign and the PostHog flag; or App Store campaign only.</p><p class="rec"><b>Recommend</b> all three. Only the server-side one can answer "how many new spotters did challenges bring", and it is two columns.</p></div>
+  <div class="dec"><span class="id">D17 · approved</span><h4>How much push ships in v1</h4><p>Local time-based reminders only (starts, ending soon, finished) in phase 2; or those plus remote push (someone joined, finished with placement, cancelled) in phase 3; or hold all notifications for a later release.</p><p class="rec"><b>Recommend</b> local in phase 2 and remote in phase 3, with phase 3 push allowed to slip past the v1.2 submission if the APNs setup drags. The local set covers the moments Noah named except "you were invited", which the text message already is.</p></div>
+  <div class="dec"><span class="id">D18 · approved</span><h4>Quest seams now</h4><p>Write <code>challenges.kind</code> and the scorer interface in phase 1; or build v1 strictly private and refactor when quests come.</p><p class="rec"><b>Recommend</b> write them now. One default column and one interface with one implementation; the refactor later would touch every route.</p></div>
+  <div class="dec"><span class="id">D19 · approved</span><h4>Invite growth attribution</h4><p>Server-side referral (device registered within 7 days, first join, stamped once) plus the App Store campaign and the PostHog flag; or App Store campaign only.</p><p class="rec"><b>Recommend</b> all three. Only the server-side one can answer "how many new spotters did challenges bring", and it is two columns.</p></div>
   <div class="dec"><span class="id">D1</span><h4>What the account button opens</h4><p>Options: the existing Profile sheet with a Challenges tile; or the Codex half-height menu; or a medium/large detent sheet with Profile below the fold.</p><p class="rec"><b>Recommend</b> the existing Profile. It keeps streak, points hero, best catch and laurels, and costs nothing to build.</p></div>
   <div class="dec"><span class="id">D2</span><h4>Live-challenge entry on Leaders</h4><p>Toolbar flag only, or flag plus a live strip under the window switcher.</p><p class="rec"><b>Recommend</b> flag plus strip. The strip only exists while you are in a challenge.</p></div>
   <div class="dec"><span class="id">D3</span><h4>Late joins</h4><p>Accept until the end with all in-window catches counting; or close joins at 50% elapsed; or count only catches after acceptance.</p><p class="rec"><b>Recommend</b> accept until the end, as you proposed. The join screen states it.</p></div>
