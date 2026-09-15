@@ -100,8 +100,10 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
   <a href="#summary">Summary</a>
   <a href="#poc">1. The POC, ported and reviewed</a>
   <a href="#goals">2. Goals and non-goals</a>
+  <a href="#quests" style="padding-left:22px">2.1 Public quests later</a>
   <a href="#ia">3. Information architecture</a>
   <a href="#flows">4. Flows</a>
+  <a href="#notifications" style="padding-left:22px">4.7 Notifications</a>
   <a href="#rules">5. Rules of play</a>
   <a href="#screens">6. Screen and state inventory</a>
   <a href="#visual">7. Visual design</a>
@@ -119,7 +121,9 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
 <main><article>
 
 <h1>Tailspot Challenges v1</h1>
-<p class="meta">Decision-ready feature spec · 2026-09-15 · branch <b>feat/challenges-poc</b> (commit d132b13) · written by Claude for Noah · nothing in production has been built</p>
+<p class="meta">Decision-ready feature spec · revision 2, 2026-09-15 · branch <b>feat/challenges-poc</b> · written by Claude for Noah · nothing in production has been built</p>
+<div class="callout ok"><span class="tag">Revision 2</span>
+<p>Noah accepted every recommendation in section 15 except D7 (make and model in the catch log), D9 (no upload grace) and D15 (no product limits). He added four inputs: push notifications are in scope, public quests are a future direction the architecture should anticipate, invites must not become a spam channel, and a challenge invite is also an app invite whose new-user growth we track. Sections 2.1, 4.7, 5, 9, 10, 11, 12 and 15 changed. Three new decisions, D17 to D19, are the last gate.</p></div>
 
 <h2 id="summary" style="border-top:0; margin-top:0; padding-top:0;">Summary</h2>
 <p class="lede">Challenges let two to ten spotters race for points inside a shared time window. Anyone can start one, share a link, and the standard Tailspot score decides it. This spec turns the Codex navigation mock into a buildable v1 and lists the sixteen decisions still open.</p>
@@ -132,7 +136,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
 </ul>
 
 <div class="callout decide"><span class="tag">What I need from you</span>
-<p>Read section 15 first if you are short on time. D1 (account surface), D3 (late joins), D5 (cancel after start) and D8 (validation verdicts) change the build the most. Everything else has a recommendation I am comfortable defaulting to. Once you have answered, phase 0 (navigation) and phase 1 (backend) can start the same day.</p></div>
+<p>D1 to D16 are settled (section 15 records each answer). Three new ones need a call: D17 how much push ships in v1 (local time-based alerts in phase 2, remote push in phase 3 is my recommendation), D18 whether to lay the quest seams now (one column and one interface, recommended), and D19 how invite growth is attributed (server-side referral on the device row, recommended). Answer those and phase 0 and phase 1 start.</p></div>
 
 <h2 id="poc">1. The POC, ported and reviewed</h2>
 
@@ -184,11 +188,22 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
 <ul>
   <li>No friend graph, follows, or in-app invite inbox. Invites are links and codes.</li>
   <li>No chat, wagering, custom scoring, handicaps or team modes.</li>
-  <li>No push notifications. The app has no APNs foundation; adding one is a separate project. Challenge state is pulled when screens appear.</li>
-  <li>No offline framework. Catches already upload with retry; challenges just count what reached the server.</li>
-  <li>No public or discoverable challenges. You are in one because you created it or opened its link.</li>
+  <li>No live push of standings. Notifications cover the moments that matter (section 4.7); the standings themselves are pulled when screens appear.</li>
+  <li>No offline framework. Catches already upload with retry; challenges count what reached the server before the end.</li>
+  <li>No public or discoverable challenges in this release. You are in one because you created it or opened its link. Section 2.1 says how the build leaves room for public quests.</li>
+  <li>No invite-by-handle, no invite inbox, no notification to someone who has not joined. These are the anti-spam guarantees (section 9).</li>
   <li>No location, photo, callsign, registration or route data ever leaves the participant's own device into a challenge view.</li>
 </ul>
+
+<h3 id="quests">2.1 Looking ahead: public quests</h3>
+<p>Noah wants a later release to offer public daily or weekly quests: catch three narrow-bodies, three private jets, three of the same airline. Those are self-competition with a reward, not a race against named people, and they should connect to the trophy screens. Nothing of that ships in v1, but four seams cost almost nothing now and avoid a rebuild later:</p>
+<ul>
+  <li><b>A challenge is a window plus a scorer.</b> Private challenges score <code>SUM(points)</code> and rank participants. A quest scores a predicate count against a target ("catches whose type bucket is narrow ≥ 3") and marks completion. The backend store exposes one <code>scoreParticipant(challenge, deviceId)</code> seam with the private scorer as its only implementation in v1. The server already has the type bucket (narrow, wide, regional, biz, ga, mil) on <code>typecodes</code> and the operator on catches, so quest predicates need no new data.</li>
+  <li><b><code>challenges.kind</code></b> is written now as <code>'private'</code>. A quest row later carries <code>kind = 'quest'</code>, no invite code, an <code>objective</code> JSON column and a public visibility. Adding the column now is additive and free; adding it later means a backfill.</li>
+  <li><b>Participation and results tables are shared.</b> <code>challenge_participants</code> already means "I'm in". <code>challenge_results</code> gains nullable <code>progress</code> and <code>completed</code> alongside placement when quests arrive, so the FLIGHT LOG and the reward moment extend rather than fork.</li>
+  <li><b>Rewards flow through server facts.</b> Weekly wins already reach the trophies as cached server facts (<code>LeaderboardStandingCache</code>). Challenge wins and, later, quest completions follow that exact path: the server counts them, the client caches them, the trophy roster reads the cache. The Ace trophy in phase 3 is the first use.</li>
+</ul>
+<p>What stays deliberately out of the v1 build: the hub's sections are not designed for a public catalogue, and the standings query assumes ten rows, not ten thousand. Quests will need a self-progress read path, not the standings path. Decision D18.</p>
 
 <h2 id="ia">3. Information architecture</h2>
 <p>The current direction (Hangar / Capture / Leaders on the bar, account top right, Challenges pushed from Leaders and reachable from the account menu and the catch result) is sound. Two refinements follow from the product behaviour.</p>
@@ -257,19 +272,33 @@ Challenges hub
 <h3>4.6 History</h3>
 <p>FLIGHT LOG lists every finished challenge you were in when it ended, newest first, with placement medal colour, "Won", "Tied 1st", "3rd of 6" or "No contest", points and date. Cancelled challenges appear greyed with "Cancelled". Challenges you left do not appear.</p>
 
+<h3 id="notifications">4.7 Notifications</h3>
+<p>Noah asked whether the streak reminders make this a small lift. Partly. The streak reminders are local notifications: the app schedules them itself with <code>UNUserNotificationCenter</code>, no server involved. That gives us the permission prompt, the in-context pre-prompt, the Settings toggle pattern and a tested decision function. It gives us nothing for a notification that originates on the server, because the app has no APNs foundation: no push capability, no device token table, no APNs client, no background job. So the honest split is by who knows the event.</p>
+<div class="tbl"><table>
+<tr><th>Moment</th><th>Who knows it</th><th>Mechanism</th><th>Phase</th></tr>
+<tr><td>You were invited</td><td>Nobody but the sender</td><td>The text message is the notification. Invites are links; the app cannot know about one until it is opened, and that is the anti-spam guarantee.</td><td>n/a</td></tr>
+<tr><td>Your scheduled challenge starts now</td><td>Your phone</td><td>Local, scheduled when you create or join</td><td>2</td></tr>
+<tr><td>One hour left (24h and longer windows); 10 minutes left (1h windows)</td><td>Your phone</td><td>Local, scheduled on join, rescheduled on leave or cancel</td><td>2</td></tr>
+<tr><td>Challenge finished, results are in</td><td>Your phone (time) and the server (placement)</td><td>Local at <code>endsAt</code> with generic copy ("Weekend Flyoff just finished. See how you did."); the push version later carries your placement</td><td>2, upgraded in 3</td></tr>
+<tr><td>Someone joined your challenge</td><td>Server</td><td>Remote push to the creator and current participants</td><td>3</td></tr>
+<tr><td>You were overtaken</td><td>Server</td><td>Remote push, at most one per hour per challenge</td><td>3 or later</td></tr>
+<tr><td>Challenge cancelled</td><td>Server</td><td>Remote push; until then the hub shows Cancelled on next open</td><td>3</td></tr>
+</table></div>
+<p>Rules for the local ones: their own identifiers (<code>tailspot.challenge.&lt;id&gt;.&lt;moment&gt;</code>), never touching the streak reminder's single-pending rule; one Settings toggle "Challenges" under REMINDERS, default on, sharing the streak toggle's authorization state; suppressed while the app is frontmost like the streak reminder; a tap opens that challenge. Remote push in phase 3 needs from you the APNs key in the developer portal and the Push Notifications capability in Xcode. On the server it is a <code>push_tokens</code> table, a token-registration route, and an APNs HTTP/2 client with a JWT signed by the key, sent from the request path that observed the event (a join, a finalization), so no background job is required. That APNs foundation is the one PLAN §9 already wanted for leaderboard and plane-overhead alerts, so it is a shared investment, not a challenges tax. Decision D17.</p>
+
 <h2 id="rules">5. Rules of play</h2>
 <div class="tbl"><table>
 <tr><th>Rule</th><th>v1 behaviour</th><th>Why</th></tr>
 <tr><td>Window</td><td>Fixed <code>[startsAt, endsAt)</code> in UTC instants, shown in local time. Presets 1h / 24h / 3d / 7d. Scheduled starts up to 14 days ahead.</td><td>Matches the leaderboard's fixed-window model. No rolling windows.</td></tr>
-<tr><td>What counts</td><td>A catch counts for a participant when the server has accepted it (<code>POST /v1/catches</code> succeeded), its <code>caughtAt</code> is inside the window, and it arrived before <code>endsAt + 15 min</code>.</td><td>Standard scoring, server truth. The grace absorbs upload retries. Decision D9 on the grace length.</td></tr>
+<tr><td>What counts</td><td>A catch counts for a participant when the server accepted it (<code>POST /v1/catches</code> succeeded) before <code>endsAt</code> and its <code>caughtAt</code> is inside the window. No grace: a catch that reaches the server after the end does not count, whatever its <code>caughtAt</code>.</td><td>Standard scoring, server truth. Catching needs a network for ADS-B anyway, so uploads land within seconds. Decided (D9).</td></tr>
 <tr><td>Validation verdict</td><td>Not enforced. The plausibility verdict is instrumented only, app-wide.</td><td>Challenges inherit the global anti-cheat posture rather than forking it. Decision D8.</td></tr>
 <tr><td>Late joins</td><td>Anyone with the link may join until <code>endsAt</code>. On joining, all their in-window catches count, including earlier ones.</td><td>Punishing people for reading the message late kills small groups. Sniping is bounded by the invite being private. Decision D3.</td></tr>
 <tr><td>Ties</td><td>Competition ranking: equal points share the placement and the next placement is skipped (1st, 1st, 3rd). Everyone tied at the top wins.</td><td>Your requirement. Note this differs from the global board, which orders ties by registration date.</td></tr>
 <tr><td>No Contest</td><td>At finalization, fewer than two accepted participants, or no participant with any points, ends as No Contest. Nobody wins; it appears in history as No contest.</td><td>A 0–0 "shared win" is silly. Decision D4 on the zero-points clause.</td></tr>
 <tr><td>Cancellation</td><td>Creator only, only before <code>startsAt</code>. A live challenge cannot be cancelled by anyone.</td><td>Cancelling while losing would poison small groups. Decision D5.</td></tr>
 <tr><td>Leaving</td><td>Any participant may leave until <code>endsAt</code>. Their row disappears. They may rejoin through the link. If the creator leaves before start, the challenge is cancelled.</td><td>Leaving is the escape hatch. Decision D6 on the creator clause.</td></tr>
-<tr><td>Finalization</td><td>Lazy, on the first read after <code>endsAt + grace</code>, exactly like weekly champions. Results are frozen in their own table so later rescoring never rewrites a placement.</td><td>Reuses the pattern that already runs in prod.</td></tr>
-<tr><td>Limits</td><td>10 participants. 5 open challenges created per device. 10 open participations per device. 10 creations per device per day.</td><td>Bounds the standings query fan-out on a 256 MB VM. Decision D15.</td></tr>
+<tr><td>Finalization</td><td>Lazy, on the first read after <code>endsAt</code>, exactly like weekly champions. Results are frozen in their own table so later rescoring never rewrites a placement.</td><td>Reuses the pattern that already runs in prod.</td></tr>
+<tr><td>Limits</td><td>10 participants per challenge. No cap on how many challenges a person creates or joins.</td><td>Decided (D15). Per-route rate limits stay because every route has one; they are abuse protection, not product limits.</td></tr>
 <tr><td>Identity</td><td>A claimed handle is required to create or join.</td><td>Standings show handles; the global board has the same rule. Decision D11.</td></tr>
 </table></div>
 
@@ -284,7 +313,8 @@ Challenges hub
 <tr><td>Create form</td><td>editing · needs handle · invalid name · schedule out of range · submitting · error · created (share sheet up)</td><td></td></tr>
 <tr><td>Join with code</td><td>entry · looking up · not found · rate limited</td><td>8-character code, unambiguous alphabet, auto-uppercase.</td></tr>
 <tr><td>Join preflight</td><td>loading · preview · needs handle (inline claim) · full · ended · cancelled · already in · joining · error</td><td>Also the deep-link landing surface.</td></tr>
-<tr><td>Challenge detail</td><td>upcoming (creator: Share, Cancel; others: Share, Leave) · live · finalizing (ended, inside grace) · results first view · results · no contest · cancelled · you left (not reachable)</td><td>One screen, state-driven header.</td></tr>
+<tr><td>Challenge detail</td><td>upcoming (creator: Share, Cancel; others: Share, Leave) · live · results first view · results · no contest · cancelled · you left (not reachable)</td><td>One screen, state-driven header.</td></tr>
+<tr><td>Settings → REMINDERS</td><td>Challenges toggle on / off · notifications not authorized</td><td>Sits under the streak reminder toggle, same row style.</td></tr>
 <tr><td>Catch log (per spotter)</td><td>rows: model, rarity tier, points, time · empty ("no catches yet")</td><td>Expandable row or push; never location, photo, callsign, registration.</td></tr>
 <tr><td>Results share card</td><td>rendered image · ties · no contest (no card)</td><td>ImageRenderer, campaign "Tailspot Challenge Share".</td></tr>
 <tr><td>Catch reveal ledger</td><td>line present when a live challenge exists · absent</td><td>Phase 3.</td></tr>
@@ -314,7 +344,18 @@ Challenges hub
 
 <h2 id="privacy">9. Privacy and authorization</h2>
 <div class="callout"><span class="tag">The boundary</span>
-<p>A challenge participant may learn about another participant exactly: handle, total points and catch count in this window, placement, rarity breakdown, and a catch log of model name, rarity tier, points and time. Nothing else. No observer coordinates, no aircraft coordinates, no heading, no photo (none exist server side), no callsign, no ICAO hex, no registration, no route, no operator, no guess outcome, no validation verdict.</p></div>
+<p>A challenge participant may learn about another participant exactly: handle, total points and catch count in this window, placement, rarity breakdown, and a catch log of make and model (for example "Boeing 737-800"), rarity tier, points and time. Nothing else. No observer coordinates, no aircraft coordinates, no heading, no photo (none exist server side), no callsign or flight number, no ICAO hex, no registration or tail number, no route, no operator, no guess outcome, no validation verdict. Operator stays out because an airline plus a time can identify a flight; it is a one-line change if you decide you want it.</p></div>
+
+<h3>9.1 Invites cannot become spam</h3>
+<p>Noah's concern: if anyone can invite anyone inside the app, someone will invite everyone to everything. The design closes that by never giving the app a way to address another person. Concretely:</p>
+<ul>
+  <li>There is no invite-by-handle, no people picker, no invite inbox, and no notification of any kind to a person who has not joined. The only way to reach someone is to send them the link yourself through Messages, email or wherever the share sheet goes, which means you already have their contact. That is the requirement Noah suggested, and it falls out of the architecture rather than needing a rule.</li>
+  <li>Opening a link never notifies anyone and never records the opener until they tap Join.</li>
+  <li>Codes are unguessable (about 40 bits) and lookups are rate limited per IP before any database read, so nobody can enumerate challenges and no stranger can land in yours.</li>
+  <li>If a link is posted somewhere public, the 10-participant cap fills it, the creator can cancel before start, and anyone can leave. A "remove participant" control for the creator is the first thing to add if that ever happens in practice.</li>
+  <li>When remote push arrives in phase 3 it goes only to accepted participants of that challenge, and "overtaken" is capped at one per hour per challenge.</li>
+  <li>Any future invite-by-handle would need a consent step (mutual challenge history, or an opt-in in Settings) and is out of scope until then.</li>
+</ul>
 <ul>
   <li><b>Who can read a challenge:</b> accepted participants (joined, not left) with a valid bearer token. Everyone else gets 404, never 403, so codes cannot be probed for existence through the authenticated route.</li>
   <li><b>Invite preview:</b> a bearer route returns name, creator handle, window, participant handles and count. A separate public preview for the web landing page returns only name, creator handle, window and count, gated by the same Origin allowlist and cache as <code>GET /v1/stats</code>.</li>
@@ -330,7 +371,8 @@ Challenges hub
 <h3>10.1 Tables</h3>
 <pre><code>challenges
   id               uuid PK
-  code             text UNIQUE            -- invite code, 8 chars
+  kind             text NOT NULL DEFAULT 'private'   -- quest seam (D18); v1 writes 'private' only
+  code             text UNIQUE            -- invite code, 8 chars (null for a future public quest)
   name             text NOT NULL
   creator_device_id uuid FK devices
   starts_at        timestamptz NOT NULL
@@ -348,8 +390,18 @@ challenge_participants
   device_id        uuid FK devices
   joined_at        timestamptz NOT NULL
   left_at          timestamptz
+  joined_as_new_device boolean NOT NULL DEFAULT false  -- growth attribution (D19)
   PRIMARY KEY (challenge_id, device_id)
   INDEX (device_id) WHERE left_at IS NULL
+
+devices: ADD referred_by_challenge_id uuid FK challenges   -- first-touch, set once (D19)
+
+push_tokens                               -- phase 3, APNs foundation
+  device_id        uuid FK devices
+  token            text NOT NULL
+  environment      text NOT NULL          -- 'sandbox' | 'production'
+  updated_at       timestamptz NOT NULL
+  PRIMARY KEY (device_id, token)
 
 challenge_results                         -- frozen at finalization
   challenge_id     uuid FK challenges
@@ -361,7 +413,7 @@ challenge_results                         -- frozen at finalization
   PRIMARY KEY (challenge_id, device_id)
 
 catches: ADD INDEX catches_device_caught_idx (device_id, caught_at)</code></pre>
-<p>Status is derived, never stored: cancelled if <code>cancelled_at</code>, else upcoming before <code>starts_at</code>, live until <code>ends_at</code>, finalizing until <code>ends_at + grace</code>, finished after finalization.</p>
+<p>Status is derived, never stored: cancelled if <code>cancelled_at</code>, else upcoming before <code>starts_at</code>, live until <code>ends_at</code>, finished after. Finalization runs inside the first read after <code>ends_at</code>, so a reader never sees an unfinalized finished challenge.</p>
 
 <h3>10.2 Standings query</h3>
 <pre><code>SELECT p.device_id, d.handle,
@@ -373,7 +425,7 @@ JOIN devices d ON d.id = p.device_id AND d.disabled_at IS NULL
 LEFT JOIN catches c
   ON c.device_id = p.device_id
  AND c.caught_at >= $starts_at AND c.caught_at < $ends_at
- AND c.created_at < $ends_at + interval '15 minutes'
+ AND c.created_at <= $ends_at                      -- no grace (D9)
 WHERE p.challenge_id = $id AND p.left_at IS NULL
 GROUP BY p.device_id, d.handle
 ORDER BY points DESC, d.handle ASC;
@@ -382,15 +434,16 @@ ORDER BY points DESC, d.handle ASC;
 <h3>10.3 Routes</h3>
 <div class="tbl"><table>
 <tr><th>Route</th><th>Auth</th><th>Limit</th><th>Returns</th></tr>
-<tr><td><code>POST /v1/challenges</code></td><td>bearer + handle</td><td>10/day/device</td><td>201 challenge (with code and invite URL); 422 name or schedule invalid; 409 too many open</td></tr>
+<tr><td><code>POST /v1/challenges</code></td><td>bearer + handle</td><td>30/hour/device</td><td>201 challenge (with code and invite URL); 422 name or schedule invalid</td></tr>
 <tr><td><code>GET /v1/challenges?scope=open|history</code></td><td>bearer</td><td>60/min/device</td><td>list of challenge summaries with my placement</td></tr>
 <tr><td><code>GET /v1/challenges/:id</code></td><td>bearer, participant</td><td>120/min/device</td><td>challenge + standings + me; triggers lazy finalization; 404 otherwise</td></tr>
 <tr><td><code>GET /v1/challenges/:id/log/:handle</code></td><td>bearer, participant</td><td>120/min/device</td><td>catch log rows {model, rarity, points, caughtAt}</td></tr>
 <tr><td><code>POST /v1/challenges/:id/leave</code></td><td>bearer, participant</td><td>30/hour/device</td><td>204; creator before start → cancels</td></tr>
 <tr><td><code>POST /v1/challenges/:id/cancel</code></td><td>bearer, creator, before start</td><td>30/hour/device</td><td>204; 409 after start</td></tr>
 <tr><td><code>GET /v1/invites/:code</code></td><td>bearer</td><td>30/min/IP before token lookup</td><td>preview {name, creator, startsAt, endsAt, participants[], count, status}; 404 unknown</td></tr>
-<tr><td><code>POST /v1/invites/:code/join</code></td><td>bearer + handle</td><td>30/hour/device</td><td>200 challenge; 409 full; 410 ended or cancelled; 422 no handle</td></tr>
+<tr><td><code>POST /v1/invites/:code/join</code></td><td>bearer + handle</td><td>30/hour/device</td><td>200 challenge; 409 full; 410 ended or cancelled; 422 no handle. Sets <code>joined_as_new_device</code> and the device's <code>referred_by_challenge_id</code> when the device registered within 7 days and has no earlier participation.</td></tr>
 <tr><td><code>GET /v1/invites/:code/preview</code></td><td>none, Origin allowlist</td><td>30/min/IP, 60 s memo</td><td>{name, creator, startsAt, endsAt, count, status} for the landing page</td></tr>
+<tr><td><code>PUT /v1/devices/me/push-token</code></td><td>bearer</td><td>10/hour/device</td><td>204. Phase 3.</td></tr>
 </table></div>
 <p>Every bearer route follows the hardening pattern: per-IP limiter before the token lookup, <code>resolveDevice</code>, per-device limiter, then work. Responses use additive JSON so a future field never breaks a shipped client. A <code>CHALLENGES_ENABLED</code> env flag makes every challenge route 404 when off, which is the kill switch and the dark-deploy switch.</p>
 
@@ -406,6 +459,15 @@ ORDER BY points DESC, d.handle ASC;
   <li><b>Link opened in Safari on a phone with the app:</b> iOS shows the Open in Tailspot banner; the page also has an Open in app button.</li>
 </ul>
 
+<h3>11.1 The invite is an app invite, and we count the growth</h3>
+<p>Someone without the app should read the landing page as "a friend wants to race you in this app", not "error, install something". The page leads with the challenge card (name, creator, window, who is in), one sentence on what Tailspot is, two app screenshots, the App Store badge, and the code with the three-step instruction. Attribution has three layers because no single one is reliable:</p>
+<ul>
+  <li><b>App Store campaign</b> <code>ct=Tailspot Challenge Invite</code> on the badge, read in App Analytics beside the existing profile-share and catch-share campaigns. Coarse, opt-in dependent, but free.</li>
+  <li><b>Server-side referral</b>, the one that matters: when a device that registered within the last 7 days joins its first challenge, the join marks <code>joined_as_new_device</code> and stamps <code>devices.referred_by_challenge_id</code> once. From that, "new spotters brought in by challenges per week", "which creators recruit", and later an invite trophy (PLAN §9 #10 already asks for joined-from-your-invite attribution) all become one query.</li>
+  <li><b>PostHog</b> gets <code>new_user: true</code> on <code>challenge_joined</code> so the funnel from landing to first catch can be read per cohort.</li>
+</ul>
+<p>The code typed after install is what carries the referral across the App Store gap, so the landing page must make the code impossible to miss. Decision D19.</p>
+
 <h2 id="analytics">12. Analytics events, success metrics and guardrails</h2>
 <h3>Events (snake_case, PostHog, no names or codes)</h3>
 <div class="tbl"><table>
@@ -414,7 +476,8 @@ ORDER BY points DESC, d.handle ASC;
 <tr><td><code>challenge_created</code></td><td>challenge_id, duration_preset, start_mode (now, scheduled), lead_minutes</td></tr>
 <tr><td><code>challenge_invite_shared</code></td><td>challenge_id, method (share_sheet, copy_link)</td></tr>
 <tr><td><code>challenge_invite_opened</code></td><td>challenge_id, via (universal_link, code_entry), status (open, full, ended, cancelled, not_found)</td></tr>
-<tr><td><code>challenge_joined</code></td><td>challenge_id, participants_after, elapsed_fraction, needed_handle</td></tr>
+<tr><td><code>challenge_joined</code></td><td>challenge_id, participants_after, elapsed_fraction, needed_handle, new_user</td></tr>
+<tr><td><code>challenge_reminder_scheduled</code> / <code>challenge_reminder_opened</code></td><td>challenge_id, moment (starts, ending_soon, finished)</td></tr>
 <tr><td><code>challenge_viewed</code></td><td>challenge_id, state, my_placement, participants</td></tr>
 <tr><td><code>challenge_log_viewed</code></td><td>challenge_id, own (bool)</td></tr>
 <tr><td><code>challenge_left</code> / <code>challenge_cancelled</code></td><td>challenge_id, state, elapsed_fraction</td></tr>
@@ -429,6 +492,7 @@ ORDER BY points DESC, d.handle ASC;
   <li>Invite conversion: joins per created challenge, and joins per invite opened. A created challenge that never reaches two people is the failure mode to watch.</li>
   <li>Completion: share of challenges that finalize as decided rather than No Contest. Below 60% means the invite loop is broken, not the game.</li>
   <li>Re-challenge: share of participants who create or join another within 14 days.</li>
+  <li>Growth: new devices with <code>referred_by_challenge_id</code> per week, and their week-1 catch rate against organic installs. This is the number Noah asked for.</li>
   <li>Week-4 retention of challenge participants against activated non-participants, same cohort weeks. Lagging, read at a month.</li>
 </ul>
 <h3>Guardrails</h3>
@@ -445,7 +509,8 @@ ORDER BY points DESC, d.handle ASC;
 <ul>
   <li>Window edges: a catch at <code>starts_at − 1 s</code> and at <code>ends_at</code> do not count; at <code>starts_at</code> counts.</li>
   <li>Late join: catches before <code>joined_at</code> but inside the window count.</li>
-  <li>Grace: an upload with in-window <code>caught_at</code> and <code>created_at</code> at <code>ends_at + 14 min</code> counts; at +16 min does not.</li>
+  <li>No grace: an upload with in-window <code>caught_at</code> but <code>created_at</code> one second after <code>ends_at</code> does not count.</li>
+  <li>Referral: a device registered 6 days ago joining its first challenge is marked new and stamped; one registered 8 days ago is not; a second join never re-stamps.</li>
   <li>Ties: 100/100/60 → placements 1, 1, 3; both 1s are winners.</li>
   <li>No Contest: one participant; two participants with zero points.</li>
   <li>Cancel: allowed before start, 409 after; creator leave before start cancels.</li>
@@ -460,43 +525,48 @@ ORDER BY points DESC, d.handle ASC;
   <li>Decoding fixtures for every response, including additive unknown fields.</li>
   <li>Pure functions: placement formatting ("1st", "T-1st", "3rd of 6"), countdown copy at 59 s / 61 min / 25 h / 3 d, code parsing from a URL and from typed input (lowercase, spaces, ambiguous characters), the challenge state machine from timestamps.</li>
   <li>Pending-invite handoff: onOpenURL before onboarding completes presents after onboarding.</li>
+  <li>Reminder decisions as a pure clock-injected function, in the StreakReminders pattern: which local notifications exist after create, join, leave, cancel and end; the 1h window gets a 10-minute warning, longer windows a 1-hour warning; the streak reminder is never removed by challenge scheduling.</li>
   <li>Snapshot suites in the ProfileSettingsSnapshotTests pattern for every state in section 6, at default and AX2 Dynamic Type, plus Reduce Motion for the results first view. Render the device matrix before and after the bar change (iPhone SE height included, given the 2026-09-06 reveal bug).</li>
   <li>The existing leaderboard and profile snapshot suites stay green after the tile swap.</li>
 </ul>
 <h3>Field</h3>
 <ul>
-  <li>A real 1-hour challenge between your phone and a tester's phone, then a 24-hour one with three or four testers on TestFlight. Check: link opens the app, code entry works without the entitlement, standings agree with the leaderboard deltas, a catch uploaded on cellular after the end lands inside the grace, results first view fires once.</li>
+  <li>A real 1-hour challenge between your phone and a tester's phone, then a 24-hour one with three or four testers on TestFlight. Check: link opens the app, code entry works without the entitlement, standings agree with the leaderboard deltas, the ending-soon and finished reminders arrive at the right minute, results first view fires once, and a tester who installs from the landing page shows up as a referred device.</li>
 </ul>
 
 <h2 id="phases">14. Phased implementation and rollout</h2>
 <div class="tbl"><table>
 <tr><th>Phase</th><th>Scope</th><th>Ships as</th><th>Size</th></tr>
 <tr><td>0 Navigation</td><td>Bottom bar Leaders, account button → Profile with Challenges tile hidden behind the server flag, Leaders as a root sheet with Done. Snapshot matrix before and after.</td><td>Own PR to main. Could ride a 1.1.x point release; my recommendation is to open the v1.2 train with it (D14).</td><td>1–2 days</td></tr>
-<tr><td>1 Backend</td><td>Migration 0010, stores, all routes, tests, <code>CHALLENGES_ENABLED=false</code>. Deploy server first; you run the migration.</td><td>Backend PR, deployed dark.</td><td>3–4 days</td></tr>
-<tr><td>2 Client core</td><td>Client models, hub, create, share sheet with link, join with code, preflight, detail in every state, results, history, Profile tile, Leaders flag and strip, analytics.</td><td>One or two PRs; field-tested with the flag on for your device's build.</td><td>5–7 days</td></tr>
-<tr><td>3 Links and moments</td><td>Associated Domains (your manual step), AASA on nginx, landing page, onOpenURL, reveal ledger line, results share card, Ace trophy (D10).</td><td>PRs after phase 2 is on TestFlight.</td><td>3–4 days</td></tr>
-<tr><td>4 Rollout</td><td>Flag on in prod, TestFlight soak with two real challenges, App Store phased release, PostHog dashboard for section 12, crash check after each ring.</td><td>v1.2 submission is yours.</td><td>1 week soak</td></tr>
-<tr><td>Later</td><td>APNs foundation and challenge pushes, rematch button, link rotation, spectators.</td><td>Not v1.</td><td></td></tr>
+<tr><td>1 Backend</td><td>Migration 0010 (challenges with <code>kind</code>, participants with referral flag, results, the devices column, the catches index), stores behind the scorer seam, all routes, tests, <code>CHALLENGES_ENABLED=false</code>. Deploy server first; you run the migration.</td><td>Backend PR, deployed dark.</td><td>4–5 days</td></tr>
+<tr><td>2 Client core</td><td>Client models, hub, create, share sheet with link, join with code, preflight, detail in every state, results, history, Profile tile, Leaders flag and strip, local challenge reminders and the Settings toggle, analytics.</td><td>One or two PRs; field-tested with the flag on for your device's build.</td><td>6–8 days</td></tr>
+<tr><td>3 Links, push and moments</td><td>Associated Domains and the APNs key (two manual steps for you), AASA on nginx, landing page with the invite pitch, onOpenURL, push token route and APNs client, joined / finished / cancelled pushes, reveal ledger line, results share card, Ace trophy (D10).</td><td>PRs after phase 2 is on TestFlight. Push can trail the rest if the APNs setup drags.</td><td>5–6 days</td></tr>
+<tr><td>4 Rollout</td><td>Flag on in prod, TestFlight soak with two real challenges, App Store phased release, PostHog dashboard for section 12 plus the referral query, crash check after each ring.</td><td>v1.2 submission is yours.</td><td>1 week soak</td></tr>
+<tr><td>Later</td><td>Public quests on the seams in section 2.1, overtaken pushes, rematch button, link rotation, creator removes a participant, spectators.</td><td>Not v1.</td><td></td></tr>
 </table></div>
 <p>The server flag is the safety net: if anything about the feature is wrong after launch, turning it off makes the tile and flag disappear on the next fetch and the hub shows "Challenges aren't available right now", with no client release.</p>
 
-<h2 id="decisions">15. Unresolved decisions with recommendations</h2>
+<h2 id="decisions">15. Decisions</h2>
+<p>D1 to D16 were answered on 2026-09-15: every recommendation holds except D7, D9 and D15, whose resolutions are recorded in place. D17 to D19 are new and open.</p>
 <div class="decisions">
+  <div class="dec"><span class="id">D17 · open</span><h4>How much push ships in v1</h4><p>Local time-based reminders only (starts, ending soon, finished) in phase 2; or those plus remote push (someone joined, finished with placement, cancelled) in phase 3; or hold all notifications for a later release.</p><p class="rec"><b>Recommend</b> local in phase 2 and remote in phase 3, with phase 3 push allowed to slip past the v1.2 submission if the APNs setup drags. The local set covers the moments Noah named except "you were invited", which the text message already is.</p></div>
+  <div class="dec"><span class="id">D18 · open</span><h4>Quest seams now</h4><p>Write <code>challenges.kind</code> and the scorer interface in phase 1; or build v1 strictly private and refactor when quests come.</p><p class="rec"><b>Recommend</b> write them now. One default column and one interface with one implementation; the refactor later would touch every route.</p></div>
+  <div class="dec"><span class="id">D19 · open</span><h4>Invite growth attribution</h4><p>Server-side referral (device registered within 7 days, first join, stamped once) plus the App Store campaign and the PostHog flag; or App Store campaign only.</p><p class="rec"><b>Recommend</b> all three. Only the server-side one can answer "how many new spotters did challenges bring", and it is two columns.</p></div>
   <div class="dec"><span class="id">D1</span><h4>What the account button opens</h4><p>Options: the existing Profile sheet with a Challenges tile; or the Codex half-height menu; or a medium/large detent sheet with Profile below the fold.</p><p class="rec"><b>Recommend</b> the existing Profile. It keeps streak, points hero, best catch and laurels, and costs nothing to build.</p></div>
   <div class="dec"><span class="id">D2</span><h4>Live-challenge entry on Leaders</h4><p>Toolbar flag only, or flag plus a live strip under the window switcher.</p><p class="rec"><b>Recommend</b> flag plus strip. The strip only exists while you are in a challenge.</p></div>
   <div class="dec"><span class="id">D3</span><h4>Late joins</h4><p>Accept until the end with all in-window catches counting; or close joins at 50% elapsed; or count only catches after acceptance.</p><p class="rec"><b>Recommend</b> accept until the end, as you proposed. The join screen states it.</p></div>
   <div class="dec"><span class="id">D4</span><h4>Zero-point endings</h4><p>Two or more participants, nobody scored: No Contest, or a shared win.</p><p class="rec"><b>Recommend</b> No Contest.</p></div>
   <div class="dec"><span class="id">D5</span><h4>Cancelling after start</h4><p>Never; or creator only.</p><p class="rec"><b>Recommend</b> never. Leaving covers the creator's own exit.</p></div>
   <div class="dec"><span class="id">D6</span><h4>Creator leaves before start</h4><p>Cancels the challenge; or the challenge continues without them.</p><p class="rec"><b>Recommend</b> cancels. An upcoming challenge with no creator is a zombie.</p></div>
-  <div class="dec"><span class="id">D7</span><h4>Catch log fields</h4><p>Model, rarity, points, time; or also operator and airline.</p><p class="rec"><b>Recommend</b> without operator. An airline plus a time can identify a flight, and you asked for no catch-identifying data.</p></div>
-  <div class="dec"><span class="id">D8</span><h4>Validation verdict in challenges</h4><p>Ignore (same as the global board); or exclude implausible catches in challenges only.</p><p class="rec"><b>Recommend</b> ignore in v1, watch the guardrail, and decide app-wide through the anti-cheat plan.</p></div>
-  <div class="dec"><span class="id">D9</span><h4>Upload grace</h4><p>15 minutes after the end; or none; or an hour.</p><p class="rec"><b>Recommend</b> 15 minutes. Long enough for a cellular retry, short enough that results feel immediate.</p></div>
+  <div class="dec"><span class="id">D7 · decided</span><h4>Catch log fields</h4><p>Noah: log the make and model; never the flight number or tail number.</p><p class="rec"><b>Resolution:</b> make and model, rarity tier, points, time. Operator stays out (section 9); say the word if you want it in.</p></div>
+  <div class="dec"><span class="id">D8 · decided</span><h4>Validation verdict in challenges</h4><p>Ignore (same as the global board); or exclude implausible catches in challenges only.</p><p class="rec"><b>Resolution:</b> ignore in v1, watch the guardrail, decide app-wide through the anti-cheat plan.</p></div>
+  <div class="dec"><span class="id">D9 · decided</span><h4>Upload grace</h4><p>Noah: no grace.</p><p class="rec"><b>Resolution:</b> a catch counts only if the server had it by <code>endsAt</code>. Results finalize on the first read after the end.</p></div>
   <div class="dec"><span class="id">D10</span><h4>Trophy</h4><p>One hard trophy, Ace: win five challenges with at least two other spotters; or none; or also an easy participation trophy.</p><p class="rec"><b>Recommend</b> Ace only, in phase 3. Matches your hard-and-rare taste.</p></div>
   <div class="dec"><span class="id">D11</span><h4>Handle requirement</h4><p>Required to create or join; or allowed anonymously with "anonymous spotter" rows.</p><p class="rec"><b>Recommend</b> required. Inline claim on the join sheet keeps it one screen.</p></div>
   <div class="dec"><span class="id">D12</span><h4>Challenge names</h4><p>Free text with suggestion and profanity filter; or presets only.</p><p class="rec"><b>Recommend</b> free text with a prefilled suggestion.</p></div>
   <div class="dec"><span class="id">D13</span><h4>Kill switch</h4><p>Server env flag with client fail-soft; or client-only build flag.</p><p class="rec"><b>Recommend</b> server flag. It also lets phase 0 ship with the tile present but hidden.</p></div>
   <div class="dec"><span class="id">D14</span><h4>Where phase 0 ships</h4><p>A 1.1.x point release; or the first item of the v1.2 train.</p><p class="rec"><b>Recommend</b> the v1.2 train. A bar change with nothing new behind it is a strange point release.</p></div>
-  <div class="dec"><span class="id">D15</span><h4>Limits</h4><p>10 participants, 5 open created, 10 open participations, 10 creations a day; or looser.</p><p class="rec"><b>Recommend</b> these numbers. Raising them later is additive.</p></div>
+  <div class="dec"><span class="id">D15 · decided</span><h4>Limits</h4><p>Noah: no limits for now.</p><p class="rec"><b>Resolution:</b> only the 10-participant cap from the requirements. Per-route rate limits remain as the standard hardening, sized so no real person meets them.</p></div>
   <div class="dec"><span class="id">D16</span><h4>Link domain and manual steps</h4><p><code>tailspot.app/c/CODE</code> with Associated Domains; or App Store links plus codes only.</p><p class="rec"><b>Recommend</b> tailspot.app links. Needs you to enable the capability; codes make the feature usable before that lands.</p></div>
 </div>
 
@@ -509,9 +579,9 @@ xcrun simctl install booted &lt;path to Tailspot.app&gt;
 xcrun simctl launch booted com.landesberg.Tailspot -competitionPOC -competitionPOCSection challenges</code></pre>
 <h3>B. Files this spec touches when built</h3>
 <ul>
-  <li>iOS new: <code>ChallengesClient.swift</code>, <code>ChallengesHub.swift</code>, <code>ChallengeCreateSheet.swift</code>, <code>ChallengeJoinSheet.swift</code>, <code>ChallengeDetailScreen.swift</code>, <code>ChallengeResultsCard.swift</code>, <code>PendingInvite.swift</code>, tests and snapshot suites.</li>
-  <li>iOS changed: <code>ContentView.swift</code> (bar buttons, account button, one bundled modifier), <code>ProfileScreen.swift</code> (tile swap), <code>PublicScreens.swift</code> (toolbar, strip), <code>TailspotApp.swift</code> (onOpenURL), <code>Trophies.swift</code> (Ace), <code>Tailspot.entitlements</code> (new).</li>
-  <li>Backend new: <code>drizzle/0010_challenges.sql</code>, <code>src/routes/challenges.ts</code>, <code>src/routes/invites.ts</code>, <code>src/challenges/store.ts</code>, <code>src/challenges/placement.ts</code>, tests.</li>
+  <li>iOS new: <code>ChallengesClient.swift</code>, <code>ChallengesHub.swift</code>, <code>ChallengeCreateSheet.swift</code>, <code>ChallengeJoinSheet.swift</code>, <code>ChallengeDetailScreen.swift</code>, <code>ChallengeResultsCard.swift</code>, <code>ChallengeReminders.swift</code>, <code>PendingInvite.swift</code>, <code>PushRegistration.swift</code> (phase 3), tests and snapshot suites.</li>
+  <li>iOS changed: <code>ContentView.swift</code> (bar buttons, account button, one bundled modifier), <code>ProfileScreen.swift</code> (tile swap), <code>PublicScreens.swift</code> (toolbar, strip), <code>SettingsScreen.swift</code> (Challenges reminder toggle), <code>TailspotApp.swift</code> (onOpenURL, push delegate), <code>Trophies.swift</code> (Ace), <code>Tailspot.entitlements</code> (new: associated domains, aps-environment).</li>
+  <li>Backend new: <code>drizzle/0010_challenges.sql</code>, <code>src/routes/challenges.ts</code>, <code>src/routes/invites.ts</code>, <code>src/challenges/store.ts</code>, <code>src/challenges/scorer.ts</code> (the quest seam), <code>src/challenges/placement.ts</code>, <code>src/push/apns.ts</code> and <code>src/routes/pushTokens.ts</code> (phase 3), tests.</li>
   <li>Web: <code>public/c/index.html</code>, <code>public/.well-known/apple-app-site-association</code>, nginx location blocks.</li>
   <li>Docs: PLAN §9 entry, CHANGELOG, this file.</li>
 </ul>
