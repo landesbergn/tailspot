@@ -119,6 +119,41 @@ Postgres at most once a minute.
 { "catches": 5812, "asOf": "2026-09-05T23:41:07.000Z" }
 ```
 
+### Challenges v1 (`/v1/challenges`, `/v1/invites`)
+
+Head-to-head and small-group races over a shared time window, scored with the
+standard catch points. Spec: `docs/reviews/2026-09-15-challenges-v1-spec.html`.
+**Deployed dark**: every route below except `/config` answers `404` until
+`CHALLENGES_ENABLED=true` is set on the Fly app.
+
+| Route | Auth | Limit | Notes |
+|---|---|---|---|
+| `GET /v1/challenges/config` | none (browser `Origin` allowlisted like `/v1/stats`; no-Origin callers allowed) | 60/min/IP | `{ enabled, availability, minBuild, appStoreURL }` — the client and the landing page read this to explain "off", "TestFlight only" or "update the app". Answers even when disabled. |
+| `POST /v1/challenges` | bearer + claimed handle | 30/h/device | body `{ name, duration: "1h"\|"24h"\|"3d"\|"7d", start?: "now"\|ISO }` (scheduled start 15 min – 14 d out). 201 with the detail payload; creator is the first participant. |
+| `GET /v1/challenges` | bearer | 120/min/device | `{ open: [...], history: [...] }` for the caller; history rows carry `myResult`. |
+| `GET /v1/challenges/:id` | bearer, active participant | 120/min/device | `{ challenge, standings, me, winners }`. Finalizes on the first read after `endsAt`. 404 for anyone else (never 403). |
+| `GET /v1/challenges/:id/log/:handle` | bearer, active participant | 120/min/device | That spotter's in-window catches: **make + model, rarity, points, caughtAt only** — never callsign, hex, registration, operator, position or verdict. |
+| `POST /v1/challenges/:id/leave` | bearer, active participant | 30/h/device | 204. Creator leaving an upcoming challenge cancels it. 409 after the end. |
+| `POST /v1/challenges/:id/cancel` | bearer, creator | 30/h/device | 204 before start; 409 once live. |
+| `GET /v1/invites/:code` | bearer | 30/min/IP **before** the token lookup | Join-sheet preview: `{ challenge, participants, needsHandle, alreadyIn, canJoin, reason? }`. Unknown code → 404. |
+| `POST /v1/invites/:code/join` | bearer + claimed handle | 30/min/IP + 30/h/device | 200 detail (+ `alreadyIn`, `newDevice`); 409 full (10); 410 ended/cancelled; 422 no handle. Joining is idempotent; a leaver can rejoin. |
+| `GET /v1/invites/:code/preview` | none, browser `Origin` allowlisted | 30/min/IP, 60 s memo | Landing-page preview: name, creator handle, window, participant count, status. Never a participant list. |
+
+Rules the store enforces (all from the spec's decided list): status is derived
+from the clock, never stored; joins are open until `endsAt` and a joiner's
+earlier in-window catches count; a catch counts iff `caught_at ∈ [starts_at,
+ends_at)` **and** `created_at <= ends_at` (no upload grace); ties share
+placement (1, 1, 3) and everyone at 1 wins; fewer than two participants or
+zero total points at the end is `no_contest`; results freeze into
+`challenge_results` on the first read after the end and never move under a
+rescore; disabled devices are invisible everywhere. Growth attribution: a
+device that registered within 7 days and joins its first challenge gets
+`challenge_participants.joined_as_new_device = true` and
+`devices.referred_by_challenge_id` stamped once.
+
+The scorer is an interface (`src/challenges/scorer.ts`) with one
+implementation — the seam for future public quests (`challenges.kind`).
+
 ### Configuration (env)
 
 | Var | Default | Meaning |
@@ -129,6 +164,10 @@ Postgres at most once a minute.
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
 | `DATABASE_URL` | — | Postgres connection string. Required for `/v1/metadata` and the ingest jobs; read lazily (the position-only endpoints don't need it). |
 | `STATS_ALLOWED_ORIGINS` | — | Comma-separated extra browser origins allowed to read `/v1/stats` (tailspot.app, www, and the preview site are always allowed). |
+| `CHALLENGES_ENABLED` | — (off) | `true` turns the Challenges routes on. Anything else: every challenge route except `GET /v1/challenges/config` answers 404 (the kill switch). Read once at startup. |
+| `CHALLENGES_AVAILABILITY` | `testflight` | `testflight` or `public` — what `/v1/challenges/config` reports so the landing page can say "TestFlight only" during the soak. |
+| `CHALLENGES_MIN_BUILD` | `0` | Minimum client `CFBundleVersion` for Challenges, reported by `/config`; the app shows "update Tailspot" below it. |
+| `CHALLENGES_INVITE_BASE_URL` | `https://tailspot.app/c` | Invite links are `<base>/<CODE>`. |
 
 **Providers.** The primary is **adsb.lol** (`https://api.adsb.lol`), whose only
 geographic query is point+radius (`GET /v2/point/{lat}/{lon}/{radius}`, radius

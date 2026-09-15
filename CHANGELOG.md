@@ -5,6 +5,36 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-15 — Challenges v1, phase 1 (backend) — branch `feat/challenges-backend`
+
+The server half of head-to-head / small-group Challenges, built from the
+decision-ready spec (`docs/reviews/2026-09-15-challenges-v1-spec.html`, D1–D19
+all answered). **Deployed dark**: nothing answers until `CHALLENGES_ENABLED=true`.
+
+- **Migration `0010_challenges.sql`** (apply MANUALLY before the deploy, as
+  always): `challenges` (with the `kind` quest seam), `challenge_participants`
+  (with `joined_as_new_device`), `challenge_results` (frozen placements),
+  `devices.referred_by_challenge_id`, and the composite
+  `catches_device_caught_idx (device_id, caught_at)`.
+- **`src/challenges/`**: `scorer.ts` (the `ChallengeScorer` interface + the one
+  v1 implementation, standard points over `[starts_at, ends_at)` with
+  `created_at <= ends_at` — no grace), `placement.ts` (competition ranking,
+  shared ties, No Contest), `codes.ts` (8-char unambiguous invite codes),
+  `store.ts` (create / join / leave / cancel / standings / catch log /
+  decide-on-read finalization / referral stamping).
+- **Routes** `src/routes/challenges.ts` + `src/routes/invites.ts`, every bearer
+  route on the hardening pattern (per-IP meter before the token lookup,
+  per-device meter after, 404 not 403 for non-participants, disabled devices
+  invisible), plus `GET /v1/challenges/config` — the flag / TestFlight-only /
+  minimum-build signal the app and the landing page read.
+- **Tests**: 37 new (`challenges.route.test.ts`, `challengesPlacement.test.ts`)
+  over PGlite covering the window edges, the no-grace boundary, late joins,
+  ties, No Contest, cancel/leave rules, frozen results under a rescore,
+  authorization, disabled devices, full challenge, code limiter, profanity,
+  referral attribution and the config endpoint. Suite: 428 passing.
+- Nothing in `ios/` or `web/`; phase 0 (navigation) and phase 2 (client) are
+  separate branches.
+
 ## 2026-09-12 — Altitude + speed units in Settings — branch `feat/unit-settings`
 
 Noah asked for a units preference: altitude in feet or meters, speed in knots,
