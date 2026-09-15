@@ -249,7 +249,7 @@ struct MarketingSnapshotTests {
                 ],
                 startPoint: .top, endPoint: .bottom
             )
-            SettledCatchCard(plane: front, isFirstOfType: front.isFirstOfType, width: 344)
+            SettledCatchCard(plane: front, isFirstOfType: front.isFirstOfType, width: 372)
                 .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
         }
         .frame(width: Self.screen.width, height: Self.screen.height)
