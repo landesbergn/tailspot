@@ -25,7 +25,8 @@
  *     logs) and cannot join — the same posture as the leaderboard.
  */
 
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client.js";
 import { withDbRetry } from "../db/retry.js";
 import {
@@ -38,7 +39,7 @@ import {
 } from "../db/schema.js";
 import { generateInviteCode } from "./codes.js";
 import { type Outcome, assignPlacements, decideOutcome } from "./placement.js";
-import { type ChallengeScorer, inWindow } from "./scorer.js";
+import { type ChallengeScorer, type Executor, inWindow } from "./scorer.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,27 @@ export type JoinResult =
 
 export type LeaveResult = "left" | "cancelled" | "not_participant" | "closed";
 
+export type ListScope = "open" | "history" | "both";
+
+export interface MyResult {
+  placement: number;
+  points: number;
+  catches: number;
+}
+
+/** One hub row: the challenge plus what the list needs, in one read. */
+export interface ChallengeListRow {
+  challenge: Challenge;
+  participantCount: number;
+  /** Frozen result for the caller; null while open or when No Contest left no rows. */
+  myResult: MyResult | null;
+}
+
+export interface ChallengeList {
+  open: ChallengeListRow[];
+  history: ChallengeListRow[];
+}
+
 export interface ChallengeStore {
   create(input: NewChallenge, now: Date): Promise<Challenge>;
   findByCode(code: string): Promise<Challenge | null>;
@@ -142,13 +164,19 @@ export interface ChallengeStore {
    */
   standings(challenge: Challenge, now: Date): Promise<{ challenge: Challenge } & StandingsResult>;
   finalizeIfDue(challenge: Challenge, now: Date): Promise<Challenge>;
-  /** Challenges this device is an active participant of. */
-  listForDevice(deviceId: string): Promise<Challenge[]>;
-  /** Frozen placement for a device, when the challenge is finalized. */
-  myResult(
-    challengeId: string,
+  /**
+   * The hub's list read: challenges this device is an active participant of,
+   * split into open (upcoming + live, soonest end first) and history
+   * (finished + cancelled, newest first), each capped at `limit`, with the
+   * creator handle, active participant count and the caller's frozen result
+   * batched into the same query (no N+1). Due-but-unfinalized challenges are
+   * finalized first so every history row carries a placement.
+   */
+  listForDevice(
     deviceId: string,
-  ): Promise<{ placement: number; points: number; catches: number } | null>;
+    now: Date,
+    opts: { scope: ListScope; limit: number },
+  ): Promise<ChallengeList>;
   catchLog(challenge: Challenge, deviceId: string): Promise<CatchLogRow[]>;
   /** Count of active participants (for previews). */
   participantCount(challengeId: string): Promise<number>;
@@ -177,13 +205,17 @@ export class DrizzleChallengeStore implements ChallengeStore {
         .where(eq(devices.id, row.creatorDeviceId))
         .limit(1),
     );
+    return this.fromRow(row, creator[0]?.handle ?? null);
+  }
+
+  private fromRow(row: ChallengeRow, creatorHandle: string | null): Challenge {
     return {
       id: row.id,
       kind: row.kind,
       code: row.code,
       name: row.name,
       creatorDeviceId: row.creatorDeviceId,
-      creatorHandle: creator[0]?.handle ?? null,
+      creatorHandle,
       startsAt: new Date(row.startsAt),
       endsAt: new Date(row.endsAt),
       durationPreset: row.durationPreset,
@@ -254,26 +286,29 @@ export class DrizzleChallengeStore implements ChallengeStore {
   }
 
   async participants(challengeId: string): Promise<Participant[]> {
-    const rows = await withDbRetry(() =>
-      this.db
-        .select({
-          deviceId: challengeParticipants.deviceId,
-          handle: devices.handle,
-          joinedAt: challengeParticipants.joinedAt,
-        })
-        .from(challengeParticipants)
-        .innerJoin(devices, eq(devices.id, challengeParticipants.deviceId))
-        .where(
-          and(
-            eq(challengeParticipants.challengeId, challengeId),
-            isNull(challengeParticipants.leftAt),
-            // Disabled devices vanish from every challenge surface, exactly as
-            // they vanish from the public leaderboard.
-            isNull(devices.disabledAt),
-          ),
-        )
-        .orderBy(asc(challengeParticipants.joinedAt)),
-    );
+    return withDbRetry(() => this.participantsWith(this.db, challengeId));
+  }
+
+  /** The participants read on a given executor (a transaction inside finalization). */
+  private async participantsWith(exec: Executor, challengeId: string): Promise<Participant[]> {
+    const rows = await exec
+      .select({
+        deviceId: challengeParticipants.deviceId,
+        handle: devices.handle,
+        joinedAt: challengeParticipants.joinedAt,
+      })
+      .from(challengeParticipants)
+      .innerJoin(devices, eq(devices.id, challengeParticipants.deviceId))
+      .where(
+        and(
+          eq(challengeParticipants.challengeId, challengeId),
+          isNull(challengeParticipants.leftAt),
+          // Disabled devices vanish from every challenge surface, exactly as
+          // they vanish from the public leaderboard.
+          isNull(devices.disabledAt),
+        ),
+      )
+      .orderBy(asc(challengeParticipants.joinedAt));
     // A participant always has a handle (joining requires one); the fallback
     // only guards a hand-edited row.
     return rows.map((r) => ({
@@ -309,6 +344,28 @@ export class DrizzleChallengeStore implements ChallengeStore {
     if (status === "finished" || status === "cancelled") return { ok: false, reason: "closed" };
 
     return this.db.transaction(async (tx) => {
+      // ROW LOCK FIRST. Two joins racing at 9/10 would both read 9 and both
+      // insert; `SELECT … FOR UPDATE` on the challenge serialises every join
+      // (and every finalization) for this challenge behind one lock, so the
+      // capacity count below is read under it. Also re-checks cancellation
+      // under the lock — the caller's snapshot may be stale.
+      const locked = await tx
+        .select({ id: challenges.id, cancelledAt: challenges.cancelledAt })
+        .from(challenges)
+        .where(eq(challenges.id, challenge.id))
+        .for("update");
+      if (!locked[0] || locked[0].cancelledAt) return { ok: false, reason: "closed" };
+
+      // Disabled devices can't join OR rejoin — checked before any branch, so
+      // no path below can resurrect a revoked device's row (defence in depth:
+      // the bearer lookup already 401s them, this is the second fence).
+      const dev = await tx
+        .select({ createdAt: devices.createdAt, disabledAt: devices.disabledAt })
+        .from(devices)
+        .where(eq(devices.id, deviceId))
+        .limit(1);
+      if (!dev[0] || dev[0].disabledAt) return { ok: false, reason: "disabled" };
+
       const existing = await tx
         .select({ leftAt: challengeParticipants.leftAt })
         .from(challengeParticipants)
@@ -355,12 +412,6 @@ export class DrizzleChallengeStore implements ChallengeStore {
       // Growth attribution (D19): registered within 7 days AND never joined
       // any challenge before (including ones they later left — that row still
       // exists). Stamp the device once; the `is null` guard keeps it first-touch.
-      const dev = await tx
-        .select({ createdAt: devices.createdAt, disabledAt: devices.disabledAt })
-        .from(devices)
-        .where(eq(devices.id, deviceId))
-        .limit(1);
-      if (!dev[0] || dev[0].disabledAt) return { ok: false, reason: "disabled" };
       const registeredRecently =
         now.getTime() - new Date(dev[0].createdAt).getTime() <= REFERRAL_WINDOW_MS;
       const prior = await tx
@@ -422,11 +473,14 @@ export class DrizzleChallengeStore implements ChallengeStore {
   }
 
   /** Live projection over the CURRENT active participants. */
-  private async liveStandings(challenge: Challenge): Promise<StandingsResult> {
-    const parts = await this.participants(challenge.id);
+  private async liveStandings(challenge: Challenge, exec?: Executor): Promise<StandingsResult> {
+    const parts = exec
+      ? await this.participantsWith(exec, challenge.id)
+      : await this.participants(challenge.id);
     const scores = await this.scorer.score(
       { startsAt: challenge.startsAt, endsAt: challenge.endsAt },
       parts.map((p) => p.deviceId),
+      exec,
     );
     const byDevice = new Map(scores.map((s) => [s.deviceId, s]));
     const scored = parts.map((p) => {
@@ -446,12 +500,20 @@ export class DrizzleChallengeStore implements ChallengeStore {
     if (challenge.finalizedAt || challenge.cancelledAt) return challenge;
     if (now.getTime() < challenge.endsAt.getTime()) return challenge;
 
-    const live = await this.liveStandings(challenge);
-    // One transaction: freeze every row, then flip the header. The header
-    // UPDATE is guarded by `finalized_at is null`, and the result INSERTs are
-    // ON CONFLICT DO NOTHING, so a concurrent second reader is a no-op and
-    // the two never disagree.
+    // One transaction, one snapshot: lock the challenge row (the same lock
+    // `join` takes, so no participant can slip in mid-freeze), re-check that
+    // nobody finalized it first, then score the participants and freeze
+    // every row and the header together. The header UPDATE is guarded by
+    // `finalized_at is null` and the result INSERTs are ON CONFLICT DO
+    // NOTHING as a belt to the lock's braces.
     await this.db.transaction(async (tx) => {
+      const locked = await tx
+        .select({ finalizedAt: challenges.finalizedAt, cancelledAt: challenges.cancelledAt })
+        .from(challenges)
+        .where(eq(challenges.id, challenge.id))
+        .for("update");
+      if (!locked[0] || locked[0].finalizedAt || locked[0].cancelledAt) return;
+      const live = await this.liveStandings(challenge, tx);
       if (live.standings.length > 0) {
         await tx
           .insert(challengeResults)
@@ -497,7 +559,11 @@ export class DrizzleChallengeStore implements ChallengeStore {
         })
         .from(challengeResults)
         .innerJoin(devices, eq(devices.id, challengeResults.deviceId))
-        .where(eq(challengeResults.challengeId, c.id))
+        // A device disabled AFTER the freeze vanishes from the frozen board
+        // too, matching the live path and the public leaderboard. The row
+        // stays in challenge_results (history is never rewritten), so
+        // re-enabling puts them straight back.
+        .where(and(eq(challengeResults.challengeId, c.id), isNull(devices.disabledAt)))
         .orderBy(asc(challengeResults.placement), asc(devices.handle)),
     );
     return {
@@ -514,40 +580,88 @@ export class DrizzleChallengeStore implements ChallengeStore {
     };
   }
 
-  async listForDevice(deviceId: string): Promise<Challenge[]> {
-    const rows = await withDbRetry(() =>
+  async listForDevice(
+    deviceId: string,
+    now: Date,
+    opts: { scope: ListScope; limit: number },
+  ): Promise<ChallengeList> {
+    // 1. Finalize anything due. Rare (only the first reader after an end pays),
+    //    and it has to happen before the batched read so `myResult` is there.
+    const due = await withDbRetry(() =>
       this.db
         .select({ c: challenges })
         .from(challengeParticipants)
         .innerJoin(challenges, eq(challenges.id, challengeParticipants.challengeId))
         .where(
-          and(eq(challengeParticipants.deviceId, deviceId), isNull(challengeParticipants.leftAt)),
-        )
-        .orderBy(desc(challenges.endsAt)),
-    );
-    const out: Challenge[] = [];
-    for (const r of rows) out.push(await this.hydrate(r.c));
-    return out;
-  }
-
-  async myResult(challengeId: string, deviceId: string) {
-    const rows = await withDbRetry(() =>
-      this.db
-        .select({
-          placement: challengeResults.placement,
-          points: challengeResults.points,
-          catches: challengeResults.catches,
-        })
-        .from(challengeResults)
-        .where(
           and(
-            eq(challengeResults.challengeId, challengeId),
-            eq(challengeResults.deviceId, deviceId),
+            eq(challengeParticipants.deviceId, deviceId),
+            isNull(challengeParticipants.leftAt),
+            isNull(challenges.finalizedAt),
+            isNull(challenges.cancelledAt),
+            lte(challenges.endsAt, now),
           ),
-        )
-        .limit(1),
+        ),
     );
-    return rows[0] ?? null;
+    for (const r of due) await this.finalizeIfDue(await this.hydrate(r.c), now);
+
+    // 2. One grouped read per bucket: challenge + creator handle + active
+    //    participant count (correlated subquery) + my frozen result (LEFT
+    //    JOIN), capped and ordered in SQL. No per-row round trips.
+    const creator = alias(devices, "creator");
+    const participantCount = sql<number>`(
+      select count(*) from challenge_participants p2
+      join devices d2 on d2.id = p2.device_id
+      where p2.challenge_id = ${challenges.id} and p2.left_at is null and d2.disabled_at is null
+    )`.as("participant_count");
+    const read = (bucket: "open" | "history") =>
+      withDbRetry(() =>
+        this.db
+          .select({
+            c: challenges,
+            creatorHandle: creator.handle,
+            participantCount,
+            placement: challengeResults.placement,
+            points: challengeResults.points,
+            catches: challengeResults.catches,
+          })
+          .from(challengeParticipants)
+          .innerJoin(challenges, eq(challenges.id, challengeParticipants.challengeId))
+          .innerJoin(creator, eq(creator.id, challenges.creatorDeviceId))
+          .leftJoin(
+            challengeResults,
+            and(
+              eq(challengeResults.challengeId, challenges.id),
+              eq(challengeResults.deviceId, deviceId),
+            ),
+          )
+          .where(
+            and(
+              eq(challengeParticipants.deviceId, deviceId),
+              isNull(challengeParticipants.leftAt),
+              bucket === "open"
+                ? and(isNull(challenges.cancelledAt), gt(challenges.endsAt, now))
+                : or(isNotNull(challenges.cancelledAt), lte(challenges.endsAt, now)),
+            ),
+          )
+          // Open: the one ending soonest is the one you care about. History:
+          // newest first.
+          .orderBy(bucket === "open" ? asc(challenges.endsAt) : desc(challenges.endsAt))
+          .limit(opts.limit),
+      );
+    const toRow = (r: Awaited<ReturnType<typeof read>>[number]): ChallengeListRow => ({
+      challenge: this.fromRow(r.c, r.creatorHandle),
+      participantCount: Number(r.participantCount),
+      myResult:
+        r.placement === null || r.points === null || r.catches === null
+          ? null
+          : { placement: r.placement, points: r.points, catches: r.catches },
+    });
+    const wantOpen = opts.scope !== "history";
+    const wantHistory = opts.scope !== "open";
+    return {
+      open: wantOpen ? (await read("open")).map(toRow) : [],
+      history: wantHistory ? (await read("history")).map(toRow) : [],
+    };
   }
 
   async catchLog(challenge: Challenge, deviceId: string): Promise<CatchLogRow[]> {

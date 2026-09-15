@@ -35,19 +35,36 @@ export interface ParticipantScore {
   rarityBreakdown: Record<string, number>;
 }
 
+/**
+ * The query surface a scorer needs. A transaction handle satisfies it too, so
+ * finalization can score inside the SAME transaction (one snapshot) that
+ * freezes the results — see `DrizzleChallengeStore.finalizeIfDue`.
+ */
+export type Executor = Pick<Database, "select" | "insert" | "update">;
+
 export interface ChallengeScorer {
   /**
    * Score every device in `deviceIds` over the window. Every requested device
    * gets a row (zero-scored when it has no in-window catches), so the caller
-   * never has to reconcile a missing participant.
+   * never has to reconcile a missing participant. `exec` overrides the
+   * scorer's own connection (a transaction) when the caller needs a snapshot.
    */
-  score(window: ScoringWindow, deviceIds: readonly string[]): Promise<ParticipantScore[]>;
+  score(
+    window: ScoringWindow,
+    deviceIds: readonly string[],
+    exec?: Executor,
+  ): Promise<ParticipantScore[]>;
 }
 
 export class PrivatePointsScorer implements ChallengeScorer {
   constructor(private readonly db: Database) {}
 
-  async score(window: ScoringWindow, deviceIds: readonly string[]): Promise<ParticipantScore[]> {
+  async score(
+    window: ScoringWindow,
+    deviceIds: readonly string[],
+    exec?: Executor,
+  ): Promise<ParticipantScore[]> {
+    const db = exec ?? this.db;
     const byDevice = new Map<string, ParticipantScore>();
     for (const id of deviceIds) {
       byDevice.set(id, { deviceId: id, points: 0, catches: 0, rarityBreakdown: {} });
@@ -57,8 +74,10 @@ export class PrivatePointsScorer implements ChallengeScorer {
     // One grouped read per (device, rarity); folded in JS. Grouping by rarity
     // here (rather than a jsonb aggregate) keeps the SQL portable across the
     // PGlite test driver and production postgres-js.
-    const rows = await withDbRetry(() =>
-      this.db
+    // Retry only on the scorer's own connection — a transaction must not be
+    // silently re-run on a fresh one.
+    const query = () =>
+      db
         .select({
           deviceId: catches.deviceId,
           rarity: catches.rarity,
@@ -74,8 +93,8 @@ export class PrivatePointsScorer implements ChallengeScorer {
             lte(catches.createdAt, window.endsAt),
           ),
         )
-        .groupBy(catches.deviceId, catches.rarity),
-    );
+        .groupBy(catches.deviceId, catches.rarity);
+    const rows = exec ? await query() : await withDbRetry(query);
 
     for (const r of rows) {
       const entry = byDevice.get(r.deviceId);
