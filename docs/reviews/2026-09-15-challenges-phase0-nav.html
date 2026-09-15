@@ -39,7 +39,7 @@
 <ul>
   <li><b>One enum, one sheet.</b> <code>showHangar</code> and <code>showProfile</code> became <code>primarySheet: PrimarySheet?</code> (<code>PrimarySheet.swift</code>) driving a single <code>.sheet(item:)</code> and a single <code>.onChange</code>. <code>ContentView.body</code> is at the compiler's type-check budget, so a third surface had to cost zero chain links; this costs minus two. Every "is a sheet up?" gate (camera occlusion choreography, trophy and restore overlays, the streak ask, the review prompt) reads <code>primarySheet == nil</code>, so Leaders inherits exactly the Hangar/Profile behaviour: camera stops behind the opaque wash, trophies re-diff on dismiss.</li>
   <li><b><code>LeadersSheet</code></b> wraps <code>LeaderboardScreen</code> in a NavigationStack with Done. The screen itself is untouched; <code>leaderboard_viewed</code> still fires on appear, so the uplift from one-tap access shows up in the existing event.</li>
-  <li><b>Compass banner inset</b> 16 → 60 pt so the centred, content-sized badge wraps at accessibility sizes instead of sliding under the account button.</li>
+  <li><b>Compass banner inset</b> is 16 leading / 60 trailing. The badge is about 307 pt wide at default type, so a symmetric 60 wrapped it on every phone and a symmetric 16 slid it 13 pt under the account button; 16 + 60 leaves 317 pt, which fits. A width assertion in <code>CompassWarningSnapshotTests</code> pins it.</li>
   <li><b>Profile keeps its Map / Leaders tiles</b> until phase 2 replaces Leaders with Challenges; a lone Map tile would look like a bug.</li>
 </ul>
 

@@ -723,13 +723,15 @@ struct ContentView: View {
                     }
                     // Keep the loud compass banner off the screen edges
                     // without narrowing the notice/toast region below it.
-                    // 60, not 16, since the account button took the top
-                    // right corner (2026-09-15): the badge is centered and
-                    // content-sized, so at default type it never reached
-                    // the corner anyway; the wider inset only makes it wrap
-                    // earlier at accessibility sizes instead of sliding
-                    // under the button.
-                    .padding(.horizontal, 60)
+                    // Asymmetric since the account button took the top
+                    // right corner (2026-09-15): the badge is ~307 pt wide
+                    // at default type (B612 Mono subtitle), so a symmetric
+                    // 60 would wrap it on every phone, and a symmetric 16
+                    // slides it 13 pt under the button. 16 + 60 leaves
+                    // 317 pt: fits on a 393 pt screen, clears the button,
+                    // and the 22 pt off-centre is invisible in practice.
+                    .padding(.leading, 16)
+                    .padding(.trailing, 60)
                     // Preserve the notices' old 60 pt resting offset when no
                     // compass/zoom affordance is showing: 12 outer padding +
                     // 40 reserved here + 8 stack spacing = 60. When an
@@ -851,8 +853,12 @@ struct ContentView: View {
         // and a Monday crown can cross Top Flight / Dynasty / Chart Topper
         // while open. Re-diffing here makes the FIRST live crossing
         // celebrate as soon as the sheet dismisses.
-        .onChange(of: primarySheet) { _, sheet in
-            if sheet == nil {
+        // Keyed on "something closed" (old value non-nil), not "nothing is
+        // open now": a future deep link can swap one case for another
+        // while presented (SwiftUI dismisses and re-presents on id change),
+        // and that transition must re-diff too.
+        .onChange(of: primarySheet) { old, _ in
+            if old != nil {
                 unlockCenter.enqueueNewUnlocks(from: catches)
             }
         }

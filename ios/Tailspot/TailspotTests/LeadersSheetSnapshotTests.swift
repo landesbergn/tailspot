@@ -71,15 +71,39 @@ struct LeadersSheetSnapshotTests {
     }
 
     /// The root-sheet wrapper adds a Done button and shows the Leaderboard
-    /// title. The no-arg LeaderboardScreen fetches on appear, so the body
-    /// renders the loading state — the chrome is what this pins.
+    /// title above the screen's own content. The screen is seeded through
+    /// its DEBUG fixture initializer (the LeaderboardWindowSnapshotTests
+    /// seam) so nothing here touches the network.
     @Test func rootSheetShowsDoneAndLeaderboard() throws {
         let container = try emptyContainer()
-        let window = host(LeadersSheet().modelContainer(container), snapshotAs: "leaders_sheet_root")
+        let entries = [
+            LeaderboardEntry(rank: 1, handle: "skykid", points: 4210, catches: 61),
+            LeaderboardEntry(rank: 2, handle: "noah", points: 2755, catches: 43),
+            LeaderboardEntry(rank: 3, handle: "contrail", points: 1980, catches: 35),
+        ]
+        let screen = LeaderboardScreen(
+            _debugWindows: [.week: LeaderboardResponse(entries: entries, me: MyStanding(rank: 2, points: 2755), window: "week")]
+        )
+        let window = host(LeadersSheet(screen: screen).modelContainer(container), snapshotAs: "leaders_sheet_root")
         defer { window.isHidden = true }
-        let strings = visibleStrings(in: window)
+        // The navigation bar populates its items a run-loop turn or two
+        // after the first layout, and CI's simulator is slower than a dev
+        // Mac (the first CI run found "Leaderboard" but not yet "Done"), so
+        // poll the hierarchy for up to 3 s instead of reading it once.
+        var strings = visibleStrings(in: window)
+        let deadline = Date().addingTimeInterval(3)
+        while !(strings.contains("Done") && strings.contains("Leaderboard")), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            strings = visibleStrings(in: window)
+        }
         #expect(strings.contains("Done"), "root presentation must add a Done button: \(strings)")
         #expect(strings.contains("Leaderboard"), "the wrapped screen must keep its title: \(strings)")
+        // The seeded rows themselves are SwiftUI Text inside a List — not
+        // UILabels, and SwiftUI publishes their accessibility through its
+        // own node tree rather than UIView.accessibilityLabel — so they are
+        // NOT asserted here; the PNG is the visual check for the board.
+        // (The window switcher draws misplaced in this harness: that is the
+        // known drawHierarchy glass-layer relocation, not a layout bug.)
     }
 
     /// `.sheet(item:)` keys the presentation on `id`; the three cases must

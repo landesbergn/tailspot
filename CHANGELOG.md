@@ -58,8 +58,9 @@ change, client only, nothing behind it yet.
   Leaders behaves exactly like the other two.
 - **`LeadersSheet`** hosts `LeaderboardScreen` in its own NavigationStack
   with a Done button; the screen itself is untouched.
-- The compass-banner stack's side inset grew from 16 to 60 so the badge wraps
-  earlier at accessibility sizes instead of sliding under the new button.
+- The compass-banner stack's inset is now 16 leading / 60 trailing: the badge
+  is ~307 pt at default type, so a symmetric 60 would wrap it on every phone
+  and a symmetric 16 slid it under the new button. A test pins the width.
 - New snapshot harness `LeadersSheetSnapshotTests`; review doc
   `docs/reviews/2026-09-15-challenges-phase0-nav.html`.
 >>>>>>> e72f10c (nav: Leaders on the bottom bar, account button top right (Challenges phase 0; opens the v1.2 train))

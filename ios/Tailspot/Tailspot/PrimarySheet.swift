@@ -37,10 +37,19 @@ enum PrimarySheet: String, Identifiable {
 /// render identically.
 struct LeadersSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// The screen to host. Production passes nothing and gets the live,
+    /// fetching `LeaderboardScreen()`; tests pass one built with its
+    /// DEBUG fixture initializer so a hosted snapshot never reaches
+    /// api.tailspot.app from CI.
+    private let screen: LeaderboardScreen
+
+    init(screen: LeaderboardScreen = LeaderboardScreen()) {
+        self.screen = screen
+    }
 
     var body: some View {
         NavigationStack {
-            LeaderboardScreen()
+            screen
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Done") { dismiss() }
