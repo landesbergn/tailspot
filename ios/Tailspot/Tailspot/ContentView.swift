@@ -82,13 +82,12 @@ struct ContentView: View {
     #endif
     /// DEBUG-only: presents the trophy-icon gallery for visual review.
     @State private var showIconGallery = false
-    /// Drives the Hangar sheet (collection of past catches). Opened
-    /// via the tray glyph in the top-trailing corner.
-    @State private var showHangar = false
-    /// Drives the Profile sheet (gamification hub: stats, trophies,
-    /// sets, map, leaderboard, settings, notifications, share).
-    /// Opened via the person glyph in the top-trailing corner.
-    @State private var showProfile = false
+    /// Which full-height surface is up over the AR view: the Hangar (bottom
+    /// left), the Leaderboard (bottom right) or the Profile (account button,
+    /// top right). nil = none. One enum instead of one Bool per sheet so a
+    /// third surface didn't cost the body another `.sheet` + `.onChange`
+    /// chain link — see PrimarySheet.swift for why that matters here.
+    @State private var primarySheet: PrimarySheet?
     /// Becomes true only after the Hangar/Profile presentation controller has
     /// completed its opening transition. Their request flags flip at tap time,
     /// before SwiftUI has a sheet ready to cover the camera; using those flags
@@ -703,7 +702,7 @@ struct ContentView: View {
                                 .frame(width: 72, height: 72)
                                 .allowsHitTesting(false)
                             Spacer()
-                            bottomProfileButton
+                            bottomLeadersButton
                         }
                         .padding(.horizontal, 28)
                         .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 12))
@@ -724,7 +723,13 @@ struct ContentView: View {
                     }
                     // Keep the loud compass banner off the screen edges
                     // without narrowing the notice/toast region below it.
-                    .padding(.horizontal, 16)
+                    // 60, not 16, since the account button took the top
+                    // right corner (2026-09-15): the badge is centered and
+                    // content-sized, so at default type it never reached
+                    // the corner anyway; the wider inset only makes it wrap
+                    // earlier at accessibility sizes instead of sliding
+                    // under the button.
+                    .padding(.horizontal, 60)
                     // Preserve the notices' old 60 pt resting offset when no
                     // compass/zoom affordance is showing: 12 outer padding +
                     // 40 reserved here + 8 stack spacing = 60. When an
@@ -783,26 +788,31 @@ struct ContentView: View {
                     .transition(.opacity)
                 }
 
-                // Top-trailing control: debug wrench only. Hangar
-                // and profile moved to the bottom capture bar so the
-                // primary action ("press capture") and the navigation
-                // (Hangar / Profile) live together at thumb height.
+                // Top-trailing controls: the account button (Profile), and
+                // in DEBUG builds the wrench to its left. The bottom bar is
+                // Hangar / Capture / Leaders (Challenges navigation change,
+                // 2026-09-15): the leaderboard is a high-value destination
+                // that was two taps deep, and the Profile — identity,
+                // settings, share — reads as "account", which lives top
+                // right on most iOS surfaces.
                 //
-                // `#if DEBUG` so the wrench (and the panels it toggles)
-                // is absent from TestFlight / App Store Release builds —
-                // testers see a clean AR view, not the sensor readout
-                // dev affordance. Local Xcode Run builds keep it.
-                #if DEBUG
+                // `#if DEBUG` keeps the wrench (and the panels it toggles)
+                // out of TestFlight / App Store Release builds — testers
+                // see a clean AR view, not the sensor readout. Local Xcode
+                // Run builds keep it. `#if` inside a view builder is legal
+                // Swift: the HStack simply has one fewer child in Release.
                 VStack {
                     HStack(spacing: 10) {
                         Spacer()
+                        #if DEBUG
                         debugToggleButton
+                        #endif
+                        accountButton
                     }
                     .padding(.top, 8)
                     .padding(.trailing, 12)
                     Spacer()
                 }
-                #endif
             }
 
             PrimarySheetBackdrop(isOpaque: primarySheetBackdropOpaque)
@@ -834,46 +844,38 @@ struct ContentView: View {
         .task {
             await missedCatchRepair.runIfNeeded(context: modelContext)
         }
-        // When the Hangar closes, re-diff — a country backfill done inside
-        // CatchDetailView can cross Mr. Worldwide while the sheet was open.
-        .onChange(of: showHangar) { _, isShowing in
-            if !isShowing {
+        // When any primary sheet closes, re-diff the trophies. Hangar: a
+        // country backfill done inside CatchDetailView can cross Mr.
+        // Worldwide while the sheet was open. Profile / Leaders: the
+        // leaderboard fetches inside them refresh the cached server facts,
+        // and a Monday crown can cross Top Flight / Dynasty / Chart Topper
+        // while open. Re-diffing here makes the FIRST live crossing
+        // celebrate as soon as the sheet dismisses.
+        .onChange(of: primarySheet) { _, sheet in
+            if sheet == nil {
                 unlockCenter.enqueueNewUnlocks(from: catches)
             }
         }
-        // Same on Profile close — the leaderboard fetches inside that sheet
-        // (ProfileScreen standing + LeaderboardScreen boards) refresh the
-        // cached server facts, and a Monday crown can cross Top Flight /
-        // Dynasty / Chart Topper while it's open. Re-diffing here makes the
-        // FIRST live crossing celebrate as soon as the sheet dismisses.
-        .onChange(of: showProfile) { _, isShowing in
-            if !isShowing {
-                unlockCenter.enqueueNewUnlocks(from: catches)
+        // ONE sheet for the three primary surfaces (see PrimarySheet.swift).
+        // The reveal modifier + presentation observer wrap whichever content
+        // the enum picked, so the camera-occlusion choreography is shared.
+        .sheet(item: $primarySheet) { sheet in
+            Group {
+                switch sheet {
+                case .hangar:  HangarView()
+                case .profile: ProfileScreen()
+                case .leaders: LeadersSheet()
+                }
             }
-        }
-        .sheet(isPresented: $showHangar) {
-            HangarView()
-                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
-                .background {
-                    PrimarySheetPresentationObserver(
-                        onWillAppear: primarySheetWillAppear,
-                        onDidAppear: primarySheetDidAppear,
-                        onWillDisappear: primarySheetWillDisappear,
-                        onDidDisappear: primarySheetDidDisappear
-                    )
-                }
-        }
-        .sheet(isPresented: $showProfile) {
-            ProfileScreen()
-                .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
-                .background {
-                    PrimarySheetPresentationObserver(
-                        onWillAppear: primarySheetWillAppear,
-                        onDidAppear: primarySheetDidAppear,
-                        onWillDisappear: primarySheetWillDisappear,
-                        onDidDisappear: primarySheetDidDisappear
-                    )
-                }
+            .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
+            .background {
+                PrimarySheetPresentationObserver(
+                    onWillAppear: primarySheetWillAppear,
+                    onDidAppear: primarySheetDidAppear,
+                    onWillDisappear: primarySheetWillDisappear,
+                    onDidDisappear: primarySheetDidDisappear
+                )
+            }
         }
         .sheet(isPresented: $showCompassSheet) {
             CompassCalibrationSheet(location: location)
@@ -1010,7 +1012,7 @@ struct ContentView: View {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
-                    showHangar = true
+                    primarySheet = .hangar
                     presentPostRevealMomentIfNeeded()
                 },
                 isDuplicate: reveal.isDuplicate,
@@ -1071,7 +1073,7 @@ struct ContentView: View {
                 onViewInHangar: {
                     pendingMultiReveal = nil
                     captureInFlight = false
-                    showHangar = true
+                    primarySheet = .hangar
                     presentPostRevealMomentIfNeeded()
                 }
             )
@@ -1220,13 +1222,13 @@ struct ContentView: View {
     /// presentation observer calls these at the matching UIKit lifecycle
     /// boundaries instead of relying on device-specific delays.
     private func primarySheetWillAppear() {
-        guard showHangar || showProfile else { return }
+        guard primarySheet != nil else { return }
         primarySheetContentVisible = true
         primarySheetBackdropOpaque = true
     }
 
     private func primarySheetDidAppear() {
-        guard showHangar || showProfile else { return }
+        guard primarySheet != nil else { return }
         primarySheetVisible = true
     }
 
@@ -1237,7 +1239,7 @@ struct ContentView: View {
     }
 
     private func primarySheetDidDisappear() {
-        guard !showHangar, !showProfile else { return }
+        guard primarySheet == nil else { return }
         primarySheetContentVisible = false
         primarySheetBackdropOpaque = false
     }
@@ -1519,12 +1521,12 @@ struct ContentView: View {
     /// covers' dismissal). Shown only when nothing else is on top: no card
     /// reveal, no sheet. A fallback unlock discovered while a sheet is open
     /// surfaces when the sheet dismisses (the `catches`-count and
-    /// `showHangar` tasks re-enqueue).
+    /// `primarySheet` tasks re-enqueue).
     @ViewBuilder
     private var trophyUnlockOverlay: some View {
         if unlockCenter.hasPending,
            pendingReveal == nil, pendingMultiReveal == nil,
-           !showHangar, !showProfile, !showCompassSheet,
+           primarySheet == nil, !showCompassSheet,
            !restoreManager.isPresenting {
             TrophyUnlockView(center: unlockCenter)
                 .transition(.opacity)
@@ -1541,7 +1543,7 @@ struct ContentView: View {
     private var hangarRestoreOverlay: some View {
         if restoreManager.isPresenting,
            pendingReveal == nil, pendingMultiReveal == nil,
-           !showHangar, !showProfile, !showCompassSheet {
+           primarySheet == nil, !showCompassSheet {
             HangarRestorePromptView(
                 manager: restoreManager,
                 context: modelContext,
@@ -1712,7 +1714,7 @@ struct ContentView: View {
         // immediately, so it can never fire twice.
         if let askDays = pendingStreakAsk {
             pendingStreakAsk = nil
-            if !showHangar, pendingReveal == nil, pendingMultiReveal == nil {
+            if primarySheet == nil, pendingReveal == nil, pendingMultiReveal == nil {
                 UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
                 streakAskFromDebug = false
                 StreakTelemetry.fireAskShown(streakDays: askDays)
@@ -1737,7 +1739,7 @@ struct ContentView: View {
     /// catch's reveal closes. Thresholds + the once-per-version stamp live
     /// in `ReviewPrompt.swift`.
     private func maybeRequestReview(momentClaimed: Bool) {
-        guard !momentClaimed, streakAsk == nil, !showHangar,
+        guard !momentClaimed, streakAsk == nil, primarySheet == nil,
               pendingReveal == nil, pendingMultiReveal == nil,
               !unlockCenter.hasPending else { return }
         ReviewPrompter.shared.catchMomentEnded(
@@ -3219,7 +3221,7 @@ struct ContentView: View {
     /// the count badge — matches the design canvas `BottomControls`.
     private var bottomHangarButton: some View {
         Button {
-            showHangar = true
+            primarySheet = .hangar
         } label: {
             ZStack(alignment: .topTrailing) {
                 RoundedRectangle(cornerRadius: Brand.Radius.card)
@@ -3253,11 +3255,14 @@ struct ContentView: View {
         )
     }
 
-    /// Profile button in the bottom bar. Mirrors the hangar button's
-    /// visual weight so the two flank the capture button evenly.
-    private var bottomProfileButton: some View {
+    /// Leaderboard button in the bottom bar (was the Profile button until
+    /// the 2026-09-15 navigation change). Mirrors the hangar button's
+    /// visual weight so the two flank the capture button evenly. The
+    /// glyph is the same `list.number` the Profile's Leaders tile uses, so
+    /// the two entry points read as one destination.
+    private var bottomLeadersButton: some View {
         Button {
-            showProfile = true
+            primarySheet = .leaders
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: Brand.Radius.card)
@@ -3268,8 +3273,36 @@ struct ContentView: View {
                                           lineWidth: 1)
                     )
                     .frame(width: 56, height: 56)
-                Image(systemName: "person.fill")
+                Image(systemName: "list.number")
                     .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(Brand.Color.textPrimary.opacity(0.9))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open leaderboard")
+    }
+
+    /// Account button, top right of the AR view — opens the Profile sheet
+    /// (identity, points and rank, streak, Map, Rarity guide, Settings,
+    /// Share). A 44 pt circle rather than the bar's 56 pt square: it is
+    /// secondary chrome up where the compass banner and toasts live, so it
+    /// takes the smaller footprint that still meets the HIG hit target.
+    /// Same fill + hairline as the bar chips so the three controls read as
+    /// one family.
+    private var accountButton: some View {
+        Button {
+            primarySheet = .profile
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Brand.Color.bgPrimary.opacity(0.7))
+                    .overlay(
+                        Circle().strokeBorder(Brand.Color.textPrimary.opacity(0.08),
+                                              lineWidth: 1)
+                    )
+                    .frame(width: 44, height: 44)
+                Image(systemName: "person.fill")
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Brand.Color.textPrimary.opacity(0.9))
             }
         }

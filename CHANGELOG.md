@@ -5,6 +5,33 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-15 — Challenges phase 0: Leaders on the bar, account button top right — branch `feat/challenges-nav`
+
+Opens the v1.2 train (`MARKETING_VERSION` 1.2.0). The Challenges feature
+(head-to-head and small-group competitions) was specified in full first —
+`docs/reviews/2026-09-15-challenges-v1-spec.html`, nineteen decisions
+answered by Noah — and this is the first of its phases: the navigation
+change, client only, nothing behind it yet.
+
+- **Bottom bar is Hangar / Capture / Leaders.** The leaderboard was two taps
+  deep (Profile → Leaders) for a destination people open a lot; it is now one
+  tap. The glyph is the same `list.number` as the Profile tile.
+- **Account button top right** (44 pt circle, `person.fill`) opens the
+  unchanged Profile sheet. DEBUG builds keep the wrench to its left.
+- **One `primarySheet` enum** (`PrimarySheet.swift`) replaces the two
+  `showHangar` / `showProfile` Bools and their two `.sheet` + two `.onChange`
+  chain links with one of each. `ContentView.body` is at the compiler's
+  type-check budget, so adding Leaders as a third Bool was not an option.
+  Every "is a sheet up?" gate (camera occlusion, trophy and restore overlays,
+  the streak ask, the review prompt) now reads `primarySheet == nil`, so
+  Leaders behaves exactly like the other two.
+- **`LeadersSheet`** hosts `LeaderboardScreen` in its own NavigationStack
+  with a Done button; the screen itself is untouched.
+- The compass-banner stack's side inset grew from 16 to 60 so the badge wraps
+  earlier at accessibility sizes instead of sliding under the new button.
+- New snapshot harness `LeadersSheetSnapshotTests`; review doc
+  `docs/reviews/2026-09-15-challenges-phase0-nav.html`.
+
 ## 2026-09-12 — Altitude + speed units in Settings — branch `feat/unit-settings`
 
 Noah asked for a units preference: altitude in feet or meters, speed in knots,
