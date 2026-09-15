@@ -59,6 +59,21 @@ struct CompassWarningSnapshotTests {
         .frame(width: 390, height: 180)
     }
 
+    /// The AR view's top-centre stack gives the banner 317 pt on a 393 pt
+    /// phone (16 leading + 60 trailing, the trailing side reserved for the
+    /// account button since the 2026-09-15 navigation change). The badge
+    /// must fit that at default type or it wraps on every device. The
+    /// rendered image's point width IS the badge's intrinsic width.
+    @Test func bannerFitsBesideAccountButtonAtDefaultType() {
+        let renderer = ImageRenderer(content: banner(accuracyText: "±40°").environment(\.colorScheme, .dark))
+        renderer.scale = 1
+        let width = renderer.uiImage?.size.width ?? .infinity
+        #expect(width <= 317, "badge is \(width) pt wide; the top stack only has 317 pt beside the account button")
+        // And the old symmetric-60 layout really was too narrow — pins the
+        // reason the inset is asymmetric, so nobody "tidies" it back.
+        #expect(width > 273, "if the badge now fits in 273 pt the inset can go back to symmetric")
+    }
+
     @Test func renderCompassBanner() {
         let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
