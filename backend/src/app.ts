@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
+import { PrivatePointsScorer } from "./challenges/scorer.js";
+import { type ChallengeStore, DrizzleChallengeStore } from "./challenges/store.js";
 import { getDb } from "./db/client.js";
 import { RateLimiter } from "./identity/rateLimiter.js";
 import {
@@ -19,8 +21,10 @@ import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
+import { type ChallengesAvailability, registerChallengesRoutes } from "./routes/challenges.js";
 import { registerDevicesRoutes } from "./routes/devices.js";
 import { registerHandlesRoute } from "./routes/handles.js";
+import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
 import { registerRoutesRoute } from "./routes/routes.js";
@@ -78,6 +82,21 @@ export interface BuildAppOptions {
   catchStore?: CatchStore;
   /** Injectable clock (unix seconds) for deterministic catch-validation tests. */
   nowSeconds?: () => number;
+  /** Challenge store override (tests inject a PGlite-backed store). Lazily built over Postgres in prod. */
+  challengeStore?: ChallengeStore;
+  /**
+   * Challenges feature flag (spec §11.2 kill switch). Production reads
+   * `CHALLENGES_ENABLED === "true"` once at build time; tests pass a function
+   * so a suite can flip it mid-run. When off, every challenge route except
+   * GET /v1/challenges/config answers 404.
+   */
+  challengesEnabled?: () => boolean;
+  /**
+   * What GET /v1/challenges/config reports. Production: `CHALLENGES_AVAILABILITY`
+   * ("testflight" | "public", default "testflight") and `CHALLENGES_MIN_BUILD`
+   * (default 0). Tests override.
+   */
+  challengesConfig?: { availability: ChallengesAvailability; minBuild: number };
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
   /**
@@ -229,6 +248,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // by PUT /v1/devices/me/handle, GET /v1/catches and POST /v1/catches; the
   // per-device limiters still apply after auth.
   const bearerIpLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
+  // Challenges (spec §10.3). Per-device limits are abuse ceilings, not product
+  // limits (D15: no cap on how many challenges a person creates or joins).
+  const challengeCreateLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow); // 30/h per device
+  const challengeReadLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per device
+  const challengeMutateLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow); // 30/h per device
+  // Invite-code lookups: per IP, BEFORE any token or DB read — this limiter is
+  // what makes a 40-bit code unguessable in practice.
+  const inviteIpLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
+  const challengeConfigIpLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per IP
 
   // ── Routes ────────────────────────────────────────────────────────────────
 
@@ -430,6 +458,62 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: nowSeconds ? () => new Date(nowSeconds() * 1000) : undefined,
   });
 
+  // ── Challenges v1 (spec docs/reviews/2026-09-15-challenges-v1-spec.html) ───
+  // Store resolved lazily like the others; the scorer is the D18 quest seam.
+  let challengeStore = options.challengeStore;
+  function getChallengeStore(): ChallengeStore {
+    if (!challengeStore) {
+      challengeStore = new DrizzleChallengeStore(getDb(), new PrivatePointsScorer(getDb()));
+    }
+    return challengeStore;
+  }
+  const challengesStore: ChallengeStore = {
+    create: (i, t) => getChallengeStore().create(i, t),
+    findByCode: (c) => getChallengeStore().findByCode(c),
+    findById: (id) => getChallengeStore().findById(id),
+    participants: (id) => getChallengeStore().participants(id),
+    participantCount: (id) => getChallengeStore().participantCount(id),
+    isActiveParticipant: (id, d) => getChallengeStore().isActiveParticipant(id, d),
+    join: (c, d, t) => getChallengeStore().join(c, d, t),
+    leave: (c, d, t) => getChallengeStore().leave(c, d, t),
+    cancel: (c, t) => getChallengeStore().cancel(c, t),
+    standings: (c, t) => getChallengeStore().standings(c, t),
+    finalizeIfDue: (c, t) => getChallengeStore().finalizeIfDue(c, t),
+    listForDevice: (d) => getChallengeStore().listForDevice(d),
+    myResult: (id, d) => getChallengeStore().myResult(id, d),
+    catchLog: (c, d) => getChallengeStore().catchLog(c, d),
+  };
+  const challengesEnabled = options.challengesEnabled ?? challengesEnabledFromEnv();
+  const challengesConfig = options.challengesConfig ?? challengesConfigFromEnv();
+  const challengeNow = nowSeconds ? () => new Date(nowSeconds() * 1000) : () => new Date();
+  const siteOrigins = options.statsAllowedOrigins ?? statsOriginsFromEnv();
+  registerChallengesRoutes(app, {
+    identityStore: identity,
+    store: challengesStore,
+    enabled: challengesEnabled,
+    config: { ...challengesConfig, appStoreURL: APP_STORE_URL },
+    allowedOrigins: siteOrigins,
+    inviteBaseURL: INVITE_BASE_URL,
+    now: challengeNow,
+    bearerIpLimiter,
+    createLimiter: challengeCreateLimiter,
+    readLimiter: challengeReadLimiter,
+    mutateLimiter: challengeMutateLimiter,
+    configIpLimiter: challengeConfigIpLimiter,
+  });
+  registerInvitesRoutes(app, {
+    identityStore: identity,
+    store: challengesStore,
+    enabled: challengesEnabled,
+    allowedOrigins: siteOrigins,
+    inviteBaseURL: INVITE_BASE_URL,
+    now: challengeNow,
+    inviteIpLimiter,
+    mutateLimiter: challengeMutateLimiter,
+    readLimiter: challengeReadLimiter,
+    cacheNow: rlNow,
+  });
+
   // GET /v1/stats — the marketing site's catch counter. Origin-gated + cached;
   // the rate limiters' clock doubles as the memo clock so tests can expire it.
   registerStatsRoute(app, {
@@ -456,6 +540,26 @@ function statsOriginsFromEnv(): string[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   return [...DEFAULT_STATS_ORIGINS, ...extra];
+}
+
+/** The App Store listing, as the challenges config endpoint reports it. */
+const APP_STORE_URL = "https://apps.apple.com/app/apple-store/id6773470079";
+
+/** Invite links: `${INVITE_BASE_URL}/${code}` — the universal-link path the app claims. */
+const INVITE_BASE_URL =
+  process.env.CHALLENGES_INVITE_BASE_URL?.replace(/\/+$/, "") || "https://tailspot.app/c";
+
+/** Kill switch: `CHALLENGES_ENABLED=true` turns the routes on; anything else is off. */
+function challengesEnabledFromEnv(): () => boolean {
+  const on = process.env.CHALLENGES_ENABLED === "true";
+  return () => on;
+}
+
+/** What /v1/challenges/config reports (spec §11.2). */
+function challengesConfigFromEnv(): { availability: ChallengesAvailability; minBuild: number } {
+  const availability: ChallengesAvailability =
+    process.env.CHALLENGES_AVAILABILITY === "public" ? "public" : "testflight";
+  return { availability, minBuild: envInt("CHALLENGES_MIN_BUILD") ?? 0 };
 }
 
 /** Parse an int env var, or undefined when unset/blank (lets defaults apply). */
