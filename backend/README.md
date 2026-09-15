@@ -130,7 +130,7 @@ standard catch points. Spec: `docs/reviews/2026-09-15-challenges-v1-spec.html`.
 |---|---|---|---|
 | `GET /v1/challenges/config` | none (browser `Origin` allowlisted like `/v1/stats`; no-Origin callers allowed) | 60/min/IP | `{ enabled, availability, minBuild, appStoreURL }` — the client and the landing page read this to explain "off", "TestFlight only" or "update the app". Answers even when disabled. |
 | `POST /v1/challenges` | bearer + claimed handle | 30/h/device | body `{ name, duration: "1h"\|"24h"\|"3d"\|"7d", start?: "now"\|ISO }` (scheduled start 15 min – 14 d out). 201 with the detail payload; creator is the first participant. |
-| `GET /v1/challenges` | bearer | 120/min/device | `{ open: [...], history: [...] }` for the caller; history rows carry `myResult`. |
+| `GET /v1/challenges?scope=open\|history` | bearer | 120/min/device (kept — the hub reads it on every appear and pull-to-refresh) | `{ open: [...], history: [...] }` for the caller, **50 per bucket**, open soonest-end-first, history newest-first; `scope` returns one bucket (default both). Rows carry `creatorHandle`, `participantCount` (active) and `myResult` (frozen placement, history only). One batched read, no per-row queries. |
 | `GET /v1/challenges/:id` | bearer, active participant | 120/min/device | `{ challenge, standings, me, winners }`. Finalizes on the first read after `endsAt`. 404 for anyone else (never 403). |
 | `GET /v1/challenges/:id/log/:handle` | bearer, active participant | 120/min/device | That spotter's in-window catches: **make + model, rarity, points, caughtAt only** — never callsign, hex, registration, operator, position or verdict. |
 | `POST /v1/challenges/:id/leave` | bearer, active participant | 30/h/device | 204. Creator leaving an upcoming challenge cancels it. 409 after the end. |
@@ -153,6 +153,12 @@ device that registered within 7 days and joins its first challenge gets
 
 The scorer is an interface (`src/challenges/scorer.ts`) with one
 implementation — the seam for future public quests (`challenges.kind`).
+
+Not in v1: there is **no rename route** (a challenge's name is fixed at
+creation; the client must not offer a rename), no push tokens, no participant
+removal by the creator. Concurrency: `join` and finalization both take
+`SELECT … FOR UPDATE` on the challenge row, so two joins racing at 9/10 can't
+both land and standings + outcome freeze from one snapshot.
 
 ### Configuration (env)
 
