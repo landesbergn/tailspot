@@ -5,7 +5,6 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-<<<<<<< HEAD
 ## 2026-09-15 — Challenges v1, phase 1 (backend) — branch `feat/challenges-backend`
 
 The server half of head-to-head / small-group Challenges, built from the
@@ -35,7 +34,7 @@ all answered). **Deployed dark**: nothing answers until `CHALLENGES_ENABLED=true
   referral attribution and the config endpoint. Suite: 428 passing.
 - Nothing in `ios/` or `web/`; phase 0 (navigation) and phase 2 (client) are
   separate branches.
-=======
+
 ## 2026-09-15 — Challenges phase 0: Leaders on the bar, account button top right — branch `feat/challenges-nav`
 
 Opens the v1.2 train (`MARKETING_VERSION` 1.2.0). The Challenges feature
@@ -63,7 +62,6 @@ change, client only, nothing behind it yet.
   and a symmetric 16 slid it under the new button. A test pins the width.
 - New snapshot harness `LeadersSheetSnapshotTests`; review doc
   `docs/reviews/2026-09-15-challenges-phase0-nav.html`.
->>>>>>> e72f10c (nav: Leaders on the bottom bar, account button top right (Challenges phase 0; opens the v1.2 train))
 
 ## 2026-09-12 — Altitude + speed units in Settings — branch `feat/unit-settings`
 
