@@ -59,8 +59,30 @@ struct RootView: View {
         ProcessInfo.processInfo.arguments.contains("-uiTestHangar")
     }
 
+    #if DEBUG
+    /// Fixture-only design seam for the Profile / competitions exploration.
+    /// It is intentionally absent from release builds and mounts no live app
+    /// or challenge state.
+    private var competitionPOC: Bool {
+        ProcessInfo.processInfo.arguments.contains("-competitionPOC")
+    }
+    #endif
+
     var body: some View {
         Group {
+            #if DEBUG
+            if competitionPOC {
+                ProfileCompetitionPOC()
+            } else if uiTestHangar {
+                HangarView()
+            } else if completed {
+                ContentView()
+            } else {
+                OnboardingFlow {
+                    completed = true
+                }
+            }
+            #else
             if uiTestHangar {
                 HangarView()
             } else if completed {
@@ -70,10 +92,14 @@ struct RootView: View {
                     completed = true
                 }
             }
+            #endif
         }
         .task {
             guard !didMigrate else { return }
             didMigrate = true
+            #if DEBUG
+            if competitionPOC { return }
+            #endif
             if uiTestHangar {
                 // Seed one catch so the Hangar shows its segmented Sets browser
                 // (the empty state hides it). icao24 only — the Sets list shows
