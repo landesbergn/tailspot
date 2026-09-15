@@ -24,8 +24,17 @@ import * as schema from "../../src/db/schema.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+export interface TestDbOptions {
+  /**
+   * Receives every SQL statement Drizzle issues, in order. Lets a test assert
+   * on statement ORDER (e.g. "the row lock is taken before the count") where
+   * PGlite's single session can't exercise real concurrency.
+   */
+  onQuery?: (sql: string) => void;
+}
+
 /** Build a fresh PGlite-backed Drizzle handle with the schema applied. */
-export async function makeTestDb(): Promise<Database> {
+export async function makeTestDb(options: TestDbOptions = {}): Promise<Database> {
   const client = new PGlite();
   // Replay EVERY committed migration in filename order so the test schema ==
   // the migrated prod schema. (We replay the raw SQL rather than running
@@ -44,5 +53,7 @@ export async function makeTestDb(): Promise<Database> {
   }
   // The Drizzle PGlite driver's type doesn't structurally match the postgres-js
   // `Database` type, but both satisfy the query surface the store/ingest use.
-  return drizzle(client, { schema }) as unknown as Database;
+  const onQuery = options.onQuery;
+  const logger = onQuery ? { logQuery: (query: string) => onQuery(query) } : undefined;
+  return drizzle(client, { schema, logger }) as unknown as Database;
 }

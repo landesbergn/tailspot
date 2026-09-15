@@ -860,6 +860,43 @@ describe("Challenges v1 routes", () => {
     void soon;
   });
 
+  it("GET /v1/challenges?scope= returns one bucket; anything else means both", async () => {
+    const noah = await register("noah");
+    const eli = await register("eli");
+    const old = await created(noah, { name: "Old", duration: "1h" });
+    await join(eli, old.challenge.code);
+    nowSec += 2 * HOUR;
+    await created(noah, { name: "Live", duration: "24h" });
+    const get = async (qs: string) =>
+      (await app.inject({ method: "GET", url: `/v1/challenges${qs}`, headers: auth(noah) })).json();
+    const open = await get("?scope=open");
+    expect(open.open.map((c: { name: string }) => c.name)).toEqual(["Live"]);
+    expect(open.history).toEqual([]);
+    const history = await get("?scope=history");
+    expect(history.open).toEqual([]);
+    expect(history.history.map((c: { name: string }) => c.name)).toEqual(["Old"]);
+    expect(history.history[0]).toMatchObject({ creatorHandle: "noah", participantCount: 2 });
+    const both = await get("?scope=everything");
+    expect(both.open).toHaveLength(1);
+    expect(both.history).toHaveLength(1);
+  });
+
+  it("detail participantCount after finalization counts active participants, not frozen rows", async () => {
+    const noah = await register("noah");
+    const eli = await register("eli");
+    const c = await created(noah, { name: "Count", duration: "1h" });
+    await join(eli, c.challenge.code);
+    await seedCatch(eli.deviceId, 50, secs(10));
+    nowSec += HOUR;
+    expect((await detail(noah, c.challenge.id)).json().challenge.participantCount).toBe(2);
+    const { eq } = await import("drizzle-orm");
+    await db.update(devices).set({ disabledAt: nowDate() }).where(eq(devices.id, eli.deviceId));
+    const after = (await detail(noah, c.challenge.id)).json();
+    expect(after.challenge.participantCount).toBe(1);
+    expect(after.standings.map((s: { handle: string }) => s.handle)).toEqual(["noah"]);
+    expect(await db.select().from(challengeResults)).toHaveLength(2); // history intact
+  });
+
   // ── rate limits on the bearer routes ───────────────────────────────────────
 
   it("create is metered per device (30/hour → 429)", async () => {
