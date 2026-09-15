@@ -174,6 +174,9 @@ struct SetsCoverageTests {
         ("ERCO", "Erco", "415 Ercoupe"),
         ("J3", "Piper", "NE Cub"),
         ("PRM1", "Hawker Beechcraft", "390 Premier 1"),
+        // Public catalog coverage additions validated 2026-09-15.
+        ("C195", "Cessna", "195"),
+        ("M7", "Maule", "MX-7-180"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -232,6 +235,8 @@ struct SetsCoverageTests {
             (("ERCO", "Erco", "415 Ercoupe"), "fam-sport-classics", "fsc-ercoupe"),
             (("J3", "Piper", "NE Cub"), "fam-vintage", "fv-cub"),
             (("PRM1", "Hawker Beechcraft", "390 Premier 1"), "fam-light-jets", "flj-premier"),
+            (("C195", "Cessna", "195"), "fam-cessna", "fc195"),
+            (("M7", "Maule", "MX-7-180"), "fam-sport-classics", "fsc-maule-m7"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -317,6 +322,18 @@ struct SetsCoverageTests {
         let c320Entry = cessnaSet.entries.first { $0.id == "fc320" }!
         #expect(!CardSets.matches(key: a320Key, entry: c320Entry),
                 "An Airbus A320 must not fill the Cessna 320 slot")
+
+        // Cessna 195 must not absorb Embraer's E195 regional jet, and the
+        // Maule MX-7 token must not absorb MX Aircraft's MX-2 aerobat.
+        let c195Entry = cessnaSet.entries.first { $0.id == "fc195" }!
+        let e195 = mk(("E195", "Embraer", "195"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: e195), entry: c195Entry),
+                "An Embraer E195 must not fill the Cessna 195 slot")
+        let mauleEntry = CardSets.families.first { $0.id == "fam-sport-classics" }!
+            .entries.first { $0.id == "fsc-maule-m7" }!
+        let mx2 = mk(("MX2", "Mx Aircraft", "MX-2"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mx2), entry: mauleEntry),
+                "An MX Aircraft MX-2 must not fill the Maule M-7 slot")
 
         // GlaStar is a distinct ICAO type from the similarly named Glasair.
         let glasair = mk(("GLAS", "Glasair", "Glasair"))
