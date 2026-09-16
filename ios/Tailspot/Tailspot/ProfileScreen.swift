@@ -718,18 +718,20 @@ struct ProfileScreen: View {
     /// Challenges tile took its place (phase 2). The tile carries the
     /// model's headline as a subtitle — "Race a friend" until you are in
     /// one, then the live line, then "see results" — so the Profile is the
-    /// one place the state shows without opening the hub. When the server
-    /// has the feature off the tile is hidden and Map stands alone; that
-    /// only happens with the kill switch thrown.
+    /// one place the state shows without opening the hub. The tile exists
+    /// only once the server config has said the feature is available on
+    /// this build; before that (feature not deployed, kill switch on,
+    /// build too old, config unreachable) Map stands alone rather than a
+    /// tile opening onto an error.
     private var quickLinks: some View {
         HStack(spacing: 10) {
             quickLink(label: "Map", glyph: "map") { MapScreen() }
-            if challenges?.verdict != .disabled {
-                let headline = challenges?.headline ?? .none
+            if let challenges, challenges.verdict == .available {
+                let headline = challenges.headline
+                let standing = ChallengesEntryCopy.standing(
+                    in: ChallengesEntryCopy.challengeId(for: headline).flatMap { challenges.details[$0] })
                 let line = ChallengesEntryCopy.line(
-                    for: headline,
-                    now: challenges?.now() ?? Date(),
-                    me: ChallengesEntryCopy.challengeId(for: headline).flatMap { challenges?.details[$0]?.me })
+                    for: headline, now: challenges.now(), me: standing.me, isTie: standing.isTie)
                 quickLink(label: "Challenges", glyph: "flag.checkered", subtitle: line.detail) {
                     ChallengesHub(source: "profile_tile")
                 }

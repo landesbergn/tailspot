@@ -27,12 +27,12 @@ nonisolated enum ChallengesEntryCopy {
     /// (the list rows carry `myResult` only for finished challenges; a live
     /// placement comes from the detail the hub or strip already loaded).
     static func line(for headline: ChallengesModel.Headline, now: Date,
-                     me: ChallengeMyResult? = nil) -> Line {
+                     me: ChallengeMyResult? = nil, isTie: Bool = false) -> Line {
         switch headline {
         case .live(let c):
             var parts = [c.name]
             if let mine = c.myResult ?? me {
-                parts.append(ChallengeTiming.placementLabel(placement: mine.placement, isTie: false))
+                parts.append(ChallengeTiming.placementLabel(placement: mine.placement, isTie: isTie))
             }
             parts.append(ChallengeTiming.timeRemainingCopy(until: c.endsAt, now: now))
             return Line(state: "IN FLIGHT", detail: parts.joined(separator: " · "))
@@ -52,6 +52,14 @@ nonisolated enum ChallengesEntryCopy {
         case .none: return nil
         }
     }
+
+    /// My standing in a cached detail, with whether that placement is
+    /// shared — so the tile and strip say "T-2nd" when it is.
+    static func standing(in detail: ChallengeDetail?) -> (me: ChallengeMyResult?, isTie: Bool) {
+        guard let detail, let me = detail.me else { return (nil, false) }
+        let sharers = detail.standings.filter { $0.placement == me.placement }.count
+        return (me, sharers > 1)
+    }
 }
 
 // MARK: - Production model
@@ -61,15 +69,35 @@ enum ChallengesAppModel {
     /// builds from `bin/deploy` carry CFBundleVersion 1 (CI bumps it), so
     /// they pass `Int.max` and never read as "update required" against the
     /// server's `minBuild`; Release builds compare their real build number.
+    /// DEBUG launch argument that swaps the real client for the fixture
+    /// demo world (live challenge with a tie, upcoming, won, lost, No
+    /// Contest, cancelled, and a code for every joinability outcome), so
+    /// the whole feature can be toured on a phone before the backend is
+    /// live. Synthetic INPUTS at the one shared funnel, never faked
+    /// outputs; the hub badges itself DEMO DATA while it is on. Pass it
+    /// with `xcrun devicectl device process launch … -- -challengesFixture`.
+    static let fixtureLaunchArgument = "-challengesFixture"
+
+    @MainActor
+    static var usesFixture: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains(fixtureLaunchArgument)
+        #else
+        return false
+        #endif
+    }
+
     @MainActor
     static func make() -> ChallengesModel {
         #if DEBUG
         let build = Int.max
+        let service: ChallengesService = usesFixture ? FixtureChallengesService() : ChallengesClient()
         #else
         let build = ChallengeBuildGate.currentBuild()
+        let service: ChallengesService = ChallengesClient()
         #endif
         return ChallengesModel(
-            service: ChallengesClient(),
+            service: service,
             currentBuild: build,
             reminders: ChallengeReminderScheduler()
         )
@@ -86,7 +114,10 @@ struct ChallengesFlagButton: View {
     @Environment(ChallengesModel.self) private var model: ChallengesModel?
 
     var body: some View {
-        if let model, model.verdict != .disabled {
+        // `.available` only: with the config unknown (server not reachable,
+        // or the feature not deployed yet) the entry point stays hidden
+        // rather than opening onto an error — ChallengeBuildGate's own rule.
+        if let model, model.verdict == .available {
             NavigationLink {
                 ChallengesHub(source: "leaders_flag")
             } label: {
@@ -116,10 +147,11 @@ struct ChallengesStrip: View {
     @Environment(ChallengesModel.self) private var model: ChallengesModel?
 
     var body: some View {
-        if let model, model.verdict != .disabled,
+        if let model, model.verdict == .available,
            let id = ChallengesEntryCopy.challengeId(for: model.headline) {
+            let standing = ChallengesEntryCopy.standing(in: model.details[id])
             let line = ChallengesEntryCopy.line(for: model.headline, now: model.now(),
-                                                me: model.details[id]?.me)
+                                                me: standing.me, isTie: standing.isTie)
             NavigationLink {
                 ChallengeDetailScreen(id: id)
             } label: {
@@ -146,7 +178,7 @@ struct ChallengesStrip: View {
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 12)
-                .frame(minHeight: 36)
+                .frame(minHeight: 44)
                 .background(Brand.Color.cyan.opacity(0.09), in: .rect(cornerRadius: Brand.Radius.row))
                 .overlay {
                     RoundedRectangle(cornerRadius: Brand.Radius.row)

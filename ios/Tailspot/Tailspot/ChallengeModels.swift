@@ -125,6 +125,27 @@ nonisolated struct ChallengeSummary: Decodable, Identifiable, Equatable {
 
 /// GET /v1/challenges → `{ open, history }`, each an array of
 /// `ChallengeSummary` rows (with `myResult` populated).
+nonisolated extension ChallengeSummary {
+    /// A copy with a few fields changed — the wire struct is `let`-only. Used
+    /// by the model for optimistic local updates (a cancel before the next
+    /// list refresh) and by the fixtures.
+    func with(status: ChallengeStatus? = nil,
+              participantCount: Int? = nil,
+              isParticipant: Bool? = nil,
+              outcome: String?? = nil,
+              myResult: ChallengeMyResult?? = nil) -> ChallengeSummary {
+        ChallengeSummary(
+            id: id, kind: kind, code: code, inviteURL: inviteURL, name: name,
+            creatorHandle: creatorHandle, startsAt: startsAt, endsAt: endsAt,
+            durationPreset: durationPreset, maxParticipants: maxParticipants,
+            status: status ?? self.status, outcome: outcome ?? self.outcome,
+            participantCount: participantCount ?? self.participantCount,
+            isCreator: isCreator, isParticipant: isParticipant ?? self.isParticipant,
+            myResult: myResult ?? self.myResult
+        )
+    }
+}
+
 nonisolated struct ChallengeList: Decodable, Equatable {
     let open: [ChallengeSummary]
     let history: [ChallengeSummary]

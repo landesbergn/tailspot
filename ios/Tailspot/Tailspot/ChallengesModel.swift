@@ -239,7 +239,7 @@ final class ChallengesModel {
             try await service.cancel(id: id)
             if let s = open.first(where: { $0.id == id }) {
                 open.removeAll { $0.id == id }
-                let cancelled = ChallengeFixtures.summary(from: s, status: .cancelled)
+                let cancelled = s.with(status: .cancelled)
                 history.insert(cancelled, at: 0)
             }
             details[id] = nil

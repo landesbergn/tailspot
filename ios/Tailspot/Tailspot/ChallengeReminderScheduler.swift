@@ -135,6 +135,10 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
             content.sound = .default
             if let challengeId = ChallengeReminders.challengeId(fromNotificationIdentifier: plan.identifier) {
                 content.userInfo = ["challengeId": challengeId]
+                Analytics.capture("challenge_reminder_scheduled", [
+                    "challenge_id": .string(challengeId),
+                    "moment": .string(String(plan.identifier.split(separator: ".").last ?? "")),
+                ])
             }
             // At least 1s: `plan` only emits moments strictly in the future,
             // but guard the system trigger's hard minimum anyway.

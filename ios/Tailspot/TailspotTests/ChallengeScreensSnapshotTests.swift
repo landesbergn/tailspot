@@ -29,9 +29,16 @@ struct ChallengeScreensSnapshotTests {
         return Calendar.current.date(from: c)!
     }()
 
-    private func snapshot<V: View>(_ view: V, as name: String, settle: TimeInterval = 0.6) {
+    /// iPhone 16 by default; pass `.se` for the 375×667 class that broke the
+    /// reveal CTA on 2026-09-06.
+    enum Device { case iphone16, se }
+
+    private func snapshot<V: View>(_ view: V, as name: String, settle: TimeInterval = 0.6,
+                                   device: Device = .iphone16) {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
-        let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
+        let bounds = device == .se
+            ? CGRect(x: 0, y: 0, width: 375, height: 667)
+            : CGRect(x: 0, y: 0, width: 393, height: 852)
         let host = UIHostingController(rootView: view)
         let window = UIWindow(frame: bounds)
         window.rootViewController = host
@@ -212,6 +219,43 @@ struct ChallengeScreensSnapshotTests {
         let (lost, _) = await makeModel(seenResults: ["c-lost"])
         await lost.loadDetail(id: "c-lost")
         snapshot(detail(lost, id: "c-lost"), as: "challenge_detail_results_lost")
+
+        // SE height: the winner block and the first standings row must
+        // both be on screen without scrolling (spec §13; the 2026-09-06
+        // reveal bug is why this class gets its own render).
+        let (se, _) = await makeModel()
+        await se.loadDetail(id: "c-won")
+        snapshot(detail(se, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first_se",
+                 settle: 1.0, device: .se)
+    }
+
+    @Test func createAndJoinAtAccessibilitySizes() async {
+        let (model, _) = await makeModel()
+        // A claimed handle so the form itself renders (the unclaimed case
+        // shows the claim card and is covered by createSheetStates).
+        let key = SpotterHandle.storageKey
+        let previous = UserDefaults.standard.string(forKey: key)
+        UserDefaults.standard.set("noah", forKey: key)
+        defer { previous.map { UserDefaults.standard.set($0, forKey: key) } ?? UserDefaults.standard.removeObject(forKey: key) }
+        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model)
+                    .dynamicTypeSize(.accessibility2),
+                 as: "challenge_create_a11y2")
+        let invites = ChallengeFixtures.demoState(now: Self.now).invites
+        let preview = ChallengeJoinSheet.Phase.from(preview: invites[ChallengeFixtures.Codes.joinable]!)
+        snapshot(ChallengeJoinSheet(code: ChallengeFixtures.Codes.joinable, via: "code_entry", onJoined: { _ in },
+                                    _debugPhase: preview).environment(model)
+                    .dynamicTypeSize(.accessibility2),
+                 as: "challenge_join_preview_a11y2")
+    }
+
+    @Test func createSheetWithClaimedHandleShowsNoClaimCard() async {
+        let (model, _) = await makeModel()
+        let key = SpotterHandle.storageKey
+        let previous = UserDefaults.standard.string(forKey: key)
+        UserDefaults.standard.set("noah", forKey: key)
+        defer { previous.map { UserDefaults.standard.set($0, forKey: key) } ?? UserDefaults.standard.removeObject(forKey: key) }
+        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model),
+                 as: "challenge_create_claimed")
     }
 
     @Test func detailNoContestAndCancelled() async {

@@ -53,6 +53,21 @@ struct ChallengesHub: View {
         }
         .scrollIndicators(.hidden)
         .background(ChallengeBackdrop())
+        // The "lying screen" badge: on when the DEBUG fixture launch
+        // argument swapped the real client for the demo world.
+        .overlay(alignment: .bottom) {
+            if ChallengesAppModel.usesFixture {
+                Text("DEMO DATA")
+                    .font(Brand.Font.mono(size: 9, weight: .bold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.bgPrimary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Brand.Color.alertCaution, in: .capsule)
+                    .padding(.bottom, 8)
+                    .accessibilityLabel("Demo data")
+            }
+        }
         .navigationTitle("Challenges")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -109,7 +124,13 @@ struct ChallengesHub: View {
         }
     }
 
+    /// Once per push: popping back from a detail re-runs `.task`, and a
+    /// create → detail → back round trip must not log two hub views.
+    @State private var didFireViewed = false
+
     private func fireViewed() {
+        guard !didFireViewed else { return }
+        didFireViewed = true
         Analytics.capture("challenges_hub_viewed", [
             "source": .string(source),
             "live_count": .int(model.live.count),

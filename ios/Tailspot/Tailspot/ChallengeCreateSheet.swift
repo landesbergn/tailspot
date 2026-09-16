@@ -29,7 +29,7 @@ struct ChallengeCreateSheet: View {
         var id: String { rawValue }
         var label: String { ChallengeCopy.durationLabel(rawValue) }
         var short: String { rawValue.uppercased() }
-        var seconds: TimeInterval { ChallengeFixtures.seconds(for: rawValue) }
+        var seconds: TimeInterval { ChallengeDurations.seconds(for: rawValue) }
     }
 
     @State private var name: String
@@ -77,11 +77,26 @@ struct ChallengeCreateSheet: View {
         return lead >= Self.minLead && lead <= Self.maxLead
     }
 
-    private var canSubmit: Bool { nameValid && scheduleValid && !isSubmitting }
+    private var canSubmit: Bool { isHandleClaimed && nameValid && scheduleValid && !isSubmitting }
+
+    /// Spec §4.1 step 1: no handle, no form. The claim card sits above the
+    /// form and the Create button stays off until it succeeds — the server
+    /// would 422 anyway, but a round trip to learn that is a bad first tap.
+    private var isHandleClaimed: Bool {
+        AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
+    }
+    @State private var claimedInline = false
 
     var body: some View {
         NavigationStack {
             List {
+                if !isHandleClaimed && !claimedInline {
+                    Section {
+                        HandleClaimCard(source: "challenge_create") { claimedInline = true }
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                    }
+                }
                 nameSection
                 startSection
                 durationSection
@@ -220,14 +235,12 @@ struct ChallengeCreateSheet: View {
     @ViewBuilder
     private func errorRow(_ error: ChallengesError) -> some View {
         if error == .handleRequired {
-            NavigationLink {
-                SettingsScreen()
-            } label: {
-                Label("Claim a handle first — it's what other spotters see.", systemImage: "person.crop.circle.badge.exclamationmark")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.alertCaution)
-            }
-            .listRowBackground(Brand.Color.bgElevated)
+            // Only reachable if the stored handle and the server disagree;
+            // the claim card above the form is the normal path.
+            Label("Claim a handle first — it's what other spotters see.", systemImage: "person.crop.circle.badge.exclamationmark")
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.alertCaution)
+                .listRowBackground(Brand.Color.bgElevated)
         } else {
             Label(ChallengeCopy.message(for: error), systemImage: "exclamationmark.circle.fill")
                 .font(Brand.Font.caption)

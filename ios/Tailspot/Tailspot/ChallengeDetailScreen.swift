@@ -128,8 +128,12 @@ struct ChallengeDetailScreen: View {
 
     // MARK: Appear
 
+    /// Once per push — a pop back from an expanded log re-runs `.task`.
+    @State private var didFireViewed = false
+
     private func onLoaded() {
-        guard let d = detail else { return }
+        guard let d = detail, !didFireViewed else { return }
+        didFireViewed = true
         Analytics.capture("challenge_viewed", [
             "challenge_id": .string(id),
             "state": .string(stateLabel.lowercased()),

@@ -71,6 +71,7 @@ nonisolated protocol ChallengesService: Sendable {
     func cancel(id: String) async throws
 }
 
+#if DEBUG
 // MARK: - Fixture service
 
 /// In-memory `ChallengesService` for tests, snapshot harnesses and previews.
@@ -268,12 +269,7 @@ nonisolated enum ChallengeFixtures {
     }
 
     static func seconds(for preset: String) -> TimeInterval {
-        switch preset {
-        case "1h": return 3600
-        case "24h": return 86_400
-        case "3d": return 3 * 86_400
-        default: return 7 * 86_400
-        }
+        ChallengeDurations.seconds(for: preset)
     }
 
     /// A deterministic 8-char code from a seed, using the invite alphabet.
@@ -305,21 +301,14 @@ nonisolated enum ChallengeFixtures {
         )
     }
 
-    /// Copy with a few fields changed (the wire structs are `let`-only).
+    /// Copy with a few fields changed — see `ChallengeSummary.with`.
     static func summary(
         from s: ChallengeSummary, status: ChallengeStatus? = nil,
         participantCount: Int? = nil, isParticipant: Bool? = nil,
         outcome: String?? = nil, myResult: ChallengeMyResult?? = nil
     ) -> ChallengeSummary {
-        ChallengeSummary(
-            id: s.id, kind: s.kind, code: s.code, inviteURL: s.inviteURL, name: s.name,
-            creatorHandle: s.creatorHandle, startsAt: s.startsAt, endsAt: s.endsAt,
-            durationPreset: s.durationPreset, maxParticipants: s.maxParticipants,
-            status: status ?? s.status, outcome: outcome ?? s.outcome,
-            participantCount: participantCount ?? s.participantCount,
-            isCreator: s.isCreator, isParticipant: isParticipant ?? s.isParticipant,
-            myResult: myResult ?? s.myResult
-        )
+        s.with(status: status, participantCount: participantCount, isParticipant: isParticipant,
+               outcome: outcome, myResult: myResult)
     }
 
     static func standing(_ placement: Int, _ handle: String, _ points: Int, _ catches: Int,
@@ -484,3 +473,4 @@ nonisolated enum ChallengeFixtures {
         return s
     }
 }
+#endif

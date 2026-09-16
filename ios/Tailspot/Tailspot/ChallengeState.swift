@@ -12,6 +12,20 @@
 
 import Foundation
 
+/// The four duration presets the server accepts, as seconds (spec §5).
+nonisolated enum ChallengeDurations {
+    static let presets = ["1h", "24h", "3d", "7d"]
+
+    static func seconds(for preset: String) -> TimeInterval {
+        switch preset {
+        case "1h": return 3600
+        case "24h": return 86_400
+        case "3d": return 3 * 86_400
+        default: return 7 * 86_400
+        }
+    }
+}
+
 nonisolated enum ChallengeTiming {
     /// Section 10.1: "Status is derived, never stored... cancelled if
     /// cancelled_at, else upcoming before starts_at, live until ends_at,

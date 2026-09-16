@@ -53,12 +53,8 @@ struct ChallengeJoinSheet: View {
     @State private var isJoining = false
     @State private var joinError: ChallengesError?
 
-    // Inline handle claim
-    @State private var handleDraft = ""
-    @State private var handleError: String?
-    @State private var isClaiming = false
+    /// Flipped by the shared HandleClaimCard on success.
     @State private var claimedInline = false
-    private let accountClient = TailspotAccountClient()
 
     init(code: String?, via: String, onJoined: @escaping (ChallengeDetail) -> Void,
          _debugPhase: Phase? = nil) {
@@ -354,77 +350,7 @@ struct ChallengeJoinSheet: View {
     // MARK: Inline handle claim
 
     private var handleClaim: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Pick a handle first")
-                .font(Brand.Font.cardTitle)
-                .foregroundStyle(Brand.Color.textPrimary)
-            Text("It's what the other spotters see. Letters, numbers and underscores, 3 to 20 characters.")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textSecondary)
-            HStack(spacing: 6) {
-                Text("@").foregroundStyle(Brand.Color.textTertiary)
-                TextField("handle", text: $handleDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .font(Brand.Font.mono(size: 17, relativeTo: .body))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .accessibilityLabel("Handle")
-                    .onChange(of: handleDraft) { _, _ in handleError = nil }
-                    .onSubmit { Task { await claimHandle() } }
-                if isClaiming { ProgressView().scaleEffect(0.75).tint(Brand.Color.cyan) }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Brand.Color.bgPrimary.opacity(0.6), in: .rect(cornerRadius: Brand.Radius.row))
-            if let handleError {
-                Label(handleError, systemImage: "exclamationmark.circle.fill")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.alertCaution)
-            }
-            Button { Task { await claimHandle() } } label: {
-                Text("Claim handle")
-                    .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
-                    .foregroundStyle(handleDraftValid ? Brand.Color.cyan : Brand.Color.textTertiary)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!handleDraftValid || isClaiming)
-        }
-        .padding(16)
-        .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: Brand.Radius.card))
-    }
-
-    private var handleDraftValid: Bool {
-        let t = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.count >= 3 && t.count <= 20 && t.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
-    }
-
-    /// Mirrors SettingsScreen.saveHandle: register, claim, persist, identify.
-    private func claimHandle() async {
-        let trimmed = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard handleDraftValid else { return }
-        isClaiming = true
-        defer { isClaiming = false }
-        do {
-            let deviceId = try await accountClient.ensureRegistered()
-            try await accountClient.claimHandle(trimmed)
-            handle = trimmed
-            UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
-            Analytics.identify(deviceId, handle: trimmed)
-            Analytics.capture("handle_claimed", ["result": .string("success"), "source": .string("challenge_join")])
-            claimedInline = true
-            handleError = nil
-        } catch AccountError.handleTaken {
-            handleError = "@\(trimmed) is already taken"
-            Analytics.capture("handle_claimed", ["result": .string("taken"), "source": .string("challenge_join")])
-        } catch AccountError.handleNotAllowed {
-            handleError = "@\(trimmed) isn't allowed"
-            Analytics.capture("handle_claimed", ["result": .string("not_allowed"), "source": .string("challenge_join")])
-        } catch {
-            Log.ui.error("Join sheet: handle claim failed: \(error, privacy: .public)")
-            handleError = "Couldn't claim that right now. Check your connection."
-        }
+        HandleClaimCard(source: "challenge_join") { claimedInline = true }
     }
 
     // MARK: Join
