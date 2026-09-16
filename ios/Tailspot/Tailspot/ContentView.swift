@@ -244,13 +244,10 @@ struct ContentView: View {
     /// catch (Bool trigger collapses repeats; a counter doesn't).
     @State private var catchHaptic = 0
     /// Same-frame capture acknowledgment (capture-lag work, 2026-08-13):
-    /// the impact haptic + shutter flash fire at the TAP, not at pipeline
+    /// the impact haptic fires at the TAP, not at pipeline
     /// end — a working press must be distinguishable from a missed one
     /// before any async work starts. Counter, like `catchHaptic`.
     @State private var captureTapHaptic = 0
-    /// Drives the brief white shutter-flash overlay; set true at the tap,
-    /// animated back to false ~70 ms later.
-    @State private var captureFlash = false
     /// Collapsed by default. Tap the NEARBY AIRCRAFT header in the
     /// debug panel to expand the per-plane list.
     @State private var showAircraftList = false
@@ -992,13 +989,12 @@ struct ContentView: View {
             updateCompassWarning(accuracy: newAcc)
         }
         // Catch feedback surface: pipeline-end success haptic + tap-time
-        // impact haptic + shutter flash (see `performCatch`). Bundled into
+        // impact haptic (see `performCatch`). Bundled into
         // ONE modifier because `body` is a single expression already at the
         // type-check budget — adding chain links here times out the compiler.
         .modifier(CaptureFeedback(
             catchHaptic: catchHaptic,
-            tapHaptic: captureTapHaptic,
-            flash: captureFlash
+            tapHaptic: captureTapHaptic
         ))
         // Card-reveal moment. Replaces the v0 green flash overlay.
         // Presented full-screen so the rarity bloom + holo card fill
@@ -1837,17 +1833,14 @@ struct ContentView: View {
         guard !icaos.isEmpty else { return }
         guard !captureInFlight else { return }
 
-        // Acknowledge the tap in THIS frame: impact haptic + shutter flash.
+        // Acknowledge the tap in THIS frame with an impact haptic. Keep the
+        // viewfinder free of bright shutter overlays for night spotting;
+        // the capture spinner and early card reveal provide visual feedback.
         // Everything after this point is async (shutter ~0.2–0.6 s, detector,
         // compose) — without this beat a working press was indistinguishable
         // from a missed one until the reveal, ~1.4 s later (field report
         // 2026-08-13). The success haptic at pipeline end is unchanged.
         captureTapHaptic &+= 1
-        captureFlash = true
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(70))
-            withAnimation(.easeOut(duration: 0.3)) { captureFlash = false }
-        }
 
         // Authenticity gates are silent shadow signals. They never block,
         // quarantine, or interrupt a catch; their only product effect is the
@@ -4765,27 +4758,18 @@ private struct EmptyTapRippleView: View {
     }
 }
 
-/// The catch feedback surface, bundled: the pipeline-end success haptic,
-/// the tap-time impact haptic, and the capture shutter flash. One
-/// `.modifier` call instead of three chain links because `ContentView.body`
+/// The catch haptics, bundled: pipeline-end success and tap-time impact.
+/// One `.modifier` call instead of separate chain links because `ContentView.body`
 /// is a single expression sitting at the compiler's type-check budget —
 /// growing the chain there times out the build (2026-08-13).
 private struct CaptureFeedback: ViewModifier {
     let catchHaptic: Int
     let tapHaptic: Int
-    let flash: Bool
 
     func body(content: Content) -> some View {
         content
             .sensoryFeedback(.success, trigger: catchHaptic)
             .sensoryFeedback(.impact(weight: .medium), trigger: tapHaptic)
-            .overlay {
-                Rectangle()
-                    .fill(.white)
-                    .opacity(flash ? 0.5 : 0)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
     }
 }
 
