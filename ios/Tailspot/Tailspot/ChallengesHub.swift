@@ -304,6 +304,12 @@ struct ChallengesHub: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityHint("Opens the standings")
+        // A live list row carries no `myResult` (that is the FROZEN result,
+        // history only), so the trio needs the detail. Fetch it once per
+        // card; until it lands the trio shows dashes, not zeros.
+        .task(id: s.id) {
+            if model.details[s.id] == nil { await model.loadDetail(id: s.id) }
+        }
     }
 
     /// Place / points / catches. Stacks at accessibility sizes (the

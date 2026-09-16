@@ -327,8 +327,10 @@ struct ChallengeDetailScreen: View {
                         .foregroundStyle(Brand.Color.podiumGold)
                         .accessibilityHidden(true)
                 }
+                // A scale pop only — opacity stays 1 so the block is legible
+                // in any frame of the spring, and Reduce Motion simply skips
+                // the scale (the flag is set without animation there).
                 .scaleEffect(laurelsShown || reduceMotion ? 1 : 0.6)
-                .opacity(laurelsShown ? 1 : 0)
             }
             Text(verdict)
                 .brandDisplayFont()
@@ -360,8 +362,21 @@ struct ChallengeDetailScreen: View {
 
     private func standings(_ d: ChallengeDetail) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            ChallengeSectionLabel(title: status == .finished ? "FINAL STANDINGS" : "STANDINGS")
-            if d.standings.isEmpty {
+            ChallengeSectionLabel(title: status == .finished ? "FINAL STANDINGS" : (status == .upcoming ? "WHO'S IN" : "STANDINGS"))
+            if status == .upcoming && !d.standings.isEmpty {
+                // Nobody has scored yet, so no placements: everyone would
+                // read "T-1st", which is nonsense before the start. Just the
+                // roster, creator first.
+                VStack(spacing: 0) {
+                    ForEach(Array(d.standings.enumerated()), id: \.element.handle) { index, row in
+                        if index > 0 {
+                            Rectangle().fill(Brand.Color.bgPrimary.opacity(0.5)).frame(height: 1).padding(.leading, 60)
+                        }
+                        rosterRow(row, creator: d.challenge.creatorHandle)
+                    }
+                }
+                .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: Brand.Radius.card))
+            } else if d.standings.isEmpty {
                 Text(status == .cancelled ? "Nothing was scored." : "Nobody's in yet. Share the link.")
                     .font(Brand.Font.body)
                     .foregroundStyle(Brand.Color.textSecondary)
@@ -438,6 +453,42 @@ struct ChallengeDetailScreen: View {
             }
         }
         .background(isMe ? Brand.Color.cyan.opacity(0.07) : .clear)
+    }
+
+    private func rosterRow(_ row: ChallengeStanding, creator: String) -> some View {
+        let isMe = row.isMe == true
+        return HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(Brand.Color.cyan.opacity(0.12))
+                Image(systemName: row.handle == creator ? "flag.fill" : "person.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Brand.Color.cyan)
+            }
+            .frame(width: 34, height: 34)
+            .accessibilityHidden(true)
+            HStack(spacing: 6) {
+                Text("@\(row.handle)")
+                    .font(Brand.Font.mono(size: 14, weight: isMe ? .bold : .regular, relativeTo: .subheadline))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .lineLimit(1)
+                if isMe {
+                    Text("YOU")
+                        .font(Brand.Font.mono(size: 8, weight: .bold, relativeTo: .caption2))
+                        .foregroundStyle(Brand.Color.bgPrimary)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Brand.Color.cyan, in: .capsule)
+                }
+            }
+            Spacer()
+            Text(row.handle == creator ? "started it" : "in")
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textTertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(minHeight: 44)
+        .background(isMe ? Brand.Color.cyan.opacity(0.07) : .clear)
+        .accessibilityElement(children: .combine)
     }
 
     private func rowLabel(_ row: ChallengeStanding, tie: Bool, isMe: Bool) -> String {
