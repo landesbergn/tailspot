@@ -37,6 +37,11 @@ struct TailspotApp: App {
     /// app-level), handed to the delegate in `init` and injected into the
     /// environment for `ContentView` to observe.
     private let streakToastRelay = StreakToastRelay()
+    /// One Challenges model for the whole app (see ChallengesAppModel.make).
+    /// `@State` in an App is how SwiftUI keeps one instance alive for the
+    /// scene's lifetime; the property is read from `body` and the
+    /// scene-phase handler.
+    @State private var challenges = ChallengesAppModel.make()
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -105,6 +110,11 @@ struct TailspotApp: App {
             RootView()
                 .modelContainer(container)
                 .environment(streakToastRelay)
+                // The app-wide Challenges model (phase 2). Sheets and
+                // pushes inherit the environment from the presenting view,
+                // so injecting it once here reaches the Profile tile, the
+                // Leaders flag and strip, and every Challenges screen.
+                .environment(challenges)
                 // The app is locked to dark (Noah, 2026-07-10 polish
                 // sweep): the Brand palette is a fixed dark HUD and every
                 // light-mode rendering of it is a bug, not a mode.
@@ -146,6 +156,15 @@ struct TailspotApp: App {
                     // the post-catch sync). Cheap — one Hangar fetch + a pure
                     // decision — and idempotent like the two steps above.
                     await StreakReminderCenter.shared.sync(context: ctx)
+                    // Challenges: config first (kill switch, min build),
+                    // then my open + finished challenges, which also
+                    // re-plans the local challenge reminders. Both are
+                    // best-effort; the screens render their own error
+                    // states when these fail.
+                    await challenges.refreshConfig()
+                    if challenges.isAvailable {
+                        await challenges.refreshList()
+                    }
                 }
             }
         }

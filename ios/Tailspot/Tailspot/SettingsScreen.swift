@@ -28,6 +28,7 @@ struct SettingsScreen: View {
     /// Streak-protection reminders (default ON; muting cancels any pending
     /// nudge on the next sync below). Key shared with StreakReminderCenter.
     @AppStorage(StreakReminders.enabledKey) private var streakRemindersEnabled = true
+    @AppStorage(ChallengeReminderScheduler.enabledKey) private var challengeRemindersEnabled = true
     /// Display units. `@Bindable` is Observation's binding bridge — the
     /// pickers write straight into the shared preference (which persists to
     /// UserDefaults itself), and every card reading it re-renders.
@@ -165,6 +166,18 @@ struct SettingsScreen: View {
                 // Denied → the toggle alone goes inert (`.disabled` on the
                 // whole row would also kill the recovery path below).
                 .disabled(notifDenied)
+                // Challenge reminders (2026-09-15): starts, ending soon,
+                // finished — local notifications planned by
+                // ChallengeReminderScheduler. Shares the streak toggle's
+                // authorization state; its own on/off key.
+                Toggle(isOn: $challengeRemindersEnabled) {
+                    Text("Challenges")
+                        .foregroundStyle(notifDenied
+                                         ? Brand.Color.textTertiary
+                                         : Brand.Color.textPrimary)
+                }
+                .tint(Brand.Color.cyan)
+                .disabled(notifDenied)
                 if notifDenied {
                     Button {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -192,8 +205,8 @@ struct SettingsScreen: View {
                     .textCase(nil)
             } footer: {
                 Text(notifDenied
-                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges."
-                     : "Get notified if your streak is at risk.")
+                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges and challenge reminders."
+                     : "Get notified if your streak is at risk, and when a challenge starts, is about to end, or finishes.")
             }
             .listRowBackground(Brand.Color.bgElevated)
 
