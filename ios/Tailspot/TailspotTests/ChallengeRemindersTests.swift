@@ -136,4 +136,30 @@ struct ChallengeRemindersTests {
         #expect(!ChallengeReminders.isChallengeIdentifier(StreakReminders.notificationId))
         #expect(ChallengeReminders.isChallengeIdentifier("tailspot.challenge.c1.starts"))
     }
+
+    // MARK: - challengeId(fromNotificationIdentifier:)
+
+    @Test func challengeIdRoundTripsSimpleIds() {
+        for id in ChallengeReminders.identifiers(challengeId: "c1") {
+            #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: id) == "c1")
+        }
+    }
+
+    @Test func challengeIdRoundTripsIdsContainingDashes() {
+        let uuid = "3f9a1c2e-1234-4abc-9def-0987654321ab"
+        for id in ChallengeReminders.identifiers(challengeId: uuid) {
+            #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: id) == uuid)
+        }
+    }
+
+    @Test func challengeIdRejectsTheStreakIdentifier() {
+        #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: StreakReminders.notificationId) == nil)
+    }
+
+    @Test func challengeIdRejectsForeignIdentifiers() {
+        #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: "com.apple.something.else") == nil)
+        #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: "tailspot.challenge.") == nil)
+        #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: "tailspot.challenge.c1.unknownmoment") == nil)
+        #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: "tailspot.challenge.c1") == nil)
+    }
 }
