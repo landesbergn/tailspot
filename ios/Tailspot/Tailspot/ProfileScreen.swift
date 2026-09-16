@@ -713,14 +713,38 @@ struct ProfileScreen: View {
 
     // "Sets" deliberately absent: the Hangar's default segment IS Sets, so
     // the quick card was a duplicate door (Noah, 2026-07-08).
+    /// Map and Challenges. Leaders left this row on 2026-09-15 when it
+    /// moved to the catch screen's bottom bar (Challenges phase 0); the
+    /// Challenges tile took its place (phase 2). The tile carries the
+    /// model's headline as a subtitle — "Race a friend" until you are in
+    /// one, then the live line, then "see results" — so the Profile is the
+    /// one place the state shows without opening the hub. The tile exists
+    /// only once the server config has said the feature is available on
+    /// this build; before that (feature not deployed, kill switch on,
+    /// build too old, config unreachable) Map stands alone rather than a
+    /// tile opening onto an error.
     private var quickLinks: some View {
         HStack(spacing: 10) {
             quickLink(label: "Map", glyph: "map") { MapScreen() }
-            quickLink(label: "Leaders", glyph: "list.number") { LeaderboardScreen() }
+            if let challenges, challenges.verdict == .available {
+                let headline = challenges.headline
+                let standing = ChallengesEntryCopy.standing(
+                    in: ChallengesEntryCopy.challengeId(for: headline).flatMap { challenges.details[$0] })
+                let line = ChallengesEntryCopy.line(
+                    for: headline, now: challenges.now(), me: standing.me, isTie: standing.isTie)
+                quickLink(label: "Challenges", glyph: "flag.checkered", subtitle: line.detail) {
+                    ChallengesHub(source: "profile_tile")
+                }
+            }
         }
     }
 
-    private func quickLink<Dest: View>(label: String, glyph: String, @ViewBuilder destination: @escaping () -> Dest) -> some View {
+    /// Optional: nil in the snapshot harness and previews (nothing injects
+    /// it there), so the tile renders its cold-state copy instead of crashing.
+    @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
+
+    private func quickLink<Dest: View>(label: String, glyph: String, subtitle: String? = nil,
+                                       @ViewBuilder destination: @escaping () -> Dest) -> some View {
         NavigationLink {
             destination()
         } label: {
@@ -732,12 +756,21 @@ struct ProfileScreen: View {
                 Text(label)
                     .font(Brand.Font.caption.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(Brand.Font.mono(size: 9, weight: .regular, relativeTo: .caption2))
+                        .foregroundStyle(Brand.Color.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .padding(.horizontal, 6)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Section links (reference / settings)

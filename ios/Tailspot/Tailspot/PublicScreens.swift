@@ -118,6 +118,13 @@ struct LeaderboardScreen: View {
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
+        // Challenges (2026-09-15): the checkered flag is the cold-state
+        // entry; the strip under the switcher is the hot-state one. Both
+        // render nothing when no ChallengesModel is in the environment
+        // (snapshot harness) or the server has the feature off.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { ChallengesFlagButton() }
+        }
         // Runs on appear AND whenever the selected tab changes: a fresh tab
         // fetches (spinner — it has no data yet); a cached tab re-fetches
         // silently behind its stale board.
@@ -233,6 +240,7 @@ struct LeaderboardScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .padding(.bottom, 2)
             }
+            ChallengesStrip()
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)

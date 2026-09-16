@@ -5,6 +5,38 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-15 — Challenges v1, phase 2 (client core) — branch `feat/challenges-client`
+
+The whole client half of Challenges, built in parallel by three agents against
+one service contract and stitched together at the end:
+
+- **Foundation (pure, 100+ tests):** wire models aligned to the built backend,
+  `ChallengeTiming` (status, countdown copy, placement labels),
+  `ChallengePlacement` (competition ranking mirroring the server), `InviteCode`
+  (31-symbol alphabet, normalize, URL parse), `ChallengeReminders` (the
+  StreakReminders-shaped pure planner), `ChallengeBuildGate` (the config
+  verdict).
+- **Contract:** `ChallengesService` protocol + `ChallengesError`;
+  `FixtureChallengesService` with a demo world covering every state; the
+  `@Observable` `ChallengesModel` (config verdict, open/history, cached details
+  and logs, hub-seen / results-seen flags, the `headline` the entry points
+  share).
+- **Network + notifications:** `ChallengesClient` over URLSession (bearer from
+  the account client, 15 s timeout, every status code mapped) and
+  `ChallengeReminderScheduler` (local notifications for starts / ending soon /
+  finished, own identifier prefix and Settings key, streak slot untouched).
+- **Screens:** hub, create sheet, join sheet, detail (all states, winner moment
+  with Reduce Motion, expandable catch logs, share + copy link), shared views;
+  33 snapshot states + logic tests.
+- **Integration:** Profile's Leaders tile → Challenges tile with the headline
+  subtitle; Leaderboard toolbar flag with the one-time discovery dot and the
+  live strip under the switcher; Settings → REMINDERS → Challenges toggle;
+  one app-wide model injected from `TailspotApp`, refreshed on foreground.
+  DEBUG builds pass `Int.max` as their build so a local `bin/deploy` (build 1)
+  never reads as update-required.
+- Everything is DEBUG-visible today but DARK in production until the backend
+  flag flips; the hub explains itself when the server says no.
+
 ## 2026-09-15 — Challenges v1, phase 1 (backend) — branch `feat/challenges-backend`
 
 The server half of head-to-head / small-group Challenges, built from the
