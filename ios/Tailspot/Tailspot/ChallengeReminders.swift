@@ -36,6 +36,29 @@ nonisolated enum ChallengeReminders {
         identifier.hasPrefix(identifierPrefix)
     }
 
+    /// The three moment suffixes an identifier ever ends in — used by
+    /// `challengeId(fromNotificationIdentifier:)` to find the right split
+    /// point when the challenge id itself contains dashes (every real id is
+    /// a UUID).
+    private static let moments: Set<Substring> = ["starts", "ending_soon", "finished"]
+
+    /// Recovers the challenge id from one of this file's own identifiers
+    /// (`"tailspot.challenge.<id>.<moment>"`), or nil for anything else —
+    /// including `StreakReminders.notificationId` and any identifier this
+    /// build doesn't recognize. Splits on the LAST "." rather than the
+    /// first: the id may itself contain dashes (UUIDs do), but never a ".",
+    /// so everything before the final "." is the id and everything after is
+    /// the moment.
+    static func challengeId(fromNotificationIdentifier identifier: String) -> String? {
+        guard identifier.hasPrefix(identifierPrefix) else { return nil }
+        let remainder = identifier.dropFirst(identifierPrefix.count)
+        guard let lastDot = remainder.lastIndex(of: ".") else { return nil }
+        let id = remainder[remainder.startIndex..<lastDot]
+        let moment = remainder[remainder.index(after: lastDot)...]
+        guard !id.isEmpty, moments.contains(moment) else { return nil }
+        return String(id)
+    }
+
     /// The (at most three) identifiers a single challenge ever owns —
     /// for cancellation on leave/cancel/delete, regardless of which moments
     /// are currently still in the future.
