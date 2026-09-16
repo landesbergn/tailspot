@@ -177,6 +177,11 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-15.
         ("C195", "Cessna", "195"),
         ("M7", "Maule", "MX-7-180"),
+        // Public catalog coverage additions validated 2026-09-16.
+        ("ASTR", "IAI", "1125 Astra"),
+        ("F5", "Northrop", "F-5 Tiger 2"),
+        ("PTS2", "Aerotek", "Pitts S-2 Special"),
+        ("VELO", "Velocity", "LW"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -237,6 +242,10 @@ struct SetsCoverageTests {
             (("PRM1", "Hawker Beechcraft", "390 Premier 1"), "fam-light-jets", "flj-premier"),
             (("C195", "Cessna", "195"), "fam-cessna", "fc195"),
             (("M7", "Maule", "MX-7-180"), "fam-sport-classics", "fsc-maule-m7"),
+            (("ASTR", "IAI", "1125 Astra"), "fam-gulfstream", "fg-astra"),
+            (("F5", "Northrop", "F-5 Tiger 2"), "fam-military", "fm-f5"),
+            (("PTS2", "Aerotek", "Pitts S-2 Special"), "fam-sport-classics", "fsc-pitts-s2"),
+            (("VELO", "Velocity", "LW"), "fam-sport-classics", "fsc-velocity"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -334,6 +343,21 @@ struct SetsCoverageTests {
         let mx2 = mk(("MX2", "Mx Aircraft", "MX-2"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mx2), entry: mauleEntry),
                 "An MX Aircraft MX-2 must not fill the Maule M-7 slot")
+
+        // The new exact designators and manufacturer-qualified tokens must not
+        // absorb adjacent codes or similarly abbreviated aircraft names.
+        let astraEntry = CardSets.families.first { $0.id == "fam-gulfstream" }!
+            .entries.first { $0.id == "fg-astra" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("ASTO", "Tecnam", "Astore"))), entry: astraEntry),
+                "A Tecnam Astore must not fill the IAI Astra slot")
+        let f5Entry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-f5" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("F50", "Fokker", "50"))), entry: f5Entry),
+                "A Fokker 50 must not fill the F-5 slot")
+        let pittsEntry = CardSets.families.first { $0.id == "fam-sport-classics" }!
+            .entries.first { $0.id == "fsc-pitts-s2" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("PTSS", "Aviat", "S-1-11 Super Stinker"))), entry: pittsEntry),
+                "A Pitts S-1-11 must not fill the Pitts S-2 slot")
 
         // GlaStar is a distinct ICAO type from the similarly named Glasair.
         let glasair = mk(("GLAS", "Glasair", "Glasair"))
