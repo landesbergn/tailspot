@@ -119,13 +119,24 @@ source + each one's focused test file — they're not restated here.
   `AnalyticsIdentity.identifyRoute` (`$set` on the pinned person) — never "fix"
   a pinned device with `reset()`/re-identify (CHANGELOG 2026-07-04).
 - **`ADSBSourceError`** (in `ADSBSource.swift`) is the source-neutral
-  transport-error enum (`badURL`/`http(status:)`/`decoding`); all errors surface
-  uniformly via `lastError` (the OpenSky-era 429 backoff was removed —
-  `/v1/aircraft` never rate-limits).
+  transport-error enum (`badURL`/`http(status:)`/`rateLimited`/`decoding`); all
+  errors surface uniformly via `lastError` — **except a 429 on metadata.**
+  `/v1/aircraft` never rate-limits, but `GET /v1/metadata/:icao24` is capped at
+  300/min/IP (backend API hardening, 2026-09-06), so a 429 is its own case:
+  `ADSBManager.metadata(for:)` logs it at info, returns nil, does **not** cache
+  it and does **not** set `lastErrorUserMessage` (no red pill for "slow down" —
+  the next lookup just retries). Real transport failures still raise the pill.
 - **`Catch` is a flat SwiftData `@Model`**; duplicate icao24 rows are allowed
-  (dedupe is a Hangar concern). `CatchDetailView` is a **frozen-moment** view that
-  may backfill **nil-only airframe** fields (registration, typecode, manufacturer,
-  model, placeName, operator) but never overwrites recorded values or backfills
+  (dedupe is a Hangar concern). **`captureDiagnosticsJSON` is now load-bearing,
+  not just debug data:** `CatchUploader` reads the press-time pose (heading /
+  camera elevation / heading accuracy) and the caught plane's ADS-B fix back out
+  of that blob and sends them on `POST /v1/catches`, which is the only thing the
+  backend's validator can correlate (no pose → verdict "unverifiable"). Adding
+  fields to `CatchCaptureDiagnostics` stays a JSON-only, additive change — no
+  SwiftData migration — and old blobs must keep decoding (absent key → nil).
+  `CatchDetailView` is a **frozen-moment** view that may backfill **nil-only
+  airframe** fields (registration, typecode, manufacturer, model, placeName,
+  operator) but never overwrites recorded values or backfills
   moment-data. Deliberate exceptions: `Catch.resolvedRarity` re-derives live (so
   re-tiering corrects old catches on read, no migration), a **fully-nil route**
   heals via `CatchBackfill`'s per-callsign `GET /v1/routes` lookup (2026-07-04 —

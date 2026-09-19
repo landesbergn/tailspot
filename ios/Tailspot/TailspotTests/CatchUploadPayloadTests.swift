@@ -8,6 +8,10 @@
 //  catch upload (nil pose → absent keys → 422 storm). These tests assert the
 //  pose keys are present as null.
 //
+//  The same rule governs `aircraft` (and `aircraft.positionTimestamp`): absent
+//  is 422, null means "no position recorded", an object is what the validator
+//  correlates the pose against.
+//
 
 import Testing
 import Foundation
@@ -48,7 +52,59 @@ struct CatchUploadPayloadTests {
         let json = String(data: try JSONEncoder().encode(req), encoding: .utf8)!
         #expect(json.contains("\"headingDeg\":186.7"))
         #expect(json.contains("\"elevationDeg\":12"))
-        #expect(json.contains("\"aircraft\":null"))   // always explicit null (backfill path)
+        #expect(json.contains("\"aircraft\":null"))   // no recorded position -> explicit null
+    }
+
+    // ── Aircraft block (anti-cheat, 2026-09-07) ──────────────────────────
+    // Same explicit-null rule as the pose: absent = 422, null = "no position
+    // recorded, verdict unverifiable", object = validate it.
+
+    @Test func absentAircraftEncodesAsExplicitNull() throws {
+        let json = try encodedNilPosePayload()
+        #expect(json.contains("\"aircraft\":null"))
+    }
+
+    @Test func presentAircraftEncodesAsAnObject() throws {
+        let req = UploadCatchRequest(
+            catchUuid: "11111111-1111-4111-8111-111111111111",
+            icao24: "abc123", callsign: "UAL1",
+            caughtAt: 1_715_000_000,
+            observer: .init(lat: 37.8, lon: -122.27,
+                            headingDeg: 186.7, elevationDeg: 24.5, headingAccuracyDeg: 12.0),
+            aircraft: .init(lat: 37.71234, lon: -122.21876,
+                            altitudeMeters: 3048, positionTimestamp: 1_757_200_000),
+            guess: nil)
+        let data = try JSONEncoder().encode(req)
+        let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let ac = obj["aircraft"] as? [String: Any]
+        #expect(ac?["lat"] as? Double == 37.71234)
+        #expect(ac?["lon"] as? Double == -122.21876)
+        #expect(ac?["altitudeMeters"] as? Double == 3048)
+        #expect(ac?["positionTimestamp"] as? Double == 1_757_200_000)
+        // And the pose that pairs with it.
+        let o = obj["observer"] as? [String: Any]
+        #expect(o?["headingDeg"] as? Double == 186.7)
+        #expect(o?["elevationDeg"] as? Double == 24.5)
+        #expect(o?["headingAccuracyDeg"] as? Double == 12.0)
+    }
+
+    @Test func aircraftWithoutAFixTimeEncodesTimestampAsNull() throws {
+        // The backend takes `positionTimestamp` as number|null; the
+        // synthesized Encodable would OMIT a nil, which is malformed.
+        let req = UploadCatchRequest(
+            catchUuid: "11111111-1111-4111-8111-111111111111",
+            icao24: "abc123", callsign: nil,
+            caughtAt: 1_715_000_000,
+            observer: .init(lat: 37.8, lon: -122.27,
+                            headingDeg: nil, elevationDeg: nil, headingAccuracyDeg: nil),
+            aircraft: .init(lat: 37.7, lon: -122.2,
+                            altitudeMeters: 3048, positionTimestamp: nil),
+            guess: nil)
+        let data = try JSONEncoder().encode(req)
+        let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let ac = try #require(obj["aircraft"] as? [String: Any])
+        #expect(ac.keys.contains("positionTimestamp"))
+        #expect(ac["positionTimestamp"] is NSNull)
     }
 
     // ── Guess block (game-layer PR2) ─────────────────────────────────────
