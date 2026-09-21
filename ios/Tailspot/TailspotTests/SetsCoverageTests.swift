@@ -182,6 +182,15 @@ struct SetsCoverageTests {
         ("F5", "Northrop", "F-5 Tiger 2"),
         ("PTS2", "Aerotek", "Pitts S-2 Special"),
         ("VELO", "Velocity", "LW"),
+        // Public catalog coverage additions validated 2026-09-21.
+        ("C42", "Ikarus", "C-42"),
+        ("C441", "Cessna", "441 Conquest"),
+        ("DH8B", "De Havilland Canada", "DHC-8-200 Dash 8"),
+        ("GY20", "Cab", "GY-20 Minicab"),
+        ("HAWK", "BAE Systems", "Hawk"),
+        ("JS32", "British Aerospace", "BAe-3200 Jetstream Super 31"),
+        ("P68", "Partenavia", "P-68"),
+        ("PC21", "Pilatus", "E-27"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -246,6 +255,14 @@ struct SetsCoverageTests {
             (("F5", "Northrop", "F-5 Tiger 2"), "fam-military", "fm-f5"),
             (("PTS2", "Aerotek", "Pitts S-2 Special"), "fam-sport-classics", "fsc-pitts-s2"),
             (("VELO", "Velocity", "LW"), "fam-sport-classics", "fsc-velocity"),
+            (("C42", "Ikarus", "C-42"), "fam-sport-classics", "fsc-c42"),
+            (("C441", "Cessna", "441 Conquest"), "fam-cessna", "fc441"),
+            (("DH8B", "De Havilland Canada", "DHC-8-200 Dash 8"), "fam-dash8", "fdash8-200"),
+            (("GY20", "Cab", "GY-20 Minicab"), "fam-sport-classics", "fsc-minicab"),
+            (("HAWK", "BAE Systems", "Hawk"), "fam-military", "fm-hawk"),
+            (("JS32", "British Aerospace", "BAe-3200 Jetstream Super 31"), "fam-commuter-props", "fcp-js32"),
+            (("P68", "Partenavia", "P-68"), "fam-sport-classics", "fsc-p68"),
+            (("PC21", "Pilatus", "E-27"), "fam-military", "fm-pc21"),
         ]
 
         for (row, setID, entryID) in assignments {
