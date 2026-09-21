@@ -229,32 +229,40 @@ struct ChallengeScreensSnapshotTests {
                  settle: 1.0, device: .se)
     }
 
+    /// A suite-named `UserDefaults` carrying a claimed handle, injected into
+    /// the view tree with `.defaultAppStorage`. The sheets read the handle
+    /// through `@AppStorage(SpotterHandle.storageKey)`, whose store is an
+    /// environment value — so a suite store keeps these renders out of
+    /// `UserDefaults.standard`, where they used to overwrite (and on a
+    /// crashed run, leave behind) the developer's real handle.
+    private func claimedHandleDefaults(_ handle: String = "noah") -> UserDefaults {
+        let defaults = UserDefaults(suiteName: "ChallengeScreensSnapshotTests-handle-\(UUID().uuidString)")!
+        defaults.set(handle, forKey: SpotterHandle.storageKey)
+        return defaults
+    }
+
     @Test func createAndJoinAtAccessibilitySizes() async {
         let (model, _) = await makeModel()
         // A claimed handle so the form itself renders (the unclaimed case
         // shows the claim card and is covered by createSheetStates).
-        let key = SpotterHandle.storageKey
-        let previous = UserDefaults.standard.string(forKey: key)
-        UserDefaults.standard.set("noah", forKey: key)
-        defer { previous.map { UserDefaults.standard.set($0, forKey: key) } ?? UserDefaults.standard.removeObject(forKey: key) }
+        let handleStore = claimedHandleDefaults()
         snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model)
+                    .defaultAppStorage(handleStore)
                     .dynamicTypeSize(.accessibility2),
                  as: "challenge_create_a11y2")
         let invites = ChallengeFixtures.demoState(now: Self.now).invites
         let preview = ChallengeJoinSheet.Phase.from(preview: invites[ChallengeFixtures.Codes.joinable]!)
         snapshot(ChallengeJoinSheet(code: ChallengeFixtures.Codes.joinable, via: "code_entry", onJoined: { _ in },
                                     _debugPhase: preview).environment(model)
+                    .defaultAppStorage(handleStore)
                     .dynamicTypeSize(.accessibility2),
                  as: "challenge_join_preview_a11y2")
     }
 
     @Test func createSheetWithClaimedHandleShowsNoClaimCard() async {
         let (model, _) = await makeModel()
-        let key = SpotterHandle.storageKey
-        let previous = UserDefaults.standard.string(forKey: key)
-        UserDefaults.standard.set("noah", forKey: key)
-        defer { previous.map { UserDefaults.standard.set($0, forKey: key) } ?? UserDefaults.standard.removeObject(forKey: key) }
-        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model),
+        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugNow: Self.now).environment(model)
+                    .defaultAppStorage(claimedHandleDefaults()),
                  as: "challenge_create_claimed")
     }
 

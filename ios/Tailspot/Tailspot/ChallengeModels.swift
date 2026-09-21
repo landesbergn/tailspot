@@ -102,6 +102,10 @@ nonisolated struct ChallengeSummary: Decodable, Identifiable, Equatable {
     let code: String?
     let inviteURL: String?
     let name: String
+    /// The backend types this `string | null` (a creator whose device never
+    /// claimed a handle, or one wiped by a later moderation pass), so it
+    /// decodes optionally with a neutral fallback — a null here used to fail
+    /// the whole row, taking the challenge out of the list entirely.
     let creatorHandle: String
     let startsAt: Date
     let endsAt: Date
@@ -121,6 +125,44 @@ nonisolated struct ChallengeSummary: Decodable, Identifiable, Equatable {
     /// than re-deriving it from standings.
     var isNoContest: Bool { outcome == "no_contest" }
     var isDecided: Bool { outcome == "decided" }
+
+    /// What a missing/null `creatorHandle` reads as everywhere it is shown
+    /// ("cancelled by @spotter before it started").
+    static let unknownCreatorHandle = "spotter"
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, code, inviteURL, name, creatorHandle, startsAt, endsAt
+        case durationPreset, maxParticipants, status, outcome, participantCount
+        case isCreator, isParticipant, myResult
+    }
+}
+
+/// Hand-written decode (rather than the synthesized one) for exactly one
+/// reason: `creatorHandle` may be null on the wire while the property is
+/// non-optional here, so every screen can keep writing `s.creatorHandle`.
+/// Declared in an extension so the struct keeps its memberwise initializer,
+/// which `with(...)` and the fixtures rely on.
+nonisolated extension ChallengeSummary {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decode(String.self, forKey: .kind)
+        code = try c.decodeIfPresent(String.self, forKey: .code)
+        inviteURL = try c.decodeIfPresent(String.self, forKey: .inviteURL)
+        name = try c.decode(String.self, forKey: .name)
+        creatorHandle = try c.decodeIfPresent(String.self, forKey: .creatorHandle)
+            ?? Self.unknownCreatorHandle
+        startsAt = try c.decode(Date.self, forKey: .startsAt)
+        endsAt = try c.decode(Date.self, forKey: .endsAt)
+        durationPreset = try c.decode(String.self, forKey: .durationPreset)
+        maxParticipants = try c.decode(Int.self, forKey: .maxParticipants)
+        status = try c.decode(ChallengeStatus.self, forKey: .status)
+        outcome = try c.decodeIfPresent(String.self, forKey: .outcome)
+        participantCount = try c.decode(Int.self, forKey: .participantCount)
+        isCreator = try c.decode(Bool.self, forKey: .isCreator)
+        isParticipant = try c.decode(Bool.self, forKey: .isParticipant)
+        myResult = try c.decodeIfPresent(ChallengeMyResult.self, forKey: .myResult)
+    }
 }
 
 /// GET /v1/challenges → `{ open, history }`, each an array of

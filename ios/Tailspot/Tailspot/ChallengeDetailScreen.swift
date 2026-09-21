@@ -99,16 +99,19 @@ struct ChallengeDetailScreen: View {
         .background(ChallengeBackdrop())
         .navigationTitle(summary?.name ?? "Challenge")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await model.loadDetail(id: id) }
+        // `onLoaded` runs after EVERY load, not just the first: its own
+        // latch makes it once-per-push, and the first load can fail — a
+        // pull-to-refresh that finally succeeds must still fire the view
+        // analytics and mark the results seen.
+        .refreshable {
+            await model.loadDetail(id: id)
+            onLoaded()
+        }
         .task {
             await model.loadDetail(id: id)
             onLoaded()
             if presentShareOnAppear { showShare = true }
-            // Live refresh: once a minute while the window is open.
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-                if status == .live || status == .upcoming { await model.loadDetail(id: id) }
-            }
+            await pollWhileRelevant()
         }
         .sensoryFeedback(.success, trigger: firstViewTick)
         .sheet(isPresented: $showShare) {
@@ -126,13 +129,64 @@ struct ChallengeDetailScreen: View {
         }
     }
 
+    // MARK: Polling
+
+    /// How often a live challenge re-reads its standings.
+    static let livePollInterval: TimeInterval = 60
+    /// The longest a single sleep waits for an upcoming challenge to start.
+    /// A start can be 14 days out; waiting that long in one `Task.sleep`
+    /// would also mean 14 days without noticing a cancel or a new joiner,
+    /// so the wait is capped and the loop re-evaluates.
+    static let upcomingPollCap: TimeInterval = 300
+
+    /// How long to wait before the next refresh, or nil when there is
+    /// nothing left to poll. Pure so the cadence is testable without a
+    /// clock or a view.
+    static func pollWait(status: ChallengeStatus, secondsUntilStart: TimeInterval?) -> TimeInterval? {
+        switch status {
+        case .live:
+            return livePollInterval
+        case .upcoming:
+            let untilStart = secondsUntilStart ?? livePollInterval
+            return min(max(untilStart, 1), upcomingPollCap)
+        case .finished, .cancelled, .unknown:
+            return nil
+        }
+    }
+
+    /// The view-analytics latch: fire only on a load that produced a detail,
+    /// and only once per push. A first load that FAILED must leave the latch
+    /// down so a later pull-to-refresh still counts the view.
+    static func shouldFireViewed(hasDetail: Bool, alreadyFired: Bool) -> Bool {
+        hasDetail && !alreadyFired
+    }
+
+    /// Refresh while there is something to refresh. A LIVE challenge's
+    /// standings move, so poll it every minute. An UPCOMING one can't score
+    /// until it starts: sleep until the start instant (capped, and
+    /// cancellable like every `Task.sleep`), refresh once there, and fall
+    /// through to live polling. Anything finished or cancelled is frozen —
+    /// the loop returns and the task ends rather than burning a request a
+    /// minute on a result that can never change.
+    private func pollWhileRelevant() async {
+        while !Task.isCancelled {
+            let untilStart = summary.map { $0.startsAt.timeIntervalSince(model.now()) }
+            guard let wait = Self.pollWait(status: status, secondsUntilStart: untilStart) else { return }
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled else { return }
+            await model.loadDetail(id: id)
+            onLoaded()
+        }
+    }
+
     // MARK: Appear
 
     /// Once per push — a pop back from an expanded log re-runs `.task`.
     @State private var didFireViewed = false
 
     private func onLoaded() {
-        guard let d = detail, !didFireViewed else { return }
+        guard let d = detail,
+              Self.shouldFireViewed(hasDetail: true, alreadyFired: didFireViewed) else { return }
         didFireViewed = true
         Analytics.capture("challenge_viewed", [
             "challenge_id": .string(id),
@@ -513,8 +567,14 @@ struct ChallengeDetailScreen: View {
             "own": .bool(d.standings.first { $0.handle == handle }?.isMe == true),
         ])
         if model.log(id: id, handle: handle) == nil {
-            Task { try? await model.loadLog(id: id, handle: handle) }
+            loadLog(handle: handle)
         }
+    }
+
+    /// Fire-and-forget log load. The throw is swallowed here because the
+    /// model records it in `logErrors`, which is what the row renders.
+    private func loadLog(handle: String) {
+        Task { try? await model.loadLog(id: id, handle: handle) }
     }
 
     private func expandedRow(_ row: ChallengeStanding, in d: ChallengeDetail) -> some View {
@@ -536,6 +596,21 @@ struct ChallengeDetailScreen: View {
                         }
                     }
                 }
+            } else if model.logError(id: id, handle: row.handle) != nil {
+                // A failed log used to leave the spinner up for ever — the
+                // load is fire-and-forget (`try?`), so nothing ever came
+                // back to clear it. Say so, and make the line the retry.
+                Button {
+                    loadLog(handle: row.handle)
+                } label: {
+                    Label("Couldn't load catches. Tap to retry.", systemImage: "arrow.clockwise")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.alertCaution)
+                        .frame(minHeight: 32, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Loads this spotter's catches again")
             } else {
                 HStack { ProgressView().controlSize(.small).tint(Brand.Color.cyan); Text("loading catches").font(Brand.Font.caption).foregroundStyle(Brand.Color.textTertiary) }
             }
@@ -669,10 +744,16 @@ struct ChallengeShareControls: View {
     let challenge: ChallengeSummary
     let now: () -> Date
     @Binding var copied: Bool
+    @State private var showActivity = false
 
     private var url: URL? {
         if let raw = challenge.inviteURL, let u = URL(string: raw) { return u }
         return challenge.code.map { InviteCode.inviteURL(for: $0) }
+    }
+
+    private var shareMessage: String {
+        ChallengeCopy.shareMessage(name: challenge.name, preset: challenge.durationPreset,
+                                   startsAt: challenge.startsAt, now: now())
     }
 
     var body: some View {
@@ -690,9 +771,15 @@ struct ChallengeShareControls: View {
             }
             HStack(spacing: 10) {
                 if let url {
-                    ShareLink(item: url, message: Text(ChallengeCopy.shareMessage(
-                        name: challenge.name, preset: challenge.durationPreset,
-                        startsAt: challenge.startsAt, now: now()))) {
+                    // Was a `ShareLink` whose tap gesture fired
+                    // `challenge_invite_shared` — i.e. the event counted
+                    // sheet OPENINGS, including the ones dismissed without
+                    // sharing. `ActivityShareSheet` reports the real
+                    // outcome, so the event now means what its name says
+                    // and `method` names the app the link went to.
+                    Button {
+                        showActivity = true
+                    } label: {
                         Label("Share link", systemImage: "square.and.arrow.up")
                             .font(Brand.Font.button)
                             .foregroundStyle(Brand.Color.bgPrimary)
@@ -702,11 +789,14 @@ struct ChallengeShareControls: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .simultaneousGesture(TapGesture().onEnded {
-                        Analytics.capture("challenge_invite_shared", [
-                            "challenge_id": .string(challenge.id), "method": .string("share_sheet"),
-                        ])
-                    })
+                    .sheet(isPresented: $showActivity) {
+                        ActivityShareSheet(items: [shareMessage, url]) { method in
+                            guard let method else { return }
+                            Analytics.capture("challenge_invite_shared", [
+                                "challenge_id": .string(challenge.id), "method": .string(method),
+                            ])
+                        }
+                    }
                     Button {
                         UIPasteboard.general.string = url.absoluteString
                         copied = true

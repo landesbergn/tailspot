@@ -787,26 +787,18 @@ struct ContentView: View {
                     .transition(.opacity)
                 }
 
-                // Top-trailing controls: the account button (Profile), and
-                // in DEBUG builds the wrench to its left. The bottom bar is
-                // Hangar / Capture / Leaders (Challenges navigation change,
+                // Top-trailing controls: the account button (Profile), with
+                // the DEBUG wrench stacked under it (see
+                // `topTrailingControls`). The bottom bar is Hangar /
+                // Capture / Leaders (Challenges navigation change,
                 // 2026-09-15): the leaderboard is a high-value destination
                 // that was two taps deep, and the Profile — identity,
                 // settings, share — reads as "account", which lives top
                 // right on most iOS surfaces.
-                //
-                // `#if DEBUG` keeps the wrench (and the panels it toggles)
-                // out of TestFlight / App Store Release builds — testers
-                // see a clean AR view, not the sensor readout. Local Xcode
-                // Run builds keep it. `#if` inside a view builder is legal
-                // Swift: the HStack simply has one fewer child in Release.
                 VStack {
-                    HStack(spacing: 10) {
+                    HStack {
                         Spacer()
-                        #if DEBUG
-                        debugToggleButton
-                        #endif
-                        accountButton
+                        topTrailingControls
                     }
                     .padding(.top, 8)
                     .padding(.trailing, 12)
@@ -1436,34 +1428,9 @@ struct ContentView: View {
                     headingAccuracyDeg: location.headingAccuracy
                 )
             } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 18, weight: .bold))
-                        .symbolEffect(.pulse, options: .repeating)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("COMPASS OFF \(formatHeadingAccuracyShort())")
-                            .font(Brand.Font.mono(size: 14, weight: .bold))
-                            .tracking(1.0)
-                        Text("Labels may be wrong — tap to calibrate")
-                            .font(Brand.Font.mono(size: 10, weight: .regular))
-                            .opacity(0.85)
-                    }
-                }
-                // Dark text/glyph on amber — the classic caution read,
-                // and the only high-contrast pairing (amber-on-dark is
-                // reserved for the quieter data HUD).
-                .foregroundStyle(Brand.Color.bgSurface)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Brand.Color.alertCaution,
-                            in: RoundedRectangle(cornerRadius: Brand.Radius.row))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Brand.Radius.row)
-                        .strokeBorder(Brand.Color.bgSurface.opacity(0.15), lineWidth: 1)
-                )
-                // Amber glow so it lifts off the live camera behind it.
-                .shadow(color: Brand.Color.alertCaution.opacity(0.5), radius: 12, y: 2)
-                .contentShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
+                // The badge itself is `CautionBadge` (its own file) so the
+                // width test measures the shipping view, not a copy.
+                CautionBadge(accuracyText: formatHeadingAccuracyShort())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Compass off by \(formatHeadingAccuracyShort()). Labels may be wrong. Tap to calibrate.")
@@ -1491,6 +1458,33 @@ struct ContentView: View {
     private func formatHeadingAccuracyShort() -> String {
         guard let acc = location.headingAccuracy, acc >= 0 else { return "±?°" }
         return String(format: "±%.0f°", acc)
+    }
+
+    // MARK: - Top-trailing controls
+
+    /// The account button, and in DEBUG the wrench BELOW it rather than
+    /// beside it.
+    ///
+    /// Why the column: the compass banner's region is 16 leading / 60
+    /// trailing, sized for the account button alone (~307 pt of badge in
+    /// 317 pt of room on a 393 pt phone). A wrench beside the button put a
+    /// 44 pt hit region at roughly x 295–327 — on top of the banner's right
+    /// end, where it silently ate "tap to calibrate" taps in every Debug
+    /// build, which is every build Noah field-tests. Stacking keeps the top
+    /// row one button wide, so the Release layout and the banner's width
+    /// are untouched and the DEBUG build stops stealing the tap.
+    ///
+    /// `#if DEBUG` keeps the wrench (and the panels it toggles) out of
+    /// TestFlight / App Store builds — testers see a clean AR view, not the
+    /// sensor readout. `#if` inside a view builder is legal Swift: the
+    /// VStack simply has one fewer child in Release.
+    private var topTrailingControls: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            accountButton
+            #if DEBUG
+            debugToggleButton
+            #endif
+        }
     }
 
     // MARK: - Debug toggle

@@ -270,12 +270,23 @@ nonisolated enum ChallengeCopy {
         case .full: return "This challenge is full (10 of 10)."
         case .closed: return "This challenge has already ended."
         case .handleRequired: return "Claim a handle first."
-        case .invalid(let msg): return msg.prefix(1).uppercased() + msg.dropFirst() + "."
-        case .conflict(let msg): return msg.prefix(1).uppercased() + msg.dropFirst() + "."
+        case .invalid(let msg): return sentence(msg)
+        case .conflict(let msg): return sentence(msg)
         case .rateLimited: return "Too many tries. Give it a minute."
         case .unavailable: return "Challenges aren't available right now."
         case .network: return "No connection. Check your internet and try again."
         case .decoding: return "Tailspot got a reply it didn't understand. Try again."
         }
+    }
+
+    /// A server-supplied reason as one plain sentence. An empty or
+    /// whitespace-only `error` string in the body used to render as a bare
+    /// "." (capitalize-nothing + append a period), which is worse than no
+    /// message at all — fall back to the generic line instead.
+    static func sentence(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Something went wrong. Try again." }
+        let body = trimmed.prefix(1).uppercased() + trimmed.dropFirst()
+        return body.hasSuffix(".") || body.hasSuffix("!") || body.hasSuffix("?") ? body : body + "."
     }
 }

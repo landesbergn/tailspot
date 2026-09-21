@@ -37,6 +37,11 @@ protocol ChallengeNotificationCenter {
     func removePendingNotificationRequests(withIdentifiers identifiers: [String])
     func pendingRequests() async -> [UNNotificationRequest]
     func authorizationStatus() async -> UNAuthorizationStatus
+    /// Put the system permission prompt up. Only ever called from
+    /// `requestAuthorizationIfNeeded()` below, which checks the status
+    /// first — iOS shows the prompt exactly once per install, and a second
+    /// call on a denied install resolves `false` without any UI.
+    func requestAuthorization() async throws -> Bool
 }
 
 extension UNUserNotificationCenter: ChallengeNotificationCenter {
@@ -46,6 +51,12 @@ extension UNUserNotificationCenter: ChallengeNotificationCenter {
 
     func authorizationStatus() async -> UNAuthorizationStatus {
         await notificationSettings().authorizationStatus
+    }
+
+    /// Same options as `StreakReminderCenter.requestPermission` — one app,
+    /// one permission, so the two features must not ask for different sets.
+    func requestAuthorization() async throws -> Bool {
+        try await requestAuthorization(options: [.alert, .sound])
     }
 }
 
@@ -89,6 +100,34 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
         )
     }
 
+    /// Ask for notification permission, but only when asking can do
+    /// something: the challenge-reminders toggle is on and iOS has never
+    /// shown the prompt for this install. Returns whether reminders can be
+    /// delivered afterwards.
+    ///
+    /// Without this, `plan(...)`'s `authorized` guard meant challenge
+    /// reminders NEVER scheduled for a user who never met the streak
+    /// pre-prompt — the feature was silently dead for them.
+    @discardableResult
+    func requestAuthorizationIfNeeded() async -> Bool {
+        guard remindersEnabled else { return false }
+        let status = await center.authorizationStatus()
+        guard status == .notDetermined else { return status == .authorized }
+        // Latch the shared one-shot so the in-camera streak pre-prompt
+        // doesn't ask again for a permission iOS has already resolved.
+        defaults.set(true, forKey: StreakReminders.permissionAskedKey)
+        let granted = (try? await center.requestAuthorization()) ?? false
+        ActivationTelemetry.firePermissionOutcome(permission: "notifications", granted: granted)
+        return granted
+    }
+
+    /// Which planned identifiers are not already pending — i.e. the ones
+    /// this sync genuinely schedules. Everything else is an upsert of a
+    /// notification that was already on the books.
+    nonisolated static func newlyScheduledIdentifiers(planned: [String], pending: [String]) -> Set<String> {
+        Set(planned).subtracting(pending)
+    }
+
     // MARK: - Core
 
     /// Recompute the plan for every open challenge and make the notification
@@ -118,6 +157,9 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
         let wantedIds = Set(wantedPlans.map(\.identifier))
 
         let pending = await center.pendingRequests()
+        let newIdentifiers = Self.newlyScheduledIdentifiers(
+            planned: wantedPlans.map(\.identifier), pending: pending.map(\.identifier)
+        )
         let staleIds = pending.map(\.identifier).filter { identifier in
             guard ChallengeReminders.isChallengeIdentifier(identifier),
                   let challengeId = ChallengeReminders.challengeId(fromNotificationIdentifier: identifier)
@@ -135,10 +177,17 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
             content.sound = .default
             if let challengeId = ChallengeReminders.challengeId(fromNotificationIdentifier: plan.identifier) {
                 content.userInfo = ["challengeId": challengeId]
-                Analytics.capture("challenge_reminder_scheduled", [
-                    "challenge_id": .string(challengeId),
-                    "moment": .string(String(plan.identifier.split(separator: ".").last ?? "")),
-                ])
+                // Only count a reminder as newly scheduled. `sync` runs on
+                // every foreground, refresh, create and join, and re-adding
+                // an already-pending identifier is an upsert no-op — firing
+                // the event there inflated the count by however often the
+                // app was opened, which is not what "scheduled" means.
+                if newIdentifiers.contains(plan.identifier) {
+                    Analytics.capture("challenge_reminder_scheduled", [
+                        "challenge_id": .string(challengeId),
+                        "moment": .string(String(plan.identifier.split(separator: ".").last ?? "")),
+                    ])
+                }
             }
             // At least 1s: `plan` only emits moments strictly in the future,
             // but guard the system trigger's hard minimum anyway.

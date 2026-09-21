@@ -20,14 +20,21 @@ nonisolated enum InviteCode {
 
     private static let alphabetSet = Set(alphabet)
 
-    /// Uppercases and strips spaces/dashes (how someone naturally types or
-    /// pastes a code — "k7m4 qd2x", "K7M4-QD2X"), then validates every
-    /// remaining character is in the alphabet and the length is exactly 8.
+    /// Uppercases and strips every whitespace/newline character plus dashes
+    /// (how someone naturally types or pastes a code — "k7m4 qd2x",
+    /// "K7M4-QD2X", or a line-wrapped paste out of Messages), then validates
+    /// every remaining character is in the alphabet and the length is
+    /// exactly 8. The strip set matches the backend's `[\s-]` exactly, so a
+    /// paste the server would accept never fails on the phone first:
+    /// `CharacterSet.whitespacesAndNewlines` covers tab, newline, carriage
+    /// return and the non-breaking space a rich-text paste can carry.
     /// Deliberately does NOT remap ambiguous input (e.g. typed "0" → "O"):
     /// the alphabet excludes 0/1/I/L/O precisely so a typo is rejected
     /// rather than silently corrected into a different, valid-looking code.
     static func normalize(_ raw: String) -> String? {
-        let stripped = raw.uppercased().filter { $0 != " " && $0 != "-" }
+        let stripped = String(raw.uppercased().unicodeScalars.filter {
+            !CharacterSet.whitespacesAndNewlines.contains($0) && $0 != "-"
+        })
         guard stripped.count == codeLength,
               stripped.allSatisfy({ alphabetSet.contains($0) }) else {
             return nil

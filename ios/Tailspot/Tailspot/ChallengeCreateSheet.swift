@@ -41,7 +41,15 @@ struct ChallengeCreateSheet: View {
 
     static let nameMin = 3
     static let nameMax = 24
-    static let minLead: TimeInterval = 15 * 60
+    /// The server's rule is "at least 15 minutes ahead", checked when the
+    /// request ARRIVES; the client checks when the form renders. A start
+    /// picked exactly 15 minutes out is therefore already stale by the time
+    /// the user taps Create, and the create 422s on a form that looked
+    /// valid. One minute of cushion makes that boundary unreachable — the
+    /// picker can't offer it and validation won't pass it.
+    static let minLead: TimeInterval = 16 * 60
+    /// What the server enforces, for copy only.
+    static let serverMinLead: TimeInterval = 15 * 60
     static let maxLead: TimeInterval = 14 * 86_400
 
     /// `_debugName` / `_debugStartMode` seed the snapshot harness.
@@ -73,8 +81,12 @@ struct ChallengeCreateSheet: View {
 
     private var scheduleValid: Bool {
         guard startMode == .scheduled else { return true }
-        let lead = scheduledAt.timeIntervalSince(model.now())
-        return lead >= Self.minLead && lead <= Self.maxLead
+        return Self.isValidLead(scheduledAt.timeIntervalSince(model.now()))
+    }
+
+    /// Whether a start this far ahead may be submitted.
+    static func isValidLead(_ lead: TimeInterval) -> Bool {
+        lead >= minLead && lead <= maxLead
     }
 
     private var canSubmit: Bool { isHandleClaimed && nameValid && scheduleValid && !isSubmitting }
