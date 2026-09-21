@@ -156,9 +156,14 @@ implementation — the seam for future public quests (`challenges.kind`).
 
 Not in v1: there is **no rename route** (a challenge's name is fixed at
 creation; the client must not offer a rename), no push tokens, no participant
-removal by the creator. Concurrency: `join` and finalization both take
+removal by the creator. Concurrency: `join`, `leave` and finalization all take
 `SELECT … FOR UPDATE` on the challenge row, so two joins racing at 9/10 can't
-both land and standings + outcome freeze from one snapshot.
+both land, standings + outcome freeze from one snapshot, and a join or leave
+arriving after the freeze is refused (409 / 410) rather than silently landing
+in a challenge that will never score it. Capacity counts the same participants
+the preview shows — active rows whose device isn't disabled. `join` also locks
+the **device** row (order: challenge → device) so one new device joining two
+challenges at once can only claim the growth-attribution credit once.
 
 ### Configuration (env)
 

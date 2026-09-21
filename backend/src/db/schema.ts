@@ -417,7 +417,12 @@ export const challenges = pgTable(
   },
   (t) => ({
     byCreator: index("challenges_creator_idx").on(t.creatorDeviceId),
-    /** The finalization sweep's shape: "ended but not yet frozen". */
+    /**
+     * "Ended but not yet frozen". There is NO sweep job — finalization is
+     * lazy (the first read after `endsAt` freezes the results); this index
+     * serves the predicate that read uses, notably `listForDevice`'s
+     * due-but-unfinalized lookup.
+     */
     pendingFinalize: index("challenges_pending_finalize_idx")
       .on(t.endsAt)
       .where(sql`${t.finalizedAt} is null`),
