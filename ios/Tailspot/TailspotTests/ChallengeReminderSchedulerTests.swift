@@ -23,8 +23,18 @@ final class FakeChallengeNotificationCenter: ChallengeNotificationCenter {
     private(set) var removedIdentifiers: [[String]] = []
     var pending: [UNNotificationRequest] = []
     var status: UNAuthorizationStatus = .authorized
+    /// How many times the permission prompt was put up, and what the user
+    /// "answers" (the fake also flips `status` the way iOS would).
+    private(set) var authorizationRequests = 0
+    var grantsAuthorization = true
+    /// Makes `add` slow, so a second `sync` has a window to interleave —
+    /// the race the scheduler's serialization exists to close.
+    var addDelayNanoseconds: UInt64 = 0
 
     func add(_ request: UNNotificationRequest) async throws {
+        if addDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: addDelayNanoseconds)
+        }
         added.append(request)
         pending.removeAll { $0.identifier == request.identifier }
         pending.append(request)
@@ -41,6 +51,12 @@ final class FakeChallengeNotificationCenter: ChallengeNotificationCenter {
 
     func authorizationStatus() async -> UNAuthorizationStatus {
         status
+    }
+
+    func requestAuthorization() async throws -> Bool {
+        authorizationRequests += 1
+        status = grantsAuthorization ? .authorized : .denied
+        return grantsAuthorization
     }
 }
 
@@ -160,5 +176,97 @@ struct ChallengeReminderSchedulerTests {
         scheduler.cancel(challengeId: "c1")
 
         #expect(center.removedIdentifiers.last == ChallengeReminders.identifiers(challengeId: "c1"))
+    }
+
+    // MARK: - permission
+
+    /// The gap this closes: `plan(...)` refuses to schedule anything unless
+    /// notifications are authorized, and nothing in the Challenges flow ever
+    /// asked — so for a user who never met the streak pre-prompt, challenge
+    /// reminders could not exist.
+    @Test func requestAuthorizationAsksOnceWhenUndeterminedThenSchedules() async {
+        let center = FakeChallengeNotificationCenter()
+        center.status = .notDetermined
+        let defaults = freshDefaults()
+        let scheduler = ChallengeReminderScheduler(center: center, defaults: defaults, now: { now })
+
+        await scheduler.sync(open: [upcomingChallenge()])
+        #expect(center.added.isEmpty, "undetermined permission schedules nothing")
+
+        let granted = await scheduler.requestAuthorizationIfNeeded()
+        #expect(granted)
+        #expect(center.authorizationRequests == 1)
+        // The shared one-shot latch is set, so the streak pre-prompt won't
+        // ask again for a permission iOS has already resolved.
+        #expect(defaults.bool(forKey: StreakReminders.permissionAskedKey))
+
+        await scheduler.sync(open: [upcomingChallenge()])
+        #expect(center.added.count == 3)
+    }
+
+    @Test func requestAuthorizationDoesNotAskWhenAlreadyDecided() async {
+        let center = FakeChallengeNotificationCenter()
+        center.status = .authorized
+        let scheduler = ChallengeReminderScheduler(center: center, defaults: freshDefaults(), now: { now })
+        #expect(await scheduler.requestAuthorizationIfNeeded())
+        #expect(center.authorizationRequests == 0)
+
+        center.status = .denied
+        #expect(await scheduler.requestAuthorizationIfNeeded() == false)
+        #expect(center.authorizationRequests == 0)
+    }
+
+    @Test func requestAuthorizationDoesNotAskWhenTheToggleIsOff() async {
+        let center = FakeChallengeNotificationCenter()
+        center.status = .notDetermined
+        let defaults = freshDefaults()
+        defaults.set(false, forKey: ChallengeReminderScheduler.enabledKey)
+        let scheduler = ChallengeReminderScheduler(center: center, defaults: defaults, now: { now })
+
+        #expect(await scheduler.requestAuthorizationIfNeeded() == false)
+        #expect(center.authorizationRequests == 0)
+    }
+
+    @Test func requestAuthorizationDeniedLeavesNothingScheduled() async {
+        let center = FakeChallengeNotificationCenter()
+        center.status = .notDetermined
+        center.grantsAuthorization = false
+        let scheduler = ChallengeReminderScheduler(center: center, defaults: freshDefaults(), now: { now })
+
+        #expect(await scheduler.requestAuthorizationIfNeeded() == false)
+        await scheduler.sync(open: [upcomingChallenge()])
+        #expect(center.added.isEmpty)
+    }
+
+    // MARK: - `challenge_reminder_scheduled` fires once per identifier
+
+    @Test func onlyIdentifiersNotAlreadyPendingCountAsNewlyScheduled() {
+        let planned = ChallengeReminders.identifiers(challengeId: "c1")
+        #expect(ChallengeReminderScheduler.newlyScheduledIdentifiers(planned: planned, pending: [])
+                == Set(planned))
+        #expect(ChallengeReminderScheduler.newlyScheduledIdentifiers(planned: planned, pending: planned)
+                .isEmpty)
+        #expect(ChallengeReminderScheduler.newlyScheduledIdentifiers(
+            planned: planned, pending: [planned[0], "tailspot.streak.reminder"])
+                == Set(planned.dropFirst()))
+    }
+
+    /// A re-sync (every foreground, every refresh, every create) re-adds the
+    /// same three identifiers as an upsert, and the pending list is
+    /// unchanged by it — the state half of "nothing new was scheduled".
+    /// That the EVENT doesn't fire again is asserted through the analytics
+    /// sink in `AnalyticsFacadeTests`
+    /// (`reminderScheduledFiresOncePerIdentifierNotPerSync`), which is the
+    /// one serialized owner of the process-global `Analytics._testSink`.
+    @Test func resyncUpsertsTheSameIdentifiers() async {
+        let center = FakeChallengeNotificationCenter()
+        let scheduler = ChallengeReminderScheduler(center: center, defaults: freshDefaults(), now: { now })
+        await scheduler.sync(open: [upcomingChallenge()])
+        let firstRound = Set(center.pending.map(\.identifier))
+        #expect(firstRound.count == 3)
+
+        await scheduler.sync(open: [upcomingChallenge()])
+        #expect(Set(center.pending.map(\.identifier)) == firstRound)
+        #expect(center.added.count == 6, "both syncs upsert; the second adds no NEW identifier")
     }
 }

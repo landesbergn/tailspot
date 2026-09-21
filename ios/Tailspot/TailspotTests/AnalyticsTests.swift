@@ -16,6 +16,7 @@
 
 import Foundation
 import Testing
+import UserNotifications
 @testable import Tailspot
 
 // MARK: - AnalyticsValue encoding
@@ -214,6 +215,97 @@ struct AnalyticsFacadeTests {
         withSink { sink in
             Analytics.flush()
             #expect(sink.flushes == 1)
+        }
+    }
+
+    // MARK: - challenge_reminder_scheduled (lives here on purpose)
+
+    // `Analytics._testSink` is process-global, and this suite is the ONE
+    // `.serialized` owner of it — a sink swap from a suite running in
+    // parallel would both lose these events and pollute the assertions
+    // above. So the scheduler's analytics contract is asserted here rather
+    // than in ChallengeReminderSchedulerTests, which never touches the sink.
+
+    /// Async twin of `withSink` — the scheduler's work is `async`.
+    private func withSinkAsync(_ body: (RecordingSink) async -> Void) async {
+        let sink = RecordingSink()
+        let previous = Analytics._testSink
+        defer { Analytics._testSink = previous }
+        Analytics._testSink = sink
+        await body(sink)
+    }
+
+    private static let remindersNow = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @MainActor
+    private func upcomingChallenge(id: String = "c1") -> ChallengeSummary {
+        ChallengeFixtures.summary(
+            id: id, name: "Weekend Flyoff", creator: "noah", code: nil,
+            startsAt: Self.remindersNow.addingTimeInterval(600),
+            endsAt: Self.remindersNow.addingTimeInterval(600 + 3600 * 24),
+            preset: "24h", status: .upcoming, participantCount: 2, isCreator: true)
+    }
+
+    @MainActor
+    private func makeScheduler(_ center: FakeChallengeNotificationCenter) -> ChallengeReminderScheduler {
+        ChallengeReminderScheduler(
+            center: center,
+            defaults: UserDefaults(suiteName: "ChallengeReminderAnalytics.\(UUID().uuidString)")!,
+            now: { Self.remindersNow })
+    }
+
+    /// Only this test's own events. `Analytics._testSink` is global, and
+    /// other suites (the scheduler's own, ActivationTelemetry) fire into
+    /// whichever sink happens to be installed — so count events for a
+    /// challenge id no other test uses, never every event in the sink.
+    private func reminderEvents(_ sink: RecordingSink, challengeId: String) -> [RecordingSink.Captured] {
+        sink.captured.filter {
+            $0.event == "challenge_reminder_scheduled"
+                && $0.properties["challenge_id"]?.jsonValue as? String == challengeId
+        }
+    }
+
+    /// The first sync of a challenge schedules its three moments and says so
+    /// once each; a second sync re-upserts the same identifiers and says
+    /// nothing, because nothing new was scheduled.
+    @MainActor
+    @Test func reminderScheduledFiresOncePerIdentifierNotPerSync() async {
+        let id = "analytics-\(UUID().uuidString)"
+        await withSinkAsync { sink in
+            let center = FakeChallengeNotificationCenter()
+            let scheduler = makeScheduler(center)
+
+            await scheduler.sync(open: [upcomingChallenge(id: id)])
+            let first = reminderEvents(sink, challengeId: id)
+            #expect(first.count == 3)
+            #expect(Set(first.compactMap { $0.properties["moment"]?.jsonValue as? String })
+                    == ["starts", "ending_soon", "finished"])
+
+            await scheduler.sync(open: [upcomingChallenge(id: id)])
+            #expect(reminderEvents(sink, challengeId: id).count == 3, "a re-sync scheduled nothing new")
+        }
+    }
+
+    /// Two syncs racing each other — Settings' toggle re-sync against a
+    /// foreground refresh, or a create against the permission ask that
+    /// follows it. The scheduler serializes them, so the second one reads a
+    /// pending list that already contains the first one's reminders and
+    /// fires nothing. With a slow `add` and no serialization this reported
+    /// six scheduled reminders for three notifications.
+    @MainActor
+    @Test func overlappingSyncsDoNotDoubleReportScheduledReminders() async {
+        let id = "analytics-\(UUID().uuidString)"
+        await withSinkAsync { sink in
+            let center = FakeChallengeNotificationCenter()
+            center.addDelayNanoseconds = 20_000_000   // 20 ms per add
+            let scheduler = makeScheduler(center)
+
+            async let a: Void = scheduler.sync(open: [upcomingChallenge(id: id)])
+            async let b: Void = scheduler.sync(open: [upcomingChallenge(id: id)])
+            _ = await (a, b)
+
+            #expect(reminderEvents(sink, challengeId: id).count == 3)
+            #expect(Set(center.pending.map(\.identifier)).count == 3)
         }
     }
 }

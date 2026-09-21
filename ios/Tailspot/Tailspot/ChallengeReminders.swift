@@ -32,6 +32,11 @@ nonisolated enum ChallengeReminders {
     /// bulk cancel/lookup for one feature can never touch the other's slot.
     static let identifierPrefix = "tailspot.challenge."
 
+    /// Minimum daylight a "starts" reminder needs to be worth scheduling.
+    /// Below this the challenge is starting essentially now, and the user
+    /// is looking at the screen that says so.
+    static let startsLead: TimeInterval = 60
+
     static func isChallengeIdentifier(_ identifier: String) -> Bool {
         identifier.hasPrefix(identifierPrefix)
     }
@@ -77,6 +82,17 @@ nonisolated enum ChallengeReminders {
     ///   future relative to `now` — a reminder scheduled for the past would
     ///   never fire, and re-planning after the fact (e.g. app reopened
     ///   mid-challenge) must not resurrect a moment that already passed.
+    /// - The "starts" moment needs `startsLead` (60 s) of daylight. A
+    ///   Starts-Now create returns a `startsAt` a second or two in the past
+    ///   or future depending on how far the device clock has drifted from
+    ///   the server's, and a "Challenge started" banner buzzing one second
+    ///   after the user pressed Create is noise, not a reminder.
+    ///   Deliberate consequence: a sync that runs inside the last minute
+    ///   before a start REMOVES an already-pending "starts" reminder (the
+    ///   scheduler drops anything no longer planned) rather than only
+    ///   declining to add one. That is the behaviour we want — a sync only
+    ///   happens because the app is open, so the user is looking at
+    ///   Tailspot when the thing starts and does not need to be told.
     /// - The "ending soon" lead is 10 minutes for the 1h preset (a 1-hour
     ///   warning on a 1-hour challenge would fire before or at the start)
     ///   and 1 hour for 24h/3d/7d, per the spec's phase-2 test list.
@@ -93,7 +109,7 @@ nonisolated enum ChallengeReminders {
         guard enabled, authorized else { return [] }
         var plans: [ChallengeReminderPlan] = []
 
-        if startsAt > now {
+        if startsAt.timeIntervalSince(now) >= startsLead {
             plans.append(ChallengeReminderPlan(
                 identifier: "\(identifierPrefix)\(challengeId).starts",
                 fireAt: startsAt,

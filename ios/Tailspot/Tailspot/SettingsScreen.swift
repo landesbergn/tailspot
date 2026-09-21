@@ -43,6 +43,10 @@ struct SettingsScreen: View {
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    /// Optional: Settings renders in snapshot harnesses and previews with no
+    /// Challenges model in the environment. `@Environment(Type.self)` with an
+    /// optional type is Observation's "inject it if it's there" form.
+    @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
     private let accountClient = TailspotAccountClient()
 
     #if DEBUG
@@ -295,6 +299,23 @@ struct SettingsScreen: View {
                 // Re-plan under the new setting: OFF cancels any pending
                 // nudge, ON schedules if a streak is live.
                 await StreakReminderCenter.shared.sync(context: modelContext)
+            }
+        }
+        // Same shape as the streak toggle above — it was the only one of the
+        // two that asked for permission or re-planned, so switching
+        // Challenges on did nothing until the next foreground, and switching
+        // it off left already-scheduled reminders to fire.
+        .onChange(of: challengeRemindersEnabled) { _, enabled in
+            Task { @MainActor in
+                if enabled,
+                   await StreakReminderCenter.shared.authorizationStatus() == .notDetermined {
+                    _ = await StreakReminderCenter.shared.requestPermission()
+                    await refreshNotifStatus()
+                }
+                // ON re-plans every open challenge; OFF makes the wanted set
+                // empty, so the sync removes every pending challenge
+                // reminder immediately.
+                challenges?.resyncReminders()
             }
         }
     }

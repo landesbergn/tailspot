@@ -8,8 +8,9 @@
 //  assertion test: writes PNGs to
 //  /private/tmp/tailspot_snaps and passes — review the images after running.
 //
-//  Mirrors ContentView.cautionBadge's label markup. If that banner's look
-//  changes, update this copy (it exists only to look at, not to gate).
+//  Renders the SHIPPING badge (`CautionBadge`, used by
+//  ContentView.cautionBadge) rather than a hand-copied duplicate — the
+//  width assertion below is only meaningful if it measures the real view.
 //
 
 #if DEBUG
@@ -22,31 +23,10 @@ import UIKit
 @Suite("Compass caution banner (visual pass)")
 struct CompassWarningSnapshotTests {
 
-    // Faithful copy of ContentView.cautionBadge's label (the visual part;
-    // the button action is ContentView-state-bound and not visual).
+    /// The shipping badge, with the repeating pulse off so a render is
+    /// deterministic.
     private func banner(accuracyText: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 18, weight: .bold))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("COMPASS OFF \(accuracyText)")
-                    .font(Brand.Font.mono(size: 14, weight: .bold))
-                    .tracking(1.0)
-                Text("Labels may be wrong — tap to calibrate")
-                    .font(Brand.Font.mono(size: 10, weight: .regular))
-                    .opacity(0.85)
-            }
-        }
-        .foregroundStyle(Brand.Color.bgSurface)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Brand.Color.alertCaution,
-                    in: RoundedRectangle(cornerRadius: Brand.Radius.row))
-        .overlay(
-            RoundedRectangle(cornerRadius: Brand.Radius.row)
-                .strokeBorder(Brand.Color.bgSurface.opacity(0.15), lineWidth: 1)
-        )
-        .shadow(color: Brand.Color.alertCaution.opacity(0.5), radius: 12, y: 2)
+        CautionBadge(accuracyText: accuracyText, animated: false)
     }
 
     // Backdrop approximating the live camera behind the HUD.
@@ -65,10 +45,13 @@ struct CompassWarningSnapshotTests {
     /// must fit that at default type or it wraps on every device. The
     /// rendered image's point width IS the badge's intrinsic width.
     @Test func bannerFitsBesideAccountButtonAtDefaultType() {
+        // The budget comes from the insets ContentView lays out with, not a
+        // number typed here.
+        let budget = TopStripLayout.bannerWidth(screenWidth: 393)
         let renderer = ImageRenderer(content: banner(accuracyText: "±40°").environment(\.colorScheme, .dark))
         renderer.scale = 1
         let width = renderer.uiImage?.size.width ?? .infinity
-        #expect(width <= 317, "badge is \(width) pt wide; the top stack only has 317 pt beside the account button")
+        #expect(width <= budget, "badge is \(width) pt wide; the top stack only has \(budget) pt beside the account button")
         // And the old symmetric-60 layout really was too narrow — pins the
         // reason the inset is asymmetric, so nobody "tidies" it back.
         #expect(width > 273, "if the badge now fits in 273 pt the inset can go back to symmetric")

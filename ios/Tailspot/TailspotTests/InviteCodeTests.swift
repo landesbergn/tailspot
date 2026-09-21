@@ -45,6 +45,16 @@ struct InviteCodeTests {
         #expect(InviteCode.normalize("K7M4-QD2X") == "K7M4QD2X")
     }
 
+    /// The backend strips `[\s-]` before validating, so anything it would
+    /// accept has to normalize here too — a code pasted out of Messages can
+    /// carry a newline, a tab or a non-breaking space.
+    @Test func normalizeStripsEveryKindOfWhitespace() {
+        #expect(InviteCode.normalize("K7M4\nQD2X") == "K7M4QD2X")
+        #expect(InviteCode.normalize("K7M4\tQD2X") == "K7M4QD2X")
+        #expect(InviteCode.normalize("\n K7M4-QD2X \r\n") == "K7M4QD2X")
+        #expect(InviteCode.normalize("K7M4\u{00A0}QD2X") == "K7M4QD2X")  // non-breaking space
+    }
+
     @Test func normalizeRejectsWrongLength() {
         #expect(InviteCode.normalize("K7M4QD2") == nil)   // 7 chars
         #expect(InviteCode.normalize("K7M4QD2XX") == nil) // 9 chars

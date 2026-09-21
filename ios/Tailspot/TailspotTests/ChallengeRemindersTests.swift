@@ -156,6 +156,36 @@ struct ChallengeRemindersTests {
         #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: StreakReminders.notificationId) == nil)
     }
 
+    // MARK: - a Starts-Now create must not buzz one second later
+
+    /// A "Starts now" challenge comes back with `startsAt` at, or within a
+    /// second or two of, the moment the user pressed Create — the device
+    /// clock and the server's never agree exactly. A "Challenge started"
+    /// banner arriving while the creator is still looking at the share sheet
+    /// is noise, so the moment needs a minute of daylight to be worth it.
+    @Test func startsMomentIsSkippedWhenTheStartIsEffectivelyNow() {
+        for offset in [-2.0, 0.0, 1.0, 30.0, 59.0] {
+            let starts = now.addingTimeInterval(offset)
+            let plans = ChallengeReminders.plan(
+                challengeId: "c1", name: "Starts Now", startsAt: starts,
+                endsAt: starts.addingTimeInterval(24 * 3600), durationPreset: "24h",
+                now: now, enabled: true, authorized: true)
+            #expect(!plans.contains { $0.identifier == "tailspot.challenge.c1.starts" },
+                    "offset \(offset) should not schedule a starts reminder")
+            // The other two moments are unaffected.
+            #expect(plans.count == 2)
+        }
+    }
+
+    @Test func startsMomentSurvivesAFullMinuteOfLead() {
+        let starts = now.addingTimeInterval(ChallengeReminders.startsLead)
+        let plans = ChallengeReminders.plan(
+            challengeId: "c1", name: "Soon", startsAt: starts,
+            endsAt: starts.addingTimeInterval(24 * 3600), durationPreset: "24h",
+            now: now, enabled: true, authorized: true)
+        #expect(plans.contains { $0.identifier == "tailspot.challenge.c1.starts" })
+    }
+
     @Test func challengeIdRejectsForeignIdentifiers() {
         #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: "com.apple.something.else") == nil)
         #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: "tailspot.challenge.") == nil)

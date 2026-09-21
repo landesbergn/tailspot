@@ -85,6 +85,39 @@ struct ChallengeModelsTests {
         #expect(s.myResult == nil)
     }
 
+    /// The backend types `creatorHandle` as `string | null`; the property is
+    /// non-optional here, so a null used to throw and take the whole row (or
+    /// the whole list) with it.
+    @Test func summaryDecodesNullCreatorHandleAsSpotter() throws {
+        let nullCreator = summaryJSON.replacingOccurrences(
+            of: "\"creatorHandle\": \"eli\"", with: "\"creatorHandle\": null")
+        let s = try decode(ChallengeSummary.self, nullCreator)
+        #expect(s.creatorHandle == "spotter")
+        #expect(s.id == "c1")
+    }
+
+    @Test func summaryDecodesMissingCreatorHandleAsSpotter() throws {
+        let noCreator = summaryJSON.replacingOccurrences(
+            of: "\"creatorHandle\": \"eli\",", with: "")
+        #expect(try decode(ChallengeSummary.self, noCreator).creatorHandle == "spotter")
+    }
+
+    /// The same null nested inside the shapes that carry a summary.
+    @Test func detailAndInvitePreviewSurviveANullCreatorHandle() throws {
+        let nullCreator = summaryJSON.replacingOccurrences(
+            of: "\"creatorHandle\": \"eli\"", with: "\"creatorHandle\": null")
+        let detailJSON = """
+        {"challenge": \(nullCreator), "standings": [], "me": null, "winners": []}
+        """
+        #expect(try decode(ChallengeDetail.self, detailJSON).challenge.creatorHandle == "spotter")
+
+        let previewJSON = """
+        {"challenge": \(nullCreator), "participants": ["eli"], "needsHandle": false,
+         "alreadyIn": false, "canJoin": true, "reason": null}
+        """
+        #expect(try decode(ChallengeInvitePreview.self, previewJSON).challenge.creatorHandle == "spotter")
+    }
+
     @Test func summaryOutcomeDrivesIsNoContestAndIsDecided() throws {
         let decided = summaryJSON.replacingOccurrences(of: "\"outcome\": null", with: "\"outcome\": \"decided\"")
         #expect(try decode(ChallengeSummary.self, decided).isDecided)

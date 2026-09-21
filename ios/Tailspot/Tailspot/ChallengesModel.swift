@@ -30,12 +30,19 @@ import Observation
 protocol ChallengeReminderScheduling: AnyObject {
     func sync(open: [ChallengeSummary])
     func cancel(challengeId: String)
+    /// Put the notification permission prompt up if it has never been shown
+    /// and challenge reminders are switched on. Returns whether reminders
+    /// can be delivered afterwards. The model calls this once, after the
+    /// first create or join — see `requestReminderAuthorizationIfNeeded`.
+    @discardableResult
+    func requestAuthorizationIfNeeded() async -> Bool
 }
 
 @MainActor
 final class NoopChallengeReminderScheduler: ChallengeReminderScheduling {
     func sync(open: [ChallengeSummary]) {}
     func cancel(challengeId: String) {}
+    func requestAuthorizationIfNeeded() async -> Bool { false }
 }
 
 @Observable
@@ -71,6 +78,9 @@ final class ChallengesModel {
     private(set) var detailErrors: [String: ChallengesError] = [:]
     /// Keyed "\(challengeId)/\(handle lowercased)".
     private(set) var logs: [String: ChallengeCatchLog] = [:]
+    /// Per-log load failures, same key shape as `logs`. A row whose log
+    /// failed must show a retry, not a spinner that never resolves.
+    private(set) var logErrors: [String: ChallengesError] = [:]
 
     // MARK: Local flags (spec §3.4)
 
@@ -152,18 +162,47 @@ final class ChallengesModel {
 
     // MARK: Lists
 
+    /// Bumped on every `refreshList` call; only the call holding the latest
+    /// value is allowed to write the list state.
+    ///
+    /// Explain-as-we-go — a *generation counter* is the standard fix for
+    /// overlapping async work writing the same state. The hub's `.task`, its
+    /// pull-to-refresh and the scene-phase handler in `TailspotApp` can all
+    /// be in flight at once; whichever response arrives LAST would otherwise
+    /// win, so a slow, stale (or failed) one could overwrite a fresh list, or
+    /// clear the spinner for a refresh still running. Each call takes a
+    /// ticket, and on return checks whether a newer call took one since — if
+    /// so it drops its result on the floor and touches nothing.
+    private var listGeneration = 0
+
     func refreshList() async {
+        listGeneration &+= 1
+        let generation = listGeneration
         isRefreshingList = true
-        defer { isRefreshingList = false; hasLoadedList = true }
+        defer {
+            if generation == listGeneration {
+                isRefreshingList = false
+                hasLoadedList = true
+            }
+        }
         do {
             let list = try await service.list()
+            guard generation == listGeneration else { return }
             open = list.open
             history = list.history
             listError = nil
             reminders.sync(open: open)
         } catch {
+            guard generation == listGeneration else { return }
             listError = Self.mapped(error, verdict: verdict)
         }
+    }
+
+    /// Re-plan the local reminders from the list already in memory — used by
+    /// the Settings toggle, which changes whether they may be scheduled at
+    /// all but has no reason to hit the network.
+    func resyncReminders() {
+        reminders.sync(open: open)
     }
 
     // MARK: Detail + log
@@ -180,12 +219,29 @@ final class ChallengesModel {
     }
 
     func loadLog(id: String, handle: String) async throws {
-        let log = try await service.catchLog(id: id, handle: handle)
-        logs["\(id)/\(handle.lowercased())"] = log
+        let key = Self.logKey(id: id, handle: handle)
+        logErrors[key] = nil
+        do {
+            let log = try await service.catchLog(id: id, handle: handle)
+            logs[key] = log
+        } catch {
+            let mapped = Self.mapped(error, verdict: verdict)
+            logErrors[key] = mapped
+            throw mapped
+        }
     }
 
     func log(id: String, handle: String) -> ChallengeCatchLog? {
-        logs["\(id)/\(handle.lowercased())"]
+        logs[Self.logKey(id: id, handle: handle)]
+    }
+
+    /// The load error for one spotter's log, if the last attempt failed.
+    func logError(id: String, handle: String) -> ChallengesError? {
+        logErrors[Self.logKey(id: id, handle: handle)]
+    }
+
+    static func logKey(id: String, handle: String) -> String {
+        "\(id)/\(handle.lowercased())"
     }
 
     // MARK: Mutations
@@ -198,6 +254,7 @@ final class ChallengesModel {
             open.removeAll { $0.id == d.challenge.id }
             open.insert(d.challenge, at: 0)
             reminders.sync(open: open)
+            await requestReminderAuthorizationIfNeeded()
             return d
         } catch {
             throw Self.mapped(error, verdict: verdict)
@@ -217,6 +274,7 @@ final class ChallengesModel {
             open.removeAll { $0.id == d.challenge.id }
             open.insert(d.challenge, at: 0)
             reminders.sync(open: open)
+            await requestReminderAuthorizationIfNeeded()
             return d
         } catch {
             throw Self.mapped(error, verdict: verdict)
@@ -237,16 +295,44 @@ final class ChallengesModel {
     func cancel(id: String) async throws {
         do {
             try await service.cancel(id: id)
-            if let s = open.first(where: { $0.id == id }) {
+            let known = open.first(where: { $0.id == id })
+            if let s = known {
                 open.removeAll { $0.id == id }
                 let cancelled = s.with(status: .cancelled)
                 history.insert(cancelled, at: 0)
             }
             details[id] = nil
             reminders.cancel(challengeId: id)
+            // Cancelled from a screen reached by a link or push, with the
+            // list never loaded (or already stale): there is no local row to
+            // move into history, so the row would simply vanish. Re-read the
+            // list instead of leaving the hub lying.
+            if known == nil {
+                await refreshList()
+            }
         } catch {
             throw Self.mapped(error, verdict: verdict)
         }
+    }
+
+    // MARK: Reminder permission
+
+    /// UserDefaults latch for "we have asked once after a create/join".
+    static let remindersAskedKey = "tailspot.challenges.remindersAsked"
+
+    /// The contextual permission ask (spec D17 rides the streak prompt, but
+    /// a user who never saw that prompt got NO challenge reminders at all).
+    /// Runs once per install, right after the first successful create or
+    /// join — the one moment where "tell me when it starts" is obviously
+    /// what the user wants. The scheduler itself no-ops unless the toggle is
+    /// on and iOS has never shown the prompt, so this can't nag.
+    func requestReminderAuthorizationIfNeeded() async {
+        guard !defaults.bool(forKey: Self.remindersAskedKey) else { return }
+        defaults.set(true, forKey: Self.remindersAskedKey)
+        await reminders.requestAuthorizationIfNeeded()
+        // Re-plan: everything that was skipped for want of authorization is
+        // schedulable now.
+        reminders.sync(open: open)
     }
 
     // MARK: Local flags

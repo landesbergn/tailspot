@@ -12,6 +12,7 @@
 #if DEBUG
 import Testing
 import Foundation
+import UIKit
 @testable import Tailspot
 
 @MainActor
@@ -215,6 +216,104 @@ struct ChallengeScreensLogicTests {
         #expect(nowMsg == "Race me on Tailspot — Weekend Flyoff, 24 hours starting now.")
         let later = ChallengeCopy.shareMessage(name: "Sunday Circuit", preset: "3d", startsAt: now.addingTimeInterval(3 * 3600), now: now)
         #expect(later.hasPrefix("Race me on Tailspot — Sunday Circuit, 3 days starting today at"))
+    }
+
+    /// A server `{"error": ""}` used to render as a bare "." — capitalize
+    /// nothing, append a period.
+    @Test func blankServerMessageFallsBackToAGenericSentence() {
+        #expect(ChallengeCopy.message(for: .invalid("")) == "Something went wrong. Try again.")
+        #expect(ChallengeCopy.message(for: .conflict("   ")) == "Something went wrong. Try again.")
+        #expect(ChallengeCopy.message(for: .invalid("\n")) == "Something went wrong. Try again.")
+    }
+
+    @Test func serverMessageIsCapitalizedAndEndsInOnePeriod() {
+        #expect(ChallengeCopy.message(for: .invalid("name must be 3–24 characters"))
+                == "Name must be 3–24 characters.")
+        // Already punctuated: no doubled period.
+        #expect(ChallengeCopy.message(for: .conflict("challenge already started."))
+                == "Challenge already started.")
+        #expect(ChallengeCopy.message(for: .conflict("  padded reason  ")) == "Padded reason.")
+    }
+
+    // MARK: - detail polling cadence
+
+    /// The 60 s poll used to run for `.upcoming` too — a challenge starting
+    /// in three days re-fetched standings that cannot change, once a minute,
+    /// for as long as the screen was open.
+    @Test func pollWaitOnlyRunsWhileThereIsSomethingToPoll() {
+        let live = ChallengeDetailScreen.livePollInterval
+        #expect(ChallengeDetailScreen.pollWait(status: .live, secondsUntilStart: nil, hasDetail: true) == live)
+        #expect(ChallengeDetailScreen.pollWait(status: .finished, secondsUntilStart: nil, hasDetail: true) == nil)
+        #expect(ChallengeDetailScreen.pollWait(status: .cancelled, secondsUntilStart: nil, hasDetail: true) == nil)
+        // A status this build doesn't recognize keeps refreshing rather
+        // than freezing on a screen it can't reason about.
+        #expect(ChallengeDetailScreen.pollWait(status: .unknown, secondsUntilStart: nil, hasDetail: true) == live)
+    }
+
+    /// The regression this guards: with no detail loaded there is no
+    /// summary, so the status reads `.unknown` — and a poll table that
+    /// stopped there left the error card with no way to heal itself short
+    /// of a pull-to-refresh. Every status must keep retrying while the
+    /// load has never succeeded.
+    @Test func pollWaitKeepsRetryingWhileNothingHasLoaded() {
+        let live = ChallengeDetailScreen.livePollInterval
+        for status in [ChallengeStatus.unknown, .live, .upcoming, .finished, .cancelled] {
+            #expect(ChallengeDetailScreen.pollWait(status: status, secondsUntilStart: nil, hasDetail: false) == live,
+                    "\(status) with no detail must keep retrying")
+        }
+    }
+
+    @Test func pollWaitSleepsUntilAnUpcomingStartBoundedByTheCap() {
+        // Starts in 90 s: wake exactly at the start.
+        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: 90, hasDetail: true) == 90)
+        // Starts in three days: capped, so a cancel or a new joiner still
+        // lands within the cap.
+        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: 3 * 86_400, hasDetail: true)
+                == ChallengeDetailScreen.upcomingPollCap)
+        // Start already passed (the status hasn't caught up yet): never a
+        // zero or negative sleep.
+        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: -10, hasDetail: true) == 1)
+    }
+
+    // MARK: - view analytics latch
+
+    /// The latch must not burn on a FAILED first load: the view analytics
+    /// and `markResultsSeen` belong to the first load that produced a
+    /// detail, even if that is a later pull-to-refresh.
+    @Test func viewedFiresOnTheFirstSuccessfulLoadNotTheFirstAttempt() {
+        #expect(!ChallengeDetailScreen.shouldFireViewed(hasDetail: false, alreadyFired: false))
+        #expect(ChallengeDetailScreen.shouldFireViewed(hasDetail: true, alreadyFired: false))
+        #expect(!ChallengeDetailScreen.shouldFireViewed(hasDetail: true, alreadyFired: true))
+    }
+
+    // MARK: - create lead time
+
+    /// The server validates the 15-minute lead when the request ARRIVES, so
+    /// a form that allows exactly 15 minutes 422s on a valid-looking tap.
+    @Test func createLeadHasAMinuteOfCushionOverTheServerRule() {
+        // The server's rule is 15 minutes, checked on arrival.
+        #expect(!ChallengeCreateSheet.isValidLead(15 * 60))
+        #expect(!ChallengeCreateSheet.isValidLead(15 * 60 + 59))
+        // The copy the sheet shows quotes the client floor, not the
+        // server's, so the message can't contradict the picker.
+        #expect(ChallengeCreateSheet.minLeadMinutes == 16)
+        #expect(ChallengeCreateSheet.isValidLead(16 * 60))
+        #expect(ChallengeCreateSheet.isValidLead(14 * 86_400))
+        #expect(!ChallengeCreateSheet.isValidLead(14 * 86_400 + 1))
+    }
+
+    // MARK: - share outcome
+
+    /// `challenge_invite_shared` must mean "shared", not "opened the sheet".
+    @Test func shareMethodIsOnlyReportedForACompletedShare() {
+        #expect(ActivityShareSheet.method(activityType: nil, completed: false) == nil)
+        #expect(ActivityShareSheet.method(activityType: .message, completed: false) == nil)
+        #expect(ActivityShareSheet.method(activityType: .message, completed: true)
+                == UIActivity.ActivityType.message.rawValue)
+        // Completed but unattributed (iOS does this for some targets).
+        #expect(ActivityShareSheet.method(activityType: nil, completed: true) == "share_sheet")
+        #expect(ActivityShareSheet.method(activityType: UIActivity.ActivityType(""), completed: true)
+                == "share_sheet")
     }
 
     @Test func errorMessagesArePlainSentences() {
