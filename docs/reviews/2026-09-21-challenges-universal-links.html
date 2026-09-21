@@ -108,7 +108,7 @@ Then check the origin directly:
 # expect: 200, content-type: application/json, NO 301/302
 
 curl -sI https://tailspot.app/c/K7M4QD2X
-# expect: 302 → apps.apple.com/…/id6773470079
+# expect: 302 → apps.apple.com/app/apple-store/id6773470079?pt=…&ct=Challenge%20Invite
 
 curl -sI https://tailspot.app/c/nope
 # expect: 404</pre></li>
@@ -127,12 +127,7 @@ CDN URL before changing any code.</li>
 
 <h2>Follow-ups not done here</h2>
 <ul>
-<li>The <code>/c/CODE</code> redirect uses the plain listing URL the decision
-specified. Every other App Store link on the site uses the attributed campaign
-form (<code>/app/apple-store/id6773470079?pt=119286625&amp;ct=…</code>); invite
-traffic is the highest-intent traffic the site gets, so it's worth a
-<code>ct=Challenge%20Invite</code> if Noah wants those installs counted
-separately.</li>
+<li>The <code>/c/CODE</code> redirect uses the attributed campaign form (<code>/app/apple-store/id6773470079?pt=119286625&amp;ct=Challenge%20Invite&amp;mt=8</code>), so invite-driven installs show up in App Analytics under <strong>Challenge Invite</strong>, next to the website and share campaigns.</li>
 <li>The other phase 3 items — APNs, the reveal ledger line, the results share
 card, the Ace trophy — are untouched.</li>
 </ul>
