@@ -114,11 +114,15 @@ struct ChallengesHub: View {
         // Universal link: whatever route brought the hub on screen, an
         // invite code parked on the model opens the join sheet here — the
         // one place that already knows how to preview, join and push the
-        // detail. `initial: true` covers the common case where the code
-        // was parked before this view existed. Taking it off the model
+        // detail. Keyed on the ROUTE, not the code: a code parked while
+        // the config was still unknown has to open once this hub's own
+        // refresh makes the verdict `.available`, and the code itself
+        // never changed. `.task(id:)` also runs on appear, which covers
+        // the code parked before this view existed, and runs after the
+        // update rather than inside it. Taking the code off the model
         // immediately is what stops a dismissed sheet re-presenting.
-        .onChange(of: model.pendingInviteCode, initial: true) { _, _ in
-            if model.isAvailable, let code = model.pendingInviteCode {
+        .task(id: model.inviteRoute) {
+            if case .join(let code) = model.inviteRoute {
                 linkCode = InviteLinkCode(id: code)
                 model.clearPendingInvite()
             }

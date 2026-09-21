@@ -18,10 +18,10 @@
 //  Explain-as-we-go: reading `model.verdict` / `model.pendingInviteCode`
 //  inside `body` is what subscribes this view to them — that's the
 //  Observation framework (iOS 17+): no publishers, no `objectWillChange`,
-//  the view re-renders when exactly those properties change. `onChange`
-//  with `initial: true` also fires once when the view appears, which is
-//  what delivers a link that landed while onboarding was still up, or
-//  before this screen existed.
+//  the view re-renders when exactly those properties change. `.task(id:)`
+//  also runs once when the view appears, which is what delivers a link
+//  that landed while onboarding was still up, or before this screen
+//  existed.
 //
 
 import SwiftUI
@@ -54,8 +54,12 @@ struct ChallengeInviteRouter: View {
         Color.clear
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
-            .onChange(of: model?.inviteRoute, initial: true) { _, route in
-                deliver(route)
+            // `.task(id:)` rather than `.onChange(of:initial:)`: it runs on
+            // appear AND on every route change, and it runs after the view
+            // update instead of inside it — this closure both writes local
+            // state and clears the code on the model.
+            .task(id: model?.inviteRoute) {
+                deliver(model?.inviteRoute)
             }
             .alert("Update Tailspot to join this challenge",
                    isPresented: Binding(
