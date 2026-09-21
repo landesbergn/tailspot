@@ -80,6 +80,16 @@ struct InviteCodeTests {
         #expect(InviteCode.parse(url: url) == "K7M4QD2X")
     }
 
+    /// The shape a universal link actually arrives in when someone typed
+    /// or shortened it by hand: www host, lowercase code, trailing slash.
+    /// nginx redirects this one to the App Store for anybody without the
+    /// app, and the entitlement claims both hosts, so the parser has to
+    /// take all three deviations at once.
+    @Test func parseAcceptsWWWLowercaseAndTrailingSlashTogether() {
+        let url = URL(string: "https://www.tailspot.app/c/k7m4qd2x/")!
+        #expect(InviteCode.parse(url: url) == "K7M4QD2X")
+    }
+
     @Test func parseAcceptsTrailingSlash() {
         let url = URL(string: "https://tailspot.app/c/K7M4QD2X/")!
         #expect(InviteCode.parse(url: url) == "K7M4QD2X")
