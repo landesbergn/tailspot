@@ -38,7 +38,7 @@ Noah's call: the link either opens the app or sells it.
   new modifier links (it's at the type-check budget): a zero-size
   `ChallengeInviteRouter` rides the existing `.overlay` and owns the
   "update to join" alert; the kill switch uses the existing toast slot.
-- **Tests:** +18 (route derivation for every verdict, pending-code
+- **Tests:** +14 (route derivation for every verdict, pending-code
   set/replace/clear, the cold-launch refresh, URL → route end to end, the
   www/lowercase/trailing-slash link shape, the fourth `PrimarySheet` id).
 - **Not verified end to end yet**, and it can't be from here: Noah must enable
