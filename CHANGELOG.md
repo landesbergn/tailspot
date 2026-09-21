@@ -5,6 +5,40 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-21 — Challenges review fixes (client) — branch `fix/challenges-client-review`
+
+Thirteen findings from the phase-2 client review, each with a test.
+
+- **Refreshes can't fight each other.** `ChallengesModel.refreshList` takes a
+  generation ticket, so an overlapping hub `.task`, pull-to-refresh and
+  scene-phase refresh can no longer let a stale (or failed) response overwrite
+  a fresh list. `cancel()` falls back to a list refresh when the row isn't in
+  `open`, instead of dropping it.
+- **Reminders can actually be delivered.** Nothing in the flow ever asked for
+  notification permission, so challenge reminders never scheduled for anyone
+  who had not met the streak pre-prompt. The model now asks once, after the
+  first create or join; Settings' "Challenges" toggle asks on turn-on and
+  re-plans in both directions (off removes pending reminders immediately); a
+  "starts" moment needs 60 s of daylight; and `challenge_reminder_scheduled`
+  fires per newly-scheduled identifier, not on every sync.
+- **Two analytics/UI lies fixed.** `challenge_invite_shared` now fires on a
+  completed share (a `UIActivityViewController` wrapper reports the real
+  activity type) rather than on the tap that opened the sheet, and the detail
+  screen polls only while live — an upcoming challenge sleeps until its start,
+  a finished one stops. A failed catch-log load shows a retry instead of a
+  permanent spinner, and the view analytics fire on the first *successful*
+  load.
+- **Edges the server would have rejected.** Invite codes strip all whitespace
+  (matching the backend's `[\s-]`), a null `creatorHandle` decodes to
+  "spotter" instead of throwing away the row, the create sheet keeps a
+  16-minute lead so the server's 15-minute check can't 422 a valid-looking
+  form, and a blank server message no longer renders as ".".
+- **The DEBUG wrench stopped eating compass taps.** It now stacks below the
+  account button, clear of the caution banner's region (Release layout
+  unchanged), and the banner became a real `CautionBadge` view so the width
+  test measures the shipping thing. Review doc:
+  `docs/reviews/2026-09-21-challenges-client-review-fixes.html`.
+
 ## 2026-09-21 — Challenges review fixes (backend) — branch `fix/challenges-backend-review`
 
 - `join()` now re-reads `finalized_at` and `ends_at` (not just `cancelled_at`)

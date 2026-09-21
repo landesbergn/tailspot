@@ -141,7 +141,11 @@ struct ChallengesModelTests {
         let model = makeModel(service: fixture, reminders: reminders)
         let detail = try await model.join(code: ChallengeFixtures.Codes.joinable)
         #expect(model.open.contains { $0.id == detail.challenge.id })
-        #expect(reminders.syncedOpen.count == 1)
+        // Two syncs: the join's own re-plan, then the re-plan that follows
+        // the one-shot notification-permission ask (first join ever).
+        #expect(reminders.syncedOpen.count == 2)
+        #expect(reminders.authorizationRequests == 1)
+        #expect(reminders.syncedOpen.last?.map(\.id) == model.open.map(\.id))
     }
 
     @Test func leaveRemovesAndCancelsReminders() async throws {
