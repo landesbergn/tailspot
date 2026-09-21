@@ -347,23 +347,48 @@ export class DrizzleChallengeStore implements ChallengeStore {
       // ROW LOCK FIRST. Two joins racing at 9/10 would both read 9 and both
       // insert; `SELECT … FOR UPDATE` on the challenge serialises every join
       // (and every finalization) for this challenge behind one lock, so the
-      // capacity count below is read under it. Also re-checks cancellation
-      // under the lock — the caller's snapshot may be stale.
+      // capacity count below is read under it. The re-read also re-derives
+      // "is this still open?" from the LOCKED row rather than the caller's
+      // snapshot: cancellation, finalization and the end of the window can
+      // all have landed since the route read the challenge, and a join that
+      // slips in after the results froze would never be scored.
       const locked = await tx
-        .select({ id: challenges.id, cancelledAt: challenges.cancelledAt })
+        .select({
+          id: challenges.id,
+          cancelledAt: challenges.cancelledAt,
+          finalizedAt: challenges.finalizedAt,
+          endsAt: challenges.endsAt,
+        })
         .from(challenges)
         .where(eq(challenges.id, challenge.id))
         .for("update");
-      if (!locked[0] || locked[0].cancelledAt) return { ok: false, reason: "closed" };
+      if (!locked[0]) return { ok: false, reason: "closed" };
+      if (
+        locked[0].cancelledAt ||
+        locked[0].finalizedAt ||
+        now.getTime() >= new Date(locked[0].endsAt).getTime()
+      ) {
+        return { ok: false, reason: "closed" };
+      }
 
       // Disabled devices can't join OR rejoin — checked before any branch, so
       // no path below can resurrect a revoked device's row (defence in depth:
       // the bearer lookup already 401s them, this is the second fence).
+      //
+      // The device row is LOCKED too, for a second reason: the growth
+      // attribution below ("has this device ever joined anything?") is only
+      // serialised per CHALLENGE by the lock above, so one brand-new device
+      // joining two DIFFERENT challenges at once could have both transactions
+      // read zero prior rows and both claim the first-join credit. `FOR
+      // UPDATE` on the device makes those joins queue behind each other. Lock
+      // order is always challenge → device (nothing takes them the other way
+      // round), so this cannot deadlock.
       const dev = await tx
         .select({ createdAt: devices.createdAt, disabledAt: devices.disabledAt })
         .from(devices)
         .where(eq(devices.id, deviceId))
-        .limit(1);
+        .limit(1)
+        .for("update");
       if (!dev[0] || dev[0].disabledAt) return { ok: false, reason: "disabled" };
 
       const existing = await tx
@@ -380,14 +405,21 @@ export class DrizzleChallengeStore implements ChallengeStore {
         return { ok: true, alreadyIn: true, newDevice: false };
       }
 
-      // Capacity counts ACTIVE rows only, so a leaver frees a seat.
+      // Capacity counts ACTIVE rows only, so a leaver frees a seat — and it
+      // must count exactly what `participants()` / `participantCount()` count,
+      // disabled devices excluded. Those are the numbers the invite preview
+      // shows ("9/10", canJoin true); a capacity check that also counted the
+      // disabled row would answer 409 full to a sheet that had just promised
+      // a free seat.
       const countRows = await tx
         .select({ n: sql<number>`count(*)` })
         .from(challengeParticipants)
+        .innerJoin(devices, eq(devices.id, challengeParticipants.deviceId))
         .where(
           and(
             eq(challengeParticipants.challengeId, challenge.id),
             isNull(challengeParticipants.leftAt),
+            isNull(devices.disabledAt),
           ),
         );
       if (Number(countRows[0]?.n ?? 0) >= challenge.maxParticipants) {
@@ -440,26 +472,73 @@ export class DrizzleChallengeStore implements ChallengeStore {
   async leave(challenge: Challenge, deviceId: string, now: Date): Promise<LeaveResult> {
     const status = challengeStatus(challenge, now);
     if (status === "finished" || status === "cancelled") return "closed";
-    if (!(await this.isActiveParticipant(challenge.id, deviceId))) return "not_participant";
 
-    // D6: the creator walking out of an UPCOMING challenge cancels it — an
-    // upcoming challenge with no creator is a zombie.
-    if (deviceId === challenge.creatorDeviceId && status === "upcoming") {
-      await this.cancel(challenge, now);
-      return "cancelled";
-    }
+    // Leaving takes the SAME challenge row lock as `join` and finalization.
+    // Without it a leave could interleave with the freeze — finalization
+    // reads the participant roster inside its transaction, so a leave landing
+    // mid-freeze either vanishes from a board it should have left or mutates
+    // the roster a frozen result was derived from. Under the lock a leave
+    // either happens entirely before the freeze or is refused as "closed",
+    // and open-ness is re-derived from the LOCKED row (cancelled / finalized /
+    // ended), never from the caller's possibly stale snapshot.
+    return this.db.transaction(async (tx) => {
+      const locked = await tx
+        .select({
+          startsAt: challenges.startsAt,
+          endsAt: challenges.endsAt,
+          cancelledAt: challenges.cancelledAt,
+          finalizedAt: challenges.finalizedAt,
+        })
+        .from(challenges)
+        .where(eq(challenges.id, challenge.id))
+        .for("update");
+      if (!locked[0]) return "closed";
+      if (
+        locked[0].cancelledAt ||
+        locked[0].finalizedAt ||
+        now.getTime() >= new Date(locked[0].endsAt).getTime()
+      ) {
+        return "closed";
+      }
 
-    await this.db
-      .update(challengeParticipants)
-      .set({ leftAt: now })
-      .where(
-        and(
-          eq(challengeParticipants.challengeId, challenge.id),
-          eq(challengeParticipants.deviceId, deviceId),
-          isNull(challengeParticipants.leftAt),
-        ),
-      );
-    return "left";
+      const active = await tx
+        .select({ deviceId: challengeParticipants.deviceId })
+        .from(challengeParticipants)
+        .where(
+          and(
+            eq(challengeParticipants.challengeId, challenge.id),
+            eq(challengeParticipants.deviceId, deviceId),
+            isNull(challengeParticipants.leftAt),
+          ),
+        )
+        .limit(1);
+      if (active.length === 0) return "not_participant";
+
+      // D6: the creator walking out of an UPCOMING challenge cancels it — an
+      // upcoming challenge with no creator is a zombie. Inlined rather than
+      // calling `cancel()` so the cancellation lands under the same lock, in
+      // the same transaction, as the leave that triggered it.
+      const upcoming = now.getTime() < new Date(locked[0].startsAt).getTime();
+      if (upcoming && deviceId === challenge.creatorDeviceId) {
+        await tx
+          .update(challenges)
+          .set({ cancelledAt: now })
+          .where(and(eq(challenges.id, challenge.id), isNull(challenges.cancelledAt)));
+        return "cancelled";
+      }
+
+      await tx
+        .update(challengeParticipants)
+        .set({ leftAt: now })
+        .where(
+          and(
+            eq(challengeParticipants.challengeId, challenge.id),
+            eq(challengeParticipants.deviceId, deviceId),
+            isNull(challengeParticipants.leftAt),
+          ),
+        );
+      return "left";
+    });
   }
 
   async cancel(challenge: Challenge, now: Date): Promise<boolean> {
