@@ -213,10 +213,40 @@ final class ChallengesModel {
         }
     }
 
-    /// Consume the pending code (the join sheet has it now), or drop it
-    /// (we told the user why it can't be opened).
+    /// Drop the pending code because we've told the user why it can't be
+    /// opened (too-old build, kill switch). The happy path goes through
+    /// `consumePendingInvite(for:)` instead.
     func clearPendingInvite() {
         pendingInviteCode = nil
+    }
+
+    /// The ONE hub source allowed to take a pending invite code: the hub
+    /// the link itself opened. It's also the spec's §12 source vocabulary
+    /// value for a link (leaders_flag, leaders_strip, profile_tile,
+    /// reveal_line, deep_link).
+    nonisolated static let inviteSource = "deep_link"
+
+    /// Which hub, if any, may take this code. Pure, so the rule is one
+    /// line and one test rather than a condition repeated per screen.
+    nonisolated static func consumableInviteCode(source: String,
+                                                 route: InviteRoute?) -> String? {
+        guard source == inviteSource, case .join(let code) = route else { return nil }
+        return code
+    }
+
+    /// Take the pending code, but only for the hub the link opened.
+    ///
+    /// Why the guard: a hub can already be on screen under the Profile or
+    /// Leaders sheet when a link lands. Without this, that hub and the
+    /// link's own hub both watch the same route, and the losing one
+    /// consumes the code during its sheet's teardown — the new hub then
+    /// opens with nothing. One owner, named explicitly.
+    func consumePendingInvite(for source: String) -> String? {
+        guard let code = Self.consumableInviteCode(source: source, route: inviteRoute) else {
+            return nil
+        }
+        pendingInviteCode = nil
+        return code
     }
 
     // MARK: Lists

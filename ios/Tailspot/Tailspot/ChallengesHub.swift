@@ -111,20 +111,24 @@ struct ChallengesHub: View {
             }
             .environment(model)
         }
-        // Universal link: whatever route brought the hub on screen, an
-        // invite code parked on the model opens the join sheet here — the
-        // one place that already knows how to preview, join and push the
-        // detail. Keyed on the ROUTE, not the code: a code parked while
-        // the config was still unknown has to open once this hub's own
-        // refresh makes the verdict `.available`, and the code itself
-        // never changed. `.task(id:)` also runs on appear, which covers
-        // the code parked before this view existed, and runs after the
-        // update rather than inside it. Taking the code off the model
-        // immediately is what stops a dismissed sheet re-presenting.
+        // Universal link: the hub the link opened takes the parked code
+        // and opens the join sheet with it — the one place that already
+        // knows how to preview, join and push the detail.
+        //
+        // `consumePendingInvite(for:)` enforces that "the hub the link
+        // opened" means exactly `source == deep_link`. A hub already on
+        // screen under Profile or Leaders sees the same route change, and
+        // without the guard it could swallow the code during its own
+        // sheet's teardown, leaving the link's hub empty.
+        //
+        // Keyed on the ROUTE, not the code: a code parked while the config
+        // was still unknown has to open once this hub's own refresh makes
+        // the verdict `.available`, and the code itself never changed.
+        // `.task(id:)` also runs on appear (the usual case here) and runs
+        // after the view update rather than inside it.
         .task(id: model.inviteRoute) {
-            if case .join(let code) = model.inviteRoute {
+            if let code = model.consumePendingInvite(for: source) {
                 linkCode = InviteLinkCode(id: code)
-                model.clearPendingInvite()
             }
         }
         .sheet(item: $linkCode) { link in

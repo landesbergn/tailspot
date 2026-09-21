@@ -6,7 +6,10 @@
 //  catch screen actually showing something. `TailspotApp` parses the URL
 //  and parks the code on `ChallengesModel`; this zero-size view watches
 //  (verdict, pendingInviteCode), turns them into a `ChallengesModel.InviteRoute`
-//  with the model's pure routing function, and reports it.
+//  with the model's pure routing function, and drives the presentation
+//  through `ChallengeInvitePresentation` — which is where the "dismiss
+//  what's open, wait, then present, and only then drop the code" order
+//  lives.
 //
 //  Why a view and not another modifier on `ContentView.body`: that body
 //  sits AT the Swift type-checker's expression budget (PR #184, and the
@@ -38,12 +41,23 @@ struct ChallengeInviteRouter: View {
     /// model render nothing instead of trapping — same shape as
     /// `ChallengesFlagButton`.
     @Environment(ChallengesModel.self) private var model: ChallengesModel?
+    /// The alert's App Store action. An `.alert` builder keeps Buttons and
+    /// may drop anything else, so a `Link` in there can silently vanish —
+    /// a Button that calls `openURL` is the supported shape.
+    @Environment(\.openURL) private var openURL
 
-    /// Show the Challenges surface; the hub picks the pending code up and
-    /// opens the join sheet with it.
-    let onJoin: (String) -> Void
+    /// Whether a primary sheet is covering the catch screen right now.
+    /// Everything this router shows — the Challenges sheet, the alert, the
+    /// toast — is invisible or unreliable under one, so it decides the plan.
+    let isPrimarySheetPresented: Bool
+    /// Close whatever primary sheet is up (`primarySheet = nil`).
+    let dismissPrimarySheet: () -> Void
+    /// Show the Challenges sheet. The hub inside it is the ONE consumer of
+    /// the pending code (`ChallengesModel.consumePendingInvite(for:)`), so
+    /// this router never clears it on the happy path.
+    let presentChallenges: () -> Void
     /// The kill switch is on — say so in the host's toast slot.
-    let onUnavailable: () -> Void
+    let showUnavailableToast: () -> Void
 
     /// Non-nil while the "too old to join" alert is up; carries the
     /// server's minimum build for the log line.
@@ -55,18 +69,18 @@ struct ChallengeInviteRouter: View {
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
             // `.task(id:)` rather than `.onChange(of:initial:)`: it runs on
-            // appear AND on every route change, and it runs after the view
-            // update instead of inside it — this closure both writes local
-            // state and clears the code on the model.
+            // appear AND on every route change, it runs after the view
+            // update instead of inside it, and it gives the async context
+            // the dismiss-then-present sequence needs.
             .task(id: model?.inviteRoute) {
-                deliver(model?.inviteRoute)
+                await deliver(model?.inviteRoute)
             }
             .alert("Update Tailspot to join this challenge",
                    isPresented: Binding(
                     get: { updateRequiredMinBuild != nil },
                     set: { if !$0 { updateRequiredMinBuild = nil } }
                    )) {
-                Link("Open the App Store", destination: appStoreURL)
+                Button("Update Tailspot") { openURL(appStoreURL) }
                 Button("Not now", role: .cancel) { updateRequiredMinBuild = nil }
             } message: {
                 Text("This version of the app is too old for the current challenge rules.")
@@ -82,28 +96,53 @@ struct ChallengeInviteRouter: View {
         return AppStoreListing.url(campaign: "Challenge Invite")
     }
 
-    private func deliver(_ route: ChallengesModel.InviteRoute?) {
+    private func deliver(_ route: ChallengesModel.InviteRoute?) async {
         guard let model, let route else { return }
+        let plan = ChallengeInvitePresentation.plan(
+            isPrimarySheetPresented: isPrimarySheetPresented)
+
         switch route {
-        case .join(let code):
-            // The code stays parked — the hub clears it when it opens the
-            // join sheet, so this survives the sheet's presentation.
-            Log.ui.notice("Challenge invite link: opening join for a code")
-            onJoin(code)
+        case .join:
+            // The code stays parked: the hub inside the Challenges sheet
+            // consumes it (and only that hub does). Clearing here would
+            // hand the sheet an empty join.
+            Log.ui.notice("Challenge invite link: opening Challenges for a code")
+            await ChallengeInvitePresentation.run(
+                plan: plan,
+                dismiss: dismissPrimarySheet,
+                settle: ChallengeInvitePresentation.sleepForDismissal,
+                present: presentChallenges)
+
         case .updateRequired(let minBuild):
-            model.clearPendingInvite()
-            updateRequiredMinBuild = minBuild
-            Analytics.capture("challenge_invite_opened", [
-                "via": .string("universal_link"),
-                "status": .string("update_required"),
-            ])
+            // Alert first, drop the code second — an alert that never
+            // reached the screen must not take the invite with it.
+            await ChallengeInvitePresentation.run(
+                plan: plan,
+                dismiss: dismissPrimarySheet,
+                settle: ChallengeInvitePresentation.sleepForDismissal,
+                present: {
+                    updateRequiredMinBuild = minBuild
+                    Analytics.capture("challenge_invite_opened", [
+                        "via": .string("universal_link"),
+                        "status": .string("update_required"),
+                    ])
+                },
+                thenClear: { model.clearPendingInvite() })
+
         case .unavailable:
-            model.clearPendingInvite()
-            onUnavailable()
-            Analytics.capture("challenge_invite_opened", [
-                "via": .string("universal_link"),
-                "status": .string("unavailable"),
-            ])
+            await ChallengeInvitePresentation.run(
+                plan: plan,
+                dismiss: dismissPrimarySheet,
+                settle: ChallengeInvitePresentation.sleepForDismissal,
+                present: {
+                    showUnavailableToast()
+                    Analytics.capture("challenge_invite_opened", [
+                        "via": .string("universal_link"),
+                        "status": .string("unavailable"),
+                    ])
+                },
+                thenClear: { model.clearPendingInvite() })
+
         case .waitForConfig:
             // `openInvite` is already refreshing the config; when it lands
             // this fires again with a real verdict.

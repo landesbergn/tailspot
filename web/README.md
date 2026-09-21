@@ -62,11 +62,15 @@ app shares:
   extension, so `nginx.conf` serves it with `default_type application/json`
   and `no-cache`. It must be reachable over **https with no redirect** —
   not even `www` → apex — or iOS quietly ignores the association.
-- **`/c/CODE`** (exactly 8 code characters, optional trailing slash) — a
-  302 to the App Store listing. This is the fallback: on an iPhone with
+- **`/c/CODE`** — a 302 to the App Store listing (attributed to the
+  `Challenge Invite` campaign). This is the fallback: on an iPhone with
   Tailspot installed, iOS opens the app and nginx never sees the request.
-  Anything else under `/c/` falls through to the 404 page. There is no
-  landing page by design.
+  The pattern is the invite alphabet exactly — 8 characters from A–Z
+  minus `I`, `L`, `O` plus `2`–`9`, case-insensitive, optional trailing
+  slash — so a code that could never exist (`/c/K7M4QD2O`, `/c/short`)
+  falls through to the 404 page instead of a pointless App Store trip.
+  The regex is **quoted** because nginx reads a bare `{8}` as the start of
+  a config block and refuses to start. There is no landing page by design.
 
 `.well-known` is a dot-directory, which `COPY public/ /usr/share/nginx/html/`
 in the Dockerfile does include (a directory source copies its contents,

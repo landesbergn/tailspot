@@ -45,10 +45,18 @@ landing page: the link either opens the app or sells it.</p>
   │                          ┌─────────┬───────────────┬──────────────┐
   │                       .join   .updateRequired   .unavailable   .waitForConfig
   │                          │         │                │               │
-  │              PrimarySheet    alert with       existing top      hold; fires
-  │               .challenges    an App Store     toast: "Challenges  again when
-  │                    │         button           aren't available    the config
-  │            ChallengesHub(source:"link")       right now."         lands
+  │                          └─────────┴────────┬───────┘               │
+  │                                             │                  hold; fires
+  │                   ChallengeInvitePresentation                  again when
+  │                   a sheet is up? dismiss it, wait 0.45 s       the config
+  │                   then present — and drop the pending          lands
+  │                   code only AFTER presenting
+  │                          ┌─────────┬────────────────┐
+  │              PrimarySheet    alert:            existing top toast:
+  │               .challenges    "Update Tailspot" "Challenges aren't
+  │                    │          button            available right now."
+  │            ChallengesHub(source: "deep_link")
+  │              the ONE hub allowed to consume the code
   │                    │
   │            join sheet, code prefilled, via: "universal_link"
   │                    │
@@ -62,14 +70,15 @@ landing page: the link either opens the app or sells it.</p>
 <table>
 <tr><th>File</th><th>Change</th></tr>
 <tr><td><code>web/public/.well-known/apple-app-site-association</code></td><td>New. Claims <code>/c/*</code> for <code>G9FJX2A5TA.com.landesberg.Tailspot</code>.</td></tr>
-<tr><td><code>web/nginx.conf</code></td><td>Serves the association file as <code>application/json</code>, no-cache (it has no extension, so it would otherwise be octet-stream). 302s <code>/c/&lt;8 chars&gt;</code> to the App Store; anything else under <code>/c/</code> still 404s.</td></tr>
+<tr><td><code>web/nginx.conf</code></td><td>Serves the association file as <code>application/json</code>, no-cache (it has no extension, so it would otherwise be octet-stream). 302s the real invite shape — 8 characters of the code alphabet (A–Z minus <code>I</code>/<code>L</code>/<code>O</code>, plus <code>2</code>–<code>9</code>), case-insensitive, optional trailing slash — to the attributed App Store link. A code that could never exist (<code>/c/K7M4QD2O</code>) 404s like any other bad path. The regex is <strong>quoted</strong>: nginx reads a bare <code>{8}</code> as a config block and refuses to start.</td></tr>
 <tr><td><code>web/README.md</code></td><td>Both routes, the "no redirect" rule, and the Apple-CDN caching note.</td></tr>
 <tr><td><code>ios/…/Tailspot.entitlements</code></td><td>New. <code>applinks:tailspot.app</code> + <code>applinks:www.tailspot.app</code>. Wired into both config blocks of the app target only.</td></tr>
 <tr><td><code>TailspotApp.swift</code></td><td><code>.onOpenURL</code> and <code>.onContinueUserActivity(NSUserActivityTypeBrowsingWeb)</code>, both into one handler.</td></tr>
-<tr><td><code>ChallengesModel.swift</code></td><td><code>pendingInviteCode</code>, <code>openInvite(code:)</code>, <code>clearPendingInvite()</code>, and the pure <code>InviteRoute</code> + <code>inviteRoute(verdict:code:)</code>.</td></tr>
+<tr><td><code>ChallengesModel.swift</code></td><td><code>pendingInviteCode</code>, <code>openInvite(code:)</code>, <code>clearPendingInvite()</code>, the pure <code>InviteRoute</code> + <code>inviteRoute(verdict:code:)</code>, and <code>consumePendingInvite(for:)</code> — only the hub the link opened (<code>deep_link</code>) may take the code.</td></tr>
+<tr><td><code>ChallengeInvitePresentation.swift</code></td><td>New. The pure plan (<code>presentNow</code> / <code>dismissThenPresent</code>) and the one async step that runs it: dismiss → settle → present → clear.</td></tr>
 <tr><td><code>ChallengeInviteRouter.swift</code></td><td>New. Zero-size observer that turns the route into presentation, and owns the "update to join" alert.</td></tr>
 <tr><td><code>PrimarySheet.swift</code></td><td><code>case challenges</code> + <code>ChallengesSheet</code> (NavigationStack + Done, shaped like <code>LeadersSheet</code>).</td></tr>
-<tr><td><code>ChallengesHub.swift</code></td><td>Picks up <code>pendingInviteCode</code> and opens its existing join sheet with <code>via: "universal_link"</code>.</td></tr>
+<tr><td><code>ChallengesHub.swift</code></td><td>Asks <code>consumePendingInvite(for: source)</code> for a code and opens its existing join sheet with <code>via: "universal_link"</code>. A hub opened from Profile or Leaders is refused, so it can’t swallow the code.</td></tr>
 <tr><td><code>ContentView.swift</code></td><td>The router rides the existing <code>.overlay</code>; one more case in the existing <code>.sheet(item:)</code>; one more <code>TopToast</code> kind. <strong>No new modifier links on <code>body</code></strong> — it is at the type-checker's expression budget.</td></tr>
 </table>
 
@@ -80,11 +89,12 @@ landing page: the link either opens the app or sells it.</p>
 <tr><td>App installed, Challenges available</td><td>Join sheet with the code prefilled, over the catch screen. Joining pushes the detail.</td></tr>
 <tr><td>Link lands on a cold launch, before the config is known</td><td>The code waits (<code>.waitForConfig</code>) while <code>openInvite</code> fetches the config, then opens. No error flash.</td></tr>
 <tr><td>Link lands during onboarding</td><td>The code stays parked; the router delivers it when the catch screen first appears.</td></tr>
-<tr><td>Build older than the server's <code>minBuild</code></td><td>Alert: "Update Tailspot to join this challenge", with an App Store button (the server's <code>appStoreURL</code> if it sent one).</td></tr>
+<tr><td>Build older than the server's <code>minBuild</code></td><td>Alert: "Update Tailspot to join this challenge", with an <strong>Update Tailspot</strong> button that opens the listing (the server's <code>appStoreURL</code> if it sent one) and a Not now. It is a Button calling <code>openURL</code>, not a <code>Link</code> — an alert builder keeps Buttons and can drop anything else.</td></tr>
 <tr><td>Kill switch on</td><td>Top toast: "Challenges aren't available right now." Nothing opens.</td></tr>
-<tr><td>Another sheet already open (Hangar / Profile / Leaders)</td><td>Replaced by Challenges. The user just tapped a link; the link wins.</td></tr>
-<tr><td>Join sheet dismissed without joining</td><td>Nothing re-presents — the hub takes the code off the model as soon as it has it.</td></tr>
-<tr><td>Malformed link (<code>/c/short</code>, wrong host, extra path)</td><td>Ignored by the parser. On the web it falls through to the 404 page.</td></tr>
+<tr><td>Another sheet already open (Hangar / Profile / Leaders)</td><td>That sheet is dismissed, the dismissal is allowed to finish (~0.45 s), then Challenges presents — swapping one <code>.sheet(item:)</code> case for another races the dismissal and can be swallowed. The link still wins; it just doesn’t fight the animation. Same order for the alert and the toast, which would otherwise be raised <em>under</em> the open sheet.</td></tr>
+<tr><td>A hub is already open under Profile / Leaders when the link lands</td><td>That hub ignores the code (wrong source). The one inside the Challenges sheet consumes it — one owner, so the code can’t be lost to a teardown.</td></tr>
+<tr><td>Join sheet dismissed without joining</td><td>Nothing re-presents — the hub takes the code off the model as soon as it has it. A blocked route drops the code only after its alert or toast is on screen.</td></tr>
+<tr><td>Malformed link (<code>/c/short</code>, <code>/c/K7M4QD2O</code>, wrong host, extra path)</td><td>Ignored by the parser — the alphabet excludes <code>0 1 I L O</code> so a typo is refused, never silently corrected. On the web the same shapes fall through to the 404 page.</td></tr>
 <tr><td>Analytics</td><td><code>challenge_invite_opened</code> fires <strong>once</strong>, from the join sheet, with the challenge id, <code>via: universal_link</code> and the joinability status. The router fires it only for the two blocked routes (<code>status: update_required</code> / <code>unavailable</code>), where nothing else would.</td></tr>
 </table>
 

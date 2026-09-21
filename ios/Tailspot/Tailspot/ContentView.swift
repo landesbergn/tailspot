@@ -1541,15 +1541,21 @@ struct ContentView: View {
     // MARK: - Challenge invite links
 
     /// A `tailspot.app/c/CODE` link landed. The router does the watching
-    /// and the deciding (and owns the "update to join" alert); all this
-    /// screen supplies is the two things only it can do — show the
-    /// Challenges sheet, and use its one toast slot. Presenting REPLACES
-    /// whatever sheet was up: the user just tapped a link, so the link
-    /// wins.
+    /// and the deciding (and owns the "update to join" alert); this screen
+    /// supplies only what it alone can do — close the sheet that's up,
+    /// open the Challenges sheet, and use its one toast slot.
+    ///
+    /// A link BEATS whatever is open: the user just tapped it. But it
+    /// can't simply overwrite `primarySheet`, because swapping one
+    /// `.sheet(item:)` case for another races the dismissal, and an alert
+    /// or toast raised from here is under any presented sheet. The
+    /// dismiss-wait-present order lives in `ChallengeInvitePresentation`.
     private var challengeInviteRouter: some View {
         ChallengeInviteRouter(
-            onJoin: { _ in primarySheet = .challenges },
-            onUnavailable: { presentTopToast(.challengesUnavailable) }
+            isPrimarySheetPresented: primarySheet != nil,
+            dismissPrimarySheet: { primarySheet = nil },
+            presentChallenges: { primarySheet = .challenges },
+            showUnavailableToast: { presentTopToast(.challengesUnavailable) }
         )
     }
 

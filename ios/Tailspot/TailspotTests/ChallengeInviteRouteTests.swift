@@ -129,6 +129,101 @@ struct ChallengeInviteRouteTests {
         #expect(model.pendingInviteCode == "P9RTVW34")
     }
 
+    // MARK: - who may consume the code
+
+    /// The whole point of the guard: a hub that was already on screen
+    /// under Profile or Leaders must not take the code, or it swallows it
+    /// during its own sheet's teardown and the link's hub opens empty.
+    @Test @MainActor func onlyTheLinksOwnHubConsumesTheCode() async {
+        for source in ["profile_tile", "leaders_flag", "leaders_strip", "reveal_line"] {
+            let model = makeModel()
+            await model.refreshConfig()
+            await model.openInvite(code: "K7M4QD2X")
+            #expect(model.consumePendingInvite(for: source) == nil)
+            #expect(model.pendingInviteCode == "K7M4QD2X", "\(source) cleared the code")
+        }
+    }
+
+    @Test @MainActor func theDeepLinkHubConsumesTheCodeOnce() async {
+        let model = makeModel()
+        await model.refreshConfig()
+        await model.openInvite(code: "K7M4QD2X")
+        #expect(model.consumePendingInvite(for: ChallengesModel.inviteSource) == "K7M4QD2X")
+        #expect(model.pendingInviteCode == nil)
+        // Second hub (or a re-run of the same task) gets nothing.
+        #expect(model.consumePendingInvite(for: ChallengesModel.inviteSource) == nil)
+    }
+
+    /// `deep_link` is the spec §12 source vocabulary value, not a new word.
+    @Test func inviteSourceIsTheSpecVocabularyValue() {
+        #expect(ChallengesModel.inviteSource == "deep_link")
+    }
+
+    /// Only a `.join` route is consumable — a blocked route's code belongs
+    /// to the router, which explains it and then drops it.
+    @Test func blockedRoutesAreNotConsumable() {
+        let src = ChallengesModel.inviteSource
+        #expect(ChallengesModel.consumableInviteCode(source: src, route: .join(code: "K7M4QD2X")) == "K7M4QD2X")
+        #expect(ChallengesModel.consumableInviteCode(source: src, route: .updateRequired(minBuild: 9)) == nil)
+        #expect(ChallengesModel.consumableInviteCode(source: src, route: .unavailable) == nil)
+        #expect(ChallengesModel.consumableInviteCode(source: src, route: .waitForConfig) == nil)
+        #expect(ChallengesModel.consumableInviteCode(source: src, route: nil) == nil)
+        #expect(ChallengesModel.consumableInviteCode(source: "profile_tile", route: .join(code: "K7M4QD2X")) == nil)
+    }
+
+    // MARK: - presentation sequencing
+
+    @Test func planDismissesFirstOnlyWhenSomethingIsPresented() {
+        #expect(ChallengeInvitePresentation.plan(isPrimarySheetPresented: false) == .presentNow)
+        #expect(ChallengeInvitePresentation.plan(isPrimarySheetPresented: true) == .dismissThenPresent)
+    }
+
+    /// With nothing in the way: present, then clear. Never the other way
+    /// round — a message the user never saw must not take the invite.
+    @Test @MainActor func presentNowPresentsBeforeClearing() async {
+        var order: [String] = []
+        await ChallengeInvitePresentation.run(
+            plan: .presentNow,
+            dismiss: { order.append("dismiss") },
+            settle: { order.append("settle") },
+            present: { order.append("present") },
+            thenClear: { order.append("clear") })
+        #expect(order == ["present", "clear"])
+    }
+
+    /// With a sheet up: close it, let the dismissal finish, and only then
+    /// present — swapping `.sheet(item:)` cases directly races the
+    /// dismissal, and an alert raised under a sheet is raised to nobody.
+    @Test @MainActor func dismissThenPresentRunsInOrder() async {
+        var order: [String] = []
+        await ChallengeInvitePresentation.run(
+            plan: .dismissThenPresent,
+            dismiss: { order.append("dismiss") },
+            settle: { order.append("settle") },
+            present: { order.append("present") },
+            thenClear: { order.append("clear") })
+        #expect(order == ["dismiss", "settle", "present", "clear"])
+    }
+
+    /// The join route passes no `thenClear` — the hub consumes the code
+    /// instead, so the default must be a no-op that still presents.
+    @Test @MainActor func runWithoutClearStillPresents() async {
+        var order: [String] = []
+        await ChallengeInvitePresentation.run(
+            plan: .dismissThenPresent,
+            dismiss: { order.append("dismiss") },
+            settle: { order.append("settle") },
+            present: { order.append("present") })
+        #expect(order == ["dismiss", "settle", "present"])
+    }
+
+    /// Long enough to clear the ~0.35 s system dismissal, short enough not
+    /// to read as a hang.
+    @Test func dismissSettleIsAboutHalfASecond() {
+        #expect(ChallengeInvitePresentation.dismissSettle >= .milliseconds(400))
+        #expect(ChallengeInvitePresentation.dismissSettle <= .milliseconds(600))
+    }
+
     // MARK: - end to end from a URL
 
     /// The whole link path, minus the views: URL → code → route.

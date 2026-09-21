@@ -69,12 +69,16 @@ struct LeadersSheet: View {
 /// presented on its own it needs a stack and a Done button. The hub itself
 /// is untouched — it picks the pending invite code off the model and opens
 /// its own join sheet, exactly as it does for a typed code.
+///
+/// The source is `deep_link` (`ChallengesModel.inviteSource`), which is
+/// both the spec §12 vocabulary value for a link and the permission to
+/// consume the pending code: no other hub may take it.
 struct ChallengesSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ChallengesHub(source: "link")
+            ChallengesHub(source: ChallengesModel.inviteSource)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Done") { dismiss() }

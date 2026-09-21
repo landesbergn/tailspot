@@ -14,8 +14,13 @@ Noah's call: the link either opens the app or sells it.
 - **Web (`web/`):** `public/.well-known/apple-app-site-association` claims
   `/c/*` for `G9FJX2A5TA.com.landesberg.Tailspot`; nginx serves it as
   `application/json` with no-cache (the file has no extension, so it would
-  otherwise go out as octet-stream) and 302s `/c/<8 chars>` to the App Store.
-  Anything else under `/c/` still 404s. The dot-directory reaches the image
+  otherwise go out as octet-stream) and 302s the invite shape — 8 characters
+  from the code alphabet (A–Z minus `I`/`L`/`O`, plus `2`–`9`),
+  case-insensitive, optional trailing slash — to the attributed App Store
+  link (`ct=Challenge Invite`). A code that could never exist (`/c/K7M4QD2O`,
+  `/c/short`) 404s rather than making a pointless App Store trip, and the
+  regex is quoted because nginx reads a bare `{8}` as a config block and
+  refuses to start. The dot-directory reaches the image
   through the existing `COPY public/ …` (a directory source copies dotfiles;
   there's no `.dockerignore`).
 - **Entitlement:** `ios/Tailspot/Tailspot/Tailspot.entitlements` with
@@ -31,16 +36,25 @@ Noah's call: the link either opens the app or sells it.
   the cold-launch case and `openInvite` refreshes the config itself so the
   code resolves instead of hanging.
 - **Presentation:** `PrimarySheet` gains `.challenges` (a `ChallengesSheet`
-  shaped like `LeadersSheet`), and `ChallengesHub(source: "link")` picks the
-  pending code up and opens its existing join sheet with
+  shaped like `LeadersSheet`), and its `ChallengesHub(source: "deep_link")`
+  picks the pending code up and opens its existing join sheet with
   `via: "universal_link"` — so the spec's `challenge_invite_opened` fires once,
   with the challenge id and joinability status. `ContentView.body` grew **no**
   new modifier links (it's at the type-check budget): a zero-size
   `ChallengeInviteRouter` rides the existing `.overlay` and owns the
   "update to join" alert; the kill switch uses the existing toast slot.
-- **Tests:** +14 (route derivation for every verdict, pending-code
+- **One owner, one order.** `consumePendingInvite(for:)` lets *only* the hub
+  the link opened (`source == deep_link`) take the code — a hub already on
+  screen under Profile or Leaders sees the same route change and would
+  otherwise swallow it during its own sheet's teardown. And nothing presents
+  on top of a sheet: `ChallengeInvitePresentation` dismisses what's open,
+  waits out the dismissal, then presents, and drops the pending code only
+  **after** presenting, so an alert or toast that never reached the screen
+  can't take the invite with it.
+- **Tests:** +23 (route derivation for every verdict, pending-code
   set/replace/clear, the cold-launch refresh, URL → route end to end, the
-  www/lowercase/trailing-slash link shape, the fourth `PrimarySheet` id).
+  www/lowercase/trailing-slash link shape, the fourth `PrimarySheet` id, who
+  may consume the code, and the dismiss → settle → present → clear order).
 - **Not verified end to end yet**, and it can't be from here: Noah must enable
   Associated Domains on the App ID, the site must be deployed, and Apple's CDN
   copy of the AASA can lag hours. See PLAN §9 phase 3.
