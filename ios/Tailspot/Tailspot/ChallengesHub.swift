@@ -35,6 +35,11 @@ struct ChallengesHub: View {
     /// `.unknown` verdict reads as "couldn't reach the server" rather than
     /// the initial spinner.
     @State private var configAttempted = false
+    /// A code that arrived from a `tailspot.app/c/CODE` link, taken off
+    /// `ChallengesModel.pendingInviteCode`. Its own sheet slot, separate
+    /// from `showJoin`, so the analytics `via` stays honest
+    /// (universal_link vs code_entry) without a second flag to keep in step.
+    @State private var linkCode: InviteLinkCode?
 
     init(source: String) {
         self.source = source
@@ -101,6 +106,25 @@ struct ChallengesHub: View {
         }
         .sheet(isPresented: $showJoin) {
             ChallengeJoinSheet(code: nil, via: "code_entry") { detail in
+                pushDetailId = detail.challenge.id
+                shareOnPush = false
+            }
+            .environment(model)
+        }
+        // Universal link: whatever route brought the hub on screen, an
+        // invite code parked on the model opens the join sheet here — the
+        // one place that already knows how to preview, join and push the
+        // detail. `initial: true` covers the common case where the code
+        // was parked before this view existed. Taking it off the model
+        // immediately is what stops a dismissed sheet re-presenting.
+        .onChange(of: model.pendingInviteCode, initial: true) { _, _ in
+            if model.isAvailable, let code = model.pendingInviteCode {
+                linkCode = InviteLinkCode(id: code)
+                model.clearPendingInvite()
+            }
+        }
+        .sheet(item: $linkCode) { link in
+            ChallengeJoinSheet(code: link.id, via: "universal_link") { detail in
                 pushDetailId = detail.challenge.id
                 shareOnPush = false
             }
