@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-21 — Challenges review fixes (backend) — branch `fix/challenges-backend-review`
+
+- `join()` now re-reads `finalized_at` and `ends_at` (not just `cancelled_at`)
+  under the challenge row lock, so a join racing the freeze is `closed`
+  instead of landing in a challenge that will never score it.
+- `leave()` moved into a transaction that takes the same `FOR UPDATE` lock and
+  re-checks cancelled / finalized / ended; D6 (creator leaving an upcoming
+  challenge cancels it) happens under that lock too.
+- `join()`'s capacity count now excludes disabled devices, matching
+  `participants()` / `participantCount()` — a 9/10 invite preview with
+  `canJoin` can no longer 409 as full.
+- Growth attribution locks the device row before the "never joined before"
+  check, so one new device joining two challenges at once can't claim the
+  first-join credit twice.
+- Six regression tests in `backend/test/challengesStore.test.ts` (all six fail
+  on the pre-fix store); `challenges_pending_finalize_idx`'s comment no longer
+  claims a finalization sweep that doesn't exist.
+
 ## 2026-09-15 — Challenges v1, phase 2 (client core) — branch `feat/challenges-client`
 
 The whole client half of Challenges, built in parallel by three agents against

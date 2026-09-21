@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { PrivatePointsScorer } from "../src/challenges/scorer.js";
 import { type Challenge, DrizzleChallengeStore } from "../src/challenges/store.js";
 import type { Database } from "../src/db/client.js";
-import { catches, challengeResults, devices } from "../src/db/schema.js";
+import {
+  catches,
+  challengeParticipants,
+  challengeResults,
+  challenges,
+  devices,
+} from "../src/db/schema.js";
 import { makeTestDb } from "./helpers/pgliteDb.js";
 
 /**
@@ -249,5 +255,131 @@ describe("DrizzleChallengeStore locking + frozen standings", () => {
     const onlyHistory = await store.listForDevice(noah, T0, { scope: "history", limit: 5 });
     expect(onlyHistory.open).toEqual([]);
     expect(onlyHistory.history).toHaveLength(5);
+  });
+
+  // ── Re-reads under the lock (review of PR #276/#277) ──────────────────────
+  //
+  // Every case below hands `join` / `leave` a STALE challenge snapshot — one
+  // that still looks live — while the row itself has moved on. The only thing
+  // that can catch that is the re-read inside the locked transaction.
+
+  it("join is refused once the row is finalized, even when the caller's snapshot says live", async () => {
+    const noah = await device("noah");
+    const eli = await device("eli");
+    const stale = await store.create(
+      { name: "Frozen", creatorDeviceId: noah, startsAt: T0, durationPreset: "1h" },
+      T0,
+    );
+    await db.update(challenges).set({ finalizedAt: T0 }).where(eq(challenges.id, stale.id));
+
+    expect(await store.join(stale, eli, T0)).toEqual({ ok: false, reason: "closed" });
+    expect(await store.isActiveParticipant(stale.id, eli)).toBe(false);
+  });
+
+  it("join is refused once ends_at has passed on the locked row", async () => {
+    const noah = await device("noah");
+    const eli = await device("eli");
+    const stale = await store.create(
+      { name: "Ended", creatorDeviceId: noah, startsAt: T0, durationPreset: "7d" },
+      T0,
+    );
+    // The window was shortened (or the snapshot is simply old): the row ended
+    // a minute ago while `stale.endsAt` is still seven days out.
+    await db
+      .update(challenges)
+      .set({ endsAt: new Date(T0.getTime() - 60_000) })
+      .where(eq(challenges.id, stale.id));
+
+    expect(await store.join(stale, eli, T0)).toEqual({ ok: false, reason: "closed" });
+    expect(await store.isActiveParticipant(stale.id, eli)).toBe(false);
+  });
+
+  it("leave on a finalized challenge is closed and leaves the participant row untouched", async () => {
+    const noah = await device("noah");
+    const eli = await device("eli");
+    const stale = await store.create(
+      { name: "Late leaver", creatorDeviceId: noah, startsAt: T0, durationPreset: "1h" },
+      T0,
+    );
+    expect((await store.join(stale, eli, T0)).ok).toBe(true);
+    const end = new Date(T0.getTime() + HOUR_MS);
+    const frozen = await store.finalizeIfDue(stale, end);
+    expect(frozen.finalizedAt).not.toBeNull();
+
+    // `stale` still says the challenge runs for another hour — the locked
+    // re-read is what refuses this.
+    expect(await store.leave(stale, eli, T0)).toBe("closed");
+    const rows = await db
+      .select({ leftAt: challengeParticipants.leftAt })
+      .from(challengeParticipants)
+      .where(eq(challengeParticipants.deviceId, eli));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].leftAt).toBeNull();
+  });
+
+  it("leave takes the challenge row lock before touching the participant row", async () => {
+    const noah = await device("noah");
+    const eli = await device("eli");
+    const c = await store.create(
+      { name: "Leave lock", creatorDeviceId: noah, startsAt: T0, durationPreset: "1h" },
+      T0,
+    );
+    await store.join(c, eli, T0);
+    log.length = 0;
+    expect(await store.leave(c, eli, T0)).toBe("left");
+
+    const lock = indexOfFirst((q) => q.includes('from "challenges"') && q.includes("for update"));
+    const update = indexOfFirst((q) => q.includes('update "challenge_participants"'));
+    expect(lock).toBe(0);
+    expect(update).toBeGreaterThan(lock);
+  });
+
+  it("capacity ignores disabled participants, so a 9/10 preview can still be joined", async () => {
+    const noah = await device("noah");
+    const c = await store.create(
+      { name: "Ghost seat", creatorDeviceId: noah, startsAt: T0, durationPreset: "1h" },
+      T0,
+    );
+    const joiners: string[] = [];
+    for (let i = 1; i <= 9; i++) {
+      const id = await device(`s${i}`);
+      joiners.push(id);
+      expect((await store.join(c, id, T0)).ok).toBe(true);
+    }
+    // Ten active rows — but one of those devices is disabled, so every surface
+    // the client sees (preview count, participant list) says nine.
+    await db.update(devices).set({ disabledAt: T0 }).where(eq(devices.id, joiners[4]));
+    expect(await store.participantCount(c.id)).toBe(9);
+    expect((await store.participants(c.id)).map((p) => p.handle)).not.toContain("s5");
+
+    // …so the tenth visible seat is real: the join must not 409.
+    const late = await device("late");
+    expect(await store.join(c, late, T0)).toEqual({ ok: true, alreadyIn: false, newDevice: true });
+    expect(await store.participantCount(c.id)).toBe(10);
+
+    // And the next one is genuinely full.
+    expect(await store.join(c, await device("later"), T0)).toEqual({ ok: false, reason: "full" });
+  });
+
+  it("join locks the device row before reading its prior participation", async () => {
+    const noah = await device("noah");
+    const eli = await device("eli");
+    const c = await store.create(
+      { name: "Attribution", creatorDeviceId: noah, startsAt: T0, durationPreset: "1h" },
+      T0,
+    );
+    log.length = 0;
+    expect(await store.join(c, eli, T0)).toEqual({ ok: true, alreadyIn: false, newDevice: true });
+
+    // PGlite can't run two sessions, so the witness is again statement order:
+    // the device row is locked before the "has this device ever joined
+    // anything?" read that decides `joined_as_new_device`, which is what
+    // serialises two first joins to DIFFERENT challenges under real Postgres.
+    const deviceLock = indexOfFirst(
+      (q) => q.includes('from "devices"') && q.includes("for update"),
+    );
+    const insert = indexOfFirst((q) => q.includes('insert into "challenge_participants"'));
+    expect(deviceLock).toBe(1); // straight after the challenge lock
+    expect(insert).toBeGreaterThan(deviceLock);
   });
 });
