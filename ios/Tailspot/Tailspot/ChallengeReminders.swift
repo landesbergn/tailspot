@@ -87,6 +87,12 @@ nonisolated enum ChallengeReminders {
     ///   or future depending on how far the device clock has drifted from
     ///   the server's, and a "Challenge started" banner buzzing one second
     ///   after the user pressed Create is noise, not a reminder.
+    ///   Deliberate consequence: a sync that runs inside the last minute
+    ///   before a start REMOVES an already-pending "starts" reminder (the
+    ///   scheduler drops anything no longer planned) rather than only
+    ///   declining to add one. That is the behaviour we want — a sync only
+    ///   happens because the app is open, so the user is looking at
+    ///   Tailspot when the thing starts and does not need to be told.
     /// - The "ending soon" lead is 10 minutes for the 1h preset (a 1-hour
     ///   warning on a 1-hour challenge would fire before or at the start)
     ///   and 1 hour for 24h/3d/7d, per the spec's phase-2 test list.

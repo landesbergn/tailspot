@@ -48,8 +48,9 @@ struct ChallengeCreateSheet: View {
     /// valid. One minute of cushion makes that boundary unreachable — the
     /// picker can't offer it and validation won't pass it.
     static let minLead: TimeInterval = 16 * 60
-    /// What the server enforces, for copy only.
-    static let serverMinLead: TimeInterval = 15 * 60
+    /// The picker floor and the validation message in minutes, so the copy
+    /// can never drift from the rule.
+    static var minLeadMinutes: Int { Int(minLead / 60) }
     static let maxLead: TimeInterval = 14 * 86_400
 
     /// `_debugName` / `_debugStartMode` seed the snapshot harness.
@@ -172,7 +173,7 @@ struct ChallengeCreateSheet: View {
                     .foregroundStyle(Brand.Color.textPrimary)
                     .tint(Brand.Color.cyan)
                 if !scheduleValid {
-                    Text("Pick a start between 15 minutes and 14 days from now.")
+                    Text("Pick a start between \(Self.minLeadMinutes) minutes and 14 days from now.")
                         .font(Brand.Font.caption)
                         .foregroundStyle(Brand.Color.alertCaution)
                 }

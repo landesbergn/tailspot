@@ -727,8 +727,10 @@ struct ContentView: View {
                     // slides it 13 pt under the button. 16 + 60 leaves
                     // 317 pt: fits on a 393 pt screen, clears the button,
                     // and the 22 pt off-centre is invisible in practice.
-                    .padding(.leading, 16)
-                    .padding(.trailing, 60)
+                    // The numbers live in `TopStripLayout` so the overlap
+                    // test reads the same ones this view lays out with.
+                    .padding(.leading, TopStripLayout.bannerLeading)
+                    .padding(.trailing, TopStripLayout.bannerTrailing)
                     // Preserve the notices' old 60 pt resting offset when no
                     // compass/zoom affordance is showing: 12 outer padding +
                     // 40 reserved here + 8 stack spacing = 60. When an
@@ -800,8 +802,8 @@ struct ContentView: View {
                         Spacer()
                         topTrailingControls
                     }
-                    .padding(.top, 8)
-                    .padding(.trailing, 12)
+                    .padding(.top, TopStripLayout.controlsTopPadding)
+                    .padding(.trailing, TopStripLayout.controlsTrailingPadding)
                     Spacer()
                 }
             }
@@ -1479,7 +1481,7 @@ struct ContentView: View {
     /// sensor readout. `#if` inside a view builder is legal Swift: the
     /// VStack simply has one fewer child in Release.
     private var topTrailingControls: some View {
-        VStack(alignment: .trailing, spacing: 10) {
+        VStack(alignment: .trailing, spacing: TopStripLayout.controlSpacing) {
             accountButton
             #if DEBUG
             debugToggleButton
@@ -1505,7 +1507,7 @@ struct ContentView: View {
                 .background(Brand.Color.bgPrimary.opacity(showDebug ? 0.45 : 0.20), in: .circle)
                 .shadow(color: .black.opacity(0.5), radius: 2)
                 // 32 pt visible disc; inset expands the hit region to 44.
-                .contentShape(Rectangle().inset(by: -6))
+                .contentShape(Rectangle().inset(by: -TopStripLayout.wrenchHitInset))
         }
         .accessibilityLabel(showDebug ? "Hide debug overlays" : "Show debug overlays")
     }
@@ -3293,7 +3295,8 @@ struct ContentView: View {
                         Circle().strokeBorder(Brand.Color.textPrimary.opacity(0.08),
                                               lineWidth: 1)
                     )
-                    .frame(width: 44, height: 44)
+                    .frame(width: TopStripLayout.controlDiameter,
+                           height: TopStripLayout.controlDiameter)
                 Image(systemName: "person.fill")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Brand.Color.textPrimary.opacity(0.9))

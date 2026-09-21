@@ -91,7 +91,7 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     /// tests call that one directly so assertions run after it completes
     /// instead of racing a detached `Task`.
     func sync(open: [ChallengeSummary]) {
-        Task { await sync(open: open) }
+        enqueueSync(open: open)
     }
 
     func cancel(challengeId: String) {
@@ -128,7 +128,45 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
         Set(planned).subtracting(pending)
     }
 
+    // MARK: - Serialization
+
+    /// The sync currently running (or queued behind one). Every entry point
+    /// chains onto it, so only one sync is ever in flight.
+    ///
+    /// Explain-as-we-go: `syncBody` reads the pending list, decides what is
+    /// new, and only then adds. Between the read and the add it `await`s —
+    /// and an `await` is a place where ANOTHER sync can start running on the
+    /// same actor. Two overlapping syncs therefore both read a pending list
+    /// that lacks the reminders the other is about to add, both conclude
+    /// "these are new", and both fire `challenge_reminder_scheduled`. That
+    /// race is easy to hit in real use: Settings' toggle re-sync against a
+    /// foreground refresh, or a create against the permission ask that
+    /// follows it. Chaining each call onto the previous task's `value` makes
+    /// the read-decide-add sequence effectively atomic without a lock.
+    private var inFlightSync: Task<Void, Never>?
+
+    /// Queue a sync behind whatever is already running, and hand back the
+    /// task so a caller (or a test) can await the whole chain.
+    @discardableResult
+    func enqueueSync(open: [ChallengeSummary]) -> Task<Void, Never> {
+        let previous = inFlightSync
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self else { return }
+            await self.syncBody(open: open)
+        }
+        inFlightSync = task
+        return task
+    }
+
     // MARK: - Core
+
+    /// Await a sync of this list — queued behind any sync already running.
+    /// The production callers use the fire-and-forget `sync(open:)`; tests
+    /// await this so assertions run after the work completes.
+    func sync(open: [ChallengeSummary]) async {
+        await enqueueSync(open: open).value
+    }
 
     /// Recompute the plan for every open challenge and make the notification
     /// center match it: remove any challenge-prefixed pending identifier
@@ -136,7 +174,10 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     /// planned, then (re-)add every currently-planned moment. Re-adding an
     /// already-pending identifier is a no-op replace (`UNUserNotificationCenter`
     /// treats `add` as upsert-by-identifier), so this never double-schedules.
-    func sync(open: [ChallengeSummary]) async {
+    ///
+    /// Never call this directly — go through `enqueueSync` / `sync`, which
+    /// keep two of these from interleaving.
+    private func syncBody(open: [ChallengeSummary]) async {
         let authorized = await center.authorizationStatus() == .authorized
         let enabled = remindersEnabled
         let t = now()

@@ -28,6 +28,15 @@ Thirteen findings from the phase-2 client review, each with a test.
   a finished one stops. A failed catch-log load shows a retry instead of a
   permanent spinner, and the view analytics fire on the first *successful*
   load.
+  - **Breaking for queries:** `challenge_invite_shared.method` changed domain.
+    It used to be the constant `"share_sheet"` for every share-sheet send;
+    it now carries the chosen activity type
+    (`com.apple.UIKit.activity.Message`, `…PostToFacebook`, …), with
+    `"share_sheet"` only as the fallback when iOS reports a completed share
+    without naming the activity. `"copy_link"` is unchanged. Filter on the
+    property's *presence*, not on `= 'share_sheet'`, and treat counts before
+    and after this build as different metrics (the old ones counted sheet
+    openings).
 - **Edges the server would have rejected.** Invite codes strip all whitespace
   (matching the backend's `[\s-]`), a null `creatorHandle` decodes to
   "spotter" instead of throwing away the row, the create sheet keeps a

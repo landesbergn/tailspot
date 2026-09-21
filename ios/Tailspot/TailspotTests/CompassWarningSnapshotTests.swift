@@ -45,10 +45,13 @@ struct CompassWarningSnapshotTests {
     /// must fit that at default type or it wraps on every device. The
     /// rendered image's point width IS the badge's intrinsic width.
     @Test func bannerFitsBesideAccountButtonAtDefaultType() {
+        // The budget comes from the insets ContentView lays out with, not a
+        // number typed here.
+        let budget = TopStripLayout.bannerWidth(screenWidth: 393)
         let renderer = ImageRenderer(content: banner(accuracyText: "±40°").environment(\.colorScheme, .dark))
         renderer.scale = 1
         let width = renderer.uiImage?.size.width ?? .infinity
-        #expect(width <= 317, "badge is \(width) pt wide; the top stack only has 317 pt beside the account button")
+        #expect(width <= budget, "badge is \(width) pt wide; the top stack only has \(budget) pt beside the account button")
         // And the old symmetric-60 layout really was too narrow — pins the
         // reason the inset is asymmetric, so nobody "tidies" it back.
         #expect(width > 273, "if the badge now fits in 273 pt the inset can go back to symmetric")

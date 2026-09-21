@@ -142,14 +142,29 @@ struct ChallengeDetailScreen: View {
     /// How long to wait before the next refresh, or nil when there is
     /// nothing left to poll. Pure so the cadence is testable without a
     /// clock or a view.
-    static func pollWait(status: ChallengeStatus, secondsUntilStart: TimeInterval?) -> TimeInterval? {
+    ///
+    /// `hasDetail == false` means the screen is showing an error card: the
+    /// load failed and there is nothing to decide a status from. That case
+    /// must keep retrying on the live cadence — the old unconditional
+    /// `while` loop did, and an error card that can never heal itself is a
+    /// worse bug than the over-polling this method exists to stop. Only a
+    /// KNOWN-finished or known-cancelled challenge stops the loop, because
+    /// only then is there provably nothing left to fetch.
+    static func pollWait(status: ChallengeStatus, secondsUntilStart: TimeInterval?,
+                         hasDetail: Bool) -> TimeInterval? {
+        guard hasDetail else { return livePollInterval }
         switch status {
         case .live:
             return livePollInterval
         case .upcoming:
             let untilStart = secondsUntilStart ?? livePollInterval
             return min(max(untilStart, 1), upcomingPollCap)
-        case .finished, .cancelled, .unknown:
+        case .unknown:
+            // Status we don't recognize (a future server value): keep
+            // refreshing rather than freezing on a screen we can't reason
+            // about.
+            return livePollInterval
+        case .finished, .cancelled:
             return nil
         }
     }
@@ -167,11 +182,14 @@ struct ChallengeDetailScreen: View {
     /// cancellable like every `Task.sleep`), refresh once there, and fall
     /// through to live polling. Anything finished or cancelled is frozen —
     /// the loop returns and the task ends rather than burning a request a
-    /// minute on a result that can never change.
+    /// minute on a result that can never change. A failed load keeps
+    /// retrying, so the error card heals itself when the network comes
+    /// back without the user pulling to refresh.
     private func pollWhileRelevant() async {
         while !Task.isCancelled {
             let untilStart = summary.map { $0.startsAt.timeIntervalSince(model.now()) }
-            guard let wait = Self.pollWait(status: status, secondsUntilStart: untilStart) else { return }
+            guard let wait = Self.pollWait(status: status, secondsUntilStart: untilStart,
+                                           hasDetail: detail != nil) else { return }
             try? await Task.sleep(for: .seconds(wait))
             guard !Task.isCancelled else { return }
             await model.loadDetail(id: id)

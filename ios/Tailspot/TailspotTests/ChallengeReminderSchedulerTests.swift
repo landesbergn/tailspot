@@ -27,8 +27,14 @@ final class FakeChallengeNotificationCenter: ChallengeNotificationCenter {
     /// "answers" (the fake also flips `status` the way iOS would).
     private(set) var authorizationRequests = 0
     var grantsAuthorization = true
+    /// Makes `add` slow, so a second `sync` has a window to interleave —
+    /// the race the scheduler's serialization exists to close.
+    var addDelayNanoseconds: UInt64 = 0
 
     func add(_ request: UNNotificationRequest) async throws {
+        if addDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: addDelayNanoseconds)
+        }
         added.append(request)
         pending.removeAll { $0.identifier == request.identifier }
         pending.append(request)
@@ -246,19 +252,21 @@ struct ChallengeReminderSchedulerTests {
     }
 
     /// A re-sync (every foreground, every refresh, every create) re-adds the
-    /// same identifiers as an upsert — none of them is newly scheduled, so
-    /// none of them fires `challenge_reminder_scheduled` a second time.
-    @Test func resyncSchedulesNothingNew() async {
+    /// same three identifiers as an upsert, and the pending list is
+    /// unchanged by it — the state half of "nothing new was scheduled".
+    /// That the EVENT doesn't fire again is asserted through the analytics
+    /// sink in `AnalyticsFacadeTests`
+    /// (`reminderScheduledFiresOncePerIdentifierNotPerSync`), which is the
+    /// one serialized owner of the process-global `Analytics._testSink`.
+    @Test func resyncUpsertsTheSameIdentifiers() async {
         let center = FakeChallengeNotificationCenter()
         let scheduler = ChallengeReminderScheduler(center: center, defaults: freshDefaults(), now: { now })
         await scheduler.sync(open: [upcomingChallenge()])
-        let firstRound = center.pending.map(\.identifier)
+        let firstRound = Set(center.pending.map(\.identifier))
         #expect(firstRound.count == 3)
 
         await scheduler.sync(open: [upcomingChallenge()])
-        let newlySecondRound = ChallengeReminderScheduler.newlyScheduledIdentifiers(
-            planned: center.added.suffix(3).map(\.identifier), pending: firstRound
-        )
-        #expect(newlySecondRound.isEmpty)
+        #expect(Set(center.pending.map(\.identifier)) == firstRound)
+        #expect(center.added.count == 6, "both syncs upsert; the second adds no NEW identifier")
     }
 }

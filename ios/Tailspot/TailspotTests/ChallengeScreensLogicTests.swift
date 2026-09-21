@@ -241,23 +241,38 @@ struct ChallengeScreensLogicTests {
     /// in three days re-fetched standings that cannot change, once a minute,
     /// for as long as the screen was open.
     @Test func pollWaitOnlyRunsWhileThereIsSomethingToPoll() {
-        #expect(ChallengeDetailScreen.pollWait(status: .live, secondsUntilStart: nil)
-                == ChallengeDetailScreen.livePollInterval)
-        #expect(ChallengeDetailScreen.pollWait(status: .finished, secondsUntilStart: nil) == nil)
-        #expect(ChallengeDetailScreen.pollWait(status: .cancelled, secondsUntilStart: nil) == nil)
-        #expect(ChallengeDetailScreen.pollWait(status: .unknown, secondsUntilStart: nil) == nil)
+        let live = ChallengeDetailScreen.livePollInterval
+        #expect(ChallengeDetailScreen.pollWait(status: .live, secondsUntilStart: nil, hasDetail: true) == live)
+        #expect(ChallengeDetailScreen.pollWait(status: .finished, secondsUntilStart: nil, hasDetail: true) == nil)
+        #expect(ChallengeDetailScreen.pollWait(status: .cancelled, secondsUntilStart: nil, hasDetail: true) == nil)
+        // A status this build doesn't recognize keeps refreshing rather
+        // than freezing on a screen it can't reason about.
+        #expect(ChallengeDetailScreen.pollWait(status: .unknown, secondsUntilStart: nil, hasDetail: true) == live)
+    }
+
+    /// The regression this guards: with no detail loaded there is no
+    /// summary, so the status reads `.unknown` — and a poll table that
+    /// stopped there left the error card with no way to heal itself short
+    /// of a pull-to-refresh. Every status must keep retrying while the
+    /// load has never succeeded.
+    @Test func pollWaitKeepsRetryingWhileNothingHasLoaded() {
+        let live = ChallengeDetailScreen.livePollInterval
+        for status in [ChallengeStatus.unknown, .live, .upcoming, .finished, .cancelled] {
+            #expect(ChallengeDetailScreen.pollWait(status: status, secondsUntilStart: nil, hasDetail: false) == live,
+                    "\(status) with no detail must keep retrying")
+        }
     }
 
     @Test func pollWaitSleepsUntilAnUpcomingStartBoundedByTheCap() {
         // Starts in 90 s: wake exactly at the start.
-        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: 90) == 90)
+        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: 90, hasDetail: true) == 90)
         // Starts in three days: capped, so a cancel or a new joiner still
         // lands within the cap.
-        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: 3 * 86_400)
+        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: 3 * 86_400, hasDetail: true)
                 == ChallengeDetailScreen.upcomingPollCap)
         // Start already passed (the status hasn't caught up yet): never a
         // zero or negative sleep.
-        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: -10) == 1)
+        #expect(ChallengeDetailScreen.pollWait(status: .upcoming, secondsUntilStart: -10, hasDetail: true) == 1)
     }
 
     // MARK: - view analytics latch
@@ -276,9 +291,12 @@ struct ChallengeScreensLogicTests {
     /// The server validates the 15-minute lead when the request ARRIVES, so
     /// a form that allows exactly 15 minutes 422s on a valid-looking tap.
     @Test func createLeadHasAMinuteOfCushionOverTheServerRule() {
-        #expect(ChallengeCreateSheet.minLead > ChallengeCreateSheet.serverMinLead)
-        #expect(!ChallengeCreateSheet.isValidLead(ChallengeCreateSheet.serverMinLead))
+        // The server's rule is 15 minutes, checked on arrival.
+        #expect(!ChallengeCreateSheet.isValidLead(15 * 60))
         #expect(!ChallengeCreateSheet.isValidLead(15 * 60 + 59))
+        // The copy the sheet shows quotes the client floor, not the
+        // server's, so the message can't contradict the picker.
+        #expect(ChallengeCreateSheet.minLeadMinutes == 16)
         #expect(ChallengeCreateSheet.isValidLead(16 * 60))
         #expect(ChallengeCreateSheet.isValidLead(14 * 86_400))
         #expect(!ChallengeCreateSheet.isValidLead(14 * 86_400 + 1))
