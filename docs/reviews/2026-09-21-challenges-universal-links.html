@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Challenge invite links open the app</title>
+<style>
+ :root { color-scheme: light; }
+ body { margin:0; background:#FBFAF6; color:#17191E; font:15px/1.6 "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif; }
+ main { max-width:1080px; margin:0 auto; padding:32px 20px 80px; }
+ h1 { font-size:26px; margin:0 0 4px; } .sub { color:#555B65; margin-bottom:24px; font-family: ui-monospace, Menlo, monospace; font-size:12.5px; }
+ h2 { font-size:18px; margin:36px 0 10px; padding-top:14px; border-top:1px solid #DCDFE4; }
+ p, li { max-width:72ch; } code { background:#EEF0F2; padding:1px 6px; border-radius:4px; font:12.5px ui-monospace,Menlo,monospace; }
+ pre { background:#EEF0F2; padding:14px 16px; border-radius:10px; overflow-x:auto; font:12.5px/1.55 ui-monospace,Menlo,monospace; max-width:72ch; }
+ table { border-collapse:collapse; font-size:14px; } th, td { text-align:left; padding:6px 10px; border-bottom:1px solid #DCDFE4; vertical-align:top; }
+ th { font: 600 11.5px ui-monospace, Menlo, monospace; letter-spacing:.08em; text-transform:uppercase; color:#555B65; }
+ ol.checklist li { margin-bottom:10px; }
+ .flag { background:#FFF3D6; border-left:3px solid #E0A315; padding:10px 14px; border-radius:0 8px 8px 0; max-width:72ch; }
+</style></head><body><main>
+
+<h1>Challenge invite links open the app</h1>
+<div class="sub">branch feat/challenges-universal-links · 2026-09-21 · Challenges v1 phase 3 · web + client · NOT yet verified end to end</div>
+
+<p><code>https://tailspot.app/c/K7M4QD2X</code> opens Tailspot straight into that
+invite's join sheet. Anywhere the app can't take it — desktop, Android, an
+iPhone without Tailspot — it goes to the App Store listing instead. There is no
+landing page: the link either opens the app or sells it.</p>
+
+<h2>The flow</h2>
+
+<pre>tap https://tailspot.app/c/K7M4QD2X
+  │
+  ├─ app installed ─────────────────────────────────────────────┐
+  │    iOS checks its cached copy of                            │
+  │    tailspot.app/.well-known/apple-app-site-association       │
+  │    against the app's applinks entitlement                    │
+  │                                                              ▼
+  │                              TailspotApp .onOpenURL  /  .onContinueUserActivity
+  │                                          (browsing web — the cold-launch form)
+  │                                                    │
+  │                                     InviteCode.parse(url:)  → "K7M4QD2X"
+  │                                                    │
+  │                            ChallengesModel.openInvite(code:)
+  │                              parks pendingInviteCode; if the config verdict
+  │                              is still .unknown, fetches it now
+  │                                                    │
+  │                            inviteRoute(verdict:code:)  — pure
+  │                          ┌─────────┬───────────────┬──────────────┐
+  │                       .join   .updateRequired   .unavailable   .waitForConfig
+  │                          │         │                │               │
+  │              PrimarySheet    alert with       existing top      hold; fires
+  │               .challenges    an App Store     toast: "Challenges  again when
+  │                    │         button           aren't available    the config
+  │            ChallengesHub(source:"link")       right now."         lands
+  │                    │
+  │            join sheet, code prefilled, via: "universal_link"
+  │                    │
+  │            join → push the challenge detail (as create/join already do)
+  │
+  └─ app NOT installed ─→ nginx 302 → App Store listing
+</pre>
+
+<h2>What changed</h2>
+
+<table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>web/public/.well-known/apple-app-site-association</code></td><td>New. Claims <code>/c/*</code> for <code>G9FJX2A5TA.com.landesberg.Tailspot</code>.</td></tr>
+<tr><td><code>web/nginx.conf</code></td><td>Serves the association file as <code>application/json</code>, no-cache (it has no extension, so it would otherwise be octet-stream). 302s <code>/c/&lt;8 chars&gt;</code> to the App Store; anything else under <code>/c/</code> still 404s.</td></tr>
+<tr><td><code>web/README.md</code></td><td>Both routes, the "no redirect" rule, and the Apple-CDN caching note.</td></tr>
+<tr><td><code>ios/…/Tailspot.entitlements</code></td><td>New. <code>applinks:tailspot.app</code> + <code>applinks:www.tailspot.app</code>. Wired into both config blocks of the app target only.</td></tr>
+<tr><td><code>TailspotApp.swift</code></td><td><code>.onOpenURL</code> and <code>.onContinueUserActivity(NSUserActivityTypeBrowsingWeb)</code>, both into one handler.</td></tr>
+<tr><td><code>ChallengesModel.swift</code></td><td><code>pendingInviteCode</code>, <code>openInvite(code:)</code>, <code>clearPendingInvite()</code>, and the pure <code>InviteRoute</code> + <code>inviteRoute(verdict:code:)</code>.</td></tr>
+<tr><td><code>ChallengeInviteRouter.swift</code></td><td>New. Zero-size observer that turns the route into presentation, and owns the "update to join" alert.</td></tr>
+<tr><td><code>PrimarySheet.swift</code></td><td><code>case challenges</code> + <code>ChallengesSheet</code> (NavigationStack + Done, shaped like <code>LeadersSheet</code>).</td></tr>
+<tr><td><code>ChallengesHub.swift</code></td><td>Picks up <code>pendingInviteCode</code> and opens its existing join sheet with <code>via: "universal_link"</code>.</td></tr>
+<tr><td><code>ContentView.swift</code></td><td>The router rides the existing <code>.overlay</code>; one more case in the existing <code>.sheet(item:)</code>; one more <code>TopToast</code> kind. <strong>No new modifier links on <code>body</code></strong> — it is at the type-checker's expression budget.</td></tr>
+</table>
+
+<h2>Behaviours worth checking</h2>
+
+<table>
+<tr><th>Situation</th><th>What happens</th></tr>
+<tr><td>App installed, Challenges available</td><td>Join sheet with the code prefilled, over the catch screen. Joining pushes the detail.</td></tr>
+<tr><td>Link lands on a cold launch, before the config is known</td><td>The code waits (<code>.waitForConfig</code>) while <code>openInvite</code> fetches the config, then opens. No error flash.</td></tr>
+<tr><td>Link lands during onboarding</td><td>The code stays parked; the router delivers it when the catch screen first appears.</td></tr>
+<tr><td>Build older than the server's <code>minBuild</code></td><td>Alert: "Update Tailspot to join this challenge", with an App Store button (the server's <code>appStoreURL</code> if it sent one).</td></tr>
+<tr><td>Kill switch on</td><td>Top toast: "Challenges aren't available right now." Nothing opens.</td></tr>
+<tr><td>Another sheet already open (Hangar / Profile / Leaders)</td><td>Replaced by Challenges. The user just tapped a link; the link wins.</td></tr>
+<tr><td>Join sheet dismissed without joining</td><td>Nothing re-presents — the hub takes the code off the model as soon as it has it.</td></tr>
+<tr><td>Malformed link (<code>/c/short</code>, wrong host, extra path)</td><td>Ignored by the parser. On the web it falls through to the 404 page.</td></tr>
+<tr><td>Analytics</td><td><code>challenge_invite_opened</code> fires <strong>once</strong>, from the join sheet, with the challenge id, <code>via: universal_link</code> and the joinability status. The router fires it only for the two blocked routes (<code>status: update_required</code> / <code>unavailable</code>), where nothing else would.</td></tr>
+</table>
+
+<h2>Manual checklist — Noah</h2>
+
+<div class="flag"><strong>None of this works until all three are done.</strong> The
+app half and the web half are each inert on their own, and Apple's cache sits
+between them.</div>
+
+<ol class="checklist">
+<li><strong>Enable Associated Domains on the App ID.</strong> Open the project in
+Xcode once → target Tailspot → Signing &amp; Capabilities → + Capability →
+Associated Domains (or the developer portal → Identifiers →
+com.landesberg.Tailspot). Until this is on, any <em>signed</em> build — a
+<code>bin/deploy</code> to the phone, or Xcode Cloud — fails to sign with a
+profile/entitlement mismatch. The simulator doesn't check, which is why CI is
+green.</li>
+<li><strong>Deploy the site:</strong> <code>cd web &amp;&amp; flyctl deploy --remote-only</code>.
+Then check the origin directly:
+<pre>curl -sI https://tailspot.app/.well-known/apple-app-site-association
+# expect: 200, content-type: application/json, NO 301/302
+
+curl -sI https://tailspot.app/c/K7M4QD2X
+# expect: 302 → apps.apple.com/…/id6773470079
+
+curl -sI https://tailspot.app/c/nope
+# expect: 404</pre></li>
+<li><strong>Let Apple's CDN catch up.</strong>
+<code>https://app-site-association.cdn-apple.com/a/v1/tailspot.app</code> shows
+what devices actually see; it can lag hours after a deploy. A device re-fetches
+the association on install and on app update, so the reliable test is
+delete-and-reinstall (⚠ that also destroys the local Hangar — use a test device
+or accept the loss knowingly).</li>
+<li><strong>Then test the real thing:</strong> paste a <code>/c/CODE</code> link into
+Messages or Notes on the phone and tap it. It should open Tailspot, not Safari.
+Long-press the link: with the association live the menu offers "Open in
+Tailspot". If it opens Safari, the association isn't in place yet — check the
+CDN URL before changing any code.</li>
+</ol>
+
+<h2>Follow-ups not done here</h2>
+<ul>
+<li>The <code>/c/CODE</code> redirect uses the plain listing URL the decision
+specified. Every other App Store link on the site uses the attributed campaign
+form (<code>/app/apple-store/id6773470079?pt=119286625&amp;ct=…</code>); invite
+traffic is the highest-intent traffic the site gets, so it's worth a
+<code>ct=Challenge%20Invite</code> if Noah wants those installs counted
+separately.</li>
+<li>The other phase 3 items — APNs, the reveal ledger line, the results share
+card, the Ace trophy — are untouched.</li>
+</ul>
+
+</main></body></html>
