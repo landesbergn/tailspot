@@ -1792,6 +1792,10 @@ struct ContentView: View {
         wasTapped: Bool
     ) -> String? {
         func r1(_ x: Double) -> Double { (x * 10).rounded() / 10 }
+        // Coordinates need more precision than the 0.1° the angles get:
+        // 5 decimal places is ~1 m, far tighter than the validator's
+        // tolerances, and still keeps the blob compact.
+        func r5(_ x: Double) -> Double { (x * 100_000).rounded() / 100_000 }
         let targetOffset: Double? = observed.map { obs in
             let v = Geo.cameraFrameVector(
                 targetBearingDeg: obs.bearingDeg, targetElevationDeg: obs.elevationDeg, basis: basis
@@ -1815,7 +1819,18 @@ struct ContentView: View {
             wasTapped: wasTapped,
             candidateCount: candidates.count,
             alternatives: alts.isEmpty ? nil : Array(alts),
-            selector: "prominence-v1"
+            selector: "prominence-v1",
+            // The caught plane's own ADS-B fix at press time. `observed` is
+            // the SHUTTER-PRESS snapshot (`visibleByIcao`), not a live read,
+            // so this is the position the reticle was actually drawn from.
+            // Recorded here (and only here) so `CatchUploader` can send it to
+            // the backend validator; nil when the plane had already fallen out
+            // of the observed set, which uploads as `aircraft: null` exactly
+            // like every pre-2026-09-07 catch.
+            aircraftLat: observed.map { r5($0.aircraft.latitude) },
+            aircraftLon: observed.map { r5($0.aircraft.longitude) },
+            aircraftAltitudeMeters: observed.map { $0.aircraft.altitudeMeters.rounded() },
+            aircraftPositionTimestamp: observed?.aircraft.positionTimestamp
         )
         return diag.jsonString()
     }

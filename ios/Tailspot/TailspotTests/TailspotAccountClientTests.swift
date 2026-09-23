@@ -313,6 +313,7 @@ protocol UploadCatchClient {
         headingDeg: Double?,
         elevationDeg: Double?,
         headingAccuracyDeg: Double?,
+        aircraft: UploadCatchRequest.Aircraft?,
         guessKind: String?,
         guessValue: String?
     ) async throws -> UploadCatchResponse
@@ -339,6 +340,9 @@ final class FakeUploadClient: UploadCatchClient {
     /// Guess block per icao24, recorded so tests can assert the frozen
     /// Catch.guessKind/guessValue reach the wire call unchanged.
     var uploadedGuesses: [String: (kind: String?, value: String?)] = [:]
+    /// Pose + aircraft block per icao24, so tests can assert what the
+    /// capture-diagnostics blob turned into on the wire.
+    var uploadedPoses: [String: CatchUploadPose] = [:]
     var registrationCallCount = 0
 
     func ensureRegistered() async throws -> String {
@@ -357,11 +361,16 @@ final class FakeUploadClient: UploadCatchClient {
         headingDeg: Double?,
         elevationDeg: Double?,
         headingAccuracyDeg: Double?,
+        aircraft: UploadCatchRequest.Aircraft?,
         guessKind: String?,
         guessValue: String?
     ) async throws -> UploadCatchResponse {
         uploadedIcaos.append(icao24)
         uploadedGuesses[icao24] = (kind: guessKind, value: guessValue)
+        uploadedPoses[icao24] = CatchUploadPose(
+            headingDeg: headingDeg, elevationDeg: elevationDeg,
+            headingAccuracyDeg: headingAccuracyDeg, aircraft: aircraft
+        )
         let outcome = globalOutcome ?? outcomes[icao24]
         switch outcome {
         case .success(let pts, let dup):
@@ -414,6 +423,10 @@ func uploadPendingWithClient(
     for catchRow in pendingRows {
         if catchRow.serverUuid == nil { catchRow.serverUuid = UUID().uuidString }
         guard let uuid = catchRow.serverUuid else { continue }
+        // Mirrors production (`CatchUploader.uploadPending`): the pose and the
+        // caught plane's position come out of the row's capture-diagnostics
+        // blob, not from live sensors.
+        let pose = CatchUploadPose.from(diagnosticsJSON: catchRow.captureDiagnosticsJSON)
         do {
             _ = try await client.uploadCatch(
                 catchUuid: uuid,
@@ -422,7 +435,10 @@ func uploadPendingWithClient(
                 caughtAt: catchRow.caughtAt,
                 observerLat: catchRow.observerLat,
                 observerLon: catchRow.observerLon,
-                headingDeg: nil, elevationDeg: nil, headingAccuracyDeg: nil,
+                headingDeg: pose.headingDeg,
+                elevationDeg: pose.elevationDeg,
+                headingAccuracyDeg: pose.headingAccuracyDeg,
+                aircraft: pose.aircraft,
                 guessKind: catchRow.guessKind, guessValue: catchRow.guessValue
             )
             catchRow.uploadedAt = Date()

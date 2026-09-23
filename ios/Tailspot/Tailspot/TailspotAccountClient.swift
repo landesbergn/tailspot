@@ -143,6 +143,34 @@ nonisolated struct UploadCatchRequest: Encodable {
         }
     }
 
+    /// The caught plane's position, as the backend's catch validator wants it:
+    /// lat/lon/altitudeMeters are REQUIRED numbers, `positionTimestamp` is a
+    /// number or an explicit null (unix seconds of the ADS-B fix). The server
+    /// correlates this against the observer pose to decide plausible /
+    /// implausible / unverifiable — see backend/src/catches/validateCatch.ts.
+    struct Aircraft: Encodable, Equatable, Sendable {
+        let lat: Double
+        let lon: Double
+        let altitudeMeters: Double
+        let positionTimestamp: Double?
+
+        // Same explicit-null rule as the pose angles: the backend accepts
+        // `positionTimestamp` as a number OR null, and the synthesized
+        // Encodable would omit a nil. Spell it out.
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(lat, forKey: .lat)
+            try c.encode(lon, forKey: .lon)
+            try c.encode(altitudeMeters, forKey: .altitudeMeters)
+            if let positionTimestamp { try c.encode(positionTimestamp, forKey: .positionTimestamp) }
+            else { try c.encodeNil(forKey: .positionTimestamp) }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case lat, lon, altitudeMeters, positionTimestamp
+        }
+    }
+
     /// The bonus-round guess (game-layer PR2): the VALUE the user picked —
     /// an ICAO airport ident for `kind: "route"`, a typecode for
     /// `kind: "type"` — NEVER a verdict. The server verifies it against
@@ -159,17 +187,19 @@ nonisolated struct UploadCatchRequest: Encodable {
     /// Unix seconds at which the catch occurred.
     let caughtAt: Double
     let observer: Observer
-    /// Aircraft position — always nil for pre-WP-1.7 backfill (see backend spec).
-    /// Typed as a nullable JSON object: the server distinguishes null (skip validation)
-    /// from an absent key.
-    let aircraft: String? // nil serialises as JSON null via custom encoder below
+    /// The caught plane's ADS-B position at shutter press, when the row
+    /// recorded one. Nil for rows captured before the app stored it (and for
+    /// a catch whose plane had dropped out of the observed set) — the server
+    /// distinguishes explicit null (accept, verdict "unverifiable") from an
+    /// ABSENT key (422), so nil is encoded as null below, never omitted.
+    let aircraft: Aircraft?
     /// Optional guess block. Unlike the pose angles (whose ABSENCE is 422),
     /// the backend treats an absent `guess` key as "no guess" — so nil here
     /// is correctly OMITTED, not encoded as null.
     let guess: Guess?
 
-    // Custom Encodable so `aircraft` becomes JSON null (not the Swift String? nullable).
-    // We keep the field as String? just to carry nil; the real encoding is explicit.
+    // Custom Encodable so `aircraft` is either a full object or an EXPLICIT
+    // JSON null — never an absent key (the backend 422s that).
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(catchUuid, forKey: .catchUuid)
@@ -177,9 +207,11 @@ nonisolated struct UploadCatchRequest: Encodable {
         try container.encodeIfPresent(callsign, forKey: .callsign)
         try container.encode(caughtAt, forKey: .caughtAt)
         try container.encode(observer, forKey: .observer)
-        // Always encode aircraft as explicit JSON null (backend distinguishes
-        // `null` from a missing key; null = "no position, still accept").
-        try container.encodeNil(forKey: .aircraft)
+        // Present → the object; absent → explicit JSON null (the backend
+        // distinguishes `null` from a missing key; null = "no position
+        // recorded, still accept, verdict unverifiable").
+        if let aircraft { try container.encode(aircraft, forKey: .aircraft) }
+        else { try container.encodeNil(forKey: .aircraft) }
         // Guess is the opposite: absent key = "no guess" (the common case);
         // present only when the user actually answered a bonus round.
         try container.encodeIfPresent(guess, forKey: .guess)
@@ -543,7 +575,13 @@ nonisolated struct TailspotAccountClient {
 
     /// Upload a single catch to the backend. `catchUuid` is the caller-supplied
     /// idempotency key — sending the same UUID twice returns the original result
-    /// with `duplicate: true`. Always sends `aircraft: null` (backfill path).
+    /// with `duplicate: true`.
+    ///
+    /// `headingDeg`/`elevationDeg`/`headingAccuracyDeg` and `aircraft` are the
+    /// anti-cheat inputs: the observer pose at shutter press and the caught
+    /// plane's ADS-B fix. All optional — a row that recorded none of them
+    /// sends nulls and validates as "unverifiable", which is exactly what
+    /// every catch did before the app started recording them.
     ///
     /// `guessKind`/`guessValue` are the frozen bonus-round guess from the Catch
     /// row (game-layer PR2). The `guess` block is sent only when BOTH are
@@ -560,6 +598,7 @@ nonisolated struct TailspotAccountClient {
         headingDeg: Double?,
         elevationDeg: Double?,
         headingAccuracyDeg: Double?,
+        aircraft: UploadCatchRequest.Aircraft? = nil,
         guessKind: String? = nil,
         guessValue: String? = nil
     ) async throws -> UploadCatchResponse {
@@ -589,7 +628,7 @@ nonisolated struct TailspotAccountClient {
                 elevationDeg: elevationDeg,
                 headingAccuracyDeg: headingAccuracyDeg
             ),
-            aircraft: nil,
+            aircraft: aircraft,
             guess: guess
         )
         request.httpBody = try JSONEncoder().encode(payload)

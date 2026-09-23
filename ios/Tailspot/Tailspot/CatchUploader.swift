@@ -27,6 +27,62 @@ import Foundation
 import SwiftData
 import os
 
+/// What a Catch row can tell the backend's validator: the observer pose at
+/// shutter press and the caught plane's ADS-B fix. All optional — every field
+/// is absent on rows written before the app recorded them, and an all-nil
+/// value produces byte-for-byte the request the app sent before this change.
+///
+/// `nonisolated` because it's a plain value type: pulling it out of
+/// `CatchUploader` (which is `@MainActor`) lets the mapping be unit-tested
+/// without a SwiftData container. See ios/CLAUDE.md on default MainActor
+/// isolation.
+nonisolated struct CatchUploadPose: Equatable, Sendable {
+    var headingDeg: Double?
+    var elevationDeg: Double?
+    var headingAccuracyDeg: Double?
+    var aircraft: UploadCatchRequest.Aircraft?
+
+    static let empty = CatchUploadPose()
+
+    /// Read the pose + aircraft position out of a stored
+    /// `Catch.captureDiagnosticsJSON` blob.
+    ///
+    /// Deliberately total (never throws, never fails a catch): anything it
+    /// can't read becomes nil, which uploads as JSON null and validates as
+    /// "unverifiable" — the pre-2026-09-07 behaviour.
+    ///
+    /// Two rules worth knowing:
+    ///  - `headingAccuracyDeg` is `CLLocation.headingAccuracy`, where a
+    ///    NEGATIVE value means "the OS says this heading is invalid". The
+    ///    validator WIDENS its bearing tolerance by whatever we send, so a
+    ///    negative would tighten it — nonsense. Map it to nil instead.
+    ///  - the aircraft block is all-or-nothing: the backend requires
+    ///    lat + lon + altitudeMeters together (a partial object is a 422),
+    ///    so a blob missing any one of them sends no block at all.
+    static func from(diagnosticsJSON: String?) -> CatchUploadPose {
+        guard let diag = CatchCaptureDiagnostics.from(json: diagnosticsJSON) else {
+            return .empty
+        }
+        let aircraft: UploadCatchRequest.Aircraft? = {
+            guard let lat = diag.aircraftLat,
+                  let lon = diag.aircraftLon,
+                  let alt = diag.aircraftAltitudeMeters else { return nil }
+            return .init(
+                lat: lat,
+                lon: lon,
+                altitudeMeters: alt,
+                positionTimestamp: diag.aircraftPositionTimestamp?.timeIntervalSince1970
+            )
+        }()
+        return CatchUploadPose(
+            headingDeg: diag.headingDeg,
+            elevationDeg: diag.cameraElevationDeg,
+            headingAccuracyDeg: diag.headingAccuracyDeg.flatMap { $0 < 0 ? nil : $0 },
+            aircraft: aircraft
+        )
+    }
+}
+
 @MainActor
 class CatchUploader {
     private let client: TailspotAccountClient
@@ -93,6 +149,11 @@ class CatchUploader {
             }
             guard let uuid = catchRow.serverUuid else { continue }
 
+            // The pose the phone held at shutter press, read back out of the
+            // row's capture-diagnostics blob. Rows written before the app
+            // recorded it yield `.empty` and upload exactly as they did.
+            let pose = CatchUploadPose.from(diagnosticsJSON: catchRow.captureDiagnosticsJSON)
+
             while true {
                 do {
                     let response = try await client.uploadCatch(
@@ -102,9 +163,14 @@ class CatchUploader {
                         caughtAt: catchRow.caughtAt,
                         observerLat: catchRow.observerLat,
                         observerLon: catchRow.observerLon,
-                        headingDeg: nil,
-                        elevationDeg: nil,
-                        headingAccuracyDeg: nil,
+                        headingDeg: pose.headingDeg,
+                        elevationDeg: pose.elevationDeg,
+                        headingAccuracyDeg: pose.headingAccuracyDeg,
+                        // The caught plane's ADS-B fix at press time. Together
+                        // with the pose above this is what the server's
+                        // validator correlates; nil → JSON null → the catch is
+                        // accepted and recorded "unverifiable".
+                        aircraft: pose.aircraft,
                         // The frozen bonus-round guess (game-layer PR2). The
                         // wire carries the guess VALUE only — the server
                         // verifies it against its own truth and awards the
