@@ -51,6 +51,40 @@ gets a 404 and an invisible line. The Fly preview site
 real number. For a local preview, mock the request (Playwright `page.route`)
 or add your local origin to the backend's `STATS_ALLOWED_ORIGINS`.
 
+## Challenge invite links (universal links)
+
+Two routes serve `https://tailspot.app/c/CODE`, the challenge invite link the
+app shares:
+
+- **`/.well-known/apple-app-site-association`** — the file iOS reads to learn
+  that `/c/*` belongs to the Tailspot app (team `G9FJX2A5TA`, bundle
+  `com.landesberg.Tailspot`). It lives at `public/.well-known/` with no file
+  extension, so `nginx.conf` serves it with `default_type application/json`
+  and `no-cache`. It must be reachable over **https with no redirect** —
+  not even `www` → apex — or iOS quietly ignores the association.
+- **`/c/CODE`** — a 302 to the App Store listing (attributed to the
+  `Challenge Invite` campaign). This is the fallback: on an iPhone with
+  Tailspot installed, iOS opens the app and nginx never sees the request.
+  The pattern is the invite alphabet exactly — 8 characters from A–Z
+  minus `I`, `L`, `O` plus `2`–`9`, case-insensitive, optional trailing
+  slash — so a code that could never exist (`/c/K7M4QD2O`, `/c/short`)
+  falls through to the 404 page instead of a pointless App Store trip.
+  The regex is **quoted** because nginx reads a bare `{8}` as the start of
+  a config block and refuses to start. There is no landing page by design.
+
+`.well-known` is a dot-directory, which `COPY public/ /usr/share/nginx/html/`
+in the Dockerfile does include (a directory source copies its contents,
+dotfiles and all — there is no `.dockerignore` here). If you ever add one,
+don't let it swallow `.well-known`.
+
+**Apple's CDN caches the association file.** After a deploy, iOS devices may
+keep using the old copy for hours. What Apple currently serves is visible at
+`https://app-site-association.cdn-apple.com/a/v1/tailspot.app`; the origin is
+`curl -sI https://tailspot.app/.well-known/apple-app-site-association`
+(expect `200` and `content-type: application/json`, never a `301`). A device
+re-fetches on install and on app update, so the reliable test after a change
+is delete-and-reinstall rather than waiting.
+
 ## Deploy
 
 ```sh

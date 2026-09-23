@@ -5,6 +5,60 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-21 — Challenge invite links open the app (universal links) — branch `feat/challenges-universal-links`
+
+`https://tailspot.app/c/CODE` now opens Tailspot straight into the invite's
+join sheet, and sends everyone else to the App Store. No landing page —
+Noah's call: the link either opens the app or sells it.
+
+- **Web (`web/`):** `public/.well-known/apple-app-site-association` claims
+  `/c/*` for `G9FJX2A5TA.com.landesberg.Tailspot`; nginx serves it as
+  `application/json` with no-cache (the file has no extension, so it would
+  otherwise go out as octet-stream) and 302s the invite shape — 8 characters
+  from the code alphabet (A–Z minus `I`/`L`/`O`, plus `2`–`9`),
+  case-insensitive, optional trailing slash — to the attributed App Store
+  link (`ct=Challenge Invite`). A code that could never exist (`/c/K7M4QD2O`,
+  `/c/short`) 404s rather than making a pointless App Store trip, and the
+  regex is quoted because nginx reads a bare `{8}` as a config block and
+  refuses to start. The dot-directory reaches the image
+  through the existing `COPY public/ …` (a directory source copies dotfiles;
+  there's no `.dockerignore`).
+- **Entitlement:** `ios/Tailspot/Tailspot/Tailspot.entitlements` with
+  `applinks:tailspot.app` + `applinks:www.tailspot.app`, wired into both
+  config blocks of the app target only.
+- **Routing:** `TailspotApp` handles `.onOpenURL` *and*
+  `.onContinueUserActivity(NSUserActivityTypeBrowsingWeb)` — a cold launch can
+  arrive as either, and wiring one gives the classic "works from Notes, not
+  from Messages". Both parse with `InviteCode.parse(url:)` and park the code
+  on `ChallengesModel.pendingInviteCode`. A pure
+  `ChallengesModel.inviteRoute(verdict:code:)` turns (verdict, code) into
+  `join / updateRequired / unavailable / waitForConfig`; `waitForConfig` is
+  the cold-launch case and `openInvite` refreshes the config itself so the
+  code resolves instead of hanging.
+- **Presentation:** `PrimarySheet` gains `.challenges` (a `ChallengesSheet`
+  shaped like `LeadersSheet`), and its `ChallengesHub(source: "deep_link")`
+  picks the pending code up and opens its existing join sheet with
+  `via: "universal_link"` — so the spec's `challenge_invite_opened` fires once,
+  with the challenge id and joinability status. `ContentView.body` grew **no**
+  new modifier links (it's at the type-check budget): a zero-size
+  `ChallengeInviteRouter` rides the existing `.overlay` and owns the
+  "update to join" alert; the kill switch uses the existing toast slot.
+- **One owner, one order.** `consumePendingInvite(for:)` lets *only* the hub
+  the link opened (`source == deep_link`) take the code — a hub already on
+  screen under Profile or Leaders sees the same route change and would
+  otherwise swallow it during its own sheet's teardown. And nothing presents
+  on top of a sheet: `ChallengeInvitePresentation` dismisses what's open,
+  waits out the dismissal, then presents, and drops the pending code only
+  **after** presenting, so an alert or toast that never reached the screen
+  can't take the invite with it.
+- **Tests:** +23 (route derivation for every verdict, pending-code
+  set/replace/clear, the cold-launch refresh, URL → route end to end, the
+  www/lowercase/trailing-slash link shape, the fourth `PrimarySheet` id, who
+  may consume the code, and the dismiss → settle → present → clear order).
+- **Not verified end to end yet**, and it can't be from here: Noah must enable
+  Associated Domains on the App ID, the site must be deployed, and Apple's CDN
+  copy of the AASA can lag hours. See PLAN §9 phase 3.
+
 ## 2026-09-21 — Challenges review fixes (client) — branch `fix/challenges-client-review`
 
 Thirteen findings from the phase-2 client review, plus seven follow-ups from
@@ -58,6 +112,7 @@ the review of the fixes themselves, each with a test.
   against a foreground refresh; a create against the permission ask) each read
   the pending list before the other's adds landed, so both reported the same
   reminders as newly scheduled.
+
 
 ## 2026-09-21 — Challenges review fixes (backend) — branch `fix/challenges-backend-review`
 

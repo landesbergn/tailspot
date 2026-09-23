@@ -35,6 +35,11 @@ struct ChallengesHub: View {
     /// `.unknown` verdict reads as "couldn't reach the server" rather than
     /// the initial spinner.
     @State private var configAttempted = false
+    /// A code that arrived from a `tailspot.app/c/CODE` link, taken off
+    /// `ChallengesModel.pendingInviteCode`. Its own sheet slot, separate
+    /// from `showJoin`, so the analytics `via` stays honest
+    /// (universal_link vs code_entry) without a second flag to keep in step.
+    @State private var linkCode: InviteLinkCode?
 
     init(source: String) {
         self.source = source
@@ -101,6 +106,33 @@ struct ChallengesHub: View {
         }
         .sheet(isPresented: $showJoin) {
             ChallengeJoinSheet(code: nil, via: "code_entry") { detail in
+                pushDetailId = detail.challenge.id
+                shareOnPush = false
+            }
+            .environment(model)
+        }
+        // Universal link: the hub the link opened takes the parked code
+        // and opens the join sheet with it — the one place that already
+        // knows how to preview, join and push the detail.
+        //
+        // `consumePendingInvite(for:)` enforces that "the hub the link
+        // opened" means exactly `source == deep_link`. A hub already on
+        // screen under Profile or Leaders sees the same route change, and
+        // without the guard it could swallow the code during its own
+        // sheet's teardown, leaving the link's hub empty.
+        //
+        // Keyed on the ROUTE, not the code: a code parked while the config
+        // was still unknown has to open once this hub's own refresh makes
+        // the verdict `.available`, and the code itself never changed.
+        // `.task(id:)` also runs on appear (the usual case here) and runs
+        // after the view update rather than inside it.
+        .task(id: model.inviteRoute) {
+            if let code = model.consumePendingInvite(for: source) {
+                linkCode = InviteLinkCode(id: code)
+            }
+        }
+        .sheet(item: $linkCode) { link in
+            ChallengeJoinSheet(code: link.id, via: "universal_link") { detail in
                 pushDetailId = detail.challenge.id
                 shareOnPush = false
             }

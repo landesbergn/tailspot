@@ -111,15 +111,16 @@ struct LeadersSheetSnapshotTests {
         // known drawHierarchy glass-layer relocation, not a layout bug.)
     }
 
-    /// `.sheet(item:)` keys the presentation on `id`; the three cases must
-    /// stay distinct and stable (they are also the wire form nothing else
-    /// reads yet, but the raw value is what a future deep link would map).
+    /// `.sheet(item:)` keys the presentation on `id`; the cases must stay
+    /// distinct and stable — the raw value is what the invite-link route
+    /// maps to (`.challenges`, added 2026-09-21).
     @Test func primarySheetIdsAreDistinctAndStable() {
-        let all: [PrimarySheet] = [.hangar, .profile, .leaders]
-        #expect(Set(all.map(\.id)).count == 3)
+        let all: [PrimarySheet] = [.hangar, .profile, .leaders, .challenges]
+        #expect(Set(all.map(\.id)).count == 4)
         #expect(PrimarySheet.hangar.id == "hangar")
         #expect(PrimarySheet.profile.id == "profile")
         #expect(PrimarySheet.leaders.id == "leaders")
+        #expect(PrimarySheet.challenges.id == "challenges")
     }
 }
 #endif

@@ -160,6 +160,95 @@ final class ChallengesModel {
         }
     }
 
+    // MARK: Invite links (spec §11, universal links)
+
+    /// A code that arrived from `https://tailspot.app/c/CODE` and hasn't
+    /// been handed to a screen yet. The hub reads it, opens the join
+    /// sheet with it and clears it; nothing else consumes it. Kept on the
+    /// model rather than in a view because the link can land while no
+    /// Challenges screen exists — and because the verdict that decides
+    /// what to do with it lives here too.
+    private(set) var pendingInviteCode: String?
+
+    /// What a pending code should do, given what we know about the
+    /// feature. Pure — see `inviteRoute(verdict:code:)`.
+    nonisolated enum InviteRoute: Equatable {
+        /// Open the join sheet for this code.
+        case join(code: String)
+        /// This build is too old for the current challenge rules.
+        case updateRequired(minBuild: Int)
+        /// Kill switch is on — say so, don't open anything.
+        case unavailable
+        /// Config not fetched yet; hold the code until it is.
+        case waitForConfig
+    }
+
+    /// The whole routing decision, as one pure function of (verdict, code)
+    /// so it can be tested without a view, a network or a clock. `nil`
+    /// means "no invite in flight" — every other state is a route.
+    nonisolated static func inviteRoute(verdict: ChallengeBuildGate.Verdict,
+                                        code: String?) -> InviteRoute? {
+        guard let code else { return nil }
+        switch verdict {
+        case .available:                   return .join(code: code)
+        case .updateRequired(let minBuild): return .updateRequired(minBuild: minBuild)
+        case .disabled:                    return .unavailable
+        case .unknown:                     return .waitForConfig
+        }
+    }
+
+    /// The route for the code currently in hand.
+    var inviteRoute: InviteRoute? {
+        Self.inviteRoute(verdict: verdict, code: pendingInviteCode)
+    }
+
+    /// A universal link landed. Park the code, and if we don't yet know
+    /// whether Challenges is usable, go find out — otherwise a link opened
+    /// on a cold launch would sit at `.waitForConfig` until the scene-phase
+    /// refresh happened to finish.
+    func openInvite(code: String) async {
+        pendingInviteCode = code
+        if verdict == .unknown {
+            await refreshConfig()
+        }
+    }
+
+    /// Drop the pending code because we've told the user why it can't be
+    /// opened (too-old build, kill switch). The happy path goes through
+    /// `consumePendingInvite(for:)` instead.
+    func clearPendingInvite() {
+        pendingInviteCode = nil
+    }
+
+    /// The ONE hub source allowed to take a pending invite code: the hub
+    /// the link itself opened. It's also the spec's §12 source vocabulary
+    /// value for a link (leaders_flag, leaders_strip, profile_tile,
+    /// reveal_line, deep_link).
+    nonisolated static let inviteSource = "deep_link"
+
+    /// Which hub, if any, may take this code. Pure, so the rule is one
+    /// line and one test rather than a condition repeated per screen.
+    nonisolated static func consumableInviteCode(source: String,
+                                                 route: InviteRoute?) -> String? {
+        guard source == inviteSource, case .join(let code) = route else { return nil }
+        return code
+    }
+
+    /// Take the pending code, but only for the hub the link opened.
+    ///
+    /// Why the guard: a hub can already be on screen under the Profile or
+    /// Leaders sheet when a link lands. Without this, that hub and the
+    /// link's own hub both watch the same route, and the losing one
+    /// consumes the code during its sheet's teardown — the new hub then
+    /// opens with nothing. One owner, named explicitly.
+    func consumePendingInvite(for source: String) -> String? {
+        guard let code = Self.consumableInviteCode(source: source, route: inviteRoute) else {
+            return nil
+        }
+        pendingInviteCode = nil
+        return code
+    }
+
     // MARK: Lists
 
     /// Bumped on every `refreshList` call; only the call holding the latest

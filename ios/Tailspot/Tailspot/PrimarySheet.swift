@@ -26,6 +26,10 @@ import SwiftUI
 /// `.sheet(item:)` requires; the raw value doubles as the id.
 enum PrimarySheet: String, Identifiable {
     case hangar, profile, leaders
+    /// The Challenges hub, opened by a `tailspot.app/c/CODE` invite link.
+    /// Every other way in is a push inside Profile or Leaders; a link has
+    /// no stack of its own, so it gets a root sheet like those two.
+    case challenges
     var id: String { rawValue }
 }
 
@@ -50,6 +54,31 @@ struct LeadersSheet: View {
     var body: some View {
         NavigationStack {
             screen
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+        }
+    }
+}
+
+/// The Challenges hub as a ROOT sheet, for invite links. Same shape as
+/// `LeadersSheet` and for the same reason: `ChallengesHub` is written to be
+/// pushed inside someone else's `NavigationStack` (Profile's, Leaders'), so
+/// presented on its own it needs a stack and a Done button. The hub itself
+/// is untouched — it picks the pending invite code off the model and opens
+/// its own join sheet, exactly as it does for a typed code.
+///
+/// The source is `deep_link` (`ChallengesModel.inviteSource`), which is
+/// both the spec §12 vocabulary value for a link and the permission to
+/// consume the pending code: no other hub may take it.
+struct ChallengesSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ChallengesHub(source: ChallengesModel.inviteSource)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("Done") { dismiss() }

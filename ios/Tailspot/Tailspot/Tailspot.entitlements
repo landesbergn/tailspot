@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal links for challenge invites (https://tailspot.app/c/CODE).
+	     Both hosts are listed because the invite link is shared as the apex
+	     domain but www.tailspot.app resolves to the same site, and a link
+	     someone retypes with www must still open the app. Each host must
+	     serve /.well-known/apple-app-site-association over https with no
+	     redirect — see web/README.md.
+
+	     This file only tells the app which domains to claim. The App ID
+	     itself must have the Associated Domains capability enabled in the
+	     developer portal, or a signed (device / Xcode Cloud) build fails
+	     to sign. The simulator doesn't check. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:tailspot.app</string>
+		<string>applinks:www.tailspot.app</string>
+	</array>
+</dict>
+</plist>

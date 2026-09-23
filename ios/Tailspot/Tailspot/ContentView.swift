@@ -816,7 +816,13 @@ struct ContentView: View {
         // ride existing links instead of adding new ones. The two can't
         // co-fire: restore needs an EMPTY Hangar, the streak ask a 2-day
         // catch streak.
-        .overlay { hangarRestoreOverlay; streakAskOverlay }
+        // Third rider on the same overlay link: the invite-link router.
+        // It's a zero-size observer of the app-wide ChallengesModel (and
+        // owns its own "too old" alert), so a universal link can reach the
+        // UI without body growing a single new modifier — see
+        // ChallengeInviteRouter.swift and PrimarySheet.swift for why that
+        // constraint is real.
+        .overlay { hangarRestoreOverlay; streakAskOverlay; challengeInviteRouter }
         // Seed at launch and re-diff on every new catch (idempotent +
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
@@ -859,9 +865,10 @@ struct ContentView: View {
         .sheet(item: $primarySheet) { sheet in
             Group {
                 switch sheet {
-                case .hangar:  HangarView()
-                case .profile: ProfileScreen()
-                case .leaders: LeadersSheet()
+                case .hangar:     HangarView()
+                case .profile:    ProfileScreen()
+                case .leaders:    LeadersSheet()
+                case .challenges: ChallengesSheet()
                 }
             }
             .modifier(PrimarySheetReveal(isReady: primarySheetContentVisible))
@@ -1529,6 +1536,27 @@ struct ContentView: View {
             TrophyUnlockView(center: unlockCenter)
                 .transition(.opacity)
         }
+    }
+
+    // MARK: - Challenge invite links
+
+    /// A `tailspot.app/c/CODE` link landed. The router does the watching
+    /// and the deciding (and owns the "update to join" alert); this screen
+    /// supplies only what it alone can do — close the sheet that's up,
+    /// open the Challenges sheet, and use its one toast slot.
+    ///
+    /// A link BEATS whatever is open: the user just tapped it. But it
+    /// can't simply overwrite `primarySheet`, because swapping one
+    /// `.sheet(item:)` case for another races the dismissal, and an alert
+    /// or toast raised from here is under any presented sheet. The
+    /// dismiss-wait-present order lives in `ChallengeInvitePresentation`.
+    private var challengeInviteRouter: some View {
+        ChallengeInviteRouter(
+            isPrimarySheetPresented: primarySheet != nil,
+            dismissPrimarySheet: { primarySheet = nil },
+            presentChallenges: { primarySheet = .challenges },
+            showUnavailableToast: { presentTopToast(.challengesUnavailable) }
+        )
     }
 
     // MARK: - Hangar restore overlay
@@ -4785,6 +4813,8 @@ nonisolated enum TopToast: Equatable {
     case saveFail
     /// A streak-reminder tap landed; the line names the streak at stake.
     case streak(line: String)
+    /// An invite link opened while the Challenges kill switch is on.
+    case challengesUnavailable
 
     /// `distanceUnit` phrases the far-tap line; the enum is nonisolated so
     /// the MainActor preference is read by the caller, not here.
@@ -4799,6 +4829,8 @@ nonisolated enum TopToast: Equatable {
             return "That catch didn't save — try again."
         case .streak(let line):
             return line
+        case .challengesUnavailable:
+            return "Challenges aren't available right now."
         }
     }
 }
@@ -4810,6 +4842,8 @@ extension TopToast {
         case .grounded, .farTap: return Brand.Color.alertCaution.opacity(0.45)
         case .saveFail:          return Brand.Color.alertWarning.opacity(0.55)
         case .streak:            return Brand.Color.alertCaution.opacity(0.5)
+        case .challengesUnavailable:
+            return Brand.Color.alertCaution.opacity(0.45)
         }
     }
 }
