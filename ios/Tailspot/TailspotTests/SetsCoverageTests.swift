@@ -191,6 +191,11 @@ struct SetsCoverageTests {
         ("JS32", "British Aerospace", "BAe-3200 Jetstream Super 31"),
         ("P68", "Partenavia", "P-68"),
         ("PC21", "Pilatus", "E-27"),
+        // Public catalog coverage additions validated 2026-09-22.
+        ("A169", "AgustaWestland", "AW-169"),
+        ("CRJ1", "Bombardier", "CRJ-100"),
+        ("EXEC", "Huzhou Taixiang", "Exec"),
+        ("PC7", "Pilatus", "PC-7 Astra"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -263,6 +268,10 @@ struct SetsCoverageTests {
             (("JS32", "British Aerospace", "BAe-3200 Jetstream Super 31"), "fam-commuter-props", "fcp-js32"),
             (("P68", "Partenavia", "P-68"), "fam-sport-classics", "fsc-p68"),
             (("PC21", "Pilatus", "E-27"), "fam-military", "fm-pc21"),
+            (("A169", "AgustaWestland", "AW-169"), "fam-heli", "fh-a169"),
+            (("CRJ1", "Bombardier", "CRJ-100"), "fam-crj", "fcrj100"),
+            (("EXEC", "Huzhou Taixiang", "Exec"), "fam-heli", "fh-exec"),
+            (("PC7", "Pilatus", "PC-7 Astra"), "fam-military", "fm-pc7"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -406,6 +415,26 @@ struct SetsCoverageTests {
         let venom = mk(("UH1Y", "Bell", "UH-1Y"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: venom), entry: hueyEntry),
                 "A Bell UH-1Y must not fill the legacy UH1 designator slot")
+
+        // The CRJ-100 and Avro RJ100 are unrelated regional jets despite the
+        // shared RJ-100 wording.
+        let crj100Entry = CardSets.families.first { $0.id == "fam-crj" }!
+            .entries.first { $0.id == "fcrj100" }!
+        let avroRJ100 = mk(("RJ1H", "Avro", "Avroliner RJ-100"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: avroRJ100), entry: crj100Entry),
+                "An Avro RJ100 must not fill the Canadair CRJ-100 slot")
+
+        // "Exec" is too generic to match by itself, and "Astra" is shared by
+        // the unrelated IAI business jet and Pilatus military trainer.
+        let execEntry = heliSet.entries.first { $0.id == "fh-exec" }!
+        let piperExecutive = mk(("PA23", "Piper", "PA-23-250 Aztec Executive"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: piperExecutive), entry: execEntry),
+                "An unrelated executive aircraft must not fill the RotorWay Exec slot")
+        let pc7Entry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-pc7" }!
+        let iaiAstra = mk(("ASTR", "IAI", "1125 Astra"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: iaiAstra), entry: pc7Entry),
+                "An IAI Astra must not fill the Pilatus PC-7 slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
