@@ -153,6 +153,27 @@ export const devices = pgTable(
      * challenge row can never be blocked from deletion by an attribution.
      */
     referredByChallengeId: uuid("referred_by_challenge_id"),
+    /**
+     * APNs device token (hex) for push, plus which APNs environment minted it
+     * (migration 0011). Nullable and unowned by the rest of the system: push is
+     * strictly additive — a device with no token simply never gets a
+     * notification, and clearing the token is always a safe fallback.
+     *
+     * A token belongs to ONE install: the same token arriving from a different
+     * device row (an app restore onto a new anonymous identity) CLEARS it from
+     * the previous row, so we can never fan one physical phone's notifications
+     * out of two identities. `apns_environment` matters because a sandbox
+     * (Xcode/TestFlight-dev) token is rejected by the production APNs host and
+     * vice versa — the host is chosen per-token, not per-deploy.
+     *
+     * Written only by POST/DELETE /v1/devices/push-token and by the sender's
+     * invalid-token cleanup (410 / BadDeviceToken / Unregistered).
+     */
+    apnsToken: text("apns_token"),
+    /** "sandbox" | "production" — which APNs host this token is valid against. */
+    apnsEnvironment: text("apns_environment"),
+    /** Last time the token was (re)registered; audit + staleness triage. */
+    apnsUpdatedAt: timestamp("apns_updated_at", { withTimezone: true }),
   },
   (t) => ({
     /**
@@ -448,6 +469,25 @@ export const challengeParticipants = pgTable(
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull(),
     leftAt: timestamp("left_at", { withTimezone: true }),
     joinedAsNewDevice: boolean("joined_as_new_device").notNull().default(false),
+    /**
+     * The placement this participant held the LAST time standings were
+     * evaluated (migration 0011). This is the memory the "someone passed you"
+     * push is derived from: a catch upload re-evaluates the live standings and
+     * anyone whose new placement is numerically WORSE than this value was
+     * overtaken. Seeded at join (and at create, for the creator) from the
+     * standings at that moment — 1 when alone — so the first evaluation after
+     * joining compares against something real rather than firing on null.
+     *
+     * Null means "never evaluated": never a notification, only a seed.
+     */
+    lastPlacement: integer("last_placement"),
+    /**
+     * When this participant was last told they'd been passed, in THIS
+     * challenge. The 30-minute cooldown is read off this column, so a
+     * back-and-forth race can't turn into a notification storm. Null = never
+     * notified.
+     */
+    overtakenNotifiedAt: timestamp("overtaken_notified_at", { withTimezone: true }),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.challengeId, t.deviceId] }),
