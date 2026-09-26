@@ -83,6 +83,8 @@ final class TrophyUnlockCenter: ObservableObject {
     /// the user's first crossing.
     func enqueueNewUnlocks(from catches: [Catch]) {
         let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
+        TrophyAchievementDates.recordMissing(from: catches, inputs: inputs,
+                                            roster: roster, ledger: ledger, events: events)
         guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
@@ -104,6 +106,8 @@ final class TrophyUnlockCenter: ObservableObject {
     /// restore success screen is the moment; a second overlay would pile on.
     func reseedAfterRestore(from catches: [Catch]) {
         let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
+        TrophyAchievementDates.recordMissing(from: catches, inputs: inputs,
+                                            roster: roster, ledger: ledger, events: events)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
         // predates it and is now stale relative to the seeded state.
