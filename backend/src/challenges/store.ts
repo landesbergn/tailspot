@@ -254,6 +254,11 @@ export class DrizzleChallengeStore implements ChallengeStore {
             challengeId: rows[0].id,
             deviceId: input.creatorDeviceId,
             joinedAt: now,
+            // Seed the overtaken-detection memory (see overtaken.ts): alone in
+            // a brand-new challenge, the creator is 1st. Without a seed the
+            // first evaluation would see null ("no opinion") and stay silent
+            // through the race's first overtake.
+            lastPlacement: 1,
           });
           return rows[0];
         });
@@ -438,6 +443,9 @@ export class DrizzleChallengeStore implements ChallengeStore {
               eq(challengeParticipants.deviceId, deviceId),
             ),
           );
+        // A rejoiner's remembered placement is from before they left; re-seed
+        // it against the board they're walking back into.
+        await this.seedPlacement(tx, challenge, deviceId);
         return { ok: true, alreadyIn: false, newDevice: false };
       }
 
@@ -459,6 +467,10 @@ export class DrizzleChallengeStore implements ChallengeStore {
         joinedAt: now,
         joinedAsNewDevice: newDevice,
       });
+      // Seed the overtaken memory from the board as it stands WITH this
+      // joiner on it — their earlier in-window catches count (D3), so a
+      // joiner can arrive anywhere, not just last.
+      await this.seedPlacement(tx, challenge, deviceId);
       if (newDevice) {
         await tx
           .update(devices)
@@ -467,6 +479,35 @@ export class DrizzleChallengeStore implements ChallengeStore {
       }
       return { ok: true, alreadyIn: false, newDevice };
     });
+  }
+
+  /**
+   * Record the placement `deviceId` holds RIGHT NOW, inside the join
+   * transaction that put them on the board.
+   *
+   * This is the seed the "someone passed you" push compares against
+   * (`challenge_participants.last_placement`, see challenges/overtaken.ts). It
+   * has to happen here rather than at the first catch: a null means "never
+   * evaluated" and never notifies, so a participant seeded late would sit out
+   * the first overtake of their race.
+   *
+   * Deliberately NOT wrapped in a try/catch: it runs inside the join's
+   * transaction, where Postgres aborts everything after the first error anyway
+   * — swallowing here would only turn a clear failure into a confusing one two
+   * statements later.
+   */
+  private async seedPlacement(exec: Executor, challenge: Challenge, deviceId: string) {
+    const live = await this.liveStandings(challenge, exec);
+    const placement = live.standings.find((s) => s.deviceId === deviceId)?.placement ?? 1;
+    await exec
+      .update(challengeParticipants)
+      .set({ lastPlacement: placement })
+      .where(
+        and(
+          eq(challengeParticipants.challengeId, challenge.id),
+          eq(challengeParticipants.deviceId, deviceId),
+        ),
+      );
   }
 
   async leave(challenge: Challenge, deviceId: string, now: Date): Promise<LeaveResult> {
