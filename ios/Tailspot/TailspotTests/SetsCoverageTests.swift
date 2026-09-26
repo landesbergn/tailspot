@@ -196,6 +196,12 @@ struct SetsCoverageTests {
         ("CRJ1", "Bombardier", "CRJ-100"),
         ("EXEC", "Huzhou Taixiang", "Exec"),
         ("PC7", "Pilatus", "PC-7 Astra"),
+        // Public catalog coverage additions validated 2026-09-26.
+        ("COZY", "Aerocad", "AeroCanard"),
+        ("J328", "Fairchild Dornier", "328JET"),
+        ("RV6", "Aiep", "Air Beetle"),
+        ("SONX", "Sonex", "Sonex"),
+        ("SREY", "Progressive Aerodyne", "SeaRey"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -272,6 +278,11 @@ struct SetsCoverageTests {
             (("CRJ1", "Bombardier", "CRJ-100"), "fam-crj", "fcrj100"),
             (("EXEC", "Huzhou Taixiang", "Exec"), "fam-heli", "fh-exec"),
             (("PC7", "Pilatus", "PC-7 Astra"), "fam-military", "fm-pc7"),
+            (("COZY", "Aerocad", "AeroCanard"), "fam-sport-classics", "fsc-cozy"),
+            (("J328", "Fairchild Dornier", "328JET"), "fam-dornier-328", "fd328-jet"),
+            (("RV6", "Aiep", "Air Beetle"), "fam-sport-classics", "fsc-air-beetle"),
+            (("SONX", "Sonex", "Sonex"), "fam-sport-classics", "fsc-sonex"),
+            (("SREY", "Progressive Aerodyne", "SeaRey"), "fam-sport-classics", "fsc-searey"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -435,6 +446,20 @@ struct SetsCoverageTests {
         let iaiAstra = mk(("ASTR", "IAI", "1125 Astra"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: iaiAstra), entry: pc7Entry),
                 "An IAI Astra must not fill the Pilatus PC-7 slot")
+
+        // COZJ is the jet-powered CozyJet, not the piston COZY family slot.
+        let sportSet = CardSets.families.first { $0.id == "fam-sport-classics" }!
+        let cozyEntry = sportSet.entries.first { $0.id == "fsc-cozy" }!
+        let cozyJet = mk(("COZJ", "Co-Z", "CozyJet"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: cozyJet), entry: cozyEntry),
+                "A COZJ CozyJet must not fill the COZY AeroCanard slot")
+
+        // ICAO assigns RV6 to AIEP's Air Beetle; it must not be absorbed by
+        // the separate Van's RV family simply because of the designator.
+        let airBeetle = mk(("RV6", "Aiep", "Air Beetle"))
+        let vansRVEntry = sportSet.entries.first { $0.id == "fsc-rv" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: airBeetle), entry: vansRVEntry),
+                "The AIEP Air Beetle must not fill the Van's RV slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
