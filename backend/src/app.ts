@@ -1,5 +1,10 @@
 import { sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
+import {
+  DrizzleOvertakenStore,
+  type OvertakenStore,
+  evaluateOvertaken,
+} from "./challenges/overtaken.js";
 import { PrivatePointsScorer } from "./challenges/scorer.js";
 import { type ChallengeStore, DrizzleChallengeStore } from "./challenges/store.js";
 import { getDb } from "./db/client.js";
@@ -19,6 +24,7 @@ import {
 } from "./providers/adsblolRoutes.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
+import { type ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
 import { type ChallengesAvailability, registerChallengesRoutes } from "./routes/challenges.js";
@@ -97,6 +103,17 @@ export interface BuildAppOptions {
    * (default 0). Tests override.
    */
   challengesConfig?: { availability: ChallengesAvailability; minBuild: number };
+  /**
+   * APNs transport override (tests inject a fake that records payloads).
+   * Production builds one from APNS_* env; absent credentials yield a no-op
+   * transport that logs "push disabled" once at startup.
+   */
+  apnsTransport?: ApnsTransport;
+  /**
+   * Overtaken-detection store override (tests inject a PGlite-backed one).
+   * Production wraps the same Postgres handle + challenge store.
+   */
+  overtakenStore?: OvertakenStore;
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
   /**
@@ -257,6 +274,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // what makes a 40-bit code unguessable in practice.
   const inviteIpLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
   const challengeConfigIpLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per IP
+  // Push-token registration: 30/h per device, the same ceiling as the other
+  // per-device mutations. The honest client calls it once per launch at most
+  // (APNs hands back the same token until the app is reinstalled).
+  const pushTokenLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow);
 
   // ── Routes ────────────────────────────────────────────────────────────────
 
@@ -412,6 +433,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     findByTokenHash: (h) => getIdentityStore().findByTokenHash(h),
     claimHandle: (id, h) => getIdentityStore().claimHandle(id, h),
     takenHandles: (hs) => getIdentityStore().takenHandles(hs),
+    setPushToken: (id, t, e, n) => getIdentityStore().setPushToken(id, t, e, n),
+    clearPushToken: (id) => getIdentityStore().clearPushToken(id),
   };
   const catchesStore: CatchStore = {
     resolveRarity: (icao) => getCatchStore().resolveRarity(icao),
@@ -432,7 +455,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     countCatches: () => getCatchStore().countCatches(),
   };
 
-  registerDevicesRoutes(app, { store: identity, registerLimiter, handleLimiter, bearerIpLimiter });
+  registerDevicesRoutes(app, {
+    store: identity,
+    registerLimiter,
+    handleLimiter,
+    bearerIpLimiter,
+    pushTokenLimiter,
+  });
   registerHandlesRoute(app, {
     store: identity,
     suggestLimiter,
@@ -446,6 +475,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     bearerIpLimiter,
     // Route-guess verification shares the /v1/routes resolver (same cache).
     routeResolver,
+    // Challenge "someone passed you" pushes hang off a successful upload. A
+    // hoisted function declaration, because the challenge wiring it needs is
+    // built further down — it is only ever CALLED after a catch, long after
+    // buildApp has returned.
+    onCatchIngested: scheduleOvertaken,
     nowSeconds: options.nowSeconds,
   });
   // The leaderboard's window math shares the catch-validation clock
@@ -512,6 +546,46 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     readLimiter: challengeReadLimiter,
     cacheNow: rlNow,
   });
+
+  // ── Challenge push notifications ───────────────────────────────────────────
+  //
+  // The whole feature is optional in three independent ways: no APNs
+  // credentials → a no-op transport (logged once at boot); CHALLENGES_ENABLED
+  // off → no evaluation at all; no stored token on a device → nothing to send
+  // to. None of them can fail a catch upload, which is the point.
+  const apnsTransport =
+    options.apnsTransport ??
+    createApnsTransport({
+      log: (message, detail) => app.log.info(detail ?? {}, message),
+    });
+  let overtakenStore = options.overtakenStore;
+  function getOvertakenStore(): OvertakenStore {
+    if (!overtakenStore) {
+      overtakenStore = new DrizzleOvertakenStore(getDb(), getChallengeStore());
+    }
+    return overtakenStore;
+  }
+  /**
+   * Fire-and-forget the overtaken evaluation for a device that just uploaded a
+   * catch. Called from `setImmediate` inside the catches route, so the reply is
+   * already on the wire; `evaluateOvertaken` swallows and logs its own errors,
+   * and the `.catch` here is the belt to that braces.
+   */
+  function scheduleOvertaken(deviceId: string): void {
+    if (!challengesEnabled()) return;
+    void evaluateOvertaken(
+      {
+        store: getOvertakenStore(),
+        transport: apnsTransport,
+        log: {
+          info: (obj, msg) => app.log.info(obj, msg),
+          warn: (obj, msg) => app.log.warn(obj, msg),
+        },
+        now: challengeNow,
+      },
+      deviceId,
+    ).catch((err) => app.log.warn({ err, deviceId }, "overtaken evaluation failed"));
+  }
 
   // GET /v1/stats — the marketing site's catch counter. Origin-gated + cached;
   // the rate limiters' clock doubles as the memo clock so tests can expire it.
