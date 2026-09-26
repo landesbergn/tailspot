@@ -124,7 +124,8 @@ struct ChallengeRemindersTests {
         let idsA = Set(ChallengeReminders.identifiers(challengeId: "a"))
         let idsB = Set(ChallengeReminders.identifiers(challengeId: "b"))
         #expect(idsA.isDisjoint(with: idsB))
-        #expect(idsA.count == 3)
+        // starts, midway, ending_soon, finished — the dailies need dates.
+        #expect(idsA.count == 4)
     }
 
     @Test func identifierPrefixNeverEqualsStreakReminderId() {
@@ -169,11 +170,13 @@ struct ChallengeRemindersTests {
             let plans = ChallengeReminders.plan(
                 challengeId: "c1", name: "Starts Now", startsAt: starts,
                 endsAt: starts.addingTimeInterval(24 * 3600), durationPreset: "24h",
-                now: now, enabled: true, authorized: true)
+                now: now, enabled: true, authorized: true, timeZone: .gmt)
             #expect(!plans.contains { $0.identifier == "tailspot.challenge.c1.starts" },
                     "offset \(offset) should not schedule a starts reminder")
-            // The other two moments are unaffected.
-            #expect(plans.count == 2)
+            // The other three moments are unaffected. `now` is 08:00 UTC, so
+            // the 24h midway lands at 20:00 — inside the daylight window.
+            #expect(plans.count == 3)
+            #expect(plans.contains { $0.identifier == "tailspot.challenge.c1.midway" })
         }
     }
 

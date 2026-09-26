@@ -2,7 +2,9 @@
 //  ChallengeReminderScheduler.swift
 //  Tailspot
 //
-//  Applies `ChallengeReminders.plan(...)` to the system notification center.
+//  Applies `ChallengeReminders.plan(...)` to the system notification center
+//  — the fixed moments (starts / midway / ending_soon / finished) and the
+//  per-day `daily` slots alike.
 //  The `ChallengesModel` hook (`ChallengeReminderScheduling`); the actual
 //  `UNUserNotificationCenter` calls sit behind `ChallengeNotificationCenter`
 //  so tests inject a fake and never touch the real notification system —
@@ -22,6 +24,7 @@
 //
 
 import Foundation
+import UIKit
 import UserNotifications
 import os
 
@@ -69,15 +72,30 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     private let center: ChallengeNotificationCenter
     private let defaults: UserDefaults
     private let now: () -> Date
+    /// The time zone the daily/midway day math runs in. Injected so the
+    /// tests are not at the mercy of the simulator's zone; production reads
+    /// the device's current zone on every plan, so a flight across zones is
+    /// picked up by the next foreground sync.
+    private let timeZone: () -> TimeZone
+    /// Ask iOS for an APNs device token. A closure, not a direct
+    /// `UIApplication` call, so the tests can watch it happen without a
+    /// UIKit application object (and so the push half stays one seam).
+    private let registerForRemoteNotifications: @MainActor () -> Void
 
     init(
         center: ChallengeNotificationCenter = UNUserNotificationCenter.current(),
         defaults: UserDefaults = .standard,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        timeZone: @escaping () -> TimeZone = { .current },
+        registerForRemoteNotifications: (@MainActor () -> Void)? = nil
     ) {
         self.center = center
         self.defaults = defaults
         self.now = now
+        self.timeZone = timeZone
+        self.registerForRemoteNotifications = registerForRemoteNotifications ?? {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
     }
 
     var remindersEnabled: Bool {
@@ -90,14 +108,23 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     /// create and join. The real work is the `async` overload just below —
     /// tests call that one directly so assertions run after it completes
     /// instead of racing a detached `Task`.
-    func sync(open: [ChallengeSummary]) {
-        enqueueSync(open: open)
+    func sync(open: [ChallengeSummary], placements: [String: Int]) {
+        enqueueSync(open: open, placements: placements)
     }
 
+    /// Drop every slot this challenge owns.
+    ///
+    /// Two halves, because the daily identifiers carry a day key this call
+    /// has no dates to reproduce. The synchronous half removes the four
+    /// fixed moments immediately (so a leave is visibly instant, and the
+    /// behaviour every existing test pins is unchanged); the queued half
+    /// sweeps the pending list for anything else belonging to this
+    /// challenge — the dailies, and any moment a future build adds.
     func cancel(challengeId: String) {
         center.removePendingNotificationRequests(
             withIdentifiers: ChallengeReminders.identifiers(challengeId: challengeId)
         )
+        enqueueCancelSweep(challengeId: challengeId)
     }
 
     /// Ask for notification permission, but only when asking can do
@@ -112,12 +139,21 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     func requestAuthorizationIfNeeded() async -> Bool {
         guard remindersEnabled else { return false }
         let status = await center.authorizationStatus()
-        guard status == .notDetermined else { return status == .authorized }
+        guard status == .notDetermined else {
+            let authorized = status == .authorized
+            if authorized { registerForRemoteNotifications() }
+            return authorized
+        }
         // Latch the shared one-shot so the in-camera streak pre-prompt
         // doesn't ask again for a permission iOS has already resolved.
         defaults.set(true, forKey: StreakReminders.permissionAskedKey)
         let granted = (try? await center.requestAuthorization()) ?? false
         ActivationTelemetry.firePermissionOutcome(permission: "notifications", granted: granted)
+        // Local permission is also APNs permission: the moment the user
+        // says yes, ask iOS for a device token so the backend can send the
+        // remote moments (`overtaken`). Registering is cheap and idempotent
+        // — iOS answers the delegate with the same token every launch.
+        if granted { registerForRemoteNotifications() }
         return granted
     }
 
@@ -148,12 +184,33 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     /// Queue a sync behind whatever is already running, and hand back the
     /// task so a caller (or a test) can await the whole chain.
     @discardableResult
-    func enqueueSync(open: [ChallengeSummary]) -> Task<Void, Never> {
+    func enqueueSync(open: [ChallengeSummary], placements: [String: Int] = [:]) -> Task<Void, Never> {
         let previous = inFlightSync
         let task = Task { @MainActor [weak self] in
             await previous?.value
             guard let self else { return }
-            await self.syncBody(open: open)
+            await self.syncBody(open: open, placements: placements)
+        }
+        inFlightSync = task
+        return task
+    }
+
+    /// The queued half of `cancel(challengeId:)`: remove every remaining
+    /// pending identifier that belongs to this challenge. Chained onto the
+    /// same task as the syncs so it can never read a pending list a sync is
+    /// halfway through rewriting.
+    @discardableResult
+    func enqueueCancelSweep(challengeId: String) -> Task<Void, Never> {
+        let previous = inFlightSync
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self else { return }
+            let stale = await self.center.pendingRequests().map(\.identifier).filter {
+                ChallengeReminders.challengeId(fromNotificationIdentifier: $0) == challengeId
+            }
+            if !stale.isEmpty {
+                self.center.removePendingNotificationRequests(withIdentifiers: stale)
+            }
         }
         inFlightSync = task
         return task
@@ -164,8 +221,8 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     /// Await a sync of this list — queued behind any sync already running.
     /// The production callers use the fire-and-forget `sync(open:)`; tests
     /// await this so assertions run after the work completes.
-    func sync(open: [ChallengeSummary]) async {
-        await enqueueSync(open: open).value
+    func sync(open: [ChallengeSummary], placements: [String: Int] = [:]) async {
+        await enqueueSync(open: open, placements: placements).value
     }
 
     /// Recompute the plan for every open challenge and make the notification
@@ -177,10 +234,11 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
     ///
     /// Never call this directly — go through `enqueueSync` / `sync`, which
     /// keep two of these from interleaving.
-    private func syncBody(open: [ChallengeSummary]) async {
+    private func syncBody(open: [ChallengeSummary], placements: [String: Int]) async {
         let authorized = await center.authorizationStatus() == .authorized
         let enabled = remindersEnabled
         let t = now()
+        let zone = timeZone()
 
         let openIds = Set(open.map(\.id))
         let wantedPlans = open.flatMap { challenge in
@@ -192,7 +250,12 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
                 durationPreset: challenge.durationPreset,
                 now: t,
                 enabled: enabled,
-                authorized: authorized
+                authorized: authorized,
+                // Last-known standing, deliberately allowed to be stale —
+                // every sync re-plans from whatever the model has now.
+                placement: placements[challenge.id],
+                participantCount: challenge.participantCount,
+                timeZone: zone
             )
         }
         let wantedIds = Set(wantedPlans.map(\.identifier))
@@ -216,8 +279,14 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
             content.title = plan.title
             content.body = plan.body
             content.sound = .default
-            if let challengeId = ChallengeReminders.challengeId(fromNotificationIdentifier: plan.identifier) {
-                content.userInfo = ["challengeId": challengeId]
+            if let parsed = ChallengeReminders.parse(plan.identifier) {
+                // `challengeId` is the tap-routing contract, and the REMOTE
+                // pushes the backend sends carry the same two keys — see
+                // ChallengeNotificationRouting.
+                content.userInfo = [
+                    "challengeId": parsed.challengeId,
+                    "kind": parsed.moment.rawValue,
+                ]
                 // Only count a reminder as newly scheduled. `sync` runs on
                 // every foreground, refresh, create and join, and re-adding
                 // an already-pending identifier is an upsert no-op — firing
@@ -225,8 +294,8 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
                 // app was opened, which is not what "scheduled" means.
                 if newIdentifiers.contains(plan.identifier) {
                     Analytics.capture("challenge_reminder_scheduled", [
-                        "challenge_id": .string(challengeId),
-                        "moment": .string(String(plan.identifier.split(separator: ".").last ?? "")),
+                        "challenge_id": .string(parsed.challengeId),
+                        "moment": .string(parsed.moment.rawValue),
                     ])
                 }
             }

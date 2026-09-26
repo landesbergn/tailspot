@@ -251,7 +251,8 @@ struct AnalyticsFacadeTests {
         ChallengeReminderScheduler(
             center: center,
             defaults: UserDefaults(suiteName: "ChallengeReminderAnalytics.\(UUID().uuidString)")!,
-            now: { Self.remindersNow })
+            now: { Self.remindersNow },
+            timeZone: { .gmt }, registerForRemoteNotifications: {})
     }
 
     /// Only this test's own events. `Analytics._testSink` is global, and
@@ -265,7 +266,7 @@ struct AnalyticsFacadeTests {
         }
     }
 
-    /// The first sync of a challenge schedules its three moments and says so
+    /// The first sync of a challenge schedules its four moments and says so
     /// once each; a second sync re-upserts the same identifiers and says
     /// nothing, because nothing new was scheduled.
     @MainActor
@@ -277,12 +278,12 @@ struct AnalyticsFacadeTests {
 
             await scheduler.sync(open: [upcomingChallenge(id: id)])
             let first = reminderEvents(sink, challengeId: id)
-            #expect(first.count == 3)
+            #expect(first.count == 4)
             #expect(Set(first.compactMap { $0.properties["moment"]?.jsonValue as? String })
-                    == ["starts", "ending_soon", "finished"])
+                    == ["starts", "midway", "ending_soon", "finished"])
 
             await scheduler.sync(open: [upcomingChallenge(id: id)])
-            #expect(reminderEvents(sink, challengeId: id).count == 3, "a re-sync scheduled nothing new")
+            #expect(reminderEvents(sink, challengeId: id).count == 4, "a re-sync scheduled nothing new")
         }
     }
 
@@ -304,8 +305,8 @@ struct AnalyticsFacadeTests {
             async let b: Void = scheduler.sync(open: [upcomingChallenge(id: id)])
             _ = await (a, b)
 
-            #expect(reminderEvents(sink, challengeId: id).count == 3)
-            #expect(Set(center.pending.map(\.identifier)).count == 3)
+            #expect(reminderEvents(sink, challengeId: id).count == 4)
+            #expect(Set(center.pending.map(\.identifier)).count == 4)
         }
     }
 }
