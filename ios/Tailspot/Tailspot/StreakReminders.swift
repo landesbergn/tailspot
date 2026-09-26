@@ -209,6 +209,16 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     /// The tap→toast channel, handed over by `TailspotApp` at launch.
     @MainActor var toastRelay: StreakToastRelay?
 
+    /// The app-wide Challenges model, handed over by `TailspotApp` at launch
+    /// (in `init`, before launch finishes, because a COLD-START tap on a
+    /// challenge notification arrives before any view exists). `weak` because
+    /// the App owns the model; this is a delivery address, not ownership.
+    ///
+    /// It lives on the streak center rather than a second delegate because
+    /// iOS allows exactly ONE `UNUserNotificationCenterDelegate` per process,
+    /// and this type already holds it.
+    @MainActor weak var challenges: ChallengesModel?
+
     /// The Settings toggle, absent-means-on.
     var remindersEnabled: Bool {
         UserDefaults.standard.object(forKey: StreakReminders.enabledKey) as? Bool ?? true
@@ -343,6 +353,16 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         guard StreakReminders.isStreakReminder(notification.request.identifier) else {
+            // Challenge notifications — local reminders AND the backend's
+            // remote pushes — obey the same never-cover-the-viewfinder rule
+            // as the streak nudge. Everything else presents normally.
+            if let options = ChallengeNotificationRouting.foregroundPresentation(
+                identifier: notification.request.identifier,
+                userInfo: notification.request.content.userInfo,
+                cameraFrontmost: Self.cameraIsFrontmost()
+            ) {
+                return options
+            }
             return [.banner, .sound]
         }
         #if DEBUG
@@ -411,6 +431,19 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse
     ) async {
         guard StreakReminders.isStreakReminder(response.notification.request.identifier) else {
+            // A challenge notification (local or remote) opens that
+            // challenge's detail. Everything else is not ours.
+            if let route = ChallengeNotificationRouting.route(
+                identifier: response.notification.request.identifier,
+                userInfo: response.notification.request.content.userInfo
+            ) {
+                Analytics.capture(ChallengeNotificationRouting.openedEvent, [
+                    "challenge_id": .string(route.challengeId),
+                    "moment": .string(route.moment),
+                ])
+                Log.ui.notice("Challenge notification tapped: \(route.moment, privacy: .public)")
+                challenges?.openChallenge(id: route.challengeId)
+            }
             return
         }
         let streak = response.notification.request.content.userInfo["streak"] as? Int

@@ -17,12 +17,17 @@ import Testing
 @MainActor
 final class RecordingReminderScheduler: ChallengeReminderScheduling {
     private(set) var syncedOpen: [[ChallengeSummary]] = []
+    /// The placements handed over with each sync, in the same order.
+    private(set) var syncedPlacements: [[String: Int]] = []
     private(set) var cancelledIds: [String] = []
     private(set) var authorizationRequests = 0
     /// What `requestAuthorizationIfNeeded` answers.
     var grantsAuthorization = true
 
-    func sync(open: [ChallengeSummary]) { syncedOpen.append(open) }
+    func sync(open: [ChallengeSummary], placements: [String: Int]) {
+        syncedOpen.append(open)
+        syncedPlacements.append(placements)
+    }
     func cancel(challengeId: String) { cancelledIds.append(challengeId) }
 
     @discardableResult

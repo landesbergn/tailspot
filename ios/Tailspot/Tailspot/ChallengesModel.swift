@@ -28,7 +28,10 @@ import Observation
 /// usable in previews and tests.
 @MainActor
 protocol ChallengeReminderScheduling: AnyObject {
-    func sync(open: [ChallengeSummary])
+    /// `placements` is challengeId → the caller's last-known placement, used
+    /// for the mid-challenge nudges' standings line. Absent ids simply get
+    /// the neutral copy.
+    func sync(open: [ChallengeSummary], placements: [String: Int])
     func cancel(challengeId: String)
     /// Put the notification permission prompt up if it has never been shown
     /// and challenge reminders are switched on. Returns whether reminders
@@ -38,9 +41,15 @@ protocol ChallengeReminderScheduling: AnyObject {
     func requestAuthorizationIfNeeded() async -> Bool
 }
 
+/// Convenience for the callers that have no placements to offer.
+@MainActor
+extension ChallengeReminderScheduling {
+    func sync(open: [ChallengeSummary]) { sync(open: open, placements: [:]) }
+}
+
 @MainActor
 final class NoopChallengeReminderScheduler: ChallengeReminderScheduling {
-    func sync(open: [ChallengeSummary]) {}
+    func sync(open: [ChallengeSummary], placements: [String: Int]) {}
     func cancel(challengeId: String) {}
     func requestAuthorizationIfNeeded() async -> Bool { false }
 }
@@ -234,6 +243,44 @@ final class ChallengesModel {
         return code
     }
 
+    // MARK: Notification taps (challenge detail)
+
+    /// A challenge whose detail a notification tap asked for, not yet handed
+    /// to a screen. Exactly the same one-owner shape as `pendingInviteCode`
+    /// above, and for exactly the same reason: the tap can land while no
+    /// Challenges screen exists (a cold-start tap runs before any view), and
+    /// a hub already on screen under Profile or Leaders would otherwise
+    /// swallow it during its own sheet's teardown.
+    private(set) var pendingDetailId: String?
+
+    /// A notification (local reminder or remote push) was tapped. Park the
+    /// challenge id; `ChallengeInviteRouter` presents the Challenges sheet
+    /// and the hub inside it pushes the detail.
+    func openChallenge(id: String) {
+        guard !id.isEmpty else { return }
+        pendingDetailId = id
+    }
+
+    /// Which hub may take a parked detail id — the one the notification's
+    /// own sheet presented, named the same way an invite link's hub is.
+    nonisolated static func consumableDetailId(source: String, detailId: String?) -> String? {
+        guard source == inviteSource, let detailId, !detailId.isEmpty else { return nil }
+        return detailId
+    }
+
+    /// Take the pending detail id, but only for the hub the tap opened.
+    func consumePendingDetail(for source: String) -> String? {
+        guard let id = Self.consumableDetailId(source: source, detailId: pendingDetailId) else {
+            return nil
+        }
+        pendingDetailId = nil
+        return id
+    }
+
+    func clearPendingDetail() {
+        pendingDetailId = nil
+    }
+
     /// Take the pending code, but only for the hub the link opened.
     ///
     /// Why the guard: a hub can already be on screen under the Profile or
@@ -280,7 +327,7 @@ final class ChallengesModel {
             open = list.open
             history = list.history
             listError = nil
-            reminders.sync(open: open)
+            syncReminders()
         } catch {
             guard generation == listGeneration else { return }
             listError = Self.mapped(error, verdict: verdict)
@@ -291,7 +338,26 @@ final class ChallengesModel {
     /// the Settings toggle, which changes whether they may be scheduled at
     /// all but has no reason to hit the network.
     func resyncReminders() {
-        reminders.sync(open: open)
+        syncReminders()
+    }
+
+    /// Re-plan every open challenge's local reminders, handing the scheduler
+    /// the placements we happen to know.
+    ///
+    /// A live placement exists only inside a fetched `ChallengeDetail` (list
+    /// rows carry `myResult` for finished challenges only), so this is
+    /// whatever detail the hub, the Leaders strip or a push tap has already
+    /// loaded — and it is allowed to be stale. Reminders are re-planned on
+    /// every sync (foreground, refresh, create, join), so a placement that
+    /// moved is corrected the next time the app is open; a day-old "You're
+    /// 2nd" still beats a nudge with no standings in it at all.
+    private func syncReminders() {
+        reminders.sync(open: open, placements: reminderPlacements)
+    }
+
+    /// challengeId → my placement, from the details already in memory.
+    var reminderPlacements: [String: Int] {
+        details.compactMapValues { $0.me?.placement }
     }
 
     // MARK: Detail + log
@@ -342,7 +408,7 @@ final class ChallengesModel {
             details[d.challenge.id] = d
             open.removeAll { $0.id == d.challenge.id }
             open.insert(d.challenge, at: 0)
-            reminders.sync(open: open)
+            syncReminders()
             await requestReminderAuthorizationIfNeeded()
             return d
         } catch {
@@ -362,7 +428,7 @@ final class ChallengesModel {
             details[d.challenge.id] = d
             open.removeAll { $0.id == d.challenge.id }
             open.insert(d.challenge, at: 0)
-            reminders.sync(open: open)
+            syncReminders()
             await requestReminderAuthorizationIfNeeded()
             return d
         } catch {
@@ -421,7 +487,7 @@ final class ChallengesModel {
         await reminders.requestAuthorizationIfNeeded()
         // Re-plan: everything that was skipped for want of authorization is
         // schedulable now.
-        reminders.sync(open: open)
+        syncReminders()
     }
 
     // MARK: Local flags

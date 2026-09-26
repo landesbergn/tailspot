@@ -18,5 +18,22 @@
 		<string>applinks:tailspot.app</string>
 		<string>applinks:www.tailspot.app</string>
 	</array>
+	<!-- Remote notifications (the `overtaken` challenge moment, which only
+	     the server can know about). `development` is the right value to
+	     COMMIT: it is what a local bin/deploy or Xcode build needs, and
+	     Xcode / Xcode Cloud rewrite it to `production` when the app is
+	     archived for the App Store — so this file never needs a per-ring
+	     edit. The app reads the value back at runtime out of
+	     embedded.mobileprovision (PushEnvironment) to tell the backend
+	     which APNs gateway its token belongs to.
+
+	     Like associated-domains above, this only declares the claim: the
+	     App ID must have the Push Notifications capability enabled in the
+	     developer portal, and an APNs key uploaded, or a signed (device /
+	     Xcode Cloud) build fails to sign. The simulator doesn't check —
+	     and has no APNs at all, which is why PushEnvironment returns nil
+	     there and registration is skipped. -->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>
