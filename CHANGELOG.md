@@ -5,6 +5,61 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-26 — Challenge notifications v2: daily nudges, camera silence, tap routing, APNs registration — branch `feat/challenge-notifications-v2`
+
+Phase 3's notification half. A 3d or 7d challenge used to go silent between
+"it started" and the last hour; a challenge banner could cover the
+viewfinder; and tapping one dropped you on the catch screen with no idea
+which challenge it meant.
+
+- **Two new local moments** (`ChallengeReminders`): `daily` for the 3d/7d
+  presets, 17:00 local (`StreakReminders.reminderHour` — one app, one
+  evening hour) on every full day strictly after the start day and strictly
+  before the end day, identifier
+  `tailspot.challenge.<id>.daily.<yyyy-MM-dd>`, title "Day 3 of 7"; and
+  `midway` for 24h only, at `startsAt + 12h` when that falls between 08:00
+  and 21:00 local, otherwise the next 09:00, skipped if it lands within 2 h
+  of `ending_soon`. Both carry the standings when the app knows them
+  ("You're 2nd in Weekend Flyoff.") and a neutral line when it doesn't. The
+  placement comes from `ChallengesModel.details[id].me` and is deliberately
+  allowed to be stale — every sync re-plans from scratch. Never two banners
+  in one calendar day, never a moment in the past.
+- **Camera silence.** Challenge notifications — local AND remote — now obey
+  the streak reminder's rule: `willPresent` returns
+  `StreakReminders.foregroundPresentation(cameraFrontmost:)` for anything
+  carrying a `challengeId` or a challenge identifier. Silent on the
+  viewfinder, banner everywhere else. Streak behaviour untouched.
+- **Tap routing.** `didReceive` reads `userInfo["challengeId"]` and hands it
+  to `ChallengesModel.openChallenge(id:)`, which parks a `pendingDetailId`
+  the same one-owner way `pendingInviteCode` works: `ChallengeInviteRouter`
+  runs the dismiss-then-present sequence onto `PrimarySheet.challenges`, and
+  the hub inside it (source `deep_link`, the only consumer) pushes the
+  detail. Fires `challenge_reminder_opened` with `challenge_id` + `moment`.
+  The `ChallengesModel` is now built in `TailspotApp.init` and handed to the
+  delegate there, because a cold-start tap arrives before any view exists.
+- **APNs registration (client half).** New `AppDelegate` via
+  `@UIApplicationDelegateAdaptor` — SwiftUI has no equivalent of
+  `didRegisterForRemoteNotificationsWithDeviceToken`. Registers at launch
+  when notifications are already authorized, and right after the challenge
+  permission ask succeeds. The token is hex-encoded and POSTed to
+  `/v1/devices/push-token` by `PushTokenClient`
+  (`{token, environment, build}`, bearer, 15 s, 204), idempotent against
+  `tailspot.push.lastUploaded` so the every-launch re-register doesn't POST
+  every launch — and a FAILED upload remembers nothing, so it retries.
+  `aps-environment` is read back out of `embedded.mobileprovision` at
+  runtime ("development" → "sandbox"), because sending a sandbox token to
+  the production gateway is the classic silent-push failure. Simulator or
+  no profile → registration is skipped entirely.
+  `Tailspot.entitlements` gains `aps-environment` = `development` (Xcode
+  flips it to production at archive).
+- **Still Noah's, before any of the remote half works:** enable **Push
+  Notifications** on the App ID and upload an **APNs key** — until then a
+  signed device / Xcode Cloud build fails to sign. The backend half (the
+  `overtaken` push) is being built in parallel to the payload contract
+  written down in `ChallengeNotificationRouting`.
+
+Review doc: `docs/reviews/2026-09-26-challenge-notifications-v2.html`.
+
 ## 2026-09-21 — Challenge invite links open the app (universal links) — branch `feat/challenges-universal-links`
 
 `https://tailspot.app/c/CODE` now opens Tailspot straight into the invite's
