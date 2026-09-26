@@ -455,12 +455,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     countCatches: () => getCatchStore().countCatches(),
   };
 
+  // The catch-validation clock, hoisted: several routes below turn it into a
+  // Date so their timestamps are deterministic under test.
+  const injectedNowSeconds = options.nowSeconds;
   registerDevicesRoutes(app, {
     store: identity,
     registerLimiter,
     handleLimiter,
     bearerIpLimiter,
     pushTokenLimiter,
+    // `apns_updated_at` shares the catch-validation clock so the route tests
+    // can assert an exact timestamp; production passes nothing and it's wall time.
+    now: injectedNowSeconds ? () => new Date(injectedNowSeconds() * 1000) : undefined,
   });
   registerHandlesRoute(app, {
     store: identity,
@@ -485,7 +491,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // The leaderboard's window math shares the catch-validation clock
   // (`nowSeconds`, unix seconds) so window tests are deterministic; production
   // passes nothing and both fall back to wall time.
-  const nowSeconds = options.nowSeconds;
+  const nowSeconds = injectedNowSeconds;
   registerLeaderboardRoute(app, {
     identityStore: identity,
     catchStore: catchesStore,
