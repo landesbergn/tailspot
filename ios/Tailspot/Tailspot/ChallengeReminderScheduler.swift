@@ -94,7 +94,7 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
         self.now = now
         self.timeZone = timeZone
         self.registerForRemoteNotifications = registerForRemoteNotifications ?? {
-            UIApplication.shared.registerForRemoteNotifications()
+            PushRegistration.registerForRemoteNotifications()
         }
     }
 

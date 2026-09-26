@@ -11,6 +11,13 @@ import os
 
 @main
 struct TailspotApp: App {
+    /// The UIKit application delegate, purely for APNs device-token
+    /// registration (see AppDelegate.swift — SwiftUI has no equivalent of
+    /// `didRegisterForRemoteNotificationsWithDeviceToken`). The adaptor
+    /// creates one instance and keeps it alive for the process; the SwiftUI
+    /// lifecycle below is unaffected.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     /// The SwiftData persistence container for `Catch` rows. Created
     /// once at app launch and injected into the view hierarchy via
     /// `.modelContainer(_:)`. Views read it via `@Environment(\.modelContext)`
