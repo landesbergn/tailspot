@@ -75,6 +75,23 @@ export interface CatchesRouteOptions {
    */
   bearerIpLimiter: RateLimiter;
   /**
+   * Fired AFTER a catch upload has been answered, with the uploading device's
+   * id. Production hangs the challenge "someone passed you" evaluation off it
+   * (see challenges/overtaken.ts); most tests leave it undefined.
+   *
+   * It is a `void` callback, not an awaited one, on purpose: nothing it does
+   * may delay or fail the upload. The route schedules it with `setImmediate`
+   * so it runs after the reply is on the wire, and the callback itself owns
+   * its error handling.
+   */
+  onCatchIngested?: (deviceId: string) => void;
+  /**
+   * How `onCatchIngested` is deferred. Production leaves it as `setImmediate`
+   * — the reply is already on the wire by the time the task runs. Tests inject
+   * a collector so the after-reply work is deterministic instead of a sleep.
+   */
+  scheduleAfterReply?: (task: () => void) => void;
+  /**
    * Route-guess verifier — the SAME resolver behind GET /v1/routes/:callsign
    * (in production the adsb.lol standing-data lookup, shared cache). Optional:
    * when absent (non-adsblol deployment, most tests), a route guess simply
@@ -121,8 +138,16 @@ function intParam(v: unknown, fallback: number, max?: number): number {
 }
 
 export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOptions): void {
-  const { identityStore, catchStore, catchLimiter, listLimiter, bearerIpLimiter, routeResolver } =
-    opts;
+  const {
+    identityStore,
+    catchStore,
+    catchLimiter,
+    listLimiter,
+    bearerIpLimiter,
+    routeResolver,
+    onCatchIngested,
+  } = opts;
+  const scheduleAfterReply = opts.scheduleAfterReply ?? ((task: () => void) => setImmediate(task));
   const nowSeconds = opts.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
 
   /**
@@ -379,6 +404,19 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
         aircraft?.positionTimestamp == null ? null : new Date(aircraft.positionTimestamp * 1000),
       validation,
     });
+
+    // Post-upload side effects, scheduled AFTER the reply. A replay (the same
+    // catchUuid twice) changes nothing about the standings, so only a fresh
+    // insert triggers one.
+    if (!duplicate && onCatchIngested) {
+      scheduleAfterReply(() => {
+        try {
+          onCatchIngested(device.id);
+        } catch (err) {
+          request.log.warn({ err, deviceId: device.id }, "post-catch hook failed");
+        }
+      });
+    }
 
     // Response NEVER varies on the verdict (no oracle). The only difference
     // between a fresh insert and a replay is the status code + `duplicate` flag.

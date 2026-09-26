@@ -5,6 +5,70 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-26 — Challenge push notifications (backend): APNs sender, push-token route, overtaken detection — branch `feat/challenge-push-overtaken`
+
+Backend half of "someone just passed you in your challenge". The iOS client is
+being built in parallel against this contract. Nothing here can fail a catch
+upload, and the whole feature is off unless three separate things are true:
+APNs credentials are set, `CHALLENGES_ENABLED=true`, and the device has
+registered a token.
+
+- **Migration 0011 (`0011_push-tokens-overtaken.sql`) — apply BEFORE deploying.**
+  Five nullable columns, no backfill: `devices.apns_token` /
+  `apns_environment` / `apns_updated_at`, and
+  `challenge_participants.last_placement` / `overtaken_notified_at`. There is
+  no Fly `release_command`, so migrations are manual —
+  `DATABASE_URL=… npm run db:migrate` first, then deploy.
+- **`POST` / `DELETE /v1/devices/push-token`** (bearer, 30/h per device, per-IP
+  metered before the token lookup). Body `{ token: 64–200 hex, environment:
+  "sandbox"|"production", build? }` → 204. Registering a token **clears it from
+  any other device row that holds it**: a restore or reinstall can hand one
+  phone's APNs token to a second anonymous identity, and if both kept it one
+  phone would get another identity's notifications.
+- **`src/push/apns.ts`** — a dependency-free sender. The ES256 provider JWT is
+  `crypto.sign` over two base64url segments with `dsaEncoding: "ieee-p1363"`
+  (the default DER encoding yields a token Apple rejects as
+  InvalidProviderToken), cached 50 minutes; the wire protocol is one HTTP/2
+  POST to `/3/device/<token>` on Node's built-in `http2`. `ApnsTransport` is
+  the seam tests inject a fake into. Unset credentials → a no-op transport that
+  logs `push disabled` once at boot.
+- **`src/challenges/overtaken.ts`** — after a *fresh* catch the route schedules
+  (via `setImmediate`, after the reply) an evaluation for that device: for each
+  LIVE challenge it is in, re-derive the standings and compare each
+  participant's placement with the remembered `last_placement`. Worse = passed.
+  One push per person per challenge per 30 minutes; never the uploader, never
+  without a token, never to a disabled device, never for an upcoming, finished
+  or cancelled challenge. Copy: **"You got passed" / "@ada just passed you in
+  Weekend Flyoff. You're now 2nd."** (ties read "tied for 2nd"). A 410 or
+  `BadDeviceToken` / `Unregistered` clears the token. `last_placement` is
+  seeded at create and inside the join transaction — null means "never
+  evaluated" and never notifies.
+- **Review round (PR #288).** Seven findings, all fixed with tests. The one
+  that mattered: a JS `Date` interpolated into a raw `sql` template reaches
+  postgres.js unconverted and crashes the bind, while PGlite serialises it
+  happily — so in production *every* evaluation would have thrown into the
+  outer catch and sent zero pushes, with the whole suite green. Now the
+  column helpers (`lte`/`gt`) do the encoding, and a test walks the bound
+  parameters of a whole evaluation asserting none is a `Date`. Also: the
+  evaluation now runs under the same challenge row lock `join` takes (two
+  simultaneous uploads pushed the same person twice and clobbered each
+  other's placements); a transient send failure keeps that participant's
+  baseline so the next catch retries instead of losing the notification;
+  baseline seeding moved out of the create/join transactions and became
+  best-effort; a token moving between devices logs a warn with both device
+  ids; the HTTP/2 send resolves on a silent stream teardown instead of
+  hanging forever; and the route test drives the after-reply work through an
+  injected scheduler rather than sleeping.
+- **An un-migrated deploy is worse than "no pushes"** — Drizzle names every
+  schema column in its INSERTs, so without 0011 device registration and
+  challenge create/join fail too. Pinned by a test; README says so plainly.
+- **Secrets to set before this does anything** (see backend/README.md):
+  `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID`.
+- **Tests: 443 → 499.** Route tests for the token lifecycle, JWT/config/no-op
+  tests for the sender, and overtaken tests that spend most of their length on
+  the negatives (cooldown, uploader, tokenless, disabled, not-live, dead-token
+  cleanup) — the ways this feature turns into spam.
+
 ## 2026-09-21 — Challenge invite links open the app (universal links) — branch `feat/challenges-universal-links`
 
 `https://tailspot.app/c/CODE` now opens Tailspot straight into the invite's

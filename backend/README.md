@@ -155,8 +155,9 @@ The scorer is an interface (`src/challenges/scorer.ts`) with one
 implementation — the seam for future public quests (`challenges.kind`).
 
 Not in v1: there is **no rename route** (a challenge's name is fixed at
-creation; the client must not offer a rename), no push tokens, no participant
-removal by the creator. Concurrency: `join`, `leave` and finalization all take
+creation; the client must not offer a rename) and no participant removal by the
+creator. Push tokens arrived after v1 — see **Device push tokens** and
+**Overtaken pushes** below. Concurrency: `join`, `leave` and finalization all take
 `SELECT … FOR UPDATE` on the challenge row, so two joins racing at 9/10 can't
 both land, standings + outcome freeze from one snapshot, and a join or leave
 arriving after the freeze is refused (409 / 410) rather than silently landing
@@ -164,6 +165,107 @@ in a challenge that will never score it. Capacity counts the same participants
 the preview shows — active rows whose device isn't disabled. `join` also locks
 the **device** row (order: challenge → device) so one new device joining two
 challenges at once can only claim the growth-attribution credit once.
+
+### Device push tokens
+
+| Route | Auth | Limit | Notes |
+|---|---|---|---|
+| `POST /v1/devices/push-token` | bearer | 30/h/device (per-IP metered first) | body `{ token, environment, build? }` → `204`. `token` is 64–200 hex characters (stored lowercased), `environment` is `"sandbox"` or `"production"`, `build` is accepted for triage and not stored. `422` on any other shape. |
+| `DELETE /v1/devices/push-token` | bearer | 30/h/device | `204`. Clears the caller's token; pushes silently stop. Clearing a device that has none is a no-op `204`. |
+
+**A token belongs to one install.** Registering a token that another `devices`
+row already holds **clears it from that row** in the same transaction. This
+case is real — restoring a phone from backup, or reinstalling and registering a
+fresh anonymous device, can hand the same APNs token to a second identity, and
+if both kept it one phone would receive the other identity's notifications.
+
+**No proof of possession — accepted, but watched.** Registration proves the
+caller holds the device's *bearer token* and nothing more; it does not prove
+they hold the *APNs* token they are claiming. Someone with a leaked bearer
+token could therefore point that device's notifications at their own phone.
+The leak is the real problem and the fix is `device:disable`; the mitigation
+here is visibility, because a token changing hands is the one observable
+symptom. Every move logs a `warn` naming **both device ids** (never the token)
+and bumps a per-process counter, so a burst stands out in the Fly log.
+
+`environment` is stored because a token minted against the sandbox APNs host is
+rejected by the production host and vice versa: the host is chosen **per token**
+(`api.push.apple.com` / `api.sandbox.push.apple.com`), not per deploy. A
+TestFlight build uses the production environment; only a development (Xcode)
+build is sandbox.
+
+### Overtaken pushes
+
+The one notification the backend sends today: **someone passed you in a live
+challenge.**
+
+After a *fresh* `POST /v1/catches` (a replayed `catchUuid` changes nothing, so
+it doesn't count), the route schedules an evaluation with `setImmediate` —
+after the reply is on the wire, fire-and-forget. For every challenge that is
+**live** right now and that the uploader is an active participant of (the 20
+soonest to end, so one upload can't fan out unboundedly), the current standings
+are re-derived once and each participant's placement is compared with the one
+remembered in `challenge_participants.last_placement`. A numerically worse
+placement means somebody went past them, and the uploader is who to name. Every
+participant's `last_placement` is then written forward, the uploader's included.
+
+**One evaluation at a time per challenge.** The whole read → decide → send →
+write cycle runs inside a transaction holding the same `SELECT … FOR UPDATE` on
+the challenge row that `join`, `leave` and finalization take. Without it, two
+phones uploading in the same second would both read the standings before either
+wrote them back, both push the same person inside what each thinks is a fresh
+cooldown, and then clobber each other's placements. The sends happen inside that
+lock, so each one is capped at **5 seconds** — a stuck APNs stream must not park
+somebody else's join.
+
+**A blip doesn't lose the notification.** If the send fails in a retryable way
+(429, any 5xx, or a transport that never answered), that participant's
+`last_placement` is deliberately *not* advanced, so the next catch sees the slip
+again and tries once more. A dead token, a missing token, the cooldown and
+"push disabled" all advance the baseline — there is nothing to retry in any of
+those.
+
+`last_placement` is seeded at create (the creator is alone, so 1st) and inside
+the join transaction from the board the joiner walks into — their earlier
+in-window catches count, so a joiner can arrive anywhere. **Null means "never
+evaluated" and never notifies**, which is also what an un-migrated row looks
+like.
+
+It will not: notify the uploader, fire for an upcoming / finished / cancelled
+challenge, reach a disabled device, notify the same person twice within 30
+minutes in the same challenge (`overtaken_notified_at`), do anything at all
+when `CHALLENGES_ENABLED` is off, or throw — every failure is logged and
+swallowed, because the catch was answered `201` before any of this ran.
+
+The payload, which the iOS client is built against:
+
+```json
+{
+  "aps": {
+    "alert": { "title": "You got passed",
+               "body": "@ada just passed you in Weekend Flyoff. You're now 2nd." },
+    "sound": "default",
+    "thread-id": "<challengeId>"
+  },
+  "challengeId": "<challengeId>",
+  "kind": "overtaken"
+}
+```
+
+A shared placement reads "You're now tied for 2nd." Changing any key here is a
+client-visible contract change.
+
+The sender (`src/push/apns.ts`) has no dependencies: an ES256 provider JWT
+signed with Node's `crypto` (refreshed every 50 minutes) and one HTTP/2 POST
+per notification via the built-in `http2` module, with `apns-push-type: alert`,
+`apns-priority: 10` and a one-hour `apns-expiration`. A `410`, or a `400` with
+reason `BadDeviceToken` / `Unregistered`, clears the stored token — the app was
+deleted, or the token belongs to the other environment. Every send is raced
+against its own deadline and resolves even if the HTTP/2 stream is torn down
+without a response (a GOAWAY or RST), because a promise that never settles would
+now hold the challenge row lock. `ApnsTransport` is the seam tests inject a fake
+into, and `connect` is injectable so the request shape is unit-tested against a
+stub session.
 
 ### Configuration (env)
 
@@ -179,6 +281,24 @@ challenges at once can only claim the growth-attribution credit once.
 | `CHALLENGES_AVAILABILITY` | `testflight` | `testflight` or `public` — what `/v1/challenges/config` reports so the landing page can say "TestFlight only" during the soak. |
 | `CHALLENGES_MIN_BUILD` | `0` | Minimum client `CFBundleVersion` for Challenges, reported by `/config`; the app shows "update Tailspot" below it. |
 | `CHALLENGES_INVITE_BASE_URL` | `https://tailspot.app/c` | Invite links are `<base>/<CODE>`. |
+| `APNS_KEY_P8` | — (push off) | Contents of the APNs auth key (`.p8`), **not** a path. Newlines may arrive as literal `\n`; they're normalised. |
+| `APNS_KEY_ID` | — (push off) | The 10-character key id — the JWT's `kid`. |
+| `APNS_TEAM_ID` | — (push off) | The Apple Developer team id — the JWT's `iss`. |
+| `APNS_BUNDLE_ID` | `com.landesberg.Tailspot` | The `apns-topic` header. |
+
+If any of `APNS_KEY_P8` / `APNS_KEY_ID` / `APNS_TEAM_ID` is unset the sender is
+a **no-op** that logs `push disabled` once at startup — nothing else changes.
+Set them with:
+
+```sh
+fly secrets set -a tailspot-api \
+  APNS_KEY_P8="$(cat AuthKey_XXXXXXXXXX.p8)" \
+  APNS_KEY_ID=XXXXXXXXXX \
+  APNS_TEAM_ID=YYYYYYYYYY
+```
+
+The `.p8` is a credential: keep it out of the repo (nothing in `backend/`
+should ever hold one) and out of shell history.
 
 **Providers.** The primary is **adsb.lol** (`https://api.adsb.lol`), whose only
 geographic query is point+radius (`GET /v2/point/{lat}/{lon}/{radius}`, radius
@@ -333,6 +453,18 @@ Re-disabling an already-disabled device is a reported no-op, so the original
 > `release_command`, so a deploy does *not* run them. `0009_device-disabled-at`
 > must be applied (`DATABASE_URL=… npm run db:migrate`) **before** deploying the
 > code that reads `disabled_at`, or every auth lookup 500s on a missing column.
+>
+> The same applies to **`0011_push-tokens-overtaken`** (device push tokens +
+> the challenge placement memory), and the consequence of getting the order
+> wrong is bigger than "pushes don't work". Drizzle names **every** column of a
+> table in its INSERT statements, whatever the values object contains — so the
+> moment `apns_token` and `last_placement` exist in `src/db/schema.ts`, an
+> un-migrated database fails **device registration** (`POST /v1/devices`),
+> **challenge creation** and **joining**, not just notifications.
+> `test/seedBaseline.test.ts` pins that, so this warning can't quietly become
+> untrue. The migration itself is additive — five nullable columns, no backfill
+> — so applying it ahead of the deploy is always safe, and it is the only safe
+> order.
 
 ## Tests
 

@@ -86,6 +86,40 @@ export interface IdentityStore {
    * itself still races the 409 path, so this is freshness, not a reservation.
    */
   takenHandles(handles: string[]): Promise<Set<string>>;
+  /**
+   * Store this device's APNs token, replacing whatever it had.
+   *
+   * A token belongs to exactly ONE install, so registering it here CLEARS it
+   * from any other device row that holds it. That case is real: restoring a
+   * phone from a backup, or reinstalling and registering a fresh anonymous
+   * device, can hand the same APNs token to a second `devices` row — and if
+   * both kept it, one physical phone would receive another identity's
+   * notifications. Last writer wins, which is also the truth (APNs gave the
+   * token to whoever asked most recently).
+   */
+  setPushToken(
+    deviceId: string,
+    token: string,
+    environment: PushEnvironment,
+    now: Date,
+  ): Promise<SetPushTokenResult>;
+  /** Forget this device's push token (the client's opt-out / sign-off path). */
+  clearPushToken(deviceId: string): Promise<void>;
+}
+
+/** Which APNs host a stored token is valid against. Mirrors push/apns.ts. */
+export type PushEnvironment = "sandbox" | "production";
+
+/** What `setPushToken` did, so the route can report a token that MOVED. */
+export interface SetPushTokenResult {
+  /**
+   * Device ids the token was taken away from. Normally empty. A non-empty list
+   * is worth a look: the honest cause is a restore or reinstall, but it is also
+   * what a replayed/leaked bearer token would look like — registration proves
+   * possession of the bearer token and nothing more, so this is the only signal
+   * we get. Never log the token itself.
+   */
+  movedFrom: string[];
 }
 
 export class DrizzleIdentityStore implements IdentityStore {
@@ -134,6 +168,36 @@ export class DrizzleIdentityStore implements IdentityStore {
     // reopen the taken-check race; the route's own error path is the safety net.
     await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
     return { ok: true, handle };
+  }
+
+  async setPushToken(
+    deviceId: string,
+    token: string,
+    environment: PushEnvironment,
+    now: Date,
+  ): Promise<SetPushTokenResult> {
+    // Both writes in ONE transaction: between the clear and the set, a token
+    // must never be on zero rows (a lost notification) or on two (a leak to
+    // another identity).
+    return this.db.transaction(async (tx) => {
+      const moved = await tx
+        .update(devices)
+        .set({ apnsToken: null, apnsEnvironment: null })
+        .where(and(eq(devices.apnsToken, token), sql`${devices.id} <> ${deviceId}`))
+        .returning({ id: devices.id });
+      await tx
+        .update(devices)
+        .set({ apnsToken: token, apnsEnvironment: environment, apnsUpdatedAt: now })
+        .where(eq(devices.id, deviceId));
+      return { movedFrom: moved.map((m) => m.id) };
+    });
+  }
+
+  async clearPushToken(deviceId: string): Promise<void> {
+    await this.db
+      .update(devices)
+      .set({ apnsToken: null, apnsEnvironment: null, apnsUpdatedAt: null })
+      .where(eq(devices.id, deviceId));
   }
 
   async takenHandles(handles: string[]): Promise<Set<string>> {
