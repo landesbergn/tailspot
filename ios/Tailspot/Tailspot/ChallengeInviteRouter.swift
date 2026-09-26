@@ -75,6 +75,14 @@ struct ChallengeInviteRouter: View {
             .task(id: model?.inviteRoute) {
                 await deliver(model?.inviteRoute)
             }
+            // A tapped challenge notification parks a detail id on the
+            // model (`ChallengesModel.openChallenge(id:)`). Same job as the
+            // invite route above, same sequencing, one less decision: there
+            // is no build gate on READING a challenge you are already in, so
+            // a parked id always means "show it".
+            .task(id: model?.pendingDetailId) {
+                await deliverDetail(model?.pendingDetailId)
+            }
             .alert("Update Tailspot to join this challenge",
                    isPresented: Binding(
                     get: { updateRequiredMinBuild != nil },
@@ -94,6 +102,20 @@ struct ChallengeInviteRouter: View {
             return url
         }
         return AppStoreListing.url(campaign: "Challenge Invite")
+    }
+
+    /// Present the Challenges sheet for a notification tap. The id stays
+    /// parked: the hub inside the sheet consumes it and pushes the detail,
+    /// the same one-owner handover the invite code uses.
+    private func deliverDetail(_ detailId: String?) async {
+        guard detailId != nil else { return }
+        Log.ui.notice("Challenge notification: opening Challenges for a detail")
+        await ChallengeInvitePresentation.run(
+            plan: ChallengeInvitePresentation.plan(
+                isPrimarySheetPresented: isPrimarySheetPresented),
+            dismiss: dismissPrimarySheet,
+            settle: ChallengeInvitePresentation.sleepForDismissal,
+            present: presentChallenges)
     }
 
     private func deliver(_ route: ChallengesModel.InviteRoute?) async {

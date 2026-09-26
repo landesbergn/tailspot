@@ -131,6 +131,17 @@ struct ChallengesHub: View {
                 linkCode = InviteLinkCode(id: code)
             }
         }
+        // Notification tap: the hub the tap's own sheet presented takes the
+        // parked challenge id and pushes straight to its detail. Same
+        // one-owner rule as the invite code above — `consumePendingDetail`
+        // only answers the `deep_link` hub, so a hub already on screen under
+        // Profile or Leaders can't swallow it.
+        .task(id: model.pendingDetailId) {
+            if let id = model.consumePendingDetail(for: source) {
+                shareOnPush = false
+                pushDetailId = id
+            }
+        }
         .sheet(item: $linkCode) { link in
             ChallengeJoinSheet(code: link.id, via: "universal_link") { detail in
                 pushDetailId = detail.challenge.id

@@ -41,7 +41,13 @@ struct TailspotApp: App {
     /// `@State` in an App is how SwiftUI keeps one instance alive for the
     /// scene's lifetime; the property is read from `body` and the
     /// scene-phase handler.
-    @State private var challenges = ChallengesAppModel.make()
+    /// Built in `init` rather than inline (`= ChallengesAppModel.make()`) so
+    /// the notification delegate can be handed the very same instance before
+    /// launch finishes — a cold-start tap on a challenge notification is
+    /// delivered before any view exists, and a delegate with no model would
+    /// drop it. `_challenges = State(initialValue:)` is how you seed a
+    /// SwiftUI `@State` from an initializer.
+    @State private var challenges: ChallengesModel
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -84,6 +90,12 @@ struct TailspotApp: App {
         // iOS. It decides foreground presentation (silent on the camera,
         // banner elsewhere) and relays the tap line back to the view.
         StreakReminderCenter.shared.toastRelay = streakToastRelay
+        // The same delegate routes a tapped CHALLENGE notification (local
+        // reminder or remote push) to the challenges model — one process,
+        // one `UNUserNotificationCenterDelegate`, so it carries both jobs.
+        let challengesModel = ChallengesAppModel.make()
+        _challenges = State(initialValue: challengesModel)
+        StreakReminderCenter.shared.challenges = challengesModel
         UNUserNotificationCenter.current().delegate = StreakReminderCenter.shared
         // A timezone change moves "today" and the 18:00 target — recompute
         // the pending reminder against the new zone (frozen per-catch day
