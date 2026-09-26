@@ -11,6 +11,13 @@ import os
 
 @main
 struct TailspotApp: App {
+    /// The UIKit application delegate, purely for APNs device-token
+    /// registration (see AppDelegate.swift — SwiftUI has no equivalent of
+    /// `didRegisterForRemoteNotificationsWithDeviceToken`). The adaptor
+    /// creates one instance and keeps it alive for the process; the SwiftUI
+    /// lifecycle below is unaffected.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     /// The SwiftData persistence container for `Catch` rows. Created
     /// once at app launch and injected into the view hierarchy via
     /// `.modelContainer(_:)`. Views read it via `@Environment(\.modelContext)`
@@ -41,7 +48,13 @@ struct TailspotApp: App {
     /// `@State` in an App is how SwiftUI keeps one instance alive for the
     /// scene's lifetime; the property is read from `body` and the
     /// scene-phase handler.
-    @State private var challenges = ChallengesAppModel.make()
+    /// Built in `init` rather than inline (`= ChallengesAppModel.make()`) so
+    /// the notification delegate can be handed the very same instance before
+    /// launch finishes — a cold-start tap on a challenge notification is
+    /// delivered before any view exists, and a delegate with no model would
+    /// drop it. `_challenges = State(initialValue:)` is how you seed a
+    /// SwiftUI `@State` from an initializer.
+    @State private var challenges: ChallengesModel
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -84,6 +97,12 @@ struct TailspotApp: App {
         // iOS. It decides foreground presentation (silent on the camera,
         // banner elsewhere) and relays the tap line back to the view.
         StreakReminderCenter.shared.toastRelay = streakToastRelay
+        // The same delegate routes a tapped CHALLENGE notification (local
+        // reminder or remote push) to the challenges model — one process,
+        // one `UNUserNotificationCenterDelegate`, so it carries both jobs.
+        let challengesModel = ChallengesAppModel.make()
+        _challenges = State(initialValue: challengesModel)
+        StreakReminderCenter.shared.challenges = challengesModel
         UNUserNotificationCenter.current().delegate = StreakReminderCenter.shared
         // A timezone change moves "today" and the 18:00 target — recompute
         // the pending reminder against the new zone (frozen per-catch day

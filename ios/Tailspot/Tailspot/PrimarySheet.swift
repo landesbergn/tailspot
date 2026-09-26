@@ -24,7 +24,13 @@ import SwiftUI
 
 /// Which primary sheet the catch screen is showing. `Identifiable` is what
 /// `.sheet(item:)` requires; the raw value doubles as the id.
-enum PrimarySheet: String, Identifiable {
+///
+/// `nonisolated` (the project defaults every type to `@MainActor`): this is
+/// a pure value type, and `ChallengeInvitePresentation` — which is
+/// nonisolated because it is pure decision logic — takes one as a
+/// parameter and compares it. A MainActor-isolated `Equatable` conformance
+/// could not be used there.
+nonisolated enum PrimarySheet: String, Identifiable {
     case hangar, profile, leaders
     /// The Challenges hub, opened by a `tailspot.app/c/CODE` invite link.
     /// Every other way in is a push inside Profile or Leaders; a link has
