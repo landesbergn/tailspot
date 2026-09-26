@@ -179,6 +179,15 @@ case is real — restoring a phone from backup, or reinstalling and registering 
 fresh anonymous device, can hand the same APNs token to a second identity, and
 if both kept it one phone would receive the other identity's notifications.
 
+**No proof of possession — accepted, but watched.** Registration proves the
+caller holds the device's *bearer token* and nothing more; it does not prove
+they hold the *APNs* token they are claiming. Someone with a leaked bearer
+token could therefore point that device's notifications at their own phone.
+The leak is the real problem and the fix is `device:disable`; the mitigation
+here is visibility, because a token changing hands is the one observable
+symptom. Every move logs a `warn` naming **both device ids** (never the token)
+and bumps a per-process counter, so a burst stands out in the Fly log.
+
 `environment` is stored because a token minted against the sandbox APNs host is
 rejected by the production host and vice versa: the host is chosen **per token**
 (`api.push.apple.com` / `api.sandbox.push.apple.com`), not per deploy. A
@@ -193,12 +202,28 @@ challenge.**
 After a *fresh* `POST /v1/catches` (a replayed `catchUuid` changes nothing, so
 it doesn't count), the route schedules an evaluation with `setImmediate` —
 after the reply is on the wire, fire-and-forget. For every challenge that is
-**live** right now and that the uploader is an active participant of, the
-current standings are re-derived once and each participant's placement is
-compared with the one remembered in `challenge_participants.last_placement`. A
-numerically worse placement means somebody went past them, and the uploader is
-who to name. Every participant's `last_placement` is then written forward, the
-uploader's included.
+**live** right now and that the uploader is an active participant of (the 20
+soonest to end, so one upload can't fan out unboundedly), the current standings
+are re-derived once and each participant's placement is compared with the one
+remembered in `challenge_participants.last_placement`. A numerically worse
+placement means somebody went past them, and the uploader is who to name. Every
+participant's `last_placement` is then written forward, the uploader's included.
+
+**One evaluation at a time per challenge.** The whole read → decide → send →
+write cycle runs inside a transaction holding the same `SELECT … FOR UPDATE` on
+the challenge row that `join`, `leave` and finalization take. Without it, two
+phones uploading in the same second would both read the standings before either
+wrote them back, both push the same person inside what each thinks is a fresh
+cooldown, and then clobber each other's placements. The sends happen inside that
+lock, so each one is capped at **5 seconds** — a stuck APNs stream must not park
+somebody else's join.
+
+**A blip doesn't lose the notification.** If the send fails in a retryable way
+(429, any 5xx, or a transport that never answered), that participant's
+`last_placement` is deliberately *not* advanced, so the next catch sees the slip
+again and tries once more. A dead token, a missing token, the cooldown and
+"push disabled" all advance the baseline — there is nothing to retry in any of
+those.
 
 `last_placement` is seeded at create (the creator is alone, so 1st) and inside
 the join transaction from the board the joiner walks into — their earlier
@@ -235,8 +260,12 @@ signed with Node's `crypto` (refreshed every 50 minutes) and one HTTP/2 POST
 per notification via the built-in `http2` module, with `apns-push-type: alert`,
 `apns-priority: 10` and a one-hour `apns-expiration`. A `410`, or a `400` with
 reason `BadDeviceToken` / `Unregistered`, clears the stored token — the app was
-deleted, or the token belongs to the other environment. `ApnsTransport` is the
-seam tests inject a fake into.
+deleted, or the token belongs to the other environment. Every send is raced
+against its own deadline and resolves even if the HTTP/2 stream is torn down
+without a response (a GOAWAY or RST), because a promise that never settles would
+now hold the challenge row lock. `ApnsTransport` is the seam tests inject a fake
+into, and `connect` is injectable so the request shape is unit-tested against a
+stub session.
 
 ### Configuration (env)
 
@@ -426,10 +455,16 @@ Re-disabling an already-disabled device is a reported no-op, so the original
 > code that reads `disabled_at`, or every auth lookup 500s on a missing column.
 >
 > The same applies to **`0011_push-tokens-overtaken`** (device push tokens +
-> the challenge placement memory): apply it **before** deploying the code that
-> reads those columns, or `POST /v1/devices/push-token` and every challenge
-> standings read 500 on a missing column. It is additive — five nullable
-> columns, no backfill — so applying it ahead of the deploy is safe.
+> the challenge placement memory), and the consequence of getting the order
+> wrong is bigger than "pushes don't work". Drizzle names **every** column of a
+> table in its INSERT statements, whatever the values object contains — so the
+> moment `apns_token` and `last_placement` exist in `src/db/schema.ts`, an
+> un-migrated database fails **device registration** (`POST /v1/devices`),
+> **challenge creation** and **joining**, not just notifications.
+> `test/seedBaseline.test.ts` pins that, so this warning can't quietly become
+> untrue. The migration itself is additive — five nullable columns, no backfill
+> — so applying it ahead of the deploy is always safe, and it is the only safe
+> order.
 
 ## Tests
 

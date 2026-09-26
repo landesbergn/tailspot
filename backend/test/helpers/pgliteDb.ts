@@ -26,11 +26,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface TestDbOptions {
   /**
-   * Receives every SQL statement Drizzle issues, in order. Lets a test assert
-   * on statement ORDER (e.g. "the row lock is taken before the count") where
-   * PGlite's single session can't exercise real concurrency.
+   * Receives every SQL statement Drizzle issues, in order, with its bound
+   * parameters. Lets a test assert on statement ORDER (e.g. "the row lock is
+   * taken before the count") where PGlite's single session can't exercise real
+   * concurrency — and on the PARAMETERS, which is how we catch a JS `Date`
+   * interpolated into a raw `sql` template: PGlite serialises one happily while
+   * postgres.js crashes on the bind, so the parameter list is the only place
+   * that production-only bug is visible from a test.
    */
-  onQuery?: (sql: string) => void;
+  onQuery?: (sql: string, params: unknown[]) => void;
 }
 
 /** Build a fresh PGlite-backed Drizzle handle with the schema applied. */
@@ -54,6 +58,8 @@ export async function makeTestDb(options: TestDbOptions = {}): Promise<Database>
   // The Drizzle PGlite driver's type doesn't structurally match the postgres-js
   // `Database` type, but both satisfy the query surface the store/ingest use.
   const onQuery = options.onQuery;
-  const logger = onQuery ? { logQuery: (query: string) => onQuery(query) } : undefined;
+  const logger = onQuery
+    ? { logQuery: (query: string, params: unknown[]) => onQuery(query, params) }
+    : undefined;
   return drizzle(client, { schema, logger }) as unknown as Database;
 }

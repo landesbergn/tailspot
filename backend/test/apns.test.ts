@@ -63,8 +63,12 @@ describe("APNs config", () => {
       APNS_TEAM_ID: "T",
       APNS_BUNDLE_ID: "com.example",
     });
-    // The proof it really normalised: the key loads and signs.
-    expect(() => mintApnsJwt({ ...testConfig(), ...config }, 0)).not.toThrow();
+    // A null config must FAIL here, not quietly fall back to a fresh key that
+    // would sign fine and prove nothing.
+    if (config === null) throw new Error("expected an escaped key to parse");
+    expect(config.keyP8).toBe(real.trim());
+    // The proof it really normalised: the mangled key loads and signs.
+    expect(() => mintApnsJwt(config, 0)).not.toThrow();
   });
 });
 

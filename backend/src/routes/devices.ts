@@ -66,6 +66,8 @@ const APNS_TOKEN_RE = /^[0-9a-fA-F]{64,200}$/;
 export function registerDevicesRoutes(app: FastifyInstance, opts: DevicesRouteOptions): void {
   const { store, registerLimiter, handleLimiter, bearerIpLimiter, pushTokenLimiter } = opts;
   const now = opts.now ?? (() => new Date());
+  /** How many times a push token has changed hands since boot (see the warn below). */
+  let pushTokenMoves = 0;
 
   // ── POST /v1/devices ───────────────────────────────────────────────────────
   app.post("/v1/devices", async (request, reply) => {
@@ -155,11 +157,29 @@ export function registerDevicesRoutes(app: FastifyInstance, opts: DevicesRouteOp
     }
 
     const environment: PushEnvironment = body.environment;
-    await store.setPushToken(device.id, body.token.toLowerCase(), environment, now());
+    const { movedFrom } = await store.setPushToken(
+      device.id,
+      body.token.toLowerCase(),
+      environment,
+      now(),
+    );
     request.log.info(
       { deviceId: device.id, environment, build: body.build ?? null },
       "push token registered",
     );
+    if (movedFrom.length > 0) {
+      // Registration proves possession of the BEARER token and nothing more —
+      // there is no proof of possession of the APNs token, so a leaked bearer
+      // token could point somebody else's notifications at an attacker's phone.
+      // Accepted risk (the leak is the real problem), but the one observable
+      // symptom is a token changing hands, so it is counted and logged loudly.
+      // Never the token itself — just the device ids on either side.
+      pushTokenMoves += 1;
+      request.log.warn(
+        { deviceId: device.id, movedFrom, movesSinceBoot: pushTokenMoves },
+        "push token moved to a different device (restore/reinstall — or a replayed bearer token)",
+      );
+    }
     return reply.code(204).send();
   });
 

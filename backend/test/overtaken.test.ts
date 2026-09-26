@@ -44,7 +44,7 @@ class FakeTransport implements ApnsTransport {
   }
 }
 
-const silentLog = { info: () => {}, warn: () => {} };
+const silentLog = { debug: () => {}, info: () => {}, warn: () => {} };
 
 describe("overtaken detection", () => {
   let db: Database;
@@ -55,7 +55,7 @@ describe("overtaken detection", () => {
   beforeEach(async () => {
     db = await makeTestDb();
     store = new DrizzleChallengeStore(db, new PrivatePointsScorer(db));
-    overtaken = new DrizzleOvertakenStore(db, store);
+    overtaken = new DrizzleOvertakenStore(db, new PrivatePointsScorer(db));
     transport = new FakeTransport();
   });
 
@@ -154,7 +154,7 @@ describe("overtaken detection", () => {
     await seedCatch(a, 150, t1);
 
     const summary = await evaluate(a, t1);
-    expect(summary).toEqual({ challenges: 1, overtaken: 1, pushes: 1 });
+    expect(summary).toEqual({ challenges: 1, overtaken: 1, pushes: 1, retryable: 0 });
     expect(transport.sent).toHaveLength(1);
     expect(transport.sent[0].token).toBe(TOKEN_B);
     expect(transport.sent[0].env).toBe("production");
@@ -251,7 +251,7 @@ describe("overtaken detection", () => {
     const after = new Date(T0.getTime() + 25 * HOUR_MS);
     await seedCatch(a, 150, new Date(T0.getTime() + 10 * 60_000));
     const summary = await evaluate(a, after);
-    expect(summary).toEqual({ challenges: 0, overtaken: 0, pushes: 0 });
+    expect(summary).toEqual({ challenges: 0, overtaken: 0, pushes: 0, retryable: 0 });
     expect(transport.sent).toHaveLength(0);
   });
 
@@ -342,7 +342,9 @@ describe("overtaken detection", () => {
       .from(challengeParticipants)
       .where(eq(challengeParticipants.deviceId, b));
     expect(parts[0].notified).toBeNull();
-    expect(challenge.id).toBeTypeOf("string");
+    // A dead token is not a blip — there is nobody to retry for, so the
+    // baseline advances and we don't re-send on every subsequent catch.
+    expect(await lastPlacement(challenge.id, b)).toBe(2);
   });
 
   it("a 400 BadDeviceToken also clears the token", async () => {
@@ -355,15 +357,49 @@ describe("overtaken detection", () => {
     expect(row[0].apnsToken).toBeNull();
   });
 
-  it("a transient APNs failure leaves the token alone and stays silent about it", async () => {
-    const { a, b } = await bLeads();
+  it("a transient 503 keeps the token AND the baseline, so the next catch retries", async () => {
+    const { a, b, challenge } = await bLeads();
     transport.reply = () => ({ status: 503, reason: "ServiceUnavailable" });
     const t1 = new Date(T0.getTime() + 10 * 60_000);
     await seedCatch(a, 150, t1);
     const summary = await evaluate(a, t1);
+
     expect(summary.pushes).toBe(0);
+    expect(summary.retryable).toBe(1);
     const row = await db.select().from(devices).where(eq(devices.id, b));
     expect(row[0].apnsToken).toBe(TOKEN_B);
+    // The baseline did NOT advance — B is still remembered as 1st, so the slip
+    // is still visible next time. The uploader's own baseline did advance.
+    expect(await lastPlacement(challenge.id, b)).toBe(1);
+    expect(await lastPlacement(challenge.id, a)).toBe(1);
+
+    // Next catch: APNs is back, and the notification that was nearly lost lands.
+    transport.reply = () => ({ status: 200 });
+    const t2 = new Date(t1.getTime() + 60_000);
+    await seedCatch(a, 10, t2);
+    const second = await evaluate(a, t2);
+    expect(second.pushes).toBe(1);
+    expect(transport.sent).toHaveLength(2);
+    expect(await lastPlacement(challenge.id, b)).toBe(2);
+  });
+
+  it("a 429 also keeps the baseline; a permanent rejection does not", async () => {
+    const { a, b, challenge } = await bLeads();
+    transport.reply = () => ({ status: 429, reason: "TooManyRequests" });
+    const t1 = new Date(T0.getTime() + 10 * 60_000);
+    await seedCatch(a, 150, t1);
+    expect((await evaluate(a, t1)).retryable).toBe(1);
+    expect(await lastPlacement(challenge.id, b)).toBe(1);
+
+    // A permanent rejection (bad topic — a misconfiguration, not a blip) has
+    // nothing to retry: the baseline advances and we stop re-sending.
+    transport.reply = () => ({ status: 400, reason: "BadTopic" });
+    const t2 = new Date(t1.getTime() + 60_000);
+    await seedCatch(a, 10, t2);
+    const second = await evaluate(a, t2);
+    expect(second.retryable).toBe(0);
+    expect(second.pushes).toBe(0);
+    expect(await lastPlacement(challenge.id, b)).toBe(2);
   });
 
   it("a participant who never got a seed (null last_placement) is never notified", async () => {
@@ -384,7 +420,7 @@ describe("overtaken detection", () => {
   it("a device in no live challenge is a cheap no-op", async () => {
     const a = await device("ada");
     const summary = await evaluate(a, T0);
-    expect(summary).toEqual({ challenges: 0, overtaken: 0, pushes: 0 });
+    expect(summary).toEqual({ challenges: 0, overtaken: 0, pushes: 0, retryable: 0 });
   });
 
   it("never rejects, even when the store throws", async () => {
@@ -398,12 +434,12 @@ describe("overtaken detection", () => {
       {
         store: broken,
         transport,
-        log: { info: () => {}, warn: (_o, msg) => warnings.push(msg) },
+        log: { debug: () => {}, info: () => {}, warn: (_o, msg) => warnings.push(msg) },
       },
       "some-device",
       T0,
     );
-    expect(summary).toEqual({ challenges: 0, overtaken: 0, pushes: 0 });
+    expect(summary).toEqual({ challenges: 0, overtaken: 0, pushes: 0, retryable: 0 });
     expect(warnings).toContain("overtaken evaluation failed");
   });
 });

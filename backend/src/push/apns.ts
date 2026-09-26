@@ -27,7 +27,7 @@
  */
 
 import { createPrivateKey, sign } from "node:crypto";
-import { constants, type ClientHttp2Session, connect } from "node:http2";
+import { constants, type ClientHttp2Session, type ClientHttp2Stream, connect } from "node:http2";
 
 /** Which APNs host a token is valid against. A token minted in one is rejected by the other. */
 export type ApnsEnvironment = "sandbox" | "production";
@@ -152,10 +152,17 @@ export class ApnsJwtProvider {
 
 // ── Transports ───────────────────────────────────────────────────────────────
 
+/**
+ * The reason the no-op sender reports. Callers distinguish it from a real
+ * transport failure: "push is switched off" is not something to retry, and it
+ * must not be logged as an error on every catch.
+ */
+export const PUSH_DISABLED_REASON = "push disabled";
+
 /** The unconfigured sender: reports `status: 0, reason: "push disabled"`, sends nothing. */
 export class NoopApnsTransport implements ApnsTransport {
   async send(): Promise<ApnsResponse> {
-    return { status: 0, reason: "push disabled" };
+    return { status: 0, reason: PUSH_DISABLED_REASON };
   }
 }
 
@@ -163,8 +170,19 @@ export interface Http2TransportOptions {
   config: ApnsConfig;
   /** Injectable clock for the JWT cache (tests). */
   now?: () => number;
-  /** Per-request ceiling; APNs answers in tens of ms, so this only bounds a hang. */
+  /**
+   * Hard per-send ceiling. APNs answers in tens of milliseconds; this exists
+   * only to bound a hang, and it is deliberately short (5 s) because a send
+   * happens inside the challenge row lock — a stuck stream would make somebody
+   * else's join wait.
+   */
   timeoutMs?: number;
+  /**
+   * How to dial APNs. Defaults to `http2.connect`; tests pass a stub session so
+   * the request shape (path, headers, expiration) can be asserted without a
+   * network.
+   */
+  connect?: (authority: string) => ClientHttp2Session;
 }
 
 /**
@@ -178,9 +196,12 @@ export class Http2ApnsTransport implements ApnsTransport {
   private readonly sessions = new Map<ApnsEnvironment, ClientHttp2Session>();
   private readonly timeoutMs: number;
 
+  private readonly dial: (authority: string) => ClientHttp2Session;
+
   constructor(private readonly options: Http2TransportOptions) {
     this.jwt = new ApnsJwtProvider(options.config, options.now);
-    this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.timeoutMs = options.timeoutMs ?? 5_000;
+    this.dial = options.connect ?? connect;
   }
 
   /** Close any open sessions (process shutdown / tests). */
@@ -192,7 +213,7 @@ export class Http2ApnsTransport implements ApnsTransport {
   private session(env: ApnsEnvironment): ClientHttp2Session {
     const existing = this.sessions.get(env);
     if (existing && !existing.closed && !existing.destroyed) return existing;
-    const session = connect(HOSTS[env]);
+    const session = this.dial(HOSTS[env]);
     // A session-level error must not become an unhandled 'error' event (which
     // would take the process down). Drop it from the cache and let the next
     // send dial again.
@@ -208,11 +229,28 @@ export class Http2ApnsTransport implements ApnsTransport {
     const body = Buffer.from(JSON.stringify(payload));
     return new Promise<ApnsResponse>((resolve) => {
       let settled = false;
-      const done = (res: ApnsResponse) => {
+      let stream: ClientHttp2Stream | undefined;
+      // THE WHOLE SEND is raced against one timer, not just the stream's own
+      // inactivity timeout. An HTTP/2 stream can be torn down by a GOAWAY or an
+      // RST without ever emitting 'error' or 'end', and the earlier version
+      // left the promise pending forever in exactly that case — which, since
+      // sends now happen under the challenge row lock, would have parked a
+      // transaction rather than merely losing a notification.
+      const timer = setTimeout(() => {
+        // Settle FIRST, then tear down: destroying the stream emits 'close',
+        // and the caller deserves "timeout" as the reason rather than the
+        // "stream closed" our own teardown would produce.
+        done({ status: 0, reason: "timeout" });
+        stream?.destroy();
+      }, this.timeoutMs);
+      // Never hold the process open for a notification.
+      timer.unref?.();
+      function done(res: ApnsResponse) {
         if (settled) return;
         settled = true;
+        clearTimeout(timer);
         resolve(res);
-      };
+      }
       try {
         const expiration = Math.floor((this.options.now?.() ?? Date.now()) / 1000) + 3600;
         const req = this.session(env).request({
@@ -226,10 +264,7 @@ export class Http2ApnsTransport implements ApnsTransport {
           [constants.HTTP2_HEADER_CONTENT_TYPE]: "application/json",
           [constants.HTTP2_HEADER_CONTENT_LENGTH]: body.length,
         });
-        req.setTimeout(this.timeoutMs, () => {
-          req.close();
-          done({ status: 0, reason: "timeout" });
-        });
+        stream = req;
         let status = 0;
         req.on("response", (headers) => {
           status = Number(headers[constants.HTTP2_HEADER_STATUS] ?? 0);
@@ -238,6 +273,10 @@ export class Http2ApnsTransport implements ApnsTransport {
         req.on("data", (chunk: Buffer) => chunks.push(chunk));
         req.on("end", () => done({ status, ...parseReason(Buffer.concat(chunks)) }));
         req.on("error", (err: Error) => done({ status: 0, reason: err.message }));
+        // The backstop for a stream that goes away silently. 'close' always
+        // fires eventually, and it fires AFTER 'end' on a healthy request, so
+        // the idempotent `done` keeps the real answer.
+        req.on("close", () => done({ status: 0, reason: "stream closed" }));
         req.end(body);
       } catch (err) {
         // connect() itself can throw (bad host, no network at all).
