@@ -43,9 +43,28 @@ registered a token.
   `BadDeviceToken` / `Unregistered` clears the token. `last_placement` is
   seeded at create and inside the join transaction — null means "never
   evaluated" and never notifies.
+- **Review round (PR #288).** Seven findings, all fixed with tests. The one
+  that mattered: a JS `Date` interpolated into a raw `sql` template reaches
+  postgres.js unconverted and crashes the bind, while PGlite serialises it
+  happily — so in production *every* evaluation would have thrown into the
+  outer catch and sent zero pushes, with the whole suite green. Now the
+  column helpers (`lte`/`gt`) do the encoding, and a test walks the bound
+  parameters of a whole evaluation asserting none is a `Date`. Also: the
+  evaluation now runs under the same challenge row lock `join` takes (two
+  simultaneous uploads pushed the same person twice and clobbered each
+  other's placements); a transient send failure keeps that participant's
+  baseline so the next catch retries instead of losing the notification;
+  baseline seeding moved out of the create/join transactions and became
+  best-effort; a token moving between devices logs a warn with both device
+  ids; the HTTP/2 send resolves on a silent stream teardown instead of
+  hanging forever; and the route test drives the after-reply work through an
+  injected scheduler rather than sleeping.
+- **An un-migrated deploy is worse than "no pushes"** — Drizzle names every
+  schema column in its INSERTs, so without 0011 device registration and
+  challenge create/join fail too. Pinned by a test; README says so plainly.
 - **Secrets to set before this does anything** (see backend/README.md):
   `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID`.
-- **Tests: 443 → 484.** Route tests for the token lifecycle, JWT/config/no-op
+- **Tests: 443 → 499.** Route tests for the token lifecycle, JWT/config/no-op
   tests for the sender, and overtaken tests that spend most of their length on
   the negatives (cooldown, uploader, tokenless, disabled, not-live, dead-token
   cleanup) — the ways this feature turns into spam.

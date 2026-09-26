@@ -86,6 +86,12 @@ export interface CatchesRouteOptions {
    */
   onCatchIngested?: (deviceId: string) => void;
   /**
+   * How `onCatchIngested` is deferred. Production leaves it as `setImmediate`
+   * — the reply is already on the wire by the time the task runs. Tests inject
+   * a collector so the after-reply work is deterministic instead of a sleep.
+   */
+  scheduleAfterReply?: (task: () => void) => void;
+  /**
    * Route-guess verifier — the SAME resolver behind GET /v1/routes/:callsign
    * (in production the adsb.lol standing-data lookup, shared cache). Optional:
    * when absent (non-adsblol deployment, most tests), a route guess simply
@@ -141,6 +147,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     routeResolver,
     onCatchIngested,
   } = opts;
+  const scheduleAfterReply = opts.scheduleAfterReply ?? ((task: () => void) => setImmediate(task));
   const nowSeconds = opts.nowSeconds ?? (() => Math.floor(Date.now() / 1000));
 
   /**
@@ -402,7 +409,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     // catchUuid twice) changes nothing about the standings, so only a fresh
     // insert triggers one.
     if (!duplicate && onCatchIngested) {
-      setImmediate(() => {
+      scheduleAfterReply(() => {
         try {
           onCatchIngested(device.id);
         } catch (err) {

@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import {
   DrizzleOvertakenStore,
   type OvertakenStore,
+  type OvertakenSummary,
   evaluateOvertaken,
 } from "./challenges/overtaken.js";
 import { PrivatePointsScorer } from "./challenges/scorer.js";
@@ -24,7 +25,7 @@ import {
 } from "./providers/adsblolRoutes.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
-import { type ApnsTransport, createApnsTransport } from "./push/apns.js";
+import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
 import { type ChallengesAvailability, registerChallengesRoutes } from "./routes/challenges.js";
@@ -114,6 +115,17 @@ export interface BuildAppOptions {
    * Production wraps the same Postgres handle + challenge store.
    */
   overtakenStore?: OvertakenStore;
+  /**
+   * How post-reply work (the overtaken evaluation) is deferred. Production uses
+   * `setImmediate`; tests pass a collector so the after-reply work can be run
+   * and awaited deterministically instead of slept on.
+   */
+  scheduleAfterReply?: (task: () => void) => void;
+  /**
+   * Called synchronously with the promise of each scheduled overtaken
+   * evaluation, so a test can await it. Production leaves it undefined.
+   */
+  onOvertakenEvaluation?: (evaluation: Promise<OvertakenSummary>) => void;
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
   /**
@@ -486,6 +498,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // built further down — it is only ever CALLED after a catch, long after
     // buildApp has returned.
     onCatchIngested: scheduleOvertaken,
+    scheduleAfterReply: options.scheduleAfterReply,
     nowSeconds: options.nowSeconds,
   });
   // The leaderboard's window math shares the catch-validation clock
@@ -503,7 +516,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   let challengeStore = options.challengeStore;
   function getChallengeStore(): ChallengeStore {
     if (!challengeStore) {
-      challengeStore = new DrizzleChallengeStore(getDb(), new PrivatePointsScorer(getDb()));
+      challengeStore = new DrizzleChallengeStore(getDb(), new PrivatePointsScorer(getDb()), {
+        warn: (obj, msg) => app.log.warn(obj, msg),
+      });
     }
     return challengeStore;
   }
@@ -567,7 +582,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   let overtakenStore = options.overtakenStore;
   function getOvertakenStore(): OvertakenStore {
     if (!overtakenStore) {
-      overtakenStore = new DrizzleOvertakenStore(getDb(), getChallengeStore());
+      // Its own scorer instance (they are stateless): the evaluation scores
+      // inside the transaction that holds the challenge row lock, so it can't
+      // borrow the challenge store's connection-bound one.
+      overtakenStore = new DrizzleOvertakenStore(getDb(), new PrivatePointsScorer(getDb()));
     }
     return overtakenStore;
   }
@@ -579,18 +597,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    */
   function scheduleOvertaken(deviceId: string): void {
     if (!challengesEnabled()) return;
-    void evaluateOvertaken(
+    const evaluation = evaluateOvertaken(
       {
         store: getOvertakenStore(),
         transport: apnsTransport,
         log: {
+          debug: (obj, msg) => app.log.debug(obj, msg),
           info: (obj, msg) => app.log.info(obj, msg),
           warn: (obj, msg) => app.log.warn(obj, msg),
         },
         now: challengeNow,
       },
       deviceId,
-    ).catch((err) => app.log.warn({ err, deviceId }, "overtaken evaluation failed"));
+    );
+    options.onOvertakenEvaluation?.(evaluation);
+    void evaluation.catch((err) => app.log.warn({ err, deviceId }, "overtaken evaluation failed"));
+  }
+
+  // An HTTP/2 session to Apple outlives any single request, so it has to be
+  // torn down with the app or vitest reports an open handle (and a production
+  // shutdown would wait on it).
+  if (apnsTransport instanceof Http2ApnsTransport) {
+    app.addHook("onClose", async () => apnsTransport.close());
   }
 
   // GET /v1/stats — the marketing site's catch counter. Origin-gated + cached;

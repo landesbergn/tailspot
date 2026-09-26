@@ -191,10 +191,17 @@ const CODE_ATTEMPTS = 5;
 
 type ChallengeRow = typeof challenges.$inferSelect;
 
+/** Just enough of Fastify's logger for the store's best-effort warnings. */
+export interface ChallengeStoreLogger {
+  warn(obj: Record<string, unknown>, msg: string): void;
+}
+
 export class DrizzleChallengeStore implements ChallengeStore {
   constructor(
     private readonly db: Database,
     private readonly scorer: ChallengeScorer,
+    /** Optional: where best-effort failures (push-baseline seeding) are reported. */
+    private readonly log?: ChallengeStoreLogger,
   ) {}
 
   private async hydrate(row: ChallengeRow): Promise<Challenge> {
@@ -254,15 +261,17 @@ export class DrizzleChallengeStore implements ChallengeStore {
             challengeId: rows[0].id,
             deviceId: input.creatorDeviceId,
             joinedAt: now,
-            // Seed the overtaken-detection memory (see overtaken.ts): alone in
-            // a brand-new challenge, the creator is 1st. Without a seed the
-            // first evaluation would see null ("no opinion") and stay silent
-            // through the race's first overtake.
-            lastPlacement: 1,
           });
           return rows[0];
         });
-        return this.hydrate(created);
+        const challenge = await this.hydrate(created);
+        // Seed the push baseline AFTER the challenge exists, never as a column
+        // in the INSERT above: `last_placement` arrived in migration 0011, and
+        // writing it inside the creating transaction would make an
+        // un-migrated deploy fail CREATE outright. Best-effort — see
+        // `seedPlacement`.
+        await this.seedCreatorPlacement(challenge);
+        return challenge;
       } catch (err) {
         // A unique-index collision on `code` (≈1 in 8e11 per attempt) → try
         // another code. Anything else is a real failure.
@@ -348,7 +357,7 @@ export class DrizzleChallengeStore implements ChallengeStore {
     const status = challengeStatus(challenge, now);
     if (status === "finished" || status === "cancelled") return { ok: false, reason: "closed" };
 
-    return this.db.transaction(async (tx) => {
+    const result = await this.db.transaction<JoinResult>(async (tx) => {
       // ROW LOCK FIRST. Two joins racing at 9/10 would both read 9 and both
       // insert; `SELECT … FOR UPDATE` on the challenge serialises every join
       // (and every finalization) for this challenge behind one lock, so the
@@ -443,9 +452,6 @@ export class DrizzleChallengeStore implements ChallengeStore {
               eq(challengeParticipants.deviceId, deviceId),
             ),
           );
-        // A rejoiner's remembered placement is from before they left; re-seed
-        // it against the board they're walking back into.
-        await this.seedPlacement(tx, challenge, deviceId);
         return { ok: true, alreadyIn: false, newDevice: false };
       }
 
@@ -467,10 +473,6 @@ export class DrizzleChallengeStore implements ChallengeStore {
         joinedAt: now,
         joinedAsNewDevice: newDevice,
       });
-      // Seed the overtaken memory from the board as it stands WITH this
-      // joiner on it — their earlier in-window catches count (D3), so a
-      // joiner can arrive anywhere, not just last.
-      await this.seedPlacement(tx, challenge, deviceId);
       if (newDevice) {
         await tx
           .update(devices)
@@ -479,35 +481,69 @@ export class DrizzleChallengeStore implements ChallengeStore {
       }
       return { ok: true, alreadyIn: false, newDevice };
     });
+    // Seed the push baseline AFTER the join has committed, outside its
+    // transaction. Inside it, a failure (notably a missing `last_placement`
+    // column on an un-migrated deploy) would abort the whole join — Postgres
+    // discards everything after the first error, so a try/catch in there buys
+    // nothing. A re-joiner is re-seeded too: their remembered placement is from
+    // before they left.
+    if (result.ok && !result.alreadyIn) await this.seedPlacement(challenge, deviceId);
+    return result;
   }
 
   /**
-   * Record the placement `deviceId` holds RIGHT NOW, inside the join
-   * transaction that put them on the board.
+   * Record the placement `deviceId` holds right now, as the baseline the
+   * "someone passed you" push compares against
+   * (`challenge_participants.last_placement`, see challenges/overtaken.ts).
    *
-   * This is the seed the "someone passed you" push compares against
-   * (`challenge_participants.last_placement`, see challenges/overtaken.ts). It
-   * has to happen here rather than at the first catch: a null means "never
-   * evaluated" and never notifies, so a participant seeded late would sit out
-   * the first overtake of their race.
+   * BEST-EFFORT, BY DESIGN. A null baseline means "never evaluated" and simply
+   * never notifies, so the worst case of a failed seed is that this participant
+   * misses the first overtake of their race — whereas a seed that could fail
+   * the JOIN would make an un-migrated deploy break joining, which is a real
+   * feature. Push is a garnish; joining is not.
    *
-   * Deliberately NOT wrapped in a try/catch: it runs inside the join's
-   * transaction, where Postgres aborts everything after the first error anyway
-   * — swallowing here would only turn a clear failure into a confusing one two
-   * statements later.
+   * Runs after the join transaction has committed, for the same reason: inside
+   * it, any error aborts the join.
    */
-  private async seedPlacement(exec: Executor, challenge: Challenge, deviceId: string) {
-    const live = await this.liveStandings(challenge, exec);
-    const placement = live.standings.find((s) => s.deviceId === deviceId)?.placement ?? 1;
-    await exec
-      .update(challengeParticipants)
-      .set({ lastPlacement: placement })
-      .where(
-        and(
-          eq(challengeParticipants.challengeId, challenge.id),
-          eq(challengeParticipants.deviceId, deviceId),
-        ),
+  private async seedPlacement(challenge: Challenge, deviceId: string): Promise<void> {
+    try {
+      const live = await this.liveStandings(challenge);
+      const placement = live.standings.find((s) => s.deviceId === deviceId)?.placement ?? 1;
+      await this.db
+        .update(challengeParticipants)
+        .set({ lastPlacement: placement })
+        .where(
+          and(
+            eq(challengeParticipants.challengeId, challenge.id),
+            eq(challengeParticipants.deviceId, deviceId),
+          ),
+        );
+    } catch (err) {
+      this.log?.warn(
+        { err, challengeId: challenge.id, deviceId },
+        "could not seed the challenge push baseline (last_placement); pushes stay silent for this participant",
       );
+    }
+  }
+
+  /** The creator is alone in a brand-new challenge, so the baseline is 1 — no scoring needed. */
+  private async seedCreatorPlacement(challenge: Challenge): Promise<void> {
+    try {
+      await this.db
+        .update(challengeParticipants)
+        .set({ lastPlacement: 1 })
+        .where(
+          and(
+            eq(challengeParticipants.challengeId, challenge.id),
+            eq(challengeParticipants.deviceId, challenge.creatorDeviceId),
+          ),
+        );
+    } catch (err) {
+      this.log?.warn(
+        { err, challengeId: challenge.id },
+        "could not seed the challenge push baseline (last_placement) for the creator",
+      );
+    }
   }
 
   async leave(challenge: Challenge, deviceId: string, now: Date): Promise<LeaveResult> {

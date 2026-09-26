@@ -102,13 +102,25 @@ export interface IdentityStore {
     token: string,
     environment: PushEnvironment,
     now: Date,
-  ): Promise<void>;
+  ): Promise<SetPushTokenResult>;
   /** Forget this device's push token (the client's opt-out / sign-off path). */
   clearPushToken(deviceId: string): Promise<void>;
 }
 
 /** Which APNs host a stored token is valid against. Mirrors push/apns.ts. */
 export type PushEnvironment = "sandbox" | "production";
+
+/** What `setPushToken` did, so the route can report a token that MOVED. */
+export interface SetPushTokenResult {
+  /**
+   * Device ids the token was taken away from. Normally empty. A non-empty list
+   * is worth a look: the honest cause is a restore or reinstall, but it is also
+   * what a replayed/leaked bearer token would look like — registration proves
+   * possession of the bearer token and nothing more, so this is the only signal
+   * we get. Never log the token itself.
+   */
+  movedFrom: string[];
+}
 
 export class DrizzleIdentityStore implements IdentityStore {
   constructor(private readonly db: Database) {}
@@ -163,19 +175,21 @@ export class DrizzleIdentityStore implements IdentityStore {
     token: string,
     environment: PushEnvironment,
     now: Date,
-  ): Promise<void> {
+  ): Promise<SetPushTokenResult> {
     // Both writes in ONE transaction: between the clear and the set, a token
     // must never be on zero rows (a lost notification) or on two (a leak to
     // another identity).
-    await this.db.transaction(async (tx) => {
-      await tx
+    return this.db.transaction(async (tx) => {
+      const moved = await tx
         .update(devices)
         .set({ apnsToken: null, apnsEnvironment: null })
-        .where(and(eq(devices.apnsToken, token), sql`${devices.id} <> ${deviceId}`));
+        .where(and(eq(devices.apnsToken, token), sql`${devices.id} <> ${deviceId}`))
+        .returning({ id: devices.id });
       await tx
         .update(devices)
         .set({ apnsToken: token, apnsEnvironment: environment, apnsUpdatedAt: now })
         .where(eq(devices.id, deviceId));
+      return { movedFrom: moved.map((m) => m.id) };
     });
   }
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
-import { DrizzleOvertakenStore } from "../src/challenges/overtaken.js";
+import { DrizzleOvertakenStore, type OvertakenSummary } from "../src/challenges/overtaken.js";
 import { PrivatePointsScorer } from "../src/challenges/scorer.js";
 import { DrizzleChallengeStore } from "../src/challenges/store.js";
 import type { Database } from "../src/db/client.js";
@@ -37,6 +37,16 @@ interface Rig {
   db: Database;
   challengeStore: DrizzleChallengeStore;
   transport: FakeTransport;
+  /**
+   * Run the work the route deferred until after the reply, and wait for it.
+   *
+   * This replaces sleeping. `scheduleAfterReply` collects the task instead of
+   * handing it to `setImmediate`, and `onOvertakenEvaluation` hands us the
+   * promise the task creates — so the test drives the post-reply work itself
+   * and a slow machine can't turn a real failure into a flake (or a real
+   * regression into a pass, which is worse).
+   */
+  afterReply: () => Promise<OvertakenSummary[]>;
 }
 
 async function setup(enabled: boolean): Promise<Rig> {
@@ -53,17 +63,25 @@ async function setup(enabled: boolean): Promise<Rig> {
   await db.insert(registry).values({ icao24: "aaaaaa", registration: "N123AA", typecode: "B738" });
   const challengeStore = new DrizzleChallengeStore(db, new PrivatePointsScorer(db));
   const transport = new FakeTransport();
+  const deferred: (() => void)[] = [];
+  const evaluations: Promise<OvertakenSummary>[] = [];
   const app = await buildApp({
     identityStore: new DrizzleIdentityStore(db),
     catchStore: new DrizzleCatchStore(db),
     challengeStore,
-    overtakenStore: new DrizzleOvertakenStore(db, challengeStore),
+    overtakenStore: new DrizzleOvertakenStore(db, new PrivatePointsScorer(db)),
     apnsTransport: transport,
     challengesEnabled: () => enabled,
+    scheduleAfterReply: (task) => deferred.push(task),
+    onOvertakenEvaluation: (evaluation) => evaluations.push(evaluation),
     nowSeconds: () => T0_SEC + 600,
     rateLimitNow: () => T0.getTime(),
   });
-  return { app, db, challengeStore, transport };
+  const afterReply = async () => {
+    for (const task of deferred.splice(0)) task();
+    return Promise.all(evaluations.splice(0));
+  };
+  return { app, db, challengeStore, transport, afterReply };
 }
 
 /** Register through the real routes, claim a handle, optionally register a push token. */
@@ -104,21 +122,6 @@ function catchBody(catchUuid: string) {
   };
 }
 
-/**
- * Wait for the `setImmediate`-scheduled evaluation to finish. It awaits several
- * PGlite round trips, so draining the microtask queue isn't enough — we poll
- * until the expected number of sends has landed, then drain once more so a
- * "should send nothing" assertion still gets a fair chance to fail.
- */
-async function settle(transport: FakeTransport, expected = 0): Promise<void> {
-  const deadline = Date.now() + 5_000;
-  while (transport.sent.length < expected && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  for (let i = 0; i < 50; i++) await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setTimeout(resolve, 50));
-}
-
 /** A small in-window catch for the rival, so they hold the lead at 10–0. */
 async function seedRival(db: Database, deviceId: string): Promise<void> {
   await db.insert(catches).values({
@@ -135,7 +138,7 @@ async function seedRival(db: Database, deviceId: string): Promise<void> {
 
 describe("overtaken pushes via POST /v1/catches", () => {
   it("a catch that takes the lead pushes the person who lost it", async () => {
-    const { app, db, challengeStore, transport } = await setup(true);
+    const { app, db, challengeStore, transport, afterReply } = await setup(true);
     try {
       const a = await newDevice(app, "ada");
       const b = await newDevice(app, "bex", TOKEN_B);
@@ -160,7 +163,8 @@ describe("overtaken pushes via POST /v1/catches", () => {
       // The reply does not wait for the push, and does not change shape for it.
       expect(res.statusCode).toBe(201);
 
-      await settle(transport, 1);
+      const [summary] = await afterReply();
+      expect(summary).toEqual({ challenges: 1, overtaken: 1, pushes: 1, retryable: 0 });
       expect(transport.sent).toHaveLength(1);
       expect(transport.sent[0].token).toBe(TOKEN_B);
       const alert = (transport.sent[0].payload as { aps: { alert: { body: string } } }).aps.alert;
@@ -171,7 +175,7 @@ describe("overtaken pushes via POST /v1/catches", () => {
   });
 
   it("sends nothing at all when CHALLENGES_ENABLED is off", async () => {
-    const { app, db, challengeStore, transport } = await setup(false);
+    const { app, db, challengeStore, transport, afterReply } = await setup(false);
     try {
       const a = await newDevice(app, "ada");
       const b = await newDevice(app, "bex", TOKEN_B);
@@ -194,7 +198,7 @@ describe("overtaken pushes via POST /v1/catches", () => {
         payload: catchBody("22222222-2222-4222-8222-222222222222"),
       });
       expect(res.statusCode).toBe(201);
-      await settle(transport);
+      expect(await afterReply()).toEqual([]); // nothing was even scheduled
       expect(transport.sent).toHaveLength(0);
     } finally {
       await app.close();
@@ -202,7 +206,7 @@ describe("overtaken pushes via POST /v1/catches", () => {
   });
 
   it("a replayed upload (same catchUuid) does not re-evaluate", async () => {
-    const { app, db, challengeStore, transport } = await setup(true);
+    const { app, db, challengeStore, transport, afterReply } = await setup(true);
     try {
       const a = await newDevice(app, "ada");
       const b = await newDevice(app, "bex", TOKEN_B);
@@ -224,7 +228,8 @@ describe("overtaken pushes via POST /v1/catches", () => {
         (await app.inject({ method: "POST", url: "/v1/catches", headers: auth, payload: body }))
           .statusCode,
       ).toBe(201);
-      await settle(transport, 1);
+      const [summary] = await afterReply();
+      expect(summary).toEqual({ challenges: 1, overtaken: 1, pushes: 1, retryable: 0 });
       expect(transport.sent).toHaveLength(1);
 
       const replay = await app.inject({
@@ -235,7 +240,8 @@ describe("overtaken pushes via POST /v1/catches", () => {
       });
       expect(replay.statusCode).toBe(200);
       expect(replay.json().duplicate).toBe(true);
-      await settle(transport, 1);
+      // A replay schedules nothing at all — the standings did not move.
+      expect(await afterReply()).toEqual([]);
       expect(transport.sent).toHaveLength(1);
     } finally {
       await app.close();

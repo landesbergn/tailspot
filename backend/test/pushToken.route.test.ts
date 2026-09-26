@@ -115,6 +115,28 @@ describe("push-token routes", () => {
     expect((await row(second.deviceId)).apnsToken).toBe(TOKEN_A);
   });
 
+  it("reports which device a token was taken from, so the move can be alarmed on", async () => {
+    // The route turns a non-empty `movedFrom` into a warn + a counter. There is
+    // no proof of possession of an APNs token — registration proves only that
+    // the caller holds the BEARER token — so a token changing hands is the one
+    // observable symptom of a replayed bearer token, as well as the ordinary
+    // symptom of a restore. The store is where it's assertable: the app's
+    // logger is off under test.
+    const store = new DrizzleIdentityStore(db);
+    const first = await register();
+    const second = await register();
+
+    const fresh = await store.setPushToken(first.deviceId, TOKEN_A, "production", new Date(T0_MS));
+    expect(fresh.movedFrom).toEqual([]);
+
+    const again = await store.setPushToken(first.deviceId, TOKEN_A, "production", new Date(T0_MS));
+    expect(again.movedFrom).toEqual([]); // the same device re-registering is not a move
+
+    const moved = await store.setPushToken(second.deviceId, TOKEN_A, "production", new Date(T0_MS));
+    expect(moved.movedFrom).toEqual([first.deviceId]);
+    expect((await row(first.deviceId)).apnsToken).toBeNull();
+  });
+
   it("DELETE clears the token", async () => {
     const dev = await register();
     await post(dev.token, { token: TOKEN_A, environment: "production" });
