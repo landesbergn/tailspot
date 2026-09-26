@@ -141,31 +141,21 @@ nonisolated enum ChallengeReminders {
         return id.isEmpty ? nil : (id, moment)
     }
 
-    /// Every identifier a single challenge can own — for cancellation on
-    /// leave / cancel / delete, regardless of which moments are currently
+    /// The four FIXED identifiers a single challenge owns — for cancellation
+    /// on leave / cancel / delete, regardless of which moments are currently
     /// still in the future.
     ///
-    /// The four fixed moments are always enumerated. The per-day `daily`
-    /// slots can only be listed if the caller knows the window, so
-    /// `startsAt` / `endsAt` are optional: pass them and the dailies come
-    /// too. A caller with no summary in hand (a challenge cancelled from a
-    /// link, with the list never loaded) gets the fixed four and relies on
-    /// `ChallengeReminderScheduler`'s pending-sweep to catch the rest.
-    static func identifiers(
-        challengeId: String,
-        startsAt: Date? = nil,
-        endsAt: Date? = nil,
-        timeZone: TimeZone = .current
-    ) -> [String] {
-        var ids = [Moment.starts, .midway, .endingSoon, .finished].map {
+    /// The per-day `daily` slots are deliberately NOT enumerable here. A
+    /// dated overload existed briefly and had no production caller: the
+    /// places that cancel (leave, cancel, a challenge dropping out of the
+    /// open list) do not reliably hold the window — a challenge cancelled
+    /// from a link has no local summary at all. `ChallengeReminderScheduler`
+    /// sweeps the pending list by challenge id instead, which needs no dates
+    /// and also catches any moment a future build adds.
+    static func identifiers(challengeId: String) -> [String] {
+        [Moment.starts, .midway, .endingSoon, .finished].map {
             identifier(challengeId: challengeId, moment: $0)
         }
-        if let startsAt, let endsAt {
-            ids += interiorDayKeys(startsAt: startsAt, endsAt: endsAt, timeZone: timeZone).map {
-                identifier(challengeId: challengeId, moment: .daily, dayKey: $0.key)
-            }
-        }
-        return ids
     }
 
     // MARK: - Plan
@@ -193,10 +183,14 @@ nonisolated enum ChallengeReminders {
     /// - The "ending soon" lead is 10 minutes for the 1h preset (a 1-hour
     ///   warning on a 1-hour challenge would fire before or at the start)
     ///   and 1 hour for 24h/3d/7d.
-    /// - Never two banners on one calendar day: a `daily` that lands on the
-    ///   same local day as `ending_soon` or `finished` is dropped, and a
-    ///   `midway` inside `midwayMinimumLeadBeforeEndingSoon` of
-    ///   `ending_soon` is dropped.
+    /// - A mid-challenge nudge never shares a day with the endgame: a
+    ///   `daily` that lands on the same local day as `ending_soon` or
+    ///   `finished` is dropped, and a `midway` inside
+    ///   `midwayMinimumLeadBeforeEndingSoon` of `ending_soon` is dropped.
+    ///   Note the precise scope — this is NOT "never two banners in one
+    ///   calendar day". A 24h challenge starting at 10:00 legitimately
+    ///   fires `starts` at 10:00 and `midway` at 22:00 the same day; those
+    ///   are twelve hours and two different facts apart.
     ///
     /// `placement` is the caller's last-known standing (see
     /// `ChallengesModel.reminderPlacements`). It is deliberately allowed to
@@ -266,7 +260,7 @@ nonisolated enum ChallengeReminders {
                 plans.append(ChallengeReminderPlan(
                     identifier: identifier(challengeId: challengeId, moment: .daily, dayKey: day.key),
                     fireAt: fireAt,
-                    title: "Day \(day.index) of \(total)",
+                    title: "Day \(dayNumber(fireAt: fireAt, startsAt: startsAt, total: total)) of \(total)",
                     body: standingLine ?? "\(name) is on. Check the standings."
                 ))
             }
@@ -310,11 +304,25 @@ nonisolated enum ChallengeReminders {
 
     // MARK: - Day math
 
-    /// How many days the preset covers, for the "Day 3 of 7" title. Day 1 is
-    /// the day the challenge started, so a 7d challenge's last interior day
-    /// is day 7 and the (excluded) end day would be day 8.
+    /// How many days the preset covers, for the "Day 3 of 7" title.
     static func totalDays(durationPreset: String) -> Int {
         Int(ChallengeDurations.seconds(for: durationPreset) / 86_400).clampedToAtLeast(1)
+    }
+
+    /// Which day of the challenge a nudge belongs to, counted in ELAPSED
+    /// TIME rather than calendar days (review of PR #289).
+    ///
+    /// The calendar version was wrong at the edges and said so out loud: a
+    /// 3d challenge created Friday 20:00 runs to Monday 20:00, and on
+    /// Sunday at 17:00 — with 27 hours still to play — the calendar count
+    /// made that the third calendar day and the banner read "Day 3 of 3".
+    /// Counting whole 24-hour blocks since `startsAt` gives "Day 2 of 3",
+    /// which is what the clock actually says. Clamped to 1…`total` so a
+    /// rounding edge can never read "Day 0" or "Day 4 of 3".
+    static func dayNumber(fireAt: Date, startsAt: Date, total: Int) -> Int {
+        let elapsed = fireAt.timeIntervalSince(startsAt)
+        let day = Int(floor(elapsed / 86_400)) + 1
+        return min(max(day, 1), total)
     }
 
     /// Every full local day strictly after the start day and strictly before
@@ -323,21 +331,19 @@ nonisolated enum ChallengeReminders {
     /// joined it); the end day by `ending_soon` / `finished`.
     static func interiorDayKeys(
         startsAt: Date, endsAt: Date, timeZone: TimeZone = .current
-    ) -> [(key: String, start: Date, index: Int)] {
+    ) -> [(key: String, start: Date)] {
         let calendar = calendar(timeZone)
         let startDay = calendar.startOfDay(for: startsAt)
         let endDay = calendar.startOfDay(for: endsAt)
-        var result: [(key: String, start: Date, index: Int)] = []
+        var result: [(key: String, start: Date)] = []
         var day = calendar.date(byAdding: .day, value: 1, to: startDay) ?? startDay
-        var index = 2 // the start day is day 1
         // 400 is a hard stop, not a rule: the longest preset is 7 days, and
         // an unbounded while over Calendar arithmetic is how you hang a run
         // loop on a corrupt date.
         while day < endDay, result.count < 400 {
-            result.append((key: dayKey(day, calendar: calendar), start: day, index: index))
+            result.append((key: dayKey(day, calendar: calendar), start: day))
             guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
             day = next
-            index += 1
         }
         return result
     }

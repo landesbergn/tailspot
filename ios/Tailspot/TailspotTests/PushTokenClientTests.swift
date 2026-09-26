@@ -192,19 +192,46 @@ struct PushTokenClientTests {
         PushTokenStubProtocol.status = 204
         await client.registerIfChanged(token: "a1b2c3", environment: PushEnvironment.sandbox)
         #expect(PushTokenStubProtocol.recorded.count == 2)
-        #expect(client.lastUploaded == "sandbox:a1b2c3")
+        #expect(client.lastUploaded == "sandbox:a1b2c3:120")
+    }
+
+    /// `build` is in the request body, so the server's row records which
+    /// client version a token came from. With the build left out of the
+    /// stamp, an app update never re-sent it and every upgraded device
+    /// stayed recorded at the build it first registered on.
+    @Test func anAppUpdateReUploadsTheSameToken() async {
+        let defaults = freshDefaults()
+        await makeClient(defaults: defaults, build: 120)
+            .registerIfChanged(token: "a1b2c3", environment: PushEnvironment.sandbox)
+        #expect(PushTokenStubProtocol.recorded.count == 1)
+
+        // Same device, same token, same environment — new build.
+        await makeClient(defaults: defaults, build: 121)
+            .registerIfChanged(token: "a1b2c3", environment: PushEnvironment.sandbox)
+        #expect(PushTokenStubProtocol.recorded.count == 2)
+        #expect(body(PushTokenStubProtocol.recorded[1])["build"] as? Int == 121)
+
+        // And that new build is now the one remembered.
+        await makeClient(defaults: defaults, build: 121)
+            .registerIfChanged(token: "a1b2c3", environment: PushEnvironment.sandbox)
+        #expect(PushTokenStubProtocol.recorded.count == 2)
     }
 
     @Test func theSkipRuleIsPure() {
-        #expect(PushTokenClient.shouldUpload(token: "a1", environment: "sandbox", lastUploaded: nil))
+        #expect(PushTokenClient.shouldUpload(token: "a1", environment: "sandbox",
+                                             build: 1, lastUploaded: nil))
         #expect(!PushTokenClient.shouldUpload(token: "a1", environment: "sandbox",
-                                              lastUploaded: "sandbox:a1"))
+                                              build: 1, lastUploaded: "sandbox:a1:1"))
         #expect(PushTokenClient.shouldUpload(token: "a1", environment: "production",
-                                             lastUploaded: "sandbox:a1"))
+                                             build: 1, lastUploaded: "sandbox:a1:1"))
         #expect(PushTokenClient.shouldUpload(token: "a2", environment: "sandbox",
-                                             lastUploaded: "sandbox:a1"))
+                                             build: 1, lastUploaded: "sandbox:a1:1"))
+        // A new build re-sends the same token.
+        #expect(PushTokenClient.shouldUpload(token: "a1", environment: "sandbox",
+                                             build: 2, lastUploaded: "sandbox:a1:1"))
         // An empty token is not a token.
-        #expect(!PushTokenClient.shouldUpload(token: "", environment: "sandbox", lastUploaded: nil))
+        #expect(!PushTokenClient.shouldUpload(token: "", environment: "sandbox",
+                                              build: 1, lastUploaded: nil))
     }
 
     @Test func anEmptyTokenIsNeverPosted() async {

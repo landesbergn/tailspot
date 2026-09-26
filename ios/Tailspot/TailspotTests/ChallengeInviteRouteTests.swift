@@ -173,16 +173,43 @@ struct ChallengeInviteRouteTests {
 
     // MARK: - presentation sequencing
 
-    @Test func planDismissesFirstOnlyWhenSomethingIsPresented() {
-        #expect(ChallengeInvitePresentation.plan(isPrimarySheetPresented: false) == .presentNow)
-        #expect(ChallengeInvitePresentation.plan(isPrimarySheetPresented: true) == .dismissThenPresent)
+    /// The DESTINATION plan is three-way. The third case is the fix for a
+    /// real race (review of PR #289): with the Challenges sheet already up,
+    /// dismissing and re-presenting it destroys the push its resident hub
+    /// was making and hands the new hub a value already consumed.
+    @Test func destinationPlanHandsOverInPlaceWhenChallengesIsAlreadyUp() {
+        #expect(ChallengeInvitePresentation.plan(sheetOpen: .challenges) == .handInPlace)
+        #expect(ChallengeInvitePresentation.plan(sheetOpen: .profile) == .dismissThenPresent)
+        #expect(ChallengeInvitePresentation.plan(sheetOpen: .hangar) == .dismissThenPresent)
+        #expect(ChallengeInvitePresentation.plan(sheetOpen: .leaders) == .dismissThenPresent)
+        #expect(ChallengeInvitePresentation.plan(sheetOpen: nil) == .presentNow)
+    }
+
+    /// The MESSAGE plan stays two-way: an alert or toast raised by the catch
+    /// screen renders UNDER any sheet, the Challenges sheet included, so it
+    /// always needs the dismissal first.
+    @Test func messagePlanDismissesForEverySheetIncludingChallenges() {
+        #expect(ChallengeInvitePresentation.messagePlan(isPrimarySheetPresented: false) == .presentNow)
+        #expect(ChallengeInvitePresentation.messagePlan(isPrimarySheetPresented: true) == .dismissThenPresent)
+    }
+
+    /// `handInPlace` touches nothing on screen.
+    @Test @MainActor func handInPlaceNeitherDismissesNorPresents() async throws {
+        var order: [String] = []
+        try await ChallengeInvitePresentation.run(
+            plan: .handInPlace,
+            dismiss: { order.append("dismiss") },
+            settle: { order.append("settle") },
+            present: { order.append("present") },
+            thenClear: { order.append("clear") })
+        #expect(order == ["clear"])
     }
 
     /// With nothing in the way: present, then clear. Never the other way
     /// round — a message the user never saw must not take the invite.
-    @Test @MainActor func presentNowPresentsBeforeClearing() async {
+    @Test @MainActor func presentNowPresentsBeforeClearing() async throws {
         var order: [String] = []
-        await ChallengeInvitePresentation.run(
+        try await ChallengeInvitePresentation.run(
             plan: .presentNow,
             dismiss: { order.append("dismiss") },
             settle: { order.append("settle") },
@@ -194,9 +221,9 @@ struct ChallengeInviteRouteTests {
     /// With a sheet up: close it, let the dismissal finish, and only then
     /// present — swapping `.sheet(item:)` cases directly races the
     /// dismissal, and an alert raised under a sheet is raised to nobody.
-    @Test @MainActor func dismissThenPresentRunsInOrder() async {
+    @Test @MainActor func dismissThenPresentRunsInOrder() async throws {
         var order: [String] = []
-        await ChallengeInvitePresentation.run(
+        try await ChallengeInvitePresentation.run(
             plan: .dismissThenPresent,
             dismiss: { order.append("dismiss") },
             settle: { order.append("settle") },
@@ -207,9 +234,9 @@ struct ChallengeInviteRouteTests {
 
     /// The join route passes no `thenClear` — the hub consumes the code
     /// instead, so the default must be a no-op that still presents.
-    @Test @MainActor func runWithoutClearStillPresents() async {
+    @Test @MainActor func runWithoutClearStillPresents() async throws {
         var order: [String] = []
-        await ChallengeInvitePresentation.run(
+        try await ChallengeInvitePresentation.run(
             plan: .dismissThenPresent,
             dismiss: { order.append("dismiss") },
             settle: { order.append("settle") },
@@ -222,6 +249,37 @@ struct ChallengeInviteRouteTests {
     @Test func dismissSettleIsAboutHalfASecond() {
         #expect(ChallengeInvitePresentation.dismissSettle >= .milliseconds(400))
         #expect(ChallengeInvitePresentation.dismissSettle <= .milliseconds(600))
+        // A pop is a shorter wait than a sheet dismissal.
+        #expect(ChallengeInvitePresentation.popSettle < ChallengeInvitePresentation.dismissSettle)
+    }
+
+    /// A settle that throws — the router's task was invalidated — must stop
+    /// the sequence. Presenting after cancellation presents the wrong thing
+    /// on top of whatever replaced it.
+    @Test @MainActor func aCancelledSettleNeverPresents() async {
+        struct Cancelled: Error {}
+        var order: [String] = []
+        await #expect(throws: Cancelled.self) {
+            try await ChallengeInvitePresentation.run(
+                plan: .dismissThenPresent,
+                dismiss: { order.append("dismiss") },
+                settle: { throw Cancelled() },
+                present: { order.append("present") },
+                thenClear: { order.append("clear") })
+        }
+        #expect(order == ["dismiss"])
+    }
+
+    /// The production settles propagate cancellation rather than swallowing
+    /// it with `try?`, which is what lets an invalidated router task stop.
+    @Test func productionSettlesPropagateCancellation() async {
+        let dismissal = Task { try await ChallengeInvitePresentation.sleepForDismissal() }
+        dismissal.cancel()
+        await #expect(throws: (any Error).self) { try await dismissal.value }
+
+        let pop = Task { try await ChallengeInvitePresentation.sleepForPop() }
+        pop.cancel()
+        await #expect(throws: (any Error).self) { try await pop.value }
     }
 
     // MARK: - end to end from a URL

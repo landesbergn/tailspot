@@ -248,30 +248,62 @@ struct ChallengeMidChallengeReminderTests {
         #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: "tailspot.challenge.c1.daily.notadate") == nil)
     }
 
-    @Test func identifiersWithDatesEnumerateEveryDailySlot() {
-        let starts = date(2026, 9, 28, 10)
-        let ids = ChallengeReminders.identifiers(
-            challengeId: "c1", startsAt: starts,
-            endsAt: starts.addingTimeInterval(3 * 86_400), timeZone: zone)
-        #expect(Set(ids) == [
+    /// `identifiers(challengeId:)` enumerates the FIXED four only. The
+    /// per-day slots are not enumerable without the window, and no caller
+    /// reliably has it — the scheduler's pending-sweep cancels those (see
+    /// `cancelSweepsTheDailyIdentifiersToo`).
+    @Test func identifiersEnumeratesTheFixedMomentsOnly() {
+        #expect(Set(ChallengeReminders.identifiers(challengeId: "c1")) == [
             "tailspot.challenge.c1.starts",
             "tailspot.challenge.c1.midway",
             "tailspot.challenge.c1.ending_soon",
             "tailspot.challenge.c1.finished",
-            "tailspot.challenge.c1.daily.2026-09-29",
-            "tailspot.challenge.c1.daily.2026-09-30",
         ])
     }
 
-    @Test func plannedDailyIdentifiersAreCancellable() {
-        // Whatever `plan` emits must be inside what `identifiers` enumerates,
-        // or a leave would strand a pending nudge for a challenge you left.
+    /// Whatever `plan` emits that is NOT a daily must be inside what
+    /// `identifiers` enumerates, or a leave would strand it.
+    @Test func plannedFixedIdentifiersAreCancellable() {
         let starts = date(2026, 9, 28, 10)
-        let planned = Set(plans(preset: "7d", startsAt: starts,
-                                now: starts.addingTimeInterval(-3600)).map(\.identifier))
-        let cancellable = Set(ChallengeReminders.identifiers(
-            challengeId: "c1", startsAt: starts,
-            endsAt: starts.addingTimeInterval(7 * 86_400), timeZone: zone))
-        #expect(planned.isSubset(of: cancellable))
+        let planned = plans(preset: "7d", startsAt: starts,
+                            now: starts.addingTimeInterval(-3600))
+        let fixed = Set(planned.map(\.identifier).filter { !$0.contains(".daily.") })
+        #expect(fixed.isSubset(of: Set(ChallengeReminders.identifiers(challengeId: "c1"))))
+        // And every daily IS parseable back to the challenge, which is what
+        // the sweep matches on.
+        for plan in planned where plan.identifier.contains(".daily.") {
+            #expect(ChallengeReminders.challengeId(fromNotificationIdentifier: plan.identifier) == "c1")
+        }
+    }
+
+    // MARK: - "Day N of M" counts elapsed time, not calendar days
+
+    /// The bug this replaced: a 3d challenge created Friday 20:00 runs to
+    /// Monday 20:00, and the Sunday 17:00 nudge — with 27 hours still to
+    /// play — read "Day 3 of 3" because Sunday is the third calendar day.
+    @Test func dayNumberCountsElapsedTimeNotCalendarDays() {
+        let friday = date(2026, 9, 25, 20)          // Friday 20:00
+        let result = dailies(plans(preset: "3d", startsAt: friday,
+                                   now: friday.addingTimeInterval(-3600)))
+        // Interior days: Saturday and Sunday (it ends Monday 20:00).
+        #expect(result.map(\.fireAt) == [date(2026, 9, 26, 17), date(2026, 9, 27, 17)])
+        // Saturday 17:00 is 21 h in — still day 1. Sunday 17:00 is 45 h in.
+        #expect(result.map(\.title) == ["Day 1 of 3", "Day 2 of 3"])
+    }
+
+    @Test func dayNumberIsPureAndClamped() {
+        let start = date(2026, 9, 28, 10)
+        #expect(ChallengeReminders.dayNumber(fireAt: start, startsAt: start, total: 7) == 1)
+        #expect(ChallengeReminders.dayNumber(
+            fireAt: start.addingTimeInterval(23 * 3600), startsAt: start, total: 7) == 1)
+        #expect(ChallengeReminders.dayNumber(
+            fireAt: start.addingTimeInterval(24 * 3600), startsAt: start, total: 7) == 2)
+        #expect(ChallengeReminders.dayNumber(
+            fireAt: start.addingTimeInterval(6 * 86_400 + 7 * 3600), startsAt: start, total: 7) == 7)
+        // Clamped at both ends: never "Day 0", never past the total.
+        #expect(ChallengeReminders.dayNumber(
+            fireAt: start.addingTimeInterval(-3600), startsAt: start, total: 3) == 1)
+        #expect(ChallengeReminders.dayNumber(
+            fireAt: start.addingTimeInterval(30 * 86_400), startsAt: start, total: 3) == 3)
     }
 }

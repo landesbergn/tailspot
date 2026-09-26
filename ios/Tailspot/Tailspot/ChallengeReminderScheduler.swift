@@ -258,11 +258,19 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
                 timeZone: zone
             )
         }
-        let wantedIds = Set(wantedPlans.map(\.identifier))
+        // Budget before anything else: iOS keeps only 64 pending local
+        // notifications per app, silently dropping the rest, and the streak
+        // reminder shares that pool.
+        let (plans, droppedPlans) = Self.trimmedToBudget(wantedPlans)
+        if !droppedPlans.isEmpty {
+            Log.ui.notice(
+                "Challenge reminders over budget: dropped \(droppedPlans.count, privacy: .public) of \(wantedPlans.count, privacy: .public)")
+        }
+        let wantedIds = Set(plans.map(\.identifier))
 
         let pending = await center.pendingRequests()
         let newIdentifiers = Self.newlyScheduledIdentifiers(
-            planned: wantedPlans.map(\.identifier), pending: pending.map(\.identifier)
+            planned: plans.map(\.identifier), pending: pending.map(\.identifier)
         )
         let staleIds = pending.map(\.identifier).filter { identifier in
             guard ChallengeReminders.isChallengeIdentifier(identifier),
@@ -274,12 +282,13 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
             center.removePendingNotificationRequests(withIdentifiers: staleIds)
         }
 
-        for plan in wantedPlans {
+        for plan in plans {
+            let parsed = ChallengeReminders.parse(plan.identifier)
             let content = UNMutableNotificationContent()
             content.title = plan.title
             content.body = plan.body
             content.sound = .default
-            if let parsed = ChallengeReminders.parse(plan.identifier) {
+            if let parsed {
                 // `challengeId` is the tap-routing contract, and the REMOTE
                 // pushes the backend sends carry the same two keys — see
                 // ChallengeNotificationRouting.
@@ -287,17 +296,6 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
                     "challengeId": parsed.challengeId,
                     "kind": parsed.moment.rawValue,
                 ]
-                // Only count a reminder as newly scheduled. `sync` runs on
-                // every foreground, refresh, create and join, and re-adding
-                // an already-pending identifier is an upsert no-op — firing
-                // the event there inflated the count by however often the
-                // app was opened, which is not what "scheduled" means.
-                if newIdentifiers.contains(plan.identifier) {
-                    Analytics.capture("challenge_reminder_scheduled", [
-                        "challenge_id": .string(parsed.challengeId),
-                        "moment": .string(parsed.moment.rawValue),
-                    ])
-                }
             }
             // At least 1s: `plan` only emits moments strictly in the future,
             // but guard the system trigger's hard minimum anyway.
@@ -308,7 +306,65 @@ final class ChallengeReminderScheduler: ChallengeReminderScheduling {
                 try await center.add(request)
             } catch {
                 Log.ui.debug("Challenge reminder scheduling failed: \(error.localizedDescription, privacy: .public)")
+                continue
+            }
+            // AFTER a successful add, never before (review of PR #289): iOS
+            // refuses an add when the 64-request pool is full, and an event
+            // fired ahead of the call counted reminders that do not exist.
+            //
+            // Only count a reminder as newly scheduled. `sync` runs on every
+            // foreground, refresh, create and join, and re-adding an
+            // already-pending identifier is an upsert no-op — firing the
+            // event there inflated the count by however often the app was
+            // opened, which is not what "scheduled" means.
+            if let parsed, newIdentifiers.contains(plan.identifier) {
+                Analytics.capture("challenge_reminder_scheduled", [
+                    "challenge_id": .string(parsed.challengeId),
+                    "moment": .string(parsed.moment.rawValue),
+                ])
             }
         }
+    }
+
+    // MARK: - Request budget
+
+    /// The most pending challenge requests this app will hold at once.
+    ///
+    /// iOS caps an app at **64** pending local notifications and silently
+    /// drops every request past it — and that pool is shared with the
+    /// streak reminder. One 7d challenge now plans up to nine moments
+    /// (starts + six dailies + ending_soon + finished), so a spotter in a
+    /// handful of long challenges can reach the cap on their own. 40 leaves
+    /// clear air for the streak slot and anything a later feature wants,
+    /// and it is a number we choose rather than a limit we discover by
+    /// having reminders vanish.
+    static let requestBudget = 40
+
+    /// Trim a plan set to the budget, dropping the least valuable moments
+    /// first: the FURTHEST-FUTURE `daily` nudges (a nudge a week out is the
+    /// one you would miss least, and by the time it matters another sync
+    /// will have re-planned it), then `midway`. `starts`, `ending_soon` and
+    /// `finished` are never dropped — they are the ones a user would call a
+    /// bug if they went missing.
+    nonisolated static func trimmedToBudget(
+        _ plans: [ChallengeReminderPlan], limit: Int = requestBudget
+    ) -> (kept: [ChallengeReminderPlan], dropped: [ChallengeReminderPlan]) {
+        guard plans.count > limit else { return (plans, []) }
+        var over = plans.count - limit
+        var dropping = Set<String>()
+        // Droppable moments in order of what we give up first.
+        for moment in [ChallengeReminders.Moment.daily, .midway] where over > 0 {
+            let candidates = plans
+                .filter { ChallengeReminders.moment(fromNotificationIdentifier: $0.identifier) == moment }
+                // Furthest future first.
+                .sorted { $0.fireAt > $1.fireAt }
+            for candidate in candidates where over > 0 {
+                dropping.insert(candidate.identifier)
+                over -= 1
+            }
+        }
+        let kept = plans.filter { !dropping.contains($0.identifier) }
+        let dropped = plans.filter { dropping.contains($0.identifier) }
+        return (kept, dropped)
     }
 }

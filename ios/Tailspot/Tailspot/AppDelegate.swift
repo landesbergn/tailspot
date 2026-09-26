@@ -35,6 +35,17 @@ import UIKit
 import UserNotifications
 import os
 
+//  SCOPE — three methods, and deliberately no more. This delegate must NOT
+//  implement `application(_:continue:restorationHandler:)` or
+//  `application(_:open:options:)`. Universal links and URL opens are handled
+//  by SwiftUI's `.onContinueUserActivity` / `.onOpenURL` in `TailspotApp`,
+//  and UIKit hands those callbacks to the app delegate FIRST: implementing
+//  either one here steals the delivery, and the SwiftUI modifiers stop
+//  firing. That would silently break every `tailspot.app/c/CODE` invite
+//  link. If a URL ever needs app-delegate-level handling, move the whole
+//  invite path here at once rather than splitting it.
+//
+
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(
@@ -46,6 +57,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // on some OS updates, and whenever the user reinstalls. Asking again
         // at launch is the documented way to stay current, and it is cheap —
         // iOS answers from cache when nothing changed.
+        //
+        // In a detached Task, and nothing else here: launch must not block.
+        // Everything this method could wait on (a notification-settings
+        // read, a network call) would be time added to a cold start that
+        // the user spends looking at the launch screen.
         Task { @MainActor in
             await PushRegistration.registerIfAuthorized()
         }
@@ -74,9 +90,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
         Log.ui.error("APNs registration failed: \(error.localizedDescription, privacy: .public)")
-        Analytics.capture("push_registration_failed", [
-            "reason": .string(error.localizedDescription),
-        ])
+        // Throttled to once a local day inside the reporter: this fires on
+        // every launch with no network, and one event per offline app open
+        // is a usage graph, not a signal.
+        PushFailureReporter.report(stage: .apns, reason: error.localizedDescription)
     }
 }
 

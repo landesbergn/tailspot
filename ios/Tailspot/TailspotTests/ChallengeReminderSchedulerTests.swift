@@ -30,11 +30,16 @@ final class FakeChallengeNotificationCenter: ChallengeNotificationCenter {
     /// Makes `add` slow, so a second `sync` has a window to interleave —
     /// the race the scheduler's serialization exists to close.
     var addDelayNanoseconds: UInt64 = 0
+    /// What `add` throws instead of succeeding. iOS refuses an add when the
+    /// 64-request pool is full, and the scheduler must not report a
+    /// reminder it failed to schedule.
+    var addError: (any Error)?
 
     func add(_ request: UNNotificationRequest) async throws {
         if addDelayNanoseconds > 0 {
             try? await Task.sleep(nanoseconds: addDelayNanoseconds)
         }
+        if let addError { throw addError }
         added.append(request)
         pending.removeAll { $0.identifier == request.identifier }
         pending.append(request)
@@ -264,6 +269,100 @@ struct ChallengeReminderSchedulerTests {
             let kind = request.content.userInfo["kind"] as? String
             #expect(kind != nil)
             #expect(ChallengeReminders.Moment(rawValue: kind ?? "") != nil)
+        }
+    }
+
+    // MARK: - the 64-pending-request budget
+
+    private func plan(_ identifier: String, _ fireAt: Date) -> ChallengeReminderPlan {
+        ChallengeReminderPlan(identifier: identifier, fireAt: fireAt, title: "t", body: "b")
+    }
+
+    @Test func underBudgetNothingIsTrimmed() {
+        let plans = (0..<5).map { plan(
+            ChallengeReminders.identifier(challengeId: "c\($0)", moment: .daily, dayKey: "2026-09-2\($0)"),
+            now.addingTimeInterval(Double($0) * 86_400)) }
+        let result = ChallengeReminderScheduler.trimmedToBudget(plans, limit: 10)
+        #expect(result.kept.count == 5)
+        #expect(result.dropped.isEmpty)
+    }
+
+    /// Over budget, the furthest-future dailies go first — a nudge a week
+    /// out is the one you would miss least, and the next sync re-plans it.
+    @Test func trimmingDropsTheFurthestFutureDailiesFirst() {
+        let dailies = (1...5).map { day in
+            plan(ChallengeReminders.identifier(challengeId: "c1", moment: .daily,
+                                               dayKey: "2026-09-0\(day)"),
+                 now.addingTimeInterval(Double(day) * 86_400))
+        }
+        let result = ChallengeReminderScheduler.trimmedToBudget(dailies, limit: 3)
+        #expect(result.dropped.count == 2)
+        // Days 5 and 4 — the two furthest out.
+        #expect(Set(result.dropped.map(\.identifier)) == [
+            "tailspot.challenge.c1.daily.2026-09-05",
+            "tailspot.challenge.c1.daily.2026-09-04",
+        ])
+        #expect(result.kept.count == 3)
+    }
+
+    /// Only once every daily is gone does `midway` go, and `starts`,
+    /// `ending_soon` and `finished` are never dropped at all — those are
+    /// the ones a user would call a bug if they went missing.
+    @Test func trimmingTakesDailiesThenMidwayAndNeverTheEndgame() {
+        let protectedMoments: [ChallengeReminders.Moment] = [.starts, .endingSoon, .finished]
+        var plans = protectedMoments.map {
+            plan(ChallengeReminders.identifier(challengeId: "c1", moment: $0),
+                 now.addingTimeInterval(3600))
+        }
+        plans.append(plan(ChallengeReminders.identifier(challengeId: "c1", moment: .midway),
+                          now.addingTimeInterval(7200)))
+        plans += (1...2).map { day in
+            plan(ChallengeReminders.identifier(challengeId: "c1", moment: .daily,
+                                               dayKey: "2026-09-0\(day)"),
+                 now.addingTimeInterval(Double(day) * 86_400))
+        }
+
+        // Room for four: both dailies go, midway survives.
+        let four = ChallengeReminderScheduler.trimmedToBudget(plans, limit: 4)
+        #expect(four.dropped.allSatisfy { $0.identifier.contains(".daily.") })
+        #expect(four.kept.contains { $0.identifier.hasSuffix(".midway") })
+
+        // Room for three: midway goes too, the endgame three survive.
+        let three = ChallengeReminderScheduler.trimmedToBudget(plans, limit: 3)
+        #expect(Set(three.kept.map(\.identifier)) == Set(protectedMoments.map {
+            ChallengeReminders.identifier(challengeId: "c1", moment: $0)
+        }))
+
+        // Room for one: there is nothing droppable left, so the endgame is
+        // kept and we go over rather than losing a "your challenge ended".
+        let one = ChallengeReminderScheduler.trimmedToBudget(plans, limit: 1)
+        #expect(one.kept.count == 3)
+        #expect(one.dropped.count == 3)
+    }
+
+    /// The real shape: one 7d challenge plans nine moments, and enough of
+    /// them together would blow through iOS's 64-request pool.
+    @Test func syncNeverAddsMoreThanTheBudget() async {
+        let center = FakeChallengeNotificationCenter()
+        let scheduler = ChallengeReminderScheduler(
+            center: center, defaults: freshDefaults(), now: { now },
+            timeZone: { .gmt }, registerForRemoteNotifications: {})
+        let many = (0..<12).map { index in
+            ChallengeFixtures.summary(
+                id: "c\(index)", name: "Long Haul \(index)", creator: "noah", code: nil,
+                startsAt: now.addingTimeInterval(60),
+                endsAt: now.addingTimeInterval(60 + 7 * 86_400),
+                preset: "7d", status: .upcoming, participantCount: 3)
+        }
+        await scheduler.sync(open: many)
+
+        #expect(center.added.count == ChallengeReminderScheduler.requestBudget)
+        // Every challenge keeps its endgame; only dailies were given up.
+        for index in 0..<12 {
+            for moment in [ChallengeReminders.Moment.starts, .endingSoon, .finished] {
+                let id = ChallengeReminders.identifier(challengeId: "c\(index)", moment: moment)
+                #expect(center.added.contains { $0.identifier == id }, "lost \(id)")
+            }
         }
     }
 

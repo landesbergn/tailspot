@@ -43,6 +43,22 @@ The fourth item is APNs registration: the client half of the remote
 past, and nothing is planned at all unless the Challenges reminder toggle
 is on and iOS notifications are authorized.</p>
 
+<p><b>The one-a-day rule, stated precisely:</b> a <code>daily</code> or
+<code>midway</code> never shares a local day with <code>ending_soon</code> or
+<code>finished</code>. It is a rule about not talking over the endgame, not a
+cap of one banner per day — a 24h challenge starting at 10:00 legitimately
+fires <code>starts</code> at 10:00 and <code>midway</code> at 22:00, twelve
+hours and two different facts apart.</p>
+
+<p><b>The request budget:</b> iOS keeps only <b>64</b> pending local
+notifications per app and silently drops the rest, and the streak reminder
+shares that pool. One 7d challenge now plans up to nine moments, so the
+scheduler caps challenge requests at <b>40</b> in total: over budget it gives
+up the furthest-future <code>daily</code> nudges first (the next sync
+re-plans them), then <code>midway</code>, and never <code>starts</code>,
+<code>ending_soon</code> or <code>finished</code> — those are the ones a user
+would call a bug if they went missing. The drop count is logged.</p>
+
 <table>
  <thead><tr><th>Moment</th><th>Presets</th><th>When</th><th>Copy</th></tr></thead>
  <tbody>
@@ -75,7 +91,10 @@ is on and iOS notifications are authorized.</p>
        <code>StreakReminders.reminderHour</code> &mdash; one app, one
        evening nudge hour, so the two features land together instead of
        pestering twice. Skipped on any day that <code>ending_soon</code> or
-       <code>finished</code> also falls on.</td>
+       <code>finished</code> also falls on. The day number counts ELAPSED
+       24-hour blocks since <code>startsAt</code>, not calendar days &mdash;
+       a 3d challenge created Friday 20:00 reads &ldquo;Day 2 of 3&rdquo; on
+       Sunday at 17:00, because there are still 27 hours to play.</td>
    <td class="copy"><b>Day 3 of 7</b><span>You&rsquo;re 2nd in Weekend Flyoff.</span>
        <span>&mdash; or, with no placement &mdash;</span>
        <span>Weekend Flyoff is on. Check the standings.</span></td>
@@ -129,6 +148,10 @@ is on and iOS notifications are authorized.</p>
      day. <b>14:00</b> &rarr; midpoint 02:00 is outside the window, so
      09:00 next day. <b>10:00</b> &rarr; midpoint 22:00 shifts to 09:00 next
      day, which <em>is</em> the ending_soon instant &mdash; skipped.</li>
+ <li><b>3d starting Friday 20:00</b> &rarr; dailies Saturday and Sunday at
+     17:00, reading "Day 1 of 3" and "Day 2 of 3". Not "Day 2" and "Day 3":
+     it ends Monday 20:00, and on Sunday evening there are still 27 hours
+     to play.</li>
  <li><b>1h</b> and <b>24h</b> never get a daily; <b>1h</b>, <b>3d</b> and
      <b>7d</b> never get a midway.</li>
 </ul>
@@ -155,10 +178,12 @@ tailspot.challenge.&lt;id&gt;.finished</pre>
 stacking a second one. Parsing now reads from the right, because a daily has
 two trailing components where every other moment has one; the id itself is a
 UUID, which can contain dashes but never a dot.
-<code>identifiers(challengeId:startsAt:endsAt:)</code> enumerates the per-day
-slots for cancellation, and <code>cancel(challengeId:)</code> additionally
-sweeps the pending list, so leaving a challenge clears its dailies even when
-the caller has no dates in hand.</p>
+<code>identifiers(challengeId:)</code> enumerates the four FIXED moments only;
+the per-day slots are not enumerable without knowing the window, and none of
+the places that cancel reliably has it (a challenge cancelled from a link has
+no local summary at all). So <code>cancel(challengeId:)</code> removes the
+fixed four synchronously and then sweeps the pending list by challenge id,
+which needs no dates and also catches any moment a later build adds.</p>
 
 <h2>Camera silence</h2>
 <p>The rule was already written down for the streak reminder: if you are
@@ -189,14 +214,36 @@ Streak behaviour is untouched.</p>
      one-owner shape as <code>pendingInviteCode</code>, because a hub already
      on screen under Profile or Leaders would otherwise swallow it during its
      own sheet's teardown.</li>
- <li><code>ChallengeInviteRouter</code> runs the existing
-     <code>ChallengeInvitePresentation</code> sequence (dismiss whatever
-     primary sheet is up, wait 450 ms for the dismissal, then present) onto
-     <code>PrimarySheet.challenges</code>.</li>
+ <li><code>ChallengeInviteRouter</code> asks
+     <code>ChallengeInvitePresentation.plan(sheetOpen:)</code> what to do,
+     and there are three answers, not two:
+     <ul class="tight">
+      <li><b>nothing open</b> &rarr; present <code>PrimarySheet.challenges</code>;</li>
+      <li><b>another sheet open</b> (Hangar, Profile, Leaders) &rarr; dismiss
+          it, wait 450 ms for the dismissal, then present — swapping
+          <code>.sheet(item:)</code> cases directly races the dismissal;</li>
+      <li><b>the Challenges sheet already open</b> &rarr; <code>handInPlace</code>:
+          do nothing at all. This one was a bug caught in review. Both the
+          router and the resident hub watch <code>pendingDetailId</code>; the
+          hub consumed it and pushed, and then the router dismissed the sheet
+          out from under that push, slept 450 ms, and re-presented a fresh
+          hub with nothing left to consume. The tap looked ignored.</li>
+     </ul>
+     The same three-way rule now covers an invite link's hub, which had the
+     identical race. A <em>message</em> (the "too old" alert, the unavailable
+     toast) still uses the two-way <code>messagePlan</code>, because an alert
+     or toast renders under any sheet, the Challenges sheet included.</li>
  <li>The hub inside that sheet &mdash; source <code>deep_link</code>, the
      only source allowed to consume it &mdash; takes the id and pushes
-     <code>ChallengeDetailScreen</code>.</li>
+     <code>ChallengeDetailScreen</code>. If it is already showing a
+     <em>different</em> challenge, it pops to root first and waits 350 ms:
+     a <code>navigationDestination(isPresented:)</code> stays presented
+     across an id change, so without the pop the second tap would build
+     nothing.</li>
 </ol>
+<p>The settle steps propagate cancellation rather than swallowing it with
+<code>try?</code>, so a router task invalidated mid-sequence stops instead of
+presenting the wrong thing on top of whatever replaced it.</p>
 <p>The <code>ChallengesModel</code> is now built in
 <code>TailspotApp.init</code> and handed to the delegate there, not created
 inline: a cold-start tap is delivered before any view exists, and a delegate
@@ -239,9 +286,30 @@ different object.</p>
      Idempotent against <code>tailspot.push.lastUploaded</code> in
      UserDefaults, so the every-launch re-register does not POST every
      launch &mdash; and a <em>failed</em> upload remembers nothing, so the
-     next launch retries.</li>
- <li><b>Failures:</b> <code>didFailToRegister</code> logs and fires
-     <code>push_registration_failed</code>.</li>
+     next launch retries. The stamp is
+     <code>environment:token:build</code>, build included: it is in the
+     body so the server's row records which client version a token came
+     from, and a two-field stamp meant an app update never re-sent it,
+     leaving every upgraded device recorded at the build it first
+     registered on.</li>
+ <li><b>Failures:</b> one event, <code>push_registration_failed</code>, with
+     a <code>stage</code> of <code>apns</code> (iOS would not hand over a
+     token) or <code>upload</code> (the backend would not take it) &mdash;
+     two different problems that used to arrive as the same row. The
+     <code>apns</code> stage is throttled to once per local day: it fires on
+     every launch with no network, and one event per offline app open is a
+     graph of how often that person opened the app in a tunnel, not a
+     signal. The <code>upload</code> stage is not throttled, because it only
+     runs when there is a genuinely new token to send.</li>
+ <li><b>Scope of the delegate:</b> three methods and deliberately no more.
+     It must never implement
+     <code>application(_:continue:restorationHandler:)</code> or
+     <code>application(_:open:options:)</code> &mdash; UIKit offers those to
+     the app delegate FIRST, so implementing either would steal delivery
+     from SwiftUI's <code>.onOpenURL</code> /
+     <code>.onContinueUserActivity</code> and silently break every invite
+     link. <code>didFinishLaunching</code> returns true and does its one job
+     in a detached Task, so nothing it touches can lengthen a cold start.</li>
  <li><b>Entitlement:</b> <code>aps-environment</code> =
      <code>development</code> in <code>Tailspot.entitlements</code>. That is
      the right value to commit &mdash; Xcode and Xcode Cloud rewrite it to
@@ -281,16 +349,20 @@ every request it adds.</p>
   <tr><td class="moment">challenge_reminder_scheduled</td>
       <td><code>challenge_id</code>, <code>moment</code></td>
       <td>Once per identifier that was not already pending (a re-sync
-          upserts and says nothing). Now includes the two new moments.</td></tr>
+          upserts and says nothing), and only AFTER iOS accepts the add —
+          fired ahead of the call it counted reminders a full request pool
+          had refused. Now includes the two new moments.</td></tr>
   <tr><td class="moment">challenge_reminder_opened</td>
       <td><code>challenge_id</code>, <code>moment</code></td>
       <td>On a tap, local or remote. An unrecognized remote
           <code>kind</code> passes through as-is rather than dropping the
           tap.</td></tr>
   <tr><td class="moment">push_registration_failed</td>
-      <td><code>reason</code>, and <code>stage: "upload"</code> when it was
-          the POST rather than iOS</td>
-      <td>APNs registration or token upload failed.</td></tr>
+      <td><code>stage</code> (<code>apns</code> | <code>upload</code>),
+          <code>reason</code></td>
+      <td>iOS refused a device token, or the backend refused the upload.
+          The <code>apns</code> stage is capped at one event per local day
+          so an offline user does not report one per launch.</td></tr>
  </tbody>
 </table>
 

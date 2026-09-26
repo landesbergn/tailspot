@@ -22,8 +22,11 @@ which challenge it meant.
   of `ending_soon`. Both carry the standings when the app knows them
   ("You're 2nd in Weekend Flyoff.") and a neutral line when it doesn't. The
   placement comes from `ChallengesModel.details[id].me` and is deliberately
-  allowed to be stale — every sync re-plans from scratch. Never two banners
-  in one calendar day, never a moment in the past.
+  allowed to be stale — every sync re-plans from scratch. A daily or midway
+  never shares a day with ending soon or finished (the rule is about the
+  endgame, not about two banners a day — a 24h challenge starting at 10:00
+  does fire `starts` at 10:00 and `midway` at 22:00), and never a moment in
+  the past.
 - **Camera silence.** Challenge notifications — local AND remote — now obey
   the streak reminder's rule: `willPresent` returns
   `StreakReminders.foregroundPresentation(cameraFrontmost:)` for anything

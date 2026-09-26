@@ -76,15 +76,23 @@ nonisolated struct PushTokenClient {
     /// The remembered form of an upload. Environment first so the string
     /// splits unambiguously — a hex token can't contain a colon, but the
     /// order makes that irrelevant.
-    static func stamp(token: String, environment: String) -> String {
-        "\(environment):\(token)"
+    ///
+    /// The BUILD is part of the stamp, not just the token and environment
+    /// (review of PR #289). It is in the request body, so the server's row
+    /// records which client version a token came from — and with a
+    /// two-field stamp an app update never re-sent it, leaving every
+    /// upgraded device permanently recorded at the build it first
+    /// registered on. Including it costs one extra POST per update.
+    static func stamp(token: String, environment: String, build: Int) -> String {
+        "\(environment):\(token):\(build)"
     }
 
-    /// Pure: is this pair worth a request? Separated from the transport so
+    /// Pure: is this triple worth a request? Separated from the transport so
     /// the rule can be read and tested on its own.
-    static func shouldUpload(token: String, environment: String, lastUploaded: String?) -> Bool {
+    static func shouldUpload(token: String, environment: String, build: Int,
+                             lastUploaded: String?) -> Bool {
         guard !token.isEmpty else { return false }
-        return stamp(token: token, environment: environment) != lastUploaded
+        return stamp(token: token, environment: environment, build: build) != lastUploaded
     }
 
     /// The last pair this install successfully uploaded.
@@ -98,7 +106,7 @@ nonisolated struct PushTokenClient {
     /// Non-throwing: this runs from a UIKit delegate callback where there is
     /// nobody to tell, and the retry is simply the next launch.
     func registerIfChanged(token: String, environment: String) async {
-        guard Self.shouldUpload(token: token, environment: environment,
+        guard Self.shouldUpload(token: token, environment: environment, build: build,
                                 lastUploaded: lastUploaded) else {
             Log.ui.debug("APNs token unchanged — not re-uploading")
             return
@@ -107,15 +115,13 @@ nonisolated struct PushTokenClient {
             try await register(token: token, environment: environment)
             // Only a SUCCESS is remembered, so a failed upload retries on
             // the next launch instead of being latched away forever.
-            defaults.set(Self.stamp(token: token, environment: environment),
+            defaults.set(Self.stamp(token: token, environment: environment, build: build),
                          forKey: Self.lastUploadedKey)
             Log.ui.notice("APNs token uploaded (\(environment, privacy: .public))")
         } catch {
             Log.ui.error("APNs token upload failed: \(String(describing: error), privacy: .public)")
-            Analytics.capture("push_registration_failed", [
-                "reason": .string(String(describing: error)),
-                "stage": .string("upload"),
-            ])
+            PushFailureReporter.report(
+                stage: .upload, reason: String(describing: error), defaults: defaults)
         }
     }
 
@@ -158,6 +164,55 @@ nonisolated struct PushTokenClient {
             if http.statusCode == 401 { throw PushTokenError.unauthorized }
             throw PushTokenError.http(http.statusCode)
         }
+    }
+}
+
+// MARK: - Failure reporting
+
+/// The one place `push_registration_failed` is fired, so its properties
+/// cannot drift between the two things that can fail.
+///
+/// The APNs stage is THROTTLED to once per local day. Registration fails on
+/// every launch with no network, and an event that fires once per app open
+/// for an offline user is not a signal — it is a graph of how often that
+/// person opened the app in a tunnel. The upload stage is not throttled: it
+/// only runs when there is a genuinely new token to send, which is rare.
+nonisolated enum PushFailureReporter {
+    enum Stage: String {
+        /// iOS refused to hand over a device token.
+        case apns
+        /// We have a token; the backend would not take it.
+        case upload
+    }
+
+    static let eventName = "push_registration_failed"
+    /// Local day key of the last APNs-stage report.
+    static let apnsReportedKey = "tailspot.push.apnsFailureReported"
+
+    /// Pure: may the APNs stage report on this local day?
+    static func shouldReportAPNsFailure(dayKey: String, lastReported: String?) -> Bool {
+        dayKey != lastReported
+    }
+
+    /// Fire the event, subject to the per-stage rules. Returns whether it
+    /// actually fired, which is what the tests assert on.
+    @discardableResult
+    static func report(stage: Stage,
+                       reason: String,
+                       defaults: UserDefaults = .standard,
+                       now: Date = Date()) -> Bool {
+        if stage == .apns {
+            let dayKey = Streaks.dayKey(for: now)
+            guard shouldReportAPNsFailure(
+                dayKey: dayKey, lastReported: defaults.string(forKey: apnsReportedKey)
+            ) else { return false }
+            defaults.set(dayKey, forKey: apnsReportedKey)
+        }
+        Analytics.capture(eventName, [
+            "stage": .string(stage.rawValue),
+            "reason": .string(reason),
+        ])
+        return true
     }
 }
 

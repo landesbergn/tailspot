@@ -137,10 +137,22 @@ struct ChallengesHub: View {
         // only answers the `deep_link` hub, so a hub already on screen under
         // Profile or Leaders can't swallow it.
         .task(id: model.pendingDetailId) {
-            if let id = model.consumePendingDetail(for: source) {
-                shareOnPush = false
-                pushDetailId = id
+            guard let id = model.consumePendingDetail(for: source) else { return }
+            shareOnPush = false
+            guard pushDetailId != id else { return }
+            if pushDetailId != nil {
+                // Already showing a DIFFERENT challenge's detail. A
+                // `navigationDestination(isPresented:)` stays presented
+                // across an id change — the binding never goes false, so
+                // SwiftUI never builds the new destination and the second
+                // tap looks ignored. Pop to root, let the pop finish, then
+                // push. `try?` because the task is invalidated if another
+                // tap lands mid-pop, and that tap's own run should win.
+                pushDetailId = nil
+                try? await ChallengeInvitePresentation.sleepForPop()
+                guard !Task.isCancelled else { return }
             }
+            pushDetailId = id
         }
         .sheet(item: $linkCode) { link in
             ChallengeJoinSheet(code: link.id, via: "universal_link") { detail in
