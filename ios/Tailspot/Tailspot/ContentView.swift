@@ -1552,7 +1552,7 @@ struct ContentView: View {
     /// dismiss-wait-present order lives in `ChallengeInvitePresentation`.
     private var challengeInviteRouter: some View {
         ChallengeInviteRouter(
-            isPrimarySheetPresented: primarySheet != nil,
+            sheetOpen: primarySheet,
             dismissPrimarySheet: { primarySheet = nil },
             presentChallenges: { primarySheet = .challenges },
             showUnavailableToast: { presentTopToast(.challengesUnavailable) }

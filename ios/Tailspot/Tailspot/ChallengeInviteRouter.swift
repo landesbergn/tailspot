@@ -46,10 +46,13 @@ struct ChallengeInviteRouter: View {
     /// a Button that calls `openURL` is the supported shape.
     @Environment(\.openURL) private var openURL
 
-    /// Whether a primary sheet is covering the catch screen right now.
-    /// Everything this router shows — the Challenges sheet, the alert, the
-    /// toast — is invisible or unreliable under one, so it decides the plan.
-    let isPrimarySheetPresented: Bool
+    /// WHICH primary sheet is covering the catch screen right now, not just
+    /// whether one is. Everything this router shows is invisible or
+    /// unreliable under a sheet — but the Challenges sheet is a special
+    /// case, because it is the destination: dismissing and re-presenting it
+    /// destroys the push its resident hub was about to make. See
+    /// `ChallengeInvitePresentation.plan(sheetOpen:)`.
+    let sheetOpen: PrimarySheet?
     /// Close whatever primary sheet is up (`primarySheet = nil`).
     let dismissPrimarySheet: () -> Void
     /// Show the Challenges sheet. The hub inside it is the ONE consumer of
@@ -75,6 +78,14 @@ struct ChallengeInviteRouter: View {
             .task(id: model?.inviteRoute) {
                 await deliver(model?.inviteRoute)
             }
+            // A tapped challenge notification parks a detail id on the
+            // model (`ChallengesModel.openChallenge(id:)`). Same job as the
+            // invite route above, same sequencing, one less decision: there
+            // is no build gate on READING a challenge you are already in, so
+            // a parked id always means "show it".
+            .task(id: model?.pendingDetailId) {
+                await deliverDetail(model?.pendingDetailId)
+            }
             .alert("Update Tailspot to join this challenge",
                    isPresented: Binding(
                     get: { updateRequiredMinBuild != nil },
@@ -96,19 +107,52 @@ struct ChallengeInviteRouter: View {
         return AppStoreListing.url(campaign: "Challenge Invite")
     }
 
+    /// Present the Challenges sheet for a notification tap. The id stays
+    /// parked: the hub inside the sheet consumes it and pushes the detail,
+    /// the same one-owner handover the invite code uses.
+    private func deliverDetail(_ detailId: String?) async {
+        guard detailId != nil else { return }
+        let plan = ChallengeInvitePresentation.plan(sheetOpen: sheetOpen)
+        guard plan != .handInPlace else {
+            // The Challenges sheet is already up and its hub is already
+            // watching `pendingDetailId`. Dismissing it here would take the
+            // hub's push down with it and hand the re-presented hub nothing.
+            Log.ui.notice("Challenge notification: Challenges already open, hub takes it")
+            return
+        }
+        Log.ui.notice("Challenge notification: opening Challenges for a detail")
+        try? await ChallengeInvitePresentation.run(
+            plan: plan,
+            dismiss: dismissPrimarySheet,
+            settle: ChallengeInvitePresentation.sleepForDismissal,
+            present: presentChallenges)
+    }
+
     private func deliver(_ route: ChallengesModel.InviteRoute?) async {
         guard let model, let route else { return }
-        let plan = ChallengeInvitePresentation.plan(
-            isPrimarySheetPresented: isPrimarySheetPresented)
+        // Two plans, on purpose: a DESTINATION that is already up needs
+        // nothing done to it, while a MESSAGE always needs the sheet gone
+        // first because alerts and toasts render under one.
+        let destinationPlan = ChallengeInvitePresentation.plan(sheetOpen: sheetOpen)
+        let plan = ChallengeInvitePresentation.messagePlan(
+            isPrimarySheetPresented: sheetOpen != nil)
 
         switch route {
         case .join:
             // The code stays parked: the hub inside the Challenges sheet
             // consumes it (and only that hub does). Clearing here would
             // hand the sheet an empty join.
+            //
+            // Same `handInPlace` rule as a notification tap: if the
+            // Challenges sheet is already up, its hub is already watching
+            // the route, and re-presenting would race its join sheet away.
+            guard destinationPlan != .handInPlace else {
+                Log.ui.notice("Challenge invite link: Challenges already open, hub takes it")
+                return
+            }
             Log.ui.notice("Challenge invite link: opening Challenges for a code")
-            await ChallengeInvitePresentation.run(
-                plan: plan,
+            try? await ChallengeInvitePresentation.run(
+                plan: destinationPlan,
                 dismiss: dismissPrimarySheet,
                 settle: ChallengeInvitePresentation.sleepForDismissal,
                 present: presentChallenges)
@@ -116,7 +160,7 @@ struct ChallengeInviteRouter: View {
         case .updateRequired(let minBuild):
             // Alert first, drop the code second — an alert that never
             // reached the screen must not take the invite with it.
-            await ChallengeInvitePresentation.run(
+            try? await ChallengeInvitePresentation.run(
                 plan: plan,
                 dismiss: dismissPrimarySheet,
                 settle: ChallengeInvitePresentation.sleepForDismissal,
@@ -130,7 +174,7 @@ struct ChallengeInviteRouter: View {
                 thenClear: { model.clearPendingInvite() })
 
         case .unavailable:
-            await ChallengeInvitePresentation.run(
+            try? await ChallengeInvitePresentation.run(
                 plan: plan,
                 dismiss: dismissPrimarySheet,
                 settle: ChallengeInvitePresentation.sleepForDismissal,
