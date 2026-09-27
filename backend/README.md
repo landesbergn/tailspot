@@ -170,7 +170,7 @@ challenges at once can only claim the growth-attribution credit once.
 
 | Route | Auth | Limit | Notes |
 |---|---|---|---|
-| `POST /v1/devices/push-token` | bearer | 30/h/device (per-IP metered first) | body `{ token, environment, build? }` → `204`. `token` is 64–200 hex characters (stored lowercased), `environment` is `"sandbox"` or `"production"`, `build` is accepted for triage and not stored. `422` on any other shape. |
+| `POST /v1/devices/push-token` | bearer | 30/h/device (per-IP metered first) | body `{ token, environment, build? }` → `204`. `token` is 64–200 hex characters (stored lowercased), `environment` is `"sandbox"` or `"production"`, `build` is accepted for triage and not stored (`null` counts as absent). `422` on any other shape. |
 | `DELETE /v1/devices/push-token` | bearer | 30/h/device | `204`. Clears the caller's token; pushes silently stop. Clearing a device that has none is a no-op `204`. |
 
 **A token belongs to one install.** Registering a token that another `devices`
@@ -209,21 +209,35 @@ remembered in `challenge_participants.last_placement`. A numerically worse
 placement means somebody went past them, and the uploader is who to name. Every
 participant's `last_placement` is then written forward, the uploader's included.
 
-**One evaluation at a time per challenge.** The whole read → decide → send →
-write cycle runs inside a transaction holding the same `SELECT … FOR UPDATE` on
-the challenge row that `join`, `leave` and finalization take. Without it, two
-phones uploading in the same second would both read the standings before either
-wrote them back, both push the same person inside what each thinks is a fresh
-cooldown, and then clobber each other's placements. The sends happen inside that
-lock, so each one is capped at **5 seconds** — a stuck APNs stream must not park
-somebody else's join.
+**Three phases, and the network is not in the locked one.**
 
-**A blip doesn't lose the notification.** If the send fails in a retryable way
-(429, any 5xx, or a transport that never answered), that participant's
-`last_placement` is deliberately *not* advanced, so the next catch sees the slip
-again and tries once more. A dead token, a missing token, the cooldown and
-"push disabled" all advance the baseline — there is nothing to retry in any of
-those.
+1. Under `SELECT … FOR UPDATE` on the challenge row — the same lock `join`,
+   `leave` and finalization take — read the roster, decide the recipients, write
+   everyone's new `last_placement`, stamp `overtaken_notified_at` for the
+   recipients, commit. Two phones uploading in the same second are serialised
+   here, so they can't both read a stale board and double-notify.
+2. **Outside every transaction**, send to all recipients in parallel, each
+   capped at 5 seconds. Sending inside the lock was an outage waiting to happen:
+   nine recipients × a 5 s APNs timeout is a 45 s lock, and `statement_timeout`
+   is 5 s, so every concurrent join, leave, finalize and standings read on that
+   challenge would 500 while we waited on Apple.
+3. A second, short transaction undoes phase 1 for sends that failed retryably.
+
+**A blip doesn't lose the notification.** If a send fails in a retryable way
+(429, any 5xx, a 403 `ExpiredProviderToken`, or a transport that never
+answered), phase 3 restores that participant's previous `last_placement` and
+`overtaken_notified_at`, so the next catch sees the slip again and tries once
+more. A dead token, a missing token, the cooldown and "push disabled" leave the
+advance in place — there is nothing to retry in any of those. The cost of
+writing optimistically is bounded: if the process dies between phases, one
+participant silently misses one notification, which beats a 45-second lock.
+
+**It only names the passer when it can prove it.** A participant's baseline can
+predate somebody else's catch (a held-back retry, a skipped evaluation, an older
+seed), so the uploader isn't necessarily who went past them. The push names the
+uploader only when they were level with or behind that participant at the last
+evaluation and are ahead now; otherwise the copy is nameless — *"You've dropped
+to 3rd in Weekend Flyoff."*
 
 `last_placement` is seeded at create (the creator is alone, so 1st) and inside
 the join transaction from the board the joiner walks into — their earlier
@@ -262,8 +276,14 @@ per notification via the built-in `http2` module, with `apns-push-type: alert`,
 reason `BadDeviceToken` / `Unregistered`, clears the stored token — the app was
 deleted, or the token belongs to the other environment. Every send is raced
 against its own deadline and resolves even if the HTTP/2 stream is torn down
-without a response (a GOAWAY or RST), because a promise that never settles would
-now hold the challenge row lock. `ApnsTransport` is the seam tests inject a fake
+without a response (a GOAWAY or RST). A timeout or transport error also destroys
+the cached HTTP/2 session, because a half-open session accepts streams and never
+answers them — keeping it would turn one timeout into every later send timing
+out until the process restarted — and a 403 `ExpiredProviderToken` invalidates
+the cached JWT so the next send mints a fresh one instead of re-presenting a
+credential Apple just refused. `createApnsTransport` signs one JWT at startup,
+so a mangled `APNS_KEY_P8` boots as "push disabled" with a loud line rather than
+as "push enabled" that fails every send. `ApnsTransport` is the seam tests inject a fake
 into, and `connect` is injectable so the request shape is unit-tested against a
 stub session.
 

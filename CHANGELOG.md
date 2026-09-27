@@ -39,10 +39,12 @@ registered a token.
   One push per person per challenge per 30 minutes; never the uploader, never
   without a token, never to a disabled device, never for an upcoming, finished
   or cancelled challenge. Copy: **"You got passed" / "@ada just passed you in
-  Weekend Flyoff. You're now 2nd."** (ties read "tied for 2nd"). A 410 or
-  `BadDeviceToken` / `Unregistered` clears the token. `last_placement` is
-  seeded at create and inside the join transaction — null means "never
-  evaluated" and never notifies.
+  Weekend Flyoff. You're now 2nd."** when we can prove the uploader did the
+  passing, else the nameless **"You've dropped to 2nd in Weekend Flyoff."**
+  (ties read "tied for 2nd"). A 410 or `BadDeviceToken` / `Unregistered`
+  clears the token. **`last_placement` is seeded inside the create and join
+  transactions**, under the challenge row lock, best-effort via a SAVEPOINT —
+  null means "never evaluated" and never notifies.
 - **Review round (PR #288).** Seven findings, all fixed with tests. The one
   that mattered: a JS `Date` interpolated into a raw `sql` template reaches
   postgres.js unconverted and crashes the bind, while PGlite serialises it
@@ -53,18 +55,38 @@ registered a token.
   evaluation now runs under the same challenge row lock `join` takes (two
   simultaneous uploads pushed the same person twice and clobbered each
   other's placements); a transient send failure keeps that participant's
-  baseline so the next catch retries instead of losing the notification;
-  baseline seeding moved out of the create/join transactions and became
-  best-effort; a token moving between devices logs a warn with both device
-  ids; the HTTP/2 send resolves on a silent stream teardown instead of
-  hanging forever; and the route test drives the after-reply work through an
-  injected scheduler rather than sleeping.
+  baseline so the next catch retries instead of losing the notification; a
+  token moving between devices logs a warn with both device ids; the HTTP/2
+  send resolves on a silent stream teardown instead of hanging forever; and
+  the route test drives the after-reply work through an injected scheduler
+  rather than sleeping.
+- **Second review round (`/code-review`, ten findings, all fixed).** The
+  severe one: the APNs sends ran sequentially *inside* the transaction holding
+  the challenge `FOR UPDATE`, so nine recipients × a 5 s deadline was a 45 s
+  lock — and `statement_timeout` is 5 s, so every concurrent join, leave,
+  finalize and standings read on that challenge would have 500'd for real
+  users. The evaluation is now three phases: decide + write under the lock,
+  **send in parallel outside every transaction**, then a short compensating
+  transaction that restores the baseline and cooldown for sends that failed
+  retryably. Also: the push no longer names the uploader unless they
+  demonstrably crossed that participant this round (a stale baseline could
+  blame the wrong friend); a send timeout now destroys the cached HTTP/2
+  session instead of leaving a half-open one to time out every later send; a
+  403 `ExpiredProviderToken` is transient *and* invalidates the cached JWT
+  rather than being retried for 50 minutes; `createApnsTransport` mints one
+  JWT at boot so a mangled `APNS_KEY_P8` degrades to the no-op sender instead
+  of pinning every baseline open; baseline seeding moved back INSIDE the join
+  transaction (outside it, it raced an evaluation and could stamp a stale
+  placement over a fresh one → a false "you got passed"), kept best-effort
+  with a SAVEPOINT; a stale session's late error can no longer evict its
+  replacement; every path that strips a push token nulls all three columns
+  through one helper; and `build: null` is accepted as "no build".
 - **An un-migrated deploy is worse than "no pushes"** — Drizzle names every
   schema column in its INSERTs, so without 0011 device registration and
   challenge create/join fail too. Pinned by a test; README says so plainly.
 - **Secrets to set before this does anything** (see backend/README.md):
   `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID`.
-- **Tests: 443 → 499.** Route tests for the token lifecycle, JWT/config/no-op
+- **Tests: 443 → 514.** Route tests for the token lifecycle, JWT/config/no-op
   tests for the sender, and overtaken tests that spend most of their length on
   the negatives (cooldown, uploader, tokenless, disabled, not-live, dead-token
   cleanup) — the ways this feature turns into spam.
