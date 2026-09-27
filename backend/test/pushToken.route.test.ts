@@ -110,8 +110,14 @@ describe("push-token routes", () => {
       204,
     );
 
-    expect((await row(first.deviceId)).apnsToken).toBeNull();
-    expect((await row(first.deviceId)).apnsEnvironment).toBeNull();
+    // Eviction nulls ALL THREE columns. A row left with a stale
+    // `apns_environment` or an `apns_updated_at` that outlives the token it
+    // described is a lie in the one table an operator reads when triaging
+    // "why didn't my phone buzz".
+    const evicted = await row(first.deviceId);
+    expect(evicted.apnsToken).toBeNull();
+    expect(evicted.apnsEnvironment).toBeNull();
+    expect(evicted.apnsUpdatedAt).toBeNull();
     expect((await row(second.deviceId)).apnsToken).toBe(TOKEN_A);
   });
 
@@ -160,6 +166,21 @@ describe("push-token routes", () => {
       headers: { authorization: `Bearer ${dev.token}` },
     });
     expect(res.statusCode).toBe(204);
+  });
+
+  it("treats build: null as 'no build', not as a bad request", async () => {
+    // The client encodes an optional Int as null rather than omitting the key,
+    // and a build number it genuinely can't read is an honest null. 422ing that
+    // would cost the install every notification for the sake of a field we
+    // don't even store.
+    const dev = await register();
+    const res = await post(dev.token, {
+      token: TOKEN_A,
+      environment: "production",
+      build: null,
+    });
+    expect(res.statusCode).toBe(204);
+    expect((await row(dev.deviceId)).apnsToken).toBe(TOKEN_A);
   });
 
   it("422s a malformed body", async () => {

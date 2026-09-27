@@ -22,7 +22,7 @@
  * capacity problem); it covers the sub-second blip.
  */
 
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import {
   CURRENT_SCORING_VERSION,
   type GuessKind,
@@ -110,6 +110,19 @@ export interface IdentityStore {
 /** Which APNs host a stored token is valid against. Mirrors push/apns.ts. */
 export type PushEnvironment = "sandbox" | "production";
 
+/**
+ * The ONE way to strip a push token from a device row. Every path that gives a
+ * token up — eviction when it moves to another install, the client's explicit
+ * DELETE, and the sender's dead-token cleanup — uses this, so a row can never
+ * end up half-cleared (no token but a stale `apns_environment`, or a
+ * `apns_updated_at` that outlives the token it described).
+ */
+export const CLEARED_PUSH_TOKEN = {
+  apnsToken: null,
+  apnsEnvironment: null,
+  apnsUpdatedAt: null,
+} as const;
+
 /** What `setPushToken` did, so the route can report a token that MOVED. */
 export interface SetPushTokenResult {
   /**
@@ -182,8 +195,8 @@ export class DrizzleIdentityStore implements IdentityStore {
     return this.db.transaction(async (tx) => {
       const moved = await tx
         .update(devices)
-        .set({ apnsToken: null, apnsEnvironment: null })
-        .where(and(eq(devices.apnsToken, token), sql`${devices.id} <> ${deviceId}`))
+        .set(CLEARED_PUSH_TOKEN)
+        .where(and(eq(devices.apnsToken, token), ne(devices.id, deviceId)))
         .returning({ id: devices.id });
       await tx
         .update(devices)
@@ -194,10 +207,7 @@ export class DrizzleIdentityStore implements IdentityStore {
   }
 
   async clearPushToken(deviceId: string): Promise<void> {
-    await this.db
-      .update(devices)
-      .set({ apnsToken: null, apnsEnvironment: null, apnsUpdatedAt: null })
-      .where(eq(devices.id, deviceId));
+    await this.db.update(devices).set(CLEARED_PUSH_TOKEN).where(eq(devices.id, deviceId));
   }
 
   async takenHandles(handles: string[]): Promise<Set<string>> {

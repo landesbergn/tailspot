@@ -152,7 +152,12 @@ export function registerDevicesRoutes(app: FastifyInstance, opts: DevicesRouteOp
     // token) and deliberately NOT stored — the app's build number is already
     // on every analytics event, and a column would have to be migrated the
     // next time the client wants to send something else.
-    if (body.build !== undefined && !Number.isFinite(body.build)) {
+    //
+    // `null` counts as absent (`== null` catches both). A client that can't
+    // read its own build number sends null rather than omitting the key —
+    // JSONEncoder does that for an optional by default — and 422ing an honest
+    // "I don't know" would cost that install every notification.
+    if (body.build != null && !Number.isFinite(body.build)) {
       return reply.code(422).send({ error: "build must be a number" });
     }
 

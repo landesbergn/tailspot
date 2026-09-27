@@ -10,48 +10,26 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
 /**
  * Two things about migration 0011 and the code that reads it.
  *
- * 1. **Seeding the push baseline is best-effort.** It happens in its own
- *    statement after the create/join transaction has committed, so a failure
- *    costs one participant their first overtake notification (a null baseline
- *    never notifies) and nothing else. It must never cost somebody their join.
+ * 1. **Seeding the push baseline is best-effort, INSIDE the transaction.** It
+ *    has to be inside: seeding after the commit raced a concurrent evaluation
+ *    and could stamp a stale placement over a fresh one, which reads as a slip
+ *    and fires a false "you got passed". Being inside a transaction is exactly
+ *    where a naive try/catch doesn't work — Postgres discards everything after
+ *    the first error, so the eventual COMMIT would roll the join back — hence
+ *    the SAVEPOINT (Drizzle's nested `transaction()`). These tests make the
+ *    seed genuinely fail at the database level, with a CHECK constraint, and
+ *    assert the join still lands.
  *
  * 2. **The migration is still mandatory before the deploy**, and for a bigger
  *    reason than push: Drizzle names EVERY column of a table in its INSERT
  *    statements, whatever the values object contains. So the moment
  *    `apns_token` and `last_placement` exist in `src/db/schema.ts`, an
  *    un-migrated database fails device registration, challenge creation and
- *    joining — not just notifications. The second test pins that, so the
+ *    joining — no savepoint can rescue that. The second test pins it, so the
  *    warning in backend/README.md can never quietly become untrue.
  */
 
 const T0 = new Date(Date.UTC(2026, 8, 26, 12, 0, 0));
-
-/**
- * A handle whose TOP-LEVEL `update(challenge_participants)` always fails —
- * which is exactly and only the two baseline seeds. Everything else, including
- * every update issued inside a transaction (`leave`, `markNotified`), goes
- * through untouched, because a transaction handle doesn't come through this
- * proxy.
- */
-function seedsAlwaysFail(db: Database): Database {
-  return new Proxy(db, {
-    get(target, prop, receiver) {
-      if (prop === "update") {
-        return (table: unknown) => {
-          if (table === challengeParticipants) {
-            return {
-              set: () => ({
-                where: () => Promise.reject(new Error('column "last_placement" does not exist')),
-              }),
-            };
-          }
-          return (target.update as (t: unknown) => unknown)(table);
-        };
-      }
-      return Reflect.get(target, prop, receiver);
-    },
-  }) as Database;
-}
 
 describe("push-baseline seeding is best-effort", () => {
   let db: Database;
@@ -61,9 +39,14 @@ describe("push-baseline seeding is best-effort", () => {
   beforeEach(async () => {
     db = await makeTestDb();
     warnings = [];
-    store = new DrizzleChallengeStore(seedsAlwaysFail(db), new PrivatePointsScorer(db), {
+    store = new DrizzleChallengeStore(db, new PrivatePointsScorer(db), {
       warn: (_obj, msg) => warnings.push(msg),
     });
+    // Make every baseline write fail, for real, inside the transaction that
+    // issues it — the savepoint is what has to contain it.
+    await db.execute(
+      sql`alter table "challenge_participants" add constraint "no_seeding" check ("last_placement" is null)`,
+    );
   });
 
   async function device(handle: string): Promise<string> {
@@ -88,7 +71,8 @@ describe("push-baseline seeding is best-effort", () => {
       newDevice: true,
     });
 
-    // Both participants really are in: the writes committed, only the seeds failed.
+    // Both participants really are in: the transactions committed around the
+    // rolled-back savepoints.
     expect((await store.participants(challenge.id)).map((p) => p.handle).sort()).toEqual([
       "ada",
       "bex",
@@ -103,17 +87,56 @@ describe("push-baseline seeding is best-effort", () => {
     expect(warnings.every((w) => w.includes("last_placement"))).toBe(true);
   });
 
-  it("standings, leaving and cancelling are unaffected by a failed seed", async () => {
+  it("standings, leaving and the growth attribution survive a failed seed", async () => {
     const a = await device("ada");
     const b = await device("bex");
     const challenge = await store.create(
       { name: "Seedless", creatorDeviceId: a, startsAt: T0, durationPreset: "24h" },
       T0,
     );
-    await store.join(challenge, b, T0);
+    expect(await store.join(challenge, b, T0)).toEqual({
+      ok: true,
+      alreadyIn: false,
+      // The attribution write comes AFTER the seed in the same transaction —
+      // proof the savepoint left the transaction usable rather than poisoned.
+      newDevice: true,
+    });
     const { standings } = await store.standings(challenge, new Date(T0.getTime() + 60_000));
     expect(standings).toHaveLength(2);
     expect(await store.leave(challenge, b, new Date(T0.getTime() + 60_000))).toBe("left");
+  });
+});
+
+describe("the baseline is seeded under the join's lock", () => {
+  it("seeds the creator at 1 and a joiner from the board they walk into", async () => {
+    const db = await makeTestDb();
+    const store = new DrizzleChallengeStore(db, new PrivatePointsScorer(db));
+    const mk = async (handle: string) =>
+      (
+        await db
+          .insert(devices)
+          .values({ tokenHash: `hash-${handle}`, handle, createdAt: T0 })
+          .returning({ id: devices.id })
+      )[0].id;
+    const a = await mk("ada");
+    const b = await mk("bex");
+
+    const challenge = await store.create(
+      { name: "Seeded", creatorDeviceId: a, startsAt: T0, durationPreset: "24h" },
+      T0,
+    );
+    await store.join(challenge, b, T0);
+
+    const rows = await db
+      .select({
+        deviceId: challengeParticipants.deviceId,
+        p: challengeParticipants.lastPlacement,
+      })
+      .from(challengeParticipants);
+    // Both on zero points, so both are 1st — and both were written, which only
+    // happens if the seed ran inside the same transaction that committed them.
+    expect(rows.map((r) => r.p)).toEqual([1, 1]);
+    expect(rows.map((r) => r.deviceId).sort()).toEqual([a, b].sort());
   });
 });
 
@@ -126,10 +149,9 @@ describe("migration 0011 is mandatory before the deploy", () => {
 
     // Drizzle lists every schema column in an INSERT — including ones the
     // values object never mentions — so these fail on the missing column, and
-    // no amount of best-effort seeding can rescue them. This is why
-    // backend/README.md says apply 0011 FIRST, and why the honest description
-    // of an un-migrated deploy is "registration and challenges break", not
-    // "pushes don't work".
+    // no savepoint can rescue them. This is why backend/README.md says apply
+    // 0011 FIRST, and why the honest description of an un-migrated deploy is
+    // "registration and challenges break", not "pushes don't work".
     const identity = new DrizzleIdentityStore(db);
     await expect(identity.createDevice("hash-nope")).rejects.toThrow(/apns_token/);
 
