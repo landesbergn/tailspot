@@ -1,0 +1,283 @@
+import { generateKeyPairSync } from "node:crypto";
+import { EventEmitter } from "node:events";
+import type { ClientHttp2Session } from "node:http2";
+import { describe, expect, it } from "vitest";
+import { type ApnsConfig, Http2ApnsTransport } from "../src/push/apns.js";
+
+/**
+ * The HTTP/2 transport, against a stubbed session.
+ *
+ * `connect` is injectable purely for this. The request SHAPE — path, topic,
+ * push-type, priority, expiration, the bearer — is a contract with Apple that
+ * nothing else can see, and getting `apns-expiration` or the path wrong fails in
+ * the worst way: Apple accepts the request and quietly drops the notification.
+ * The teardown cases matter just as much: a promise that never settles hangs
+ * the whole parallel batch of sends a catch upload scheduled, and a session
+ * destroyed by the wrong send closes healthy streams belonging to other
+ * recipients.
+ */
+
+const NOW_MS = Date.UTC(2026, 8, 26, 12, 0, 0);
+
+function testConfig(): ApnsConfig {
+  const { privateKey } = generateKeyPairSync("ec", {
+    namedCurve: "prime256v1",
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+  return { keyP8: privateKey, keyId: "ABC1234567", teamId: "TEAM123456", bundleId: "com.example" };
+}
+
+class StubStream extends EventEmitter {
+  ended: Buffer | undefined;
+  destroyed = false;
+  end(body: Buffer) {
+    this.ended = body;
+  }
+  close() {
+    this.destroyed = true;
+  }
+  destroy() {
+    this.destroyed = true;
+    this.emit("close");
+  }
+  /** Play back an APNs answer. */
+  answer(status: number, body = "") {
+    this.emit("response", { ":status": status });
+    if (body !== "") this.emit("data", Buffer.from(body));
+    this.emit("end");
+    this.emit("close");
+  }
+}
+
+class StubSession extends EventEmitter {
+  readonly requests: Record<string, unknown>[] = [];
+  readonly streams: StubStream[] = [];
+  closed = false;
+  destroyed = false;
+  idleTimeoutMs: number | undefined;
+  request(headers: Record<string, unknown>): StubStream {
+    this.requests.push(headers);
+    const stream = new StubStream();
+    this.streams.push(stream);
+    return stream;
+  }
+  setTimeout(ms: number, _cb: () => void) {
+    this.idleTimeoutMs = ms;
+  }
+  close() {
+    this.closed = true;
+  }
+  destroy() {
+    this.destroyed = true;
+    this.emit("close");
+  }
+}
+
+function transportWith(timeoutMs?: number): {
+  transport: Http2ApnsTransport;
+  sessions: StubSession[];
+} {
+  const sessions: StubSession[] = [];
+  const transport = new Http2ApnsTransport({
+    config: testConfig(),
+    now: () => NOW_MS,
+    timeoutMs,
+    connect: () => {
+      const session = new StubSession();
+      sessions.push(session);
+      return session as unknown as ClientHttp2Session;
+    },
+  });
+  return { transport, sessions };
+}
+
+describe("Http2ApnsTransport", () => {
+  it("POSTs /3/device/<token> with the alert headers and a one-hour expiration", async () => {
+    const { transport, sessions } = transportWith();
+    const token = "f".repeat(64);
+    const payload = { aps: { alert: { title: "t", body: "b" } } };
+    const pending = transport.send("production", token, payload);
+
+    const session = sessions[0];
+    const headers = session.requests[0];
+    expect(headers[":method"]).toBe("POST");
+    expect(headers[":path"]).toBe(`/3/device/${token}`);
+    expect(headers["apns-topic"]).toBe("com.example");
+    expect(headers["apns-push-type"]).toBe("alert");
+    expect(headers["apns-priority"]).toBe("10");
+    expect(headers["apns-expiration"]).toBe(String(Math.floor(NOW_MS / 1000) + 3600));
+    expect(String(headers.authorization)).toMatch(/^bearer [\w-]+\.[\w-]+\.[\w-]+$/);
+    expect(headers["content-type"]).toBe("application/json");
+
+    const stream = session.streams[0];
+    expect(stream.ended && JSON.parse(stream.ended.toString())).toEqual(payload);
+
+    stream.answer(200);
+    expect(await pending).toEqual({ status: 200 });
+    transport.close();
+  });
+
+  it("reports the status and APNs reason from a rejection", async () => {
+    const { transport, sessions } = transportWith();
+    const pending = transport.send("sandbox", "a".repeat(64), {});
+    sessions[0].streams[0].answer(410, JSON.stringify({ reason: "Unregistered" }));
+    expect(await pending).toEqual({ status: 410, reason: "Unregistered" });
+    transport.close();
+  });
+
+  it("reuses one session per environment, and close() shuts them", async () => {
+    const { transport, sessions } = transportWith();
+    const first = transport.send("production", "a".repeat(64), {});
+    sessions[0].streams[0].answer(200);
+    await first;
+    const second = transport.send("production", "b".repeat(64), {});
+    sessions[0].streams[1].answer(200);
+    await second;
+    expect(sessions).toHaveLength(1);
+
+    const other = transport.send("sandbox", "c".repeat(64), {});
+    sessions[1].streams[0].answer(200);
+    await other;
+    expect(sessions).toHaveLength(2);
+
+    transport.close();
+    expect(sessions.every((s) => s.closed)).toBe(true);
+  });
+
+  it("resolves when a stream is torn down without a response (GOAWAY / RST)", async () => {
+    const { transport, sessions } = transportWith();
+    const pending = transport.send("production", "a".repeat(64), {});
+    // No 'response', no 'end', no 'error' — just gone. This used to leave the
+    // promise pending forever, which would now hold the challenge row lock.
+    sessions[0].streams[0].emit("close");
+    expect(await pending).toEqual({ status: 0, reason: "stream closed" });
+    transport.close();
+  });
+
+  it("gives up after the deadline and destroys the stream", async () => {
+    const { transport, sessions } = transportWith(10);
+    const pending = transport.send("production", "a".repeat(64), {});
+    expect(await pending).toEqual({ status: 0, reason: "timeout" });
+    expect(sessions[0].streams[0].destroyed).toBe(true);
+    transport.close();
+  });
+
+  it("drops the session after a timeout, so the next send redials", async () => {
+    // A half-open HTTP/2 session accepts streams and never answers them. Keeping
+    // it cached turned one timeout into every later send timing out for the
+    // life of the process.
+    const { transport, sessions } = transportWith(10);
+    expect(await transport.send("production", "a".repeat(64), {})).toEqual({
+      status: 0,
+      reason: "timeout",
+    });
+    expect(sessions[0].destroyed).toBe(true);
+
+    const second = transport.send("production", "a".repeat(64), {});
+    expect(sessions).toHaveLength(2); // redialled rather than reusing the dead one
+    sessions[1].streams[0].answer(200);
+    expect(await second).toEqual({ status: 200 });
+    transport.close();
+  });
+
+  it("drops the session after a transport error too", async () => {
+    const { transport, sessions } = transportWith();
+    const pending = transport.send("production", "a".repeat(64), {});
+    sessions[0].streams[0].emit("error", new Error("socket hang up"));
+    await pending;
+    expect(sessions[0].destroyed).toBe(true);
+
+    transport.send("production", "a".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+    transport.close();
+  });
+
+  it("sets an idle timeout on every session it dials", async () => {
+    const { transport, sessions } = transportWith();
+    transport.send("production", "a".repeat(64), {});
+    expect(sessions[0].idleTimeoutMs).toBe(60_000);
+    transport.close();
+  });
+
+  it("a stale session's late error cannot evict its replacement", async () => {
+    const { transport, sessions } = transportWith();
+    // First session dies and is replaced.
+    const first = transport.send("production", "a".repeat(64), {});
+    sessions[0].streams[0].emit("error", new Error("boom"));
+    await first;
+    const second = transport.send("production", "b".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+
+    // Now the DEAD one emits again, late. Without the identity check this
+    // dropped the healthy replacement from the cache and leaked it.
+    sessions[0].emit("error", new Error("late boom"));
+    sessions[1].streams[0].answer(200);
+    expect(await second).toEqual({ status: 200 });
+    expect(sessions[1].destroyed).toBe(false);
+
+    const third = transport.send("production", "c".repeat(64), {});
+    expect(sessions).toHaveLength(2); // still the same live session
+    sessions[1].streams[1].answer(200);
+    await third;
+    transport.close();
+  });
+
+  it("a timed-out send destroys the session IT used, never the replacement", async () => {
+    // Two sends overlap. The first one's session dies and is replaced while it
+    // is still in flight; when its deadline finally fires it must not take the
+    // REPLACEMENT down with it. Evicting "whatever is cached now" did exactly
+    // that: it destroyed the healthy session, which closed the second send's
+    // stream ("stream closed" → transient), so one stuck send kept knocking
+    // over its own replacements and deferring good notifications.
+    const { transport, sessions } = transportWith(25);
+    const slow = transport.send("production", "a".repeat(64), {});
+
+    // The session the slow send went out on dies and is dropped from the cache.
+    sessions[0].emit("error", new Error("socket hang up"));
+    expect(sessions[0].destroyed).toBe(true);
+
+    // A second send redials; this one is healthy and still in flight.
+    const fresh = transport.send("production", "b".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+
+    // Now the slow send gives up.
+    expect(await slow).toEqual({ status: 0, reason: "timeout" });
+    expect(sessions[1].destroyed).toBe(false);
+
+    // The replacement is untouched: its in-flight stream still answers, and the
+    // next send reuses it rather than redialling.
+    sessions[1].streams[0].answer(200);
+    expect(await fresh).toEqual({ status: 200 });
+    const third = transport.send("production", "c".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+    sessions[1].streams[1].answer(200);
+    expect(await third).toEqual({ status: 200 });
+    transport.close();
+  });
+
+  it("re-mints the JWT after APNs rejects the provider token", async () => {
+    const { transport, sessions } = transportWith();
+    const first = transport.send("production", "a".repeat(64), {});
+    const firstJwt = String(sessions[0].requests[0].authorization);
+    sessions[0].streams[0].answer(403, JSON.stringify({ reason: "ExpiredProviderToken" }));
+    expect(await first).toEqual({ status: 403, reason: "ExpiredProviderToken" });
+
+    // Without invalidation the cache would keep serving the rejected JWT for
+    // the rest of its 50-minute window, and every send in it would 403.
+    const second = transport.send("production", "b".repeat(64), {});
+    const secondJwt = String(sessions[sessions.length - 1].requests.at(-1)?.authorization);
+    expect(secondJwt).not.toBe(firstJwt);
+    sessions[sessions.length - 1].streams.at(-1)?.answer(200);
+    await second;
+    transport.close();
+  });
+
+  it("turns a stream error into a status 0, never a rejection", async () => {
+    const { transport, sessions } = transportWith();
+    const pending = transport.send("production", "a".repeat(64), {});
+    sessions[0].streams[0].emit("error", new Error("socket hang up"));
+    expect(await pending).toEqual({ status: 0, reason: "socket hang up" });
+    transport.close();
+  });
+});
