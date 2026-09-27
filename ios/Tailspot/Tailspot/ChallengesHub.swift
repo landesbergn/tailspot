@@ -29,8 +29,6 @@ struct ChallengesHub: View {
     @State private var showJoin = false
     /// A just-created or just-joined challenge to push straight into.
     @State private var pushDetailId: String?
-    /// Present the share sheet on the pushed detail (after Create).
-    @State private var shareOnPush = false
     /// True once the first config fetch has come back (either way), so an
     /// `.unknown` verdict reads as "couldn't reach the server" rather than
     /// the initial spinner.
@@ -100,14 +98,12 @@ struct ChallengesHub: View {
         .sheet(isPresented: $showCreate) {
             ChallengeCreateSheet { detail in
                 pushDetailId = detail.challenge.id
-                shareOnPush = true
             }
             .environment(model)
         }
         .sheet(isPresented: $showJoin) {
             ChallengeJoinSheet(code: nil, via: "code_entry") { detail in
                 pushDetailId = detail.challenge.id
-                shareOnPush = false
             }
             .environment(model)
         }
@@ -138,7 +134,6 @@ struct ChallengesHub: View {
         // Profile or Leaders can't swallow it.
         .task(id: model.pendingDetailId) {
             guard let id = model.consumePendingDetail(for: source) else { return }
-            shareOnPush = false
             guard pushDetailId != id else { return }
             if pushDetailId != nil {
                 // Already showing a DIFFERENT challenge's detail. A
@@ -157,7 +152,6 @@ struct ChallengesHub: View {
         .sheet(item: $linkCode) { link in
             ChallengeJoinSheet(code: link.id, via: "universal_link") { detail in
                 pushDetailId = detail.challenge.id
-                shareOnPush = false
             }
             .environment(model)
         }
@@ -166,7 +160,7 @@ struct ChallengesHub: View {
             set: { if !$0 { pushDetailId = nil } }
         )) {
             if let id = pushDetailId {
-                ChallengeDetailScreen(id: id, presentShareOnAppear: shareOnPush)
+                ChallengeDetailScreen(id: id)
             }
         }
     }
@@ -286,10 +280,10 @@ struct ChallengesHub: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Race a friend")
+                Text("Spot with friends")
                     .brandDisplayFont()
                     .foregroundStyle(Brand.Color.textPrimary)
-                Text("Pick a window from an hour to a week and send a link. Whoever scores the most Tailspot points in that window wins. Two to ten spotters; ties share the place.")
+                Text("Invite up to 10 friends for a head-to-head spotting challenge.")
                     .font(Brand.Font.body)
                     .foregroundStyle(Brand.Color.textSecondary)
             }
