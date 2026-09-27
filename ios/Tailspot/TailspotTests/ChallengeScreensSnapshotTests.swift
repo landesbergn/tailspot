@@ -276,8 +276,8 @@ struct ChallengeScreensSnapshotTests {
         snapshot(detail(model, id: "c-cancelled"), as: "challenge_detail_cancelled")
     }
 
-    /// Right after Create: a live challenge with only you in it. The invite
-    /// prompt sits in the inline INVITE card (no separate sheet any more).
+    /// Right after Create: a live challenge with only you in it. The code
+    /// and Share link sit in the inline INVITE MORE card (no pop-up sheet).
     @Test func detailJustCreatedSolo() async {
         var s = ChallengeFixtures.demoState(now: Self.now)
         let solo = ChallengeFixtures.summary(

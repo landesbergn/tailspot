@@ -65,11 +65,12 @@ app shares:
 - **`/c/CODE`** — a 302 to the App Store listing (attributed to the
   `Challenge Invite` campaign). This is the fallback: on an iPhone with
   Tailspot installed, iOS opens the app and nginx never sees the request.
-  The pattern is the invite alphabet exactly — 8 characters from A–Z
+  The pattern is the invite alphabet exactly — 6 characters (or 8, for
+  codes issued before 2026-09-26) from A–Z
   minus `I`, `L`, `O` plus `2`–`9`, case-insensitive, optional trailing
   slash — so a code that could never exist (`/c/K7M4QD2O`, `/c/short`)
   falls through to the 404 page instead of a pointless App Store trip.
-  The regex is **quoted** because nginx reads a bare `{8}` as the start of
+  The regex is **quoted** because nginx reads a bare `{6}` as the start of
   a config block and refuses to start. There is no landing page by design.
 
 `.well-known` is a dot-directory, which `COPY public/ /usr/share/nginx/html/`

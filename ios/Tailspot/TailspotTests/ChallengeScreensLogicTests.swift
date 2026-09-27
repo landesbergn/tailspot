@@ -46,12 +46,6 @@ struct ChallengeScreensLogicTests {
                 == "Too long: \(max + 3)/\(max) characters.")
     }
 
-    @Test func invitePromptOnlyWhileSolo() {
-        #expect(ChallengeDetailScreen.invitePrompt(participantCount: 1) == "You're in. Now invite someone.")
-        #expect(ChallengeDetailScreen.invitePrompt(participantCount: 2) == nil)
-        #expect(ChallengeDetailScreen.invitePrompt(participantCount: 10) == nil)
-    }
-
     // MARK: Hub sections
 
     @Test func hubSectionsFromFixtureWorld() async {

@@ -160,12 +160,9 @@ struct ChallengesStrip: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Brand.Color.cyan)
                         .accessibilityHidden(true)
-                    if let state = line.state {
-                        Text(state)
-                            .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
-                            .tracking(1.1)
-                            .foregroundStyle(Brand.Color.cyan)
-                    }
+                    // No state word ("IN FLIGHT") here: the flag already
+                    // says "challenge", and the chip sits at the very top of
+                    // the leaderboard where space is tight.
                     Text(line.detail)
                         .font(Brand.Font.mono(size: 11, weight: .regular, relativeTo: .caption))
                         .foregroundStyle(Brand.Color.textPrimary)
@@ -188,7 +185,7 @@ struct ChallengesStrip: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .padding(.top, 2)
+            .padding(.bottom, 4)
         }
     }
 }

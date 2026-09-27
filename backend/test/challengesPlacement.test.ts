@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeCode } from "../src/challenges/codes.js";
+import { CODE_ALPHABET, CODE_LENGTH, generateInviteCode, normalizeCode } from "../src/challenges/codes.js";
 import { assignPlacements, decideOutcome, winners } from "../src/challenges/placement.js";
 import { aircraftName } from "../src/challenges/store.js";
 
@@ -66,6 +66,11 @@ describe("invite codes", () => {
     expect(normalizeCode("K7M4QD2O")).toBeNull(); // O is not in the alphabet
     expect(normalizeCode("K7M4QD21")).toBeNull(); // 1 is not in the alphabet
     expect(normalizeCode(42)).toBeNull();
+    // Six-character codes (2026-09-26); legacy eight-character ones above still pass.
+    expect(normalizeCode("k7m4-qd")).toBe("K7M4QD");
+    expect(normalizeCode("K7M4Q")).toBeNull();
+    expect(normalizeCode("K7M4QO")).toBeNull();
+    expect(normalizeCode("K7M4QD2")).toBeNull(); // 7 is neither length
   });
 });
 
@@ -75,5 +80,17 @@ describe("catch-log aircraft name", () => {
     expect(aircraftName(null, "737-800", "B738")).toBe("737-800");
     expect(aircraftName(null, null, "B738")).toBe("B738");
     expect(aircraftName(null, null, null)).toBe("Unknown aircraft");
+  });
+});
+
+describe("generateInviteCode", () => {
+  it("issues six-character codes from the alphabet that normalizeCode accepts", () => {
+    expect(CODE_LENGTH).toBe(6);
+    for (let i = 0; i < 200; i++) {
+      const code = generateInviteCode();
+      expect(code).toHaveLength(6);
+      expect([...code].every((c) => CODE_ALPHABET.includes(c))).toBe(true);
+      expect(normalizeCode(code)).toBe(code);
+    }
   });
 });

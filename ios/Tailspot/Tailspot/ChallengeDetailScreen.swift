@@ -33,7 +33,6 @@ struct ChallengeDetailScreen: View {
     @State private var confirmCancel = false
     @State private var actionError: ChallengesError?
     @State private var expanded: Set<String> = []
-    @State private var copied = false
     /// Flips once on the first results view; drives the haptic and the
     /// laurel animation.
     @State private var firstViewTick = 0
@@ -417,17 +416,9 @@ struct ChallengeDetailScreen: View {
 
     private func shareCard(_ s: ChallengeSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            ChallengeSectionLabel(title: "INVITE")
-            ChallengeShareControls(challenge: s, now: model.now, copied: $copied,
-                                   prompt: Self.invitePrompt(participantCount: s.participantCount))
+            ChallengeSectionLabel(title: "INVITE MORE")
+            ChallengeShareControls(challenge: s, now: model.now)
         }
-    }
-
-    /// While you're the only spotter, the invite card leads with a nudge.
-    /// This replaced the separate Invite sheet that used to pop up after
-    /// Create: the same controls are right here on the screen.
-    static func invitePrompt(participantCount: Int) -> String? {
-        participantCount <= 1 ? "You're in. Now invite someone." : nil
     }
 
     // MARK: Standings
@@ -752,14 +743,11 @@ struct ChallengeDetailScreen: View {
 
 // MARK: - Share controls
 
-/// The code in large mono, Share link (system share sheet) and Copy link.
-/// Used inline on the detail's INVITE section.
+/// The code in large mono and one Share link button (system share sheet).
+/// Used inline on the detail's INVITE MORE section.
 struct ChallengeShareControls: View {
     let challenge: ChallengeSummary
     let now: () -> Date
-    @Binding var copied: Bool
-    /// Optional headline above the code (see `invitePrompt`).
-    var prompt: String? = nil
     @State private var showActivity = false
 
     private var url: URL? {
@@ -774,12 +762,6 @@ struct ChallengeShareControls: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            if let prompt {
-                Text(prompt)
-                    .font(Brand.Font.cardTitle)
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-            }
             VStack(spacing: 4) {
                 Text("CODE")
                     .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
@@ -791,60 +773,33 @@ struct ChallengeShareControls: View {
                     .foregroundStyle(Brand.Color.cyan)
                     .accessibilityLabel("Invite code \((challenge.code ?? "").map(String.init).joined(separator: " "))")
             }
-            HStack(spacing: 10) {
-                if let url {
-                    // Was a `ShareLink` whose tap gesture fired
-                    // `challenge_invite_shared` — i.e. the event counted
-                    // sheet OPENINGS, including the ones dismissed without
-                    // sharing. `ActivityShareSheet` reports the real
-                    // outcome, so the event now means what its name says
-                    // and `method` names the app the link went to.
-                    Button {
-                        showActivity = true
-                    } label: {
-                        Label("Share link", systemImage: "square.and.arrow.up")
-                            .font(Brand.Font.button)
-                            .foregroundStyle(Brand.Color.bgPrimary)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 46)
-                            .background(Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.row))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .sheet(isPresented: $showActivity) {
-                        ActivityShareSheet(items: [shareMessage, url]) { method in
-                            guard let method else { return }
-                            Analytics.capture("challenge_invite_shared", [
-                                "challenge_id": .string(challenge.id), "method": .string(method),
-                            ])
-                        }
-                    }
-                    Button {
-                        UIPasteboard.general.string = url.absoluteString
-                        copied = true
+            if let url {
+                // `ActivityShareSheet` reports the real outcome, so
+                // `challenge_invite_shared` fires only when the link was
+                // actually sent, and `method` names the app it went to.
+                // (Copy link was dropped 2026-09-26: the share sheet has
+                // its own Copy action.)
+                Button {
+                    showActivity = true
+                } label: {
+                    Label("Share link", systemImage: "square.and.arrow.up")
+                        .font(Brand.Font.button)
+                        .foregroundStyle(Brand.Color.bgPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 46)
+                        .background(Brand.Color.cyan, in: .rect(cornerRadius: Brand.Radius.row))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .sheet(isPresented: $showActivity) {
+                    ActivityShareSheet(items: [shareMessage, url]) { method in
+                        guard let method else { return }
                         Analytics.capture("challenge_invite_shared", [
-                            "challenge_id": .string(challenge.id), "method": .string("copy_link"),
+                            "challenge_id": .string(challenge.id), "method": .string(method),
                         ])
-                        Task {
-                            try? await Task.sleep(for: .seconds(2))
-                            copied = false
-                        }
-                    } label: {
-                        Label(copied ? "Copied" : "Copy link", systemImage: copied ? "checkmark" : "doc.on.doc")
-                            .font(Brand.Font.button)
-                            .foregroundStyle(Brand.Color.cyan)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 46)
-                            .background(Brand.Color.cyan.opacity(0.12), in: .rect(cornerRadius: Brand.Radius.row))
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            Text("Anyone with the link can join until it ends, up to \(challenge.maxParticipants) spotters.")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
-                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(18)
