@@ -232,6 +232,9 @@ struct LeaderboardScreen: View {
     /// row margins so the track aligns with the cards below.
     private var switcherHeader: some View {
         VStack(spacing: 6) {
+            // The live challenge sits above the window slider (Noah,
+            // 2026-09-26) so it reads as its own thing, not a fourth window.
+            ChallengesStrip()
             LeaderboardWindowSwitcher(selection: $selectedWindow)
             if let line = countdownLine {
                 Text(line)
@@ -240,7 +243,6 @@ struct LeaderboardScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .padding(.bottom, 2)
             }
-            ChallengesStrip()
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)

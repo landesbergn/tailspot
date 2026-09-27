@@ -20,7 +20,13 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * off rather than merely hiding the routes.
  */
 
-const T0 = new Date(Date.UTC(2026, 8, 26, 12, 0, 0));
+// Anchored to the REAL clock, not a fixed date. The uploaded catch's
+// `created_at` is the database's `now()`, and the scorer only counts catches
+// that reached the server before the challenge ended — so a fixed T0 turned
+// this test red for good once real time passed T0 + 24h (2026-09-27 12:00Z).
+// Ten minutes back, whole seconds, keeps the injected clocks (T0 + 600 s)
+// at roughly "now".
+const T0 = new Date(Math.floor((Date.now() - 10 * 60_000) / 1000) * 1000);
 const T0_SEC = Math.floor(T0.getTime() / 1000);
 const TOKEN_B = "b".repeat(64);
 

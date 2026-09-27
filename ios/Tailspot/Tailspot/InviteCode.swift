@@ -2,8 +2,9 @@
 //  InviteCode.swift
 //  Tailspot
 //
-//  Invite-code parsing and normalization (section 9.1: "Codes are
-//  unguessable (about 40 bits)... 8 characters from a 31-symbol alphabet")
+//  Invite-code parsing and normalization. New codes are 6 characters from
+//  a 31-symbol alphabet (2026-09-26; spec section 9.1 originally said 8);
+//  codes issued before that are 8 and stay valid, so both lengths parse.
 //  and the universal-link shape (section 11: "https://tailspot.app/c/CODE.
 //  One shape, no query parameters."). `nonisolated` — pure, no networking,
 //  no UI. Used by both the Join-with-code entry field and `onOpenURL`.
@@ -13,18 +14,22 @@ import Foundation
 
 nonisolated enum InviteCode {
     /// A-Z minus the visually-ambiguous I, L, O, plus digits 2-9 (0 and 1
-    /// dropped for the same reason). 23 letters + 8 digits = 31 symbols,
-    /// ~40 bits over 8 characters (log2(31^8) ≈ 39.6).
+    /// dropped for the same reason). 23 letters + 8 digits = 31 symbols:
+    /// ~30 bits over 6 characters (log2(31^6) ≈ 29.7), ~40 over 8.
     static let alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-    static let codeLength = 8
+    /// What the server issues now.
+    static let codeLength = 6
+    /// Every length that parses: current codes plus the legacy 8-character
+    /// ones still attached to challenges created before the switch.
+    static let acceptedLengths: Set<Int> = [6, 8]
 
     private static let alphabetSet = Set(alphabet)
 
     /// Uppercases and strips every whitespace/newline character plus dashes
     /// (how someone naturally types or pastes a code — "k7m4 qd2x",
     /// "K7M4-QD2X", or a line-wrapped paste out of Messages), then validates
-    /// every remaining character is in the alphabet and the length is
-    /// exactly 8. The strip set matches the backend's `[\s-]` in practice —
+    /// every remaining character is in the alphabet and the length is one
+    /// of `acceptedLengths`. The strip set matches the backend's `[\s-]` in practice —
     /// `CharacterSet.whitespacesAndNewlines` covers space, tab, newline,
     /// carriage return and the non-breaking space a rich-text paste can
     /// carry — but the two sets are not identical: JavaScript's `\s` also
@@ -39,7 +44,7 @@ nonisolated enum InviteCode {
         let stripped = String(raw.uppercased().unicodeScalars.filter {
             !CharacterSet.whitespacesAndNewlines.contains($0) && $0 != "-"
         })
-        guard stripped.count == codeLength,
+        guard acceptedLengths.contains(stripped.count),
               stripped.allSatisfy({ alphabetSet.contains($0) }) else {
             return nil
         }
