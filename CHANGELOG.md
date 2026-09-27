@@ -86,7 +86,7 @@ registered a token.
   challenge create/join fail too. Pinned by a test; README says so plainly.
 - **Secrets to set before this does anything** (see backend/README.md):
   `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID`.
-- **Tests: 443 → 514.** Route tests for the token lifecycle, JWT/config/no-op
+- **Tests: 443 → 515.** Route tests for the token lifecycle, JWT/config/no-op
   tests for the sender, and overtaken tests that spend most of their length on
   the negatives (cooldown, uploader, tokenless, disabled, not-live, dead-token
   cleanup) — the ways this feature turns into spam.

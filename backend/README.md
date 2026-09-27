@@ -228,7 +228,12 @@ participant's `last_placement` is then written forward, the uploader's included.
 answered), phase 3 restores that participant's previous `last_placement` and
 `overtaken_notified_at`, so the next catch sees the slip again and tries once
 more. A dead token, a missing token, the cooldown and "push disabled" leave the
-advance in place — there is nothing to retry in any of those. The cost of
+advance in place — there is nothing to retry in any of those. Phase 3 takes no
+lock and writes unconditionally, so it can land the pre-round values on top of a
+placement a concurrent evaluation wrote in the meantime: the restored baseline
+predates the slip, so that can cost a **duplicate** push (a 5xx that actually
+delivered, say) but never a lost one, and phase 1's lock still means nobody is
+notified twice inside a cooldown that is standing. The cost of
 writing optimistically is bounded: if the process dies between phases, one
 participant silently misses one notification, which beats a 45-second lock.
 

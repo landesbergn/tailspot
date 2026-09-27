@@ -11,8 +11,10 @@ import { type ApnsConfig, Http2ApnsTransport } from "../src/push/apns.js";
  * push-type, priority, expiration, the bearer — is a contract with Apple that
  * nothing else can see, and getting `apns-expiration` or the path wrong fails in
  * the worst way: Apple accepts the request and quietly drops the notification.
- * The teardown cases matter just as much now that a send happens inside the
- * challenge row lock: a promise that never settles would park a transaction.
+ * The teardown cases matter just as much: a promise that never settles hangs
+ * the whole parallel batch of sends a catch upload scheduled, and a session
+ * destroyed by the wrong send closes healthy streams belonging to other
+ * recipients.
  */
 
 const NOW_MS = Date.UTC(2026, 8, 26, 12, 0, 0);
@@ -218,6 +220,39 @@ describe("Http2ApnsTransport", () => {
     expect(sessions).toHaveLength(2); // still the same live session
     sessions[1].streams[1].answer(200);
     await third;
+    transport.close();
+  });
+
+  it("a timed-out send destroys the session IT used, never the replacement", async () => {
+    // Two sends overlap. The first one's session dies and is replaced while it
+    // is still in flight; when its deadline finally fires it must not take the
+    // REPLACEMENT down with it. Evicting "whatever is cached now" did exactly
+    // that: it destroyed the healthy session, which closed the second send's
+    // stream ("stream closed" → transient), so one stuck send kept knocking
+    // over its own replacements and deferring good notifications.
+    const { transport, sessions } = transportWith(25);
+    const slow = transport.send("production", "a".repeat(64), {});
+
+    // The session the slow send went out on dies and is dropped from the cache.
+    sessions[0].emit("error", new Error("socket hang up"));
+    expect(sessions[0].destroyed).toBe(true);
+
+    // A second send redials; this one is healthy and still in flight.
+    const fresh = transport.send("production", "b".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+
+    // Now the slow send gives up.
+    expect(await slow).toEqual({ status: 0, reason: "timeout" });
+    expect(sessions[1].destroyed).toBe(false);
+
+    // The replacement is untouched: its in-flight stream still answers, and the
+    // next send reuses it rather than redialling.
+    sessions[1].streams[0].answer(200);
+    expect(await fresh).toEqual({ status: 200 });
+    const third = transport.send("production", "c".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+    sessions[1].streams[1].answer(200);
+    expect(await third).toEqual({ status: 200 });
     transport.close();
   });
 

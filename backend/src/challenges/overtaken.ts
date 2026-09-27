@@ -42,9 +42,23 @@
  *      the alternative (write after sending) would leave the lock open across
  *      the network again.
  *
- * The cost of the optimism is bounded and known: if the process dies between
- * phase 1 and phase 3, a participant silently misses one notification. That is
- * strictly better than a 45-second lock on a live challenge.
+ * THE WINDOW THE OPTIMISM OPENS, HONESTLY. Phase 3 takes no lock and its UPDATE
+ * is unconditional — last write wins — so an evaluation that ran in between and
+ * recorded a fresher placement can have it overwritten with the pre-round one.
+ * That asymmetry is deliberate and it only ever errs LOUD:
+ *   - Nobody is pushed twice inside a live cooldown. The decision and the
+ *     `overtaken_notified_at` stamp both happen in phase 1, under the row lock,
+ *     so two concurrent evaluations are serialised and the second sees the
+ *     stamp the first wrote.
+ *   - A revert restores a baseline from BEFORE the slip, which is never worse
+ *     (numerically larger) than the placement that triggered the push, so a
+ *     later real slip can't be hidden by it. No notification is lost this way.
+ *   - The price is at most one DUPLICATE: a 5xx that actually delivered, or a
+ *     concurrent evaluation's push whose cooldown stamp our revert erased, can
+ *     produce a second "you got passed" on the next catch. One repeat beats a
+ *     silence, which is the trade the whole retryable path is making.
+ * And if the process dies between phase 1 and phase 3, a participant silently
+ * misses one notification. All of it beats a 45-second lock on a live challenge.
  *
  * WHAT IT WILL NOT DO:
  *   - notify the uploader about their own catch,
@@ -52,9 +66,12 @@
  *   - reach a disabled device, or one that has left (they are invisible in
  *     standings, as everywhere),
  *   - notify the same person twice within 30 minutes in the same challenge
- *     (a lead that changes hands five times is one notification, not five),
- *   - lose a notification to a blip: a transient send failure KEEPS that
- *     participant's baseline, so the next catch tries again,
+ *     (a lead that changes hands five times is one notification, not five) —
+ *     the one exception being the reverted-cooldown case above, which can
+ *     repeat a notification that was reported as failed but actually landed,
+ *   - lose a notification to a blip: a transient send failure has that
+ *     participant's baseline and cooldown RESTORED in phase 3, so the next
+ *     catch sees the slip again and tries once more,
  *   - throw. Every failure is logged and swallowed: a catch upload has already
  *     been answered 201 by the time this runs, and push is a garnish.
  *
@@ -94,7 +111,11 @@ export const OVERTAKEN_TITLE = "You got passed";
  */
 export const MAX_LIVE_CHALLENGES_PER_EVALUATION = 20;
 
-/** Hard ceiling on one APNs send, because sends happen inside the challenge lock. */
+/**
+ * Hard ceiling on one APNs send. Sends run outside every transaction (phase 2),
+ * so this no longer guards a lock — it bounds how long a catch upload's
+ * after-work stays alive, since the whole batch is awaited together.
+ */
 export const SEND_DEADLINE_MS = 5_000;
 
 /** The locked challenge an evaluation runs against. */
@@ -156,9 +177,12 @@ export interface OvertakenStore {
   ): Promise<T | null>;
   /**
    * Phase 3: put back the pre-round baseline and cooldown for participants
-   * whose notification didn't make it. Its own short transaction, no lock —
-   * a concurrent evaluation writing a fresher placement is a better answer than
-   * ours anyway, and losing the revert only costs one notification.
+   * whose notification didn't make it. Its own short transaction and NO lock,
+   * so it is a blind last-write-wins UPDATE: it can stamp the pre-round values
+   * over a fresher placement a concurrent evaluation wrote. That is the
+   * accepted cost (see the header) — it can cost a duplicate push, never a
+   * lost one — and taking the lock again would cost everyone else on this
+   * challenge their 5-second statement timeout.
    */
   revertRound(challengeId: string, rows: readonly RevertRow[]): Promise<void>;
   /** Forget a token APNs told us is dead, wherever it is. Outside the lock. */
@@ -408,9 +432,9 @@ export function isTransientFailure(res: ApnsResponse): boolean {
 
 /**
  * Bound one send, whatever the transport does. `Http2ApnsTransport` has its own
- * deadline, but the transport is an injected seam and a send now happens inside
- * the challenge row lock — a transport that never resolves would hold that lock
- * until the connection pool gave up.
+ * deadline, but the transport is an injected seam: a fake that never resolves
+ * would hang phase 2's `Promise.all` forever, and with it the compensating
+ * phase 3 that puts the failed recipients' baselines back.
  */
 async function sendWithDeadline(
   transport: ApnsTransport,
@@ -542,11 +566,14 @@ export class DrizzleOvertakenStore implements OvertakenStore {
 
   async revertRound(challengeId: string, rows: readonly RevertRow[]): Promise<void> {
     if (rows.length === 0) return;
-    // Deliberately NOT under the challenge lock: this runs after the network,
-    // and a concurrent evaluation that has written a fresher placement in the
-    // meantime has a better answer than ours. Losing this race costs one
-    // notification; taking the lock again would cost everyone else their
-    // 5-second statement timeout.
+    // Deliberately NOT under the challenge lock, and deliberately unconditional
+    // — this runs after the network, and re-taking the lock to compare would
+    // cost everyone else on this challenge their 5-second statement timeout for
+    // a write whose only job is to make a retry possible. So it is last-write-
+    // wins: if a concurrent evaluation recorded a fresher placement in the
+    // meantime, these pre-round values land on top of it. The restored baseline
+    // is from before the slip, so it can only make the next evaluation MORE
+    // willing to notify — at worst a duplicate push, never a lost one.
     await this.db.transaction(async (tx) => {
       for (const row of rows) {
         await tx

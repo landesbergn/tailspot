@@ -204,9 +204,10 @@ export interface Http2TransportOptions {
   now?: () => number;
   /**
    * Hard per-send ceiling. APNs answers in tens of milliseconds; this exists
-   * only to bound a hang, and it is deliberately short (5 s) because a send
-   * happens inside the challenge row lock — a stuck stream would make somebody
-   * else's join wait.
+   * only to bound a hang, and it is deliberately short (5 s): sends run outside
+   * any transaction now, but a batch of them is awaited together, so the
+   * slowest one sets how long a catch upload's after-work stays alive — and a
+   * send that never settles would pin it forever.
    */
   timeoutMs?: number;
   /**
@@ -272,12 +273,15 @@ export class Http2ApnsTransport implements ApnsTransport {
     return new Promise<ApnsResponse>((resolve) => {
       let settled = false;
       let stream: ClientHttp2Stream | undefined;
+      // The session THIS request went out on — not whatever is cached when it
+      // finishes. See `done`.
+      let sentOn: ClientHttp2Session | undefined;
       // THE WHOLE SEND is raced against one timer, not just the stream's own
       // inactivity timeout. An HTTP/2 stream can be torn down by a GOAWAY or an
       // RST without ever emitting 'error' or 'end', and the earlier version
-      // left the promise pending forever in exactly that case — which, since
-      // sends now happen under the challenge row lock, would have parked a
-      // transaction rather than merely losing a notification.
+      // left the promise pending forever in exactly that case — a notification
+      // lost, and (before the send moved out of the challenge lock) a parked
+      // transaction with it.
       const timer = setTimeout(() => {
         // Settle FIRST, then tear down: destroying the stream emits 'close',
         // and the caller deserves "timeout" as the reason rather than the
@@ -291,14 +295,22 @@ export class Http2ApnsTransport implements ApnsTransport {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        // A timeout or a transport-level error means this SESSION is suspect —
-        // a half-open connection accepts streams and never answers them, so
-        // reusing it turns one bad send into every later send timing out until
-        // the process restarts. Drop it; the next send redials.
-        if (res.status === 0) {
-          const cached = this.sessions.get(env);
-          if (cached) this.evict(env, cached);
-        }
+        // A timeout or a transport-level error means the session THIS request
+        // went out on is suspect — a half-open connection accepts streams and
+        // never answers them, so reusing it turns one bad send into every later
+        // send timing out until the process restarts. Drop it; the next send
+        // redials.
+        //
+        // `sentOn`, NOT `this.sessions.get(env)`: two sends overlap, and by the
+        // time a slow one gives up the cache can already hold a REPLACEMENT.
+        // Evicting whatever is cached now would destroy that healthy session
+        // and close the in-flight streams of every send using it — each of
+        // which comes back "stream closed", which the overtaken evaluation
+        // reads as transient and defers. One stuck send would keep knocking
+        // over its own replacements. `evict` then no-ops unless `sentOn` is
+        // still the cached session, which is the whole point of its identity
+        // guard.
+        if (res.status === 0 && sentOn) this.evict(env, sentOn);
         // APNs rejected our JWT, not the device token: stop serving the
         // rejected one for the rest of its cache window.
         if (isProviderTokenFailure(res)) this.jwt.invalidate();
@@ -306,7 +318,8 @@ export class Http2ApnsTransport implements ApnsTransport {
       };
       try {
         const expiration = Math.floor((this.options.now?.() ?? Date.now()) / 1000) + 3600;
-        const req = this.session(env).request({
+        sentOn = this.session(env);
+        const req = sentOn.request({
           [constants.HTTP2_HEADER_METHOD]: "POST",
           [constants.HTTP2_HEADER_PATH]: `/3/device/${token}`,
           [constants.HTTP2_HEADER_AUTHORIZATION]: `bearer ${this.jwt.token()}`,
