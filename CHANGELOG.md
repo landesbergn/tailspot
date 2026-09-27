@@ -12,6 +12,34 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Record the first new grounded-catch event timestamp. Legacy events and leaderboard trophies without source timestamps show “Date unavailable”; a repeat event or later leaderboard fetch never becomes a fabricated achievement date.
 - Added coverage for upgrades, restores, first threshold crossings, guess streaks, persistence, and missing external dates, plus native standard/accessibility renders. Physical-device review remains pending because the phone was unavailable.
 
+## 2026-09-27 — Challenges UI pass (PR #290, branch `worktree-challenges-ui-pass`)
+
+Three rounds of Noah's notes from device screenshots, all client copy/layout
+except the invite-code length.
+
+- **Hub:** empty state reads "Spot with friends" / "Invite up to 10 friends for
+  a head-to-head spotting challenge."
+- **Create sheet:** one-line name, the character limit only appears (amber)
+  once exceeded; Start (NOW / SCHEDULE) uses the same `GlassSegmentedSlider`
+  as Duration; the scheduled date picker has its own card; the end line is
+  centered text under the slider; the "You're in as soon as…" footer is gone.
+- **Detail:** the header card no longer repeats the name. `ChallengeShareSheet`
+  (the post-Create pop-up) is deleted; the inline **INVITE MORE** card holds
+  the code and one **Invite now** button. Copy link and the "Anyone with the
+  link…" line are gone (the share sheet has its own Copy).
+- **Join sheet:** the code-entry button reads **Join now**; help copy shows a
+  6-character example.
+- **Leaderboard:** the live-challenge chip keeps the checkered flag, drops
+  "IN FLIGHT", and sits above the Week / Month / All time slider.
+- **6-character invite codes** (was 8; ≈30 bits, limiter-backed). Old codes
+  stay valid: backend `normalizeCode`, app `InviteCode.normalize`/`parse` and
+  the web `/c/` nginx route accept 6 or 8. **Ship the app before the backend**
+  — installed builds only parse 8.
+- **Test fix:** `backend/test/overtakenRoute.test.ts` (from #288) pinned T0 to
+  2026-09-26 12:00Z while the uploaded catch's `created_at` is the DB's real
+  `now()`; it went red for everyone once real time passed the 24 h window.
+  T0 is now anchored to the real clock.
+
 ## 2026-09-26 — Challenge push notifications (backend): APNs sender, push-token route, overtaken detection — branch `feat/challenge-push-overtaken`
 
 Backend half of "someone just passed you in your challenge". The iOS client is

@@ -18,6 +18,8 @@ struct InviteCodeTests {
 
     @Test func alphabetHas31Symbols() {
         #expect(InviteCode.alphabet.count == 31)
+        #expect(InviteCode.codeLength == 6)
+        #expect(InviteCode.acceptedLengths == [6, 8])
     }
 
     @Test func alphabetExcludesAmbiguousCharacters() {
@@ -58,6 +60,7 @@ struct InviteCodeTests {
     @Test func normalizeRejectsWrongLength() {
         #expect(InviteCode.normalize("K7M4QD2") == nil)   // 7 chars
         #expect(InviteCode.normalize("K7M4QD2XX") == nil) // 9 chars
+        #expect(InviteCode.normalize("K7M4Q") == nil)     // 5 chars
     }
 
     @Test func normalizeRejectsAmbiguousCharacters() {
@@ -119,4 +122,17 @@ struct InviteCodeTests {
         #expect(InviteCode.parse(url: url) == "K7M4QD2X")
         #expect(url.absoluteString == "https://tailspot.app/c/K7M4QD2X")
     }
+
+    // MARK: Six-character codes (2026-09-26)
+
+    /// New codes are six characters; the legacy eight-character ones above
+    /// still parse. Typing and link parsing both accept the short form.
+    @Test func sixCharacterCodesParse() {
+        #expect(InviteCode.normalize("K7M4QD") == "K7M4QD")
+        #expect(InviteCode.normalize("k7m4-qd") == "K7M4QD")
+        #expect(InviteCode.normalize("K7M4QO") == nil) // O is not in the alphabet
+        #expect(InviteCode.parse(url: URL(string: "https://tailspot.app/c/K7M4QD")!) == "K7M4QD")
+        #expect(InviteCode.parse(url: URL(string: "https://www.tailspot.app/c/k7m4qd/")!) == "K7M4QD")
+    }
 }
+

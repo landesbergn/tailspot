@@ -34,6 +34,18 @@ struct ChallengeScreensLogicTests {
         return (model, service)
     }
 
+    // MARK: UI pass (2026-09-26)
+
+    @Test func nameLimitOnlySpeaksWhenOver() {
+        let max = ChallengeCreateSheet.nameMax
+        #expect(!ChallengeCreateSheet.isOverLimit(""))
+        #expect(!ChallengeCreateSheet.isOverLimit("Hi"))
+        #expect(!ChallengeCreateSheet.isOverLimit(String(repeating: "a", count: max)))
+        #expect(ChallengeCreateSheet.isOverLimit(String(repeating: "a", count: max + 1)))
+        #expect(ChallengeCreateSheet.overLimitMessage(String(repeating: "a", count: max + 3))
+                == "Too long: \(max + 3)/\(max) characters.")
+    }
+
     // MARK: Hub sections
 
     @Test func hubSectionsFromFixtureWorld() async {

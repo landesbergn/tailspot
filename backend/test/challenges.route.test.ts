@@ -244,7 +244,7 @@ describe("Challenges v1 routes", () => {
         isCreator: true,
         isParticipant: true,
       });
-      expect(body.challenge.code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/);
+      expect(body.challenge.code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
       expect(body.challenge.inviteURL).toBe(`https://tailspot.app/c/${body.challenge.code}`);
       expect(
         new Date(body.challenge.endsAt).getTime() - new Date(body.challenge.startsAt).getTime(),
