@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { CODE_ALPHABET, CODE_LENGTH, generateInviteCode, normalizeCode } from "../src/challenges/codes.js";
+import {
+  CODE_ALPHABET,
+  CODE_LENGTH,
+  generateInviteCode,
+  normalizeCode,
+} from "../src/challenges/codes.js";
 import { assignPlacements, decideOutcome, winners } from "../src/challenges/placement.js";
 import { aircraftName } from "../src/challenges/store.js";
 

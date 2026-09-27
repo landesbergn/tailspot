@@ -136,7 +136,7 @@ struct ChallengeJoinSheet: View {
                     .foregroundStyle(Brand.Color.alertCaution)
             }
             Button { Task { await submitCode() } } label: {
-                primaryLabel("Look up", enabled: !codeDraft.isEmpty)
+                primaryLabel("Join now", enabled: !codeDraft.isEmpty)
             }
             .buttonStyle(.plain)
             .disabled(codeDraft.isEmpty)
@@ -147,7 +147,7 @@ struct ChallengeJoinSheet: View {
 
     private func submitCode() async {
         guard let code = InviteCode.normalize(codeDraft) else {
-            codeHint = "Codes are 8 letters and numbers, and never use 0, 1, I, L or O."
+            codeHint = "Codes are 6 letters and numbers, and never use 0, 1, I, L or O."
             return
         }
         phase = .lookingUp

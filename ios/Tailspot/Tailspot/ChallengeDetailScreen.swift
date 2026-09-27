@@ -782,7 +782,7 @@ struct ChallengeShareControls: View {
                 Button {
                     showActivity = true
                 } label: {
-                    Label("Share link", systemImage: "square.and.arrow.up")
+                    Label("Invite now", systemImage: "square.and.arrow.up")
                         .font(Brand.Font.button)
                         .foregroundStyle(Brand.Color.bgPrimary)
                         .frame(maxWidth: .infinity)
