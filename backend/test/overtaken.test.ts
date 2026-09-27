@@ -109,6 +109,21 @@ describe("overtaken detection", () => {
     return rows[0]?.p ?? null;
   }
 
+  /** Pin each participant's remembered placement, bypassing the seed. */
+  async function setBaselines(challengeId: string, rows: [string, number][]) {
+    for (const [deviceId, placement] of rows) {
+      await db
+        .update(challengeParticipants)
+        .set({ lastPlacement: placement })
+        .where(
+          and(
+            eq(challengeParticipants.challengeId, challengeId),
+            eq(challengeParticipants.deviceId, deviceId),
+          ),
+        );
+    }
+  }
+
   /**
    * A live 24h challenge with A (creator) and B, where B leads 100–0.
    * `bPush: null` gives B no push token — explicitly null, not undefined, so
@@ -294,6 +309,92 @@ describe("overtaken detection", () => {
     expect(transport.sent).toHaveLength(0);
   });
 
+  it("names nobody when the uploader is not the one who did the passing", async () => {
+    // A, B and C, with baselines A=1st, B=2nd, C=3rd. Since then C has been
+    // catching and nobody re-evaluated (a transient failure held a baseline, or
+    // an evaluation was skipped). The board is now C, A, B — B really has
+    // slipped, but A didn't pass them, C did. Naming A would be a lie about a
+    // competitor, so the copy names nobody.
+    const a = await device("ada");
+    const b = await device("bex", { token: TOKEN_B, environment: "production" });
+    const c = await device("cyd");
+    const challenge = await store.create(
+      { name: "Three Up", creatorDeviceId: a, startsAt: T0, durationPreset: "24h" },
+      T0,
+    );
+    await store.join(challenge, b, new Date(T0.getTime() + 60_000));
+    await store.join(challenge, c, new Date(T0.getTime() + 60_000));
+    await setBaselines(challenge.id, [
+      [a, 1],
+      [b, 2],
+      [c, 3],
+    ]);
+
+    const t1 = new Date(T0.getTime() + 10 * 60_000);
+    await seedCatch(c, 500, t1); // C ran away with it
+    await seedCatch(a, 100, t1);
+    await seedCatch(b, 50, t1);
+
+    const summary = await evaluate(a, t1);
+    expect(summary.pushes).toBe(1);
+    const alert = (transport.sent[0].payload as { aps: { alert: { title: string; body: string } } })
+      .aps.alert;
+    expect(alert.title).toBe("You got passed");
+    expect(alert.body).toBe("You've dropped to 3rd in Three Up.");
+    expect(alert.body).not.toContain("@");
+  });
+
+  it("names the uploader when they demonstrably crossed this round", async () => {
+    // The positive control for the test above: same three spotters, but this
+    // time A was BEHIND B and is now ahead, so A is provably the passer.
+    const a = await device("ada");
+    const b = await device("bex", { token: TOKEN_B, environment: "production" });
+    const c = await device("cyd");
+    const challenge = await store.create(
+      { name: "Three Up", creatorDeviceId: a, startsAt: T0, durationPreset: "24h" },
+      T0,
+    );
+    await store.join(challenge, b, new Date(T0.getTime() + 60_000));
+    await store.join(challenge, c, new Date(T0.getTime() + 60_000));
+    await setBaselines(challenge.id, [
+      [a, 3],
+      [b, 2],
+      [c, 1],
+    ]);
+
+    const t1 = new Date(T0.getTime() + 10 * 60_000);
+    await seedCatch(c, 500, t1);
+    await seedCatch(a, 300, t1); // A vaults over B
+    await seedCatch(b, 50, t1);
+
+    const summary = await evaluate(a, t1);
+    expect(summary.pushes).toBe(1);
+    const body = (transport.sent[0].payload as { aps: { alert: { body: string } } }).aps.alert.body;
+    expect(body).toBe("@ada just passed you in Three Up. You're now 3rd.");
+  });
+
+  it("names nobody when the uploader has no baseline of their own", async () => {
+    const { a, b, challenge } = await bLeads();
+    // A's own baseline is missing (an un-seeded row, or a seed that failed), so
+    // we cannot say where A came from and cannot claim they passed anyone.
+    await db
+      .update(challengeParticipants)
+      .set({ lastPlacement: null })
+      .where(
+        and(
+          eq(challengeParticipants.challengeId, challenge.id),
+          eq(challengeParticipants.deviceId, a),
+        ),
+      );
+    const t1 = new Date(T0.getTime() + 10 * 60_000);
+    await seedCatch(a, 150, t1);
+
+    expect((await evaluate(a, t1)).pushes).toBe(1);
+    const body = (transport.sent[0].payload as { aps: { alert: { body: string } } }).aps.alert.body;
+    expect(body).toBe("You've dropped to 2nd in Weekend Flyoff.");
+    expect(b).toBeTypeOf("string");
+  });
+
   it('says "tied for 2nd" when the new placement is shared', async () => {
     // Three spotters: B and C both on 100, A passes neither until they draw
     // level — then A's catch drops both to a shared 2nd.
@@ -325,7 +426,7 @@ describe("overtaken detection", () => {
     expect(byToken.get(TOKEN_C)).toBe("sandbox");
   });
 
-  it("a 410 from APNs clears the token and does not mark the cooldown", async () => {
+  it("a 410 from APNs clears the token and lets the baseline stand", async () => {
     const { a, b, challenge } = await bLeads();
     transport.reply = () => ({ status: 410, reason: "Unregistered" });
     const t1 = new Date(T0.getTime() + 10 * 60_000);
@@ -337,13 +438,15 @@ describe("overtaken detection", () => {
     const row = await db.select().from(devices).where(eq(devices.id, b));
     expect(row[0].apnsToken).toBeNull();
     expect(row[0].apnsEnvironment).toBeNull();
+    // The cooldown stamp stays: it was written optimistically under the lock
+    // and only a RETRYABLE failure takes it back. A dead token is not
+    // retryable — there is nobody to send to until they register a new one —
+    // so nothing is undone, and the baseline advances with it.
     const parts = await db
       .select({ notified: challengeParticipants.overtakenNotifiedAt })
       .from(challengeParticipants)
       .where(eq(challengeParticipants.deviceId, b));
-    expect(parts[0].notified).toBeNull();
-    // A dead token is not a blip — there is nobody to retry for, so the
-    // baseline advances and we don't re-send on every subsequent catch.
+    expect(parts[0].notified).not.toBeNull();
     expect(await lastPlacement(challenge.id, b)).toBe(2);
   });
 

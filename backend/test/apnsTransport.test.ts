@@ -53,14 +53,22 @@ class StubSession extends EventEmitter {
   readonly streams: StubStream[] = [];
   closed = false;
   destroyed = false;
+  idleTimeoutMs: number | undefined;
   request(headers: Record<string, unknown>): StubStream {
     this.requests.push(headers);
     const stream = new StubStream();
     this.streams.push(stream);
     return stream;
   }
+  setTimeout(ms: number, _cb: () => void) {
+    this.idleTimeoutMs = ms;
+  }
   close() {
     this.closed = true;
+  }
+  destroy() {
+    this.destroyed = true;
+    this.emit("close");
   }
 }
 
@@ -150,6 +158,83 @@ describe("Http2ApnsTransport", () => {
     const pending = transport.send("production", "a".repeat(64), {});
     expect(await pending).toEqual({ status: 0, reason: "timeout" });
     expect(sessions[0].streams[0].destroyed).toBe(true);
+    transport.close();
+  });
+
+  it("drops the session after a timeout, so the next send redials", async () => {
+    // A half-open HTTP/2 session accepts streams and never answers them. Keeping
+    // it cached turned one timeout into every later send timing out for the
+    // life of the process.
+    const { transport, sessions } = transportWith(10);
+    expect(await transport.send("production", "a".repeat(64), {})).toEqual({
+      status: 0,
+      reason: "timeout",
+    });
+    expect(sessions[0].destroyed).toBe(true);
+
+    const second = transport.send("production", "a".repeat(64), {});
+    expect(sessions).toHaveLength(2); // redialled rather than reusing the dead one
+    sessions[1].streams[0].answer(200);
+    expect(await second).toEqual({ status: 200 });
+    transport.close();
+  });
+
+  it("drops the session after a transport error too", async () => {
+    const { transport, sessions } = transportWith();
+    const pending = transport.send("production", "a".repeat(64), {});
+    sessions[0].streams[0].emit("error", new Error("socket hang up"));
+    await pending;
+    expect(sessions[0].destroyed).toBe(true);
+
+    transport.send("production", "a".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+    transport.close();
+  });
+
+  it("sets an idle timeout on every session it dials", async () => {
+    const { transport, sessions } = transportWith();
+    transport.send("production", "a".repeat(64), {});
+    expect(sessions[0].idleTimeoutMs).toBe(60_000);
+    transport.close();
+  });
+
+  it("a stale session's late error cannot evict its replacement", async () => {
+    const { transport, sessions } = transportWith();
+    // First session dies and is replaced.
+    const first = transport.send("production", "a".repeat(64), {});
+    sessions[0].streams[0].emit("error", new Error("boom"));
+    await first;
+    const second = transport.send("production", "b".repeat(64), {});
+    expect(sessions).toHaveLength(2);
+
+    // Now the DEAD one emits again, late. Without the identity check this
+    // dropped the healthy replacement from the cache and leaked it.
+    sessions[0].emit("error", new Error("late boom"));
+    sessions[1].streams[0].answer(200);
+    expect(await second).toEqual({ status: 200 });
+    expect(sessions[1].destroyed).toBe(false);
+
+    const third = transport.send("production", "c".repeat(64), {});
+    expect(sessions).toHaveLength(2); // still the same live session
+    sessions[1].streams[1].answer(200);
+    await third;
+    transport.close();
+  });
+
+  it("re-mints the JWT after APNs rejects the provider token", async () => {
+    const { transport, sessions } = transportWith();
+    const first = transport.send("production", "a".repeat(64), {});
+    const firstJwt = String(sessions[0].requests[0].authorization);
+    sessions[0].streams[0].answer(403, JSON.stringify({ reason: "ExpiredProviderToken" }));
+    expect(await first).toEqual({ status: 403, reason: "ExpiredProviderToken" });
+
+    // Without invalidation the cache would keep serving the rejected JWT for
+    // the rest of its 50-minute window, and every send in it would 403.
+    const second = transport.send("production", "b".repeat(64), {});
+    const secondJwt = String(sessions[sessions.length - 1].requests.at(-1)?.authorization);
+    expect(secondJwt).not.toBe(firstJwt);
+    sessions[sessions.length - 1].streams.at(-1)?.answer(200);
+    await second;
     transport.close();
   });
 

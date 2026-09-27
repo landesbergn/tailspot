@@ -71,6 +71,25 @@ export function isDeadTokenResponse(res: ApnsResponse): boolean {
   return res.reason === "Unregistered";
 }
 
+/**
+ * Reasons APNs gives when it rejected our PROVIDER token (the JWT), not the
+ * device token. They are 403s and they are OUR fault — an expired cached JWT, a
+ * clock skew, a key that was revoked. Crucially they are RETRYABLE: the
+ * notification is fine, the credential isn't, so the caller must not treat the
+ * notification as delivered-and-done, and we must stop serving the rejected JWT
+ * (see `Http2ApnsTransport.send`, which invalidates the cache on sight).
+ */
+const PROVIDER_TOKEN_REASONS = new Set([
+  "ExpiredProviderToken",
+  "InvalidProviderToken",
+  "MissingProviderToken",
+]);
+
+/** Did APNs reject our signing credential rather than the device token? */
+export function isProviderTokenFailure(res: ApnsResponse): boolean {
+  return res.status === 403 && res.reason !== undefined && PROVIDER_TOKEN_REASONS.has(res.reason);
+}
+
 export interface ApnsConfig {
   /** Contents of the .p8 key (NOT a path). Literal `\n` sequences are normalised. */
   keyP8: string;
@@ -110,6 +129,9 @@ export function normalizePem(raw: string): string {
 
 const TOKEN_TTL_MS = 50 * 60 * 1000; // Apple rejects tokens older than 1 h; refresh at 50 min.
 
+/** Idle ceiling on a cached HTTP/2 session. Apple keeps them open far longer; this reaps ours. */
+const IDLE_SESSION_MS = 60_000;
+
 function base64url(input: Buffer | string): string {
   return Buffer.from(input).toString("base64url");
 }
@@ -147,6 +169,16 @@ export class ApnsJwtProvider {
     const token = mintApnsJwt(this.config, nowMs);
     this.cached = { token, mintedAt: nowMs };
     return token;
+  }
+
+  /**
+   * Throw the cached JWT away so the next send mints a fresh one. Called when
+   * APNs tells us the token is expired or invalid — otherwise we would keep
+   * presenting the rejected credential for the rest of its 50-minute cache
+   * window and every notification in that window would fail.
+   */
+  invalidate(): void {
+    this.cached = undefined;
   }
 }
 
@@ -210,17 +242,27 @@ export class Http2ApnsTransport implements ApnsTransport {
     this.sessions.clear();
   }
 
+  /** Forget `session` if it is still the cached one for `env`, and tear it down. */
+  private evict(env: ApnsEnvironment, session: ClientHttp2Session): void {
+    if (this.sessions.get(env) !== session) return;
+    this.sessions.delete(env);
+    if (!session.destroyed) session.destroy();
+  }
+
   private session(env: ApnsEnvironment): ClientHttp2Session {
     const existing = this.sessions.get(env);
     if (existing && !existing.closed && !existing.destroyed) return existing;
     const session = this.dial(HOSTS[env]);
     // A session-level error must not become an unhandled 'error' event (which
     // would take the process down). Drop it from the cache and let the next
-    // send dial again.
-    session.on("error", () => this.sessions.delete(env));
-    session.on("close", () => {
-      if (this.sessions.get(env) === session) this.sessions.delete(env);
-    });
+    // send dial again — but ONLY if it is still the cached one: a stale
+    // session's late error would otherwise evict the healthy replacement and
+    // leak the connection it was evicting.
+    session.on("error", () => this.evict(env, session));
+    session.on("close", () => this.evict(env, session));
+    // Reap an idle session rather than letting a middlebox half-close it and
+    // leave us holding a socket that accepts streams and never answers.
+    session.setTimeout?.(IDLE_SESSION_MS, () => session.destroy());
     this.sessions.set(env, session);
     return session;
   }
@@ -245,12 +287,23 @@ export class Http2ApnsTransport implements ApnsTransport {
       }, this.timeoutMs);
       // Never hold the process open for a notification.
       timer.unref?.();
-      function done(res: ApnsResponse) {
+      const done = (res: ApnsResponse) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        // A timeout or a transport-level error means this SESSION is suspect —
+        // a half-open connection accepts streams and never answers them, so
+        // reusing it turns one bad send into every later send timing out until
+        // the process restarts. Drop it; the next send redials.
+        if (res.status === 0) {
+          const cached = this.sessions.get(env);
+          if (cached) this.evict(env, cached);
+        }
+        // APNs rejected our JWT, not the device token: stop serving the
+        // rejected one for the rest of its cache window.
+        if (isProviderTokenFailure(res)) this.jwt.invalidate();
         resolve(res);
-      }
+      };
       try {
         const expiration = Math.floor((this.options.now?.() ?? Date.now()) / 1000) + 3600;
         const req = this.session(env).request({
@@ -318,6 +371,22 @@ export function createApnsTransport(options: CreateTransportOptions = {}): ApnsT
   const config = apnsConfigFromEnv(options.env);
   if (!config) {
     options.log?.("push disabled");
+    return new NoopApnsTransport();
+  }
+  // PROVE THE KEY WORKS AT BOOT. `createPrivateKey` only runs on the first
+  // send, so a mangled or truncated APNS_KEY_P8 used to boot as "push enabled"
+  // and then fail every send with a status-0 error — which the overtaken
+  // evaluation quite correctly reads as "transient", so it would hold every
+  // baseline open forever, retrying a credential that can never work. One
+  // signature at startup turns that into a loud line in the boot log and the
+  // honest no-op sender.
+  try {
+    mintApnsJwt(config, options.now?.() ?? Date.now());
+  } catch (err) {
+    options.log?.("push disabled: APNS_KEY_P8 is not a usable signing key", {
+      err: err instanceof Error ? err.message : String(err),
+      keyId: config.keyId,
+    });
     return new NoopApnsTransport();
   }
   options.log?.("push enabled", { bundleId: config.bundleId, keyId: config.keyId });

@@ -1,5 +1,6 @@
 import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { isTransientFailure } from "../src/challenges/overtaken.js";
 import {
   type ApnsConfig,
   ApnsJwtProvider,
@@ -9,6 +10,7 @@ import {
   createApnsTransport,
   isApnsEnvironment,
   isDeadTokenResponse,
+  isProviderTokenFailure,
   mintApnsJwt,
   normalizePem,
 } from "../src/push/apns.js";
@@ -114,6 +116,27 @@ describe("the provider JWT", () => {
   });
 });
 
+describe("provider-token failures", () => {
+  it("are recognised, and are NOT dead-token failures", () => {
+    for (const reason of ["ExpiredProviderToken", "InvalidProviderToken", "MissingProviderToken"]) {
+      const res = { status: 403, reason };
+      expect(isProviderTokenFailure(res)).toBe(true);
+      // A rejected SIGNING key says nothing about the device token — clearing
+      // it would throw away a perfectly good address because of our own
+      // misconfiguration.
+      expect(isDeadTokenResponse(res)).toBe(false);
+      // And the notification is worth retrying once the credential is fixed.
+      expect(isTransientFailure(res)).toBe(true);
+    }
+  });
+
+  it("do not swallow other 403s", () => {
+    expect(isProviderTokenFailure({ status: 403, reason: "Forbidden" })).toBe(false);
+    expect(isProviderTokenFailure({ status: 400, reason: "ExpiredProviderToken" })).toBe(false);
+    expect(isProviderTokenFailure({ status: 403 })).toBe(false);
+  });
+});
+
 describe("dead-token detection", () => {
   it("treats 410 and BadDeviceToken/Unregistered as dead, and nothing else", () => {
     expect(isDeadTokenResponse({ status: 410 })).toBe(true);
@@ -140,6 +163,26 @@ describe("the transport factory", () => {
     const res = await transport.send("production", "a".repeat(64), { aps: {} });
     expect(res).toEqual({ status: 0, reason: "push disabled" });
     expect(logged).toEqual(["push disabled"]); // still once — no per-send noise
+  });
+
+  it("refuses a key that cannot sign, rather than booting 'enabled' and failing every send", () => {
+    // A truncated or mangled APNS_KEY_P8 used to boot as "push enabled" and
+    // then fail every send with a status-0 error — which the overtaken
+    // evaluation quite correctly reads as transient, so it would hold every
+    // baseline open forever, retrying a credential that can never work.
+    const logged: { msg: string; detail?: Record<string, unknown> }[] = [];
+    const transport = createApnsTransport({
+      env: {
+        APNS_KEY_P8: "-----BEGIN PRIVATE KEY-----\nnot actually a key\n-----END PRIVATE KEY-----",
+        APNS_KEY_ID: "ABC1234567",
+        APNS_TEAM_ID: "TEAM123456",
+      },
+      log: (msg, detail) => logged.push({ msg, detail }),
+    });
+    expect(transport).toBeInstanceOf(NoopApnsTransport);
+    expect(logged).toHaveLength(1);
+    expect(logged[0].msg).toContain("APNS_KEY_P8");
+    expect(logged[0].msg).toContain("push disabled");
   });
 
   it("builds a real transport and says so when the env is complete", () => {

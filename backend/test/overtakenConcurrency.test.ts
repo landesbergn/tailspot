@@ -34,10 +34,44 @@ const TOKEN_B = "b".repeat(64);
 
 class FakeTransport implements ApnsTransport {
   readonly sent: { env: ApnsEnvironment; token: string; payload: unknown }[] = [];
+  /** How many database transactions were open at the moment of each send. */
+  readonly depthAtSend: number[] = [];
+  /** Set by the test rig so a send can observe the transaction depth. */
+  observeDepth: () => number = () => 0;
+  reply: (token: string) => ApnsResponse = () => ({ status: 200 });
+
   async send(env: ApnsEnvironment, token: string, payload: unknown): Promise<ApnsResponse> {
     this.sent.push({ env, token, payload });
-    return { status: 200 };
+    this.depthAtSend.push(this.observeDepth());
+    return this.reply(token);
   }
+}
+
+/**
+ * Wrap a handle so we can see whether a transaction is open. The overtaken
+ * evaluation must NOT be holding one while it talks to Apple: the lock it takes
+ * is the challenge row's `FOR UPDATE`, everyone else's `statement_timeout` is
+ * 5 s (db/client.ts), and a single slow send would blow through that for every
+ * concurrent join, leave, finalize and standings read on that challenge.
+ */
+function trackTransactions(db: Database): { db: Database; depth: () => number } {
+  let depth = 0;
+  const proxy = new Proxy(db, {
+    get(target, prop, receiver) {
+      if (prop === "transaction") {
+        return (fn: unknown, config?: unknown) => {
+          depth++;
+          return (target.transaction as (f: unknown, c?: unknown) => Promise<unknown>)
+            .call(target, fn, config)
+            .finally(() => {
+              depth--;
+            });
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as Database;
+  return { db: proxy, depth: () => depth };
 }
 
 const silentLog = { debug: () => {}, info: () => {}, warn: () => {} };
@@ -158,6 +192,66 @@ describe("overtaken evaluation: parameters and serialisation", () => {
     expect(lock).toBeGreaterThanOrEqual(0);
     expect(roster).toBeGreaterThan(lock);
     expect(write).toBeGreaterThan(roster);
+  });
+
+  it("has released the challenge lock before it talks to APNs", async () => {
+    const { db: tracked, depth } = trackTransactions(db);
+    const lockAware = new DrizzleOvertakenStore(tracked, new PrivatePointsScorer(db));
+    transport.observeDepth = depth;
+
+    const { a } = await race();
+    const t1 = new Date(T0.getTime() + 10 * 60_000);
+    await seedCatch(a, 150, t1);
+    log.length = 0;
+
+    const summary = await evaluateOvertaken({ store: lockAware, transport, log: silentLog }, a, t1);
+    expect(summary.pushes).toBe(1);
+    // Zero open transactions at send time. This is the whole point: nine
+    // recipients × a 5 s APNs deadline used to mean a 45 s row lock.
+    expect(transport.depthAtSend).toEqual([0]);
+    expect(depth()).toBe(0);
+
+    // And the writes really did land BEFORE the send, not after — the phase-1
+    // transaction is what stops a simultaneous upload double-notifying.
+    const write = log.findIndex((e) => e.sql.includes("last_placement"));
+    const stamp = log.findIndex((e) => e.sql.includes("overtaken_notified_at"));
+    expect(write).toBeGreaterThanOrEqual(0);
+    expect(stamp).toBeGreaterThanOrEqual(0);
+  });
+
+  it("restores the baseline and the cooldown when a send fails transiently", async () => {
+    const { db: tracked, depth } = trackTransactions(db);
+    const revertStore = new DrizzleOvertakenStore(tracked, new PrivatePointsScorer(db));
+    transport.observeDepth = depth;
+    transport.reply = () => ({ status: 503, reason: "ServiceUnavailable" });
+
+    const { a, b, challenge } = await race();
+    const t1 = new Date(T0.getTime() + 10 * 60_000);
+    await seedCatch(a, 150, t1);
+
+    const summary = await evaluateOvertaken(
+      { store: revertStore, transport, log: silentLog },
+      a,
+      t1,
+    );
+    expect(summary).toEqual({ challenges: 1, overtaken: 1, pushes: 0, retryable: 1 });
+
+    // Phase 1 wrote optimistically; phase 3 put both fields back, so the next
+    // catch sees the slip again.
+    const rows = await db
+      .select({
+        deviceId: challengeParticipants.deviceId,
+        placement: challengeParticipants.lastPlacement,
+        notified: challengeParticipants.overtakenNotifiedAt,
+      })
+      .from(challengeParticipants)
+      .where(eq(challengeParticipants.challengeId, challenge.id));
+    const bex = rows.find((r) => r.deviceId === b);
+    expect(bex?.placement).toBe(1);
+    expect(bex?.notified).toBeNull();
+    // The uploader was never a recipient, so their advance stands.
+    expect(rows.find((r) => r.deviceId === a)?.placement).toBe(1);
+    expect(depth()).toBe(0);
   });
 
   it("two uploads racing on the same challenge push the loser exactly once", async () => {

@@ -19,15 +19,32 @@
  * which is also what an un-migrated or unseeded row looks like, so an
  * unseeded participant is silent rather than spammed.
  *
- * ONE EVALUATION AT A TIME PER CHALLENGE. Two phones uploading within the same
- * second would otherwise both read the standings before either wrote them back,
- * and both would push the same person (inside what each thinks is a fresh
- * cooldown) and then clobber each other's placements. So the whole read →
- * decide → send → write cycle runs inside a transaction holding the SAME
- * `SELECT … FOR UPDATE` on the challenge row that `join`, `leave` and
- * finalization take. The sends are inside that lock, which is why each one is
- * bounded at `SEND_DEADLINE_MS` — a stuck APNs stream must not park somebody
- * else's join for longer than a couple of seconds.
+ * THREE PHASES, AND THE NETWORK IS NOT IN THE LOCKED ONE.
+ *
+ *   1. Under `SELECT … FOR UPDATE` on the challenge row — the same lock `join`,
+ *      `leave` and finalization take — read the roster, decide who gets a
+ *      notification, write EVERYONE's new `last_placement` and stamp
+ *      `overtaken_notified_at` for the recipients, then COMMIT. No I/O but the
+ *      database. Two phones uploading in the same second are serialised here,
+ *      so they cannot both read a stale board, both push the same person inside
+ *      what each thinks is a fresh cooldown, and then clobber each other's
+ *      placements.
+ *   2. Outside any transaction, send to all recipients IN PARALLEL, each capped
+ *      at `SEND_DEADLINE_MS`. An earlier version sent inside the lock, which
+ *      was a real outage waiting to happen: nine recipients × a 5 s APNs
+ *      timeout is a 45 s lock, and `db/client.ts` sets `statement_timeout` to
+ *      5 s — so every concurrent join, leave, finalize and standings read on
+ *      that challenge would have 500'd while we waited on Apple.
+ *   3. In a second, short transaction, undo phase 1 for the sends that failed
+ *      in a retryable way: restore those participants' previous
+ *      `last_placement` and `overtaken_notified_at`, so the next catch sees the
+ *      slip again and tries once more. Optimistic write, compensating undo —
+ *      the alternative (write after sending) would leave the lock open across
+ *      the network again.
+ *
+ * The cost of the optimism is bounded and known: if the process dies between
+ * phase 1 and phase 3, a participant silently misses one notification. That is
+ * strictly better than a 45-second lock on a live challenge.
  *
  * WHAT IT WILL NOT DO:
  *   - notify the uploader about their own catch,
@@ -50,6 +67,7 @@ import { type SQL, and, asc, eq, gt, inArray, isNull, lte, sql } from "drizzle-o
 import type { Database } from "../db/client.js";
 import { withDbRetry } from "../db/retry.js";
 import { challengeParticipants, challenges, devices } from "../db/schema.js";
+import { CLEARED_PUSH_TOKEN } from "../identity/store.js";
 import {
   type ApnsEnvironment,
   type ApnsResponse,
@@ -57,6 +75,7 @@ import {
   PUSH_DISABLED_REASON,
   isApnsEnvironment,
   isDeadTokenResponse,
+  isProviderTokenFailure,
 } from "../push/apns.js";
 import { assignPlacements } from "./placement.js";
 import type { ChallengeScorer } from "./scorer.js";
@@ -110,7 +129,13 @@ export interface OvertakenSession {
   roster(): Promise<RosterRow[]>;
   markNotified(deviceIds: readonly string[], now: Date): Promise<void>;
   recordPlacements(rows: readonly { deviceId: string; placement: number }[]): Promise<void>;
-  clearToken(token: string): Promise<void>;
+}
+
+/** What phase 3 puts back when a send failed in a retryable way. */
+export interface RevertRow {
+  deviceId: string;
+  lastPlacement: number | null;
+  overtakenNotifiedAt: Date | null;
 }
 
 export interface OvertakenStore {
@@ -120,12 +145,24 @@ export interface OvertakenStore {
    * Run `body` under `SELECT … FOR UPDATE` on the challenge row. Resolves to
    * null — without calling `body` — when the challenge has vanished, been
    * cancelled, been finalized, or stopped being live since it was listed.
+   *
+   * Nothing slow belongs in `body`: the lock is held for its whole duration and
+   * `statement_timeout` is 5 s for everyone else on this challenge.
    */
   withLiveChallenge<T>(
     challengeId: string,
     now: Date,
     body: (session: OvertakenSession) => Promise<T>,
   ): Promise<T | null>;
+  /**
+   * Phase 3: put back the pre-round baseline and cooldown for participants
+   * whose notification didn't make it. Its own short transaction, no lock —
+   * a concurrent evaluation writing a fresher placement is a better answer than
+   * ours anyway, and losing the revert only costs one notification.
+   */
+  revertRound(challengeId: string, rows: readonly RevertRow[]): Promise<void>;
+  /** Forget a token APNs told us is dead, wherever it is. Outside the lock. */
+  clearToken(token: string): Promise<void>;
 }
 
 /** Just enough of Fastify's logger to be satisfied by a plain object in tests. */
@@ -192,32 +229,35 @@ interface OneResult {
   retryable: number;
 }
 
-function evaluateOne(
+/** One recipient, decided under the lock and sent after it. */
+interface Recipient {
+  deviceId: string;
+  token: string;
+  environment: ApnsEnvironment;
+  payload: Record<string, unknown>;
+  /** What to put back if the send fails retryably (phase 3). */
+  previous: RevertRow;
+}
+
+async function evaluateOne(
   deps: OvertakenDeps,
   challengeId: string,
   uploaderId: string,
   now: Date,
 ): Promise<OneResult | null> {
-  return deps.store.withLiveChallenge(challengeId, now, async (session) => {
+  // ── Phase 1: decide and write, under the lock, with no network in sight ───
+  const plan = await deps.store.withLiveChallenge(challengeId, now, async (session) => {
     const { challenge } = session;
     const roster = await session.roster();
-    if (roster.length === 0) return { overtaken: 0, pushes: 0, retryable: 0 };
+    if (roster.length === 0) return null;
 
-    const uploaderHandle = roster.find((r) => r.deviceId === uploaderId)?.handle ?? "someone";
+    const uploader = roster.find((r) => r.deviceId === uploaderId);
     // A placement is SHARED when more than one row holds it — the copy says
     // "tied for 2nd" rather than claiming a rank nobody has alone.
     const perPlacement = new Map<number, number>();
     for (const r of roster) perPlacement.set(r.placement, (perPlacement.get(r.placement) ?? 0) + 1);
 
-    const notified: string[] = [];
-    /**
-     * Participants whose baseline must NOT move: they really were passed, and
-     * the send failed in a way worth retrying. Advancing them would mean the
-     * next evaluation sees no slip and the notification is lost for good. A
-     * dead token, a missing token, the cooldown and a disabled sender all DO
-     * advance — there is nothing to retry in any of those.
-     */
-    const keepBaseline = new Set<string>();
+    const recipients: Recipient[] = [];
     let overtaken = 0;
 
     for (const row of roster) {
@@ -234,81 +274,135 @@ function evaluateOne(
         continue; // inside the cooldown
       }
 
-      const payload = overtakenPayload({
-        challengeId: challenge.id,
-        challengeName: challenge.name,
-        byHandle: uploaderHandle,
-        placement: row.placement,
-        tied: (perPlacement.get(row.placement) ?? 1) > 1,
-      });
-      const res = await sendWithDeadline(
-        deps.transport,
-        row.apnsEnvironment,
-        row.apnsToken,
-        payload,
-      );
-
-      if (res.status === 200) {
-        notified.push(row.deviceId);
-        continue;
-      }
-      if (isDeadTokenResponse(res)) {
-        // The app was deleted, or the token belongs to the other APNs
-        // environment. Forget it — a reinstall registers a fresh one — and let
-        // the baseline advance: there is nobody to retry for.
-        await session.clearToken(row.apnsToken);
-        deps.log.info(
-          { challengeId: challenge.id, deviceId: row.deviceId, reason: res.reason },
-          "cleared a dead APNs token",
-        );
-        continue;
-      }
-      if (isTransientFailure(res)) {
-        keepBaseline.add(row.deviceId);
-        deps.log.warn(
-          {
-            challengeId: challenge.id,
-            deviceId: row.deviceId,
-            status: res.status,
-            reason: res.reason,
-          },
-          "overtaken push failed transiently; keeping the baseline so the next catch retries",
-        );
-        continue;
-      }
-      // Permanent, but not a dead token (a bad topic, a rejected JWT) — or push
-      // simply isn't configured, which is normal and must not shout on every
-      // catch.
-      const detail = {
-        challengeId: challenge.id,
+      recipients.push({
         deviceId: row.deviceId,
-        status: res.status,
-        reason: res.reason,
-      };
-      if (res.reason === PUSH_DISABLED_REASON) deps.log.debug(detail, "push disabled; not sent");
-      else deps.log.warn(detail, "overtaken push not delivered");
+        token: row.apnsToken,
+        environment: row.apnsEnvironment,
+        payload: overtakenPayload({
+          challengeId: challenge.id,
+          challengeName: challenge.name,
+          // ATTRIBUTE ONLY WHEN WE CAN PROVE IT. The uploader is not
+          // necessarily the person who passed this participant: the baseline
+          // can predate somebody else's catch (a transient failure held it, an
+          // evaluation was skipped, the seed is older than the board), and
+          // naming the wrong competitor is worse than naming none.
+          byHandle: crossedThisRound(uploader, row) ? (uploader?.handle ?? null) : null,
+          placement: row.placement,
+          tied: (perPlacement.get(row.placement) ?? 1) > 1,
+        }),
+        previous: {
+          deviceId: row.deviceId,
+          lastPlacement: row.lastPlacement,
+          overtakenNotifiedAt: row.overtakenNotifiedAt,
+        },
+      });
     }
 
-    if (notified.length > 0) await session.markNotified(notified, now);
-    // Everyone's placement moves forward, the uploader included — otherwise the
-    // person who did the passing would be "overtaken" the moment they slipped
-    // back to a placement they'd never been recorded at. Except the retryables.
-    const advance = roster
-      .filter((r) => !keepBaseline.has(r.deviceId))
-      .map((r) => ({ deviceId: r.deviceId, placement: r.placement }));
-    await session.recordPlacements(advance);
-    return { overtaken, pushes: notified.length, retryable: keepBaseline.size };
+    // Optimistic writes: everyone's placement moves forward (the uploader's
+    // included — otherwise the person who did the passing would be "overtaken"
+    // the moment they slipped back to a placement they'd never been recorded
+    // at), and every recipient's cooldown is stamped now so a simultaneous
+    // upload can't double-notify. Phase 3 undoes the ones that don't land.
+    await session.recordPlacements(
+      roster.map((r) => ({ deviceId: r.deviceId, placement: r.placement })),
+    );
+    if (recipients.length > 0) {
+      await session.markNotified(
+        recipients.map((r) => r.deviceId),
+        now,
+      );
+    }
+    return { challenge, recipients, overtaken };
   });
+
+  if (plan === null) return null;
+  const { challenge, recipients, overtaken } = plan;
+  if (recipients.length === 0) return { overtaken, pushes: 0, retryable: 0 };
+
+  // ── Phase 2: send, outside every transaction, all at once ────────────────
+  const results = await Promise.all(
+    recipients.map(async (recipient) => ({
+      recipient,
+      res: await sendWithDeadline(
+        deps.transport,
+        recipient.environment,
+        recipient.token,
+        recipient.payload,
+      ),
+    })),
+  );
+
+  // ── Phase 3: compensate ──────────────────────────────────────────────────
+  const revert: RevertRow[] = [];
+  const deadTokens: string[] = [];
+  let pushes = 0;
+  for (const { recipient, res } of results) {
+    const detail = {
+      challengeId: challenge.id,
+      deviceId: recipient.deviceId,
+      status: res.status,
+      reason: res.reason,
+    };
+    if (res.status === 200) {
+      pushes++;
+      continue;
+    }
+    if (isDeadTokenResponse(res)) {
+      // The app was deleted, or the token belongs to the other APNs
+      // environment. Forget it — a reinstall registers a fresh one — and leave
+      // the baseline advanced: there is nobody to retry for.
+      deadTokens.push(recipient.token);
+      deps.log.info(detail, "cleared a dead APNs token");
+      continue;
+    }
+    if (isTransientFailure(res)) {
+      revert.push(recipient.previous);
+      deps.log.warn(
+        detail,
+        "overtaken push failed transiently; restoring the baseline so the next catch retries",
+      );
+      continue;
+    }
+    // Permanent, but not a dead token (a bad topic) — or push simply isn't
+    // configured, which is normal and must not shout on every catch.
+    if (res.reason === PUSH_DISABLED_REASON) deps.log.debug(detail, "push disabled; not sent");
+    else deps.log.warn(detail, "overtaken push not delivered");
+  }
+
+  if (revert.length > 0) await deps.store.revertRound(challenge.id, revert);
+  for (const token of new Set(deadTokens)) await deps.store.clearToken(token);
+  return { overtaken, pushes, retryable: revert.length };
+}
+
+/**
+ * Did the uploader personally cross this participant in THIS round?
+ *
+ * Placements are golf scores — lower is better. The uploader crossed `row` when
+ * they were level with or behind them at the last evaluation and are ahead of
+ * them now. With no remembered placement for the uploader we cannot tell, so we
+ * don't claim.
+ */
+function crossedThisRound(uploader: RosterRow | undefined, row: RosterRow): boolean {
+  if (!uploader || uploader.lastPlacement === null || row.lastPlacement === null) return false;
+  return uploader.lastPlacement >= row.lastPlacement && uploader.placement < row.placement;
 }
 
 /**
  * Is this failure worth retrying on the next catch? Rate limiting and server
  * errors are; so is a transport that never answered (status 0) — unless it is
  * the no-op sender, which means push is switched off, not broken.
+ *
+ * So is a rejected PROVIDER token (a 403 `ExpiredProviderToken` and friends):
+ * that is our signing credential being refused, not the recipient's address.
+ * The notification is perfectly good and will go through once the JWT is
+ * re-minted — which the transport does the moment it sees one of these — so
+ * treating it as permanent would throw away a real notification over a
+ * self-inflicted, self-healing problem.
  */
 export function isTransientFailure(res: ApnsResponse): boolean {
   if (res.status === 200 || isDeadTokenResponse(res)) return false;
   if (res.status === 429 || res.status >= 500) return true;
+  if (isProviderTokenFailure(res)) return true;
   return res.status === 0 && res.reason !== PUSH_DISABLED_REASON;
 }
 
@@ -347,8 +441,13 @@ async function sendWithDeadline(
 export interface OvertakenCopyInput {
   challengeId: string;
   challengeName: string;
-  /** The handle of whoever just went past, without the "@". */
-  byHandle: string;
+  /**
+   * The handle of whoever just went past, without the "@" — or null when we
+   * can't prove who it was, which produces the nameless variant. Naming a
+   * competitor who didn't actually pass anyone is a worse notification than
+   * naming nobody.
+   */
+  byHandle: string | null;
   placement: number;
   tied: boolean;
 }
@@ -382,10 +481,11 @@ export function placementPhrase(placement: number, tied: boolean): string {
  * here is a client-visible contract change.
  */
 export function overtakenPayload(input: OvertakenCopyInput): Record<string, unknown> {
-  const body = `@${input.byHandle} just passed you in ${input.challengeName}. You're now ${placementPhrase(
-    input.placement,
-    input.tied,
-  )}.`;
+  const place = placementPhrase(input.placement, input.tied);
+  const body =
+    input.byHandle === null
+      ? `You've dropped to ${place} in ${input.challengeName}.`
+      : `@${input.byHandle} just passed you in ${input.challengeName}. You're now ${place}.`;
   return {
     aps: {
       alert: { title: OVERTAKEN_TITLE, body },
@@ -438,6 +538,35 @@ export class DrizzleOvertakenStore implements OvertakenStore {
         .limit(MAX_LIVE_CHALLENGES_PER_EVALUATION),
     );
     return rows.map((r) => r.id);
+  }
+
+  async revertRound(challengeId: string, rows: readonly RevertRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    // Deliberately NOT under the challenge lock: this runs after the network,
+    // and a concurrent evaluation that has written a fresher placement in the
+    // meantime has a better answer than ours. Losing this race costs one
+    // notification; taking the lock again would cost everyone else their
+    // 5-second statement timeout.
+    await this.db.transaction(async (tx) => {
+      for (const row of rows) {
+        await tx
+          .update(challengeParticipants)
+          .set({
+            lastPlacement: row.lastPlacement,
+            overtakenNotifiedAt: row.overtakenNotifiedAt,
+          })
+          .where(
+            and(
+              eq(challengeParticipants.challengeId, challengeId),
+              eq(challengeParticipants.deviceId, row.deviceId),
+            ),
+          );
+      }
+    });
+  }
+
+  async clearToken(token: string): Promise<void> {
+    await this.db.update(devices).set(CLEARED_PUSH_TOKEN).where(eq(devices.apnsToken, token));
   }
 
   withLiveChallenge<T>(
@@ -552,12 +681,5 @@ class TxOvertakenSession implements OvertakenSession {
       from (values ${sql.join(values, sql`, `)}) as v(device_id, placement)
       where p."challenge_id" = ${this.challenge.id}::uuid and p."device_id" = v.device_id
     `);
-  }
-
-  async clearToken(token: string): Promise<void> {
-    await this.tx
-      .update(devices)
-      .set({ apnsToken: null, apnsEnvironment: null })
-      .where(eq(devices.apnsToken, token));
   }
 }
