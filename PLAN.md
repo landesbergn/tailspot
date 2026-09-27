@@ -357,6 +357,8 @@ historical plans/specs/reviews. Still only planned:
 
 ## 9. Immediate next steps (post-POC)
 
+**Trophy achievement dates — implemented 2026-09-27, pending review.** Earned cards use the approved achievement strip with a localized date. Catch-based dates are recovered from the first qualifying catch in available history and retained independently of celebration acknowledgments. Leaderboard trophies and legacy event records without timestamps show “Date unavailable.” Standard and accessibility layouts rendered; physical-device review is pending (phone unavailable during deployment).
+
 **🚀 GA — v1.0.0 (build 83) IS LIVE ON THE APP STORE, approved 2026-08-08.** Submitted 2026-07-21, rejected once under 5.1.1(iv) (onboarding CTA wording — fixed in #170), resubmitted 2026-08-04, approved 2026-08-08. **The v1.1 fast-follow clock starts here.**
 
 **v1.2 train OPEN 2026-09-15 (`feat/challenges-nav`) — the Challenges release (head-to-head and small-group competitions).** `MARKETING_VERSION` 1.1.1 → 1.2.0 in both app-target config blocks (`CURRENT_PROJECT_VERSION` stays 1; CI bumps the build). The boundary is **c5955a4** — the last commit in the shipped 1.1.1 build 94. The feature is built to the decision-ready spec at `docs/reviews/2026-09-15-challenges-v1-spec.html` (revision 3, all 19 decisions answered by Noah 2026-09-15; the DEBUG navigation mock it reviewed stays unmerged on `feat/challenges-poc`), in phases:
