@@ -208,6 +208,10 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-27.
         ("BL17", "Bellanca", "17 Viking"),
         ("EVOT", "Evolution", "EVOT-550 Evolution"),
+        // Public catalog coverage additions validated 2026-09-28.
+        ("GA8", "Gippsaero", "GA-8 Airvan"),
+        ("HROC", "Harmon", "Rocket"),
+        ("PA24", "Piper", "PA-24 Comanche"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -293,6 +297,9 @@ struct SetsCoverageTests {
             (("SREY", "Progressive Aerodyne", "SeaRey"), "fam-sport-classics", "fsc-searey"),
             (("BL17", "Bellanca", "17 Viking"), "fam-sport-classics", "fsc-viking"),
             (("EVOT", "Evolution", "EVOT-550 Evolution"), "fam-sport-classics", "fsc-evolution"),
+            (("GA8", "Gippsaero", "GA-8 Airvan"), "fam-sport-classics", "fsc-airvan"),
+            (("HROC", "Harmon", "Rocket"), "fam-sport-classics", "fsc-harmon-rocket"),
+            (("PA24", "Piper", "PA-24 Comanche"), "fam-piper", "fpa24"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -422,6 +429,22 @@ struct SetsCoverageTests {
                 "A Bellanca 19 Skyrocket must not fill the Bellanca 17 Viking slot")
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("EVSS", "Evektor", "SportStar"))), entry: evolutionEntry),
                 "An Evektor SportStar must not fill the Evolution Turbine slot")
+
+        // Manufacturer-qualified tokens keep similarly named or coded public
+        // aircraft out of the Airvan, Harmon Rocket, and Comanche slots.
+        let airvanEntry = sportSet.entries.first { $0.id == "fsc-airvan" }!
+        let gulfstreamG800 = mk(("GA8C", "Gulfstream", "G800"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: gulfstreamG800), entry: airvanEntry),
+                "A Gulfstream G800 must not fill the GippsAero GA8 Airvan slot")
+        let harmonRocketEntry = sportSet.entries.first { $0.id == "fsc-harmon-rocket" }!
+        let rileyRocket = mk(("C310", "Riley", "Rocket"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: rileyRocket), entry: harmonRocketEntry),
+                "A Riley Rocket must not fill the Harmon Rocket slot")
+        let comancheEntry = CardSets.families.first { $0.id == "fam-piper" }!
+            .entries.first { $0.id == "fpa24" }!
+        let twinComanche = mk(("PA30", "Piper", "PA-30 Twin Comanche"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: twinComanche), entry: comancheEntry),
+                "A PA-30 Twin Comanche must not fill the PA-24 Comanche slot")
 
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
