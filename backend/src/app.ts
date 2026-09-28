@@ -258,6 +258,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const registerLimiter = new RateLimiter({ capacity: 20, windowMs: 60_000 }, rlNow); // 20/min per IP
   const handleLimiter = new RateLimiter({ capacity: 5, windowMs: 60_000 }, rlNow); // 5/min per device
   const catchLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per device
+  // Hangar deletes: their own bucket so a bulk delete can't starve uploads.
+  const catchDeleteLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per device
   const suggestLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
   // 120/min per IP on the position poll. The client polls every 10 s normally
   // and every 2 s when data-starved (30/min worst case per phone), so this is
@@ -490,6 +492,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     identityStore: identity,
     catchStore: catchesStore,
     catchLimiter,
+    deleteLimiter: catchDeleteLimiter,
     listLimiter: catchesListLimiter,
     bearerIpLimiter,
     // Route-guess verification shares the /v1/routes resolver (same cache).

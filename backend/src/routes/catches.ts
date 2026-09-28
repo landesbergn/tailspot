@@ -58,6 +58,12 @@ import type { RouteResolver } from "../providers/adsblolRoutes.js";
 export interface CatchesRouteOptions {
   identityStore: IdentityStore;
   catchStore: CatchStore;
+  /**
+   * Per-device limiter for DELETE /v1/catches/:uuid. Its own bucket: a Hangar
+   * row can group dozens of catches, and a bulk delete must not spend the
+   * budget the next real catch upload needs. Defaults to `catchLimiter`.
+   */
+  deleteLimiter?: RateLimiter;
   /** Per-device write limiter for catches. */
   catchLimiter: RateLimiter;
   /**
@@ -205,7 +211,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       return reply.code(401).send({ error: "unauthorized" });
     }
 
-    const rl = catchLimiter.take(`device:${device.id}`);
+    const rl = (opts.deleteLimiter ?? catchLimiter).take(`device:${device.id}`);
     if (!rl.allowed) {
       reply.header("Retry-After", String(rl.retryAfterSeconds));
       return reply.code(429).send({ error: "rate limited" });
@@ -216,7 +222,24 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       return reply.code(400).send({ error: "catchUuid must be a UUID" });
     }
 
-    await catchStore.deleteCatch(device.id, catchUuid);
+    const removed = await catchStore.deleteCatch(device.id, catchUuid);
+    // `removed: false` is normal (a retry, a never-uploaded catch) but worth
+    // seeing: a device re-registered under a new id would show up as a run
+    // of false deletes while its old catches keep counting.
+    request.log.info({ deviceId: device.id, removed }, "catch delete");
+    // The deleter's live challenge standings just moved. Re-run the same
+    // post-catch evaluation so the stored placements are current — it never
+    // notifies the device that changed, and only notifies someone whose
+    // placement got WORSE, which a delete can't cause for anyone else.
+    if (removed && onCatchIngested) {
+      scheduleAfterReply(() => {
+        try {
+          onCatchIngested(device.id);
+        } catch (err) {
+          request.log.warn({ err, deviceId: device.id }, "post-delete hook failed");
+        }
+      });
+    }
     return reply.code(204).send();
   });
 

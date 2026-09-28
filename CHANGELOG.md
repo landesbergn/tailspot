@@ -28,6 +28,20 @@ challenge scores, and came back on a Hangar restore.
 - **Deploy order: backend first**, but either order is safe: the route never
   404s (it answers 204 for a missing row), so the client treats a 404 as "this
   server doesn't have the route yet" and keeps the delete queued.
+- **Review fixes (local high review, before PR):** SwiftData's `isDeleted` is
+  only true between `delete()` and `save()`, so the uploader now treats a row
+  that left its context as gone. The server keeps no tombstone, so the app
+  keeps a bounded **deleted ledger**: after each POST the uploader checks it
+  and re-sends the delete if the POST landed after the DELETE. Hangar restore
+  skips ledger uuids and discounts unsent deletes from the server total. The
+  queue is MainActor-serialised with one drain at a time (a concurrent
+  read-modify-write could drop a uuid). The drain runs off the foreground
+  path; a network error, 401/403 or 429 stops the pass; an unreadable token
+  keeps the queue. Backend: deletes have their own 120/min limiter, log
+  `{deviceId, removed}`, and re-run the post-catch challenge evaluation so the
+  stored placements stay current (it never pushes the deleter, and a delete
+  can't make anyone else's placement worse). A server-side tombstone table
+  (migration) would be the sturdier fix for resurrection; parked.
 - Not retroactive: catches deleted before this ship are still on the server.
 
 ## 2026-09-27 — Trophy achievement dates — branch `codex/trophy-achievement-dates`

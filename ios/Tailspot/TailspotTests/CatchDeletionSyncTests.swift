@@ -39,6 +39,7 @@ final class CatchDeleteStubProtocol: URLProtocol {
 }
 
 @Suite("Catch deletion sync", .serialized)
+@MainActor
 struct CatchDeletionSyncTests {
 
     init() { CatchDeleteStubProtocol.reset() }
@@ -77,6 +78,19 @@ struct CatchDeletionSyncTests {
         #expect(sync.pending == ["a", "b", "c"])
     }
 
+    @Test func theLedgerRemembersDeletesCaseInsensitively() async {
+        let (sync, _) = makeSync()
+        sync.enqueue(["ABCD-1"])
+        #expect(sync.wasDeleted("abcd-1"))
+        #expect(sync.wasDeleted("ABCD-1"))
+        #expect(!sync.wasDeleted("other"))
+        // Sending the delete clears the queue but NOT the ledger: a POST that
+        // lands afterwards must still be recognised as a deleted catch.
+        await sync.drain()
+        #expect(sync.pending.isEmpty)
+        #expect(sync.wasDeleted("abcd-1"))
+    }
+
     @Test func aFailedDeleteStaysQueuedForTheNextOpen() async {
         let (sync, _) = makeSync()
         CatchDeleteStubProtocol.statuses = [500, 204]
@@ -96,12 +110,21 @@ struct CatchDeletionSyncTests {
         #expect(sync.pending == ["one", "two"])
     }
 
-    @Test func noTokenMeansNothingToDeleteServerSide() async {
+    @Test func anUnreadableTokenKeepsTheQueue() async {
         let (sync, _) = makeSync(token: nil)
-        sync.enqueue(["never-uploaded"])
+        sync.enqueue(["uploaded-under-a-token-we-cant-read-right-now"])
         await sync.drain()
         #expect(CatchDeleteStubProtocol.recorded.isEmpty)
-        #expect(sync.pending.isEmpty)
+        #expect(sync.pending == ["uploaded-under-a-token-we-cant-read-right-now"])
+    }
+
+    @Test func anAuthRejectionStopsTheRun() async {
+        let (sync, _) = makeSync()
+        CatchDeleteStubProtocol.statuses = [401]
+        sync.enqueue(["one", "two", "three"])
+        await sync.drain()
+        #expect(CatchDeleteStubProtocol.recorded.count == 1)
+        #expect(sync.pending == ["one", "two", "three"])
     }
 
     @Test func statusMapping() {
@@ -109,7 +132,7 @@ struct CatchDeletionSyncTests {
         #expect(CatchDeletionSync.outcome(forStatus: 404) == .retry) // server without the route yet
         #expect(CatchDeletionSync.outcome(forStatus: 400) == .done)
         #expect(CatchDeletionSync.outcome(forStatus: 429) == .stop)
-        #expect(CatchDeletionSync.outcome(forStatus: 401) == .retry)
+        #expect(CatchDeletionSync.outcome(forStatus: 401) == .stop)
         #expect(CatchDeletionSync.outcome(forStatus: 503) == .retry)
     }
 }
