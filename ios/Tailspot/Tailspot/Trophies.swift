@@ -194,7 +194,9 @@ nonisolated struct TrophyProgressInputs: Sendable {
     // rightly creates none), so it derives from `TrophyEventStore`, not the
     // Hangar. Defaulted in the initializer — the established zero-churn
     // pattern for existing call sites.
-    let triedGroundedCatch: Bool    // ever tapped a parked (on-ground) plane
+    // External facts can be cleared on a copy for historical catch-prefix
+    // evaluation; today's event/standing must not leak into an older catch.
+    var triedGroundedCatch: Bool    // ever tapped a parked (on-ground) plane
     // Metrics added with the 2026-07-10 roster expansion (game-layer PR4).
     // `totalPoints` is the OFFLINE approximation of lifetime score — the sum
     // of each catch's current base points (resolvedRarity.basePoints), the
@@ -215,8 +217,8 @@ nonisolated struct TrophyProgressInputs: Sendable {
     // `LeaderboardStandingCache` snapshot of the last leaderboard fetch.
     // The app never infers a win locally. Defaulted (zero-churn pattern):
     // fresh installs and offline devices read the cached (or zero) values.
-    let weeklyWins: Int             // weekly-champion crowns (server count)
-    let everToppedAllTime: Bool     // ever held #1 on the all-time board
+    var weeklyWins: Int             // weekly-champion crowns (server count)
+    var everToppedAllTime: Bool     // ever held #1 on the all-time board
 
     init(
         totalCatches: Int,

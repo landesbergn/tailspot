@@ -6,9 +6,10 @@
 //  *shown* — the "acknowledged" half of the unlock-moment machinery.
 //
 //  Trophy *truth* stays derived from the Hangar (see `Trophies.swift`);
-//  this ledger only remembers what's been celebrated so a tier the user
+//  this ledger remembers what's been celebrated so a tier the user
 //  just crossed can be detected as a transition (current > acknowledged)
-//  and never re-fired. It is pure UI state — single-device, no sync, no
+//  and never re-fired. It also preserves recovered achievement dates,
+//  independently of those acknowledgments. Single-device, no sync, no
 //  migration — so a small `UserDefaults` blob is the right home, not
 //  SwiftData (CLAUDE.md: simplest viable iOS choice).
 //
@@ -23,6 +24,9 @@
 import Foundation
 
 nonisolated struct UserDefaultsTrophyLedger {
+    /// Separate from celebration acknowledgments: skipping a celebration or
+    /// reseeding after restore must never replace an achievement's date.
+    static let achievedDatesKey = "trophy.ledger.achievedDates.v1"
     private let defaults: UserDefaults
 
     /// Namespaced + versioned. Bumped to v2 with the binary-roster redesign
@@ -37,6 +41,24 @@ nonisolated struct UserDefaultsTrophyLedger {
     }
 
     // MARK: - Acknowledged tiers
+
+    static func achievedDates(from data: Data) -> [String: Date] {
+        (try? JSONDecoder().decode([String: Date].self, from: data)) ?? [:]
+    }
+
+    var achievedDates: [String: Date] {
+        Self.achievedDates(from: defaults.data(forKey: Self.achievedDatesKey) ?? Data())
+    }
+
+    /// Fill only missing dates. Once recorded, deleting catches or changing
+    /// catalog metadata must not move an already-earned milestone forward.
+    func recordAchievementDates(_ dates: [String: Date]) {
+        var stored = achievedDates
+        for (id, date) in dates where stored[id] == nil { stored[id] = date }
+        guard stored != achievedDates,
+              let data = try? JSONEncoder().encode(stored) else { return }
+        defaults.set(data, forKey: Self.achievedDatesKey)
+    }
 
     /// Highest tier ordinal the user has been shown for `id`, or −1 if none.
     func acknowledgedOrdinal(for id: String) -> Int {

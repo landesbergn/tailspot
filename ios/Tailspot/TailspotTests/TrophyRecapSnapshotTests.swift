@@ -102,6 +102,31 @@ struct TrophyRecapSnapshotTests {
 
     // MARK: - Hangar trophy list states
 
+    @Test func renderAchievementDateStrips() {
+        let suite = UserDefaults(suiteName: "snap.dates.\(UUID())")!
+        let catches = mixedCatches()
+        let inputs = Trophies.inputs(from: catches, events: TrophyEventStore(defaults: suite),
+                                    standing: LeaderboardStandingCache(defaults: suite))
+        let date = Date(timeIntervalSince1970: 1_780_000_000)
+        for largeText in [false, true] {
+            snapshotColumn(
+                VStack(spacing: 10) {
+                    TrophyCardRow(ach: real("firstcatch"), inputs: inputs, achievedAt: date)
+                    TrophyCardRow(ach: real("spotter"), inputs: inputs, achievedAt: date)
+                    TrophyCardRow(ach: real("calledit"), inputs: inputs)
+                    TrophyCardRow(ach: real("catcher"), inputs: inputs)
+                    TrophyCardRow(ach: real("groundstop"), inputs: inputs)
+                }
+                .padding(16)
+                .frame(width: largeText ? 320 : 393)
+                .background(Brand.Color.bgPrimary)
+                .environment(\.locale, Locale(identifier: "en_US"))
+                .dynamicTypeSize(largeText ? .accessibility3 : .large),
+                as: largeText ? "trophy_dates_large_text" : "trophy_dates_standard"
+            )
+        }
+    }
+
     /// Catches producing a good mix: a few earned rows, a partial Four
     /// Figures progress bar, an earned Called It, and locked secrets.
     private func mixedCatches() -> [Catch] {

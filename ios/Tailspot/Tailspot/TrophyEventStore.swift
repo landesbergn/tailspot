@@ -40,9 +40,18 @@ nonisolated struct TrophyEventStore {
     }
 
     /// Record one occurrence of `event` (increments its counter).
-    func record(_ event: Event) {
+    func record(_ event: Event, at date: Date = .now) {
         let key = Self.keyPrefix + event.rawValue
+        // A legacy counter has no timestamp. A repeat today cannot tell us
+        // when the original event occurred, so leave that date unknown.
+        if count(of: event) == 0 {
+            defaults.set(date, forKey: key + ".firstOccurredAt")
+        }
         defaults.set(defaults.integer(forKey: key) + 1, forKey: key)
+    }
+
+    func firstOccurredAt(_ event: Event) -> Date? {
+        defaults.object(forKey: Self.keyPrefix + event.rawValue + ".firstOccurredAt") as? Date
     }
 
     /// How many times `event` has been recorded on this device.
