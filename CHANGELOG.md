@@ -5,6 +5,28 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-27 — Challenges UI tweaks (branch `worktree-challenges-ui-tweaks`)
+
+Seven device-screenshot notes from Noah, client only.
+
+- **Tap the invite code to copy it** (copy glyph beside CODE, flips to COPIED
+  with a haptic; `challenge_invite_shared` with `method: copy_code`).
+- **Scheduled start:** the date picker's range is fixed at render, so a start
+  at the edge went stale while the sheet sat open and the picker showed a time
+  the form called "too soon". The sheet now re-checks every 15 s and moves a
+  stale start to the earliest valid minute with a note ("Moved to 5:02 PM:
+  starts need at least 15 minutes' notice so friends can join."). Backstop
+  messages say which rule broke and name a time that works ("Too soon…",
+  "Too far out… pick Oct 11 at 4:45 PM or earlier").
+- **Clear (x) button** in the challenge name field.
+- **"No contest" reads "Tie"** when two or more spotters finished (the server's
+  `no_contest` with ≥2 is always 0–0); a solo no-contest keeps "No contest".
+- **Standings discs** show the ordinal only ("T-1st" overflowed 34 pt); tied
+  rows say "tied · N catches".
+- **Profile tiles:** Map and Challenges match heights, share a fixed icon slot,
+  and the subtitle wraps to two centered lines instead of shrinking edge to edge.
+- **Join preview:** the details and rules cards span the full width.
+
 ## 2026-09-27 — Challenges UI pass (PR #290, branch `worktree-challenges-ui-pass`)
 
 Three rounds of Noah's notes from device screenshots, all client copy/layout

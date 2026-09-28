@@ -724,6 +724,9 @@ struct ProfileScreen: View {
     /// build too old, config unreachable) Map stands alone rather than a
     /// tile opening onto an error.
     private var quickLinks: some View {
+        // `fixedSize(vertical:)` + `maxHeight: .infinity` on each tile makes
+        // both as tall as the taller one, so Map doesn't sit short next to
+        // a Challenges tile with a subtitle.
         HStack(spacing: 10) {
             quickLink(label: "Map", glyph: "map") { MapScreen() }
             if let challenges, challenges.verdict == .available {
@@ -737,6 +740,7 @@ struct ProfileScreen: View {
                 }
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Optional: nil in the snapshot harness and previews (nothing injects
@@ -749,23 +753,29 @@ struct ProfileScreen: View {
             destination()
         } label: {
             VStack(spacing: 6) {
+                // A fixed slot so glyphs of different shapes (map vs flag)
+                // land at the same size and baseline.
                 Image(systemName: glyph)
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Brand.Color.cyan)
+                    .frame(width: 28, height: 24)
                     .accessibilityHidden(true)
                 Text(label)
                     .font(Brand.Font.caption.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 if let subtitle {
+                    // Two centered lines at a readable size, inset from the
+                    // edges, instead of one line shrunk to fit.
                     Text(subtitle)
-                        .font(Brand.Font.mono(size: 9, weight: .regular, relativeTo: .caption2))
+                        .font(Brand.Font.mono(size: 10, weight: .regular, relativeTo: .caption2))
                         .foregroundStyle(Brand.Color.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .padding(.horizontal, 6)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 12)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 14)
             .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }

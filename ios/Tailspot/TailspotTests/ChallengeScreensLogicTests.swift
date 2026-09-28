@@ -36,6 +36,57 @@ struct ChallengeScreensLogicTests {
 
     // MARK: UI pass (2026-09-26)
 
+    // MARK: UI tweaks (2026-09-27)
+
+    @Test func scheduleProblemSaysWhyAndNamesAWorkingTime() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        cal.locale = Locale(identifier: "en_US")
+        // 16:45:20 local; the 16-minute floor lands at 17:01:20 → 17:02.
+        let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 16, minute: 45, second: 20))!
+        let tooSoon = now.addingTimeInterval(15 * 60)
+        let soonText = ChallengeCreateSheet.scheduleProblem(start: tooSoon, now: now, calendar: cal)
+        #expect(soonText?.hasPrefix("Too soon. Friends need at least 15 minutes to join") == true)
+        #expect(soonText?.contains("5:02") == true)
+        #expect(soonText?.hasSuffix("or later.") == true)
+
+        let tooFar = now.addingTimeInterval(15 * 86_400)
+        let farText = ChallengeCreateSheet.scheduleProblem(start: tooFar, now: now, calendar: cal)
+        #expect(farText?.hasPrefix("Too far out. Challenges can start up to 14 days ahead") == true)
+        #expect(farText?.contains("Oct 11") == true)
+        #expect(farText?.hasSuffix("or earlier.") == true)
+
+        #expect(ChallengeCreateSheet.scheduleProblem(start: now.addingTimeInterval(3600), now: now, calendar: cal) == nil)
+        #expect(ChallengeCreateSheet.scheduleProblem(start: now.addingTimeInterval(ChallengeCreateSheet.minLead), now: now, calendar: cal) == nil)
+    }
+
+    @Test func staleScheduledStartMovesToEarliestValidMinute() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        cal.locale = Locale(identifier: "en_US")
+        let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 16, minute: 45, second: 20))!
+        let stale = cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 17, minute: 1))!
+        let fixed = ChallengeCreateSheet.clampedStart(stale, now: now, calendar: cal)
+        #expect(fixed == cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 17, minute: 2)))
+        #expect(ChallengeCreateSheet.scheduleProblem(start: fixed!, now: now, calendar: cal) == nil)
+        #expect(ChallengeCreateSheet.clampedStart(now.addingTimeInterval(3600), now: now, calendar: cal) == nil)
+        #expect(ChallengeCreateSheet.clampedStart(now.addingTimeInterval(20 * 86_400), now: now, calendar: cal) == nil)
+        #expect(ChallengeCreateSheet.autoMovedNote(to: fixed!, now: now, calendar: cal)
+                .hasPrefix("Moved to 5:02"))
+    }
+
+    @Test func noContestReadsAsTieWithTwoOrMore() {
+        #expect(ChallengeCopy.noContestLabel(participantCount: 1) == "No contest")
+        #expect(ChallengeCopy.noContestLabel(participantCount: 2) == "Tie")
+        #expect(ChallengeCopy.noContestLabel(participantCount: 10) == "Tie")
+    }
+
+    @Test func tiedStandingSaysSoInTheSubtitle() {
+        #expect(ChallengeDetailScreen.standingSubtitle(catches: 0, tied: true) == "tied · 0 catches")
+        #expect(ChallengeDetailScreen.standingSubtitle(catches: 1, tied: false) == "1 catch")
+        #expect(ChallengeTiming.placementLabel(placement: 1, isTie: false) == "1st")
+    }
+
     @Test func nameLimitOnlySpeaksWhenOver() {
         let max = ChallengeCreateSheet.nameMax
         #expect(!ChallengeCreateSheet.isOverLimit(""))

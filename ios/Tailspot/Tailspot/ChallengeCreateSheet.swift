@@ -39,6 +39,11 @@ struct ChallengeCreateSheet: View {
     @State private var scheduledAt: Date
     @State private var duration: Duration = .h24
     @State private var isSubmitting = false
+    /// The start the sheet last moved forward on its own (see
+    /// `keepScheduledStartValid`). The note under the picker shows only
+    /// while the picker still holds exactly that value; any manual change
+    /// makes it moot.
+    @State private var autoMovedTo: Date?
     @State private var error: ChallengesError?
 
     static let nameMin = 3
@@ -55,17 +60,19 @@ struct ChallengeCreateSheet: View {
     static var minLeadMinutes: Int { Int(minLead / 60) }
     static let maxLead: TimeInterval = 14 * 86_400
 
-    /// `_debugName` / `_debugStartMode` seed the snapshot harness.
+    /// `_debugName` / `_debugStartMode` / `_debugScheduledAt` seed the
+    /// snapshot harness.
     init(onCreated: @escaping (ChallengeDetail) -> Void,
          _debugName: String? = nil,
          _debugStartMode: StartMode = .now,
+         _debugScheduledAt: Date? = nil,
          _debugNow: Date = Date()) {
         self.onCreated = onCreated
         _name = State(initialValue: _debugName ?? ChallengeCopy.suggestedName(for: _debugNow))
         _startMode = State(initialValue: _debugStartMode)
         // Default schedule: the next whole hour at least 15 minutes out.
         let next = Self.nextWholeHour(after: _debugNow.addingTimeInterval(Self.minLead))
-        _scheduledAt = State(initialValue: next)
+        _scheduledAt = State(initialValue: _debugScheduledAt ?? next)
     }
 
     static func nextWholeHour(after date: Date, calendar: Calendar = .current) -> Date {
@@ -87,11 +94,63 @@ struct ChallengeCreateSheet: View {
         return Self.isValidLead(scheduledAt.timeIntervalSince(model.now()))
     }
 
+    /// Moves a scheduled start that has drifted inside the notice window to
+    /// the earliest start that works, and remembers it for the note.
+    private func keepScheduledStartValid() {
+        guard let fixed = Self.clampedStart(scheduledAt, now: model.now()) else { return }
+        scheduledAt = fixed
+        autoMovedTo = fixed
+    }
+
+    /// The earliest valid start if `start` is too soon, else nil. Too far
+    /// out is not clamped: the picker can't offer it, and moving someone's
+    /// chosen day back would be a bigger surprise than a message.
+    static func clampedStart(_ start: Date, now: Date, calendar: Calendar = .current) -> Date? {
+        guard start.timeIntervalSince(now) < minLead else { return nil }
+        return nextMinute(after: now.addingTimeInterval(minLead), calendar: calendar)
+    }
+
+    static func autoMovedNote(to date: Date, now: Date, calendar: Calendar = .current) -> String {
+        "Moved to \(clock(date, now: now, calendar: calendar)): starts need at least 15 minutes' notice so friends can join."
+    }
+
     /// The name's only visible rule: say something once it's too long.
     static func isOverLimit(_ trimmed: String) -> Bool { trimmed.count > nameMax }
 
     static func overLimitMessage(_ trimmed: String) -> String {
         "Too long: \(trimmed.count)/\(nameMax) characters."
+    }
+
+    /// Why a scheduled start can't be used, in words, or nil when it can.
+    /// The picker's range is fixed when the sheet renders, so a start that
+    /// was fine can go stale while the sheet sits open — say which rule it
+    /// broke and name the time that would work, not just the bounds.
+    static func scheduleProblem(start: Date, now: Date,
+                                calendar: Calendar = .current) -> String? {
+        let lead = start.timeIntervalSince(now)
+        if lead < minLead {
+            let earliest = nextMinute(after: now.addingTimeInterval(minLead), calendar: calendar)
+            return "Too soon. Friends need at least 15 minutes to join, so pick \(clock(earliest, now: now, calendar: calendar)) or later."
+        }
+        if lead > maxLead {
+            let latest = now.addingTimeInterval(maxLead)
+            return "Too far out. Challenges can start up to 14 days ahead, so pick \(clock(latest, now: now, calendar: calendar)) or earlier."
+        }
+        return nil
+    }
+
+    /// The first whole minute at or after `date`.
+    static func nextMinute(after date: Date, calendar: Calendar = .current) -> Date {
+        let floor = calendar.dateInterval(of: .minute, for: date)?.start ?? date
+        return floor < date ? floor.addingTimeInterval(60) : floor
+    }
+
+    /// "5:02 PM" today, otherwise "Oct 11 at 4:45 PM".
+    static func clock(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+        let time = date.formatted(Date.FormatStyle(calendar: calendar).hour().minute())
+        if calendar.isDate(date, inSameDayAs: now) { return time }
+        let day = date.formatted(Date.FormatStyle(calendar: calendar).month(.abbreviated).day())
+        return "\(day) at \(time)"
     }
 
     /// Whether a start this far ahead may be submitted.
@@ -127,6 +186,19 @@ struct ChallengeCreateSheet: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Brand.Color.bgPrimary.ignoresSafeArea())
+            // The picker's range is fixed at render, so a start chosen at
+            // the edge goes stale while the sheet sits open — the picker
+            // then DISPLAYS the clamped earliest time while the state still
+            // holds the stale one, and "too soon" looks like nonsense
+            // (Noah's 2026-09-27 screenshot: 5:01 shown, flagged too soon).
+            // Re-check every 15 s and move the state to what's on screen.
+            .task(id: startMode) {
+                guard startMode == .scheduled else { return }
+                while !Task.isCancelled {
+                    keepScheduledStartValid()
+                    try? await Task.sleep(for: .seconds(15))
+                }
+            }
             .navigationTitle("New challenge")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -144,12 +216,29 @@ struct ChallengeCreateSheet: View {
             // One line. The limit only speaks up once it's been crossed; a
             // too-short name just leaves Create disabled.
             VStack(alignment: .leading, spacing: 6) {
-                TextField("Weekend Flyoff", text: $name)
-                    .font(Brand.Font.body)
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .textInputAutocapitalization(.words)
-                    .lineLimit(1)
-                    .accessibilityLabel("Challenge name")
+                HStack(spacing: 8) {
+                    TextField("Weekend Flyoff", text: $name)
+                        .font(Brand.Font.body)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .textInputAutocapitalization(.words)
+                        .lineLimit(1)
+                        .accessibilityLabel("Challenge name")
+                    if !name.isEmpty {
+                        // `.borderless` so only the glyph is the button;
+                        // a plain button in a List row claims the whole row.
+                        Button {
+                            name = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 17))
+                                .foregroundStyle(Brand.Color.textTertiary)
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Clear name")
+                    }
+                }
                 if Self.isOverLimit(trimmedName) {
                     Text(Self.overLimitMessage(trimmedName))
                         .font(Brand.Font.caption)
@@ -183,10 +272,15 @@ struct ChallengeCreateSheet: View {
                     .foregroundStyle(Brand.Color.textPrimary)
                     .tint(Brand.Color.cyan)
                     .listRowBackground(Brand.Color.bgElevated)
-                if !scheduleValid {
-                    Text("Pick a start between \(Self.minLeadMinutes) minutes and 14 days from now.")
+                if let problem = Self.scheduleProblem(start: scheduledAt, now: model.now()) {
+                    Text(problem)
                         .font(Brand.Font.caption)
                         .foregroundStyle(Brand.Color.alertCaution)
+                        .listRowBackground(Brand.Color.bgElevated)
+                } else if let moved = autoMovedTo, moved == scheduledAt {
+                    Text(Self.autoMovedNote(to: moved, now: model.now()))
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
                         .listRowBackground(Brand.Color.bgElevated)
                 }
             }

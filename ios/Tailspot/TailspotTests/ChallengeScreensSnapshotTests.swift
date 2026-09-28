@@ -147,6 +147,12 @@ struct ChallengeScreensSnapshotTests {
                  as: "challenge_create_scheduled")
         snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugName: "The Great Wednesday Flyoff", _debugNow: Self.now).environment(model),
                  as: "challenge_create_name_too_long")
+        // A start that went stale while the sheet sat open (10 minutes out):
+        // the sheet moves it to the earliest valid minute and says why.
+        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugStartMode: .scheduled,
+                                      _debugScheduledAt: Self.now.addingTimeInterval(10 * 60),
+                                      _debugNow: Self.now).environment(model),
+                 as: "challenge_create_scheduled_moved")
     }
 
     // MARK: Join sheet
@@ -274,6 +280,27 @@ struct ChallengeScreensSnapshotTests {
         snapshot(detail(model, id: "c-nocontest"), as: "challenge_detail_no_contest")
         await model.loadDetail(id: "c-cancelled")
         snapshot(detail(model, id: "c-cancelled"), as: "challenge_detail_cancelled")
+    }
+
+    /// Two spotters, nobody scored: the server's no_contest reads "Tie", and
+    /// the tied badges show the ordinal with "tied" in the subtitle.
+    @Test func detailZeroZeroTie() async {
+        var s = ChallengeFixtures.demoState(now: Self.now)
+        let tie = ChallengeFixtures.summary(
+            id: "c-tie", name: "Weekend Flyoff", creator: "babyjoda", code: nil,
+            startsAt: Self.now.addingTimeInterval(-7_200), endsAt: Self.now.addingTimeInterval(-3_600),
+            preset: "1h", status: .finished, participantCount: 2, isCreator: false,
+            outcome: "no_contest", myResult: ChallengeMyResult(placement: 1, points: 0, catches: 0))
+        s.history.append(tie)
+        s.details["c-tie"] = ChallengeDetail(
+            challenge: tie,
+            standings: [ChallengeFixtures.standing(1, "babyjoda", 0, 0),
+                        ChallengeFixtures.standing(1, "noah", 0, 0, me: true)],
+            me: ChallengeMyResult(placement: 1, points: 0, catches: 0),
+            winners: [], alreadyIn: nil, newDevice: nil)
+        let (model, _) = await makeModel(state: s)
+        await model.loadDetail(id: "c-tie")
+        snapshot(detail(model, id: "c-tie"), as: "challenge_detail_zero_zero_tie")
     }
 
     /// Right after Create: a live challenge with only you in it. The code
