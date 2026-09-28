@@ -468,7 +468,6 @@ struct SetsCoverageTests {
                 "An IAI Astra must not fill the Pilatus PC-7 slot")
 
         // COZJ is the jet-powered CozyJet, not the piston COZY family slot.
-        let sportSet = CardSets.families.first { $0.id == "fam-sport-classics" }!
         let cozyEntry = sportSet.entries.first { $0.id == "fsc-cozy" }!
         let cozyJet = mk(("COZJ", "Co-Z", "CozyJet"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: cozyJet), entry: cozyEntry),
