@@ -185,6 +185,8 @@ struct TailspotApp: App {
                     // without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
+                    // Retry any Hangar deletes that didn't reach the server.
+                    await CatchDeletionSync().drain()
                     // Streak reminder re-plan on every foreground: repairs
                     // whatever the last run couldn't know (a day rolled over,
                     // permission changed in iOS Settings, a force-kill raced

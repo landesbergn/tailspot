@@ -449,6 +449,15 @@ export interface CatchStore {
    */
   listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage>;
   /**
+   * Delete `deviceId`'s catch `catchUuid` — the user deleted it in the Hangar,
+   * so it must stop counting everywhere: leaderboard points, live challenge
+   * scores, and Hangar restore all read this table. Scoped to the device
+   * (another device's row with the same uuid is untouched). Returns whether a
+   * row was removed. Frozen results (weekly/monthly crowns already decided,
+   * finished challenges' frozen standings) are NOT recomputed.
+   */
+  deleteCatch(deviceId: string, catchUuid: string): Promise<boolean>;
+  /**
    * Top-N devices WITH a handle AND at least one IN-WINDOW catch, by total
    * in-window points. `since` scopes the window: only catches with
    * `caughtAt >= since` count (omit for the all-time board — the pre-windows
@@ -657,6 +666,16 @@ export class DrizzleCatchStore implements CatchStore {
       },
       duplicate: true,
     };
+  }
+
+  async deleteCatch(deviceId: string, catchUuid: string): Promise<boolean> {
+    const removed = await withDbRetry(() =>
+      this.db
+        .delete(catches)
+        .where(and(eq(catches.deviceId, deviceId), eq(catches.catchUuid, catchUuid)))
+        .returning({ id: catches.id }),
+    );
+    return removed.length > 0;
   }
 
   async listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage> {

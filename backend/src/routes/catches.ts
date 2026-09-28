@@ -190,6 +190,36 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     return reply.code(200).send(page);
   });
 
+  // ── DELETE /v1/catches/:catchUuid — the user deleted the catch ────────────
+  // Before this route existed a Hangar delete was local-only, so the row
+  // kept counting toward the leaderboard and challenge scores, and came back
+  // on a Hangar restore. Idempotent: 204 whether or not a row was removed
+  // (a retry after a lost reply, or a catch that never finished uploading,
+  // is not an error). Scoped by the bearer token like every catches route.
+  // Metered with the upload limiter: a delete is a write.
+  app.delete("/v1/catches/:catchUuid", async (request, reply) => {
+    if (ipLimited(request, reply)) return reply;
+
+    const device = await resolveDevice(identityStore, request.headers.authorization);
+    if (!device) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
+    const rl = catchLimiter.take(`device:${device.id}`);
+    if (!rl.allowed) {
+      reply.header("Retry-After", String(rl.retryAfterSeconds));
+      return reply.code(429).send({ error: "rate limited" });
+    }
+
+    const { catchUuid } = request.params as { catchUuid: string };
+    if (!UUID_RE.test(catchUuid)) {
+      return reply.code(400).send({ error: "catchUuid must be a UUID" });
+    }
+
+    await catchStore.deleteCatch(device.id, catchUuid);
+    return reply.code(204).send();
+  });
+
   app.post("/v1/catches", async (request, reply) => {
     if (ipLimited(request, reply)) return reply;
 

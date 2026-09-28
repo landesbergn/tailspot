@@ -132,9 +132,10 @@ describe("Challenges v1 routes", () => {
     points: number,
     caughtAt: Date,
     opts: { createdAt?: Date; rarity?: string | null; typecode?: string | null } = {},
-  ) {
+  ): Promise<string> {
+    const catchUuid = nextUuid();
     await db.insert(catches).values({
-      catchUuid: nextUuid(),
+      catchUuid,
       deviceId,
       icao24: "abc123",
       callsign: "UAL184", // never surfaces in a challenge payload
@@ -159,6 +160,7 @@ describe("Challenges v1 routes", () => {
       aircraftPositionTimestamp: caughtAt,
       validation: { verdict: "plausible" },
     });
+    return catchUuid;
   }
 
   const secs = (s: number) => new Date(nowMs() + s * 1000);
@@ -628,6 +630,32 @@ describe("Challenges v1 routes", () => {
       expect(body.standings[0]).toMatchObject({ handle: "eli", placement: 1, points: 50 });
       expect(body.winners).toEqual([]); // nobody wins a live challenge
       expect(await db.select().from(challengeResults)).toHaveLength(0);
+    });
+  });
+
+  it("a catch deleted from the Hangar stops counting in a live challenge", async () => {
+    const noah = await register("noah");
+    const eli = await register("eli");
+    const c = await created(noah);
+    await join(eli, c.challenge.code);
+    const lead = await seedCatch(eli.deviceId, 50, secs(10));
+    await seedCatch(noah.deviceId, 20, secs(20));
+    expect((await detail(noah, c.challenge.id)).json().standings[0]).toMatchObject({
+      handle: "eli",
+      points: 50,
+    });
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/catches/${lead}`,
+      headers: auth(eli),
+    });
+    expect(res.statusCode).toBe(204);
+
+    const standings = (await detail(noah, c.challenge.id)).json().standings;
+    expect(standings[0]).toMatchObject({ handle: "noah", placement: 1, points: 20 });
+    expect(standings.find((r: { handle: string }) => r.handle === "eli")).toMatchObject({
+      points: 0,
     });
   });
 

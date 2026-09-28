@@ -87,6 +87,11 @@ class CatchUploader {
 
         uploadLoop:
         for catchRow in pendingRows {
+            // The sweep awaits the network per row, and a Hangar delete can
+            // land in between. A deleted row must not be uploaded (it would
+            // start counting again), and its properties can't be read.
+            if catchRow.isDeleted { continue }
+            let icao = catchRow.icao24
             // Assign a stable UUID for this catch if it doesn't have one yet.
             if catchRow.serverUuid == nil {
                 catchRow.serverUuid = UUID().uuidString
@@ -94,6 +99,8 @@ class CatchUploader {
             guard let uuid = catchRow.serverUuid else { continue }
 
             while true {
+                // A 429 wait below can outlast a Hangar delete.
+                if catchRow.isDeleted { break }
                 do {
                     let response = try await client.uploadCatch(
                         catchUuid: uuid,
@@ -113,6 +120,12 @@ class CatchUploader {
                         guessKind: catchRow.guessKind,
                         guessValue: catchRow.guessValue
                     )
+                    // Deleted while this POST was in flight: the server now
+                    // has a catch the user threw away. Take it back off.
+                    if catchRow.isDeleted {
+                        CatchDeletionSync.deleteRemotely([uuid])
+                        break
+                    }
                     // Mark uploaded regardless of duplicate status — both mean
                     // the server has accepted this catch.
                     catchRow.uploadedAt = Date()
@@ -142,7 +155,7 @@ class CatchUploader {
                 } catch {
                     // Non-rate-limit error: leave this row pending and move on.
                     Log.ui.error(
-                        "CatchUploader: upload failed icao=\(catchRow.icao24, privacy: .public) err=\(error, privacy: .public)"
+                        "CatchUploader: upload failed icao=\(icao, privacy: .public) err=\(error, privacy: .public)"
                     )
                     break
                 }

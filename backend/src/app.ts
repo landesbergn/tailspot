@@ -454,6 +454,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     isFirstOfType: (deviceId, typecode) => getCatchStore().isFirstOfType(deviceId, typecode),
     insertOrGet: (c) => getCatchStore().insertOrGet(c),
     listCatches: (id, limit, offset) => getCatchStore().listCatches(id, limit, offset),
+    deleteCatch: (id, catchUuid) => getCatchStore().deleteCatch(id, catchUuid),
     leaderboard: (n, since) => getCatchStore().leaderboard(n, since),
     myStanding: (id, since) => getCatchStore().myStanding(id, since),
     ensureWeeksDecided: (now) => getCatchStore().ensureWeeksDecided(now),
