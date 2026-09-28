@@ -133,6 +133,10 @@ final class ChallengesModel {
         open.filter { ChallengeTiming.status(startsAt: $0.startsAt, endsAt: $0.endsAt, cancelledAt: nil, now: now()) == .upcoming }
     }
 
+    /// Challenges you're in that haven't finished (live + upcoming): the
+    /// number on the Profile tile and the Leaderboard flag.
+    var activeCount: Int { live.count + upcoming.count }
+
     /// Finished, decided or no-contest, whose results the user hasn't seen.
     var unseenResults: [ChallengeSummary] {
         history.filter { $0.status == .finished && !seenResultIds.contains($0.id) }

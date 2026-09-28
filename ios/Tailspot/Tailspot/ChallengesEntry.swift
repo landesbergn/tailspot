@@ -2,65 +2,18 @@
 //  ChallengesEntry.swift
 //  Tailspot
 //
-//  The three small entry points into Challenges that live on OTHER
-//  screens (spec §3.3–3.4): the Profile tile's subtitle, the Leaderboard's
-//  toolbar flag with its one-time discovery dot, and the slim live strip
-//  under the leaderboard's window switcher. Plus the production factory
-//  for the app-wide `ChallengesModel`.
+//  The small entry points into Challenges that live on OTHER screens
+//  (spec §3.3–3.4): the Leaderboard's toolbar flag (a count badge of the
+//  challenges you're in, or a one-time discovery dot) and the count badge
+//  the Profile tile shares with it. Plus the production factory for the
+//  app-wide `ChallengesModel`.
 //
-//  The copy is a pure, clock-injected function so the tile and the strip
-//  can never disagree and the tests pin every headline case.
+//  2026-09-27: the Profile tile's subtitle line and the Leaders live strip
+//  were replaced by the count badge, and the copy function that fed both
+//  (`ChallengesEntryCopy`) went with them.
 //
 
 import SwiftUI
-
-/// What the Profile tile and the Leaders strip say for a given headline.
-nonisolated enum ChallengesEntryCopy {
-    struct Line: Equatable {
-        /// Mono ALL-CAPS state word ("IN FLIGHT"), nil for the cold state.
-        let state: String?
-        /// The human line ("Weekend Flyoff · 2nd · 48M LEFT").
-        let detail: String
-    }
-
-    /// `me` is the caller's cached standing for the headline challenge
-    /// (the list rows carry `myResult` only for finished challenges; a live
-    /// placement comes from the detail the hub or strip already loaded).
-    static func line(for headline: ChallengesModel.Headline, now: Date,
-                     me: ChallengeMyResult? = nil, isTie: Bool = false) -> Line {
-        switch headline {
-        case .live(let c):
-            var parts = [c.name]
-            if let mine = c.myResult ?? me {
-                parts.append(ChallengeTiming.placementLabel(placement: mine.placement, isTie: isTie))
-            }
-            parts.append(ChallengeTiming.timeRemainingCopy(until: c.endsAt, now: now))
-            return Line(state: "IN FLIGHT", detail: parts.joined(separator: " · "))
-        case .resultsReady(let c):
-            return Line(state: "FINISHED", detail: "\(c.name) · see results")
-        case .upcoming(let c):
-            return Line(state: "ON DECK", detail: "\(c.name) · \(ChallengeTiming.startsInCopy(startsAt: c.startsAt, now: now))")
-        case .none:
-            return Line(state: nil, detail: "Race a friend")
-        }
-    }
-
-    /// The challenge a headline points at, for the strip's destination.
-    static func challengeId(for headline: ChallengesModel.Headline) -> String? {
-        switch headline {
-        case .live(let c), .resultsReady(let c), .upcoming(let c): return c.id
-        case .none: return nil
-        }
-    }
-
-    /// My standing in a cached detail, with whether that placement is
-    /// shared — so the tile and strip say "T-2nd" when it is.
-    static func standing(in detail: ChallengeDetail?) -> (me: ChallengeMyResult?, isTie: Bool) {
-        guard let detail, let me = detail.me else { return (nil, false) }
-        let sharers = detail.standings.filter { $0.placement == me.placement }.count
-        return (me, sharers > 1)
-    }
-}
 
 // MARK: - Production model
 
@@ -113,6 +66,11 @@ enum ChallengesAppModel {
 struct ChallengesFlagButton: View {
     @Environment(ChallengesModel.self) private var model: ChallengesModel?
 
+    static func accessibilityLabel(active: Int, hubSeen: Bool) -> String {
+        if active > 0 { return "Challenges, \(active) active" }
+        return hubSeen ? "Challenges" : "Challenges, new"
+    }
+
     var body: some View {
         // `.available` only: with the config unknown (server not reachable,
         // or the feature not deployed yet) the entry point stays hidden
@@ -123,7 +81,12 @@ struct ChallengesFlagButton: View {
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "flag.checkered")
-                    if !model.hubSeen {
+                    // The count of challenges you're in wins; the discovery
+                    // dot only shows while there's nothing to count.
+                    if model.activeCount > 0 {
+                        ChallengeCountBadge(count: model.activeCount)
+                            .offset(x: 10, y: -9)
+                    } else if !model.hubSeen {
                         Circle()
                             .fill(Brand.Color.cyan)
                             .frame(width: 7, height: 7)
@@ -133,59 +96,30 @@ struct ChallengesFlagButton: View {
                     }
                 }
             }
-            .accessibilityLabel(model.hubSeen ? "Challenges" : "Challenges, new")
+            .accessibilityLabel(Self.accessibilityLabel(active: model.activeCount, hubSeen: model.hubSeen))
         }
     }
 }
 
-// MARK: - Leaders live strip
+// MARK: - Count badge
 
-/// One slim row under the window switcher while you are in a challenge
-/// (spec §3.3, D2): the hot-state entry. Absent in the cold state, so the
-/// leaderboard looks exactly as it did before Challenges existed.
-struct ChallengesStrip: View {
-    @Environment(ChallengesModel.self) private var model: ChallengesModel?
+/// The small cyan count on the Profile tile icon and the Leaderboard flag:
+/// how many challenges you're in right now (live + upcoming). Replaced the
+/// Leaders strip and the tile's subtitle line (Noah, 2026-09-27) — the
+/// number says "you have something going on" without a sentence to fit.
+struct ChallengeCountBadge: View {
+    let count: Int
 
     var body: some View {
-        if let model, model.verdict == .available,
-           let id = ChallengesEntryCopy.challengeId(for: model.headline) {
-            let standing = ChallengesEntryCopy.standing(in: model.details[id])
-            let line = ChallengesEntryCopy.line(for: model.headline, now: model.now(),
-                                                me: standing.me, isTie: standing.isTie)
-            NavigationLink {
-                ChallengeDetailScreen(id: id)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "flag.checkered")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .accessibilityHidden(true)
-                    // No state word ("IN FLIGHT") here: the flag already
-                    // says "challenge", and the chip sits at the very top of
-                    // the leaderboard where space is tight.
-                    Text(line.detail)
-                        .font(Brand.Font.mono(size: 11, weight: .regular, relativeTo: .caption))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Brand.Color.textTertiary)
-                        .accessibilityHidden(true)
-                }
-                .padding(.horizontal, 12)
-                .frame(minHeight: 44)
-                .background(Brand.Color.cyan.opacity(0.09), in: .rect(cornerRadius: Brand.Radius.row))
-                .overlay {
-                    RoundedRectangle(cornerRadius: Brand.Radius.row)
-                        .strokeBorder(Brand.Color.cyan.opacity(0.22), lineWidth: 1)
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .padding(.bottom, 4)
-        }
+        Text(count > 9 ? "9+" : "\(count)")
+            .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
+            .monospacedDigit()
+            .foregroundStyle(Brand.Color.bgPrimary)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 17, minHeight: 17)
+            .background(Brand.Color.cyan, in: .capsule)
+            .overlay { Capsule().strokeBorder(Brand.Color.bgPrimary, lineWidth: 1.5) }
+            .fixedSize()
+            .accessibilityHidden(true)
     }
 }
