@@ -145,6 +145,8 @@ struct ChallengeScreensSnapshotTests {
                  as: "challenge_create_invalid_name")
         snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugStartMode: .scheduled, _debugNow: Self.now).environment(model),
                  as: "challenge_create_scheduled")
+        snapshot(ChallengeCreateSheet(onCreated: { _ in }, _debugName: "The Great Wednesday Flyoff", _debugNow: Self.now).environment(model),
+                 as: "challenge_create_name_too_long")
     }
 
     // MARK: Join sheet
@@ -274,9 +276,23 @@ struct ChallengeScreensSnapshotTests {
         snapshot(detail(model, id: "c-cancelled"), as: "challenge_detail_cancelled")
     }
 
-    @Test func shareSheet() async {
-        let s = ChallengeFixtures.demoState(now: Self.now)
-        snapshot(ChallengeShareSheet(challenge: s.open[1], now: { Self.now }), as: "challenge_share_sheet")
+    /// Right after Create: a live challenge with only you in it. The code
+    /// and Share link sit in the inline INVITE MORE card (no pop-up sheet).
+    @Test func detailJustCreatedSolo() async {
+        var s = ChallengeFixtures.demoState(now: Self.now)
+        let solo = ChallengeFixtures.summary(
+            id: "c-solo", name: "Wednesday Flyoff", creator: "noah", code: "EGB4GXBX",
+            startsAt: Self.now, endsAt: Self.now.addingTimeInterval(86_400), preset: "24h",
+            status: .live, participantCount: 1, isCreator: true,
+            myResult: ChallengeMyResult(placement: 1, points: 0, catches: 0))
+        s.open.append(solo)
+        s.details["c-solo"] = ChallengeDetail(
+            challenge: solo, standings: [ChallengeFixtures.standing(1, "noah", 0, 0, me: true)],
+            me: ChallengeMyResult(placement: 1, points: 0, catches: 0),
+            winners: [], alreadyIn: nil, newDevice: nil)
+        let (model, _) = await makeModel(state: s)
+        await model.loadDetail(id: "c-solo")
+        snapshot(detail(model, id: "c-solo"), as: "challenge_detail_just_created_solo")
     }
 }
 

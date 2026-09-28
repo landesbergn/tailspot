@@ -191,10 +191,24 @@ const CODE_ATTEMPTS = 5;
 
 type ChallengeRow = typeof challenges.$inferSelect;
 
+/**
+ * The transaction handle Drizzle hands `db.transaction(…)`. Nesting one issues
+ * a SAVEPOINT, which is what makes the baseline seed best-effort — see
+ * `seedOnTx`.
+ */
+type SeedTx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/** Just enough of Fastify's logger for the store's best-effort warnings. */
+export interface ChallengeStoreLogger {
+  warn(obj: Record<string, unknown>, msg: string): void;
+}
+
 export class DrizzleChallengeStore implements ChallengeStore {
   constructor(
     private readonly db: Database,
     private readonly scorer: ChallengeScorer,
+    /** Optional: where best-effort failures (push-baseline seeding) are reported. */
+    private readonly log?: ChallengeStoreLogger,
   ) {}
 
   private async hydrate(row: ChallengeRow): Promise<Challenge> {
@@ -255,6 +269,12 @@ export class DrizzleChallengeStore implements ChallengeStore {
             deviceId: input.creatorDeviceId,
             joinedAt: now,
           });
+          // Seed the push baseline in the SAME transaction (a savepoint makes
+          // it best-effort — see `seedOnTx`), and as its own UPDATE rather than
+          // a column in the INSERT above: the column arrived in migration 0011,
+          // so the savepoint is what keeps an un-migrated database from failing
+          // the create. Alone in a brand-new challenge, the creator is 1st.
+          await this.seedOnTx(tx, rows[0].id, input.creatorDeviceId, 1);
           return rows[0];
         });
         return this.hydrate(created);
@@ -343,7 +363,7 @@ export class DrizzleChallengeStore implements ChallengeStore {
     const status = challengeStatus(challenge, now);
     if (status === "finished" || status === "cancelled") return { ok: false, reason: "closed" };
 
-    return this.db.transaction(async (tx) => {
+    const result = await this.db.transaction<JoinResult>(async (tx) => {
       // ROW LOCK FIRST. Two joins racing at 9/10 would both read 9 and both
       // insert; `SELECT … FOR UPDATE` on the challenge serialises every join
       // (and every finalization) for this challenge behind one lock, so the
@@ -438,6 +458,9 @@ export class DrizzleChallengeStore implements ChallengeStore {
               eq(challengeParticipants.deviceId, deviceId),
             ),
           );
+        // A rejoiner's remembered placement is from before they left; re-seed
+        // it against the board they are walking back into.
+        await this.seedJoinerOnTx(tx, challenge, deviceId);
         return { ok: true, alreadyIn: false, newDevice: false };
       }
 
@@ -465,8 +488,62 @@ export class DrizzleChallengeStore implements ChallengeStore {
           .set({ referredByChallengeId: challenge.id })
           .where(and(eq(devices.id, deviceId), isNull(devices.referredByChallengeId)));
       }
+      await this.seedJoinerOnTx(tx, challenge, deviceId);
       return { ok: true, alreadyIn: false, newDevice };
     });
+    return result;
+  }
+
+  /**
+   * Seed the baseline the "someone passed you" push compares against
+   * (`challenge_participants.last_placement`, see challenges/overtaken.ts) for
+   * a device that has just joined, scored against the board it is walking into
+   * — a joiner's earlier in-window catches count (D3), so they can arrive
+   * anywhere, not just last.
+   *
+   * INSIDE the join transaction, under the challenge row lock. It used to run
+   * after the commit, which raced a concurrent evaluation: the evaluation could
+   * write a fresh placement and this could then stamp a staler one over it,
+   * which reads as a slip and produces a false "you got passed". Under the lock
+   * there is no window for that.
+   */
+  private async seedJoinerOnTx(tx: SeedTx, challenge: Challenge, deviceId: string) {
+    const live = await this.liveStandings(challenge, tx);
+    const placement = live.standings.find((s) => s.deviceId === deviceId)?.placement ?? 1;
+    await this.seedOnTx(tx, challenge.id, deviceId, placement);
+  }
+
+  /**
+   * Write one baseline, BEST-EFFORT, inside a caller's transaction.
+   *
+   * The savepoint is the whole trick. Postgres discards everything after the
+   * first error in a transaction, so a bare try/catch around a failing
+   * statement would leave the transaction poisoned and turn the eventual COMMIT
+   * into a rollback — the join would silently vanish. A nested transaction
+   * (Drizzle issues `SAVEPOINT` / `ROLLBACK TO SAVEPOINT`) contains the damage,
+   * so a missing `last_placement` column on an un-migrated database costs this
+   * participant their first overtake notification (a null baseline never
+   * notifies) and nothing else. Push is a garnish; joining is not.
+   */
+  private async seedOnTx(tx: SeedTx, challengeId: string, deviceId: string, placement: number) {
+    try {
+      await tx.transaction(async (sp) => {
+        await sp
+          .update(challengeParticipants)
+          .set({ lastPlacement: placement })
+          .where(
+            and(
+              eq(challengeParticipants.challengeId, challengeId),
+              eq(challengeParticipants.deviceId, deviceId),
+            ),
+          );
+      });
+    } catch (err) {
+      this.log?.warn(
+        { err, challengeId, deviceId },
+        "could not seed the challenge push baseline (last_placement); pushes stay silent for this participant",
+      );
+    }
   }
 
   async leave(challenge: Challenge, deviceId: string, now: Date): Promise<LeaveResult> {

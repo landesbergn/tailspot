@@ -196,12 +196,18 @@ struct SetsCoverageTests {
         ("CRJ1", "Bombardier", "CRJ-100"),
         ("EXEC", "Huzhou Taixiang", "Exec"),
         ("PC7", "Pilatus", "PC-7 Astra"),
+        // Public catalog coverage additions validated 2026-09-24.
+        ("E120", "Embraer", "EMB-120 Brasilia"),
+        ("T34T", "Beechcraft", "T-34C Turbo Mentor"),
         // Public catalog coverage additions validated 2026-09-26.
         ("COZY", "Aerocad", "AeroCanard"),
         ("J328", "Fairchild Dornier", "328JET"),
         ("RV6", "Aiep", "Air Beetle"),
         ("SONX", "Sonex", "Sonex"),
         ("SREY", "Progressive Aerodyne", "SeaRey"),
+        // Public catalog coverage additions validated 2026-09-27.
+        ("BL17", "Bellanca", "17 Viking"),
+        ("EVOT", "Evolution", "EVOT-550 Evolution"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -278,11 +284,15 @@ struct SetsCoverageTests {
             (("CRJ1", "Bombardier", "CRJ-100"), "fam-crj", "fcrj100"),
             (("EXEC", "Huzhou Taixiang", "Exec"), "fam-heli", "fh-exec"),
             (("PC7", "Pilatus", "PC-7 Astra"), "fam-military", "fm-pc7"),
+            (("E120", "Embraer", "EMB-120 Brasilia"), "fam-commuter-props", "fcp-e120"),
+            (("T34T", "Beechcraft", "T-34C Turbo Mentor"), "fam-beech", "fbt34"),
             (("COZY", "Aerocad", "AeroCanard"), "fam-sport-classics", "fsc-cozy"),
             (("J328", "Fairchild Dornier", "328JET"), "fam-dornier-328", "fd328-jet"),
             (("RV6", "Aiep", "Air Beetle"), "fam-sport-classics", "fsc-air-beetle"),
             (("SONX", "Sonex", "Sonex"), "fam-sport-classics", "fsc-sonex"),
             (("SREY", "Progressive Aerodyne", "SeaRey"), "fam-sport-classics", "fsc-searey"),
+            (("BL17", "Bellanca", "17 Viking"), "fam-sport-classics", "fsc-viking"),
+            (("EVOT", "Evolution", "EVOT-550 Evolution"), "fam-sport-classics", "fsc-evolution"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -402,6 +412,16 @@ struct SetsCoverageTests {
             .entries.first { $0.id == "fsc-glastar" }!
         #expect(!CardSets.matches(key: CardSets.matchKey(for: glasair), entry: glastarEntry),
                 "A GLAS Glasair must not fill the GLST GlaStar slot")
+
+        // Bellanca's 19 Skyrocket and Evektor's SportStar are distinct from
+        // the Bellanca 17 Viking and Evolution Turbine families.
+        let sportSet = CardSets.families.first { $0.id == "fam-sport-classics" }!
+        let vikingEntry = sportSet.entries.first { $0.id == "fsc-viking" }!
+        let evolutionEntry = sportSet.entries.first { $0.id == "fsc-evolution" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("BL19", "Aviabellanca", "19 Skyrocket"))), entry: vikingEntry),
+                "A Bellanca 19 Skyrocket must not fill the Bellanca 17 Viking slot")
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("EVSS", "Evektor", "SportStar"))), entry: evolutionEntry),
+                "An Evektor SportStar must not fill the Evolution Turbine slot")
 
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.

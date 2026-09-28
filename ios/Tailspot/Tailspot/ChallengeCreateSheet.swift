@@ -2,11 +2,12 @@
 //  ChallengeCreateSheet.swift
 //  Tailspot
 //
-//  Create a challenge (spec §4.1): a prefilled name, Starts now or Schedule,
-//  one of four durations, a computed end line, Create. Utility chrome: a
-//  branded inset-grouped List inside its own NavigationStack, like Settings.
-//  The creator is the first participant; on success the caller receives
-//  the detail so it can push it and put the share sheet up.
+//  Create a challenge (spec §4.1): a prefilled name, Now or Schedule, one
+//  of four durations (both as the same glass slider), a computed end line,
+//  Create. Utility chrome: a branded inset-grouped List inside its own
+//  NavigationStack, like Settings. The creator is the first participant;
+//  on success the caller receives the detail and pushes it, where the
+//  inline INVITE card prompts for the first invite.
 //
 
 import SwiftUI
@@ -22,6 +23,7 @@ struct ChallengeCreateSheet: View {
         case now, scheduled
         var id: String { rawValue }
         var label: String { self == .now ? "Starts now" : "Schedule" }
+        var short: String { self == .now ? "NOW" : "SCHEDULE" }
     }
 
     enum Duration: String, CaseIterable, Identifiable {
@@ -85,6 +87,13 @@ struct ChallengeCreateSheet: View {
         return Self.isValidLead(scheduledAt.timeIntervalSince(model.now()))
     }
 
+    /// The name's only visible rule: say something once it's too long.
+    static func isOverLimit(_ trimmed: String) -> Bool { trimmed.count > nameMax }
+
+    static func overLimitMessage(_ trimmed: String) -> String {
+        "Too long: \(trimmed.count)/\(nameMax) characters."
+    }
+
     /// Whether a start this far ahead may be submitted.
     static func isValidLead(_ lead: TimeInterval) -> Bool {
         lead >= minLead && lead <= maxLead
@@ -132,22 +141,19 @@ struct ChallengeCreateSheet: View {
 
     private var nameSection: some View {
         Section {
+            // One line. The limit only speaks up once it's been crossed; a
+            // too-short name just leaves Create disabled.
             VStack(alignment: .leading, spacing: 6) {
                 TextField("Weekend Flyoff", text: $name)
                     .font(Brand.Font.body)
                     .foregroundStyle(Brand.Color.textPrimary)
                     .textInputAutocapitalization(.words)
+                    .lineLimit(1)
                     .accessibilityLabel("Challenge name")
-                HStack {
-                    if !trimmedName.isEmpty && !nameValid {
-                        Text(trimmedName.count < Self.nameMin ? "At least \(Self.nameMin) characters." : "At most \(Self.nameMax) characters.")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.alertCaution)
-                    }
-                    Spacer()
-                    Text("\(trimmedName.count)/\(Self.nameMax)")
-                        .font(Brand.Font.mono(size: 10, relativeTo: .caption2))
-                        .foregroundStyle(Brand.Color.textTertiary)
+                if Self.isOverLimit(trimmedName) {
+                    Text(Self.overLimitMessage(trimmedName))
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.alertCaution)
                         .monospacedDigit()
                 }
             }
@@ -157,14 +163,18 @@ struct ChallengeCreateSheet: View {
         .listRowBackground(Brand.Color.bgElevated)
     }
 
+    @ViewBuilder
     private var startSection: some View {
         Section {
-            Picker("Start", selection: $startMode) {
-                ForEach(StartMode.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityLabel("Start")
-            if startMode == .scheduled {
+            segmentedSlider(selection: $startMode, segments: StartMode.allCases,
+                            title: "Start", label: \.label, short: \.short)
+        } header: {
+            header("START")
+        }
+        // The picker gets its own fully rounded card. Sharing a section
+        // with the clear slider row drew a half-card with a hairline on top.
+        if startMode == .scheduled {
+            Section {
                 DatePicker("Starts",
                            selection: $scheduledAt,
                            in: model.now().addingTimeInterval(Self.minLead)...model.now().addingTimeInterval(Self.maxLead),
@@ -172,42 +182,56 @@ struct ChallengeCreateSheet: View {
                     .font(Brand.Font.body)
                     .foregroundStyle(Brand.Color.textPrimary)
                     .tint(Brand.Color.cyan)
+                    .listRowBackground(Brand.Color.bgElevated)
                 if !scheduleValid {
                     Text("Pick a start between \(Self.minLeadMinutes) minutes and 14 days from now.")
                         .font(Brand.Font.caption)
                         .foregroundStyle(Brand.Color.alertCaution)
+                        .listRowBackground(Brand.Color.bgElevated)
                 }
             }
-        } header: {
-            header("START")
         }
-        .listRowBackground(Brand.Color.bgElevated)
     }
 
     private var durationSection: some View {
         Section {
-            GlassSegmentedSlider(
-                selection: $duration,
-                segments: Duration.allCases,
-                segmentHeight: 40,
-                trackPadding: 4,
-                accessibilityTitle: "Duration",
-                segmentTitle: { $0.label }
-            ) { d, isSelected in
-                Text(d.short)
-                    .font(Brand.Font.mono(size: 12, weight: isSelected ? .bold : .regular, relativeTo: .caption))
-                    .tracking(0.8)
-                    .foregroundStyle(isSelected ? Brand.Color.bgPrimary : Brand.Color.textSecondary)
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-            .listRowBackground(Color.clear)
+            segmentedSlider(selection: $duration, segments: Duration.allCases,
+                            title: "Duration", label: \.label, short: \.short)
+        } header: {
+            header("DURATION")
+        } footer: {
+            // Plain centered text under the slider, no card of its own.
             Text("\(duration.label) · \(ChallengeCopy.endsLine(endsAt: endsAt, now: model.now()))")
                 .font(Brand.Font.caption)
                 .foregroundStyle(Brand.Color.textSecondary)
-                .listRowBackground(Brand.Color.bgElevated)
-        } header: {
-            header("DURATION")
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
         }
+    }
+
+    /// The glass pill both Start and Duration use, so the two choices on
+    /// this sheet read as the same kind of control. Generic over the
+    /// option enum: `label` is what VoiceOver says, `short` what's drawn.
+    private func segmentedSlider<Option: Hashable>(
+        selection: Binding<Option>, segments: [Option], title: String,
+        label: @escaping (Option) -> String, short: @escaping (Option) -> String
+    ) -> some View {
+        GlassSegmentedSlider(
+            selection: selection,
+            segments: segments,
+            segmentHeight: 40,
+            trackPadding: 4,
+            accessibilityTitle: title,
+            segmentTitle: label
+        ) { option, isSelected in
+            Text(short(option))
+                .font(Brand.Font.mono(size: 12, weight: isSelected ? .bold : .regular, relativeTo: .caption))
+                .tracking(0.8)
+                .foregroundStyle(isSelected ? Brand.Color.bgPrimary : Brand.Color.textSecondary)
+        }
+        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+        .listRowBackground(Color.clear)
     }
 
     private var submitSection: some View {
@@ -238,10 +262,6 @@ struct ChallengeCreateSheet: View {
             .buttonStyle(.plain)
             .disabled(!canSubmit)
             .listRowBackground(Color.clear)
-        } footer: {
-            Text("You're in as soon as you create it. Share the link with up to nine others; anyone can join until it ends.")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
         }
     }
 

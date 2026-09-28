@@ -5,6 +5,127 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-27 — Trophy achievement dates — branch `codex/trophy-achievement-dates`
+
+- Earned trophy cards now show a separate “Achieved” strip with a localized date, matching the approved option C. The strip stacks at accessibility text sizes and VoiceOver includes the date.
+- Recover catch-based dates from the first qualifying chronological prefix under the current trophy rules. Persist dates separately from celebration acknowledgments so skipping a celebration, restarting, or deleting catches does not move an existing date. Restores recover dates from catch history.
+- Record the first new grounded-catch event timestamp. Legacy events and leaderboard trophies without source timestamps show “Date unavailable”; a repeat event or later leaderboard fetch never becomes a fabricated achievement date.
+- Added coverage for upgrades, restores, first threshold crossings, guess streaks, persistence, and missing external dates, plus native standard/accessibility renders. Physical-device review remains pending because the phone was unavailable.
+
+## 2026-09-27 — Challenges UI pass (PR #290, branch `worktree-challenges-ui-pass`)
+
+Three rounds of Noah's notes from device screenshots, all client copy/layout
+except the invite-code length.
+
+- **Hub:** empty state reads "Spot with friends" / "Invite up to 10 friends for
+  a head-to-head spotting challenge."
+- **Create sheet:** one-line name, the character limit only appears (amber)
+  once exceeded; Start (NOW / SCHEDULE) uses the same `GlassSegmentedSlider`
+  as Duration; the scheduled date picker has its own card; the end line is
+  centered text under the slider; the "You're in as soon as…" footer is gone.
+- **Detail:** the header card no longer repeats the name. `ChallengeShareSheet`
+  (the post-Create pop-up) is deleted; the inline **INVITE MORE** card holds
+  the code and one **Invite now** button. Copy link and the "Anyone with the
+  link…" line are gone (the share sheet has its own Copy).
+- **Join sheet:** the code-entry button reads **Join now**; help copy shows a
+  6-character example.
+- **Leaderboard:** the live-challenge chip keeps the checkered flag, drops
+  "IN FLIGHT", and sits above the Week / Month / All time slider.
+- **6-character invite codes** (was 8; ≈30 bits, limiter-backed). Old codes
+  stay valid: backend `normalizeCode`, app `InviteCode.normalize`/`parse` and
+  the web `/c/` nginx route accept 6 or 8. **Ship the app before the backend**
+  — installed builds only parse 8.
+- **Test fix:** `backend/test/overtakenRoute.test.ts` (from #288) pinned T0 to
+  2026-09-26 12:00Z while the uploaded catch's `created_at` is the DB's real
+  `now()`; it went red for everyone once real time passed the 24 h window.
+  T0 is now anchored to the real clock.
+
+## 2026-09-26 — Challenge push notifications (backend): APNs sender, push-token route, overtaken detection — branch `feat/challenge-push-overtaken`
+
+Backend half of "someone just passed you in your challenge". The iOS client is
+being built in parallel against this contract. Nothing here can fail a catch
+upload, and the whole feature is off unless three separate things are true:
+APNs credentials are set, `CHALLENGES_ENABLED=true`, and the device has
+registered a token.
+
+- **Migration 0011 (`0011_push-tokens-overtaken.sql`) — apply BEFORE deploying.**
+  Five nullable columns, no backfill: `devices.apns_token` /
+  `apns_environment` / `apns_updated_at`, and
+  `challenge_participants.last_placement` / `overtaken_notified_at`. There is
+  no Fly `release_command`, so migrations are manual —
+  `DATABASE_URL=… npm run db:migrate` first, then deploy.
+- **`POST` / `DELETE /v1/devices/push-token`** (bearer, 30/h per device, per-IP
+  metered before the token lookup). Body `{ token: 64–200 hex, environment:
+  "sandbox"|"production", build? }` → 204. Registering a token **clears it from
+  any other device row that holds it**: a restore or reinstall can hand one
+  phone's APNs token to a second anonymous identity, and if both kept it one
+  phone would get another identity's notifications.
+- **`src/push/apns.ts`** — a dependency-free sender. The ES256 provider JWT is
+  `crypto.sign` over two base64url segments with `dsaEncoding: "ieee-p1363"`
+  (the default DER encoding yields a token Apple rejects as
+  InvalidProviderToken), cached 50 minutes; the wire protocol is one HTTP/2
+  POST to `/3/device/<token>` on Node's built-in `http2`. `ApnsTransport` is
+  the seam tests inject a fake into. Unset credentials → a no-op transport that
+  logs `push disabled` once at boot.
+- **`src/challenges/overtaken.ts`** — after a *fresh* catch the route schedules
+  (via `setImmediate`, after the reply) an evaluation for that device: for each
+  LIVE challenge it is in, re-derive the standings and compare each
+  participant's placement with the remembered `last_placement`. Worse = passed.
+  One push per person per challenge per 30 minutes; never the uploader, never
+  without a token, never to a disabled device, never for an upcoming, finished
+  or cancelled challenge. Copy: **"You got passed" / "@ada just passed you in
+  Weekend Flyoff. You're now 2nd."** when we can prove the uploader did the
+  passing, else the nameless **"You've dropped to 2nd in Weekend Flyoff."**
+  (ties read "tied for 2nd"). A 410 or `BadDeviceToken` / `Unregistered`
+  clears the token. **`last_placement` is seeded inside the create and join
+  transactions**, under the challenge row lock, best-effort via a SAVEPOINT —
+  null means "never evaluated" and never notifies.
+- **Review round (PR #288).** Seven findings, all fixed with tests. The one
+  that mattered: a JS `Date` interpolated into a raw `sql` template reaches
+  postgres.js unconverted and crashes the bind, while PGlite serialises it
+  happily — so in production *every* evaluation would have thrown into the
+  outer catch and sent zero pushes, with the whole suite green. Now the
+  column helpers (`lte`/`gt`) do the encoding, and a test walks the bound
+  parameters of a whole evaluation asserting none is a `Date`. Also: the
+  evaluation now runs under the same challenge row lock `join` takes (two
+  simultaneous uploads pushed the same person twice and clobbered each
+  other's placements); a transient send failure keeps that participant's
+  baseline so the next catch retries instead of losing the notification; a
+  token moving between devices logs a warn with both device ids; the HTTP/2
+  send resolves on a silent stream teardown instead of hanging forever; and
+  the route test drives the after-reply work through an injected scheduler
+  rather than sleeping.
+- **Second review round (`/code-review`, ten findings, all fixed).** The
+  severe one: the APNs sends ran sequentially *inside* the transaction holding
+  the challenge `FOR UPDATE`, so nine recipients × a 5 s deadline was a 45 s
+  lock — and `statement_timeout` is 5 s, so every concurrent join, leave,
+  finalize and standings read on that challenge would have 500'd for real
+  users. The evaluation is now three phases: decide + write under the lock,
+  **send in parallel outside every transaction**, then a short compensating
+  transaction that restores the baseline and cooldown for sends that failed
+  retryably. Also: the push no longer names the uploader unless they
+  demonstrably crossed that participant this round (a stale baseline could
+  blame the wrong friend); a send timeout now destroys the cached HTTP/2
+  session instead of leaving a half-open one to time out every later send; a
+  403 `ExpiredProviderToken` is transient *and* invalidates the cached JWT
+  rather than being retried for 50 minutes; `createApnsTransport` mints one
+  JWT at boot so a mangled `APNS_KEY_P8` degrades to the no-op sender instead
+  of pinning every baseline open; baseline seeding moved back INSIDE the join
+  transaction (outside it, it raced an evaluation and could stamp a stale
+  placement over a fresh one → a false "you got passed"), kept best-effort
+  with a SAVEPOINT; a stale session's late error can no longer evict its
+  replacement; every path that strips a push token nulls all three columns
+  through one helper; and `build: null` is accepted as "no build".
+- **An un-migrated deploy is worse than "no pushes"** — Drizzle names every
+  schema column in its INSERTs, so without 0011 device registration and
+  challenge create/join fail too. Pinned by a test; README says so plainly.
+- **Secrets to set before this does anything** (see backend/README.md):
+  `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID`.
+- **Tests: 443 → 515.** Route tests for the token lifecycle, JWT/config/no-op
+  tests for the sender, and overtaken tests that spend most of their length on
+  the negatives (cooldown, uploader, tokenless, disabled, not-live, dead-token
+  cleanup) — the ways this feature turns into spam.
+
 ## 2026-09-26 — Challenge notifications v2: daily nudges, camera silence, tap routing, APNs registration — branch `feat/challenge-notifications-v2`
 
 Phase 3's notification half. A 3d or 7d challenge used to go silent between
@@ -62,6 +183,7 @@ which challenge it meant.
   written down in `ChallengeNotificationRouting`.
 
 Review doc: `docs/reviews/2026-09-26-challenge-notifications-v2.html`.
+
 
 ## 2026-09-21 — Challenge invite links open the app (universal links) — branch `feat/challenges-universal-links`
 
