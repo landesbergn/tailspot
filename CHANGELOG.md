@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-27 — Trophy achievement dates — branch `codex/trophy-achievement-dates`
+
+- Earned trophy cards now show a separate “Achieved” strip with a localized date, matching the approved option C. The strip stacks at accessibility text sizes and VoiceOver includes the date.
+- Recover catch-based dates from the first qualifying chronological prefix under the current trophy rules. Persist dates separately from celebration acknowledgments so skipping a celebration, restarting, or deleting catches does not move an existing date. Restores recover dates from catch history.
+- Record the first new grounded-catch event timestamp. Legacy events and leaderboard trophies without source timestamps show “Date unavailable”; a repeat event or later leaderboard fetch never becomes a fabricated achievement date.
+- Added coverage for upgrades, restores, first threshold crossings, guess streaks, persistence, and missing external dates, plus native standard/accessibility renders. Physical-device review remains pending because the phone was unavailable.
+
 ## 2026-09-27 — Challenges UI pass (PR #290, branch `worktree-challenges-ui-pass`)
 
 Three rounds of Noah's notes from device screenshots, all client copy/layout
