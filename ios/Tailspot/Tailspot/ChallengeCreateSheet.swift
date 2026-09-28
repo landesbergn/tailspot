@@ -147,9 +147,9 @@ struct ChallengeCreateSheet: View {
 
     /// "5:02 PM" today, otherwise "Oct 11 at 4:45 PM".
     static func clock(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
-        let time = date.formatted(Date.FormatStyle(calendar: calendar).hour().minute())
+        let time = date.formatted(Date.FormatStyle(locale: calendar.locale ?? .current, calendar: calendar, timeZone: calendar.timeZone).hour().minute())
         if calendar.isDate(date, inSameDayAs: now) { return time }
-        let day = date.formatted(Date.FormatStyle(calendar: calendar).month(.abbreviated).day())
+        let day = date.formatted(Date.FormatStyle(locale: calendar.locale ?? .current, calendar: calendar, timeZone: calendar.timeZone).month(.abbreviated).day())
         return "\(day) at \(time)"
     }
 
