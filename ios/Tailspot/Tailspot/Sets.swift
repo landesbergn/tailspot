@@ -39,6 +39,14 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
     /// (divergence-b fix, 2026-06-11). Optional for entries with no
     /// resolvable typecode (homebuilts, retired types not in DOC 8643).
     let representativeTypecode: String?
+    /// True when `representativeTypecode` is shared by more than one real
+    /// aircraft (RV6: ICAO assigns it to the AIEP Air Beetle, and Van's
+    /// RV-6/6A catches carry it too). The code still drives the slot's
+    /// rarity, but nothing derived from it can place a catch here — not the
+    /// code itself, and not the display name the naming table builds FROM
+    /// the code — so the slot matches `modelTokens` against the catch's own
+    /// recorded model string only.
+    let ambiguousTypecode: Bool
 
     /// Tier that colors the locked silhouette. Derives from the single
     /// source of truth (the activity table) when a typecode resolves;
@@ -55,6 +63,7 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
          modelTokens: [String], summary: String,
          exactTypecodes: [String] = [],
          representativeTypecode: String? = nil,
+         ambiguousTypecode: Bool = false,
          matchesUnidentified: Bool = false) {
         self.id = id
         self.canonicalName = canonicalName
@@ -63,6 +72,7 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
         self.summary = summary
         self.exactTypecodes = exactTypecodes
         self.representativeTypecode = representativeTypecode
+        self.ambiguousTypecode = ambiguousTypecode
         self.matchesUnidentified = matchesUnidentified
     }
 }
@@ -1209,9 +1219,10 @@ nonisolated enum CardSets {
                   summary: "Composite canard homebuilt in the Cozy-derived AeroCanard family.",
                   representativeTypecode: "COZY"),
             .init(id: "fsc-air-beetle", canonicalName: "AIEP Air Beetle", rarity: .common,
-                  modelTokens: ["aiep air beetle"],
+                  modelTokens: ["air beetle"],
                   summary: "Light single-engine sport aircraft assigned ICAO designator RV6.",
-                  representativeTypecode: "RV6"),
+                  representativeTypecode: "RV6",
+                  ambiguousTypecode: true),
             .init(id: "fsc-sonex", canonicalName: "Sonex", rarity: .common,
                   modelTokens: ["sonex sonex"],
                   summary: "Compact amateur-built sport aircraft from Sonex.",
@@ -1380,13 +1391,17 @@ nonisolated enum CardSets {
            }) {
             return true
         }
-        if let tc = entry.representativeTypecode,
+        if !entry.ambiguousTypecode,
+           let tc = entry.representativeTypecode,
            let ctc = key.typecode,
            !ctc.isEmpty,
            tc.caseInsensitiveCompare(ctc) == .orderedSame {
             return true
         }
         guard !key.rawModelLowercased.isEmpty || !key.canonicalLowercased.isEmpty else { return false }
+        if entry.ambiguousTypecode {
+            return entry.modelTokens.contains { key.rawModelLowercased.contains($0.lowercased()) }
+        }
         return entry.modelTokens.contains { token in
             let t = token.lowercased()
             return key.rawModelLowercased.contains(t) || key.canonicalLowercased.contains(t)

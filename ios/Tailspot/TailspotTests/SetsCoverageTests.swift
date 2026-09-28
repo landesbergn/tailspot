@@ -502,6 +502,14 @@ struct SetsCoverageTests {
         let vansRVEntry = sportSet.entries.first { $0.id == "fsc-rv" }!
         #expect(!CardSets.matches(key: CardSets.matchKey(for: airBeetle), entry: vansRVEntry),
                 "The AIEP Air Beetle must not fill the Van's RV slot")
+        // …and the other way round: a Van's RV-6 carries the same RV6 code,
+        // so the Air Beetle slot matches by name, never by that code alone.
+        let airBeetleEntry = sportSet.entries.first { $0.id == "fsc-air-beetle" }!
+        let vansRV6 = mk(("RV6", "Van's", "RV-6A"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: vansRV6), entry: airBeetleEntry),
+                "A Van's RV-6 must not fill the AIEP Air Beetle slot")
+        #expect(CardSets.matches(key: CardSets.matchKey(for: vansRV6), entry: vansRVEntry),
+                "A Van's RV-6 still fills the Van's RV slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the

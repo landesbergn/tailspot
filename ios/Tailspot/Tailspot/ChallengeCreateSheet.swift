@@ -102,12 +102,18 @@ struct ChallengeCreateSheet: View {
         autoMovedTo = fixed
     }
 
-    /// The earliest valid start if `start` is too soon, else nil. Too far
-    /// out is not clamped: the picker can't offer it, and moving someone's
-    /// chosen day back would be a bigger surprise than a message.
+    /// Slack added when moving a stale start: landing exactly on the limit
+    /// would go stale again within the minute (before the next 15 s
+    /// re-check, and before the request reaches the server).
+    static let clampSlack: TimeInterval = 60
+
+    /// A valid start if `start` is too soon, else nil — the first whole
+    /// minute at least `minLead + clampSlack` out. Too far out is not
+    /// clamped: the picker can't offer it, and moving someone's chosen day
+    /// back would be a bigger surprise than a message.
     static func clampedStart(_ start: Date, now: Date, calendar: Calendar = .current) -> Date? {
         guard start.timeIntervalSince(now) < minLead else { return nil }
-        return nextMinute(after: now.addingTimeInterval(minLead), calendar: calendar)
+        return nextMinute(after: now.addingTimeInterval(minLead + clampSlack), calendar: calendar)
     }
 
     static func autoMovedNote(to date: Date, now: Date, calendar: Calendar = .current) -> String {
@@ -387,6 +393,9 @@ struct ChallengeCreateSheet: View {
     // MARK: Submit
 
     private func submit() async {
+        // The 15 s re-check may not have run since the start went stale; a
+        // Create tap that silently did nothing was the review's finding.
+        if startMode == .scheduled { keepScheduledStartValid() }
         guard canSubmit else { return }
         isSubmitting = true
         defer { isSubmitting = false }

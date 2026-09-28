@@ -67,12 +67,15 @@ struct ChallengeScreensLogicTests {
         let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 16, minute: 45, second: 20))!
         let stale = cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 17, minute: 1))!
         let fixed = ChallengeCreateSheet.clampedStart(stale, now: now, calendar: cal)
-        #expect(fixed == cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 17, minute: 2)))
+        // 16:45:20 + 16 min + 1 min slack = 17:02:20 → the next whole minute.
+        #expect(fixed == cal.date(from: DateComponents(year: 2026, month: 9, day: 27, hour: 17, minute: 3)))
+        // Still valid a full minute later — it doesn't go stale at once.
+        #expect(ChallengeCreateSheet.scheduleProblem(start: fixed!, now: now.addingTimeInterval(60), calendar: cal) == nil)
         #expect(ChallengeCreateSheet.scheduleProblem(start: fixed!, now: now, calendar: cal) == nil)
         #expect(ChallengeCreateSheet.clampedStart(now.addingTimeInterval(3600), now: now, calendar: cal) == nil)
         #expect(ChallengeCreateSheet.clampedStart(now.addingTimeInterval(20 * 86_400), now: now, calendar: cal) == nil)
         #expect(ChallengeCreateSheet.autoMovedNote(to: fixed!, now: now, calendar: cal)
-                .hasPrefix("Moved to 5:02"))
+                .hasPrefix("Moved to 5:03"))
     }
 
     @Test func noContestReadsAsTieWithTwoOrMore() {

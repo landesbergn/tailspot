@@ -5,6 +5,24 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-28 — Review fixes for #287 / #294 (branch `fix/review-schedule-slack-air-beetle`)
+
+From Noah's `/code-review` of #287, #293, #294 and #295.
+
+- **Scheduled start (#294):** a stale start was moved to exactly the
+  15-minute limit, so it went stale again within the minute and a Create
+  tap could silently do nothing. It now moves to the first whole minute at
+  least `minLead + 60 s` out, and `submit()` re-runs the check before its
+  guard.
+- **Air Beetle slot (#287):** `RV6` is ICAO's code for the AIEP Air Beetle,
+  but Van's RV-6/6A catches carry it too, so a Van's RV-6 filled the Air
+  Beetle slot — both by the code and by the display name the naming table
+  builds from the code. `CardSetEntry.ambiguousTypecode` keeps the code for
+  rarity but matches `modelTokens` against the catch's own recorded model
+  only; the Air Beetle sets it.
+- **Deployed:** the #295 delete route shipped as **API release v43**
+  (2026-09-28, no migration); phones' queued deletes send on next open.
+
 ## 2026-09-27 — Challenges UI tweaks (branch `worktree-challenges-ui-tweaks`)
 
 Seven device-screenshot notes from Noah, client only.
