@@ -26,6 +26,19 @@ Seven device-screenshot notes from Noah, client only.
 - **Profile tiles:** Map and Challenges match heights, share a fixed icon slot,
   and the subtitle wraps to two centered lines instead of shrinking edge to edge.
 - **Join preview:** the details and rules cards span the full width.
+- **Round 2 — counts, not sentences:** the Profile Challenges tile and the
+  Leaderboard flag carry a small cyan count badge of the challenges you're in
+  (live + upcoming; `ChallengesModel.activeCount`). The tile's headline subtitle
+  and the Leaderboard's live strip are gone, and `ChallengesEntryCopy` (the
+  sentence builder that fed both) was deleted. The hub's IN FLIGHT challenges
+  are compact rows ("2nd · 380 pts · 48m left") like ON DECK and FLIGHT LOG.
+
+## 2026-09-27 — Trophy achievement dates — branch `codex/trophy-achievement-dates`
+
+- Earned trophy cards now show a separate “Achieved” strip with a localized date, matching the approved option C. The strip stacks at accessibility text sizes and VoiceOver includes the date.
+- Recover catch-based dates from the first qualifying chronological prefix under the current trophy rules. Persist dates separately from celebration acknowledgments so skipping a celebration, restarting, or deleting catches does not move an existing date. Restores recover dates from catch history.
+- Record the first new grounded-catch event timestamp. Legacy events and leaderboard trophies without source timestamps show “Date unavailable”; a repeat event or later leaderboard fetch never becomes a fabricated achievement date.
+- Added coverage for upgrades, restores, first threshold crossings, guess streaks, persistence, and missing external dates, plus native standard/accessibility renders. Physical-device review remains pending because the phone was unavailable.
 
 ## 2026-09-27 — Challenges UI pass (PR #290, branch `worktree-challenges-ui-pass`)
 

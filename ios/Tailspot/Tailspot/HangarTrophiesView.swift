@@ -51,6 +51,7 @@ nonisolated enum TrophyBoard {
 
 struct HangarTrophiesView: View {
     @Query private var catches: [Catch]
+    @AppStorage(UserDefaultsTrophyLedger.achievedDatesKey) private var achievedDatesData = Data()
     /// Memoizes the inputs + board so segment switches (which re-eval this
     /// kept-alive page's body) render from cache — see HangarDerivedCache.
     @State private var cache = DerivedCacheBox<(inputs: TrophyProgressInputs, items: [Achievement])>()
@@ -79,15 +80,19 @@ struct HangarTrophiesView: View {
         }
         let inputs = derived.inputs
         let items = derived.items
+        let dates = UserDefaultsTrophyLedger.achievedDates(from: achievedDatesData)
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
-                ForEach(items) { TrophyCardRow(ach: $0, inputs: inputs) }
+                ForEach(items) { TrophyCardRow(ach: $0, inputs: inputs, achievedAt: dates[$0.id]) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 32)
         }
         .background(Brand.Color.bgPrimary)
+        .task(id: token) {
+            TrophyAchievementDates.recordMissing(from: catches, inputs: inputs)
+        }
     }
 }
 
@@ -98,6 +103,7 @@ struct HangarTrophiesView: View {
 struct TrophyCardRow: View {
     let ach: Achievement
     let inputs: TrophyProgressInputs
+    var achievedAt: Date? = nil
 
     /// The single accent for an earned achievement hex — cyan-family metal,
     /// chosen to sit apart from the rarity/type palettes (grey/green/cyan/
@@ -110,23 +116,26 @@ struct TrophyCardRow: View {
         // exists in the list without spoiling what it is.
         let masked = ach.secret && !earned
         let progress = ach.currentProgress(inputs: inputs)
-        HStack(alignment: .center, spacing: 14) {
-            TrophyView(tier: earnedTier, iconName: ach.iconName, size: 52, locked: !earned)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(masked ? "???" : ach.title)
-                    .font(Brand.Font.cardTitle)
-                    .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
-                Text(masked ? "Hidden achievement" : ach.displaySummary)
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    // Two lines, not one: at larger Dynamic Type sizes a
-                    // one-line cap truncates the goal text mid-sentence.
-                    .lineLimit(2)
-                footer(masked: masked, earned: earned, ach: ach, progress: progress)
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 14) {
+                TrophyView(tier: earnedTier, iconName: ach.iconName, size: 52, locked: !earned)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(masked ? "???" : ach.title)
+                        .font(Brand.Font.cardTitle)
+                        .foregroundStyle(earned ? Brand.Color.textPrimary : Brand.Color.textSecondary)
+                    Text(masked ? "Hidden achievement" : ach.displaySummary)
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textSecondary)
+                        // Two lines, not one: at larger Dynamic Type sizes a
+                        // one-line cap truncates the goal text mid-sentence.
+                        .lineLimit(2)
+                    footer(masked: masked, earned: earned, ach: ach, progress: progress)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(12)
+            if earned { achievementStrip }
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             earned ? Brand.Color.bgElevated : Brand.Color.bgElevated.opacity(0.5),
@@ -136,10 +145,60 @@ struct TrophyCardRow: View {
             RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.textPrimary.opacity(earned ? 0.06 : 0.04), lineWidth: 1)
         )
+        .clipShape(.rect(cornerRadius: Brand.Radius.card))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(masked
             ? "Hidden achievement, locked"
-            : "\(ach.title), \(earned ? "earned" : "locked"). \(ach.displaySummary)")
+            : "\(ach.title), \(earned ? "earned" : "locked"). \(ach.displaySummary)\(earned ? achievementAccessibility : "")")
+    }
+
+    private var achievementAccessibility: String {
+        guard let achievedAt else { return ". Achievement date unavailable" }
+        return ". Achieved \(achievedAt.formatted(date: .long, time: .omitted))"
+    }
+
+    private var achievementStrip: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                achievedLabel
+                Spacer(minLength: 0)
+                achievementDate.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                achievedLabel
+                achievementDate
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .foregroundStyle(Brand.Color.textSecondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background { Rectangle().fill(Brand.Color.bgPrimary.opacity(0.4)) }
+        .overlay(alignment: .top) {
+            Rectangle().fill(Brand.Color.textPrimary.opacity(0.06)).frame(height: 1)
+        }
+    }
+
+    private var achievedLabel: some View {
+        Label {
+            Text("Achieved")
+        } icon: {
+            Image(systemName: "checkmark").foregroundStyle(Brand.Color.cyan)
+        }
+        .font(Brand.Font.caption)
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var achievementDate: some View {
+        if let achievedAt {
+            Text(achievedAt, format: .dateTime.month(.abbreviated).day().year())
+                .font(Brand.Font.mono(size: 11, relativeTo: .caption2))
+        } else {
+            Text("Date unavailable")
+                .font(Brand.Font.caption)
+                .foregroundStyle(Brand.Color.textTertiary)
+        }
     }
 
     @ViewBuilder

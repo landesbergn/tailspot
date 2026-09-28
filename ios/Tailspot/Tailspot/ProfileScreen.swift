@@ -119,13 +119,14 @@ struct ProfileScreen: View {
                     // aligned like its Done sibling, hit target included.
                     // A direct ShareLink, deliberately minimal (Noah,
                     // 2026-07-08): one tap → the system share sheet with a
-                    // short invite + the App Store link. Messages inflates
-                    // the standalone link into one rich store-listing
-                    // bubble — the whole message, by design; a rendered
-                    // stat-card image was tried and cut as too much.
+                    // short invite with the claimed username + the App Store
+                    // link. Messages renders the link as a rich store-listing
+                    // bubble and keeps the username in the accompanying text.
                     ShareLink(
                         item: Self.inviteURL,
-                        message: Text("Join me on Tailspot:")
+                        message: isHandleClaimed
+                            ? Text("Join me on Tailspot! My username is @\(handle).")
+                            : Text("Join me on Tailspot:")
                     ) {
                         Image(systemName: "square.and.arrow.up")
                             .fontWeight(.bold)
