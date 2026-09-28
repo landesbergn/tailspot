@@ -232,9 +232,8 @@ struct LeaderboardScreen: View {
     /// row margins so the track aligns with the cards below.
     private var switcherHeader: some View {
         VStack(spacing: 6) {
-            // The live challenge sits above the window slider (Noah,
-            // 2026-09-26) so it reads as its own thing, not a fourth window.
-            ChallengesStrip()
+            // The live-challenge strip that sat here is gone (Noah,
+            // 2026-09-27): the flag button's count badge is the entry now.
             LeaderboardWindowSwitcher(selection: $selectedWindow)
             if let line = countdownLine {
                 Text(line)

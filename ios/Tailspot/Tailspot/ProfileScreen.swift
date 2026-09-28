@@ -716,62 +716,63 @@ struct ProfileScreen: View {
     // the quick card was a duplicate door (Noah, 2026-07-08).
     /// Map and Challenges. Leaders left this row on 2026-09-15 when it
     /// moved to the catch screen's bottom bar (Challenges phase 0); the
-    /// Challenges tile took its place (phase 2). The tile carries the
-    /// model's headline as a subtitle — "Race a friend" until you are in
-    /// one, then the live line, then "see results" — so the Profile is the
-    /// one place the state shows without opening the hub. The tile exists
+    /// Challenges tile took its place (phase 2). It carries a count badge
+    /// of the challenges you're in (live + upcoming) — it used to carry the
+    /// headline as a subtitle, which didn't fit the tile (2026-09-27). The
+    /// tile exists
     /// only once the server config has said the feature is available on
     /// this build; before that (feature not deployed, kill switch on,
     /// build too old, config unreachable) Map stands alone rather than a
     /// tile opening onto an error.
     private var quickLinks: some View {
+        // `fixedSize(vertical:)` + `maxHeight: .infinity` on each tile makes
+        // both as tall as the taller one, so Map doesn't sit short next to
+        // a Challenges tile with a subtitle.
         HStack(spacing: 10) {
             quickLink(label: "Map", glyph: "map") { MapScreen() }
             if let challenges, challenges.verdict == .available {
-                let headline = challenges.headline
-                let standing = ChallengesEntryCopy.standing(
-                    in: ChallengesEntryCopy.challengeId(for: headline).flatMap { challenges.details[$0] })
-                let line = ChallengesEntryCopy.line(
-                    for: headline, now: challenges.now(), me: standing.me, isTie: standing.isTie)
-                quickLink(label: "Challenges", glyph: "flag.checkered", subtitle: line.detail) {
+                quickLink(label: "Challenges", glyph: "flag.checkered", badge: challenges.activeCount) {
                     ChallengesHub(source: "profile_tile")
                 }
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Optional: nil in the snapshot harness and previews (nothing injects
     /// it there), so the tile renders its cold-state copy instead of crashing.
     @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
 
-    private func quickLink<Dest: View>(label: String, glyph: String, subtitle: String? = nil,
+    private func quickLink<Dest: View>(label: String, glyph: String, badge: Int = 0,
                                        @ViewBuilder destination: @escaping () -> Dest) -> some View {
         NavigationLink {
             destination()
         } label: {
             VStack(spacing: 6) {
+                // A fixed slot so glyphs of different shapes (map vs flag)
+                // land at the same size and baseline.
                 Image(systemName: glyph)
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Brand.Color.cyan)
+                    .frame(width: 28, height: 24)
+                    .overlay(alignment: .topTrailing) {
+                        if badge > 0 {
+                            ChallengeCountBadge(count: badge)
+                                .offset(x: 10, y: -7)
+                        }
+                    }
                     .accessibilityHidden(true)
                 Text(label)
                     .font(Brand.Font.caption.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(Brand.Font.mono(size: 9, weight: .regular, relativeTo: .caption2))
-                        .foregroundStyle(Brand.Color.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .padding(.horizontal, 6)
-                }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 14)
             .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(badge > 0 ? "\(badge) active" : "")
     }
 
     // MARK: - Section links (reference / settings)

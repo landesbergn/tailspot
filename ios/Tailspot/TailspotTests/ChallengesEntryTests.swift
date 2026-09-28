@@ -3,9 +3,9 @@
 //  TailspotTests
 //
 //  The entry points into Challenges that live on other screens: the
-//  Profile tile subtitle and the Leaders strip share one pure copy
-//  function (asserted here for every headline case), and the three
-//  surfaces that host them — Profile, the Leaders sheet, Settings — are
+//  count badge on the Profile tile and the Leaders flag (its count and
+//  label asserted here), and the three surfaces that host them — Profile,
+//  the Leaders sheet, Settings — are
 //  rendered with a fixture-backed ChallengesModel injected, in the
 //  ProfileSettingsSnapshotTests hosted-window pattern, for the visual pass
 //  (PNGs in /private/tmp/tailspot_snaps). The hosted tests assert only the
@@ -20,59 +20,25 @@ import SwiftData
 import UIKit
 @testable import Tailspot
 
-@Suite("Challenges entry copy")
-struct ChallengesEntryCopyTests {
+@Suite("Challenges entry count")
+struct ChallengesEntryCountTests {
 
-    private let now = Date(timeIntervalSince1970: 1_800_000_000)
-
-    private func summary(name: String, startsIn: TimeInterval, length: TimeInterval,
-                         status: ChallengeStatus, myResult: ChallengeMyResult? = nil) -> ChallengeSummary {
-        ChallengeFixtures.summary(
-            id: "x", name: name, creator: "eli", code: "K7M4QD2X",
-            startsAt: now.addingTimeInterval(startsIn), endsAt: now.addingTimeInterval(startsIn + length),
-            preset: "24h", status: status, participantCount: 3, myResult: myResult)
+    @Test func flagLabelSaysHowManyAreActive() {
+        #expect(ChallengesFlagButton.accessibilityLabel(active: 2, hubSeen: true) == "Challenges, 2 active")
+        #expect(ChallengesFlagButton.accessibilityLabel(active: 0, hubSeen: false) == "Challenges, new")
+        #expect(ChallengesFlagButton.accessibilityLabel(active: 0, hubSeen: true) == "Challenges")
     }
 
-    @Test func coldStateSaysRaceAFriend() {
-        let line = ChallengesEntryCopy.line(for: .none, now: now)
-        #expect(line.state == nil)
-        #expect(line.detail == "Race a friend")
-        #expect(ChallengesEntryCopy.challengeId(for: .none) == nil)
-    }
-
-    @Test func liveLineCarriesNamePlacementAndCountdown() {
-        let s = summary(name: "Weekend Flyoff", startsIn: -3600, length: 3600 + 48 * 60,
-                        status: .live, myResult: ChallengeMyResult(placement: 2, points: 380, catches: 11))
-        let line = ChallengesEntryCopy.line(for: .live(s), now: now)
-        #expect(line.state == "IN FLIGHT")
-        #expect(line.detail == "Weekend Flyoff · 2nd · 48M LEFT")
-        #expect(ChallengesEntryCopy.challengeId(for: .live(s)) == "x")
-    }
-
-    @Test func liveLineWithoutMyResultSkipsPlacement() {
-        let s = summary(name: "Weekend Flyoff", startsIn: -3600, length: 3600 + 90 * 60, status: .live)
-        #expect(ChallengesEntryCopy.line(for: .live(s), now: now).detail == "Weekend Flyoff · 1H 30M LEFT")
-    }
-
-    @Test func liveLineUsesCachedDetailStandingWhenRowHasNone() {
-        let s = summary(name: "Weekend Flyoff", startsIn: -3600, length: 3600 + 90 * 60, status: .live)
-        let me = ChallengeMyResult(placement: 3, points: 120, catches: 4)
-        #expect(ChallengesEntryCopy.line(for: .live(s), now: now, me: me).detail == "Weekend Flyoff · 3rd · 1H 30M LEFT")
-    }
-
-    @Test func upcomingLineSaysOnDeckWithStartsIn() {
-        let s = summary(name: "Sunday Circuit", startsIn: 3 * 3600, length: 86_400, status: .upcoming)
-        let line = ChallengesEntryCopy.line(for: .upcoming(s), now: now)
-        #expect(line.state == "ON DECK")
-        #expect(line.detail == "Sunday Circuit · STARTS IN 3H")
-    }
-
-    @Test func resultsReadyLinePointsAtResults() {
-        let s = summary(name: "Golden Hour", startsIn: -7200, length: 3600, status: .finished,
-                        myResult: ChallengeMyResult(placement: 1, points: 620, catches: 9))
-        let line = ChallengesEntryCopy.line(for: .resultsReady(s), now: now)
-        #expect(line.state == "FINISHED")
-        #expect(line.detail == "Golden Hour · see results")
+    @MainActor
+    @Test func activeCountIsLivePlusUpcoming() async {
+        let defaults = UserDefaults(suiteName: "ChallengesEntryCountTests")!
+        defaults.removePersistentDomain(forName: "ChallengesEntryCountTests")
+        let model = ChallengesModel(service: FixtureChallengesService(), currentBuild: Int.max, defaults: defaults)
+        await model.refreshConfig()
+        await model.refreshList()
+        #expect(model.activeCount == model.live.count + model.upcoming.count)
+        #expect(model.activeCount > 0)
+        #expect(model.history.allSatisfy { h in !model.open.contains { $0.id == h.id } })
     }
 }
 
@@ -137,7 +103,7 @@ struct ChallengesEntrySnapshotTests {
         #expect(titles(in: window).contains("Profile"))
     }
 
-    @Test func leadersSheetShowsFlagWithDotAndStrip() async throws {
+    @Test func leadersSheetShowsFlagWithCount() async throws {
         let model = await demoModel(hubSeen: false)
         let entries = [
             LeaderboardEntry(rank: 1, handle: "skykid", points: 4210, catches: 61),
@@ -148,12 +114,12 @@ struct ChallengesEntrySnapshotTests {
             _debugWindows: [.week: LeaderboardResponse(entries: entries, me: MyStanding(rank: 2, points: 2755), window: "week")]
         )
         let window = host(LeadersSheet(screen: screen).modelContainer(try container()).environment(model),
-                          snapshotAs: "challenges_entry_leaders_strip")
+                          snapshotAs: "challenges_entry_leaders_count")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Leaderboard"))
     }
 
-    @Test func leadersSheetColdStateHasNoStrip() async throws {
+    @Test func leadersSheetColdStateHasNoCount() async throws {
         let defaults = UserDefaults(suiteName: "ChallengesEntrySnapshotTests.cold")!
         defaults.removePersistentDomain(forName: "ChallengesEntrySnapshotTests.cold")
         let model = ChallengesModel(service: FixtureChallengesService(state: ChallengeFixtures.emptyState()),
@@ -161,7 +127,7 @@ struct ChallengesEntrySnapshotTests {
         await model.refreshConfig()
         await model.refreshList()
         #expect(model.headline == .none)
-        #expect(ChallengesEntryCopy.challengeId(for: model.headline) == nil)
+        #expect(model.activeCount == 0)
         let window = host(LeadersSheet().modelContainer(try container()).environment(model),
                           snapshotAs: "challenges_entry_leaders_cold")
         defer { window.isHidden = true }

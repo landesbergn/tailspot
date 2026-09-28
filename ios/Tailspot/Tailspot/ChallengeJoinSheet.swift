@@ -217,6 +217,8 @@ struct ChallengeJoinSheet: View {
                           ? "Nobody yet"
                           : "\(p.participants.map { "@\($0)" }.joined(separator: ", ")) (\(p.participants.count) of \(c.maxParticipants))")
             }
+            // Full width: the card used to hug its longest line.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
             .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
 
@@ -224,6 +226,7 @@ struct ChallengeJoinSheet: View {
                 Text(ChallengeCopy.ruleCard(startsAt: c.startsAt, endsAt: c.endsAt))
                     .font(Brand.Font.body)
                     .foregroundStyle(Brand.Color.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
                     .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: Brand.Radius.card))
             }

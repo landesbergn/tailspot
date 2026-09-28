@@ -19,7 +19,6 @@ import SwiftUI
 
 struct ChallengesHub: View {
     @Environment(ChallengesModel.self) private var model
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Where the user came from, for `challenges_hub_viewed`
     /// (leaders_flag, leaders_strip, profile_tile, reveal_line, deep_link).
@@ -237,7 +236,7 @@ struct ChallengesHub: View {
             }
             if !model.live.isEmpty {
                 ChallengeSectionLabel(title: "IN FLIGHT")
-                ForEach(model.live) { liveCard($0) }
+                rowsCard(model.live) { liveRow($0) }
             }
             if !model.upcoming.isEmpty {
                 ChallengeSectionLabel(title: "ON DECK")
@@ -324,111 +323,72 @@ struct ChallengesHub: View {
             .contentShape(Rectangle())
     }
 
-    // MARK: - Live card
+    // MARK: - Live row
 
-    private func liveCard(_ s: ChallengeSummary) -> some View {
+    /// One compact row per live challenge (Noah, 2026-09-27 — the big
+    /// card with the place / points / catches trio was too much for a
+    /// list): my placement disc, the name, and "1st · 10 pts · 22h left".
+    /// The full trio lives on the detail.
+    private func liveRow(_ s: ChallengeSummary) -> some View {
         let me = model.details[s.id]?.me ?? s.myResult
         let tie = model.details[s.id].map(ChallengeCopy.isTie) ?? false
         return NavigationLink {
             ChallengeDetailScreen(id: s.id)
         } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Label("IN FLIGHT", systemImage: "airplane")
-                        .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
-                        .tracking(1.1)
-                        .foregroundStyle(Brand.Color.cyan)
-                    Spacer()
-                    ChallengeCountdown(endsAt: s.endsAt, now: model.now)
+            HStack(spacing: 12) {
+                if let me {
+                    PlacementDisc(placement: me.placement)
+                } else {
+                    ZStack {
+                        Circle().fill(Brand.Color.cyan.opacity(0.13))
+                        Image(systemName: "airplane")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Brand.Color.cyan)
+                    }
+                    .frame(width: 34, height: 34)
+                    .accessibilityHidden(true)
                 }
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(s.name)
-                        .brandDisplayFont()
+                        .font(Brand.Font.body.weight(.semibold))
                         .foregroundStyle(Brand.Color.textPrimary)
-                        .lineLimit(2)
-                    Text("\(ChallengeCopy.spotters(s.participantCount)) · \(ChallengeCopy.endsLine(endsAt: s.endsAt, now: model.now()))")
+                        .lineLimit(1)
+                    Text(Self.liveDetail(me: me, tie: tie, endsAt: s.endsAt, now: model.now()))
                         .font(Brand.Font.caption)
                         .foregroundStyle(Brand.Color.textSecondary)
+                        .lineLimit(1)
                 }
-                trio(me: me, tie: tie)
-                HStack(spacing: 6) {
-                    Text("Standings")
-                        .font(Brand.Font.button)
-                        .foregroundStyle(Brand.Color.cyan)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .accessibilityHidden(true)
-                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .accessibilityHidden(true)
             }
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Brand.Color.cyan.opacity(0.07), in: .rect(cornerRadius: Brand.Radius.card))
-            .glassEffect(ChallengeStyle.glass, in: .rect(cornerRadius: Brand.Radius.card))
-            .overlay {
-                RoundedRectangle(cornerRadius: Brand.Radius.card)
-                    .strokeBorder(Brand.Color.cyan.opacity(0.22), lineWidth: 1)
-            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens the standings")
         // A live list row carries no `myResult` (that is the FROZEN result,
-        // history only), so the trio needs the detail. Fetch it once per
-        // card; until it lands the trio shows dashes, not zeros.
+        // history only), so the placement needs the detail. Fetch it once
+        // per row; until it lands the row shows the plane glyph.
         .task(id: s.id) {
             if model.details[s.id] == nil { await model.loadDetail(id: s.id) }
         }
     }
 
-    /// Place / points / catches. Stacks at accessibility sizes (the
-    /// ProfileScreen statsRow pattern).
-    @ViewBuilder
-    private func trio(me: ChallengeMyResult?, tie: Bool) -> some View {
-        let place = me.map { ChallengeTiming.placementLabel(placement: $0.placement, isTie: tie) } ?? "—"
-        let placeTint = me.map { ChallengeStyle.placementTint($0.placement) } ?? Brand.Color.textTertiary
-        let cells: [(String, String, Color)] = [
-            (place, "PLACE", placeTint),
-            (me.map { $0.points.formatted(.number) } ?? "0", "POINTS", Brand.Color.cyan),
-            (me.map { "\($0.catches)" } ?? "0", "CATCHES", Brand.Color.textPrimary),
-        ]
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(cells, id: \.1) { cell in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        metricValue(cell.0, color: cell.2)
-                        metricLabel(cell.1)
-                    }
-                }
-            }
-        } else {
-            HStack(spacing: 0) {
-                ForEach(cells, id: \.1) { cell in
-                    VStack(spacing: 2) {
-                        metricValue(cell.0, color: cell.2)
-                        metricLabel(cell.1)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
+    /// "T-1st · 10 pts · 22h 19m left"; without a standing yet, just the
+    /// time left.
+    static func liveDetail(me: ChallengeMyResult?, tie: Bool, endsAt: Date, now: Date) -> String {
+        var parts: [String] = []
+        if let me {
+            parts.append(ChallengeTiming.placementLabel(placement: me.placement, isTie: tie))
+            parts.append("\(me.points.formatted(.number)) pts")
         }
-    }
-
-    private func metricValue(_ value: String, color: Color) -> some View {
-        Text(value)
-            .font(Brand.Font.mono(size: 23, weight: .bold, relativeTo: .title3))
-            .foregroundStyle(color)
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-    }
-
-    private func metricLabel(_ label: String) -> some View {
-        Text(label)
-            .font(Brand.Font.mono(size: 8, weight: .semibold, relativeTo: .caption2))
-            .tracking(1.1)
-            .foregroundStyle(Brand.Color.textTertiary)
+        parts.append(ChallengeTiming.timeRemainingCopy(until: endsAt, now: now).lowercased())
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Rows

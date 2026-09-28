@@ -82,11 +82,14 @@ struct PlacementDisc: View {
         ZStack {
             Circle().fill(tint.opacity(0.16))
             Circle().strokeBorder(tint.opacity(0.5), lineWidth: 1)
-            Text(ChallengeTiming.placementLabel(placement: placement, isTie: isTie))
+            // Ordinal only: "T-1st" didn't fit a 34 pt disc (Noah,
+            // 2026-09-27). Rows that tie say so in their subtitle instead.
+            Text(ChallengeTiming.placementLabel(placement: placement, isTie: false))
                 .font(Brand.Font.mono(size: size * 0.32, weight: .bold, relativeTo: .caption))
                 .foregroundStyle(tint)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
+                .frame(width: size - 6)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -211,16 +214,24 @@ nonisolated enum ChallengeCopy {
     /// it; the detail shows "T-1st".
     static func historyLabel(_ s: ChallengeSummary) -> String {
         if s.status == .cancelled { return "Cancelled" }
-        if s.isNoContest { return "No contest" }
+        if s.isNoContest { return noContestLabel(participantCount: s.participantCount) }
         guard let mine = s.myResult else { return "Finished" }
         if mine.placement == 1 { return "Won" }
         return ChallengeTiming.placementOf(placement: mine.placement, participants: s.participantCount)
     }
 
+    /// The server calls it "no contest" when fewer than two spotters are
+    /// left OR nobody scored. With two or more that is a 0–0 tie, and "Tie"
+    /// is what people expect to read (Noah, 2026-09-27); alone, there was
+    /// nobody to tie with, so it stays "No contest".
+    static func noContestLabel(participantCount: Int) -> String {
+        participantCount >= 2 ? "Tie" : "No contest"
+    }
+
     /// The results verdict (spec §4.5). `nil` me → "Finished".
     static func verdict(_ d: ChallengeDetail) -> String {
         if d.challenge.status == .cancelled { return "Cancelled" }
-        if d.challenge.isNoContest { return "No contest" }
+        if d.challenge.isNoContest { return noContestLabel(participantCount: d.challenge.participantCount) }
         guard let me = d.me else { return "Finished" }
         let mine = d.standings.first { $0.isMe == true }
         let tiedAtMine = d.standings.filter { $0.placement == me.placement }.count > 1

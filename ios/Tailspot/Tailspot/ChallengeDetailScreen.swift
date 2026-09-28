@@ -232,11 +232,17 @@ struct ChallengeDetailScreen: View {
         return "lost"
     }
 
+    /// "Tie" / "No contest" for a no-contest finish, else nil.
+    private var noContestText: String? {
+        guard let s = summary, s.isNoContest else { return nil }
+        return ChallengeCopy.noContestLabel(participantCount: s.participantCount)
+    }
+
     private var stateLabel: String {
         switch status {
         case .upcoming: return "Upcoming"
         case .live: return "Live"
-        case .finished: return (summary?.isNoContest ?? false) ? "No contest" : "Finished"
+        case .finished: return noContestText ?? "Finished"
         case .cancelled: return "Cancelled"
         case .unknown: return "Challenge"
         }
@@ -286,7 +292,7 @@ struct ChallengeDetailScreen: View {
         switch status {
         case .upcoming: return "ON DECK"
         case .live: return "IN FLIGHT"
-        case .finished: return (summary?.isNoContest ?? false) ? "NO CONTEST" : "FINISHED"
+        case .finished: return noContestText?.uppercased() ?? "FINISHED"
         case .cancelled: return "CANCELLED"
         case .unknown: return "CHALLENGE"
         }
@@ -485,7 +491,7 @@ struct ChallengeDetailScreen: View {
                                     .background(Brand.Color.cyan, in: .capsule)
                             }
                         }
-                        Text(CountCopy.phrase(row.catches, singular: "catch", plural: "catches"))
+                        Text(Self.standingSubtitle(catches: row.catches, tied: tie))
                             .font(Brand.Font.mono(size: 10, relativeTo: .caption2))
                             .foregroundStyle(Brand.Color.textTertiary)
                     }
@@ -516,6 +522,12 @@ struct ChallengeDetailScreen: View {
             }
         }
         .background(isMe ? Brand.Color.cyan.opacity(0.07) : .clear)
+    }
+
+    /// "0 catches", or "tied · 0 catches" when the row shares its place.
+    static func standingSubtitle(catches: Int, tied: Bool) -> String {
+        let count = CountCopy.phrase(catches, singular: "catch", plural: "catches")
+        return tied ? "tied · \(count)" : count
     }
 
     private func rosterRow(_ row: ChallengeStanding, creator: String) -> some View {
@@ -749,6 +761,9 @@ struct ChallengeShareControls: View {
     let challenge: ChallengeSummary
     let now: () -> Date
     @State private var showActivity = false
+    /// Flips for two seconds after the code is tapped; drives the label and
+    /// the haptic.
+    @State private var codeCopied = false
 
     private var url: URL? {
         if let raw = challenge.inviteURL, let u = URL(string: raw) { return u }
@@ -762,17 +777,39 @@ struct ChallengeShareControls: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            VStack(spacing: 4) {
-                Text("CODE")
-                    .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
-                    .tracking(1.2)
-                    .foregroundStyle(Brand.Color.textTertiary)
-                Text(challenge.code ?? "—")
-                    .font(Brand.Font.mono(size: 28, weight: .bold, relativeTo: .title2))
-                    .tracking(3)
-                    .foregroundStyle(Brand.Color.cyan)
-                    .accessibilityLabel("Invite code \((challenge.code ?? "").map(String.init).joined(separator: " "))")
+            // Tap the code to copy it (Noah, 2026-09-27) — for pasting into
+            // a chat by hand, or reading it off one phone into another.
+            Button {
+                guard let code = challenge.code else { return }
+                UIPasteboard.general.string = code
+                codeCopied = true
+                Analytics.capture("challenge_invite_shared", [
+                    "challenge_id": .string(challenge.id), "method": .string("copy_code"),
+                ])
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    codeCopied = false
+                }
+            } label: {
+                VStack(spacing: 4) {
+                    Label(codeCopied ? "COPIED" : "CODE",
+                          systemImage: codeCopied ? "checkmark" : "doc.on.doc")
+                        .font(Brand.Font.mono(size: 9, weight: .semibold, relativeTo: .caption2))
+                        .tracking(1.2)
+                        .foregroundStyle(codeCopied ? Brand.Color.cyan : Brand.Color.textTertiary)
+                    Text(challenge.code ?? "—")
+                        .font(Brand.Font.mono(size: 28, weight: .bold, relativeTo: .title2))
+                        .tracking(3)
+                        .foregroundStyle(Brand.Color.cyan)
+                }
+                .padding(.horizontal, 12)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .disabled(challenge.code == nil)
+            .sensoryFeedback(.success, trigger: codeCopied) { _, new in new }
+            .accessibilityLabel("Invite code \((challenge.code ?? "").map(String.init).joined(separator: " "))")
+            .accessibilityHint(codeCopied ? "Copied" : "Copies the code")
             if let url {
                 // `ActivityShareSheet` reports the real outcome, so
                 // `challenge_invite_shared` fires only when the link was
