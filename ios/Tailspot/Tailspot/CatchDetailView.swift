@@ -408,6 +408,9 @@ struct CatchDetailView: View {
             rarity: row.allCatches.first?.resolvedRarity.rawValue,
             source: .hangarDelete
         )
+        // Capture the server ids BEFORE the delete — a deleted model's
+        // properties can't be read afterwards.
+        let serverUuids = row.allCatches.compactMap(\.serverUuid)
         for c in row.allCatches {
             CatchPhotoStore.delete(filename: c.photoFilename)
             modelContext.delete(c)
@@ -415,6 +418,9 @@ struct CatchDetailView: View {
         do { try modelContext.save() } catch {
             Log.adsb.error("Detail delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+        // …and off the server, so it stops counting toward the leaderboard
+        // and challenge scores.
+        CatchDeletionSync.deleteRemotely(serverUuids)
         dismiss()
     }
 

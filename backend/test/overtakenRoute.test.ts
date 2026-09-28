@@ -180,6 +180,49 @@ describe("overtaken pushes via POST /v1/catches", () => {
     }
   });
 
+  it("a Hangar delete re-baselines placements without pushing anyone", async () => {
+    const { app, db, challengeStore, transport, afterReply } = await setup(true);
+    try {
+      const a = await newDevice(app, "ada");
+      const b = await newDevice(app, "bex", TOKEN_B);
+      const challenge = await challengeStore.create(
+        {
+          name: "Weekend Flyoff",
+          creatorDeviceId: a.deviceId,
+          startsAt: T0,
+          durationPreset: "24h",
+        },
+        T0,
+      );
+      await seedRival(db, b.deviceId);
+      expect((await challengeStore.join(challenge, b.deviceId, T0)).ok).toBe(true);
+
+      const catchUuid = "44444444-4444-4444-8444-444444444444";
+      await app.inject({
+        method: "POST",
+        url: "/v1/catches",
+        headers: { authorization: `Bearer ${a.deviceToken}` },
+        payload: catchBody(catchUuid),
+      });
+      await afterReply();
+      expect(transport.sent).toHaveLength(1); // ada passed bex
+
+      const del = await app.inject({
+        method: "DELETE",
+        url: `/v1/catches/${catchUuid}`,
+        headers: { authorization: `Bearer ${a.deviceToken}` },
+      });
+      expect(del.statusCode).toBe(204);
+      const [summary] = await afterReply();
+      // Ada fell back behind bex: evaluated, but ada is the one who moved, and
+      // nobody else got worse — so no push, just fresh stored placements.
+      expect(summary).toEqual({ challenges: 1, overtaken: 0, pushes: 0, retryable: 0 });
+      expect(transport.sent).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("sends nothing at all when CHALLENGES_ENABLED is off", async () => {
     const { app, db, challengeStore, transport, afterReply } = await setup(false);
     try {

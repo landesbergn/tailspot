@@ -198,6 +198,20 @@ struct HangarRestoreTests {
         #expect(planned.count == 2)
     }
 
+    /// A catch the user deleted whose server DELETE hasn't landed yet must
+    /// not be restored back into the Hangar.
+    @Test func insertRestoredSkipsDeletedCatches() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let inserted = HangarRestore.insertRestored(
+            [fullRow(), bareRow()], into: context,
+            deleted: ["11111111-1111-4111-8111-111111111111"])
+        try context.save()
+        #expect(inserted == 1)
+        let left = try context.fetch(FetchDescriptor<Catch>())
+        #expect(left.map(\.serverUuid) == ["22222222-2222-4222-8222-222222222222"])
+    }
+
     @Test func reRunningInsertRestoredInsertsNothing() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
