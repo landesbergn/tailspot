@@ -33,6 +33,45 @@ Seven device-screenshot notes from Noah, client only.
   sentence builder that fed both) was deleted. The hub's IN FLIGHT challenges
   are compact rows ("2nd · 380 pts · 48m left") like ON DECK and FLIGHT LOG.
 
+## 2026-09-27 — Deleted catches stop counting (branch `fix/deleted-catch-stops-counting`)
+
+Bug (Noah): deleting a catch in the Hangar only deleted it on the phone. The
+server kept the row, so it still counted toward leaderboard points and live
+challenge scores, and came back on a Hangar restore.
+
+- **Backend:** `DELETE /v1/catches/:catchUuid` (bearer; per-IP meter before
+  auth, then the per-device upload limiter; 400 on a malformed uuid; **204
+  whether or not a row existed**, so retries are safe). Hard delete scoped to
+  the caller's device: nothing references `catches`, so there is **no
+  migration**, and every reader (leaderboard windows, challenge scorer,
+  restore, stats) drops the catch without a filter change. Frozen results
+  (decided weekly/monthly crowns, finished challenges' frozen standings) are
+  not recomputed.
+- **App:** `CatchDeletionSync` — both Hangar delete paths capture the catches'
+  `serverUuid`s before `modelContext.delete`, queue them in UserDefaults, and
+  send the DELETEs; the queue drains again on every app open, so an offline
+  delete lands later. A device with no stored token skips the network (it
+  never uploaded anything). `CatchUploader` now skips rows deleted mid-sweep
+  and, if a delete lands while a POST is in flight, queues a delete for it.
+- **Deploy order: backend first**, but either order is safe: the route never
+  404s (it answers 204 for a missing row), so the client treats a 404 as "this
+  server doesn't have the route yet" and keeps the delete queued.
+- **Review fixes (local high review, before PR):** SwiftData's `isDeleted` is
+  only true between `delete()` and `save()`, so the uploader now treats a row
+  that left its context as gone. The server keeps no tombstone, so the app
+  keeps a bounded **deleted ledger**: after each POST the uploader checks it
+  and re-sends the delete if the POST landed after the DELETE. Hangar restore
+  skips ledger uuids and discounts unsent deletes from the server total. The
+  queue is MainActor-serialised with one drain at a time (a concurrent
+  read-modify-write could drop a uuid). The drain runs off the foreground
+  path; a network error, 401/403 or 429 stops the pass; an unreadable token
+  keeps the queue. Backend: deletes have their own 120/min limiter, log
+  `{deviceId, removed}`, and re-run the post-catch challenge evaluation so the
+  stored placements stay current (it never pushes the deleter, and a delete
+  can't make anyone else's placement worse). A server-side tombstone table
+  (migration) would be the sturdier fix for resurrection; parked.
+- Not retroactive: catches deleted before this ship are still on the server.
+
 ## 2026-09-27 — Trophy achievement dates — branch `codex/trophy-achievement-dates`
 
 - Earned trophy cards now show a separate “Achieved” strip with a localized date, matching the approved option C. The strip stacks at accessibility text sizes and VoiceOver includes the date.

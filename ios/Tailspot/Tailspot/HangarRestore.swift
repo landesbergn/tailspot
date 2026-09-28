@@ -122,8 +122,11 @@ enum HangarRestore {
     /// caller saves once, after the trophy-ledger reseed). Returns how many
     /// rows were actually inserted; a re-run over the same rows returns 0.
     @discardableResult
-    static func insertRestored(_ rows: [RestoredCatchRow], into context: ModelContext) -> Int {
-        let planned = rowsToInsert(rows, existingServerUuids: existingServerUuids(in: context))
+    static func insertRestored(_ rows: [RestoredCatchRow], into context: ModelContext,
+                               deleted: Set<String> = CatchDeletionSync().deletedSet) -> Int {
+        // A deleted catch the server still holds (its DELETE is queued, or
+        // hasn't landed yet) must not come back: treat it as already present.
+        let planned = rowsToInsert(rows, existingServerUuids: existingServerUuids(in: context).union(deleted))
         for row in planned {
             context.insert(makeCatch(from: row))
         }
@@ -193,8 +196,12 @@ final class HangarRestoreManager: ObservableObject {
         }
 
         // Cheapest possible probe: one row, but the full `total`.
+        // Deletes the server hasn't applied yet still count in its total;
+        // offering to restore catches the user just deleted is the bug
+        // those deletes exist to fix.
+        let unsynced = CatchDeletionSync().pending.count
         guard let head = try? await client.fetchCatches(limit: 1, offset: 0),
-              head.total > 0 else { return }
+              head.total - unsynced > 0 else { return }
 
         // Re-check emptiness — the user may have caught a plane while we
         // waited on registration; a non-empty Hangar means no prompt (organic
