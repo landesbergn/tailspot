@@ -829,7 +829,13 @@ struct ChallengeShareControls: View {
                 }
                 .buttonStyle(.plain)
                 .sheet(isPresented: $showActivity) {
-                    ActivityShareSheet(items: [shareMessage, url]) { method in
+                    // The URL goes in as an item source carrying a rendered
+                    // challenge card, so the Messages preview shows this
+                    // challenge instead of the App Store listing the link
+                    // redirects to. See ChallengeInviteCard.swift.
+                    ActivityShareSheet(items: [
+                        shareMessage, ChallengeInviteItemSource(url: url, challenge: challenge),
+                    ]) { method in
                         guard let method else { return }
                         Analytics.capture("challenge_invite_shared", [
                             "challenge_id": .string(challenge.id), "method": .string(method),
