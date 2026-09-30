@@ -597,9 +597,7 @@ struct ChallengeDetailScreen: View {
     private func expandedRow(_ row: ChallengeStanding, in d: ChallengeDetail) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if !row.rarityBreakdown.isEmpty {
-                FlowChips(items: Rarity.allCases.compactMap { tier in
-                    row.rarityBreakdown[tier.rawValue].map { (tier.rawValue, $0) }
-                })
+                FlowChips(items: row.rarityChips.map { ($0.tier, $0.count) })
             }
             if let log = model.log(id: id, handle: row.handle) {
                 if log.catches.isEmpty {

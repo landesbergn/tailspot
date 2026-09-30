@@ -243,6 +243,22 @@ nonisolated struct ChallengeStanding: Decodable, Equatable {
         self.rarityBreakdown = rarityBreakdown
         self.isMe = isMe
     }
+
+    /// The breakdown as an ordered chip list: known tiers common → legendary,
+    /// then any bucket the app doesn't recognise (the server files catches
+    /// with no resolved type under `"unknown"`). Unrecognised buckets are
+    /// kept, not dropped, so the chip counts always add up to `catches`.
+    var rarityChips: [(tier: String, count: Int)] {
+        let known = Rarity.allCases.compactMap { tier in
+            rarityBreakdown[tier.rawValue].map { (tier: tier.rawValue, count: $0) }
+        }
+        let knownKeys = Set(Rarity.allCases.map(\.rawValue))
+        let rest = rarityBreakdown
+            .filter { !knownKeys.contains($0.key) }
+            .sorted { $0.key < $1.key }
+            .map { (tier: $0.key, count: $0.value) }
+        return known + rest
+    }
 }
 
 /// GET /v1/challenges/:id, POST /v1/challenges (201) and POST
@@ -291,7 +307,11 @@ nonisolated struct ChallengeDetail: Decodable, Equatable {
 /// registration.
 nonisolated struct ChallengeCatchLogEntry: Decodable, Equatable {
     let aircraft: String?
-    let rarity: String
+    /// nil when the server couldn't resolve the airframe's type — the row
+    /// still scores (default points) and still counts, it just has no tier.
+    /// The backend test suite pins `"rarity": null` as valid output, so a
+    /// non-optional here fails the whole log decode for one such catch.
+    let rarity: String?
     let points: Int
     let caughtAt: Date
 }
