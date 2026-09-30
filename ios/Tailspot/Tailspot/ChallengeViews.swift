@@ -33,12 +33,14 @@ enum ChallengeStyle {
         }
     }
 
-    static func rarityTint(_ raw: String) -> Color {
-        Rarity(rawValue: raw)?.tint ?? Brand.Color.textTertiary
+    /// nil (log entry with no resolved type) and the server's `"unknown"`
+    /// breakdown bucket both render as a neutral UNKNOWN in tertiary text.
+    static func rarityTint(_ raw: String?) -> Color {
+        raw.flatMap(Rarity.init(rawValue:))?.tint ?? Brand.Color.textTertiary
     }
 
-    static func rarityLabel(_ raw: String) -> String {
-        Rarity(rawValue: raw)?.label ?? raw.uppercased()
+    static func rarityLabel(_ raw: String?) -> String {
+        raw.flatMap(Rarity.init(rawValue:))?.label ?? (raw ?? "unknown").uppercased()
     }
 }
 

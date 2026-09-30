@@ -232,6 +232,51 @@ struct ChallengeModelsTests {
         #expect(entry.aircraft == nil)
     }
 
+    /// The server sends `"rarity": null` for a catch whose airframe type
+    /// never resolved (pinned by backend/test/challenges.route.test.ts). A
+    /// non-optional `rarity` turned that one row into "Couldn't load
+    /// catches" for the whole log — seen on the 2026-09-29 Tuesday Flyoff.
+    @Test func catchLogEntryDecodesNullRarity() throws {
+        let json = """
+        {"aircraft": "Unknown aircraft", "rarity": null, "points": 10, "caughtAt": "2026-09-20T09:05:00.000Z"}
+        """
+        let entry = try decode(ChallengeCatchLogEntry.self, json)
+        #expect(entry.rarity == nil)
+        #expect(entry.points == 10)
+    }
+
+    @Test func catchLogDecodesMixedRarityLog() throws {
+        let json = """
+        {"handle": "noah", "catches": [
+          {"aircraft": "Unknown aircraft", "rarity": null, "points": 10, "caughtAt": "2026-09-29T15:05:00.000Z"},
+          {"aircraft": "Boeing 737-800", "rarity": "common", "points": 10, "caughtAt": "2026-09-29T09:05:00.000Z"}
+        ]}
+        """
+        let log = try decode(ChallengeCatchLog.self, json)
+        #expect(log.catches.map(\.rarity) == [nil, "common"])
+    }
+
+    @Test func rarityChipsKeepUnknownBucketAfterKnownTiers() {
+        let row = ChallengeStanding(placement: 1, handle: "noah", points: 20, catches: 2,
+                                    rarityBreakdown: ["unknown": 1, "common": 1])
+        let chips = row.rarityChips
+        #expect(chips.map(\.tier) == ["common", "unknown"])
+        #expect(chips.map(\.count).reduce(0, +) == row.catches)
+    }
+
+    @Test func rarityChipsOrderKnownTiersCommonToLegendary() {
+        let row = ChallengeStanding(placement: 1, handle: "noah", points: 0, catches: 3,
+                                    rarityBreakdown: ["legendary": 1, "common": 1, "rare": 1])
+        #expect(row.rarityChips.map(\.tier) == ["common", "rare", "legendary"])
+    }
+
+    @Test func rarityLabelAndTintTolerateNilAndUnknown() {
+        #expect(ChallengeStyle.rarityLabel(nil) == "UNKNOWN")
+        #expect(ChallengeStyle.rarityLabel("unknown") == "UNKNOWN")
+        #expect(ChallengeStyle.rarityLabel("rare") == "RARE")
+        #expect(ChallengeStyle.rarityTint(nil) == ChallengeStyle.rarityTint("unknown"))
+    }
+
     @Test func catchLogDecodesFullFixture() throws {
         let json = """
         {"handle": "noah", "catches": [
