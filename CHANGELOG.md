@@ -5,6 +5,14 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-29 — Standings catcher count
+
+- All Time, Weekly, and Monthly show at most 50 positive-point public catchers,
+  followed by “N more catchers” when more than 50 qualify in that period.
+  Removes the anonymous-global footer. The additive `totalCatchers` response
+  field counts enabled, named catchers with positive period points before the
+  row limit; older servers omit the footer. Deploy the backend before the app.
+
 ## 2026-09-29 — Challenge invite link preview (branch `challenge-invite-preview`)
 
 - Sharing a challenge invite into Messages showed the App Store listing
