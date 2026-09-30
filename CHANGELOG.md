@@ -24,6 +24,14 @@ Git history + PLAN.md §9 remain the authoritative record.
 - `handle_claimed` gains `source` values `profile` and `settings`, and a
   `failed` result for network errors.
 
+## 2026-09-29 — Standings catcher count
+
+- All Time, Weekly, and Monthly show at most 50 positive-point public catchers,
+  followed by “N more catchers” when more than 50 qualify in that period.
+  Removes the anonymous-global footer. The additive `totalCatchers` response
+  field counts enabled, named catchers with positive period points before the
+  row limit; older servers omit the footer. Deploy the backend before the app.
+
 ## 2026-09-29 — Challenge invite link preview (branch `challenge-invite-preview`)
 
 - Sharing a challenge invite into Messages showed the App Store listing
