@@ -362,6 +362,12 @@ export interface LeaderboardEntry {
   catches: number;
 }
 
+/** A public leaderboard page and its qualifying count before the limit. */
+export interface LeaderboardPage {
+  entries: LeaderboardEntry[];
+  totalCatchers: number;
+}
+
 /**
  * The caller's own standing (present whenever a valid token is sent).
  * `rank` 0 = unranked (zero in-window points) — clients render it as "no
@@ -458,12 +464,12 @@ export interface CatchStore {
    */
   deleteCatch(deviceId: string, catchUuid: string): Promise<boolean>;
   /**
-   * Top-N devices WITH a handle AND at least one IN-WINDOW catch, by total
+   * Top-N enabled devices WITH a handle AND positive IN-WINDOW points, by total
    * in-window points. `since` scopes the window: only catches with
    * `caughtAt >= since` count (omit for the all-time board — the pre-windows
    * behavior, unchanged).
    */
-  leaderboard(limit: number, since?: Date): Promise<LeaderboardEntry[]>;
+  leaderboard(limit: number, since?: Date): Promise<LeaderboardPage>;
   /**
    * The given device's rank + total points — computed over ALL devices
    * (handle-less devices accrue points and occupy ranks invisibly). `since`
@@ -749,13 +755,11 @@ export class DrizzleCatchStore implements CatchStore {
     };
   }
 
-  async leaderboard(limit: number, since?: Date): Promise<LeaderboardEntry[]> {
+  async leaderboard(limit: number, since?: Date): Promise<LeaderboardPage> {
     // Aggregate points + catch count per device — only those WITH a handle
-    // AND at least one catch.
-    // Windowing lives in the JOIN condition, not a WHERE: a LEFT JOIN keeps
-    // every device row while only in-window catches contribute to the sums,
-    // so the `having count > 0` entry ticket naturally becomes "at least one
-    // catch IN THE WINDOW".
+    // AND positive points in the selected window.
+    // Windowing lives in the JOIN condition; HAVING applies the same positive
+    // points requirement to both the entries and their total count.
     // Ordering: points DESC, then created_at ASC, then device id ASC. The id is
     // the FINAL tiebreaker so the order is TOTAL and DETERMINISTIC even in the
     // (rare) case where two devices share a createdAt timestamp — the same data
@@ -769,6 +773,9 @@ export class DrizzleCatchStore implements CatchStore {
           handle: devices.handle,
           points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("points"),
           catches: sql<number>`count(${catches.id})`.as("catches"),
+          // Window functions run after HAVING and before LIMIT, so the total
+          // counts qualifying devices, not catch rows or just this page.
+          totalCatchers: sql<number>`count(*) over ()`,
           createdAt: devices.createdAt,
         })
         .from(devices)
@@ -786,19 +793,21 @@ export class DrizzleCatchStore implements CatchStore {
         .groupBy(devices.id, devices.handle, devices.createdAt)
         // A claimed handle alone doesn't put you on the public board — onboarding
         // mints handles for drive-by installs (suggestion chips), and those
-        // 0-point rows were padding the bottom of the leaderboard. One catch is
-        // the entry ticket.
-        .having(sql`count(${catches.id}) > 0`)
+        // 0-point rows were padding the bottom of the leaderboard.
+        .having(sql`coalesce(sum(${catches.points}), 0) > 0`)
         .orderBy(desc(sql`points`), devices.createdAt, devices.id)
         .limit(limit),
     );
 
-    return rows.map((r, i) => ({
-      rank: i + 1,
-      handle: r.handle as string,
-      points: Number(r.points),
-      catches: Number(r.catches),
-    }));
+    return {
+      totalCatchers: Number(rows[0]?.totalCatchers ?? 0),
+      entries: rows.map((r, i) => ({
+        rank: i + 1,
+        handle: r.handle as string,
+        points: Number(r.points),
+        catches: Number(r.catches),
+      })),
+    };
   }
 
   async myStanding(deviceId: string, since?: Date): Promise<MyStanding | null> {

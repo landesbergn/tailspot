@@ -155,7 +155,7 @@ struct LeaderboardScreen: View {
 
     private func load(_ window: LeaderboardWindow) async {
         do {
-            let response = try await client.leaderboard(window: window)
+            let response = try await client.leaderboard(window: window, limit: LeaderboardResponse.displayLimit)
             responses[window] = response
             errors[window] = nil
             windowsSupported = response.supportsWindows
@@ -188,6 +188,7 @@ struct LeaderboardScreen: View {
     private func windowList(_ window: LeaderboardWindow) -> some View {
         List {
             if let response = responses[window] {
+                let entries = response.displayedEntries
                 if windowsSupported == true {
                     if window == .week, let champions = response.champions {
                         championSection(champions, window: .week)
@@ -196,17 +197,17 @@ struct LeaderboardScreen: View {
                         championSection(champions, window: .month)
                     }
                 }
-                if response.entries.isEmpty {
+                if entries.isEmpty {
                     emptySection
                 } else {
-                    if response.entries.count >= 3 {
+                    if entries.count >= 3 {
                         Section {
-                            podium(entries: response.entries)
+                            podium(entries: entries)
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
                         }
                     }
-                    rankSection(entries: response.entries)
+                    rankSection(entries: entries, additionalCatchers: response.additionalCatchers)
                     meHintSection(me: response.me)
                 }
             } else if let msg = errors[window] {
@@ -442,17 +443,20 @@ struct LeaderboardScreen: View {
         } ?? "Rank \(rank), empty")
     }
 
-    /// Full ranked list.
+    /// Top 50 public catchers, with the qualifying remainder below the list.
     @ViewBuilder
-    private func rankSection(entries: [LeaderboardEntry]) -> some View {
+    private func rankSection(entries: [LeaderboardEntry], additionalCatchers: Int) -> some View {
         Section {
             ForEach(entries) { entry in
                 leaderRow(entry)
             }
         } footer: {
-            Text("Anonymous global. Handles are public; identities aren't tied to Apple ID.")
-                .font(Brand.Font.caption)
-                .foregroundStyle(Brand.Color.textTertiary)
+            if additionalCatchers > 0 {
+                Text("\(additionalCatchers.formatted(.number)) more \(additionalCatchers == 1 ? "catcher" : "catchers")")
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
         }
     }
 
