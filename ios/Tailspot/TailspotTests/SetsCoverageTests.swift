@@ -212,6 +212,13 @@ struct SetsCoverageTests {
         ("GA8", "Gippsaero", "GA-8 Airvan"),
         ("HROC", "Harmon", "Rocket"),
         ("PA24", "Piper", "PA-24 Comanche"),
+        // Public catalog coverage additions validated 2026-09-29.
+        ("AURA", "Sunward", "SA60 Aurora"),
+        ("E400", "Extra", "EA-400"),
+        ("G2T1", "Great Lakes", "2T-1 Sport"),
+        ("LEG2", "Lancair", "Legacy"),
+        ("T38", "Northrop", "T-38 Talon"),
+        ("TEX2", "Hawker Beechcraft", "3000"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -300,6 +307,12 @@ struct SetsCoverageTests {
             (("GA8", "Gippsaero", "GA-8 Airvan"), "fam-sport-classics", "fsc-airvan"),
             (("HROC", "Harmon", "Rocket"), "fam-sport-classics", "fsc-harmon-rocket"),
             (("PA24", "Piper", "PA-24 Comanche"), "fam-piper", "fpa24"),
+            (("AURA", "Sunward", "SA60 Aurora"), "fam-sport-classics", "fsc-aurora"),
+            (("E400", "Extra", "EA-400"), "fam-sport-classics", "fsc-extra400"),
+            (("G2T1", "Great Lakes", "2T-1 Sport"), "fam-vintage", "fv-great-lakes"),
+            (("LEG2", "Lancair", "Legacy"), "fam-sport-classics", "fsc-lancair-legacy"),
+            (("T38", "Northrop", "T-38 Talon"), "fam-military", "fm-t38"),
+            (("TEX2", "Hawker Beechcraft", "3000"), "fam-military", "fm-texan2"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -445,6 +458,22 @@ struct SetsCoverageTests {
         let twinComanche = mk(("PA30", "Piper", "PA-30 Twin Comanche"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: twinComanche), entry: comancheEntry),
                 "A PA-30 Twin Comanche must not fill the PA-24 Comanche slot")
+
+        // Legacy and Texan names are shared across unrelated aircraft lines.
+        let lancairLegacyEntry = sportSet.entries.first { $0.id == "fsc-lancair-legacy" }!
+        let embraerLegacy = mk(("E35L", "Embraer", "EMB-135BJ Legacy 600"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: embraerLegacy), entry: lancairLegacyEntry),
+                "An Embraer Legacy business jet must not fill the Lancair Legacy slot")
+        let texanIIEntry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-texan2" }!
+        let originalTexan = mk(("T6", "North American", "T-6 Texan"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: originalTexan), entry: texanIIEntry),
+                "The piston T-6 Texan must not fill the turboprop Texan II slot")
+        let texanII = mk(("TEX2", "Hawker Beechcraft", "3000"))
+        let originalTexanEntry = CardSets.families.first { $0.id == "fam-vintage" }!
+            .entries.first { $0.id == "fv-t6" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: texanII), entry: originalTexanEntry),
+                "The TEX2 Texan II must not fill the vintage piston T-6 slot")
 
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
