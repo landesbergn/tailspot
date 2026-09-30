@@ -343,7 +343,20 @@ nonisolated struct LeaderboardChampion: Decodable {
 /// predates windows — the tabs hide entirely and the board renders as the
 /// single all-time board it always was.
 nonisolated struct LeaderboardResponse: Decodable {
+    static let displayLimit = 50
     let entries: [LeaderboardEntry]
+    /// Public catchers with >0 points in this window, before the row limit.
+    /// Optional so older servers still load without an invented count.
+    let totalCatchers: Int?
+
+    var displayedEntries: [LeaderboardEntry] {
+        Array(entries.lazy.filter { $0.points > 0 }.prefix(Self.displayLimit))
+    }
+
+    var additionalCatchers: Int {
+        guard let totalCatchers, totalCatchers > Self.displayLimit else { return 0 }
+        return totalCatchers - Self.displayLimit
+    }
     /// Present when a valid bearer token was sent, even handle-less.
     let me: MyStanding?
     /// "week" | "month" | "all". Absent on the pre-windows backend.
@@ -366,7 +379,9 @@ nonisolated struct LeaderboardResponse: Decodable {
          window: String? = nil,
          resetsAt: String? = nil,
          champions: [LeaderboardChampion]? = nil,
-         monthlyChampions: [LeaderboardChampion]? = nil) {
+         monthlyChampions: [LeaderboardChampion]? = nil,
+         totalCatchers: Int? = nil) {
+        self.totalCatchers = totalCatchers
         self.entries = entries
         self.me = me
         self.window = window

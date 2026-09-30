@@ -4,6 +4,7 @@
  *   GET /v1/leaderboard?window=week|month|all&limit=50   (auth OPTIONAL)
  *     → 200 {
  *         entries:   [{ rank, handle, points, catches }…],   // in-window
+ *         totalCatchers: number, // enabled, named catchers with >0 in-window points
  *         me:        { rank, points, weeklyWins, monthlyWins, everToppedAllTime } | null,
  *         window:    "week" | "month" | "all",
  *         resetsAt:  ISO-8601 of the next boundary | null (all-time),
@@ -116,7 +117,7 @@ export function registerLeaderboardRoute(
       );
     }
 
-    const entries = await catchStore.leaderboard(limit, since);
+    const { entries, totalCatchers } = await catchStore.leaderboard(limit, since);
 
     // Serving the all-time board just computed the all-time #1 — observe it
     // into the topper ledger (first sighting wins) before `me` reads the flag,
@@ -151,6 +152,7 @@ export function registerLeaderboardRoute(
 
     return reply.code(200).send({
       entries,
+      totalCatchers,
       me,
       window,
       resetsAt,
