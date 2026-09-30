@@ -5,6 +5,26 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-29 — Handle sync failures reported (branch `handle-sync-telemetry`)
+
+- A TestFlight tester (blue_hour) got "Claim a handle first" when creating a
+  challenge. Their phone had `blue_hour` from the old shared onboarding
+  chips, but a throwaway install (0 catches, likely App Review) had claimed it
+  on the server on 2026-07-28. `HandleSyncer` hit a 409 on every foreground
+  and only logged it, so they were also missing from the leaderboard for two
+  months. Fixed in prod by clearing the handle on the throwaway device; the
+  tester's app reclaims it on next open.
+- `HandleSyncer` now sends `handle_sync_failed` with `result` = `taken` or
+  `transient` and the `handle` it tried, so stuck devices show up in
+  PostHog. It fires on every foreground a device stays stuck; count distinct
+  persons. The 422 revert keeps its existing `handle_claimed` event.
+- Not a bug: PostHog person `handle` does update on rename. SQL that reads
+  `person.properties.handle` off events gets the value at ingest time
+  (person-on-events), so old events show old names; query the `persons`
+  table for the current one.
+- Still open: challenge create/join sheets gate on the local handle, and a
+  409 is not surfaced to the user in the app.
+
 ## 2026-09-29 — Standings catcher count
 
 - All Time, Weekly, and Monthly show at most 50 positive-point public catchers,
