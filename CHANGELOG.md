@@ -5,6 +5,25 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-30 — Change your handle from Profile (branch `handle-edit-sheet`)
+
+- Tapping the handle (or avatar) on Profile opens a half-height sheet to
+  change it: field prefilled, Save in the top bar, a note that the old
+  handle becomes free for anyone. A small pencil marks the handle as
+  editable. "CLAIM YOUR HANDLE" opens the same sheet in its "Pick a handle"
+  mode instead of pushing Settings. Design picked from three mocks
+  (sheet / inline / pushed screen); no confirm step and no suggestions on
+  "taken" (Noah, 2026-09-30).
+- Settings' SPOTTER section is now one `Handle @x ›` row that opens the same
+  sheet, replacing the always-editable field and Save button.
+- `HandleClaimer` is the one claim round-trip for the sheet and the
+  Challenges claim card, and `HandleRules` the one format check (ASCII only,
+  matching the server). A failed save no longer keeps the new handle on the
+  phone; the old Settings save did, which is one way a device ends up
+  showing a handle the server never recorded.
+- `handle_claimed` gains `source` values `profile` and `settings`, and a
+  `failed` result for network errors.
+
 ## 2026-09-29 — Handle sync failures reported (branch `handle-sync-telemetry`)
 
 - A TestFlight tester (blue_hour) got "Claim a handle first" when creating a
@@ -24,6 +43,7 @@ Git history + PLAN.md §9 remain the authoritative record.
   table for the current one.
 - Still open: challenge create/join sheets gate on the local handle, and a
   409 is not surfaced to the user in the app.
+
 
 ## 2026-09-29 — Standings catcher count
 
