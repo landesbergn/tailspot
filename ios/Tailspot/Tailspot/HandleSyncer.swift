@@ -44,13 +44,20 @@ extension TailspotAccountClient: HandleClaiming {}
 
 @MainActor
 final class HandleSyncer {
+    /// Analytics sink, injectable so tests can assert the failure events
+    /// without swapping the process-global `Analytics._testSink`.
+    typealias Report = (String, [String: AnalyticsValue]) -> Void
+
     private let client: any HandleClaiming
     private let defaults: UserDefaults
+    private let report: Report
 
     init(client: any HandleClaiming = TailspotAccountClient(),
-         defaults: UserDefaults = .standard) {
+         defaults: UserDefaults = .standard,
+         report: @escaping Report = { Analytics.capture($0, $1) }) {
         self.client = client
         self.defaults = defaults
+        self.report = report
     }
 
     /// Claim the locally-chosen handle on the backend if the server hasn't
@@ -80,7 +87,14 @@ final class HandleSyncer {
             // Genuinely held by another device — can't resolve automatically.
             // Leave `confirmed` unset; the user can rename in Settings. A
             // re-attempt next foreground is harmless (a single 409).
+            //
+            // Reported because this used to be log-only: the blue_hour tester
+            // (2026-09-29) sat here for two months, showing @blue_hour locally
+            // while the server had no handle for them, and nothing surfaced it
+            // until challenge creation refused with a 422. The event fires on
+            // every foreground a device stays stuck, so count distinct persons.
             Log.ui.notice("HandleSyncer: handle is taken; cannot auto-claim")
+            report("handle_sync_failed", ["result": .string("taken"), "handle": .string(local)])
         } catch AccountError.handleNotAllowed {
             // The server rejected this handle outright (validation/profanity
             // 422) — retrying can never succeed. This is the legacy-strand
@@ -93,11 +107,12 @@ final class HandleSyncer {
             defaults.set(confirmed ?? SpotterHandle.defaultPlaceholder,
                          forKey: SpotterHandle.storageKey)
             Log.ui.notice("HandleSyncer: handle rejected by server (not allowed); reverted local handle")
-            Analytics.capture("handle_claimed", ["result": .string("not_allowed_reverted")])
+            report("handle_claimed", ["result": .string("not_allowed_reverted")])
         } catch {
             // Transient (offline / 5xx / not-yet-registered). Leave `confirmed`
             // unset so the next foreground retries.
             Log.ui.error("HandleSyncer: claim failed (will retry next foreground): \(error, privacy: .public)")
+            report("handle_sync_failed", ["result": .string("transient"), "handle": .string(local)])
         }
     }
 }
