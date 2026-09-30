@@ -86,6 +86,46 @@ enum RP {
     static let flapUnsettled = Color(hex: 0x6B7886)
 }
 
+/// Shared frame treatment for the live reveal, saved catch, and share render.
+/// Rarity lives on the frames and score ledger; flight details use neutral ink.
+struct CatchRarityBorder: View {
+    let rarity: Rarity
+    let cornerRadius: CGFloat
+    var emphasis: Double = 0.65
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .strokeBorder(RP.rule, lineWidth: 1)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(rarity.tint.opacity(emphasis), lineWidth: 1)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+struct CatchRarityFrame: ViewModifier {
+    let rarity: Rarity
+    let scale: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RP.bg.overlay(alignment: .top) {
+                    LinearGradient(colors: [rarity.tint.opacity(0.09), .clear],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 90 * scale)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.hero))
+            .overlay {
+                CatchRarityBorder(rarity: rarity, cornerRadius: Brand.Radius.hero)
+            }
+            .shadow(color: rarity.tint.opacity(0.08), radius: 8 * scale)
+    }
+}
+
 // MARK: - Split-flap row
 
 struct FlapRow: View {
@@ -408,7 +448,7 @@ func splitUnit(_ s: String?) -> (value: String, unit: String?) {
     return (s, nil)
 }
 
-/// A labelled stat — big monospaced value with a smaller tinted unit suffix.
+/// A labelled stat — big monospaced value with a smaller neutral unit suffix.
 func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) -> some View {
     let parts = splitUnit(raw)
     return VStack(alignment: .leading, spacing: 3 * scale) {
@@ -422,7 +462,7 @@ func statCell(_ label: String, _ raw: String?, scale: CGFloat, accent: Color) ->
             if let unit = parts.unit {
                 Text(unit)
                     .font(.system(size: 12 * scale, weight: .medium, design: .monospaced))
-                    .foregroundColor(accent)
+                    .foregroundStyle(RP.muted)
             }
         }
         .lineLimit(1).minimumScaleFactor(0.6)
@@ -446,7 +486,7 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
         if parts.isEmpty {
             Text(rarity.label.uppercased())
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
-                .tracking(3).foregroundColor(rarity.tint)
+                .tracking(3).foregroundStyle(RP.ink)
         } else {
             Text(parts.joined(separator: " · "))
                 .font(.system(size: 11 * scale, weight: .semibold, design: .monospaced))
@@ -456,7 +496,7 @@ func identityRow(callsign: String?, carrier: String?, rarity: Rarity,
         if isDuplicate {
             Text("· ALREADY CAUGHT")
                 .font(.system(size: 10 * scale, weight: .semibold, design: .monospaced))
-                .tracking(1).foregroundColor(Brand.Color.duplicateRose)
+                .tracking(1).foregroundStyle(RP.muted)
                 .lineLimit(1).fixedSize(horizontal: true, vertical: false)
         }
     }
@@ -467,7 +507,7 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
         Text(label)
             .font(.system(size: (big ? 12 : 11) * scale, weight: big ? .heavy : .regular, design: .monospaced))
             .tracking(big ? 1.5 : 0)
-            .foregroundColor(big ? RP.ink : RP.muted)
+            .foregroundColor(big ? RP.ink : color)
         Spacer()
         Text(amount)
             .font(.system(size: (big ? 24 : 13) * scale, weight: big ? .bold : .semibold, design: .monospaced))
@@ -477,6 +517,23 @@ func ledgerRow(_ label: String, _ amount: String, _ color: Color, _ opacity: Dou
 }
 
 // MARK: - CatchRevealView
+
+/// Lays out its single child at the child's compressed minimum height and
+/// reports THAT size — proposing zero height, the way the reveal's old
+/// `VStack { Spacer; card; Spacer; cta }` column effectively did (see
+/// `CatchRevealView.revealColumn`). Keeps the card pixel-identical to what
+/// shipped while the column around it changes; width passes through.
+nonisolated struct CompressedHeightLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        return child.sizeThatFits(ProposedViewSize(width: proposal.width, height: 0))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: CGPoint(x: bounds.midX, y: bounds.minY), anchor: .top,
+                              proposal: ProposedViewSize(width: bounds.width, height: 0))
+    }
+}
 
 struct CatchRevealView: View {
     let plane: CardPlane
@@ -686,7 +743,7 @@ struct CatchRevealView: View {
                     let bt = bonusStart.map { revClamp(context.date.timeIntervalSince($0) / bonusCountUpDuration) } ?? 0
                     let gt = chipsStart.map { revClamp(context.date.timeIntervalSince($0) / chipPopDuration) }
                         ?? (chipsPhase == .shown ? 1 : 0)
-                    layout(t: t, bt: bt, gt: gt, width: width)
+                    layout(t: t, bt: bt, gt: gt, width: width, height: geo.size.height)
                 }
 
                 // Morph layer for the hero's zoom transition — above the
@@ -745,8 +802,17 @@ struct CatchRevealView: View {
     /// The card's frame fills the space above the CTA and centers its content;
     /// card taps fall through (hit-testing off) to the dismiss catcher behind,
     /// while the CTA captures its own taps.
+    ///
+    /// The card region SCROLLS (`revealColumn`) since 2026-09-06: on an iPhone
+    /// SE (375×667, 647 pt safe area) a three-line name + ledger makes the card
+    /// ~624 pt, and card + CTA (~71 pt) overflowed the column. The overflow
+    /// spilled off the BOTTOM (the GeometryReader top-aligns its child), so the
+    /// CTA was entirely off-screen and a TestFlight tester had "no way to
+    /// proceed". Pinning the CTA below a scroll view keeps it on screen for
+    /// every card height; on a tall phone nothing changes (the card still
+    /// centers, the scroll view never engages).
     @ViewBuilder
-    private func layout(t: Double, bt: Double, gt: Double, width: CGFloat) -> some View {
+    private func layout(t: Double, bt: Double, gt: Double, width: CGFloat, height: CGFloat) -> some View {
         // Map the live bonus-round @State into the immutable per-frame render.
         let render: GuessRender? = liveGuess.map {
             GuessRender(question: $0,
@@ -754,8 +820,7 @@ struct CatchRevealView: View {
                         chipsInLayout: chipsPhase == .shown,
                         popClock: gt)
         }
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
+        revealColumn(height: height, card: {
             // While the chips are up the card holds real controls, so its
             // children must stay exposed to VoiceOver (FlapRow flattens the
             // name itself); at rest the card collapses to a single element
@@ -778,7 +843,7 @@ struct CatchRevealView: View {
                 // margin/chrome taps still fall through to the catcher and
                 // dismiss (or skip-then-dismiss).
                 .allowsHitTesting(chipsPhase == .shown || (settled && zoomablePhotoURL != nil))
-            Spacer(minLength: 0)
+        }, cta: {
             // The streak lives INSIDE the card (the entry-stamp row) since
             // 2026-08-26 — as a free line here it crowded the card's outline
             // on tall cards (the spacers collapse) and packed against the CTA.
@@ -787,8 +852,88 @@ struct CatchRevealView: View {
             ctaRow
                 .opacity(settled ? 1 : 0)
                 .allowsHitTesting(settled)
-                .padding(.top, 26)
-                .padding(.bottom, 30)
+        })
+    }
+
+    /// Vertical padding of the CTA strip, plus its ~15 pt text line — the
+    /// fallback viewport estimate for the first layout pass, before
+    /// `onGeometryChange` reports the real scroll-viewport height.
+    private static let ctaStripPadding: (top: CGFloat, bottom: CGFloat) = (26, 30)
+    private static let ctaStripEstimate: CGFloat = ctaStripPadding.top + 15 + ctaStripPadding.bottom
+
+    /// Measured height of the scroll viewport above the CTA strip; nil until
+    /// the first layout pass reports it. It is the scroll content's MINIMUM
+    /// height, so a card that fits centers exactly as it did in the fixed
+    /// column and only a taller card scrolls.
+    @State private var cardViewportHeight: CGFloat?
+
+    /// The reveal's column: a scrollable card region with the CTA pinned below.
+    /// The dismiss/skip catcher lives in the scroll content's BACKGROUND, so
+    /// the hit-testing contract is unchanged — taps on the margins, and card
+    /// taps while the card is tap-through, reach it; while the card captures
+    /// (chips up / settled photo) only its attached controls fire. The
+    /// full-screen catcher in `body` still covers the CTA strip's own margins.
+    /// Shared by the live `layout` and the DEBUG `_snapshotScreen` so the
+    /// visual-pass renders can't drift from the device layout. `scrolls:
+    /// false` is the snapshot's mirror: ImageRenderer cannot draw UIScrollView-
+    /// backed content (the card came out blank), so the render substitutes a
+    /// top-aligned, clipped frame — exactly what the scroll viewport shows at
+    /// rest, overflow cut at the bottom edge.
+    private func revealColumn<Card: View, CTA: View>(
+        height: CGFloat,
+        scrolls: Bool = true,
+        @ViewBuilder card: () -> Card,
+        @ViewBuilder cta: () -> CTA
+    ) -> some View {
+        let viewport = cardViewportHeight ?? max(0, height - Self.ctaStripEstimate)
+        // The card is laid out through `CompressedHeightLayout` so it takes the
+        // SAME size it always has. The pre-scroll column was
+        // `VStack { Spacer; card; Spacer; cta }`: a VStack offers each child a
+        // share of the remaining space in order of flexibility, so the card
+        // was proposed about a third of the screen and always laid out at its
+        // compressed MINIMUM — route codes/names and the readouts (all
+        // `minimumScaleFactor` text) scaled down — on every device. That is
+        // the card every user has seen; a bare scroll view proposes unbounded
+        // height, which un-squeezes it and made cards that used to fit (a
+        // one-line name on the SE, a two-line one on a 6.1") start scrolling
+        // by a few points. (Whether the design should render at its intended
+        // sizes is a separate call — see the PR.)
+        //
+        // Around it, a min-height frame does what the two Spacers did: a card
+        // that fits is centered; a taller card sets the content height and
+        // scrolls. No padding or Spacers here: under the scroll view's
+        // unbounded proposal even `Spacer(minLength: 0)` reports 8 pt, a
+        // phantom scroll where a card just fits.
+        let content = CompressedHeightLayout { card() }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: viewport)
+            .background {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { advanceOrDismiss() }
+            }
+        return VStack(spacing: 0) {
+            Group {
+                if scrolls {
+                    ScrollView(.vertical) { content }
+                        // No rubber-banding when the card fits — the tall-phone
+                        // reveal must feel exactly as fixed as before the scroll view.
+                        .scrollBounceBehavior(.basedOnSize)
+                } else {
+                    // ImageRenderer mirror (it draws UIScrollView content
+                    // blank): the same content, cut to a CONCRETE viewport
+                    // frame, top-aligned — what the scroll view shows at rest.
+                    // Concrete on purpose: a flexible `maxHeight` frame adopts
+                    // an oversized child instead of clamping it.
+                    content
+                        .frame(height: viewport, alignment: .top)
+                        .clipped()
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardViewportHeight = $0 }
+            cta()
+                .padding(.top, Self.ctaStripPadding.top)
+                .padding(.bottom, Self.ctaStripPadding.bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -972,17 +1117,14 @@ struct CatchRevealView: View {
     @MainActor func _snapshotScreen(
         width: CGFloat, size: CGSize, guessState: GuessSnapshotState? = nil
     ) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
+        revealColumn(height: size.height, scrolls: false, card: {
             card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render)
-            Spacer(minLength: 0)
+        }, cta: {
             // Settled-state chrome, mirrored from `layout` (which gates it
             // on the live `settled` flag this static render never flips).
             // The streak renders inside the card's entry-stamp row.
             ctaRow
-                .padding(.top, 26)
-                .padding(.bottom, 30)
-        }
+        })
         .frame(width: size.width, height: size.height)
         .background(RP.bg)
     }
@@ -1069,8 +1211,8 @@ struct CatchRevealView: View {
                                              focus: livePlane.photoFocus,
                                              enabled: settled))
                     .overlay(
-                        RoundedRectangle(cornerRadius: Brand.Radius.card)
-                            .stroke(accent.opacity(livePlane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
+                        CatchRarityBorder(rarity: livePlane.rarity,
+                                          cornerRadius: Brand.Radius.card, emphasis: 0.55)
                     )
                     // Tap-to-zoom: the settled hero opens the full-res viewer
                     // instead of falling through to the dismiss catcher. The
@@ -1115,7 +1257,7 @@ struct CatchRevealView: View {
                         if isDuplicate {
                             ledgerRow("ALREADY IN HANGAR", "", RP.muted, ss(0.78, 0.86, t), scale: scale)
                         } else {
-                            ledgerRow(livePlane.rarity.label.uppercased(), "+\(base)", RP.muted, ss(0.78, 0.86, t), scale: scale)
+                            ledgerRow(livePlane.rarity.label.uppercased(), "+\(base)", accent, ss(0.78, 0.86, t), scale: scale)
                             if firstOfTypeBonus > 0 {
                                 ledgerRow("FIRST OF TYPE", "+\(firstOfTypeBonus)", RP.gold, ss(0.82, 0.9, t), scale: scale)
                             }
@@ -1126,10 +1268,10 @@ struct CatchRevealView: View {
                             // BONUS" (Noah 2026-07-09; 25% since 2026-08-12).
                             if let render {
                                 if render.resolution?.correct == true, routeBonus > 0 {
-                                    ledgerRow("25% ROUTE BONUS", "+\(routeBonus)", RP.gold, ss(0.0, 0.4, bt), scale: scale)
+                                    ledgerRow("25% ROUTE BONUS", "+\(routeBonus)", RP.muted, ss(0.0, 0.4, bt), scale: scale)
                                 }
                             } else if frozenGuessBonus > 0 {
-                                ledgerRow("25% ROUTE BONUS", "+\(frozenGuessBonus)", RP.gold, ss(0.83, 0.91, t), scale: scale)
+                                ledgerRow("25% ROUTE BONUS", "+\(frozenGuessBonus)", RP.muted, ss(0.83, 0.91, t), scale: scale)
                             }
                         }
                         Rectangle().fill(RP.rule).frame(height: 1)
@@ -1156,15 +1298,13 @@ struct CatchRevealView: View {
                 .padding(.horizontal, hPad)
                 .padding(.bottom, 22 * scale)
             }
-            .background(RP.bg)
             .frame(width: width)
-            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.hero))
-            .overlay(RoundedRectangle(cornerRadius: Brand.Radius.hero).stroke(RP.rule, lineWidth: 1))
+            .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))
         }
     }
 
     // ALT / SPD as a two-column top row, then (when there's route data) a
-    // rule and a full-width ROUTE row: big ICAO codes with a tinted arrow and
+    // rule and a full-width ROUTE row: big ICAO codes with a neutral arrow and
     // the human-readable city names underneath. No route → DIST joins row one.
     //
     // With a bonus round in play, the route slot renders MASKED (the question
@@ -1244,11 +1384,11 @@ struct CatchRevealView: View {
                 if let o = livePlane.originIcao {
                     Text(o).font(codeFont).foregroundColor(RP.ink)
                     if let d = livePlane.destIcao {
-                        Text("→").font(arrowFont).foregroundColor(accent)
+                        Text("→").font(arrowFont).foregroundStyle(RP.muted)
                         Text(d).font(codeFont).foregroundColor(RP.ink)
                     }
                 } else if let d = livePlane.destIcao {
-                    Text("→").font(arrowFont).foregroundColor(accent)
+                    Text("→").font(arrowFont).foregroundStyle(RP.muted)
                     Text(d).font(codeFont).foregroundColor(RP.ink)
                 }
             }

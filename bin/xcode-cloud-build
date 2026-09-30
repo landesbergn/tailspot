@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Start, list, or watch Xcode Cloud builds from the terminal.
+#
+#   bin/xcode-cloud-build                 # start the workflow on main, print the build number
+#   bin/xcode-cloud-build --watch         # ...and poll until it finishes
+#   bin/xcode-cloud-build --list          # show the product, its workflows, and recent runs
+#   bin/xcode-cloud-build --branch fix/x  # start on another branch
+#   bin/xcode-cloud-build --workflow NAME # choose a workflow by name when there is more than one
+#   bin/xcode-cloud-build --dry-run       # resolve ids, POST nothing
+#
+# This replaces the Start Build click in App Store Connect, nothing more.
+# When to cut a build is still a judgment call (CONTRIBUTING.md, Ring 2).
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$here/tools/xcode-cloud/config.sh"
+
+: "${ASC_ISSUER_ID:?set ASC_ISSUER_ID (see tools/xcode-cloud/config.sh)}"
+: "${ASC_KEY_ID:?set ASC_KEY_ID (see tools/xcode-cloud/config.sh)}"
+: "${ASC_KEY_PATH:?set ASC_KEY_PATH (see tools/xcode-cloud/config.sh)}"
+[ -r "$ASC_KEY_PATH" ] || { echo "error: cannot read ASC_KEY_PATH=$ASC_KEY_PATH" >&2; exit 2; }
+
+export ASC_ISSUER_ID ASC_KEY_ID ASC_KEY_PATH TAILSPOT_BUNDLE_ID XCODE_CLOUD_DEFAULT_BRANCH
+exec python3 "$here/tools/xcode-cloud/start_build.py" "$@"

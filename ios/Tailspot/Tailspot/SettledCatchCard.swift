@@ -118,7 +118,7 @@ struct SettledCatchCard: View {
 
                 VStack(spacing: 8 * scale) {
                     Rectangle().fill(RP.rule).frame(height: 1).padding(.top, 4 * scale)
-                    ledgerRow(plane.rarity.label.uppercased(), "+\(base)", RP.muted, 1, scale: scale)
+                    ledgerRow(plane.rarity.label.uppercased(), "+\(base)", accent, 1, scale: scale)
                     if bonus > 0 {
                         ledgerRow("FIRST OF TYPE", "+\(bonus)", RP.gold, 1, scale: scale)
                     }
@@ -133,10 +133,8 @@ struct SettledCatchCard: View {
             // its Planespotters link remains an actionable element.
             .accessibilityElement(children: .combine)
         }
-        .background(RP.bg)
         .frame(width: width)
-        .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.hero))
-        .overlay(RoundedRectangle(cornerRadius: Brand.Radius.hero).stroke(RP.rule, lineWidth: 1))
+        .modifier(CatchRarityFrame(rarity: plane.rarity, scale: scale))
     }
 
     /// The photo hero — its own function, not inline in `body`, both to
@@ -165,13 +163,13 @@ struct SettledCatchCard: View {
             }
         }
         .overlay(
-            RoundedRectangle(cornerRadius: Brand.Radius.card)
-                .stroke(accent.opacity(plane.rarity.ordinal >= Rarity.rare.ordinal ? 0.35 : 0.18), lineWidth: 1)
+            CatchRarityBorder(rarity: plane.rarity,
+                              cornerRadius: Brand.Radius.card, emphasis: 0.55)
         )
     }
 
     // ALT / SPD two-column row, then a rule and the full-width ROUTE row
-    // (display codes — IATA preferred upstream — tinted arrow, city subline);
+    // (display codes — IATA preferred upstream — neutral arrow, city subline);
     // no route → DIST takes the full-width slot. The reveal's dataSection
     // shape, settled.
     @ViewBuilder
@@ -204,11 +202,11 @@ struct SettledCatchCard: View {
                 if let o = plane.originIcao {
                     Text(o).font(codeFont).foregroundColor(RP.ink)
                     if let d = plane.destIcao {
-                        Text("→").font(arrowFont).foregroundColor(accent)
+                        Text("→").font(arrowFont).foregroundStyle(RP.muted)
                         Text(d).font(codeFont).foregroundColor(RP.ink)
                     }
                 } else if let d = plane.destIcao {
-                    Text("→").font(arrowFont).foregroundColor(accent)
+                    Text("→").font(arrowFont).foregroundStyle(RP.muted)
                     Text(d).font(codeFont).foregroundColor(RP.ink)
                 }
             }

@@ -15,13 +15,13 @@ conventions; `PLAN.md` §9 carries what's being built.
 |---|---|---|---|---|
 | 0 | `bin/deploy` | Noah's iPhone | none | redeploy, seconds |
 | 1 | `main` | nobody | PR + green **Unit tests** | revert a commit |
-| 2 | TestFlight | invited testers | manual Start Build | message the testers |
+| 2 | TestFlight | invited testers | `bin/xcode-cloud-build` on `main` | message the testers |
 | 3 | App Store | the public | App Review, 24–48 h | **none — you cannot un-ship** |
 
 ```
 feat branch ─▶ PR (CI green) ─▶ squash-merge to main ─▶ accumulates on main
      │                                                        │
-     │                                    manual Start Build ─▶ Xcode Cloud ─▶ TestFlight  (Ring 2: soak)
+     │                              bin/xcode-cloud-build ─▶ Xcode Cloud ─▶ TestFlight  (Ring 2: soak)
      │                                                                              │
      │                                                        submit for review ────▶ App Store  (Ring 3: public)
      └─▶ bin/deploy to the iPhone   (Ring 0: instant loop, any branch)
@@ -87,8 +87,9 @@ user, so merge freely and often.
 - Update `PLAN.md` §9 and `CHANGELOG.md` **in the feature's PR**, so code and
   docs land together. `CLAUDE.md` changes only when durable guidance changes.
 
-Claude may commit, `bin/deploy`, and merge on green CI autonomously. Claude
-**may not** promote to Ring 2 or Ring 3.
+Claude may commit, `bin/deploy`, merge on green CI, and cut a TestFlight build
+with `bin/xcode-cloud-build` (Ring 2) autonomously. Claude **may not** promote
+to Ring 3.
 
 ## Ring 2 — TestFlight (pre-production soak)
 
@@ -99,10 +100,14 @@ cycle. It is also the only place the app runs on hardware that isn't Noah's
 iPhone 16, which matters — every device-compatibility assumption in this
 codebase has exactly one data point behind it.
 
-To cut a build: App Store Connect → Xcode Cloud → the workflow → **Start
-Build** on `main` (or Xcode: **Integrate → Start Build**). One build → external
-TestFlight, bundling everything merged since the last build, so testers get one
-notification per release rather than one per merge.
+To cut a build: `bin/xcode-cloud-build` from the terminal (`--watch` polls it
+to completion, `--list` shows workflows and recent runs). It needs an App Store
+Connect API key with the **App Manager** role in the gitignored
+`tools/xcode-cloud/config.local.sh` — see `tools/xcode-cloud/config.sh` for the
+three values. The manual routes still work: App Store Connect → Xcode Cloud →
+the workflow → **Start Build** on `main`, or Xcode: **Integrate → Start Build**.
+One build → external TestFlight, bundling everything merged since the last
+build, so testers get one notification per release rather than one per merge.
 
 **Soak before promoting to Ring 3:**
 

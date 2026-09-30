@@ -376,11 +376,14 @@ function getDefaultRects(
         },
       };
     case "device-top":
+      // The phone used to start 10% above the canvas, which clipped the top
+      // of the screen and made a full-screen shot (the reveal) read as cut
+      // off. Keep the whole phone in frame and drop the caption beneath it.
       return {
-        caption: { x: cW * 0.08, y: cH * 0.65, width: capW, height: capH, align: "center" },
+        caption: { x: cW * 0.08, y: cH * 0.78, width: capW, height: capH, align: "center" },
         device: {
           x: (cW - deviceW) / 2,
-          y: -cH * 0.1,
+          y: cH * 0.03,
           width: deviceW,
           height: deviceH,
         },

@@ -108,6 +108,12 @@ class CatchUploader {
         $0.uploadedAt == nil
     }
 
+    /// A row the user deleted since the fetch: deleted-but-unsaved, or saved
+    /// and detached from its context.
+    static func isGone(_ row: Catch) -> Bool {
+        row.isDeleted || row.modelContext == nil
+    }
+
     func uploadPending(context: ModelContext) async {
         let pendingRows: [Catch]
         do {
@@ -131,6 +137,7 @@ class CatchUploader {
         }
 
         var successCount = 0
+        let deletions = CatchDeletionSync()
         // The backend rate-limits catch uploads (token bucket, ~60/min per
         // device). The old loop blasted every pending row straight through, so
         // a backlog backfill drained the bucket in milliseconds, most rows got
@@ -143,6 +150,14 @@ class CatchUploader {
 
         uploadLoop:
         for catchRow in pendingRows {
+            // The sweep awaits the network per row, and a Hangar delete can
+            // land in between. A deleted row must not be uploaded (it would
+            // start counting again), and its properties can't be read.
+            // `isDeleted` alone isn't enough: it is only true between
+            // `delete()` and `save()`, and the delete sites save at once —
+            // after that the model has simply left its context.
+            if Self.isGone(catchRow) { continue }
+            let icao = catchRow.icao24
             // Assign a stable UUID for this catch if it doesn't have one yet.
             if catchRow.serverUuid == nil {
                 catchRow.serverUuid = UUID().uuidString
@@ -155,6 +170,8 @@ class CatchUploader {
             let pose = CatchUploadPose.from(diagnosticsJSON: catchRow.captureDiagnosticsJSON)
 
             while true {
+                // A 429 wait below can outlast a Hangar delete.
+                if Self.isGone(catchRow) || deletions.wasDeleted(uuid) { break }
                 do {
                     let response = try await client.uploadCatch(
                         catchUuid: uuid,
@@ -179,6 +196,13 @@ class CatchUploader {
                         guessKind: catchRow.guessKind,
                         guessValue: catchRow.guessValue
                     )
+                    // Deleted while this POST was in flight: the DELETE may
+                    // have reached the server first (a no-op), so this POST
+                    // just put the catch back. Send the delete again.
+                    if Self.isGone(catchRow) || deletions.wasDeleted(uuid) {
+                        CatchDeletionSync.deleteRemotely([uuid])
+                        break
+                    }
                     // Mark uploaded regardless of duplicate status — both mean
                     // the server has accepted this catch.
                     catchRow.uploadedAt = Date()
@@ -208,7 +232,7 @@ class CatchUploader {
                 } catch {
                     // Non-rate-limit error: leave this row pending and move on.
                     Log.ui.error(
-                        "CatchUploader: upload failed icao=\(catchRow.icao24, privacy: .public) err=\(error, privacy: .public)"
+                        "CatchUploader: upload failed icao=\(icao, privacy: .public) err=\(error, privacy: .public)"
                     )
                     break
                 }

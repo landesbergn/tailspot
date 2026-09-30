@@ -16,6 +16,7 @@
 
 import Foundation
 import Testing
+import UserNotifications
 @testable import Tailspot
 
 // MARK: - AnalyticsValue encoding
@@ -214,6 +215,188 @@ struct AnalyticsFacadeTests {
         withSink { sink in
             Analytics.flush()
             #expect(sink.flushes == 1)
+        }
+    }
+
+    // MARK: - challenge_reminder_scheduled (lives here on purpose)
+
+    // `Analytics._testSink` is process-global, and this suite is the ONE
+    // `.serialized` owner of it — a sink swap from a suite running in
+    // parallel would both lose these events and pollute the assertions
+    // above. So the scheduler's analytics contract is asserted here rather
+    // than in ChallengeReminderSchedulerTests, which never touches the sink.
+
+    /// Async twin of `withSink` — the scheduler's work is `async`.
+    private func withSinkAsync(_ body: (RecordingSink) async -> Void) async {
+        let sink = RecordingSink()
+        let previous = Analytics._testSink
+        defer { Analytics._testSink = previous }
+        Analytics._testSink = sink
+        await body(sink)
+    }
+
+    private static let remindersNow = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @MainActor
+    private func upcomingChallenge(id: String = "c1") -> ChallengeSummary {
+        ChallengeFixtures.summary(
+            id: id, name: "Weekend Flyoff", creator: "noah", code: nil,
+            startsAt: Self.remindersNow.addingTimeInterval(600),
+            endsAt: Self.remindersNow.addingTimeInterval(600 + 3600 * 24),
+            preset: "24h", status: .upcoming, participantCount: 2, isCreator: true)
+    }
+
+    @MainActor
+    private func makeScheduler(_ center: FakeChallengeNotificationCenter) -> ChallengeReminderScheduler {
+        ChallengeReminderScheduler(
+            center: center,
+            defaults: UserDefaults(suiteName: "ChallengeReminderAnalytics.\(UUID().uuidString)")!,
+            now: { Self.remindersNow },
+            timeZone: { .gmt }, registerForRemoteNotifications: {})
+    }
+
+    /// Only this test's own events. `Analytics._testSink` is global, and
+    /// other suites (the scheduler's own, ActivationTelemetry) fire into
+    /// whichever sink happens to be installed — so count events for a
+    /// challenge id no other test uses, never every event in the sink.
+    private func reminderEvents(_ sink: RecordingSink, challengeId: String) -> [RecordingSink.Captured] {
+        sink.captured.filter {
+            $0.event == "challenge_reminder_scheduled"
+                && $0.properties["challenge_id"]?.jsonValue as? String == challengeId
+        }
+    }
+
+    /// The first sync of a challenge schedules its four moments and says so
+    /// once each; a second sync re-upserts the same identifiers and says
+    /// nothing, because nothing new was scheduled.
+    @MainActor
+    @Test func reminderScheduledFiresOncePerIdentifierNotPerSync() async {
+        let id = "analytics-\(UUID().uuidString)"
+        await withSinkAsync { sink in
+            let center = FakeChallengeNotificationCenter()
+            let scheduler = makeScheduler(center)
+
+            await scheduler.sync(open: [upcomingChallenge(id: id)])
+            let first = reminderEvents(sink, challengeId: id)
+            #expect(first.count == 4)
+            #expect(Set(first.compactMap { $0.properties["moment"]?.jsonValue as? String })
+                    == ["starts", "midway", "ending_soon", "finished"])
+
+            await scheduler.sync(open: [upcomingChallenge(id: id)])
+            #expect(reminderEvents(sink, challengeId: id).count == 4, "a re-sync scheduled nothing new")
+        }
+    }
+
+    // MARK: - push_registration_failed (also here, for the sink)
+
+    /// Both stages say which one they are, so "iOS wouldn't give us a
+    /// token" and "the backend wouldn't take it" stop being the same row.
+    @Test func pushFailuresCarryTheirStage() async {
+        await withSinkAsync { sink in
+            let defaults = UserDefaults(suiteName: "PushFailure.\(UUID().uuidString)")!
+            PushFailureReporter.report(stage: .apns, reason: "no network", defaults: defaults)
+            PushFailureReporter.report(stage: .upload, reason: "HTTP 500", defaults: defaults)
+
+            let events = sink.captured.filter { $0.event == PushFailureReporter.eventName }
+            #expect(events.count == 2)
+            #expect(events.map { $0.properties["stage"]?.jsonValue as? String } == ["apns", "upload"])
+            #expect(events.first?.properties["reason"]?.jsonValue as? String == "no network")
+        }
+    }
+
+    /// The APNs stage is throttled to once a local day. Registration fails
+    /// on every launch with no network, and one event per offline app open
+    /// is a graph of how often that person opened the app in a tunnel.
+    @Test func theApnsStageReportsOncePerDay() async {
+        await withSinkAsync { sink in
+            let defaults = UserDefaults(suiteName: "PushFailure.\(UUID().uuidString)")!
+            let monday = Date(timeIntervalSince1970: 1_800_000_000)
+
+            #expect(PushFailureReporter.report(
+                stage: .apns, reason: "offline", defaults: defaults, now: monday))
+            // Three more launches the same day, all silent.
+            for hour in 1...3 {
+                #expect(PushFailureReporter.report(
+                    stage: .apns, reason: "offline", defaults: defaults,
+                    now: monday.addingTimeInterval(Double(hour) * 3600)) == false)
+            }
+            // Tomorrow it speaks again.
+            #expect(PushFailureReporter.report(
+                stage: .apns, reason: "offline", defaults: defaults,
+                now: monday.addingTimeInterval(86_400 * 2)))
+
+            #expect(sink.captured.filter { $0.event == PushFailureReporter.eventName }.count == 2)
+        }
+    }
+
+    /// The upload stage is NOT throttled: it only runs when there is a
+    /// genuinely new token to send, which is rare, and losing one of those
+    /// would hide a real backend failure.
+    @Test func theUploadStageIsNotThrottled() async {
+        await withSinkAsync { sink in
+            let defaults = UserDefaults(suiteName: "PushFailure.\(UUID().uuidString)")!
+            let monday = Date(timeIntervalSince1970: 1_800_000_000)
+            for _ in 0..<3 {
+                #expect(PushFailureReporter.report(
+                    stage: .upload, reason: "HTTP 500", defaults: defaults, now: monday))
+            }
+            #expect(sink.captured.filter { $0.event == PushFailureReporter.eventName }.count == 3)
+        }
+    }
+
+    @Test func theApnsThrottleRuleIsPure() {
+        #expect(PushFailureReporter.shouldReportAPNsFailure(dayKey: "2026-09-26", lastReported: nil))
+        #expect(!PushFailureReporter.shouldReportAPNsFailure(
+            dayKey: "2026-09-26", lastReported: "2026-09-26"))
+        #expect(PushFailureReporter.shouldReportAPNsFailure(
+            dayKey: "2026-09-27", lastReported: "2026-09-26"))
+    }
+
+    /// A reminder iOS REFUSED is not a reminder that was scheduled. The
+    /// event used to fire before `add`, so a full 64-request pool produced
+    /// a clean-looking count of notifications that do not exist.
+    @MainActor
+    @Test func reminderScheduledDoesNotFireWhenTheAddIsRefused() async {
+        struct PoolFull: Error {}
+        let id = "analytics-\(UUID().uuidString)"
+        await withSinkAsync { sink in
+            let center = FakeChallengeNotificationCenter()
+            center.addError = PoolFull()
+            let scheduler = makeScheduler(center)
+
+            await scheduler.sync(open: [upcomingChallenge(id: id)])
+
+            #expect(center.added.isEmpty)
+            #expect(reminderEvents(sink, challengeId: id).isEmpty,
+                    "a refused add must not report a scheduled reminder")
+
+            // And once iOS accepts them, the events arrive as normal.
+            center.addError = nil
+            await scheduler.sync(open: [upcomingChallenge(id: id)])
+            #expect(reminderEvents(sink, challengeId: id).count == 4)
+        }
+    }
+
+    /// Two syncs racing each other — Settings' toggle re-sync against a
+    /// foreground refresh, or a create against the permission ask that
+    /// follows it. The scheduler serializes them, so the second one reads a
+    /// pending list that already contains the first one's reminders and
+    /// fires nothing. With a slow `add` and no serialization this reported
+    /// six scheduled reminders for three notifications.
+    @MainActor
+    @Test func overlappingSyncsDoNotDoubleReportScheduledReminders() async {
+        let id = "analytics-\(UUID().uuidString)"
+        await withSinkAsync { sink in
+            let center = FakeChallengeNotificationCenter()
+            center.addDelayNanoseconds = 20_000_000   // 20 ms per add
+            let scheduler = makeScheduler(center)
+
+            async let a: Void = scheduler.sync(open: [upcomingChallenge(id: id)])
+            async let b: Void = scheduler.sync(open: [upcomingChallenge(id: id)])
+            _ = await (a, b)
+
+            #expect(reminderEvents(sink, challengeId: id).count == 4)
+            #expect(Set(center.pending.map(\.identifier)).count == 4)
         }
     }
 }

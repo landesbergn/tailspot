@@ -119,13 +119,14 @@ struct ProfileScreen: View {
                     // aligned like its Done sibling, hit target included.
                     // A direct ShareLink, deliberately minimal (Noah,
                     // 2026-07-08): one tap → the system share sheet with a
-                    // short invite + the App Store link. Messages inflates
-                    // the standalone link into one rich store-listing
-                    // bubble — the whole message, by design; a rendered
-                    // stat-card image was tried and cut as too much.
+                    // short invite with the claimed username + the App Store
+                    // link. Messages renders the link as a rich store-listing
+                    // bubble and keeps the username in the accompanying text.
                     ShareLink(
                         item: Self.inviteURL,
-                        message: Text("Join me on Tailspot:")
+                        message: isHandleClaimed
+                            ? Text("Join me on Tailspot! My username is @\(handle).")
+                            : Text("Join me on Tailspot:")
                     ) {
                         Image(systemName: "square.and.arrow.up")
                             .fontWeight(.bold)
@@ -713,31 +714,65 @@ struct ProfileScreen: View {
 
     // "Sets" deliberately absent: the Hangar's default segment IS Sets, so
     // the quick card was a duplicate door (Noah, 2026-07-08).
+    /// Map and Challenges. Leaders left this row on 2026-09-15 when it
+    /// moved to the catch screen's bottom bar (Challenges phase 0); the
+    /// Challenges tile took its place (phase 2). It carries a count badge
+    /// of the challenges you're in (live + upcoming) — it used to carry the
+    /// headline as a subtitle, which didn't fit the tile (2026-09-27). The
+    /// tile exists
+    /// only once the server config has said the feature is available on
+    /// this build; before that (feature not deployed, kill switch on,
+    /// build too old, config unreachable) Map stands alone rather than a
+    /// tile opening onto an error.
     private var quickLinks: some View {
+        // `fixedSize(vertical:)` + `maxHeight: .infinity` on each tile makes
+        // both as tall as the taller one, so Map doesn't sit short next to
+        // a Challenges tile with a subtitle.
         HStack(spacing: 10) {
             quickLink(label: "Map", glyph: "map") { MapScreen() }
-            quickLink(label: "Leaders", glyph: "list.number") { LeaderboardScreen() }
+            if let challenges, challenges.verdict == .available {
+                quickLink(label: "Challenges", glyph: "flag.checkered", badge: challenges.activeCount) {
+                    ChallengesHub(source: "profile_tile")
+                }
+            }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func quickLink<Dest: View>(label: String, glyph: String, @ViewBuilder destination: @escaping () -> Dest) -> some View {
+    /// Optional: nil in the snapshot harness and previews (nothing injects
+    /// it there), so the tile renders its cold-state copy instead of crashing.
+    @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
+
+    private func quickLink<Dest: View>(label: String, glyph: String, badge: Int = 0,
+                                       @ViewBuilder destination: @escaping () -> Dest) -> some View {
         NavigationLink {
             destination()
         } label: {
             VStack(spacing: 6) {
+                // A fixed slot so glyphs of different shapes (map vs flag)
+                // land at the same size and baseline.
                 Image(systemName: glyph)
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Brand.Color.cyan)
+                    .frame(width: 28, height: 24)
+                    .overlay(alignment: .topTrailing) {
+                        if badge > 0 {
+                            ChallengeCountBadge(count: badge)
+                                .offset(x: 10, y: -7)
+                        }
+                    }
                     .accessibilityHidden(true)
                 Text(label)
                     .font(Brand.Font.caption.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 14)
             .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(badge > 0 ? "\(badge) active" : "")
     }
 
     // MARK: - Section links (reference / settings)
@@ -831,7 +866,12 @@ struct ProfileStats {
 
 // MARK: - Spotter handle (stored)
 
-enum SpotterHandle {
+// `nonisolated`: the project's default actor isolation is MainActor, which
+// would make these three string constants MainActor-only. `Analytics` is a
+// `nonisolated enum` and reads them off-main when decorating events, so
+// isolating them buys nothing and costs two build warnings. Immutable
+// `let` Strings are Sendable; there is nothing to protect.
+nonisolated enum SpotterHandle {
     static let storageKey = "tailspot.spotter.handle"
     /// The handle value the backend has confirmed for THIS device. Written by
     /// the claim paths (onboarding/Settings) on success and by `HandleSyncer`.

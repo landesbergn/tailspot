@@ -170,8 +170,8 @@ struct HangarRestoreTests {
 
     @Test func zeroSlantRendersAsUnknownNotZeroKm() {
         // The display seam for the 0 sentinel: cards show "—", never "0.0 km".
-        #expect(CardPlane.distText(fromMeters: 0) == nil)
-        #expect(CardPlane.distText(fromMeters: 12_000) == "12.0 km")
+        #expect(CardPlane.distText(fromMeters: 0, unit: .kilometers) == nil)
+        #expect(CardPlane.distText(fromMeters: 12_000, unit: .kilometers) == "12.0 km")
         let plane = CardPlane(catchRecord: HangarRestore.makeCatch(from: fullRow()))
         #expect(plane.distText == nil)
     }
@@ -196,6 +196,20 @@ struct HangarRestoreTests {
             existingServerUuids: []
         )
         #expect(planned.count == 2)
+    }
+
+    /// A catch the user deleted whose server DELETE hasn't landed yet must
+    /// not be restored back into the Hangar.
+    @Test func insertRestoredSkipsDeletedCatches() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let inserted = HangarRestore.insertRestored(
+            [fullRow(), bareRow()], into: context,
+            deleted: ["11111111-1111-4111-8111-111111111111"])
+        try context.save()
+        #expect(inserted == 1)
+        let left = try context.fetch(FetchDescriptor<Catch>())
+        #expect(left.map(\.serverUuid) == ["22222222-2222-4222-8222-222222222222"])
     }
 
     @Test func reRunningInsertRestoredInsertsNothing() throws {

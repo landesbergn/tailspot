@@ -11,6 +11,13 @@ import os
 
 @main
 struct TailspotApp: App {
+    /// The UIKit application delegate, purely for APNs device-token
+    /// registration (see AppDelegate.swift — SwiftUI has no equivalent of
+    /// `didRegisterForRemoteNotificationsWithDeviceToken`). The adaptor
+    /// creates one instance and keeps it alive for the process; the SwiftUI
+    /// lifecycle below is unaffected.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     /// The SwiftData persistence container for `Catch` rows. Created
     /// once at app launch and injected into the view hierarchy via
     /// `.modelContainer(_:)`. Views read it via `@Environment(\.modelContext)`
@@ -37,6 +44,17 @@ struct TailspotApp: App {
     /// app-level), handed to the delegate in `init` and injected into the
     /// environment for `ContentView` to observe.
     private let streakToastRelay = StreakToastRelay()
+    /// One Challenges model for the whole app (see ChallengesAppModel.make).
+    /// `@State` in an App is how SwiftUI keeps one instance alive for the
+    /// scene's lifetime; the property is read from `body` and the
+    /// scene-phase handler.
+    /// Built in `init` rather than inline (`= ChallengesAppModel.make()`) so
+    /// the notification delegate can be handed the very same instance before
+    /// launch finishes — a cold-start tap on a challenge notification is
+    /// delivered before any view exists, and a delegate with no model would
+    /// drop it. `_challenges = State(initialValue:)` is how you seed a
+    /// SwiftUI `@State` from an initializer.
+    @State private var challenges: ChallengesModel
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -79,6 +97,12 @@ struct TailspotApp: App {
         // iOS. It decides foreground presentation (silent on the camera,
         // banner elsewhere) and relays the tap line back to the view.
         StreakReminderCenter.shared.toastRelay = streakToastRelay
+        // The same delegate routes a tapped CHALLENGE notification (local
+        // reminder or remote push) to the challenges model — one process,
+        // one `UNUserNotificationCenterDelegate`, so it carries both jobs.
+        let challengesModel = ChallengesAppModel.make()
+        _challenges = State(initialValue: challengesModel)
+        StreakReminderCenter.shared.challenges = challengesModel
         UNUserNotificationCenter.current().delegate = StreakReminderCenter.shared
         // A timezone change moves "today" and the 18:00 target — recompute
         // the pending reminder against the new zone (frozen per-catch day
@@ -105,6 +129,11 @@ struct TailspotApp: App {
             RootView()
                 .modelContainer(container)
                 .environment(streakToastRelay)
+                // The app-wide Challenges model (phase 2). Sheets and
+                // pushes inherit the environment from the presenting view,
+                // so injecting it once here reaches the Profile tile, the
+                // Leaders flag and strip, and every Challenges screen.
+                .environment(challenges)
                 // The app is locked to dark (Noah, 2026-07-10 polish
                 // sweep): the Brand palette is a fixed dark HUD and every
                 // light-mode rendering of it is a bug, not a mode.
@@ -116,6 +145,22 @@ struct TailspotApp: App {
                 // (`scrollContentBackground(.hidden)` + Brand backgrounds)
                 // stay as belt-and-suspenders.
                 .preferredColorScheme(.dark)
+                // Challenge invite links — https://tailspot.app/c/CODE.
+                // Explain-as-we-go: a universal link can reach the app two
+                // ways. A COLD launch hands it to the scene as a user
+                // activity (`NSUserActivityTypeBrowsingWeb`); a tap while
+                // the app is already running arrives through `onOpenURL`.
+                // SwiftUI routes most cases to `onOpenURL`, but not all of
+                // them, so both are wired to the same handler — it's
+                // idempotent (parking the same code twice is a no-op in
+                // effect), and missing one of the two is the classic
+                // "works from Notes, not from Messages on a cold start".
+                // Anything that isn't an invite link is ignored, which is
+                // what keeps this from swallowing future URL types.
+                .onOpenURL { url in handleIncoming(url) }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL { handleIncoming(url) }
+                }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -140,14 +185,47 @@ struct TailspotApp: App {
                     // without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
+                    // Retry any Hangar deletes that didn't reach the server —
+                    // in its own Task, so a slow network can't hold up the
+                    // reminder re-plan and challenge refresh below.
+                    Task { await CatchDeletionSync().drain() }
                     // Streak reminder re-plan on every foreground: repairs
                     // whatever the last run couldn't know (a day rolled over,
                     // permission changed in iOS Settings, a force-kill raced
                     // the post-catch sync). Cheap — one Hangar fetch + a pure
                     // decision — and idempotent like the two steps above.
                     await StreakReminderCenter.shared.sync(context: ctx)
+                    // Challenges: config first (kill switch, min build),
+                    // then my open + finished challenges, which also
+                    // re-plans the local challenge reminders. Both are
+                    // best-effort; the screens render their own error
+                    // states when these fail.
+                    await challenges.refreshConfig()
+                    if challenges.isAvailable {
+                        await challenges.refreshList()
+                    }
                 }
             }
         }
+    }
+
+    /// Parse an incoming URL as a challenge invite and park the code on
+    /// the app-wide model. Everything after this — which screen to show,
+    /// or which "no" to say — is `ChallengesModel.inviteRoute` and
+    /// `ChallengeInviteRouter`; the App layer only decides whether the URL
+    /// is ours at all.
+    ///
+    /// `challenge_invite_opened` is NOT fired here on the happy path: the
+    /// join sheet already fires it with the challenge id and the
+    /// joinability status once the preview comes back (spec §12, `via:
+    /// universal_link`), and two events per link would double-count the
+    /// funnel. The blocked routes fire it from the router, where they're
+    /// the only signal that link ever existed.
+    private func handleIncoming(_ url: URL) {
+        guard let code = InviteCode.parse(url: url) else {
+            Log.ui.notice("Ignoring URL that isn't a challenge invite")
+            return
+        }
+        Task { await challenges.openInvite(code: code) }
     }
 }

@@ -9,6 +9,9 @@
 //    REMINDERS — the streak-protection mute toggle (StreakReminders.swift),
 //                with an honest permission-denied state that routes to iOS
 //                Settings and heals on return.
+//    UNITS     — altitude (ft / m), speed (kt / mph / km/h) and distance
+//                (km / mi) pickers bound to UnitPreferences; every card
+//                re-formats live.
 //    ABOUT     — legal links (Privacy Policy, Terms, Attributions —
 //                ODbL attribution for adsb.lol data is a licence
 //                obligation), data-source credits, plus the tap-to-copy
@@ -25,6 +28,11 @@ struct SettingsScreen: View {
     /// Streak-protection reminders (default ON; muting cancels any pending
     /// nudge on the next sync below). Key shared with StreakReminderCenter.
     @AppStorage(StreakReminders.enabledKey) private var streakRemindersEnabled = true
+    @AppStorage(ChallengeReminderScheduler.enabledKey) private var challengeRemindersEnabled = true
+    /// Display units. `@Bindable` is Observation's binding bridge — the
+    /// pickers write straight into the shared preference (which persists to
+    /// UserDefaults itself), and every card reading it re-renders.
+    @Bindable private var units = UnitPreferences.shared
 
     @State private var handleDraft: String = ""
     @State private var handleTakenError: String? = nil
@@ -35,6 +43,10 @@ struct SettingsScreen: View {
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    /// Optional: Settings renders in snapshot harnesses and previews with no
+    /// Challenges model in the environment. `@Environment(Type.self)` with an
+    /// optional type is Observation's "inject it if it's there" form.
+    @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
     private let accountClient = TailspotAccountClient()
 
     #if DEBUG
@@ -158,6 +170,18 @@ struct SettingsScreen: View {
                 // Denied → the toggle alone goes inert (`.disabled` on the
                 // whole row would also kill the recovery path below).
                 .disabled(notifDenied)
+                // Challenge reminders (2026-09-15): starts, ending soon,
+                // finished — local notifications planned by
+                // ChallengeReminderScheduler. Shares the streak toggle's
+                // authorization state; its own on/off key.
+                Toggle(isOn: $challengeRemindersEnabled) {
+                    Text("Challenges")
+                        .foregroundStyle(notifDenied
+                                         ? Brand.Color.textTertiary
+                                         : Brand.Color.textPrimary)
+                }
+                .tint(Brand.Color.cyan)
+                .disabled(notifDenied)
                 if notifDenied {
                     Button {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -185,8 +209,23 @@ struct SettingsScreen: View {
                     .textCase(nil)
             } footer: {
                 Text(notifDenied
-                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges."
-                     : "Get notified if your streak is at risk.")
+                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges and challenge reminders."
+                     : "Get notified if your streak is at risk, and when a challenge starts, is about to end, or finishes.")
+            }
+            .listRowBackground(Brand.Color.bgElevated)
+
+            // MARK: UNITS
+
+            Section {
+                unitRow("Altitude", selection: $units.altitude, accessibilityLabel: "Altitude unit")
+                unitRow("Speed", selection: $units.speed, accessibilityLabel: "Speed unit")
+                unitRow("Distance", selection: $units.distance, accessibilityLabel: "Distance unit")
+            } header: {
+                Text("UNITS")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
             }
             .listRowBackground(Brand.Color.bgElevated)
 
@@ -262,6 +301,23 @@ struct SettingsScreen: View {
                 await StreakReminderCenter.shared.sync(context: modelContext)
             }
         }
+        // Same shape as the streak toggle above — it was the only one of the
+        // two that asked for permission or re-planned, so switching
+        // Challenges on did nothing until the next foreground, and switching
+        // it off left already-scheduled reminders to fire.
+        .onChange(of: challengeRemindersEnabled) { _, enabled in
+            Task { @MainActor in
+                if enabled,
+                   await StreakReminderCenter.shared.authorizationStatus() == .notDetermined {
+                    _ = await StreakReminderCenter.shared.requestPermission()
+                    await refreshNotifStatus()
+                }
+                // ON re-plans every open challenge; OFF makes the wanted set
+                // empty, so the sync removes every pending challenge
+                // reminder immediately.
+                challenges?.resyncReminders()
+            }
+        }
     }
 
     /// Re-read the system permission (or the snapshot harness override).
@@ -323,6 +379,48 @@ struct SettingsScreen: View {
             Log.ui.error("Settings: handle claim failed (non-fatal): \(error, privacy: .public)")
             handle = trimmed
             handleTakenError = nil
+        }
+    }
+
+    // MARK: - Unit row
+
+    /// "Altitude   [ ft | m ]" — a label with a trailing segmented picker.
+    /// Generic over the unit enum so both rows share one construction; the
+    /// picker's own label is hidden (the row text is the label) and the
+    /// accessibility name is supplied explicitly so VoiceOver still announces
+    /// what the control changes.
+    @ViewBuilder
+    private func unitRow<U: CaseIterable & Identifiable & Hashable>(
+        _ title: String,
+        selection: Binding<U>,
+        accessibilityLabel: String
+    ) -> some View where U.AllCases: RandomAccessCollection {
+        HStack {
+            Text(title)
+                .foregroundStyle(Brand.Color.textPrimary)
+            Spacer()
+            Picker(title, selection: selection) {
+                ForEach(U.allCases) { unit in
+                    Text(unitSymbol(unit))
+                        .font(Brand.Font.mono(size: 13, weight: .semibold, relativeTo: .footnote))
+                        .tag(unit)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            // Segments size to their longest label; cap the control so the
+            // row title keeps its space on narrow phones.
+            .frame(maxWidth: U.allCases.count > 2 ? 190 : 130)
+            .accessibilityLabel(accessibilityLabel)
+        }
+    }
+
+    private func unitSymbol<U>(_ unit: U) -> String {
+        switch unit {
+        case let u as AltitudeUnit: u.symbol
+        case let u as SpeedUnit: u.symbol
+        case let u as DistanceUnit: u.symbol
+        default: "\(unit)"
         }
     }
 

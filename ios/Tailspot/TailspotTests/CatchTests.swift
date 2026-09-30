@@ -455,9 +455,27 @@ struct CatchTests {
             altitudeMeters: 152.4,   // exactly 500 ft
             velocityMps: 102.889     // exactly 200 kt
         )
+        // `init(catchRecord:)` formats in the Settings → UNITS choice; pin the
+        // shared preference for the assertion and restore it after.
+        let prefs = UnitPreferences.shared
+        let (savedAlt, savedSpd) = (prefs.altitude, prefs.speed)
+        defer { prefs.altitude = savedAlt; prefs.speed = savedSpd }
+        let savedDist = prefs.distance
+        defer { prefs.distance = savedDist }
+        prefs.altitude = .feet
+        prefs.speed = .knots
+        prefs.distance = .kilometers
         let plane = CardPlane(catchRecord: c)
         #expect(plane.altText == "500 ft")
         #expect(plane.speedText == "200 kt")
+        #expect(plane.distText == "8.3 km")
+        prefs.altitude = .meters
+        prefs.speed = .kph
+        prefs.distance = .miles
+        let metric = CardPlane(catchRecord: c)
+        #expect(metric.altText == "152 m")
+        #expect(metric.speedText == "370 km/h")
+        #expect(metric.distText == "5.2 mi")
     }
 
     @Test func cardPlaneShowsNilStatsForLegacyRows() {

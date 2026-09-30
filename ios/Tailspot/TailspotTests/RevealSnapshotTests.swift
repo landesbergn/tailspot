@@ -62,6 +62,15 @@ struct RevealSnapshotTests {
                 callsign: "N4521C", model: nil, carrier: "Private",
                 rarity: .common, type: .ga,
                 altText: "3,609 ft", speedText: "101 kt", distText: "3.8 km")),
+            // Settings → UNITS = m + mph, through the real converters.
+            ("a220_route_metric_units", CardPlane(
+                callsign: "JBU613", model: "Airbus A220-300", carrier: "JetBlue",
+                rarity: .uncommon, type: .narrow,
+                altText: CardPlane.altText(fromMeters: 10_800, unit: .meters),
+                speedText: CardPlane.speedText(fromMps: 232, unit: .mph),
+                distText: "14.5 km",
+                originIcao: "KBOS", destIcao: "KSFO",
+                originName: "Boston Logan", destName: "San Francisco")),
         ]
 
         // Render the FULL screen (card + CTA) at iPhone size so card↔CTA
@@ -74,6 +83,31 @@ struct RevealSnapshotTests {
             let renderer = ImageRenderer(content: view)
             renderer.scale = 3
             // Pure side-effect harness — never fail CI over a render/write hiccup.
+            guard let img = renderer.uiImage, let data = img.pngData() else { continue }
+            try? data.write(to: dir.appendingPathComponent("\(name).png"))
+        }
+
+        // SHORT SCREENS (TestFlight, 2026-09-06): an iPhone SE 3rd-gen tester
+        // (375×667, safe area 375×647) saw a three-line-name card with NO
+        // "tap to continue / View in Hangar" row — the card + CTA overflowed
+        // the height and the CTA was pushed off the bottom, leaving her
+        // "no way to proceed". Render the same card at the SE's safe-area
+        // size so the CTA strip's presence is part of the visual pass.
+        let se = CGSize(width: 375, height: 647)
+        let seCases: [(String, CardPlane, Int?)] = [
+            ("se_bell206_threeLineName", CardPlane(
+                callsign: "N217MH", model: "Bell 206 JetRanger / LongRanger", carrier: "Private",
+                rarity: .uncommon, type: .ga,
+                altText: "1,975 ft", speedText: "65 kt", distText: "0.6 km"), 1),
+            ("se_c17_twoLineName_firstOfType", cases[2].1, 3),
+            ("se_a220_oneLineName", cases[0].1, nil),
+        ]
+        for (name, plane, streak) in seCases {
+            var reveal = CatchRevealView(plane: plane, entryNumber: 4, onDismiss: {}, onViewInHangar: {})
+            reveal.streakDays = streak
+            let view = reveal._snapshotScreen(width: min(se.width - 28, 420), size: se)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
             guard let img = renderer.uiImage, let data = img.pngData() else { continue }
             try? data.write(to: dir.appendingPathComponent("\(name).png"))
         }

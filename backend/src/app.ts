@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
 import Fastify, { type FastifyInstance } from "fastify";
+import {
+  DrizzleOvertakenStore,
+  type OvertakenStore,
+  type OvertakenSummary,
+  evaluateOvertaken,
+} from "./challenges/overtaken.js";
+import { PrivatePointsScorer } from "./challenges/scorer.js";
+import { type ChallengeStore, DrizzleChallengeStore } from "./challenges/store.js";
 import { getDb } from "./db/client.js";
 import { RateLimiter } from "./identity/rateLimiter.js";
 import {
@@ -17,10 +25,13 @@ import {
 } from "./providers/adsblolRoutes.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
+import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
+import { type ChallengesAvailability, registerChallengesRoutes } from "./routes/challenges.js";
 import { registerDevicesRoutes } from "./routes/devices.js";
 import { registerHandlesRoute } from "./routes/handles.js";
+import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerLeaderboardRoute } from "./routes/leaderboard.js";
 import { registerMetadataRoute } from "./routes/metadata.js";
 import { registerRoutesRoute } from "./routes/routes.js";
@@ -78,6 +89,43 @@ export interface BuildAppOptions {
   catchStore?: CatchStore;
   /** Injectable clock (unix seconds) for deterministic catch-validation tests. */
   nowSeconds?: () => number;
+  /** Challenge store override (tests inject a PGlite-backed store). Lazily built over Postgres in prod. */
+  challengeStore?: ChallengeStore;
+  /**
+   * Challenges feature flag (spec §11.2 kill switch). Production reads
+   * `CHALLENGES_ENABLED === "true"` once at build time; tests pass a function
+   * so a suite can flip it mid-run. When off, every challenge route except
+   * GET /v1/challenges/config answers 404.
+   */
+  challengesEnabled?: () => boolean;
+  /**
+   * What GET /v1/challenges/config reports. Production: `CHALLENGES_AVAILABILITY`
+   * ("testflight" | "public", default "testflight") and `CHALLENGES_MIN_BUILD`
+   * (default 0). Tests override.
+   */
+  challengesConfig?: { availability: ChallengesAvailability; minBuild: number };
+  /**
+   * APNs transport override (tests inject a fake that records payloads).
+   * Production builds one from APNS_* env; absent credentials yield a no-op
+   * transport that logs "push disabled" once at startup.
+   */
+  apnsTransport?: ApnsTransport;
+  /**
+   * Overtaken-detection store override (tests inject a PGlite-backed one).
+   * Production wraps the same Postgres handle + challenge store.
+   */
+  overtakenStore?: OvertakenStore;
+  /**
+   * How post-reply work (the overtaken evaluation) is deferred. Production uses
+   * `setImmediate`; tests pass a collector so the after-reply work can be run
+   * and awaited deterministically instead of slept on.
+   */
+  scheduleAfterReply?: (task: () => void) => void;
+  /**
+   * Called synchronously with the promise of each scheduled overtaken
+   * evaluation, so a test can await it. Production leaves it undefined.
+   */
+  onOvertakenEvaluation?: (evaluation: Promise<OvertakenSummary>) => void;
   /** Injectable clock (unix ms) for the rate limiters (tests pass a fake). */
   rateLimitNow?: () => number;
   /**
@@ -210,6 +258,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const registerLimiter = new RateLimiter({ capacity: 20, windowMs: 60_000 }, rlNow); // 20/min per IP
   const handleLimiter = new RateLimiter({ capacity: 5, windowMs: 60_000 }, rlNow); // 5/min per device
   const catchLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per device
+  // Hangar deletes: their own bucket so a bulk delete can't starve uploads.
+  const catchDeleteLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per device
   const suggestLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
   // 120/min per IP on the position poll. The client polls every 10 s normally
   // and every 2 s when data-starved (30/min worst case per phone), so this is
@@ -229,6 +279,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // by PUT /v1/devices/me/handle, GET /v1/catches and POST /v1/catches; the
   // per-device limiters still apply after auth.
   const bearerIpLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
+  // Challenges (spec §10.3). Per-device limits are abuse ceilings, not product
+  // limits (D15: no cap on how many challenges a person creates or joins).
+  const challengeCreateLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow); // 30/h per device
+  const challengeReadLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per device
+  const challengeMutateLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow); // 30/h per device
+  // Invite-code lookups: per IP, BEFORE any token or DB read — this limiter is
+  // what makes a 40-bit code unguessable in practice.
+  const inviteIpLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
+  const challengeConfigIpLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per IP
+  // Push-token registration: 30/h per device, the same ceiling as the other
+  // per-device mutations. The honest client calls it once per launch at most
+  // (APNs hands back the same token until the app is reinstalled).
+  const pushTokenLimiter = new RateLimiter({ capacity: 30, windowMs: 3_600_000 }, rlNow);
 
   // ── Routes ────────────────────────────────────────────────────────────────
 
@@ -384,6 +447,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     findByTokenHash: (h) => getIdentityStore().findByTokenHash(h),
     claimHandle: (id, h) => getIdentityStore().claimHandle(id, h),
     takenHandles: (hs) => getIdentityStore().takenHandles(hs),
+    setPushToken: (id, t, e, n) => getIdentityStore().setPushToken(id, t, e, n),
+    clearPushToken: (id) => getIdentityStore().clearPushToken(id),
   };
   const catchesStore: CatchStore = {
     resolveRarity: (icao) => getCatchStore().resolveRarity(icao),
@@ -391,6 +456,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     isFirstOfType: (deviceId, typecode) => getCatchStore().isFirstOfType(deviceId, typecode),
     insertOrGet: (c) => getCatchStore().insertOrGet(c),
     listCatches: (id, limit, offset) => getCatchStore().listCatches(id, limit, offset),
+    deleteCatch: (id, catchUuid) => getCatchStore().deleteCatch(id, catchUuid),
     leaderboard: (n, since) => getCatchStore().leaderboard(n, since),
     myStanding: (id, since) => getCatchStore().myStanding(id, since),
     ensureWeeksDecided: (now) => getCatchStore().ensureWeeksDecided(now),
@@ -404,7 +470,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     countCatches: () => getCatchStore().countCatches(),
   };
 
-  registerDevicesRoutes(app, { store: identity, registerLimiter, handleLimiter, bearerIpLimiter });
+  // The catch-validation clock, hoisted: several routes below turn it into a
+  // Date so their timestamps are deterministic under test.
+  const injectedNowSeconds = options.nowSeconds;
+  registerDevicesRoutes(app, {
+    store: identity,
+    registerLimiter,
+    handleLimiter,
+    bearerIpLimiter,
+    pushTokenLimiter,
+    // `apns_updated_at` shares the catch-validation clock so the route tests
+    // can assert an exact timestamp; production passes nothing and it's wall time.
+    now: injectedNowSeconds ? () => new Date(injectedNowSeconds() * 1000) : undefined,
+  });
   registerHandlesRoute(app, {
     store: identity,
     suggestLimiter,
@@ -414,21 +492,138 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     identityStore: identity,
     catchStore: catchesStore,
     catchLimiter,
+    deleteLimiter: catchDeleteLimiter,
     listLimiter: catchesListLimiter,
     bearerIpLimiter,
     // Route-guess verification shares the /v1/routes resolver (same cache).
     routeResolver,
+    // Challenge "someone passed you" pushes hang off a successful upload. A
+    // hoisted function declaration, because the challenge wiring it needs is
+    // built further down — it is only ever CALLED after a catch, long after
+    // buildApp has returned.
+    onCatchIngested: scheduleOvertaken,
+    scheduleAfterReply: options.scheduleAfterReply,
     nowSeconds: options.nowSeconds,
   });
   // The leaderboard's window math shares the catch-validation clock
   // (`nowSeconds`, unix seconds) so window tests are deterministic; production
   // passes nothing and both fall back to wall time.
-  const nowSeconds = options.nowSeconds;
+  const nowSeconds = injectedNowSeconds;
   registerLeaderboardRoute(app, {
     identityStore: identity,
     catchStore: catchesStore,
     now: nowSeconds ? () => new Date(nowSeconds() * 1000) : undefined,
   });
+
+  // ── Challenges v1 (spec docs/reviews/2026-09-15-challenges-v1-spec.html) ───
+  // Store resolved lazily like the others; the scorer is the D18 quest seam.
+  let challengeStore = options.challengeStore;
+  function getChallengeStore(): ChallengeStore {
+    if (!challengeStore) {
+      challengeStore = new DrizzleChallengeStore(getDb(), new PrivatePointsScorer(getDb()), {
+        warn: (obj, msg) => app.log.warn(obj, msg),
+      });
+    }
+    return challengeStore;
+  }
+  const challengesStore: ChallengeStore = {
+    create: (i, t) => getChallengeStore().create(i, t),
+    findByCode: (c) => getChallengeStore().findByCode(c),
+    findById: (id) => getChallengeStore().findById(id),
+    participants: (id) => getChallengeStore().participants(id),
+    participantCount: (id) => getChallengeStore().participantCount(id),
+    isActiveParticipant: (id, d) => getChallengeStore().isActiveParticipant(id, d),
+    join: (c, d, t) => getChallengeStore().join(c, d, t),
+    leave: (c, d, t) => getChallengeStore().leave(c, d, t),
+    cancel: (c, t) => getChallengeStore().cancel(c, t),
+    standings: (c, t) => getChallengeStore().standings(c, t),
+    finalizeIfDue: (c, t) => getChallengeStore().finalizeIfDue(c, t),
+    listForDevice: (d, t, o) => getChallengeStore().listForDevice(d, t, o),
+    catchLog: (c, d) => getChallengeStore().catchLog(c, d),
+  };
+  const challengesEnabled = options.challengesEnabled ?? challengesEnabledFromEnv();
+  const challengesConfig = options.challengesConfig ?? challengesConfigFromEnv();
+  const challengeNow = nowSeconds ? () => new Date(nowSeconds() * 1000) : () => new Date();
+  const siteOrigins = options.statsAllowedOrigins ?? statsOriginsFromEnv();
+  registerChallengesRoutes(app, {
+    identityStore: identity,
+    store: challengesStore,
+    enabled: challengesEnabled,
+    config: { ...challengesConfig, appStoreURL: APP_STORE_URL },
+    allowedOrigins: siteOrigins,
+    inviteBaseURL: INVITE_BASE_URL,
+    now: challengeNow,
+    bearerIpLimiter,
+    createLimiter: challengeCreateLimiter,
+    readLimiter: challengeReadLimiter,
+    mutateLimiter: challengeMutateLimiter,
+    configIpLimiter: challengeConfigIpLimiter,
+  });
+  registerInvitesRoutes(app, {
+    identityStore: identity,
+    store: challengesStore,
+    enabled: challengesEnabled,
+    allowedOrigins: siteOrigins,
+    inviteBaseURL: INVITE_BASE_URL,
+    now: challengeNow,
+    inviteIpLimiter,
+    mutateLimiter: challengeMutateLimiter,
+    readLimiter: challengeReadLimiter,
+    cacheNow: rlNow,
+  });
+
+  // ── Challenge push notifications ───────────────────────────────────────────
+  //
+  // The whole feature is optional in three independent ways: no APNs
+  // credentials → a no-op transport (logged once at boot); CHALLENGES_ENABLED
+  // off → no evaluation at all; no stored token on a device → nothing to send
+  // to. None of them can fail a catch upload, which is the point.
+  const apnsTransport =
+    options.apnsTransport ??
+    createApnsTransport({
+      log: (message, detail) => app.log.info(detail ?? {}, message),
+    });
+  let overtakenStore = options.overtakenStore;
+  function getOvertakenStore(): OvertakenStore {
+    if (!overtakenStore) {
+      // Its own scorer instance (they are stateless): the evaluation scores
+      // inside the transaction that holds the challenge row lock, so it can't
+      // borrow the challenge store's connection-bound one.
+      overtakenStore = new DrizzleOvertakenStore(getDb(), new PrivatePointsScorer(getDb()));
+    }
+    return overtakenStore;
+  }
+  /**
+   * Fire-and-forget the overtaken evaluation for a device that just uploaded a
+   * catch. Called from `setImmediate` inside the catches route, so the reply is
+   * already on the wire; `evaluateOvertaken` swallows and logs its own errors,
+   * and the `.catch` here is the belt to that braces.
+   */
+  function scheduleOvertaken(deviceId: string): void {
+    if (!challengesEnabled()) return;
+    const evaluation = evaluateOvertaken(
+      {
+        store: getOvertakenStore(),
+        transport: apnsTransport,
+        log: {
+          debug: (obj, msg) => app.log.debug(obj, msg),
+          info: (obj, msg) => app.log.info(obj, msg),
+          warn: (obj, msg) => app.log.warn(obj, msg),
+        },
+        now: challengeNow,
+      },
+      deviceId,
+    );
+    options.onOvertakenEvaluation?.(evaluation);
+    void evaluation.catch((err) => app.log.warn({ err, deviceId }, "overtaken evaluation failed"));
+  }
+
+  // An HTTP/2 session to Apple outlives any single request, so it has to be
+  // torn down with the app or vitest reports an open handle (and a production
+  // shutdown would wait on it).
+  if (apnsTransport instanceof Http2ApnsTransport) {
+    app.addHook("onClose", async () => apnsTransport.close());
+  }
 
   // GET /v1/stats — the marketing site's catch counter. Origin-gated + cached;
   // the rate limiters' clock doubles as the memo clock so tests can expire it.
@@ -456,6 +651,26 @@ function statsOriginsFromEnv(): string[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
   return [...DEFAULT_STATS_ORIGINS, ...extra];
+}
+
+/** The App Store listing, as the challenges config endpoint reports it. */
+const APP_STORE_URL = "https://apps.apple.com/app/apple-store/id6773470079";
+
+/** Invite links: `${INVITE_BASE_URL}/${code}` — the universal-link path the app claims. */
+const INVITE_BASE_URL =
+  process.env.CHALLENGES_INVITE_BASE_URL?.replace(/\/+$/, "") || "https://tailspot.app/c";
+
+/** Kill switch: `CHALLENGES_ENABLED=true` turns the routes on; anything else is off. */
+function challengesEnabledFromEnv(): () => boolean {
+  const on = process.env.CHALLENGES_ENABLED === "true";
+  return () => on;
+}
+
+/** What /v1/challenges/config reports (spec §11.2). */
+function challengesConfigFromEnv(): { availability: ChallengesAvailability; minBuild: number } {
+  const availability: ChallengesAvailability =
+    process.env.CHALLENGES_AVAILABILITY === "public" ? "public" : "testflight";
+  return { availability, minBuild: envInt("CHALLENGES_MIN_BUILD") ?? 0 };
 }
 
 /** Parse an int env var, or undefined when unset/blank (lets defaults apply). */

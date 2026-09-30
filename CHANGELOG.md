@@ -5,6 +5,612 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-29 — Standings catcher count
+
+- All Time, Weekly, and Monthly show at most 50 positive-point public catchers,
+  followed by “N more catchers” when more than 50 qualify in that period.
+  Removes the anonymous-global footer. The additive `totalCatchers` response
+  field counts enabled, named catchers with positive period points before the
+  row limit; older servers omit the footer. Deploy the backend before the app.
+
+## 2026-09-29 — Challenge invite link preview (branch `challenge-invite-preview`)
+
+- Sharing a challenge invite into Messages showed the App Store listing
+  image, because the invite link redirects there. The share sheet now
+  supplies its own link metadata: a rendered card with the creator, the
+  challenge name, its window and the code (`ChallengeInviteCard.swift`),
+  so iMessage shows that instead. Other apps that fetch the link
+  themselves are unchanged.
+
+## 2026-09-28 — Review fixes for #287 / #294 (branch `fix/review-schedule-slack-air-beetle`)
+
+From Noah's `/code-review` of #287, #293, #294 and #295.
+
+- **Scheduled start (#294):** a stale start was moved to exactly the
+  15-minute limit, so it went stale again within the minute and a Create
+  tap could silently do nothing. It now moves to the first whole minute at
+  least `minLead + 60 s` out, and `submit()` re-runs the check before its
+  guard.
+- **Air Beetle slot (#287):** `RV6` is ICAO's code for the AIEP Air Beetle,
+  but Van's RV-6/6A catches carry it too, so a Van's RV-6 filled the Air
+  Beetle slot — both by the code and by the display name the naming table
+  builds from the code. `CardSetEntry.ambiguousTypecode` keeps the code for
+  rarity but matches `modelTokens` against the catch's own recorded model
+  only; the Air Beetle sets it.
+- **Deployed:** the #295 delete route shipped as **API release v43**
+  (2026-09-28, no migration); phones' queued deletes send on next open.
+
+## 2026-09-27 — Challenges UI tweaks (branch `worktree-challenges-ui-tweaks`)
+
+Seven device-screenshot notes from Noah, client only.
+
+- **Tap the invite code to copy it** (copy glyph beside CODE, flips to COPIED
+  with a haptic; `challenge_invite_shared` with `method: copy_code`).
+- **Scheduled start:** the date picker's range is fixed at render, so a start
+  at the edge went stale while the sheet sat open and the picker showed a time
+  the form called "too soon". The sheet now re-checks every 15 s and moves a
+  stale start to the earliest valid minute with a note ("Moved to 5:02 PM:
+  starts need at least 15 minutes' notice so friends can join."). Backstop
+  messages say which rule broke and name a time that works ("Too soon…",
+  "Too far out… pick Oct 11 at 4:45 PM or earlier").
+- **Clear (x) button** in the challenge name field.
+- **"No contest" reads "Tie"** when two or more spotters finished (the server's
+  `no_contest` with ≥2 is always 0–0); a solo no-contest keeps "No contest".
+- **Standings discs** show the ordinal only ("T-1st" overflowed 34 pt); tied
+  rows say "tied · N catches".
+- **Profile tiles:** Map and Challenges match heights, share a fixed icon slot,
+  and the subtitle wraps to two centered lines instead of shrinking edge to edge.
+- **Join preview:** the details and rules cards span the full width.
+- **Round 2 — counts, not sentences:** the Profile Challenges tile and the
+  Leaderboard flag carry a small cyan count badge of the challenges you're in
+  (live + upcoming; `ChallengesModel.activeCount`). The tile's headline subtitle
+  and the Leaderboard's live strip are gone, and `ChallengesEntryCopy` (the
+  sentence builder that fed both) was deleted. The hub's IN FLIGHT challenges
+  are compact rows ("2nd · 380 pts · 48m left") like ON DECK and FLIGHT LOG.
+
+## 2026-09-27 — Deleted catches stop counting (branch `fix/deleted-catch-stops-counting`)
+
+Bug (Noah): deleting a catch in the Hangar only deleted it on the phone. The
+server kept the row, so it still counted toward leaderboard points and live
+challenge scores, and came back on a Hangar restore.
+
+- **Backend:** `DELETE /v1/catches/:catchUuid` (bearer; per-IP meter before
+  auth, then the per-device upload limiter; 400 on a malformed uuid; **204
+  whether or not a row existed**, so retries are safe). Hard delete scoped to
+  the caller's device: nothing references `catches`, so there is **no
+  migration**, and every reader (leaderboard windows, challenge scorer,
+  restore, stats) drops the catch without a filter change. Frozen results
+  (decided weekly/monthly crowns, finished challenges' frozen standings) are
+  not recomputed.
+- **App:** `CatchDeletionSync` — both Hangar delete paths capture the catches'
+  `serverUuid`s before `modelContext.delete`, queue them in UserDefaults, and
+  send the DELETEs; the queue drains again on every app open, so an offline
+  delete lands later. A device with no stored token skips the network (it
+  never uploaded anything). `CatchUploader` now skips rows deleted mid-sweep
+  and, if a delete lands while a POST is in flight, queues a delete for it.
+- **Deploy order: backend first**, but either order is safe: the route never
+  404s (it answers 204 for a missing row), so the client treats a 404 as "this
+  server doesn't have the route yet" and keeps the delete queued.
+- **Review fixes (local high review, before PR):** SwiftData's `isDeleted` is
+  only true between `delete()` and `save()`, so the uploader now treats a row
+  that left its context as gone. The server keeps no tombstone, so the app
+  keeps a bounded **deleted ledger**: after each POST the uploader checks it
+  and re-sends the delete if the POST landed after the DELETE. Hangar restore
+  skips ledger uuids and discounts unsent deletes from the server total. The
+  queue is MainActor-serialised with one drain at a time (a concurrent
+  read-modify-write could drop a uuid). The drain runs off the foreground
+  path; a network error, 401/403 or 429 stops the pass; an unreadable token
+  keeps the queue. Backend: deletes have their own 120/min limiter, log
+  `{deviceId, removed}`, and re-run the post-catch challenge evaluation so the
+  stored placements stay current (it never pushes the deleter, and a delete
+  can't make anyone else's placement worse). A server-side tombstone table
+  (migration) would be the sturdier fix for resurrection; parked.
+- Not retroactive: catches deleted before this ship are still on the server.
+
+## 2026-09-27 — Trophy achievement dates — branch `codex/trophy-achievement-dates`
+
+- Earned trophy cards now show a separate “Achieved” strip with a localized date, matching the approved option C. The strip stacks at accessibility text sizes and VoiceOver includes the date.
+- Recover catch-based dates from the first qualifying chronological prefix under the current trophy rules. Persist dates separately from celebration acknowledgments so skipping a celebration, restarting, or deleting catches does not move an existing date. Restores recover dates from catch history.
+- Record the first new grounded-catch event timestamp. Legacy events and leaderboard trophies without source timestamps show “Date unavailable”; a repeat event or later leaderboard fetch never becomes a fabricated achievement date.
+- Added coverage for upgrades, restores, first threshold crossings, guess streaks, persistence, and missing external dates, plus native standard/accessibility renders. Physical-device review remains pending because the phone was unavailable.
+
+## 2026-09-27 — Challenges UI pass (PR #290, branch `worktree-challenges-ui-pass`)
+
+Three rounds of Noah's notes from device screenshots, all client copy/layout
+except the invite-code length.
+
+- **Hub:** empty state reads "Spot with friends" / "Invite up to 10 friends for
+  a head-to-head spotting challenge."
+- **Create sheet:** one-line name, the character limit only appears (amber)
+  once exceeded; Start (NOW / SCHEDULE) uses the same `GlassSegmentedSlider`
+  as Duration; the scheduled date picker has its own card; the end line is
+  centered text under the slider; the "You're in as soon as…" footer is gone.
+- **Detail:** the header card no longer repeats the name. `ChallengeShareSheet`
+  (the post-Create pop-up) is deleted; the inline **INVITE MORE** card holds
+  the code and one **Invite now** button. Copy link and the "Anyone with the
+  link…" line are gone (the share sheet has its own Copy).
+- **Join sheet:** the code-entry button reads **Join now**; help copy shows a
+  6-character example.
+- **Leaderboard:** the live-challenge chip keeps the checkered flag, drops
+  "IN FLIGHT", and sits above the Week / Month / All time slider.
+- **6-character invite codes** (was 8; ≈30 bits, limiter-backed). Old codes
+  stay valid: backend `normalizeCode`, app `InviteCode.normalize`/`parse` and
+  the web `/c/` nginx route accept 6 or 8. **Ship the app before the backend**
+  — installed builds only parse 8.
+- **Test fix:** `backend/test/overtakenRoute.test.ts` (from #288) pinned T0 to
+  2026-09-26 12:00Z while the uploaded catch's `created_at` is the DB's real
+  `now()`; it went red for everyone once real time passed the 24 h window.
+  T0 is now anchored to the real clock.
+
+## 2026-09-26 — Challenge push notifications (backend): APNs sender, push-token route, overtaken detection — branch `feat/challenge-push-overtaken`
+
+Backend half of "someone just passed you in your challenge". The iOS client is
+being built in parallel against this contract. Nothing here can fail a catch
+upload, and the whole feature is off unless three separate things are true:
+APNs credentials are set, `CHALLENGES_ENABLED=true`, and the device has
+registered a token.
+
+- **Migration 0011 (`0011_push-tokens-overtaken.sql`) — apply BEFORE deploying.**
+  Five nullable columns, no backfill: `devices.apns_token` /
+  `apns_environment` / `apns_updated_at`, and
+  `challenge_participants.last_placement` / `overtaken_notified_at`. There is
+  no Fly `release_command`, so migrations are manual —
+  `DATABASE_URL=… npm run db:migrate` first, then deploy.
+- **`POST` / `DELETE /v1/devices/push-token`** (bearer, 30/h per device, per-IP
+  metered before the token lookup). Body `{ token: 64–200 hex, environment:
+  "sandbox"|"production", build? }` → 204. Registering a token **clears it from
+  any other device row that holds it**: a restore or reinstall can hand one
+  phone's APNs token to a second anonymous identity, and if both kept it one
+  phone would get another identity's notifications.
+- **`src/push/apns.ts`** — a dependency-free sender. The ES256 provider JWT is
+  `crypto.sign` over two base64url segments with `dsaEncoding: "ieee-p1363"`
+  (the default DER encoding yields a token Apple rejects as
+  InvalidProviderToken), cached 50 minutes; the wire protocol is one HTTP/2
+  POST to `/3/device/<token>` on Node's built-in `http2`. `ApnsTransport` is
+  the seam tests inject a fake into. Unset credentials → a no-op transport that
+  logs `push disabled` once at boot.
+- **`src/challenges/overtaken.ts`** — after a *fresh* catch the route schedules
+  (via `setImmediate`, after the reply) an evaluation for that device: for each
+  LIVE challenge it is in, re-derive the standings and compare each
+  participant's placement with the remembered `last_placement`. Worse = passed.
+  One push per person per challenge per 30 minutes; never the uploader, never
+  without a token, never to a disabled device, never for an upcoming, finished
+  or cancelled challenge. Copy: **"You got passed" / "@ada just passed you in
+  Weekend Flyoff. You're now 2nd."** when we can prove the uploader did the
+  passing, else the nameless **"You've dropped to 2nd in Weekend Flyoff."**
+  (ties read "tied for 2nd"). A 410 or `BadDeviceToken` / `Unregistered`
+  clears the token. **`last_placement` is seeded inside the create and join
+  transactions**, under the challenge row lock, best-effort via a SAVEPOINT —
+  null means "never evaluated" and never notifies.
+- **Review round (PR #288).** Seven findings, all fixed with tests. The one
+  that mattered: a JS `Date` interpolated into a raw `sql` template reaches
+  postgres.js unconverted and crashes the bind, while PGlite serialises it
+  happily — so in production *every* evaluation would have thrown into the
+  outer catch and sent zero pushes, with the whole suite green. Now the
+  column helpers (`lte`/`gt`) do the encoding, and a test walks the bound
+  parameters of a whole evaluation asserting none is a `Date`. Also: the
+  evaluation now runs under the same challenge row lock `join` takes (two
+  simultaneous uploads pushed the same person twice and clobbered each
+  other's placements); a transient send failure keeps that participant's
+  baseline so the next catch retries instead of losing the notification; a
+  token moving between devices logs a warn with both device ids; the HTTP/2
+  send resolves on a silent stream teardown instead of hanging forever; and
+  the route test drives the after-reply work through an injected scheduler
+  rather than sleeping.
+- **Second review round (`/code-review`, ten findings, all fixed).** The
+  severe one: the APNs sends ran sequentially *inside* the transaction holding
+  the challenge `FOR UPDATE`, so nine recipients × a 5 s deadline was a 45 s
+  lock — and `statement_timeout` is 5 s, so every concurrent join, leave,
+  finalize and standings read on that challenge would have 500'd for real
+  users. The evaluation is now three phases: decide + write under the lock,
+  **send in parallel outside every transaction**, then a short compensating
+  transaction that restores the baseline and cooldown for sends that failed
+  retryably. Also: the push no longer names the uploader unless they
+  demonstrably crossed that participant this round (a stale baseline could
+  blame the wrong friend); a send timeout now destroys the cached HTTP/2
+  session instead of leaving a half-open one to time out every later send; a
+  403 `ExpiredProviderToken` is transient *and* invalidates the cached JWT
+  rather than being retried for 50 minutes; `createApnsTransport` mints one
+  JWT at boot so a mangled `APNS_KEY_P8` degrades to the no-op sender instead
+  of pinning every baseline open; baseline seeding moved back INSIDE the join
+  transaction (outside it, it raced an evaluation and could stamp a stale
+  placement over a fresh one → a false "you got passed"), kept best-effort
+  with a SAVEPOINT; a stale session's late error can no longer evict its
+  replacement; every path that strips a push token nulls all three columns
+  through one helper; and `build: null` is accepted as "no build".
+- **An un-migrated deploy is worse than "no pushes"** — Drizzle names every
+  schema column in its INSERTs, so without 0011 device registration and
+  challenge create/join fail too. Pinned by a test; README says so plainly.
+- **Secrets to set before this does anything** (see backend/README.md):
+  `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID`.
+- **Tests: 443 → 515.** Route tests for the token lifecycle, JWT/config/no-op
+  tests for the sender, and overtaken tests that spend most of their length on
+  the negatives (cooldown, uploader, tokenless, disabled, not-live, dead-token
+  cleanup) — the ways this feature turns into spam.
+
+## 2026-09-26 — Challenge notifications v2: daily nudges, camera silence, tap routing, APNs registration — branch `feat/challenge-notifications-v2`
+
+Phase 3's notification half. A 3d or 7d challenge used to go silent between
+"it started" and the last hour; a challenge banner could cover the
+viewfinder; and tapping one dropped you on the catch screen with no idea
+which challenge it meant.
+
+- **Two new local moments** (`ChallengeReminders`): `daily` for the 3d/7d
+  presets, 17:00 local (`StreakReminders.reminderHour` — one app, one
+  evening hour) on every full day strictly after the start day and strictly
+  before the end day, identifier
+  `tailspot.challenge.<id>.daily.<yyyy-MM-dd>`, title "Day 3 of 7"; and
+  `midway` for 24h only, at `startsAt + 12h` when that falls between 08:00
+  and 21:00 local, otherwise the next 09:00, skipped if it lands within 2 h
+  of `ending_soon`. Both carry the standings when the app knows them
+  ("You're 2nd in Weekend Flyoff.") and a neutral line when it doesn't. The
+  placement comes from `ChallengesModel.details[id].me` and is deliberately
+  allowed to be stale — every sync re-plans from scratch. A daily or midway
+  never shares a day with ending soon or finished (the rule is about the
+  endgame, not about two banners a day — a 24h challenge starting at 10:00
+  does fire `starts` at 10:00 and `midway` at 22:00), and never a moment in
+  the past.
+- **Camera silence.** Challenge notifications — local AND remote — now obey
+  the streak reminder's rule: `willPresent` returns
+  `StreakReminders.foregroundPresentation(cameraFrontmost:)` for anything
+  carrying a `challengeId` or a challenge identifier. Silent on the
+  viewfinder, banner everywhere else. Streak behaviour untouched.
+- **Tap routing.** `didReceive` reads `userInfo["challengeId"]` and hands it
+  to `ChallengesModel.openChallenge(id:)`, which parks a `pendingDetailId`
+  the same one-owner way `pendingInviteCode` works: `ChallengeInviteRouter`
+  runs the dismiss-then-present sequence onto `PrimarySheet.challenges`, and
+  the hub inside it (source `deep_link`, the only consumer) pushes the
+  detail. Fires `challenge_reminder_opened` with `challenge_id` + `moment`.
+  The `ChallengesModel` is now built in `TailspotApp.init` and handed to the
+  delegate there, because a cold-start tap arrives before any view exists.
+- **APNs registration (client half).** New `AppDelegate` via
+  `@UIApplicationDelegateAdaptor` — SwiftUI has no equivalent of
+  `didRegisterForRemoteNotificationsWithDeviceToken`. Registers at launch
+  when notifications are already authorized, and right after the challenge
+  permission ask succeeds. The token is hex-encoded and POSTed to
+  `/v1/devices/push-token` by `PushTokenClient`
+  (`{token, environment, build}`, bearer, 15 s, 204), idempotent against
+  `tailspot.push.lastUploaded` so the every-launch re-register doesn't POST
+  every launch — and a FAILED upload remembers nothing, so it retries.
+  `aps-environment` is read back out of `embedded.mobileprovision` at
+  runtime ("development" → "sandbox"), because sending a sandbox token to
+  the production gateway is the classic silent-push failure. Simulator or
+  no profile → registration is skipped entirely.
+  `Tailspot.entitlements` gains `aps-environment` = `development` (Xcode
+  flips it to production at archive).
+- **Still Noah's, before any of the remote half works:** enable **Push
+  Notifications** on the App ID and upload an **APNs key** — until then a
+  signed device / Xcode Cloud build fails to sign. The backend half (the
+  `overtaken` push) is being built in parallel to the payload contract
+  written down in `ChallengeNotificationRouting`.
+
+Review doc: `docs/reviews/2026-09-26-challenge-notifications-v2.html`.
+
+
+## 2026-09-21 — Challenge invite links open the app (universal links) — branch `feat/challenges-universal-links`
+
+`https://tailspot.app/c/CODE` now opens Tailspot straight into the invite's
+join sheet, and sends everyone else to the App Store. No landing page —
+Noah's call: the link either opens the app or sells it.
+
+- **Web (`web/`):** `public/.well-known/apple-app-site-association` claims
+  `/c/*` for `G9FJX2A5TA.com.landesberg.Tailspot`; nginx serves it as
+  `application/json` with no-cache (the file has no extension, so it would
+  otherwise go out as octet-stream) and 302s the invite shape — 8 characters
+  from the code alphabet (A–Z minus `I`/`L`/`O`, plus `2`–`9`),
+  case-insensitive, optional trailing slash — to the attributed App Store
+  link (`ct=Challenge Invite`). A code that could never exist (`/c/K7M4QD2O`,
+  `/c/short`) 404s rather than making a pointless App Store trip, and the
+  regex is quoted because nginx reads a bare `{8}` as a config block and
+  refuses to start. The dot-directory reaches the image
+  through the existing `COPY public/ …` (a directory source copies dotfiles;
+  there's no `.dockerignore`).
+- **Entitlement:** `ios/Tailspot/Tailspot/Tailspot.entitlements` with
+  `applinks:tailspot.app` + `applinks:www.tailspot.app`, wired into both
+  config blocks of the app target only.
+- **Routing:** `TailspotApp` handles `.onOpenURL` *and*
+  `.onContinueUserActivity(NSUserActivityTypeBrowsingWeb)` — a cold launch can
+  arrive as either, and wiring one gives the classic "works from Notes, not
+  from Messages". Both parse with `InviteCode.parse(url:)` and park the code
+  on `ChallengesModel.pendingInviteCode`. A pure
+  `ChallengesModel.inviteRoute(verdict:code:)` turns (verdict, code) into
+  `join / updateRequired / unavailable / waitForConfig`; `waitForConfig` is
+  the cold-launch case and `openInvite` refreshes the config itself so the
+  code resolves instead of hanging.
+- **Presentation:** `PrimarySheet` gains `.challenges` (a `ChallengesSheet`
+  shaped like `LeadersSheet`), and its `ChallengesHub(source: "deep_link")`
+  picks the pending code up and opens its existing join sheet with
+  `via: "universal_link"` — so the spec's `challenge_invite_opened` fires once,
+  with the challenge id and joinability status. `ContentView.body` grew **no**
+  new modifier links (it's at the type-check budget): a zero-size
+  `ChallengeInviteRouter` rides the existing `.overlay` and owns the
+  "update to join" alert; the kill switch uses the existing toast slot.
+- **One owner, one order.** `consumePendingInvite(for:)` lets *only* the hub
+  the link opened (`source == deep_link`) take the code — a hub already on
+  screen under Profile or Leaders sees the same route change and would
+  otherwise swallow it during its own sheet's teardown. And nothing presents
+  on top of a sheet: `ChallengeInvitePresentation` dismisses what's open,
+  waits out the dismissal, then presents, and drops the pending code only
+  **after** presenting, so an alert or toast that never reached the screen
+  can't take the invite with it.
+- **Tests:** +23 (route derivation for every verdict, pending-code
+  set/replace/clear, the cold-launch refresh, URL → route end to end, the
+  www/lowercase/trailing-slash link shape, the fourth `PrimarySheet` id, who
+  may consume the code, and the dismiss → settle → present → clear order).
+- **Not verified end to end yet**, and it can't be from here: Noah must enable
+  Associated Domains on the App ID, the site must be deployed, and Apple's CDN
+  copy of the AASA can lag hours. See PLAN §9 phase 3.
+
+## 2026-09-21 — Challenges review fixes (client) — branch `fix/challenges-client-review`
+
+Thirteen findings from the phase-2 client review, plus seven follow-ups from
+the review of the fixes themselves, each with a test.
+
+- **Refreshes can't fight each other.** `ChallengesModel.refreshList` takes a
+  generation ticket, so an overlapping hub `.task`, pull-to-refresh and
+  scene-phase refresh can no longer let a stale (or failed) response overwrite
+  a fresh list. `cancel()` falls back to a list refresh when the row isn't in
+  `open`, instead of dropping it.
+- **Reminders can actually be delivered.** Nothing in the flow ever asked for
+  notification permission, so challenge reminders never scheduled for anyone
+  who had not met the streak pre-prompt. The model now asks once, after the
+  first create or join; Settings' "Challenges" toggle asks on turn-on and
+  re-plans in both directions (off removes pending reminders immediately); a
+  "starts" moment needs 60 s of daylight; and `challenge_reminder_scheduled`
+  fires per newly-scheduled identifier, not on every sync.
+- **Two analytics/UI lies fixed.** `challenge_invite_shared` now fires on a
+  completed share (a `UIActivityViewController` wrapper reports the real
+  activity type) rather than on the tap that opened the sheet, and the detail
+  screen polls only while live — an upcoming challenge sleeps until its start,
+  a finished one stops, and a load that has never succeeded keeps retrying so
+  the error card still heals itself. A failed catch-log load shows a retry
+  instead of a permanent spinner, and the view analytics fire on the first
+  *successful* load.
+  - **Breaking for queries:** `challenge_invite_shared.method` changed domain.
+    It used to be the constant `"share_sheet"` for every share-sheet send;
+    it now carries the chosen activity type
+    (`com.apple.UIKit.activity.Message`, `…PostToFacebook`, …), with
+    `"share_sheet"` only as the fallback when iOS reports a completed share
+    without naming the activity. `"copy_link"` is unchanged. Filter on the
+    property's *presence*, not on `= 'share_sheet'`, and treat counts before
+    and after this build as different metrics (the old ones counted sheet
+    openings).
+- **Edges the server would have rejected.** Invite codes strip all whitespace
+  and newlines (matching the backend's `[\s-]` in practice — JavaScript's
+  `\s` also matches U+FEFF, which `whitespacesAndNewlines` does not), a null
+  `creatorHandle` decodes to
+  "spotter" instead of throwing away the row, the create sheet keeps a
+  16-minute lead so the server's 15-minute check can't 422 a valid-looking
+  form, and a blank server message no longer renders as ".".
+- **The DEBUG wrench stopped eating compass taps.** It now stacks below the
+  account button, clear of the caution banner's region (Release layout
+  unchanged), and the banner became a real `CautionBadge` view so the width
+  test measures the shipping thing. The strip's geometry now lives in
+  `TopStripLayout`, which the view lays out with and both layout tests measure
+  from — so the gate is on the constants ContentView reads, not on numbers
+  retyped in a test. Review doc:
+  `docs/reviews/2026-09-21-challenges-client-review-fixes.html`.
+- **Reminder syncs are serialized.** Two overlapping ones (Settings' re-sync
+  against a foreground refresh; a create against the permission ask) each read
+  the pending list before the other's adds landed, so both reported the same
+  reminders as newly scheduled.
+
+
+## 2026-09-21 — Challenges review fixes (backend) — branch `fix/challenges-backend-review`
+
+- `join()` now re-reads `finalized_at` and `ends_at` (not just `cancelled_at`)
+  under the challenge row lock, so a join racing the freeze is `closed`
+  instead of landing in a challenge that will never score it.
+- `leave()` moved into a transaction that takes the same `FOR UPDATE` lock and
+  re-checks cancelled / finalized / ended; D6 (creator leaving an upcoming
+  challenge cancels it) happens under that lock too.
+- `join()`'s capacity count now excludes disabled devices, matching
+  `participants()` / `participantCount()` — a 9/10 invite preview with
+  `canJoin` can no longer 409 as full.
+- Growth attribution locks the device row before the "never joined before"
+  check, so one new device joining two challenges at once can't claim the
+  first-join credit twice.
+- Six regression tests in `backend/test/challengesStore.test.ts` (all six fail
+  on the pre-fix store); `challenges_pending_finalize_idx`'s comment no longer
+  claims a finalization sweep that doesn't exist.
+
+## 2026-09-15 — Challenges v1, phase 2 (client core) — branch `feat/challenges-client`
+
+The whole client half of Challenges, built in parallel by three agents against
+one service contract and stitched together at the end:
+
+- **Foundation (pure, 100+ tests):** wire models aligned to the built backend,
+  `ChallengeTiming` (status, countdown copy, placement labels),
+  `ChallengePlacement` (competition ranking mirroring the server), `InviteCode`
+  (31-symbol alphabet, normalize, URL parse), `ChallengeReminders` (the
+  StreakReminders-shaped pure planner), `ChallengeBuildGate` (the config
+  verdict).
+- **Contract:** `ChallengesService` protocol + `ChallengesError`;
+  `FixtureChallengesService` with a demo world covering every state; the
+  `@Observable` `ChallengesModel` (config verdict, open/history, cached details
+  and logs, hub-seen / results-seen flags, the `headline` the entry points
+  share).
+- **Network + notifications:** `ChallengesClient` over URLSession (bearer from
+  the account client, 15 s timeout, every status code mapped) and
+  `ChallengeReminderScheduler` (local notifications for starts / ending soon /
+  finished, own identifier prefix and Settings key, streak slot untouched).
+- **Screens:** hub, create sheet, join sheet, detail (all states, winner moment
+  with Reduce Motion, expandable catch logs, share + copy link), shared views;
+  33 snapshot states + logic tests.
+- **Integration:** Profile's Leaders tile → Challenges tile with the headline
+  subtitle; Leaderboard toolbar flag with the one-time discovery dot and the
+  live strip under the switcher; Settings → REMINDERS → Challenges toggle;
+  one app-wide model injected from `TailspotApp`, refreshed on foreground.
+  DEBUG builds pass `Int.max` as their build so a local `bin/deploy` (build 1)
+  never reads as update-required.
+- Everything is DEBUG-visible today but DARK in production until the backend
+  flag flips; the hub explains itself when the server says no.
+
+## 2026-09-15 — Challenges v1, phase 1 (backend) — branch `feat/challenges-backend`
+
+The server half of head-to-head / small-group Challenges, built from the
+decision-ready spec (`docs/reviews/2026-09-15-challenges-v1-spec.html`, D1–D19
+all answered). **Deployed dark**: nothing answers until `CHALLENGES_ENABLED=true`.
+
+- **Migration `0010_challenges.sql`** (apply MANUALLY before the deploy, as
+  always): `challenges` (with the `kind` quest seam), `challenge_participants`
+  (with `joined_as_new_device`), `challenge_results` (frozen placements),
+  `devices.referred_by_challenge_id`, and the composite
+  `catches_device_caught_idx (device_id, caught_at)`.
+- **`src/challenges/`**: `scorer.ts` (the `ChallengeScorer` interface + the one
+  v1 implementation, standard points over `[starts_at, ends_at)` with
+  `created_at <= ends_at` — no grace), `placement.ts` (competition ranking,
+  shared ties, No Contest), `codes.ts` (8-char unambiguous invite codes),
+  `store.ts` (create / join / leave / cancel / standings / catch log /
+  decide-on-read finalization / referral stamping).
+- **Routes** `src/routes/challenges.ts` + `src/routes/invites.ts`, every bearer
+  route on the hardening pattern (per-IP meter before the token lookup,
+  per-device meter after, 404 not 403 for non-participants, disabled devices
+  invisible), plus `GET /v1/challenges/config` — the flag / TestFlight-only /
+  minimum-build signal the app and the landing page read.
+- **Tests**: 37 new (`challenges.route.test.ts`, `challengesPlacement.test.ts`)
+  over PGlite covering the window edges, the no-grace boundary, late joins,
+  ties, No Contest, cancel/leave rules, frozen results under a rescore,
+  authorization, disabled devices, full challenge, code limiter, profanity,
+  referral attribution and the config endpoint. Suite: 428 passing.
+- Nothing in `ios/` or `web/`; phase 0 (navigation) and phase 2 (client) are
+  separate branches.
+
+## 2026-09-15 — Challenges phase 0: Leaders on the bar, account button top right — branch `feat/challenges-nav`
+
+Opens the v1.2 train (`MARKETING_VERSION` 1.2.0). The Challenges feature
+(head-to-head and small-group competitions) was specified in full first —
+`docs/reviews/2026-09-15-challenges-v1-spec.html`, nineteen decisions
+answered by Noah — and this is the first of its phases: the navigation
+change, client only, nothing behind it yet.
+
+- **Bottom bar is Hangar / Capture / Leaders.** The leaderboard was two taps
+  deep (Profile → Leaders) for a destination people open a lot; it is now one
+  tap. The glyph is the same `list.number` as the Profile tile.
+- **Account button top right** (44 pt circle, `person.fill`) opens the
+  unchanged Profile sheet. DEBUG builds keep the wrench to its left.
+- **One `primarySheet` enum** (`PrimarySheet.swift`) replaces the two
+  `showHangar` / `showProfile` Bools and their two `.sheet` + two `.onChange`
+  chain links with one of each. `ContentView.body` is at the compiler's
+  type-check budget, so adding Leaders as a third Bool was not an option.
+  Every "is a sheet up?" gate (camera occlusion, trophy and restore overlays,
+  the streak ask, the review prompt) now reads `primarySheet == nil`, so
+  Leaders behaves exactly like the other two.
+- **`LeadersSheet`** hosts `LeaderboardScreen` in its own NavigationStack
+  with a Done button; the screen itself is untouched.
+- The compass-banner stack's inset is now 16 leading / 60 trailing: the badge
+  is ~307 pt at default type, so a symmetric 60 would wrap it on every phone
+  and a symmetric 16 slid it under the new button. A test pins the width.
+- New snapshot harness `LeadersSheetSnapshotTests`; review doc
+  `docs/reviews/2026-09-15-challenges-phase0-nav.html`.
+
+## 2026-09-12 — Altitude + speed units in Settings — branch `feat/unit-settings`
+
+Noah asked for a units preference: altitude in feet or meters, speed in knots,
+mph or km/h, and (second round, same day) distance in km or miles, honoured
+everywhere the app shows any of them. The audit found one formatting
+chokepoint — `CardPlane.altText` / `speedText` / `distText` in
+`CatchCardView.swift` — that every reveal, settled card, Hangar detail, model
+slot and share card flows through, plus a handful of loose strings (the AR
+overlay's VoiceOver label, the beyond-eyeshot toast, the Debug aircraft list)
+and four trophy summaries with units baked into the copy.
+
+- **New `UnitPreferences.swift`:** `AltitudeUnit` (ft / m), `SpeedUnit`
+  (kt / mph / km/h) and `DistanceUnit` (km / mi) as `String`-raw enums (the
+  raw value is the persisted form), each with `format(...)` from the SI
+  value, and an `@Observable` `UnitPreferences.shared` backed by
+  `UserDefaults` (`tailspot.units.altitude` / `.speed` / `.distance`).
+  **First-launch defaults are localized** (Noah's call, third round): they
+  follow the phone's measurement system (`Locale.measurementSystem`, i.e.
+  iOS Settings → Language & Region → Measurement System) via
+  `DisplayUnits.localized(for:)` — metric → m / km/h / km, US and UK → ft /
+  mph / mi. Knots is never a default. A stored choice always wins, so this
+  only affects a key that was never written — which means **existing users
+  who never opened Settings → UNITS also move** from the old ft / kt / km to
+  their locale's set on update. Storage stays SI everywhere — `Aircraft`, `Catch`, the wire DTO,
+  replays, telemetry are untouched; only formatting changes.
+- **`CardPlane.altText(fromMeters:unit:)` / `speedText(fromMps:unit:)`** take
+  the unit as a defaulted parameter that reads the shared preference. Because
+  that read happens inside a SwiftUI body, Observation re-renders any live
+  card (a Hangar detail open in another tab) the moment the picker flips.
+  Speed now groups thousands like altitude ("1,008 km/h").
+- **Settings → UNITS** section between REMINDERS and ABOUT: three rows
+  ("Altitude", "Speed", "Distance") with trailing segmented pickers bound via
+  `@Bindable`, same header treatment as the other sections, no footer (Noah
+  cut the explanatory copy).
+- **Distance** goes through `CardPlane.distText(fromMeters:unit:)`; the two
+  inline `"%.1f km"` duplicates in `ContentView`'s card builders now route
+  through it too (so the 0-sentinel renders "—" on those paths as well).
+  The AR overlay's VoiceOver line ("12 kilometers away" / "7 miles away"),
+  the far-tap toast ("Nearest plane is 52 km out" / "32 mi out" —
+  `TopToast.message(distanceUnit:)`, the enum is nonisolated so the caller
+  passes the unit) and the Debug list's range column follow it.
+- **Trophy copy follows the units:** Sky High ("40,000 ft" / "12,192 m"),
+  On the Deck ("3,000 ft" / "914 m"), Speed Demon ("520+ kt" / "600+ mph"
+  / "965+ km/h") and Long Lens ("25 km" / "15.5 mi") gain a `unitSummary`
+  over a `DisplayUnits` snapshot; `Achievement.displaySummary` renders it in
+  `HangarTrophiesView` and `TrophyUnlockView`. The Speed Demon copy used to
+  say mph while every card said kt; it now matches whichever the user
+  picked. Thresholds are unchanged.
+- **Debug aircraft list** shows `FLxxx` in feet mode and whole meters
+  otherwise.
+- **Tests:** new `UnitPreferencesTests` (formatting per unit, persistence
+  round-trip through a throwaway suite, fallback on unknown stored values,
+  trophy copy). `CatchTests` pins the shared preference around the
+  stored-catch formatter assertion and adds a metric case. Metric renders
+  added to the Settings, settled-card and reveal snapshot harnesses.
+
+## 2026-09-06 — Reveal CTA off-screen on iPhone SE — branch `fix/reveal-cta-short-screens` (PR #254, draft)
+
+First TestFlight report from a small phone: an iPhone SE (3rd gen) tester on
+1.1.1 (90) caught a Bell 206 JetRanger / LongRanger — a name that wraps to three
+split-flap rows — and had "no way to proceed": the reveal filled the screen with
+no "tap to continue / View in Hangar" row. Cause: the reveal stacked the card
+above the CTA in a fixed column; the card (~624 pt) plus the CTA strip (~71 pt)
+overflowed the SE's 647 pt safe area, and the `GeometryReader` top-aligns an
+overflowing child, so the whole strip fell below the screen edge. The static
+snapshot harness only ever rendered at 393×852. Any two-line name with a route
+was already at the edge on the SE.
+
+- **Fix:** the card region is a vertical `ScrollView` with the CTA strip pinned
+  below it (`revealColumn`); the dismiss/skip catcher moves into the scroll
+  content's background so tap semantics are unchanged. The card goes through a
+  tiny `CompressedHeightLayout` (proposes zero height, reports the child's
+  size) so it takes **the same size it always has**: the old
+  `VStack { Spacer; card; Spacer; cta }` offered the card about a third of the
+  screen, so the card has always laid out at its compressed minimum — route
+  codes/names and the readouts (`minimumScaleFactor` text) scaled down — on
+  every device. That is the card every user has seen. A bare scroll view
+  proposes unbounded height, un-squeezes it, and made cards that used to fit (a
+  one-line name on the SE, a two-line one on a 6.1") scroll by a few points —
+  caught by the before/after device matrix. A min-height frame then does what
+  the two Spacers did: a fitting card centers, a taller one scrolls. No padding
+  or Spacer inside the scroll content: under the unbounded proposal even
+  `Spacer(minLength: 0)` reports 8 pt, a phantom scroll where a card just fits.
+  **Open design question surfaced:** the card's intended type sizes (21 pt
+  route codes, full-size readouts) have never rendered on a phone; whether to
+  keep the squeeze as the design or re-tune the card to fit unsqueezed is a
+  separate call.
+- **Tests:** `RevealShortScreenTests` hosts the live view in a `UIWindow` at the
+  SE (375×647) and iPhone 16 (393×759) safe-area sizes — ImageRenderer draws
+  `ScrollView` content blank. Lessons that cost iterations: async sleeps, not
+  `RunLoop` spins (a spin blocks the main-actor `.task` that flips `settled`);
+  `ignoresSafeArea` on the root so the window size means the device safe area;
+  poll for state under the parallel full suite. Three 375×647 static cases
+  added to `RevealSnapshotTests` through a `scrolls: false` mirror. Debug
+  ✦ Catch gains the three-line Bell 206 preset. **Device matrix:** the opt-in
+  `RevealDeviceMatrixRenderTests` (`TEST_RUNNER_TAILSPOT_MATRIX=<tag>`) hosts
+  the live reveal at five safe-area sizes × four card configurations; the
+  before/after sheets are in `docs/ui-sweeps/2026-09-06/reveal-short-screens/`.
+- **Found, not changed:** the chips-up bonus-round card is taller than EVERY
+  phone's safe area even squeezed (the 16 Pro Max included — the matrix's
+  "before" row has no CTA on any device): "tap to continue" was off-screen for
+  the whole round everywhere, the ledger cut, and on the SE the last chip and
+  SKIP were unreachable. It now scrolls with the CTA pinned. A live test for
+  that state was not stable under the parallel suite and was dropped.
+- **Audience (PostHog, 30 d):** 2 SE users + 2 iPad users running the iPhone
+  app in a 375×667 compatibility window, of ~110.
+
 ## 2026-09-06 — API hardening, phase 1 — branch `feat/api-hardening`
 
 Noah asked whether the API was publicly queryable. Reading the routes said no
