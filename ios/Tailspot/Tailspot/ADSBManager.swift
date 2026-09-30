@@ -725,6 +725,12 @@ final class ADSBManager: ObservableObject {
     /// cache first and falling back to the current source on miss.
     /// A successful response (including a 404 / nil) is cached;
     /// transport errors are NOT cached, so a later tap can retry.
+    ///
+    /// A 429 is deliberately QUIET. The backend caps
+    /// `GET /v1/metadata/:icao24` at 300/min/IP (API hardening, 2026-09-06),
+    /// and hitting that ceiling means "ask again in a moment", not "Tailspot
+    /// is down" — so it must not raise the red status pill. Like every other
+    /// error it is not cached, so the next lookup retries.
     func metadata(for icao24: String) async -> AircraftMetadata? {
         switch await metadataCache.get(icao24: icao24) {
         case .hit(let value):
@@ -734,6 +740,13 @@ final class ADSBManager: ObservableObject {
                 let fetched = try await source.aircraftMetadata(icao24: icao24)
                 await metadataCache.set(icao24: icao24, value: fetched)
                 return fetched
+            } catch ADSBSourceError.rateLimited {
+                // Rate limited, not broken. No pill, no cache — the next
+                // lookup (ambient prefetch or tap) retries once the bucket
+                // has refilled. Info level: worth seeing in the field log if
+                // it ever becomes common, not worth an error.
+                Log.adsb.info("metadata lookup rate limited for \(icao24, privacy: .public) — not cached, will retry")
+                return nil
             } catch {
                 // Transport error — surface via lastError but do NOT
                 // cache. The next tap will retry.
