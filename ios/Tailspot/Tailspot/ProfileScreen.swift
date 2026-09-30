@@ -55,6 +55,9 @@ struct ProfileScreen: View {
     @AppStorage(LeaderboardStandingCache.weeklyWinsKey) private var cachedWeeklyWins: Int = 0
     @AppStorage(LeaderboardStandingCache.monthlyWinsKey) private var cachedMonthlyWins: Int = 0
     private let accountClient = TailspotAccountClient()
+    @State private var showHandleSheet = false
+    /// "Handle changed to @x" confirmation, cleared after a few seconds.
+    @State private var handleToast: String?
 
     var body: some View {
         // Aggregate the Hangar ONCE per render. `stats` and `inputs` used to be
@@ -102,6 +105,25 @@ struct ProfileScreen: View {
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .task { await loadStanding() }
+            .sheet(isPresented: $showHandleSheet) {
+                HandleEditSheet(source: "profile") { saved in
+                    showToast(saved)
+                }
+            }
+            .overlay(alignment: .top) {
+                if let handleToast {
+                    Label(handleToast, systemImage: "checkmark.circle.fill")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .symbolRenderingMode(.multicolor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.top, 6)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
@@ -157,6 +179,19 @@ struct ProfileScreen: View {
     /// codes, the invite trophy) is PLAN §9 #10.
     // Internal (not private) so CatchShareLinkTests can pin the campaign.
     static let inviteURL = AppStoreListing.url(campaign: "Tailspot Profile Share")
+
+    /// Show the rename confirmation, then clear it. A second rename inside
+    /// the window replaces the text and restarts the clock.
+    private func showToast(_ saved: String) {
+        let text = "Handle changed to @\(saved)"
+        withAnimation(.easeOut(duration: 0.2)) { handleToast = text }
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            if handleToast == text {
+                withAnimation(.easeIn(duration: 0.2)) { handleToast = nil }
+            }
+        }
+    }
 
     // MARK: - Standing fetch
 
@@ -232,50 +267,59 @@ struct ProfileScreen: View {
         let rankLabel = cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : "—"
         let hasChampionWins = cachedWeeklyWins >= 1 || cachedMonthlyWins >= 1
         return VStack(spacing: 14) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(Brand.Color.bgPrimary)
-                    Circle()
-                        .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1.5)
-                    if isHandleClaimed {
-                        Text(initials)
-                            .font(Brand.Font.mono(size: 18, weight: .bold))
-                            .foregroundStyle(Brand.Color.cyan)
-                    } else {
-                        // No initials to show yet — a quiet person glyph,
-                        // not fake "SP" initials off the placeholder.
-                        Image(systemName: "person")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(Brand.Color.textTertiary)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .frame(width: 56, height: 56)
-                VStack(alignment: .leading, spacing: 2) {
-                    if isHandleClaimed {
-                        Text("@\(handle)")
-                            .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
-                            .tracking(0.4)
-                            .foregroundStyle(Brand.Color.textPrimary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        if let joined = joinedDateLabel {
-                            Text(joined)
-                                .font(Brand.Font.caption)
-                                .foregroundStyle(Brand.Color.textSecondary)
+            // The whole identity row (avatar, handle, pencil) is one button
+            // that opens the handle sheet — claimed or not (2026-09-30).
+            Button { showHandleSheet = true } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(Brand.Color.bgPrimary)
+                        Circle()
+                            .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1.5)
+                        if isHandleClaimed {
+                            Text(initials)
+                                .font(Brand.Font.mono(size: 18, weight: .bold))
+                                .foregroundStyle(Brand.Color.cyan)
                         } else {
-                            Text("ready to spot")
-                                .font(Brand.Font.caption)
-                                .foregroundStyle(Brand.Color.textSecondary)
+                            // No initials to show yet — a quiet person glyph,
+                            // not fake "SP" initials off the placeholder.
+                            Image(systemName: "person")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(Brand.Color.textTertiary)
+                                .accessibilityHidden(true)
                         }
-                    } else {
-                        // Unclaimed: a designed affordance, not "@spotter_42"
-                        // masquerading as a handle. Taps into the existing
-                        // claim flow (Settings → SPOTTER).
-                        NavigationLink {
-                            SettingsScreen()
-                        } label: {
+                    }
+                    .frame(width: 56, height: 56)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if isHandleClaimed {
+                            HStack(spacing: 8) {
+                                Text("@\(handle)")
+                                    .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
+                                    .tracking(0.4)
+                                    .foregroundStyle(Brand.Color.textPrimary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                // Small, quiet "this is editable" cue.
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Brand.Color.cyan)
+                                    .frame(width: 24, height: 24)
+                                    .background(Brand.Color.bgPrimary.opacity(0.7), in: Circle())
+                                    .accessibilityHidden(true)
+                            }
+                            if let joined = joinedDateLabel {
+                                Text(joined)
+                                    .font(Brand.Font.caption)
+                                    .foregroundStyle(Brand.Color.textSecondary)
+                            } else {
+                                Text("ready to spot")
+                                    .font(Brand.Font.caption)
+                                    .foregroundStyle(Brand.Color.textSecondary)
+                            }
+                        } else {
+                            // Unclaimed: a designed affordance, not "@spotter_42"
+                            // masquerading as a handle. The enclosing button opens
+                            // the handle sheet in its "Pick a handle" mode.
                             HStack(spacing: 6) {
                                 Text("CLAIM YOUR HANDLE")
                                     .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
@@ -286,19 +330,20 @@ struct ProfileScreen: View {
                                     .foregroundStyle(Brand.Color.cyan.opacity(0.7))
                                     .accessibilityHidden(true)
                             }
-                            // The row is ~16 pt tall; growing it to 44 would
-                            // shift the whole identity header, so the HIG hit
-                            // target comes from an expanded hit shape instead.
-                            .contentShape(Rectangle().inset(by: -14))
+                            Text("shown on the global leaderboard")
+                                .font(Brand.Font.caption)
+                                .foregroundStyle(Brand.Color.textSecondary)
                         }
-                        .buttonStyle(.plain)
-                        Text("shown on the global leaderboard")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.textSecondary)
                     }
+                    Spacer()
                 }
-                Spacer()
+                // The row is 56 pt (the avatar), so the whole row is a
+                // comfortable hit target without an inset hit shape.
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isHandleClaimed ? "Your handle, @\(handle)" : "Claim your handle")
+            .accessibilityHint(isHandleClaimed ? "Opens a sheet to change it" : "Opens a sheet to pick one")
             HStack(spacing: 0) {
                 VStack(spacing: 2) {
                     Text(displayPoints.formatted(.number))

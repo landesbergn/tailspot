@@ -4,24 +4,21 @@
 //
 //  The inline "pick a handle first" card the Challenges create and join
 //  sheets show when the device has no claimed handle (spec §4.1 step 1 and
-//  §4.3 step 3). One component, two call sites, so the copy, validation
-//  and the claim round-trip (register → PUT handle → persist → identify)
-//  can never drift between them. Mirrors SettingsScreen.saveHandle.
+//  §4.3 step 3). One component, two call sites. The validation and the
+//  claim round-trip live in HandleClaimer, shared with HandleEditSheet.
 //
 
 import SwiftUI
-import os
 
 struct HandleClaimCard: View {
     /// Analytics source for `handle_claimed` ("challenge_join", "challenge_create").
     let source: String
     let onClaimed: () -> Void
 
-    @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
     @State private var draft = ""
     @State private var error: String?
     @State private var isClaiming = false
-    private let accountClient = TailspotAccountClient()
+    private let claimer = HandleClaimer()
 
     init(source: String, onClaimed: @escaping () -> Void) {
         self.source = source
@@ -70,34 +67,18 @@ struct HandleClaimCard: View {
         .background(Brand.Color.bgElevated.opacity(0.75), in: .rect(cornerRadius: Brand.Radius.card))
     }
 
-    private var isValid: Bool {
-        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.count >= 3 && t.count <= 20 && t.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
-    }
+    private var isValid: Bool { HandleRules.isValid(draft) }
 
     private func claim() async {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isValid else { return }
         isClaiming = true
         defer { isClaiming = false }
-        do {
-            let deviceId = try await accountClient.ensureRegistered()
-            try await accountClient.claimHandle(trimmed)
-            handle = trimmed
-            UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
-            Analytics.identify(deviceId, handle: trimmed)
-            Analytics.capture("handle_claimed", ["result": .string("success"), "source": .string(source)])
+        let result = await claimer.claim(draft, source: source)
+        if case .saved = result {
             error = nil
             onClaimed()
-        } catch AccountError.handleTaken {
-            error = "@\(trimmed) is already taken"
-            Analytics.capture("handle_claimed", ["result": .string("taken"), "source": .string(source)])
-        } catch AccountError.handleNotAllowed {
-            error = "@\(trimmed) isn't allowed"
-            Analytics.capture("handle_claimed", ["result": .string("not_allowed"), "source": .string(source)])
-        } catch {
-            Log.ui.error("HandleClaimCard(\(source, privacy: .public)): claim failed: \(error, privacy: .public)")
-            self.error = "Couldn't claim that right now. Check your connection."
+        } else {
+            error = result.message
         }
     }
 }
