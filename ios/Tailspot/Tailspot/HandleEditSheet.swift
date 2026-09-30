@@ -24,7 +24,10 @@ struct HandleEditSheet: View {
     /// Test seam: snapshot and unit harnesses inject a fake claimer.
     var claimer: HandleClaimer
 
-    @AppStorage(SpotterHandle.storageKey) private var handle: String = SpotterHandle.defaultPlaceholder
+    /// The handle as it was when the sheet opened. Frozen on purpose: a save
+    /// writes the new handle before the sheet finishes dismissing, and reading
+    /// it live made the title and note flip to the "after" state mid-close.
+    @State private var handle: String
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
     @State private var outcome: HandleClaimOutcome?
@@ -40,7 +43,10 @@ struct HandleEditSheet: View {
          initialOutcome: HandleClaimOutcome? = nil) {
         self.source = source
         self.onSaved = onSaved
-        self.claimer = claimer ?? HandleClaimer()
+        let claimer = claimer ?? HandleClaimer()
+        self.claimer = claimer
+        _handle = State(initialValue: claimer.defaults.string(forKey: SpotterHandle.storageKey)
+                        ?? SpotterHandle.defaultPlaceholder)
         _draft = State(initialValue: initialDraft)
         _outcome = State(initialValue: initialOutcome)
     }
@@ -118,7 +124,10 @@ struct HandleEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // Disabled mid-save: the request can't be recalled, so
+                    // closing here would still rename behind the user's back.
                     Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isClaimed ? "Save" : "Claim") { Task { await save() } }
@@ -129,6 +138,7 @@ struct HandleEditSheet: View {
             }
         }
         .presentationDetents([.medium])
+        .interactiveDismissDisabled(isSaving)
         .presentationDragIndicator(.visible)
         .task {
             // Prefill only a real handle; the "spotter_42" placeholder would
