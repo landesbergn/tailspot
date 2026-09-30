@@ -116,6 +116,62 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
     return res.json();
   }
 
+  it("counts positive-point public catchers before the limit in each window", async () => {
+    const participants = await db
+      .insert(devices)
+      .values(
+        Array.from({ length: 55 }, (_, i) => ({
+          tokenHash: `count-fixture-${i}`,
+          handle: `catcher_${i}`,
+        })),
+      )
+      .returning();
+    for (const [i, participant] of participants.entries()) {
+      const date = i < 51 ? utc(2026, 7, 10) : i < 53 ? utc(2026, 7, 3) : utc(2026, 6, 30);
+      await seedCatch(participant.id, 10, date);
+    }
+    // Multiple catches still count as one catcher.
+    await seedCatch(participants[0].id, 20, utc(2026, 7, 10));
+    const excluded = await db
+      .insert(devices)
+      .values([
+        { tokenHash: "count-empty", handle: "no_catches" },
+        { tokenHash: "count-zero", handle: "zero_points" },
+        { tokenHash: "count-anonymous", handle: null },
+        { tokenHash: "count-disabled", handle: "disabled", disabledAt: utc(2026, 7, 10) },
+      ])
+      .returning();
+    await seedCatch(excluded[1].id, 0, utc(2026, 7, 10));
+    await seedCatch(excluded[2].id, 100, utc(2026, 7, 10));
+    await seedCatch(excluded[3].id, 100, utc(2026, 7, 10));
+
+    for (const [window, total] of [
+      ["week", 51],
+      ["month", 53],
+      ["all", 55],
+    ] as const) {
+      const board = await get(`/v1/leaderboard?window=${window}`);
+      expect(board.totalCatchers).toBe(total);
+      expect(board.entries).toHaveLength(50);
+      expect(board.entries[49].rank).toBe(50);
+      expect(board.entries.every((entry: { points: number }) => entry.points > 0)).toBe(true);
+      expect(board.entries.some((entry: { handle: string }) => entry.handle === "disabled")).toBe(
+        false,
+      );
+      const smallPage = await get(`/v1/leaderboard?window=${window}&limit=1`);
+      expect(smallPage.totalCatchers).toBe(total);
+      expect(smallPage.entries).toHaveLength(1);
+    }
+  });
+
+  it("returns zero qualifying catchers for an empty board in every window", async () => {
+    for (const window of ["week", "month", "all"]) {
+      const board = await get(`/v1/leaderboard?window=${window}`);
+      expect(board.totalCatchers).toBe(0);
+      expect(board.entries).toEqual([]);
+    }
+  });
+
   // ── Window scoping ─────────────────────────────────────────────────────────
 
   it("week window sums and ranks only this week's catches; all-time is untouched", async () => {
@@ -239,6 +295,7 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
         "me",
         "monthlyChampions",
         "resetsAt",
+        "totalCatchers",
         "window",
       ]);
       expect(Object.keys(body.me).sort()).toEqual([

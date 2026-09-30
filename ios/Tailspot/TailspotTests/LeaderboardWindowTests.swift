@@ -233,6 +233,44 @@ struct LeaderboardWindowDecodingTests {
     }
 }
 
+@Suite("Leaderboard catcher totals")
+struct LeaderboardCatcherCountTests {
+    @Test func decodesTotalAndRemainsCompatibleWithLegacyPayloads() throws {
+        let json = """
+        {"entries": [], "me": null, "window": "week", "totalCatchers": 86}
+        """.data(using: .utf8)!
+        let response = try JSONDecoder().decode(LeaderboardResponse.self, from: json)
+        #expect(response.totalCatchers == 86)
+        #expect(response.additionalCatchers == 36)
+        _ = try JSONDecoder().decode(LegacyLeaderboardResponse.self, from: json)
+
+        let old = """
+        {"entries": [], "me": null, "window": "week"}
+        """.data(using: .utf8)!
+        let legacy = try JSONDecoder().decode(LeaderboardResponse.self, from: old)
+        #expect(legacy.totalCatchers == nil)
+        #expect(legacy.additionalCatchers == 0)
+    }
+
+    @Test(arguments: [0, 49, 50, 51, 1284])
+    func remainderOnlyAppearsAboveFifty(total: Int) {
+        let response = LeaderboardResponse(entries: [], me: nil, totalCatchers: total)
+        #expect(response.additionalCatchers == max(0, total - 50))
+    }
+
+    @Test func capsDisplayAtFiftyAndExcludesZeroPointEntries() {
+        let entries = (1...60).map { rank in
+            LeaderboardEntry(rank: rank, handle: "catcher_\(rank)",
+                             points: rank == 1 ? 0 : 10, catches: 1)
+        }
+        let response = LeaderboardResponse(entries: entries, me: nil, totalCatchers: 59)
+        #expect(response.displayedEntries.count == 50)
+        #expect(response.displayedEntries.first?.handle == "catcher_2")
+        #expect(response.displayedEntries.last?.handle == "catcher_51")
+        #expect(response.displayedEntries.allSatisfy { $0.points > 0 })
+    }
+}
+
 // MARK: - Countdown math
 
 @Suite("Leaderboard reset countdown")
