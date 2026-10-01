@@ -763,7 +763,9 @@ struct ProfileScreen: View {
     /// moved to the catch screen's bottom bar (Challenges phase 0); the
     /// Challenges tile took its place (phase 2). It carries a count badge
     /// of the challenges you're in (live + upcoming) — it used to carry the
-    /// headline as a subtitle, which didn't fit the tile (2026-09-27). The
+    /// headline as a subtitle, which didn't fit the tile (2026-09-27) — or,
+    /// until the hub is first opened, the same discovery dot as the Leaders
+    /// flag (2026-09-30). The
     /// tile exists
     /// only once the server config has said the feature is available on
     /// this build; before that (feature not deployed, kill switch on,
@@ -776,7 +778,9 @@ struct ProfileScreen: View {
         HStack(spacing: 10) {
             quickLink(label: "Map", glyph: "map") { MapScreen() }
             if let challenges, challenges.verdict == .available {
-                quickLink(label: "Challenges", glyph: "flag.checkered", badge: challenges.activeCount) {
+                quickLink(label: "Challenges", glyph: "flag.checkered",
+                          indicator: ChallengeEntryIndicator(active: challenges.activeCount,
+                                                             hubSeen: challenges.hubSeen)) {
                     ChallengesHub(source: "profile_tile")
                 }
             }
@@ -788,7 +792,8 @@ struct ProfileScreen: View {
     /// it there), so the tile renders its cold-state copy instead of crashing.
     @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
 
-    private func quickLink<Dest: View>(label: String, glyph: String, badge: Int = 0,
+    private func quickLink<Dest: View>(label: String, glyph: String,
+                                       indicator: ChallengeEntryIndicator = .none,
                                        @ViewBuilder destination: @escaping () -> Dest) -> some View {
         NavigationLink {
             destination()
@@ -801,9 +806,15 @@ struct ProfileScreen: View {
                     .foregroundStyle(Brand.Color.cyan)
                     .frame(width: 28, height: 24)
                     .overlay(alignment: .topTrailing) {
-                        if badge > 0 {
-                            ChallengeCountBadge(count: badge)
+                        switch indicator {
+                        case .count(let n):
+                            ChallengeCountBadge(count: n)
                                 .offset(x: 10, y: -7)
+                        case .discovery:
+                            ChallengeDiscoveryDot()
+                                .offset(x: 4, y: -2)
+                        case .none:
+                            EmptyView()
                         }
                     }
                     .accessibilityHidden(true)
@@ -817,7 +828,7 @@ struct ProfileScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(badge > 0 ? "\(badge) active" : "")
+        .accessibilityValue(indicator.accessibilityValue)
     }
 
     // MARK: - Section links (reference / settings)

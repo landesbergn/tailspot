@@ -60,8 +60,8 @@ enum ChallengesAppModel {
 // MARK: - Leaders toolbar flag
 
 /// The checkered flag on the Leaderboard's toolbar. A cyan dot marks it
-/// until the hub has been opened once (the whole first-run discovery
-/// story — no NEW pill, no coachmark). Hidden entirely when the server has
+/// until the hub has been opened once (the Profile tile carries the same
+/// dot — no NEW pill, no coachmark). Hidden entirely when the server has
 /// the feature off.
 struct ChallengesFlagButton: View {
     @Environment(ChallengesModel.self) private var model: ChallengesModel?
@@ -81,23 +81,78 @@ struct ChallengesFlagButton: View {
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "flag.checkered")
-                    // The count of challenges you're in wins; the discovery
-                    // dot only shows while there's nothing to count.
-                    if model.activeCount > 0 {
-                        ChallengeCountBadge(count: model.activeCount)
+                    switch ChallengeEntryIndicator(active: model.activeCount, hubSeen: model.hubSeen) {
+                    case .count(let n):
+                        ChallengeCountBadge(count: n)
                             .offset(x: 10, y: -9)
-                    } else if !model.hubSeen {
-                        Circle()
-                            .fill(Brand.Color.cyan)
-                            .frame(width: 7, height: 7)
-                            .overlay { Circle().strokeBorder(Brand.Color.bgPrimary, lineWidth: 1.5) }
+                    case .discovery:
+                        ChallengeDiscoveryDot()
                             .offset(x: 4, y: -4)
-                            .accessibilityHidden(true)
+                    case .none:
+                        EmptyView()
                     }
                 }
             }
             .accessibilityLabel(Self.accessibilityLabel(active: model.activeCount, hubSeen: model.hubSeen))
         }
+    }
+}
+
+// MARK: - Indicator rule
+
+/// What sits on a Challenges entry point's icon. The Leaders flag and the
+/// Profile tile share one rule so they never disagree: the count of
+/// challenges you're in wins; the discovery dot only shows while there's
+/// nothing to count and the hub has never been opened.
+///
+/// The dot used to live on the flag alone, and the flag sits inside the
+/// Leaderboard sheet, so someone who never opened Leaders never learned
+/// Challenges existed. The Profile tile got the same dot on 2026-09-30.
+enum ChallengeEntryIndicator: Equatable {
+    case count(Int)
+    case discovery
+    case none
+
+    init(active: Int, hubSeen: Bool) {
+        if active > 0 { self = .count(active) }
+        else if !hubSeen { self = .discovery }
+        else { self = .none }
+    }
+
+    /// VoiceOver value for the Profile tile ("2 active", "new", or nothing).
+    var accessibilityValue: String {
+        switch self {
+        case .count(let n): return "\(n) active"
+        case .discovery: return "new"
+        case .none: return ""
+        }
+    }
+}
+
+extension ChallengesModel {
+    /// The catch screen's Leaders button carries the dot for discovery
+    /// only, never a count: the AR view stays quiet once Challenges has
+    /// been seen. Same `.available` gate as the other entry points, so a
+    /// dot never leads to a hub that would open onto an error.
+    var showsBarDiscoveryDot: Bool {
+        verdict == .available
+            && ChallengeEntryIndicator(active: activeCount, hubSeen: hubSeen) == .discovery
+    }
+}
+
+/// The small cyan "you haven't looked yet" dot. The bgPrimary ring keeps
+/// it legible where it overlaps the glyph. 7 pt on the toolbar flag and
+/// the Profile tile; the catch screen's 56 pt bar chip takes a bigger one.
+struct ChallengeDiscoveryDot: View {
+    var diameter: CGFloat = 7
+    var ring: CGFloat = 1.5
+
+    var body: some View {
+        Circle()
+            .fill(Brand.Color.cyan)
+            .frame(width: diameter, height: diameter)
+            .overlay { Circle().strokeBorder(Brand.Color.bgPrimary, lineWidth: ring) }
+            .accessibilityHidden(true)
     }
 }
 

@@ -5,6 +5,21 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-09-30 — Challenges discovery dot on the Profile tile (branch `challenges-profile-dot`)
+
+- The Profile Challenges tile now carries the cyan discovery dot until the
+  hub has been opened once, the same dot as the Leaderboard flag. Before
+  this, the flag inside the Leaderboard sheet was the only cue that the
+  feature existed, for new users and for people updating alike.
+- The catch screen's bottom-bar Leaders button gets a slightly bigger
+  (11 pt) dot under the same condition, for discovery only. A user in a
+  challenge sees no count there, so the AR view stays quiet. This overrides
+  spec §3.4's "no dots on the AR bottom bar" (Noah, 2026-09-30).
+- `ChallengeEntryIndicator` is the one rule for both entry points: the count
+  of challenges you're in wins, then the dot, then nothing.
+  `ChallengeDiscoveryDot` is the shared view. The tile's VoiceOver value
+  reads "new" while the dot shows.
+
 ## 2026-09-30 — Change your handle from Profile (branch `handle-edit-sheet`)
 
 - Tapping the handle (or avatar) on Profile opens a half-height sheet to
