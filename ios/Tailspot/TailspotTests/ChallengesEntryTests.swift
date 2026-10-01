@@ -29,6 +29,19 @@ struct ChallengesEntryCountTests {
         #expect(ChallengesFlagButton.accessibilityLabel(active: 0, hubSeen: true) == "Challenges")
     }
 
+    @Test func countWinsThenDiscoveryDotThenNothing() {
+        #expect(ChallengeEntryIndicator(active: 2, hubSeen: false) == .count(2))
+        #expect(ChallengeEntryIndicator(active: 2, hubSeen: true) == .count(2))
+        #expect(ChallengeEntryIndicator(active: 0, hubSeen: false) == .discovery)
+        #expect(ChallengeEntryIndicator(active: 0, hubSeen: true) == ChallengeEntryIndicator.none)
+    }
+
+    @Test func profileTileValueSaysNewUntilHubOpened() {
+        #expect(ChallengeEntryIndicator.count(3).accessibilityValue == "3 active")
+        #expect(ChallengeEntryIndicator.discovery.accessibilityValue == "new")
+        #expect(ChallengeEntryIndicator.none.accessibilityValue == "")
+    }
+
     @MainActor
     @Test func activeCountIsLivePlusUpcoming() async {
         let defaults = UserDefaults(suiteName: "ChallengesEntryCountTests")!
@@ -99,6 +112,22 @@ struct ChallengesEntrySnapshotTests {
         let model = await demoModel(hubSeen: true)
         let window = host(ProfileScreen().modelContainer(try container()).environment(model),
                           snapshotAs: "challenges_entry_profile_live")
+        defer { window.isHidden = true }
+        #expect(titles(in: window).contains("Profile"))
+    }
+
+    /// A user who has never opened Challenges and is in none: the tile
+    /// carries the discovery dot (no count to show).
+    @Test func profileTileShowsDiscoveryDotOnFirstRun() async throws {
+        let defaults = UserDefaults(suiteName: "ChallengesEntrySnapshotTests.profileCold")!
+        defaults.removePersistentDomain(forName: "ChallengesEntrySnapshotTests.profileCold")
+        let model = ChallengesModel(service: FixtureChallengesService(state: ChallengeFixtures.emptyState()),
+                                    currentBuild: Int.max, defaults: defaults)
+        await model.refreshConfig()
+        await model.refreshList()
+        #expect(ChallengeEntryIndicator(active: model.activeCount, hubSeen: model.hubSeen) == .discovery)
+        let window = host(ProfileScreen().modelContainer(try container()).environment(model),
+                          snapshotAs: "challenges_entry_profile_first_run")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Profile"))
     }
