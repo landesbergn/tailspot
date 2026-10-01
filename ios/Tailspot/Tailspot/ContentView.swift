@@ -49,6 +49,9 @@ struct ContentView: View {
     /// scenePhase)` handler below. (The app-level scenePhase handler in
     /// TailspotApp owns the upload/sync-on-foreground side, separately.)
     @Environment(\.scenePhase) private var scenePhase
+    /// Read only for the Leaders button's discovery dot. Optional because
+    /// snapshot harnesses don't inject it.
+    @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
     @StateObject private var location = LocationManager()
     @StateObject private var motion = MotionManager()
     @StateObject private var adsb = ADSBManager()
@@ -3298,11 +3301,17 @@ struct ContentView: View {
     /// visual weight so the two flank the capture button evenly. The
     /// glyph is the same `list.number` the Profile's Leaders tile uses, so
     /// the two entry points read as one destination.
+    ///
+    /// Carries the Challenges discovery dot until the hub is first opened
+    /// (Noah, 2026-09-30). That overrides the spec's "no dots on the AR
+    /// bottom bar" for discovery only: live counts stay off the catch
+    /// screen, so the bar goes quiet once Challenges has been seen.
     private var bottomLeadersButton: some View {
-        Button {
+        let showsDot = challenges?.showsBarDiscoveryDot ?? false
+        return Button {
             primarySheet = .leaders
         } label: {
-            ZStack {
+            ZStack(alignment: .topTrailing) {
                 RoundedRectangle(cornerRadius: Brand.Radius.card)
                     .fill(Brand.Color.bgPrimary.opacity(0.7))
                     .overlay(
@@ -3314,10 +3323,16 @@ struct ContentView: View {
                 Image(systemName: "list.number")
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(Brand.Color.textPrimary.opacity(0.9))
+                    .frame(width: 56, height: 56)
+                if showsDot {
+                    ChallengeDiscoveryDot(diameter: 11, ring: 2)
+                        .offset(x: 3, y: -3)
+                }
             }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open leaderboard")
+        .accessibilityValue(showsDot ? "Challenges, new" : "")
     }
 
     /// Account button, top right of the AR view — opens the Profile sheet

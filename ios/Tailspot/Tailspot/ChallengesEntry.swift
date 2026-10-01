@@ -129,14 +129,29 @@ enum ChallengeEntryIndicator: Equatable {
     }
 }
 
+extension ChallengesModel {
+    /// The catch screen's Leaders button carries the dot for discovery
+    /// only, never a count: the AR view stays quiet once Challenges has
+    /// been seen. Same `.available` gate as the other entry points, so a
+    /// dot never leads to a hub that would open onto an error.
+    var showsBarDiscoveryDot: Bool {
+        verdict == .available
+            && ChallengeEntryIndicator(active: activeCount, hubSeen: hubSeen) == .discovery
+    }
+}
+
 /// The small cyan "you haven't looked yet" dot. The bgPrimary ring keeps
-/// it legible where it overlaps the glyph.
+/// it legible where it overlaps the glyph. 7 pt on the toolbar flag and
+/// the Profile tile; the catch screen's 56 pt bar chip takes a bigger one.
 struct ChallengeDiscoveryDot: View {
+    var diameter: CGFloat = 7
+    var ring: CGFloat = 1.5
+
     var body: some View {
         Circle()
             .fill(Brand.Color.cyan)
-            .frame(width: 7, height: 7)
-            .overlay { Circle().strokeBorder(Brand.Color.bgPrimary, lineWidth: 1.5) }
+            .frame(width: diameter, height: diameter)
+            .overlay { Circle().strokeBorder(Brand.Color.bgPrimary, lineWidth: ring) }
             .accessibilityHidden(true)
     }
 }

@@ -42,6 +42,33 @@ struct ChallengesEntryCountTests {
         #expect(ChallengeEntryIndicator.none.accessibilityValue == "")
     }
 
+    /// The catch screen's Leaders dot: discovery only. On for a fresh user
+    /// with the feature available; off once the hub is opened, off while in
+    /// any challenge (no counts on the AR view), off before config arrives.
+    @MainActor
+    @Test func barDotIsDiscoveryOnly() async {
+        func model(_ name: String, state: FixtureChallengesService.State) -> ChallengesModel {
+            let defaults = UserDefaults(suiteName: "ChallengesBarDot.\(name)")!
+            defaults.removePersistentDomain(forName: "ChallengesBarDot.\(name)")
+            return ChallengesModel(service: FixtureChallengesService(state: state),
+                                   currentBuild: Int.max, defaults: defaults)
+        }
+
+        let fresh = model("fresh", state: ChallengeFixtures.emptyState())
+        #expect(!fresh.showsBarDiscoveryDot)  // config not fetched yet
+        await fresh.refreshConfig()
+        await fresh.refreshList()
+        #expect(fresh.showsBarDiscoveryDot)
+        fresh.markHubSeen()
+        #expect(!fresh.showsBarDiscoveryDot)
+
+        let busy = model("busy", state: ChallengeFixtures.demoState())
+        await busy.refreshConfig()
+        await busy.refreshList()
+        #expect(busy.activeCount > 0)
+        #expect(!busy.showsBarDiscoveryDot)
+    }
+
     @MainActor
     @Test func activeCountIsLivePlusUpcoming() async {
         let defaults = UserDefaults(suiteName: "ChallengesEntryCountTests")!
@@ -130,6 +157,25 @@ struct ChallengesEntrySnapshotTests {
                           snapshotAs: "challenges_entry_profile_first_run")
         defer { window.isHidden = true }
         #expect(titles(in: window).contains("Profile"))
+    }
+
+    /// The catch screen with a fresh Challenges user: the bottom bar's
+    /// Leaders chip carries the discovery dot. PNG only (the simulator has
+    /// no camera, so the AR view behind the bar is its fallback).
+    @Test func catchScreenLeadersShowsDiscoveryDot() async throws {
+        let defaults = UserDefaults(suiteName: "ChallengesEntrySnapshotTests.catchScreen")!
+        defaults.removePersistentDomain(forName: "ChallengesEntrySnapshotTests.catchScreen")
+        let model = ChallengesModel(service: FixtureChallengesService(state: ChallengeFixtures.emptyState()),
+                                    currentBuild: Int.max, defaults: defaults)
+        await model.refreshConfig()
+        await model.refreshList()
+        #expect(model.showsBarDiscoveryDot)
+        let window = host(ContentView()
+                            .modelContainer(try container())
+                            .environment(StreakToastRelay())
+                            .environment(model),
+                          snapshotAs: "challenges_entry_catch_screen_dot")
+        defer { window.isHidden = true }
     }
 
     @Test func leadersSheetShowsFlagWithCount() async throws {

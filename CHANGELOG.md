@@ -11,6 +11,10 @@ Git history + PLAN.md §9 remain the authoritative record.
   hub has been opened once, the same dot as the Leaderboard flag. Before
   this, the flag inside the Leaderboard sheet was the only cue that the
   feature existed, for new users and for people updating alike.
+- The catch screen's bottom-bar Leaders button gets a slightly bigger
+  (11 pt) dot under the same condition, for discovery only. A user in a
+  challenge sees no count there, so the AR view stays quiet. This overrides
+  spec §3.4's "no dots on the AR bottom bar" (Noah, 2026-09-30).
 - `ChallengeEntryIndicator` is the one rule for both entry points: the count
   of challenges you're in wins, then the dot, then nothing.
   `ChallengeDiscoveryDot` is the shared view. The tile's VoiceOver value
