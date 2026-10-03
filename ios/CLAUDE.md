@@ -119,13 +119,17 @@ source + each one's focused test file — they're not restated here.
   `AnalyticsIdentity.identifyRoute` (`$set` on the pinned person) — never "fix"
   a pinned device with `reset()`/re-identify (CHANGELOG 2026-07-04).
 - **`ADSBSourceError`** (in `ADSBSource.swift`) is the source-neutral
-  transport-error enum (`badURL`/`http(status:)`/`rateLimited`/`decoding`); all
-  errors surface uniformly via `lastError` — **except a 429 on metadata.**
-  `/v1/aircraft` never rate-limits, but `GET /v1/metadata/:icao24` is capped at
-  300/min/IP (backend API hardening, 2026-09-06), so a 429 is its own case:
-  `ADSBManager.metadata(for:)` logs it at info, returns nil, does **not** cache
-  it and does **not** set `lastErrorUserMessage` (no red pill for "slow down" —
-  the next lookup just retries). Real transport failures still raise the pill.
+  transport-error enum (`badURL`/`http(status:)`/`rateLimited`/`decoding`).
+  **Only the `/v1/aircraft` poll raises the status pill** (`lastError` /
+  `lastErrorUserMessage`), and only after a time-based grace: 30 s with fresh
+  data, 8 s cold/stale (`ADSBManager.surfaceDelay`; `isReconnecting` covers the
+  quiet window). **Metadata failures never raise it** (2026-10-02): they're
+  logged, not cached, and retried. A 429 there (`GET /v1/metadata/:icao24` is
+  capped at 300/min/IP) logs at info. **Cancellation is never an error**
+  (`ErrorCopy.isCancellation`): `.task(id:)` re-keys and `stop()` cancel
+  in-flight requests, which URLSession reports as `URLError.cancelled`. That
+  used to read as "TAILSPOT UNREACHABLE" every time you panned off a plane.
+  `ErrorCopy` buckets: offline / weak connection (timeout, DNS) / unreachable.
 - **`Catch` is a flat SwiftData `@Model`**; duplicate icao24 rows are allowed
   (dedupe is a Hangar concern). **`captureDiagnosticsJSON` is now load-bearing,
   not just debug data:** `CatchUploader` reads the press-time pose (heading /

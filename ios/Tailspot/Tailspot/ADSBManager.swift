@@ -505,22 +505,54 @@ final class ADSBManager: ObservableObject {
     private var lastLoggedDiagnostic: VisibilityDiagnostic?
     @Published var lastError: String?
     /// Human-facing companion to `lastError`, mapped through `ErrorCopy`
-    /// (two buckets: no internet / Tailspot unreachable). The AR status
+    /// (no internet / weak connection / Tailspot unreachable). The AR status
     /// pill renders THIS; `lastError` keeps the raw transport string for
     /// the debug aircraft list and logs. Set and cleared in lockstep.
     @Published var lastErrorUserMessage: String?
 
-    /// Consecutive `refresh` failures since the last success. A single
-    /// failed poll on flaky cellular (one bar under an approach corridor)
-    /// shouldn't flash THE INTERNET CONNECTION APPEARS TO BE OFFLINE while
-    /// the 1 Hz re-annotation loop is still gliding happily on
-    /// forward-extrapolated positions. With data on hand we tolerate
-    /// `fetchFailureGraceCount` misses (~30 s at the 10 s poll cadence)
-    /// before surfacing; if we've NEVER fetched successfully (cold start
-    /// while offline) the very first failure surfaces immediately — the
-    /// user needs to know why the sky is empty.
+    /// Consecutive `refresh` failures since the last success, and when the
+    /// streak began. A failed poll on flaky cellular (one bar under an
+    /// approach corridor) shouldn't flash an error while the 1 Hz
+    /// re-annotation loop is still gliding on forward-extrapolated
+    /// positions, so a streak only surfaces once it has lasted
+    /// `surfaceDelay`. That's measured in time, not a count, because the
+    /// starved loop retries every 2 s and a count-based grace burned
+    /// through in a few seconds there.
+    ///
+    /// Two delays (2026-10-02). With fresh data on hand: `warmGrace` (30 s,
+    /// what the old 3-poll count worked out to). With no data or stale
+    /// data (cold start, or foregrounding after the rows aged out):
+    /// `coldStartGrace` (8 s). That used to be zero, so the very first
+    /// failure surfaced; the first request after launch or resume often
+    /// fails while the radio wakes up, so a healthy launch flashed
+    /// "Tailspot unreachable". 8 s covers that blip (the starved loop gets
+    /// ~3 retries in) and still tells someone who is genuinely offline why
+    /// the sky is empty. During that window `isReconnecting` is true and
+    /// the empty-sky pill says so instead of showing an error.
     private var consecutiveFetchFailures = 0
-    static let fetchFailureGraceCount = 3
+    private var failureStreakStart: Date?
+    /// Whether the current streak has reached the HUD (telemetry fires once).
+    private var failureStreakSurfaced = false
+    static let warmGrace: TimeInterval = 30
+    static let coldStartGrace: TimeInterval = 8
+    /// Data older than this counts as "no data" when picking the grace;
+    /// past it `maxPositionAge` has dropped most rows anyway.
+    static let freshDataWindow: TimeInterval = 60
+
+    /// The grace a failure streak gets before it surfaces, given when the
+    /// last successful fetch landed.
+    static func surfaceDelay(lastFetched: Date?, now: Date) -> TimeInterval {
+        guard let lastFetched,
+              now.timeIntervalSince(lastFetched) < freshDataWindow else {
+            return coldStartGrace
+        }
+        return warmGrace
+    }
+
+    /// True while polls are failing inside the cold-start grace with no
+    /// fresh data. The empty-sky pill reads RECONNECTING instead of a
+    /// stale "no aircraft nearby" or a premature error.
+    @Published private(set) var isReconnecting = false
     @Published var lastFetched: Date?
 
     /// Search radius around the user, in km. 50 km comfortably covers the
@@ -670,6 +702,17 @@ final class ADSBManager: ObservableObject {
         pollTask = nil
         reAnnotationTask?.cancel()
         reAnnotationTask = nil
+        // A streak from before backgrounding must not carry over: measured
+        // from its old start, the first failure after resume would surface
+        // at once and skip the cold-start grace.
+        resetFailureStreak()
+    }
+
+    private func resetFailureStreak() {
+        consecutiveFetchFailures = 0
+        failureStreakStart = nil
+        failureStreakSurfaced = false
+        if isReconnecting { isReconnecting = false }
     }
 
     /// Single fetch + annotate cycle. Errors are surfaced via lastError;
@@ -679,7 +722,10 @@ final class ADSBManager: ObservableObject {
     /// On success the raw aircraft list is stashed in `rawAircraft` and
     /// also immediately re-annotated so callers (and tests) see the new
     /// data without waiting for the next smoothness tick.
-    func refresh(around location: CLLocation) async {
+    ///
+    /// `now` is injectable so tests can drive the failure grace without
+    /// sleeping; production always passes the default.
+    func refresh(around location: CLLocation, now: Date = Date()) async {
         let observerLat = location.coordinate.latitude
         let observerLon = location.coordinate.longitude
 
@@ -706,18 +752,65 @@ final class ADSBManager: ObservableObject {
             // nothing. Only clear when there's actually an error to clear.
             if self.lastError != nil { self.lastError = nil }
             if self.lastErrorUserMessage != nil { self.lastErrorUserMessage = nil }
-            self.consecutiveFetchFailures = 0
-            self.lastFetched = Date()
+            if self.consecutiveFetchFailures > 0, let streakStart = self.failureStreakStart {
+                // Every streak reports on recovery, including the ones the
+                // grace kept off the HUD, so the field data shows how often
+                // polls fail and how long the outages really last.
+                Analytics.capture("adsb_fetch_recovered", [
+                    "failures": .int(self.consecutiveFetchFailures),
+                    "streak_s": .double((now.timeIntervalSince(streakStart) * 10).rounded() / 10),
+                    "surfaced": .bool(self.failureStreakSurfaced),
+                ])
+            }
+            self.resetFailureStreak()
+            self.lastFetched = now
         } catch {
+            // Cancelled by us (stop() on background), not a failure.
+            if ErrorCopy.isCancellation(error) {
+                Log.adsb.debug("Poll cancelled")
+                return
+            }
             self.consecutiveFetchFailures += 1
-            if self.lastFetched == nil
-                || self.consecutiveFetchFailures >= Self.fetchFailureGraceCount {
+            let streakStart = self.failureStreakStart ?? now
+            self.failureStreakStart = streakStart
+            let delay = Self.surfaceDelay(lastFetched: self.lastFetched, now: now)
+            let streak = now.timeIntervalSince(streakStart)
+            if streak >= delay {
                 self.lastError = error.localizedDescription
                 self.lastErrorUserMessage = ErrorCopy.pill(for: error)
+                if self.isReconnecting { self.isReconnecting = false }
+                if !self.failureStreakSurfaced {
+                    self.failureStreakSurfaced = true
+                    Analytics.capture("adsb_fetch_error_shown", [
+                        "failures": .int(self.consecutiveFetchFailures),
+                        "streak_s": .double((streak * 10).rounded() / 10),
+                        "bucket": .string(ErrorCopy.bucket(for: error)),
+                        "error_code": .string(Self.telemetryCode(for: error)),
+                        "had_fresh_data": .bool(delay == Self.warmGrace),
+                    ])
+                }
             } else {
                 // Within grace: log it, keep the HUD quiet, keep extrapolating.
-                Log.adsb.notice("Poll failed (\(self.consecutiveFetchFailures, privacy: .public)/\(Self.fetchFailureGraceCount, privacy: .public), banner suppressed): \(error.localizedDescription, privacy: .public)")
+                if delay == Self.coldStartGrace, !self.isReconnecting {
+                    self.isReconnecting = true
+                }
+                Log.adsb.notice("Poll failed (\(self.consecutiveFetchFailures, privacy: .public) in \(Int(streak), privacy: .public)s of \(Int(delay), privacy: .public)s grace, banner suppressed): \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    /// Stable, low-cardinality error code for telemetry. Never the
+    /// localized description, which varies by device language.
+    static func telemetryCode(for error: Error) -> String {
+        var underlying = error
+        if case AccountError.transport(let inner) = error { underlying = inner }
+        if let url = underlying as? URLError { return "url_\(url.code.rawValue)" }
+        switch underlying as? ADSBSourceError {
+        case .http(let status): return "http_\(status)"
+        case .decoding: return "decoding"
+        case .rateLimited: return "rate_limited"
+        case .badURL: return "bad_url"
+        case nil: return "other"
         }
     }
 
@@ -731,6 +824,15 @@ final class ADSBManager: ObservableObject {
     /// and hitting that ceiling means "ask again in a moment", not "Tailspot
     /// is down" — so it must not raise the red status pill. Like every other
     /// error it is not cached, so the next lookup retries.
+    ///
+    /// No metadata failure raises the pill (2026-10-02). The pill reports
+    /// the position feed; metadata is a side lookup whose failure only
+    /// costs a label detail. These lookups also run inside `.task(id:)`s
+    /// that SwiftUI cancels whenever the visible set or the lock target
+    /// changes, and that cancellation used to surface as "TAILSPOT
+    /// UNREACHABLE", most often right as the last plane left the frame,
+    /// which is exactly when the empty-sky pill appears. If the backend is
+    /// really down, the poll fails too and raises the pill on its own.
     func metadata(for icao24: String) async -> AircraftMetadata? {
         switch await metadataCache.get(icao24: icao24) {
         case .hit(let value):
@@ -747,12 +849,13 @@ final class ADSBManager: ObservableObject {
                 // it ever becomes common, not worth an error.
                 Log.adsb.info("metadata lookup rate limited for \(icao24, privacy: .public) — not cached, will retry")
                 return nil
+            } catch where ErrorCopy.isCancellation(error) {
+                // The view that asked moved on; nothing failed.
+                return nil
             } catch {
-                // Transport error — surface via lastError but do NOT
-                // cache. The next tap will retry.
+                // Transport error: log it and do NOT cache (the next tap
+                // retries). No pill, see the doc comment above.
                 Log.adsb.error("metadata lookup failed for \(icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                self.lastError = "Metadata lookup failed: \(error.localizedDescription)"
-                self.lastErrorUserMessage = ErrorCopy.pill(for: error)
                 return nil
             }
         }
