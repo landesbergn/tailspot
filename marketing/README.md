@@ -9,12 +9,12 @@ marketing/
 ├─ catch-photos/            real catch photos, committed — see its README
 └─ app-store-screenshots/   the Next.js deck editor
    ├─ app-store-screenshots.json      the deck: copy, layout, which file per slide
-   ├─ public/screenshots/apple/iphone/en/   the six source screenshots
+   ├─ public/screenshots/apple/iphone/en/   the seven source screenshots
    ├─ export/                          current store-ready PNGs (gitignored)
    └─ export-archive/<version>/        what actually shipped for that version
 ```
 
-## The six slides
+## The seven slides
 
 Files are named for the slide they fill, so the deck and the folder agree.
 **This was not always true** — they used to be `01.png`…`07.png`, where slide 2
@@ -28,17 +28,25 @@ was `07.png` and `02.png` was unused. Don't go back to numbers.
 | 4 | `slide4-hangar-sets.png` | `mkt_04_hangar_sets` | Sets grid |
 | 5 | `slide5-trophies.png` | `mkt_05_trophies` | Trophy case |
 | 6 | `slide6-leaderboard.png` | `mkt_06_leaderboard` | Standings |
+| 7 | `slide7-challenges.png` | `mkt_08_challenge_live` | A live private challenge: 7 spotters, me 1st by 35 (added for v1.2.0; `isolated` in the deck) |
+
+The deck uses the connected canvas, so a phone can bleed across a slide
+edge (slide 6's two phones reach into slides 5 and 7). A slide with
+`"isolated": true` in `app-store-screenshots.json` is drawn above the shared
+canvas inside its own clip, so nothing bleeds onto it or off it. Slide 7
+uses it; flipping it on for another slide changes only that slide's export.
 
 `mkt_02_reveal` also renders but **no slide uses it** — it's a spare if the
-deck ever wants the reveal screen. `bin/marketing-collect` owns the
+deck ever wants the reveal screen. Likewise `mkt_08b_challenge_live_expanded`
+(my catch log open) and `mkt_09_challenges_hub` render as Challenges spares. `bin/marketing-collect` owns the
 shot → filename mapping so nobody has to remember the crossover.
 
-## Regenerating slides 2–6
+## Regenerating slides 2–7
 
 ```bash
 bin/marketing-stage-photos          # real catch photos → /private/tmp
 xcrun simctl boot <sim>             # a booted sim is required
-tools/marketing-shot-watcher.sh &   # only for shots 4–6 (see below)
+tools/marketing-shot-watcher.sh &   # only for shots 4–6 and 8–9 (see below)
 
 TEST_RUNNER_MARKETING_CAPTURE=1 xcodebuild test \
   -project ios/Tailspot/Tailspot.xcodeproj -scheme Tailspot \
@@ -65,10 +73,25 @@ Two capture paths exist, for a reason:
   can't draw them (any photo-bearing card comes out as a yellow "no entry"
   placeholder, because `RevealPhoto` wraps the hero in a UIKit tag view), so
   they go through `writeOffscreen`.
-- **Shots 4, 5, 6** carry `.glassEffect`, which offscreen capture garbles.
+- **Shots 4, 5, 6, 8, 9** carry `.glassEffect`, which offscreen capture garbles.
   They're shown on the real simulator screen and grabbed by
   `tools/marketing-shot-watcher.sh` via a flag-file handshake. That watcher
-  must be running or those three will hang for 20 s each and produce nothing.
+  must be running or those shots will hang for 20 s each and produce nothing.
+  Newer simulators leave the Dynamic Island out of `simctl io screenshot`;
+  the watcher paints it back from a second `--mask=black` shot (needs
+  ImageMagick), so new captures match the older slides.
+- **The Challenges shots never show the DEMO DATA badge.** That badge keys
+  off the `-challengesFixture` launch argument; the harness injects its own
+  `FixtureChallengesService` world (invented handles) straight into the
+  model instead. Its invite code must be a valid 6-character code from the
+  invite alphabet (no L, I, O, 0, 1), currently `WKND7X`.
+- **The home indicator can land on slide 7's bottom row.** The sim draws it
+  over window-hosted shots inconsistently; neither `persistentSystemOverlays`
+  nor `prefersHomeIndicatorAutoHidden` on the capture window suppresses it.
+  The 2026-10-02 slide 7 had its bottom 72 px (the indicator band) swapped
+  for the same band of an earlier clean render of the identical rows (the
+  400 px above matched pixel-for-pixel), so nothing but the system bar
+  changed. If a re-capture shows the bar, do the same.
 
 ## Slide 1 is different
 
@@ -104,7 +127,7 @@ Sizes live in `src/lib/constants.ts` (`EXPORT_SIZES`).
 
 ## Before a submission
 
-1. Re-capture if any UI on slides 2–6 changed since the last export.
+1. Re-capture if any UI on slides 2–7 changed since the last export.
 2. Export the bundle; upload from `export/ios/iphone/1284x2778/en/`.
 3. Once the version ships, copy the set to `export-archive/<version>/` so
    there's a record of what each listing actually showed.
