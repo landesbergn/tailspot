@@ -28,7 +28,13 @@ was `07.png` and `02.png` was unused. Don't go back to numbers.
 | 4 | `slide4-hangar-sets.png` | `mkt_04_hangar_sets` | Sets grid |
 | 5 | `slide5-trophies.png` | `mkt_05_trophies` | Trophy case |
 | 6 | `slide6-leaderboard.png` | `mkt_06_leaderboard` | Standings |
-| 7 | `slide7-challenges.png` | `mkt_08_challenge_live` | A live private challenge: 7 spotters, me 1st by 35 (added for v1.2.0) |
+| 7 | `slide7-challenges.png` | `mkt_08_challenge_live` | A live private challenge: 7 spotters, me 1st by 35 (added for v1.2.0; `isolated` in the deck) |
+
+The deck uses the connected canvas, so a phone can bleed across a slide
+edge (slide 6's two phones reach into slides 5 and 7). A slide with
+`"isolated": true` in `app-store-screenshots.json` is drawn above the shared
+canvas inside its own clip, so nothing bleeds onto it or off it. Slide 7
+uses it; flipping it on for another slide changes only that slide's export.
 
 `mkt_02_reveal` also renders but **no slide uses it** — it's a spare if the
 deck ever wants the reveal screen. Likewise `mkt_08b_challenge_live_expanded`

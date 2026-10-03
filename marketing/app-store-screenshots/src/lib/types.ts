@@ -63,6 +63,10 @@ export type Slide = {
   screenshot: string;         // path under /screenshots/ — may contain {locale}
   screenshotSecondary?: string; // for two-devices layout — may contain {locale}
   inverted?: boolean;         // dark background variant
+  // Connected canvas only: draw this screen on top of the shared canvas,
+  // clipped to its own bounds, so neighbours' overflow (e.g. a two-devices
+  // phone bleeding off the edge) can't reach it and its own can't leave it.
+  isolated?: boolean;
   // Per-element overrides; when present, replaces layout default placement.
   transforms?: Partial<Record<BuiltInElementId, ElementTransform>>;
   textElements?: TextElement[];

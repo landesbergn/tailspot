@@ -87,9 +87,10 @@
           "en": ""
         },
         "headline": {
-          "en": "Race your friends\nto the next plane."
+          "en": "Challenge\nyour friends."
         },
-        "screenshot": "/screenshots/apple/iphone/en/slide7-challenges.png"
+        "screenshot": "/screenshots/apple/iphone/en/slide7-challenges.png",
+        "isolated": true
       }
     ],
     "android": [
