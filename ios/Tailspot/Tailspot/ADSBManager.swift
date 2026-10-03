@@ -535,8 +535,10 @@ final class ADSBManager: ObservableObject {
     private var failureStreakSurfaced = false
     static let warmGrace: TimeInterval = 30
     static let coldStartGrace: TimeInterval = 8
-    /// Data older than this counts as "no data" when picking the grace;
-    /// past it `maxPositionAge` has dropped most rows anyway.
+    /// Data older than this counts as "no data" when picking the grace.
+    /// Shorter than `maxPositionAge` (150 s) on purpose: rows that old are
+    /// still drawn, but they're extrapolated a minute or more past their
+    /// last fix, so a feed failing then deserves the quick heads-up.
     static let freshDataWindow: TimeInterval = 60
 
     /// The grace a failure streak gets before it surfaces, given when the
@@ -765,8 +767,11 @@ final class ADSBManager: ObservableObject {
             self.resetFailureStreak()
             self.lastFetched = now
         } catch {
-            // Cancelled by us (stop() on background), not a failure.
-            if ErrorCopy.isCancellation(error) {
+            // Cancelled by us (stop() on background), not a failure. Gated
+            // on our own task being cancelled: a stray URLError.cancelled
+            // from URLSession itself must still count, or a failing feed
+            // would go silent (no pill, no fast retry).
+            if ErrorCopy.isCancellation(error), Task.isCancelled {
                 Log.adsb.debug("Poll cancelled")
                 return
             }

@@ -250,11 +250,28 @@ struct ADSBManagerTests {
     @Test func cancelledPollIsNotAFailure() async {
         let manager = ADSBManager(source: FixedSource([], error: URLError(.cancelled)))
         let t0 = Date()
-        await manager.refresh(around: Self.observer(), now: t0)
-        await manager.refresh(around: Self.observer(), now: t0 + 60)
+        // Run inside a task we cancel, as stop() cancels the poll task.
+        let task = Task { @MainActor in
+            await manager.refresh(around: Self.observer(), now: t0)
+            await manager.refresh(around: Self.observer(), now: t0 + 60)
+        }
+        task.cancel()
+        await task.value
         #expect(manager.lastError == nil)
         #expect(manager.lastErrorUserMessage == nil)
         #expect(!manager.isReconnecting)
+    }
+
+    /// A URLError.cancelled we did NOT ask for (our task still running)
+    /// counts as a failure, so a broken feed can't go silent.
+    @Test func strayCancelledErrorStillCounts() async {
+        let manager = ADSBManager(source: FixedSource([], error: URLError(.cancelled)))
+        let t0 = Date()
+        await manager.refresh(around: Self.observer(), now: t0)
+        #expect(manager.isReconnecting)
+        await manager.refresh(around: Self.observer(),
+                              now: t0 + ADSBManager.coldStartGrace)
+        #expect(manager.lastErrorUserMessage != nil)
     }
 
     /// stop() resets the streak, so a failure after resume is measured
