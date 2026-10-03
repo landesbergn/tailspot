@@ -1,0 +1,3 @@
+node_modules/
+# Generated carousels. Only examples/ (one compressed slide per template) is committed.
+out/

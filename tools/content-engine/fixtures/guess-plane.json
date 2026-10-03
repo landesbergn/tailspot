@@ -1,0 +1,20 @@
+{
+ "template": "guess-plane",
+ "capturedAt": "2026-08-19T00:00:00.000Z",
+ "synthetic": false,
+ "note": "Real: Noah's own catch photo + the ADS-B the app recorded (marketing/catch-photos/README.md). No network needed; this fixture just pins the photo.",
+ "params": {
+  "catchId": "b737"
+ },
+ "raw": {
+  "catchId": "b737"
+ },
+ "sources": [
+  {
+   "name": "Noah's catch photo + recorded ADS-B",
+   "url": "marketing/catch-photos/b737.jpg",
+   "fetchedAt": "2026-08-19T00:00:00.000Z"
+  }
+ ],
+ "tailspotStats": null
+}

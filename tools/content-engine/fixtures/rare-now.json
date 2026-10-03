@@ -1,0 +1,452 @@
+{
+ "template": "rare-now",
+ "capturedAt": "2026-10-03T22:40:00.000Z",
+ "synthetic": true,
+ "note": "SYNTHETIC test data in the exact adsb.lol /v2 response shape, hand-built because the dev environment that wrote this engine could not reach api.adsb.lol. Callsigns and registrations are illustrative, NOT a real sighting. Slides rendered from it carry a SAMPLE DATA stamp and post.json says postable:false. Replace with a real capture: npm run generate -- --template <id> --save-fixture fixtures/<id>.json",
+ "params": {},
+ "raw": {
+  "mil": {
+   "ac": [
+    {
+     "hex": "ae0412",
+     "type": "adsb_icao",
+     "flight": "DOOM31  ",
+     "r": "60-0034",
+     "t": "B52",
+     "alt_baro": 27975,
+     "alt_geom": 28275,
+     "gs": 418.2,
+     "track": 285.4,
+     "lat": 63.12,
+     "lon": -146.05,
+     "category": "A5",
+     "seen_pos": 0.8,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 1
+    },
+    {
+     "hex": "ae01ce",
+     "type": "adsb_icao",
+     "flight": "RCH871  ",
+     "r": "05-5140",
+     "t": "C17",
+     "alt_baro": 31000,
+     "alt_geom": 31300,
+     "gs": 452.0,
+     "track": 62.0,
+     "lat": 47.9,
+     "lon": -84.2,
+     "category": "A5",
+     "seen_pos": 0.8,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 1
+    },
+    {
+     "hex": "ae04c5",
+     "type": "adsb_icao",
+     "flight": "PACK22  ",
+     "r": "63-8886",
+     "t": "K35R",
+     "alt_baro": 24000,
+     "alt_geom": 24300,
+     "gs": 380.5,
+     "track": 95.0,
+     "lat": 50.2,
+     "lon": 6.5,
+     "category": "A5",
+     "seen_pos": 0.8,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 1
+    },
+    {
+     "hex": "43c6f1",
+     "type": "adsb_icao",
+     "flight": "RRR4502 ",
+     "r": "ZM412",
+     "t": "A400",
+     "alt_baro": 22000,
+     "alt_geom": 22300,
+     "gs": 300.1,
+     "track": 140.0,
+     "lat": 52.9,
+     "lon": -1.0,
+     "category": "A5",
+     "seen_pos": 0.8,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 1
+    },
+    {
+     "hex": "ae5d10",
+     "type": "adsb_icao",
+     "flight": "NAVY12  ",
+     "r": "169001",
+     "t": "P8",
+     "alt_baro": 15000,
+     "alt_geom": 15300,
+     "gs": 330.0,
+     "track": 200.0,
+     "lat": 36.8,
+     "lon": -121.0,
+     "category": "A5",
+     "seen_pos": 0.8,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 1
+    },
+    {
+     "hex": "ae1234",
+     "type": "adsb_icao",
+     "flight": "LADD01  ",
+     "r": null,
+     "t": "F35",
+     "alt_baro": 18000,
+     "alt_geom": 18300,
+     "gs": 420.0,
+     "track": 10.0,
+     "lat": 33.0,
+     "lon": -117.0,
+     "category": "A5",
+     "seen_pos": 0.8,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 9
+    },
+    {
+     "hex": "ae2222",
+     "type": "adsb_icao",
+     "flight": "STALE1  ",
+     "r": "86-0111",
+     "t": "B1",
+     "alt_baro": 20000,
+     "alt_geom": 20300,
+     "gs": 500.0,
+     "track": 10.0,
+     "lat": 38.5,
+     "lon": -100.0,
+     "category": "A5",
+     "seen_pos": 300,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 1
+    },
+    {
+     "hex": "ae3333",
+     "type": "adsb_icao",
+     "flight": "GRND1   ",
+     "r": "164386",
+     "t": "E6",
+     "alt_baro": "ground",
+     "alt_geom": null,
+     "gs": 12.0,
+     "track": 0.0,
+     "lat": 36.3,
+     "lon": -97.9,
+     "category": "A5",
+     "seen_pos": 0.8,
+     "seen": 0.2,
+     "mlat": [],
+     "tisb": [],
+     "dbFlags": 1
+    }
+   ],
+   "msg": "No error",
+   "now": 1791067200000,
+   "total": 8,
+   "ctime": 1791067200000,
+   "ptime": 12
+  },
+  "types": {
+   "A388": {
+    "ac": [
+     {
+      "hex": "8963c5",
+      "type": "adsb_icao",
+      "flight": "UAE215  ",
+      "r": "A6-EOX",
+      "t": "A388",
+      "alt_baro": 38000,
+      "alt_geom": 38300,
+      "gs": 488.0,
+      "track": 300.0,
+      "lat": 48.3,
+      "lon": 40.2,
+      "category": "A5",
+      "seen_pos": 0.8,
+      "seen": 0.2,
+      "mlat": [],
+      "tisb": []
+     },
+     {
+      "hex": "4007f1",
+      "type": "adsb_icao",
+      "flight": "BAW283  ",
+      "r": "G-XLEA",
+      "t": "A388",
+      "alt_baro": 36000,
+      "alt_geom": 36300,
+      "gs": 471.0,
+      "track": 265.0,
+      "lat": 58.0,
+      "lon": -30.0,
+      "category": "A5",
+      "seen_pos": 0.8,
+      "seen": 0.2,
+      "mlat": [],
+      "tisb": []
+     }
+    ],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 2,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "B748": {
+    "ac": [
+     {
+      "hex": "4d0101",
+      "type": "adsb_icao",
+      "flight": "CLX7881 ",
+      "r": "LX-VCA",
+      "t": "B748",
+      "alt_baro": 35000,
+      "alt_geom": 35300,
+      "gs": 505.0,
+      "track": 250.0,
+      "lat": 40.5,
+      "lon": -45.0,
+      "category": "A5",
+      "seen_pos": 0.8,
+      "seen": 0.2,
+      "mlat": [],
+      "tisb": []
+     },
+     {
+      "hex": "3c4b21",
+      "type": "adsb_icao",
+      "flight": "DLH463  ",
+      "r": "D-ABYA",
+      "t": "B748",
+      "alt_baro": 37000,
+      "alt_geom": 37300,
+      "gs": 495.0,
+      "track": 285.0,
+      "lat": 55.0,
+      "lon": -20.0,
+      "category": "A5",
+      "seen_pos": 0.8,
+      "seen": 0.2,
+      "mlat": [],
+      "tisb": []
+     }
+    ],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 2,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "B744": {
+    "ac": [
+     {
+      "hex": "a0b2c3",
+      "type": "adsb_icao",
+      "flight": "GTI8251 ",
+      "r": "N263SG",
+      "t": "B744",
+      "alt_baro": 34000,
+      "alt_geom": 34300,
+      "gs": 480.0,
+      "track": 40.0,
+      "lat": 25.0,
+      "lon": -150.0,
+      "category": "A5",
+      "seen_pos": 0.8,
+      "seen": 0.2,
+      "mlat": [],
+      "tisb": []
+     }
+    ],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 1,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "B742": {
+    "ac": [],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 0,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "A124": {
+    "ac": [
+     {
+      "hex": "508021",
+      "type": "adsb_icao",
+      "flight": "ADB3021 ",
+      "r": "UR-82029",
+      "t": "A124",
+      "alt_baro": 33000,
+      "alt_geom": 33300,
+      "gs": 430.0,
+      "track": 230.0,
+      "lat": 50.5,
+      "lon": 12.0,
+      "category": "A5",
+      "seen_pos": 0.8,
+      "seen": 0.2,
+      "mlat": [],
+      "tisb": []
+     }
+    ],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 1,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "IL76": {
+    "ac": [],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 0,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "AN22": {
+    "ac": [],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 0,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "MD11": {
+    "ac": [
+     {
+      "hex": "a1f2e3",
+      "type": "adsb_icao",
+      "flight": "FDX36   ",
+      "r": "N583FE",
+      "t": "MD11",
+      "alt_baro": "ground",
+      "alt_geom": null,
+      "gs": 0.0,
+      "track": null,
+      "lat": 35.04,
+      "lon": -89.98,
+      "category": "A5",
+      "seen_pos": 0.8,
+      "seen": 0.2,
+      "mlat": [],
+      "tisb": []
+     }
+    ],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 1,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "DC10": {
+    "ac": [],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 0,
+    "ctime": 1791067200000,
+    "ptime": 12
+   },
+   "L101": {
+    "ac": [],
+    "msg": "No error",
+    "now": 1791067200000,
+    "total": 0,
+    "ctime": 1791067200000,
+    "ptime": 12
+   }
+  }
+ },
+ "sources": [
+  {
+   "name": "adsb.lol /v2/mil",
+   "url": "https://api.adsb.lol/v2/mil",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/A388",
+   "url": "https://api.adsb.lol/v2/type/A388",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/B748",
+   "url": "https://api.adsb.lol/v2/type/B748",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/B744",
+   "url": "https://api.adsb.lol/v2/type/B744",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/B742",
+   "url": "https://api.adsb.lol/v2/type/B742",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/A124",
+   "url": "https://api.adsb.lol/v2/type/A124",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/IL76",
+   "url": "https://api.adsb.lol/v2/type/IL76",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/AN22",
+   "url": "https://api.adsb.lol/v2/type/AN22",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/MD11",
+   "url": "https://api.adsb.lol/v2/type/MD11",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/DC10",
+   "url": "https://api.adsb.lol/v2/type/DC10",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  },
+  {
+   "name": "adsb.lol /v2/type/L101",
+   "url": "https://api.adsb.lol/v2/type/L101",
+   "fetchedAt": "2026-10-03T22:40:00.000Z",
+   "license": "ODbL-1.0"
+  }
+ ],
+ "tailspotStats": null
+}

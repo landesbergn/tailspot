@@ -29,6 +29,34 @@ Git history + PLAN.md §9 remain the authoritative record.
   `backend/`), then www (`cd web && fly deploy`). Additive route; shipped app
   builds are unaffected. Per-code card images are the later step.
 
+## 2026-10-03 — Content engine v0 (branch `worktree-agent-aca006e7ce211e984`)
+
+- New `tools/content-engine/`: a Node 22 CLI that a daily cloud routine can run
+  to produce one ready-to-post carousel (6 PNGs at 1080×1920, `caption.txt`,
+  `post.json`). This is Loop 2 of the growth plan. It renders HTML/CSS slides
+  with Playwright Chromium, and Playwright is its only dependency. It renders
+  posts but doesn't publish them yet; the Postiz step comes next (see its
+  README).
+- Three templates rotate by date. **Rare right now**: the highest-tier
+  aircraft airborne, from adsb.lol `/v2/mil` + `/v2/type/*`. **What's over
+  [city]**: live counts, the rarity mix and the rarest catchable plane within
+  30 NM of SF, London, NYC, Tokyo, Sydney or Bali. **Guess the plane**: one of
+  Noah's real catch photos with four choices, and the answer on the last
+  content slide. Guess-the-plane needs no network, so it's the automatic
+  fallback when adsb.lol is down.
+- Real data only. Tiers come from the app's own `AircraftTypes.json`. Privacy
+  rules live in `src/privacy.ts` and are tested: LADD/PIA aircraft and private
+  tail numbers are never named, positions are region-level only, and no user
+  photos, catch GPS or leaderboard handles are used. The only Tailspot data
+  is the public `/v1/stats` count, sent with the site's Origin as
+  `backend/README.md` allows.
+- The rare-now and over-city fixtures are **synthetic**. The build sandbox's
+  egress proxy blocks `api.adsb.lol` and `api.tailspot.app`, so the endpoints
+  were checked against adsb.lol's source rather than live. Anything rendered
+  from those fixtures is stamped SAMPLE DATA and marked `postable: false`.
+  Re-capture them with `--save-fixture` once a routine environment can reach
+  adsb.lol. 22 `node:test` tests run offline.
+
 ## 2026-10-02 — Fewer false "Tailspot unreachable" pills (branch `unreachable-pill`)
 
 - Most of these pills weren't outages. Metadata lookups run in `.task(id:)`s
