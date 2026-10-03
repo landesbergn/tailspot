@@ -91,7 +91,7 @@ struct HangarTrophiesView: View {
         }
         .background(Brand.Color.bgPrimary)
         .task(id: token) {
-            TrophyAchievementDates.recordMissing(from: catches, inputs: inputs)
+            await TrophyAchievementDates.backfill(from: catches, inputs: inputs)
         }
     }
 }

@@ -750,7 +750,9 @@ nonisolated enum Trophies {
         // strings (canonical()/lowercased()) while scanning all catches for
         // its mostly-locked entries — tens of thousands of allocations per
         // `inputs()` call. `progress(of:againstKeys:)` reuses the single pass.
-        let catchKeys = CardSets.matchKeys(for: catches)
+        // Distinct keys only (identical result): with every key, this loop
+        // was nearly all of `inputs()` on a 4,600-catch Hangar (~2.7 s).
+        let catchKeys = CardSets.distinctMatchKeys(for: catches)
         let completedSets = CardSets.families.reduce(into: 0) { acc, set in
             let p = CardSets.progress(of: set, againstKeys: catchKeys)
             if p.total > 0 && p.caught == p.total { acc += 1 }

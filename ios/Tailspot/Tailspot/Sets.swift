@@ -1401,6 +1401,26 @@ nonisolated enum CardSets {
         catches.map(matchKey(for:))
     }
 
+    /// `matchKeys(for:)` minus every key whose match strings repeat an
+    /// earlier key's. `matches(key:entry:)` reads only those strings, so
+    /// first-match-wins over this list picks the same key (same `source`) as
+    /// over the full one. It matters for big Hangars: a locked entry scans
+    /// every key, and 4,600 catches × 238 entries was ~2.7 s per call — the
+    /// whole cost of `Trophies.inputs` — when those catches are a few hundred
+    /// distinct types at most.
+    nonisolated static func distinctMatchKeys(for catches: [Catch]) -> [CatchMatchKey] {
+        struct MatchStrings: Hashable {
+            let typecode: String?
+            let rawModel: String
+            let canonical: String
+        }
+        var seen = Set<MatchStrings>()
+        return matchKeys(for: catches).filter { key in
+            seen.insert(MatchStrings(typecode: key.typecode, rawModel: key.rawModelLowercased,
+                                     canonical: key.canonicalLowercased)).inserted
+        }
+    }
+
     /// Keyed twin of `matches(catch:entry:)` — the actual decision, reading
     /// the precomputed strings instead of re-deriving them per pair. Semantics
     /// are bit-for-bit identical to the legacy `[Catch]` path.
