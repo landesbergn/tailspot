@@ -3,7 +3,7 @@
 //  TailspotTests
 //
 //  Marketing-capture harness for the App Store screenshot set
-//  (docs/ga/screenshot-plan.md). Renders the six planned shots as
+//  (docs/ga/screenshot-plan.md). Renders the planned shots as
 //  full-screen 393×852 @3x PNGs into /private/tmp/tailspot_snaps/marketing/
 //  for the framing pass in marketing/app-store-screenshots. NOT an
 //  assertion test — same visual-pass pattern as RevealSnapshotTests.
@@ -14,7 +14,8 @@
 //  Shots 2, 2b and 3 render REAL catches: real ADS-B numbers, real routes,
 //  real tiers, and the app's own composed catch JPEGs (staged by
 //  `bin/marketing-stage-photos` from marketing/catch-photos/) as the hero
-//  photos. Shots 4–6 are the real screens with fixture data.
+//  photos. Shots 4–6 are the real screens with fixture data, and so is
+//  shot 8 (Challenges, slide 7; 8b and 9 are spares).
 //
 //  Shot 2 (the reveal) is a SPARE: it renders, but no slide in the current
 //  deck uses it. `bin/marketing-collect` maps shots to deck filenames.
@@ -410,6 +411,117 @@ struct MarketingSnapshotTests {
         }
         .modelContainer(container)
         snapshotWindow(view, name: "mkt_06_leaderboard", settle: 0.8)
+    }
+
+    // MARK: - Shot 7 · Challenges (head-to-head with friends)
+
+    /// A small private challenge mid-race: seven spotters, two hours left,
+    /// me narrowly in front. Seven rows (not five) so the standings run to
+    /// the bottom of the screen and the red Leave button stays below the
+    /// fold — the shot should end on the race, not on an exit. Built here rather than from
+    /// `ChallengeFixtures.demoState()` so the store shot uses its own
+    /// invented handles (the same cast as the leaderboard shot) and so the
+    /// hub's DEMO DATA badge never appears — that badge keys off the
+    /// `-challengesFixture` launch argument, which this harness doesn't use;
+    /// the fixture service is injected straight into the model instead.
+    private func challengesMarketingState(now: Date) -> FixtureChallengesService.State {
+        let h: TimeInterval = 3_600
+        let d: TimeInterval = 86_400
+        let me = "noah"
+        typealias F = ChallengeFixtures
+
+        let live = F.summary(
+            id: "m-live", name: "Weekend Flyoff", creator: "skykid", code: "WKNDFLY7",
+            startsAt: now.addingTimeInterval(-22 * h), endsAt: now.addingTimeInterval(2 * h),
+            preset: "24h", status: .live, participantCount: 7)
+        let standings = [
+            F.standing(1, me, 545, 13, rarity: ["common": 7, "uncommon": 4, "rare": 1, "epic": 1], me: true),
+            F.standing(2, "skykid", 510, 15, rarity: ["common": 10, "uncommon": 3, "rare": 2]),
+            F.standing(3, "contrail", 320, 9, rarity: ["common": 5, "uncommon": 3, "rare": 1]),
+            F.standing(4, "finalapproach", 185, 7, rarity: ["common": 6, "uncommon": 1]),
+            F.standing(5, "heavywatcher", 140, 4, rarity: ["common": 2, "uncommon": 2]),
+            F.standing(6, "spotterella", 95, 5, rarity: ["common": 5]),
+            F.standing(7, "gearup", 60, 3, rarity: ["common": 3]),
+        ]
+        let liveDetail = ChallengeDetail(
+            challenge: live, standings: standings,
+            me: ChallengeMyResult(placement: 1, points: 545, catches: 13),
+            winners: [], alreadyIn: nil, newDevice: nil)
+
+        let upcoming = F.summary(
+            id: "m-upcoming", name: "Sunday Circuit", creator: me, code: "K7M4QD2X",
+            startsAt: now.addingTimeInterval(20 * h), endsAt: now.addingTimeInterval(20 * h + 3 * d),
+            preset: "3d", status: .upcoming, participantCount: 3, isCreator: true)
+        let upcomingDetail = ChallengeDetail(
+            challenge: upcoming,
+            standings: [F.standing(1, me, 0, 0, me: true), F.standing(1, "contrail", 0, 0),
+                        F.standing(1, "heavywatcher", 0, 0)],
+            me: ChallengeMyResult(placement: 1, points: 0, catches: 0),
+            winners: [], alreadyIn: nil, newDevice: nil)
+
+        let won = F.summary(
+            id: "m-won", name: "Golden Hour", creator: "contrail", code: nil,
+            startsAt: now.addingTimeInterval(-9 * d), endsAt: now.addingTimeInterval(-9 * d + h),
+            preset: "1h", status: .finished, participantCount: 4, outcome: "decided",
+            myResult: ChallengeMyResult(placement: 1, points: 260, catches: 6))
+        let wonDetail = ChallengeDetail(
+            challenge: won,
+            standings: [F.standing(1, me, 260, 6, me: true), F.standing(2, "contrail", 230, 7),
+                        F.standing(3, "skykid", 140, 4), F.standing(4, "gearup", 30, 1)],
+            me: ChallengeMyResult(placement: 1, points: 260, catches: 6),
+            winners: [me], alreadyIn: nil, newDevice: nil)
+
+        let myLog = ChallengeCatchLog(handle: me, catches: [
+            .init(aircraft: "Boeing 737-800", rarity: "common", points: 10, caughtAt: now.addingTimeInterval(-20 * h)),
+            .init(aircraft: "Airbus A321neo", rarity: "common", points: 10, caughtAt: now.addingTimeInterval(-17 * h)),
+            .init(aircraft: "Boeing 777-300ER", rarity: "uncommon", points: 20, caughtAt: now.addingTimeInterval(-11 * h)),
+            .init(aircraft: "Boeing 747-8F", rarity: "rare", points: 50, caughtAt: now.addingTimeInterval(-6 * h)),
+            .init(aircraft: "Gulfstream G650", rarity: "epic", points: 150, caughtAt: now.addingTimeInterval(-3 * h)),
+            .init(aircraft: "Cessna 172", rarity: "uncommon", points: 20, caughtAt: now.addingTimeInterval(-40 * 60)),
+        ])
+
+        var s = ChallengeFixtures.emptyState()
+        s.config = ChallengesConfig(enabled: true, availability: "public", minBuild: 1, appStoreURL: nil)
+        s.open = [live, upcoming]
+        s.history = [won]
+        s.details = [live.id: liveDetail, upcoming.id: upcomingDetail, won.id: wonDetail]
+        s.logs = ["\(live.id)/\(me)": myLog]
+        return s
+    }
+
+    private func challengesModel(now: Date) async -> ChallengesModel {
+        let service = FixtureChallengesService(state: challengesMarketingState(now: now))
+        let defaults = UserDefaults(suiteName: "MarketingSnapshotTests-challenges-\(UUID().uuidString)")!
+        defaults.set(["m-won"], forKey: ChallengesModel.seenResultsKey)
+        let model = ChallengesModel(service: service, currentBuild: 999, now: { now }, defaults: defaults)
+        await model.refreshConfig()
+        await model.refreshList()
+        return model
+    }
+
+    /// Glass cards → on-screen capture via the watcher. Renders the live
+    /// detail (plain + my catch log expanded) and the hub; the deck uses
+    /// whichever reads best at store size (see bin/marketing-collect).
+    @Test func renderChallenges() async {
+        let now = Date()
+        let model = await challengesModel(now: now)
+        await model.loadDetail(id: "m-live")
+        try? await model.loadLog(id: "m-live", handle: "noah")
+        Self.retained.append(model)
+
+        snapshotWindow(
+            NavigationStack { ChallengeDetailScreen(id: "m-live", _debugReduceMotion: true) }
+                .environment(model),
+            name: "mkt_08_challenge_live", settle: 1.0)
+        snapshotWindow(
+            NavigationStack {
+                ChallengeDetailScreen(id: "m-live", _debugReduceMotion: true, _debugExpanded: ["noah"])
+            }
+            .environment(model),
+            name: "mkt_08b_challenge_live_expanded", settle: 1.0)
+        snapshotWindow(
+            NavigationStack { ChallengesHub(source: "marketing") }.environment(model),
+            name: "mkt_09_challenges_hub", settle: 1.0)
     }
 }
 #endif

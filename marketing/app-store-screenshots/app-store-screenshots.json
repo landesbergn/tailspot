@@ -79,6 +79,17 @@
         },
         "screenshot": "/screenshots/apple/iphone/en/slide6-leaderboard.png",
         "screenshotSecondary": "/screenshots/apple/iphone/en/slide5-trophies.png"
+      },
+      {
+        "id": "ts_07_challenges",
+        "layout": "device-bottom",
+        "label": {
+          "en": ""
+        },
+        "headline": {
+          "en": "Race your friends\nto the next plane."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/slide7-challenges.png"
       }
     ],
     "android": [
