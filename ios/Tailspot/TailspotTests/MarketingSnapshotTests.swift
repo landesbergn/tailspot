@@ -431,7 +431,7 @@ struct MarketingSnapshotTests {
         typealias F = ChallengeFixtures
 
         let live = F.summary(
-            id: "m-live", name: "Weekend Flyoff", creator: "skykid", code: "WKNDFLY7",
+            id: "m-live", name: "Weekend Flyoff", creator: "skykid", code: "WKND7X",
             startsAt: now.addingTimeInterval(-22 * h), endsAt: now.addingTimeInterval(2 * h),
             preset: "24h", status: .live, participantCount: 7)
         let standings = [

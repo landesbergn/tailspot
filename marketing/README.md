@@ -77,7 +77,15 @@ Two capture paths exist, for a reason:
 - **The Challenges shots never show the DEMO DATA badge.** That badge keys
   off the `-challengesFixture` launch argument; the harness injects its own
   `FixtureChallengesService` world (invented handles) straight into the
-  model instead.
+  model instead. Its invite code must be a valid 6-character code from the
+  invite alphabet (no L, I, O, 0, 1), currently `WKND7X`.
+- **The home indicator can land on slide 7's bottom row.** The sim draws it
+  over window-hosted shots inconsistently; neither `persistentSystemOverlays`
+  nor `prefersHomeIndicatorAutoHidden` on the capture window suppresses it.
+  The 2026-10-02 slide 7 had its bottom 72 px (the indicator band) swapped
+  for the same band of an earlier clean render of the identical rows (the
+  400 px above matched pixel-for-pixel), so nothing but the system bar
+  changed. If a re-capture shows the bar, do the same.
 
 ## Slide 1 is different
 
