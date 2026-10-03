@@ -357,6 +357,8 @@ historical plans/specs/reviews. Still only planned:
 
 ## 9. Immediate next steps (post-POC)
 
+**Growth plan to 1,000 WAU by 2026-12-31: drafted 2026-10-03, not started.** Research-backed plan in `docs/plans/2026-10-03-growth-to-1000-wau.md`: fix first-catch activation (#225), story-format share card + server OG for invites, an agent-run daily content engine, Apple featuring nomination, agent-drafted press/creator outreach, Wrapped about Dec 1. Skycards by Flightradar24 (500k+ downloads) is the direct competitor.
+
 **Trophy achievement dates — implemented 2026-09-27, pending review.** Earned cards use the approved achievement strip with a localized date. Catch-based dates are recovered from the first qualifying catch in available history and retained independently of celebration acknowledgments. Leaderboard trophies and legacy event records without timestamps show “Date unavailable.” Standard and accessibility layouts rendered; physical-device review is pending (phone unavailable during deployment).
 
 **🚀 GA — v1.0.0 (build 83) IS LIVE ON THE APP STORE, approved 2026-08-08.** Submitted 2026-07-21, rejected once under 5.1.1(iv) (onboarding CTA wording — fixed in #170), resubmitted 2026-08-04, approved 2026-08-08. **The v1.1 fast-follow clock starts here.**
