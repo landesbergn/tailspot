@@ -831,6 +831,9 @@ struct ContentView: View {
         // shows first, then this overlay once it dismisses.
         .task(id: catches.count) {
             unlockCenter.enqueueNewUnlocks(from: catches)
+            // Upgrade/restore date backfill, off the first frame (1.2.0
+            // shipped it synchronously here and hung big Hangars at launch).
+            await unlockCenter.finishAchievementDates()
         }
         // Hangar restore check — once per launch, self-gating (empty local
         // Hangar + registered identity + server catches > 0). It waits for

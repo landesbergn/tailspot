@@ -44,7 +44,8 @@ struct SetsBrowser: View {
     private func computeScored() -> [(set: CardSet, progress: (caught: Int, total: Int))] {
         // Derive per-catch match keys once and share them across all ~30
         // families — the [Catch] overload would rebuild them per family.
-        let keys = CardSets.matchKeys(for: catches)
+        // Distinct keys only: same result, far fewer scans on a big Hangar.
+        let keys = CardSets.distinctMatchKeys(for: catches)
         return CardSets.families
             .map { (set: $0, progress: CardSets.progress(of: $0, againstKeys: keys)) }
             .sorted { a, b in
