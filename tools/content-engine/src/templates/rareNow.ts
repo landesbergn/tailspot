@@ -241,7 +241,7 @@ export const rareNow: Template<RareNowRaw> = {
     const caption = [
       hook,
       "",
-      `As of ${when}: ${p.callsign} (${name}) at ${p.altFt !== null ? fmtAltitudeFt(p.altFt) : "unknown altitude"}, ${region.phrase}. In Tailspot that's a ${subject.rarity.toUpperCase()} catch, worth ${pts} points.`,
+      `As of ${when}: ${p.callsign} (${name}) at ${p.altFt !== null ? fmtAltitudeFt(p.altFt) : "unknown altitude"}, ${region.phrase}. In Tailspot that's ${/^[aeiou]/i.test(subject.rarity) ? "an" : "a"} ${subject.rarity.toUpperCase()} catch, worth ${pts} points.`,
       "",
       "Tailspot names the real plane over you from live ADS-B, then you add it to your collection. Free on iPhone, link in bio.",
       "",
