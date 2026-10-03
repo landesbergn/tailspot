@@ -91,17 +91,23 @@ Ground truth verified in source (see `privacy-policy.md` appendix). Data below
 is what the app actually sends off-device. **"Linked to you":** every backend
 and analytics record is keyed to the anonymous device ID. Apple's definition
 of "linked" includes data tied to a device-level identifier, so the honest
-answers are **Linked = Yes** wherever the device ID is the key. (Note: the
-committed `PrivacyInfo.xcprivacy` currently declares most types
-`Linked=false` — defensible only under a narrower "real-world identity"
-reading. Recommend aligning the manifest to the label, one small code PR.)
+answers are **Linked = Yes** wherever the device ID is the key.
+`PrivacyInfo.xcprivacy` matches this table (every type Linked = true since the
+2026-07-11 GA review; Other User Content added 2026-10-02 for v1.2.0).
+
+**v1.2.0 re-check (2026-10-02): no label change in App Store Connect.**
+Challenges adds new *data* but no new *category*: the challenge name, who
+joined, and placements are Other User Content; the APNs push token sits on the
+device row, so it is Device ID; the shutter-press pose sent with a catch (#257)
+is part of the catch record. Open App Privacy once before submitting to confirm
+the live label still matches this table.
 Nothing is used for **Tracking** (Apple's cross-app/ad sense) — `NSPrivacyTracking=false` stands.
 
 | Apple category | Data | Collected? | Linked | Tracking | Purpose |
 |---|---|---|---|---|---|
 | Location → Precise Location | Observer lat/lon uploaded with each catch; bounding-box aircraft queries while open | **Yes** | Yes | No | App Functionality |
-| Identifiers → Device ID | Anonymous server-minted device ID (Keychain) | **Yes** | Yes | No | App Functionality, Analytics |
-| User Content → Other User Content | Catch records (aircraft, timestamp, guess answer) | **Yes** | Yes | No | App Functionality |
+| Identifiers → Device ID | Anonymous server-minted device ID (Keychain); APNs push token on the same device row (v1.2) | **Yes** | Yes | No | App Functionality, Analytics |
+| User Content → Other User Content | Catch records (aircraft, timestamp, guess answer, shutter-press pose); challenge names, membership and placements (v1.2) | **Yes** | Yes | No | App Functionality |
 | Identifiers → User ID | Optional public handle | **Yes** | Yes | No | App Functionality |
 | Usage Data → Product Interaction | PostHog events + **session replay screen recordings** | **Yes** | Yes | No | Analytics |
 | Diagnostics → Crash Data | MetricKit crash counts → PostHog | **Yes** | Yes | No | Analytics, App Functionality |
@@ -117,7 +123,61 @@ Nothing is used for **Tracking** (Apple's cross-app/ad sense) — `NSPrivacyTrac
   (Bali field data). Mitigation is expectation-setting: the description's
   coverage paragraph + the in-app empty-sky messaging.
 
-## What's New — v1.1.1 (train opened 2026-09-01) ← NEXT SUBMISSION
+## What's New — v1.2.0 (train opened 2026-09-15) ← NEXT SUBMISSION
+
+Covers everything on `main` after **c5955a4**, the last commit in the shipped
+1.1.1 build 94. The Challenges release. Backend (API v42, migrations 0010 +
+0011, APNs) is deployed in prod with `CHALLENGES_ENABLED=true`. The app never
+reads `CHALLENGES_AVAILABILITY`, so the review build sees Challenges either way;
+set it to `public` on release day so the config endpoint tells the truth.
+
+App Store "What's New" (paste into ASC):
+
+> Challenges are here. Start a race with up to 10 friends, pick how long it
+> runs (an hour, a day, three days or a week), and send them the invite link
+> or code. Every plane you catch while it's live scores points, and the
+> standings update as you go. We'll nudge you when someone passes you.
+>
+> Also in this release:
+> • Leaders has its own button on the camera screen. Your profile is now the
+>   button in the top right.
+> • Change your handle by tapping it on your profile.
+> • Trophies show the day you earned them.
+> • The leaderboard shows where you stand even outside the top 50.
+> • Deleted catches no longer count toward the leaderboard.
+> • No more bright flash when you press the shutter.
+> • Far fewer "Tailspot unreachable" warnings on a weak signal.
+> • New sets to fill, including the Maule M-7, EMB-120, T-34C, AW169,
+>   Pilatus PC-7, Pitts, Cessna 414 and Luscombe 8.
+
+Promotional text (170 chars, no review needed — swap in on release day):
+
+> New: Challenges. Race up to 10 friends to catch the most planes in an hour,
+> a day or a week.
+
+App Review notes (keep the open-sky paragraph from 1.1.1, add this). On
+submission day, create a 7-day challenge from your phone and put its code in
+place of [CODE]; joins stay open until it ends, which covers a slow review.
+
+> New in 1.2: Challenges, under Leaders (bottom bar, flag icon) or the
+> Challenges tile on Profile. A reviewer can create one from a desk: tap the
+> flag, Create, leave Start on "Starts now" and pick 1 hour. Points only come from real catches, so
+> standings stay at zero indoors; that is expected. Joining needs an invite
+> code from another player; to test the join flow, enter code [CODE] (a
+> week-long challenge we opened for review). After the first create or join,
+> the app may ask for notification permission so it can send challenge reminders and tell you
+> when someone passes you. Notifications are optional and can be turned off in
+> Settings → Reminders.
+
+TestFlight "What to Test" (tester-notes voice):
+
+> • challenges! start one from the flag on Leaders, send your friends the
+>   code, and see who catches the most before the clock runs out
+> • i'll ping you when someone passes you. you've been warned
+> • the shutter stopped flashing and the "unreachable" pill should mostly
+>   leave you alone now
+
+## What's New — v1.1.1 — ✅ SHIPPED 2026-09-14 (build 94)
 
 Covers everything on `main` after **db3d274**, the last commit in the shipped
 1.1.0 build 89. A polish-and-accessibility release with one feature (monthly
