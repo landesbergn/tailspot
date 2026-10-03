@@ -5,6 +5,30 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-03 — Rich link previews for invite links outside iMessage (branch `invite-og-card`)
+
+- WhatsApp, Slack, Discord, Telegram, X, Facebook and LinkedIn fetch a
+  pasted `tailspot.app/c/CODE` themselves, follow the 302 and showed the
+  generic App Store page. (iMessage was already covered by the app's
+  `LPLinkMetadata`, 2026-09-29.) Noah's rule stands: no landing page for
+  people. Only crawlers see anything new.
+- API: `GET /v1/invites/:code/card` returns a small HTML page of Open Graph
+  and Twitter tags: "<name> · Tailspot challenge", "@creator invited you to a
+  plane-spotting challenge · Oct 5 – Oct 12 · 3 spotters" (UTC; an ended or
+  cancelled challenge says so), the static `og-image.jpg`, `og:url` = the
+  invite link, and a meta refresh to the App Store campaign URL. No auth, no
+  Origin gate, never a participant list, all user text HTML-escaped. It
+  shares the `/preview` lookup and 60 s memo (refactored into one
+  `publicInvite`), has its own 120/min/IP bucket, and every failure (unknown
+  code, flag off, rate limited) is the App Store 302, never a 404.
+- www: a `map` on the User-Agent flags link-preview bots; for them `/c/CODE`
+  is rewritten into an internal location that proxies the card from
+  `api.tailspot.app`. Everyone else keeps the unchanged 302. An API error,
+  timeout or 404 falls back to the same 302.
+- Deploy order (Noah, manual): API first (`fly deploy --remote-only` from
+  `backend/`), then www (`cd web && fly deploy`). Additive route; shipped app
+  builds are unaffected. Per-code card images are the later step.
+
 ## 2026-10-02 — Fewer false "Tailspot unreachable" pills (branch `unreachable-pill`)
 
 - Most of these pills weren't outages. Metadata lookups run in `.task(id:)`s

@@ -123,8 +123,8 @@ Postgres at most once a minute.
 
 Head-to-head and small-group races over a shared time window, scored with the
 standard catch points. Spec: `docs/reviews/2026-09-15-challenges-v1-spec.html`.
-**Deployed dark**: every route below except `/config` answers `404` until
-`CHALLENGES_ENABLED=true` is set on the Fly app.
+**Deployed dark**: every route below except `/config` answers `404` (`/card`:
+its App Store `302`) until `CHALLENGES_ENABLED=true` is set on the Fly app.
 
 | Route | Auth | Limit | Notes |
 |---|---|---|---|
@@ -138,6 +138,7 @@ standard catch points. Spec: `docs/reviews/2026-09-15-challenges-v1-spec.html`.
 | `GET /v1/invites/:code` | bearer | 30/min/IP **before** the token lookup | Join-sheet preview: `{ challenge, participants, needsHandle, alreadyIn, canJoin, reason? }`. Unknown code → 404. |
 | `POST /v1/invites/:code/join` | bearer + claimed handle | 30/min/IP + 30/h/device | 200 detail (+ `alreadyIn`, `newDevice`); 409 full (10); 410 ended/cancelled; 422 no handle. Joining is idempotent; a leaver can rejoin. |
 | `GET /v1/invites/:code/preview` | none, browser `Origin` allowlisted | 30/min/IP, 60 s memo | Landing-page preview: name, creator handle, window, participant count, status. Never a participant list. |
+| `GET /v1/invites/:code/card` | none, no `Origin` check (crawlers send none) | 120/min/IP (own bucket), same 60 s memo as `/preview` | `text/html` Open Graph card for link-preview crawlers (WhatsApp, Slack, Discord, …), which `web/nginx.conf` proxies `tailspot.app/c/CODE` to by User-Agent. Title "<name> · Tailspot challenge", description with creator, UTC window and spotter count (honest wording once ended or cancelled), static `og:image`, `og:url` = the invite link, and a meta refresh to the App Store campaign URL. User text is HTML-escaped. Unknown or malformed code, flag off, or rate limited → **302 to the App Store** (not 404), so a crawler always gets the old preview at worst. `Cache-Control: public, max-age=300`. Never a participant list. Crawlers proxied through www share that app's egress IP, hence one generous bucket. |
 
 Rules the store enforces (all from the spec's decided list): status is derived
 from the clock, never stored; joins are open until `endsAt` and a joiner's

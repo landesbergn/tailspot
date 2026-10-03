@@ -15,7 +15,7 @@ web/
     style.css
     img/           # real catch photos + the social preview card
   Dockerfile       # nginx:alpine serving public/ on :8080
-  nginx.conf       # port 8080, gzip, cache headers
+  nginx.conf       # port 8080, gzip, cache headers, /c/CODE routing
   fly.toml         # Fly.io config — app: tailspot-www, region: sjc
 ```
 
@@ -72,6 +72,22 @@ app shares:
   falls through to the 404 page instead of a pointless App Store trip.
   The regex is **quoted** because nginx reads a bare `{6}` as the start of
   a config block and refuses to start. There is no landing page by design.
+- **`/c/CODE` for link-preview crawlers** — WhatsApp, Slack, Discord,
+  Telegram, X, Facebook, LinkedIn, Skype, Pinterest and Reddit fetch a
+  pasted link themselves; following the 302 they used to show the generic
+  App Store page. A `map` on `$http_user_agent` (`$is_preview_bot`) sends
+  just those requests, via `rewrite … last` into the internal
+  `/_invite-card/` location, to `https://api.tailspot.app/v1/invites/CODE/card`
+  — an HTML page of Open Graph tags (challenge name, creator, window,
+  spotter count, `img/og-image.jpg`) with a meta refresh to the same App
+  Store URL. People never see it; iMessage doesn't need it (the app hands
+  it `LPLinkMetadata`). Googlebot is deliberately not in the list. If the
+  API errors, 404s (www deployed before the API) or times out, nginx falls
+  back to the same 302. `proxy_pass` names the host literally, so nginx
+  resolves `api.tailspot.app` once at startup (no `resolver` needed) and
+  **won't start if that lookup fails**. To check after a deploy:
+  `curl -s -A WhatsApp/2 https://tailspot.app/c/CODE | grep og:` (tags),
+  and without `-A` (still the 302).
 
 `.well-known` is a dot-directory, which `COPY public/ /usr/share/nginx/html/`
 in the Dockerfile does include (a directory source copies its contents,

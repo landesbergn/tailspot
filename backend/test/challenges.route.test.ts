@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { PrivatePointsScorer } from "../src/challenges/scorer.js";
 import { DrizzleChallengeStore } from "../src/challenges/store.js";
@@ -27,6 +27,7 @@ const SITE = "https://tailspot.app";
 describe("Challenges v1 routes", () => {
   let app: FastifyInstance;
   let db: Database;
+  let challengeStore: DrizzleChallengeStore;
   let nowSec = Math.floor(T0_MS / 1000);
   let enabled = true;
   let uuidSeq = 0;
@@ -51,10 +52,11 @@ describe("Challenges v1 routes", () => {
       type: "narrow",
       rarity: "rare",
     });
+    challengeStore = new DrizzleChallengeStore(db, new PrivatePointsScorer(db));
     app = await buildApp({
       identityStore: new DrizzleIdentityStore(db),
       catchStore: new DrizzleCatchStore(db),
-      challengeStore: new DrizzleChallengeStore(db, new PrivatePointsScorer(db)),
+      challengeStore,
       challengesEnabled: () => enabled,
       challengesConfig: { availability: "testflight", minBuild: 95 },
       nowSeconds: () => nowSec,
@@ -453,6 +455,145 @@ describe("Challenges v1 routes", () => {
         status: "live",
       });
       expect(JSON.stringify(res.json())).not.toContain("participants");
+    });
+  });
+
+  // ── link-preview card (crawlers) ───────────────────────────────────────────
+
+  describe("GET /v1/invites/:code/card", () => {
+    const APP_STORE =
+      "https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&ct=Challenge%20Invite&mt=8";
+
+    function card(code: string, headers: Record<string, string> = {}) {
+      return app.inject({ method: "GET", url: `/v1/invites/${code}/card`, headers });
+    }
+
+    /** The `content` of the first <meta> whose property/name is `key` (still HTML-escaped). */
+    function meta(html: string, key: string): string | undefined {
+      const re = new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)">`);
+      return html.match(re)?.[1];
+    }
+
+    it("serves Open Graph tags with no auth and no Origin, case-insensitively", async () => {
+      const noah = await register("noah");
+      const eli = await register("eli");
+      const c = await created(noah, { name: "Weekend Flyoff", duration: "7d" });
+      await join(eli, c.challenge.code);
+
+      const res = await card(c.challenge.code.toLowerCase());
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toBe("text/html; charset=utf-8");
+      expect(res.headers["cache-control"]).toBe("public, max-age=300");
+      expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+      const html = res.body;
+      expect(meta(html, "og:title")).toBe("Weekend Flyoff · Tailspot challenge");
+      // T0 is 2026-09-15T12:00Z; a 7-day window ends 09-22.
+      expect(meta(html, "og:description")).toBe(
+        "@noah invited you to a plane-spotting challenge · Sep 15 – Sep 22 · 2 spotters",
+      );
+      expect(meta(html, "og:image")).toBe("https://tailspot.app/img/og-image.jpg");
+      expect(meta(html, "og:url")).toBe(`https://tailspot.app/c/${c.challenge.code}`);
+      expect(meta(html, "og:site_name")).toBe("Tailspot");
+      expect(meta(html, "twitter:card")).toBe("summary_large_image");
+      expect(html).toContain(
+        `<meta http-equiv="refresh" content="0;url=${APP_STORE.replace(/&/g, "&amp;")}">`,
+      );
+      // Never a participant list.
+      expect(html).not.toContain("eli");
+    });
+
+    it("escapes user-written text (challenge name)", async () => {
+      const noah = await register("noah");
+      const c = await created(noah, { name: `"><script>a</script>'&`, duration: "24h" });
+      const res = await card(c.challenge.code);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain("<script>");
+      expect(res.body).not.toContain(`"><`);
+      expect(meta(res.body, "og:title")).toBe(
+        "&quot;&gt;&lt;script&gt;a&lt;/script&gt;&#39;&amp; · Tailspot challenge",
+      );
+      expect(res.body).toContain(
+        "<title>&quot;&gt;&lt;script&gt;a&lt;/script&gt;&#39;&amp; · Tailspot challenge</title>",
+      );
+    });
+
+    it("an unknown, malformed or flagged-off code is a 302 to the App Store, not a 404", async () => {
+      for (const code of ["ZZZZZZ", "short", "K7M4QD2O"]) {
+        const res = await card(code);
+        expect(res.statusCode).toBe(302);
+        expect(res.headers.location).toBe(APP_STORE);
+      }
+      const noah = await register("noah");
+      const c = await created(noah);
+      enabled = false;
+      const off = await card(c.challenge.code);
+      expect(off.statusCode).toBe(302);
+      expect(off.headers.location).toBe(APP_STORE);
+    });
+
+    it("an ended or cancelled challenge says so", async () => {
+      const noah = await register("noah");
+      const ended = await created(noah, { name: "Quick", duration: "1h" });
+      const upcoming = await created(noah, {
+        name: "Later",
+        duration: "1h",
+        start: secs(2 * HOUR).toISOString(),
+      });
+      const cancel = await app.inject({
+        method: "POST",
+        url: `/v1/challenges/${upcoming.challenge.id}/cancel`,
+        headers: auth(noah),
+      });
+      expect(cancel.statusCode).toBe(204);
+      nowSec += HOUR; // exactly at the first one's endsAt → finished
+
+      const endedCard = await card(ended.challenge.code);
+      expect(meta(endedCard.body, "og:description")).toBe(
+        "This plane-spotting challenge by @noah has ended · Sep 15, 12:00–13:00 UTC · 1 spotter · Get Tailspot to start your own",
+      );
+      const cancelledCard = await card(upcoming.challenge.code);
+      expect(meta(cancelledCard.body, "og:description")).toBe(
+        "This plane-spotting challenge by @noah was cancelled · Get Tailspot to start your own",
+      );
+    });
+
+    it("shares the 60 s memo with /preview: one DB read for both, again after expiry", async () => {
+      const noah = await register("noah");
+      const c = await created(noah);
+      const spy = vi.spyOn(challengeStore, "findByCode");
+
+      const preview = await app.inject({
+        method: "GET",
+        url: `/v1/invites/${c.challenge.code}/preview`,
+        headers: { origin: SITE },
+      });
+      expect(preview.statusCode).toBe(200);
+      expect((await card(c.challenge.code)).statusCode).toBe(200);
+      expect((await card(c.challenge.code)).statusCode).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      nowSec += 61;
+      expect((await card(c.challenge.code)).statusCode).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
+    it("has its own per-IP bucket (120/min); running out degrades to the App Store redirect", async () => {
+      const noah = await register("noah");
+      const c = await created(noah);
+      const ip = { "fly-client-ip": "203.0.113.20" };
+      for (let i = 0; i < 120; i++) {
+        expect((await card(c.challenge.code, ip)).statusCode).toBe(200);
+      }
+      const limited = await card(c.challenge.code, ip);
+      expect(limited.statusCode).toBe(302);
+      expect(limited.headers.location).toBe(APP_STORE);
+      // The authenticated invite lookup's 30/min bucket is untouched.
+      const lookup = await app.inject({
+        method: "GET",
+        url: `/v1/invites/${c.challenge.code}`,
+        headers: auth(noah, "203.0.113.20"),
+      });
+      expect(lookup.statusCode).toBe(200);
     });
   });
 

@@ -4,10 +4,13 @@
  *   GET  /v1/invites/:code            (bearer) → preview { challenge, participants: [handle], canJoin, reason? }
  *   POST /v1/invites/:code/join       (bearer + handle) → 200 detail | 409 full | 410 closed | 422 no handle
  *   GET  /v1/invites/:code/preview    (no auth, Origin allowlist) → { name, creatorHandle, startsAt, endsAt, participantCount, status }
+ *   GET  /v1/invites/:code/card       (no auth, no Origin)        → text/html Open Graph card for link-preview crawlers
  *
  * The code lookup is metered PER IP BEFORE the token lookup — codes are
  * unguessable (~40 bits) and this limiter is what keeps them that way.
- * Unknown codes are 404 on every route, so nothing can be enumerated.
+ * Unknown codes are 404 on every route, so nothing can be enumerated — except
+ * /card, which answers a 302 to the App Store instead (a crawler should still
+ * render something), and does so for a rate-limited caller too.
  *
  * Anti-spam (spec §9.1): opening a link records nothing and notifies nobody.
  * The only write is the explicit join.
@@ -15,6 +18,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { normalizeCode } from "../challenges/codes.js";
+import { type PublicInvite, renderInviteCard } from "../challenges/inviteCard.js";
 import { type Challenge, type ChallengeStore, challengeStatus } from "../challenges/store.js";
 import { resolveDevice } from "../identity/auth.js";
 import { ipKey } from "../identity/clientIp.js";
@@ -29,13 +33,17 @@ export interface InvitesRouteOptions {
   allowedOrigins: readonly string[];
   inviteBaseURL: string;
   now: () => Date;
-  /** Per-IP, before any token or DB read, on every invite route. */
+  /** Per-IP, before any token or DB read, on every invite route except /card. */
   inviteIpLimiter: RateLimiter;
+  /** Per-IP, before any DB read, on /card only (its own, more generous bucket). */
+  cardIpLimiter: RateLimiter;
+  /** Where /card sends browsers and unknown codes — the same campaign URL as web/nginx.conf. */
+  appStoreURL: string;
   /** Per-device: join (shared with leave/cancel). */
   mutateLimiter: RateLimiter;
   /** Per-device: the authenticated preview. */
   readLimiter: RateLimiter;
-  /** In-process memo lifetime for the public preview. Default 60 s. */
+  /** In-process memo lifetime for the public preview and card. Default 60 s. */
   previewCacheTtlMs?: number;
   /** Clock (unix ms) for the memo; shares the rate limiters' clock. */
   cacheNow?: () => number;
@@ -160,10 +168,40 @@ export function registerInvitesRoutes(app: FastifyInstance, opts: InvitesRouteOp
       .send({ ...detail, alreadyIn: result.alreadyIn, newDevice: result.newDevice });
   });
 
+  // ── The public, participant-free lookup behind /preview and /card ─────────
+  // Memoised per code for `ttl`, shared by both routes, so a link pasted into
+  // a busy group chat (one crawler fetch per client, plus the landing page)
+  // costs one DB read a minute. Misses are not memoised.
+  const memo = new Map<string, { body: PublicInvite; expiresAt: number }>();
+  async function publicInvite(code: string): Promise<PublicInvite | null> {
+    const tms = clock();
+    const hit = memo.get(code);
+    if (hit && tms < hit.expiresAt) return hit.body;
+    const raw = await store.findByCode(code);
+    if (!raw) return null;
+    const t = now();
+    const c = await store.finalizeIfDue(raw, t);
+    const participantCount = await store.participantCount(c.id);
+    const body: PublicInvite = {
+      name: c.name,
+      creatorHandle: c.creatorHandle,
+      startsAt: c.startsAt.toISOString(),
+      endsAt: c.endsAt.toISOString(),
+      durationPreset: c.durationPreset,
+      participantCount,
+      maxParticipants: c.maxParticipants,
+      status: challengeStatus(c, t),
+    };
+    // Bound the memo: codes are attacker-guessable strings only up to the
+    // limiter, but a long-lived process should not grow without limit.
+    if (memo.size > 1_000) memo.clear();
+    memo.set(code, { body, expiresAt: tms + ttl });
+    return body;
+  }
+
   // ── GET /v1/invites/:code/preview — the web landing page ──────────────────
   // Same fence as /v1/stats: browser Origin allowlist, 404 otherwise, memoised
   // per code. Returns the minimum the page needs and never a participant list.
-  const memo = new Map<string, { body: unknown; expiresAt: number }>();
   app.get("/v1/invites/:code/preview", async (request, reply) => {
     const code = gate(request, reply);
     if (!code) return reply;
@@ -171,35 +209,39 @@ export function registerInvitesRoutes(app: FastifyInstance, opts: InvitesRouteOp
     if (typeof origin !== "string" || !allowedOrigins.has(origin)) {
       return reply.code(404).send({ error: "not found" });
     }
-    const tms = clock();
-    let hit = memo.get(code);
-    if (!hit || tms >= hit.expiresAt) {
-      const raw = await store.findByCode(code);
-      if (!raw) return reply.code(404).send({ error: "not found" });
-      const t = now();
-      const c = await store.finalizeIfDue(raw, t);
-      const participantCount = await store.participantCount(c.id);
-      hit = {
-        body: {
-          name: c.name,
-          creatorHandle: c.creatorHandle,
-          startsAt: c.startsAt.toISOString(),
-          endsAt: c.endsAt.toISOString(),
-          durationPreset: c.durationPreset,
-          participantCount,
-          maxParticipants: c.maxParticipants,
-          status: challengeStatus(c, t),
-        },
-        expiresAt: tms + ttl,
-      };
-      // Bound the memo: codes are attacker-guessable strings only up to the
-      // limiter, but a long-lived process should not grow without limit.
-      if (memo.size > 1_000) memo.clear();
-      memo.set(code, hit);
-    }
+    const body = await publicInvite(code);
+    if (!body) return reply.code(404).send({ error: "not found" });
     reply.header("Access-Control-Allow-Origin", origin);
     reply.header("Vary", "Origin");
     reply.header("Cache-Control", "public, max-age=60");
-    return hit.body;
+    return body;
+  });
+
+  // ── GET /v1/invites/:code/card — Open Graph card for link-preview crawlers ─
+  // web/nginx.conf proxies /c/CODE here when the User-Agent is a known
+  // link-preview bot; everyone else still gets the plain 302 to the App Store.
+  // No auth and no Origin check (crawlers send neither). Every failure — flag
+  // off, rate limited, malformed or unknown code — is the same 302 the bare
+  // link gives, so a crawler always renders something (the App Store page, as
+  // before) and a guesser can't tell "limited" from "no such code".
+  //
+  // Rate limiting: its own per-IP bucket (`cardIpLimiter`). Requests proxied
+  // by the www app arrive from that app's egress IP, so ALL crawler traffic
+  // through tailspot.app/c/ may share one bucket — hence the generous limit,
+  // and why running out degrades to the old preview rather than an error.
+  app.get("/v1/invites/:code/card", async (request, reply) => {
+    const toStore = () => reply.header("Cache-Control", "no-store").redirect(opts.appStoreURL, 302);
+    if (!enabled()) return toStore();
+    if (!opts.cardIpLimiter.take(ipKey(request)).allowed) return toStore();
+    const code = normalizeCode((request.params as { code: string }).code);
+    if (!code) return toStore();
+    const invite = await publicInvite(code);
+    if (!invite) return toStore();
+    reply.header("Content-Type", "text/html; charset=utf-8");
+    reply.header("Cache-Control", "public, max-age=300");
+    return renderInviteCard(invite, {
+      inviteURL: `${inviteBaseURL}/${code}`,
+      appStoreURL: opts.appStoreURL,
+    });
   });
 }

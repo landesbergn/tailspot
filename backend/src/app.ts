@@ -287,6 +287,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Invite-code lookups: per IP, BEFORE any token or DB read — this limiter is
   // what makes a 40-bit code unguessable in practice.
   const inviteIpLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
+  // The invite link-preview card (/v1/invites/:code/card) for chat-app
+  // crawlers. Its own, generous bucket: crawlers proxied through the www app
+  // all arrive from that app's IP and share this one bucket, and running out
+  // only degrades the preview to the App Store page.
+  const inviteCardIpLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per IP
   const challengeConfigIpLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per IP
   // Push-token registration: 30/h per device, the same ceiling as the other
   // per-device mutations. The honest client calls it once per launch at most
@@ -567,6 +572,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     inviteBaseURL: INVITE_BASE_URL,
     now: challengeNow,
     inviteIpLimiter,
+    cardIpLimiter: inviteCardIpLimiter,
+    appStoreURL: INVITE_APP_STORE_URL,
     mutateLimiter: challengeMutateLimiter,
     readLimiter: challengeReadLimiter,
     cacheNow: rlNow,
@@ -655,6 +662,14 @@ function statsOriginsFromEnv(): string[] {
 
 /** The App Store listing, as the challenges config endpoint reports it. */
 const APP_STORE_URL = "https://apps.apple.com/app/apple-store/id6773470079";
+
+/**
+ * Where an invite link sends anyone without the app — attributed to the
+ * "Challenge Invite" campaign. Must match the `/c/CODE` 302 in web/nginx.conf
+ * exactly, so the link-preview card and the bare link land in the same place.
+ */
+const INVITE_APP_STORE_URL =
+  "https://apps.apple.com/app/apple-store/id6773470079?pt=119286625&ct=Challenge%20Invite&mt=8";
 
 /** Invite links: `${INVITE_BASE_URL}/${code}` — the universal-link path the app claims. */
 const INVITE_BASE_URL =
