@@ -28,6 +28,9 @@ private final class CountingMetadataSource: ADSBSource, @unchecked Sendable {
     /// GET /v1/metadata at 300/min/IP). A test clears the entry to simulate
     /// the bucket refilling and assert the retry succeeds.
     var rateLimited: Set<String> = []
+    /// icao24s whose lookup is cancelled mid-flight (URLSession reports a
+    /// cancelled Swift task as `URLError.cancelled`).
+    var cancelled: Set<String> = []
 
     private(set) var callCounts: [String: Int] = [:]
 
@@ -35,6 +38,9 @@ private final class CountingMetadataSource: ADSBSource, @unchecked Sendable {
         callCounts[icao24, default: 0] += 1
         if rateLimited.contains(icao24) {
             throw ADSBSourceError.rateLimited
+        }
+        if cancelled.contains(icao24) {
+            throw URLError(.cancelled)
         }
         if errors.contains(icao24) {
             throw ADSBSourceError.http(status: 503)
@@ -118,16 +124,39 @@ struct ADSBManagerMetadataTests {
         #expect(src.callCounts["err"] == 2)   // error did not cache
     }
 
-    @Test func sourceErrorRaisesTheStatusPill() async {
-        // The baseline the 429 case below is measured against: a REAL
-        // transport failure still puts the red pill up.
+    @Test func sourceErrorDoesNotRaiseTheStatusPill() async {
+        // The pill reports the position feed. A failed side lookup only
+        // costs a label detail, and a real outage fails the poll too
+        // (2026-10-02).
         let src = CountingMetadataSource()
         src.errors.insert("err")
 
         let mgr = ADSBManager(source: src)
         _ = await mgr.metadata(for: "err")
 
-        #expect(mgr.lastErrorUserMessage != nil)
+        #expect(mgr.lastErrorUserMessage == nil)
+        #expect(mgr.lastError == nil)
+    }
+
+    // ── Cancellation: the visible set or lock target changed ────────────
+    // `.task(id:)` cancels in-flight lookups whenever the visible set or
+    // the lock target changes. That read as "TAILSPOT UNREACHABLE" as you
+    // panned off a plane, the bug behind most of those pills.
+
+    @Test func cancelledLookupIsSilentAndUncached() async {
+        let src = CountingMetadataSource()
+        src.cancelled.insert("gone")
+
+        let mgr = ADSBManager(source: src)
+        #expect(await mgr.metadata(for: "gone") == nil)
+        #expect(mgr.lastErrorUserMessage == nil)
+        #expect(mgr.lastError == nil)
+
+        // Not cached: the next lookup reaches the source.
+        src.cancelled.remove("gone")
+        src.results["gone"] = makeMetadata(icao24: "gone", model: "E175")
+        #expect(await mgr.metadata(for: "gone")?.model == "E175")
+        #expect(src.callCounts["gone"] == 2)
     }
 
     // ── 429: a silent retry, not an error ────────────────────────────────

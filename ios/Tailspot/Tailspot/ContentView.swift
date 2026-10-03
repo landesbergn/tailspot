@@ -3379,7 +3379,8 @@ struct ContentView: View {
     /// the horizon or past 30 km.
     private func emptySkyOverlay(rawCount: Int) -> some View {
         // The pill renders the ErrorCopy-mapped message ("NO INTERNET —
-        // RETRYING" / "TAILSPOT UNREACHABLE — RETRYING"), never the raw
+        // RETRYING" / "WEAK CONNECTION — RETRYING" / "TAILSPOT
+        // UNREACHABLE — RETRYING"), never the raw
         // transport string — that stays in `lastError` for the debug
         // aircraft list and logs (error-copy pass, 2026-08-14).
         let lastErr = adsb.lastErrorUserMessage
@@ -3387,6 +3388,10 @@ struct ContentView: View {
         let pillText: String = {
             if let lastErr { return lastErr.uppercased() }
             if neverFetched { return "SCANNING SKY…" }
+            // Polls failing inside the cold-start grace with only stale
+            // data (back from background): say so, rather than a stale
+            // "N NEARBY" count or an error that may clear in seconds.
+            if adsb.isReconnecting { return "RECONNECTING…" }
             if rawCount > 0 {
                 return "NO AIRCRAFT IN VIEW · \(rawCount) NEARBY"
             }

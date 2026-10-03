@@ -5,6 +5,27 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-02 — Fewer false "Tailspot unreachable" pills (branch `unreachable-pill`)
+
+- Most of these pills weren't outages. Metadata lookups run in `.task(id:)`s
+  that SwiftUI cancels whenever the visible set or the lock target changes.
+  The cancellation (`URLError.cancelled`) raised the pill straight away,
+  usually right as the last plane left the frame, which is when the
+  empty-sky pill shows. Cancellations are now ignored everywhere
+  (`ErrorCopy.isCancellation`), and metadata failures no longer raise the
+  pill at all. Only the position poll does.
+- Cold start and resume: the first poll failure used to surface at once.
+  The grace is now time-based: 8 s with no data or stale data (>60 s old),
+  30 s with fresh data. During the short grace the empty-sky pill says
+  RECONNECTING…. `stop()` resets the failure streak so it can't carry over
+  a background trip.
+- Weak signal: timeouts and DNS failures now read "WEAK CONNECTION —
+  RETRYING" instead of blaming Tailspot. Refused connections, HTTP errors
+  and decode failures still read "Tailspot unreachable".
+- New telemetry: `adsb_fetch_error_shown` (once per surfaced streak: bucket,
+  error code, streak length) and `adsb_fetch_recovered` (every streak,
+  including the quiet ones).
+
 ## 2026-09-30 — Challenges discovery dot on the Profile tile (branch `challenges-profile-dot`)
 
 - The Profile Challenges tile now carries the cyan discovery dot until the

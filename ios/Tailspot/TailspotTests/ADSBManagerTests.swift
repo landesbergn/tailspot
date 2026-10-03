@@ -173,11 +173,124 @@ struct ADSBManagerTests {
     @Test func sourceErrorsLandInLastErrorWithoutCrashing() async {
         let source = FixedSource([], error: TestError())
         let manager = ADSBManager(source: source)
+        let t0 = Date()
 
-        await manager.refresh(around: Self.observer())
+        await manager.refresh(around: Self.observer(), now: t0)
+        await manager.refresh(around: Self.observer(),
+                              now: t0 + ADSBManager.coldStartGrace)
 
         #expect(manager.observed.isEmpty)
         #expect(manager.lastError != nil)
+    }
+
+    /// Cold start: the first request after launch often fails while the
+    /// radio wakes up. It stays quiet (RECONNECTING) for `coldStartGrace`
+    /// instead of flashing an error on a healthy launch (2026-10-02).
+    @Test func coldStartFailureWaitsOutTheShortGrace() async {
+        let manager = ADSBManager(source: FixedSource([], error: TestError()))
+        let t0 = Date()
+
+        await manager.refresh(around: Self.observer(), now: t0)
+        #expect(manager.lastErrorUserMessage == nil, "first cold failure is quiet")
+        #expect(manager.isReconnecting)
+
+        await manager.refresh(around: Self.observer(),
+                              now: t0 + ADSBManager.coldStartGrace - 1)
+        #expect(manager.lastErrorUserMessage == nil, "still inside the grace")
+
+        await manager.refresh(around: Self.observer(),
+                              now: t0 + ADSBManager.coldStartGrace)
+        #expect(manager.lastErrorUserMessage != nil, "grace over: genuinely offline")
+        #expect(!manager.isReconnecting)
+    }
+
+    /// A launch blip that recovers inside the grace never shows anything.
+    @Test func coldStartBlipThatRecoversNeverSurfaces() async {
+        let plane = Self.aircraftAt(
+            bearing: 0, distanceMeters: 10_000, altitudeMeters: 5_000, icao: "x"
+        )
+        let manager = ADSBManager(source: ScriptedSource([
+            .failure(URLError(.networkConnectionLost)),
+            .failure(URLError(.timedOut)),
+            .success([plane]),
+        ]))
+        let t0 = Date()
+        await manager.refresh(around: Self.observer(), now: t0)
+        await manager.refresh(around: Self.observer(), now: t0 + 4)
+        #expect(manager.isReconnecting)
+        await manager.refresh(around: Self.observer(), now: t0 + 6)
+        #expect(manager.lastErrorUserMessage == nil)
+        #expect(!manager.isReconnecting)
+        #expect(manager.observed.count == 1)
+    }
+
+    /// Back from background with data older than `freshDataWindow`: the
+    /// rows have aged out, so it's the short grace again, not the warm 30 s.
+    @Test func staleDataGetsTheColdStartGrace() async {
+        let plane = Self.aircraftAt(
+            bearing: 0, distanceMeters: 10_000, altitudeMeters: 5_000, icao: "x"
+        )
+        let manager = ADSBManager(source: ScriptedSource([
+            .success([plane]),
+            .failure(TestError()), .failure(TestError()),
+        ]))
+        let t0 = Date()
+        await manager.refresh(around: Self.observer(), now: t0)
+        let resume = t0 + ADSBManager.freshDataWindow + 300
+        await manager.refresh(around: Self.observer(), now: resume)
+        #expect(manager.isReconnecting)
+        #expect(manager.lastErrorUserMessage == nil)
+        await manager.refresh(around: Self.observer(),
+                              now: resume + ADSBManager.coldStartGrace)
+        #expect(manager.lastErrorUserMessage != nil)
+    }
+
+    /// A cancelled poll (stop() on background) is not a failure: it must
+    /// not count, start a streak, or show anything.
+    @Test func cancelledPollIsNotAFailure() async {
+        let manager = ADSBManager(source: FixedSource([], error: URLError(.cancelled)))
+        let t0 = Date()
+        // Run inside a task we cancel, as stop() cancels the poll task.
+        let task = Task { @MainActor in
+            await manager.refresh(around: Self.observer(), now: t0)
+            await manager.refresh(around: Self.observer(), now: t0 + 60)
+        }
+        task.cancel()
+        await task.value
+        #expect(manager.lastError == nil)
+        #expect(manager.lastErrorUserMessage == nil)
+        #expect(!manager.isReconnecting)
+    }
+
+    /// A URLError.cancelled we did NOT ask for (our task still running)
+    /// counts as a failure, so a broken feed can't go silent.
+    @Test func strayCancelledErrorStillCounts() async {
+        let manager = ADSBManager(source: FixedSource([], error: URLError(.cancelled)))
+        let t0 = Date()
+        await manager.refresh(around: Self.observer(), now: t0)
+        #expect(manager.isReconnecting)
+        await manager.refresh(around: Self.observer(),
+                              now: t0 + ADSBManager.coldStartGrace)
+        #expect(manager.lastErrorUserMessage != nil)
+    }
+
+    /// stop() resets the streak, so a failure after resume is measured
+    /// from the resume, not from a streak that began before backgrounding.
+    @Test func stopResetsTheFailureStreak() async {
+        let manager = ADSBManager(source: FixedSource([], error: TestError()))
+        let t0 = Date()
+        await manager.refresh(around: Self.observer(), now: t0)
+        manager.stop()
+        #expect(!manager.isReconnecting)
+        await manager.refresh(around: Self.observer(), now: t0 + 600)
+        #expect(manager.lastErrorUserMessage == nil, "fresh streak after resume")
+    }
+
+    @Test func telemetryCodesAreStableAndLanguageFree() {
+        #expect(ADSBManager.telemetryCode(for: URLError(.timedOut)) == "url_-1001")
+        #expect(ADSBManager.telemetryCode(for: ADSBSourceError.http(status: 503)) == "http_503")
+        #expect(ADSBManager.telemetryCode(for: ADSBSourceError.decoding(TestError())) == "decoding")
+        #expect(ADSBManager.telemetryCode(for: TestError()) == "other")
     }
 
     @Test func successfulRefreshClearsPreviousError() async {
@@ -208,28 +321,33 @@ struct ADSBManagerTests {
         func aircraftMetadata(icao24: String) async throws -> AircraftMetadata? { nil }
     }
 
-    /// With data on hand, a transient poll failure stays off the HUD —
-    /// the banner only surfaces after `fetchFailureGraceCount` consecutive
-    /// misses (~30 s at the 10 s cadence). Field case: one-bar cellular
-    /// under the JFK approach corridor, 2026-07-05.
+    /// With fresh data on hand, a transient poll failure stays off the HUD:
+    /// the banner only surfaces once the streak has lasted `warmGrace`
+    /// (30 s). Field case: one-bar cellular under the JFK approach
+    /// corridor, 2026-07-05. Time-based since 2026-10-02 (it was 3 polls).
     @Test func transientPollFailuresStayQuietUntilGraceExhausted() async {
         let plane = Self.aircraftAt(
             bearing: 0, distanceMeters: 10_000, altitudeMeters: 5_000, icao: "x"
         )
         var script: [Result<[Aircraft], any Error>] = [.success([plane])]
-        script += Array(repeating: .failure(TestError()),
-                        count: ADSBManager.fetchFailureGraceCount)
+        script += Array(repeating: .failure(URLError(.timedOut)), count: 4)
         let manager = ADSBManager(source: ScriptedSource(script))
+        let t0 = Date()
 
-        await manager.refresh(around: Self.observer())
+        await manager.refresh(around: Self.observer(), now: t0)
         #expect(manager.lastError == nil)
 
-        for i in 1..<ADSBManager.fetchFailureGraceCount {
-            await manager.refresh(around: Self.observer())
-            #expect(manager.lastError == nil, "failure \(i) is within grace")
+        // Streak starts at t0+10; quiet through t0+39 (and no RECONNECTING:
+        // planes are still on screen, extrapolated).
+        for offset in [10.0, 20, 39] {
+            await manager.refresh(around: Self.observer(), now: t0 + offset)
+            #expect(manager.lastError == nil, "t+\(offset) is within grace")
+            #expect(!manager.isReconnecting)
         }
-        await manager.refresh(around: Self.observer())
-        #expect(manager.lastError != nil, "grace exhausted — banner surfaces")
+        await manager.refresh(around: Self.observer(),
+                              now: t0 + 10 + ADSBManager.warmGrace)
+        #expect(manager.lastErrorUserMessage == "WEAK CONNECTION — RETRYING",
+                "grace exhausted, banner surfaces")
     }
 
     /// A success inside the grace window resets the failure count — two
