@@ -23,6 +23,15 @@
 		    Apple's definition), and session replay masks them
 		    (.postHogMask() on every catch-photo view; the live camera
 		    view never reaches replay — see PostHogSessionReplay.swift).
+		REVIEWED 2026-10-02 for v1.2.0 (Challenges):
+		  - Added Other User Content: catch records were already on the
+		    App Store label but missing here. It now also covers what
+		    Challenges sends: the challenge name a user types, who joined,
+		    and placements/points.
+		  - The APNs push token is stored on the device row server-side,
+		    so it falls under Device ID (already declared). The shutter-
+		    press pose uploaded with a catch (#257) is part of the catch
+		    record (Other User Content). No new categories on the label.
 		MANUAL STEP (Noah, App Store Connect): keep the privacy "nutrition
 		label" in sync before the next build — this manifest and the label
 		are separate surfaces; the manifest does not auto-populate the label.
@@ -30,8 +39,9 @@
 		Current data flows:
 		  - Backend (api.tailspot.app): device registration, handle
 		    claim, catch upload (incl. observer GPS coordinates),
-		    leaderboard, Hangar restore. Auth via a per-device bearer
-		    token.
+		    leaderboard, Hangar restore, challenges (create/join/
+		    standings), APNs push-token registration. Auth via a
+		    per-device bearer token.
 		  - PostHog SDK (the single analytics pipeline since 2026-06-27):
 		    product events, session replay (screenshot mode, catch photos
 		    masked), person-property $set. distinct_id is the anonymous,
@@ -154,6 +164,21 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- Other user content: catch records (aircraft, time, pose) and
+		     challenge names / membership / placements, keyed to the
+		     device id → linked. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>

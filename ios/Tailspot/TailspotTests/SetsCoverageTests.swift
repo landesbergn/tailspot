@@ -219,6 +219,12 @@ struct SetsCoverageTests {
         ("LEG2", "Lancair", "Legacy"),
         ("T38", "Northrop", "T-38 Talon"),
         ("TEX2", "Hawker Beechcraft", "3000"),
+        // Public catalog coverage additions validated 2026-10-02.
+        ("C414", "Cessna", "414"),
+        ("L8", "Luscombe", "8"),
+        // Public catalog coverage additions validated 2026-10-03.
+        ("B190", "Beechcraft", "1900"),
+        ("GC1", "Globe", "GC-1 Swift"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -313,6 +319,10 @@ struct SetsCoverageTests {
             (("LEG2", "Lancair", "Legacy"), "fam-sport-classics", "fsc-lancair-legacy"),
             (("T38", "Northrop", "T-38 Talon"), "fam-military", "fm-t38"),
             (("TEX2", "Hawker Beechcraft", "3000"), "fam-military", "fm-texan2"),
+            (("C414", "Cessna", "414"), "fam-cessna", "fc414"),
+            (("L8", "Luscombe", "8"), "fam-vintage", "fv-luscombe8"),
+            (("B190", "Beechcraft", "1900"), "fam-commuter-props", "fcp-b190"),
+            (("GC1", "Globe", "GC-1 Swift"), "fam-sport-classics", "fsc-globe-swift"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -343,6 +353,16 @@ struct SetsCoverageTests {
         let h130Entry = heliSet.entries.first { $0.id == "fh-h130" }!
         #expect(!CardSets.matches(key: hercKey, entry: h130Entry),
                 "A C-130 Hercules must not fill the H130 helicopter slot")
+
+        // Other public aircraft named Swift must not fill the Globe GC-1 slot.
+        let classicsSet = CardSets.families.first { $0.id == "fam-sport-classics" }!
+        let globeSwift = classicsSet.entries.first { $0.id == "fsc-globe-swift" }!
+        let skyetonSwift = mk(("SK10", "Skyeton", "K-10 Swift"))
+        let scaledSwift = mk(("SWFT", "Scaled", "400 Swift"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: skyetonSwift), entry: globeSwift),
+                "A Skyeton K-10 Swift must not fill the Globe GC-1 slot")
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: scaledSwift), entry: globeSwift),
+                "A Scaled 400 Swift must not fill the Globe GC-1 slot")
 
         // AS50 covers the single-engine AS350/AS550 family; AS55 is the
         // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
