@@ -5,6 +5,37 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-04 — Content engine: real-catches template (branch `claude/magical-hopper-uk56jk`)
+
+- New `real-catches` template in `tools/content-engine`: a rare+ plane a
+  real Tailspot spotter caught, read from the app's own `catch_performed`
+  events through PostHog HogQL (auth injected by the egress proxy; an
+  optional `POSTHOG_PERSONAL_API_KEY` is sent as Bearer). Subject: the
+  highest tier from the last 48 h, then the most recent (7 days if 48 h is
+  empty). Slides: hook ("A Lufthansa 747-8 was just caught in the San
+  Francisco area." + tier badge and points) → the aircraft (operator, size,
+  `TYPE_FACTS`, what the tier means) → how it was caught → up to 5 other rare+
+  catches from the week (model + place + day, one per model and place) → CTA.
+- **Privacy decision (Noah, 2026-10-04):** promotional posts may feature
+  real user catches as aircraft model (+ operator), city and day only. Never
+  handle, registration, callsign, icao24, photos, coordinates, route, time of
+  day or anything else per-user. Recorded in the engine README and
+  `src/privacy.ts`. Enforced by never selecting those fields, an allowlist
+  projection (`CATCH_COLUMNS`) before use or fixture save, metro-level
+  "approximate" city phrasing ("in the San Francisco area", "near Tucson"),
+  and the existing no-private-GA/bizjet rule (`isCatchSpotlightable`: Epic,
+  Global and Gulfstream only with an airline/cargo/military operator; military
+  types are fine). Sky-gate `notSky` catches are excluded.
+- Rotation is now 7 days with real-catches on 4 of them; a rotated run that
+  can't fetch or finds nothing falls back real-catches → rare-now →
+  guess-plane. over-city advances its city weekly, guess-plane its photo daily.
+- `npm run generate` sets `NODE_USE_ENV_PROXY=1` so Node's `fetch` uses the
+  cloud proxy. New real fixture `fixtures/real-catches.json` (live capture,
+  allowlisted columns only) and tests for selection, privacy filtering
+  (private bizjets excluded; a malicious fixture with handle/registration/
+  callsign/icao24 columns leaks nothing), dedupe and city phrasing. First live
+  post: "A Northrop T-38 Talon was just caught near Tucson."
+
 ## 2026-10-03 — Rich link previews for invite links outside iMessage (branch `invite-og-card`)
 
 - WhatsApp, Slack, Discord, Telegram, X, Facebook and LinkedIn fetch a

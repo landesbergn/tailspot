@@ -12,13 +12,23 @@ import { designator, displayName, typeInfo } from "../src/aircraftTypes.ts";
 import { CATCHES } from "../src/catches.ts";
 import { regionFor } from "../src/geo.ts";
 import { CATCH_PHOTOS_DIR, FIXTURES_DIR } from "../src/paths.ts";
-import { isSpotlightable } from "../src/privacy.ts";
+import { CATCH_COLUMNS, isCatchSpotlightable, isSpotlightable } from "../src/privacy.ts";
 import { roundedCatchCount } from "../src/tailspot.ts";
 import { buildChoices, guessPlane } from "../src/templates/guessPlane.ts";
-import { TEMPLATES, templateById, templateForDay } from "../src/templates/index.ts";
+import { fallbackChain, ROTATION, TEMPLATES, templateById, templateForDay } from "../src/templates/index.ts";
 import { CITIES, cityStats, overCity } from "../src/templates/overCity.ts";
+import {
+  alsoCaught,
+  chooseSubject as chooseCatch,
+  eligibleCatches,
+  parseCatchRows,
+  placeFor,
+  projectCatchRows,
+  realCatches,
+  type RealCatchesRaw,
+} from "../src/templates/realCatches.ts";
 import { airborneCountOfType, candidates, chooseSubject, rareNow, runnersUp, typeHashtag } from "../src/templates/rareNow.ts";
-import type { BuildContext, Fixture } from "../src/types.ts";
+import { NoSubjectError, type BuildContext, type Fixture } from "../src/types.ts";
 import { article, dayIndex } from "../src/util.ts";
 
 const fixture = <T>(id: string) => JSON.parse(readFileSync(join(FIXTURES_DIR, `${id}.json`), "utf8")) as Fixture<T>;
@@ -57,18 +67,27 @@ const plane = (over: Partial<Plane>): Plane => ({
 });
 
 describe("rotation", () => {
-  test("three templates cycle by day", () => {
+  test("7-day rotation: real-catches 4 days, every other template once", () => {
     const d = dayIndex("2026-10-03");
-    const ids = [0, 1, 2, 3].map((i) => templateForDay(d + i).id);
-    assert.equal(new Set(ids.slice(0, 3)).size, 3);
-    assert.equal(ids[0], ids[3]);
-    assert.deepEqual(TEMPLATES.map((t) => t.id).sort(), ["guess-plane", "over-city", "rare-now"]);
+    const ids = Array.from({ length: 7 }, (_, i) => templateForDay(d + i).id);
+    const count = (id: string) => ids.filter((x) => x === id).length;
+    assert.equal(count("real-catches"), 4);
+    for (const id of ["rare-now", "over-city", "guess-plane"]) assert.equal(count(id), 1, id);
+    assert.equal(templateForDay(d).id, templateForDay(d + 7).id);
+    assert.equal(ROTATION.length, 7);
+    assert.deepEqual(TEMPLATES.map((t) => t.id).sort(), ["guess-plane", "over-city", "rare-now", "real-catches"]);
   });
 
-  test("over-city visits every city before repeating", () => {
+  test("fallback chain: real-catches → rare-now → guess-plane", () => {
+    assert.deepEqual(fallbackChain("real-catches").map((t) => t.id), ["rare-now", "guess-plane"]);
+    assert.deepEqual(fallbackChain("rare-now").map((t) => t.id), ["guess-plane"]);
+    assert.deepEqual(fallbackChain("guess-plane"), []);
+  });
+
+  test("over-city visits every city before repeating (one slot a week)", () => {
     const d0 = dayIndex("2026-10-03");
     const seen = new Set<string>();
-    for (let k = 0; k < CITIES.length; k++) seen.add(String(overCity.params(d0 + 3 * k).city));
+    for (let k = 0; k < CITIES.length; k++) seen.add(String(overCity.params(d0 + 7 * k).city));
     assert.equal(seen.size, CITIES.length);
   });
 
@@ -175,6 +194,131 @@ describe("over-city", () => {
   });
 });
 
+describe("real-catches", () => {
+  const fx = fixture<RealCatchesRaw>("real-catches");
+  const COLS = ["rarity", "manufacturer", "model", "operator_name", "typecode", "city", "country", "day", "within_48h"];
+  // [rarity, manufacturer, model, operator_name, typecode, city, country, day, within_48h], newest first
+  const raw = (...results: unknown[][]): RealCatchesRaw => ({ columns: COLS, results });
+  const row = (over: Partial<Record<string, unknown>> = {}): unknown[] => {
+    const base: Record<string, unknown> = {
+      rarity: "rare", manufacturer: "Boeing", model: "747-400", operator_name: "Atlas Air", typecode: "B744",
+      city: "Oakland", country: "United States", day: "2026-10-03", within_48h: 1, ...over,
+    };
+    return COLS.map((c) => base[c]);
+  };
+  const ctx = (): BuildContext => ({ date: "2026-10-04", dayIndex: dayIndex("2026-10-04"), seed: "s", capturedAt: new Date("2026-10-04T16:00:00Z"), stats: null, sample: false, params: {} });
+
+  test("the live fixture holds only the allowlisted columns", () => {
+    assert.deepEqual(fx.raw.columns, [...CATCH_COLUMNS]);
+    assert.equal(fx.synthetic, false);
+  });
+
+  test("subject: highest tier first, then most recent, within 48 h", () => {
+    const rows = parseCatchRows(
+      raw(
+        row({ rarity: "rare", typecode: "B744" }),
+        row({ rarity: "epic", typecode: "B748", model: "747-8", operator_name: "Lufthansa", city: "San Francisco" }),
+        row({ rarity: "epic", typecode: "MD11", model: "MD-11", operator_name: "FedEx Express" }),
+        row({ rarity: "legendary", typecode: "B52", model: "B-52", operator_name: null, city: "Tucson", day: "2026-09-29", within_48h: 0 }),
+      ),
+    );
+    const { subject, recent } = chooseCatch(eligibleCatches(rows));
+    assert.equal(recent, true);
+    assert.equal(subject.row.typecode, "B748", "the older legendary loses to the newest 48 h epic");
+    const post = realCatches.build(raw(...[row({ rarity: "epic", typecode: "B748", model: "747-8", operator_name: "Lufthansa", city: "San Francisco" })]), ctx());
+    assert.equal(post.hook, "A Lufthansa 747-8 was just caught in the San Francisco area.");
+  });
+
+  test("falls back to the whole week when nothing is from the last 48 h", () => {
+    const rows = parseCatchRows(raw(row({ within_48h: 0, typecode: "B744" }), row({ within_48h: 0, rarity: "epic", typecode: "C17", model: "C-17", operator_name: null })));
+    const { subject, recent } = chooseCatch(eligibleCatches(rows));
+    assert.equal(recent, false);
+    assert.equal(subject.row.typecode, "C17");
+    assert.match(realCatches.build(raw(row({ within_48h: 0 })), ctx()).hook, /was caught this week/);
+  });
+
+  test("no eligible catch is a NoSubjectError (so the CLI falls back to rare-now)", () => {
+    assert.throws(() => realCatches.build(raw(), ctx()), NoSubjectError);
+    assert.throws(() => realCatches.build(raw(row({ city: null })), ctx()), NoSubjectError);
+  });
+
+  test("private GA / business jets are never spotlighted; airline, cargo and military are", () => {
+    assert.equal(isCatchSpotlightable({ typecode: "EPIC", operator: null }), false);
+    assert.equal(isCatchSpotlightable({ typecode: "GLEX", operator: "Solairus Aviation" }), false);
+    assert.equal(isCatchSpotlightable({ typecode: "GL7T", operator: "NetJets" }), false);
+    assert.equal(isCatchSpotlightable({ typecode: "GLF6", operator: "Flexjet" }), false);
+    assert.equal(isCatchSpotlightable({ typecode: "GLF6", operator: "N650XX" }), false);
+    assert.equal(isCatchSpotlightable({ typecode: "ZZZZ", operator: null }), false, "unknown type is treated as private");
+    assert.equal(isCatchSpotlightable({ typecode: "B748", operator: "Lufthansa" }), true);
+    assert.equal(isCatchSpotlightable({ typecode: "C17", operator: null }), true);
+    assert.equal(isCatchSpotlightable({ typecode: "T38", operator: null }), true, "T-38 is military despite its GA class");
+    assert.equal(isCatchSpotlightable({ typecode: "CL35", operator: "Air Force Reserve" }), true);
+    // The live fixture has private bizjets (GLEX, GL7T, GLF6, EPIC, ...): none may surface.
+    const post = realCatches.build(fx.raw, ctxFor(fx));
+    const names = [post.subject.typecode, ...(post.subject.alsoCaught as Array<{ typecode: string }>).map((o) => o.typecode)];
+    for (const code of ["GLEX", "GL7T", "GL5T", "GLF6", "GA6C", "EPIC"]) assert.ok(!names.includes(code), code);
+    const text = post.caption + post.slides.map((s) => s.html).join("") + post.altText.join("");
+    for (const word of ["Global", "Gulfstream", "Epic Aircraft", "E1000", "Solairus", "NetJets", "Flexjet"]) assert.ok(!text.includes(word), word);
+  });
+
+  test("a malicious fixture can't leak handle, registration, callsign or icao24", () => {
+    const evil: RealCatchesRaw = {
+      columns: [...COLS, "handle", "registration", "callsign", "icao24", "origin_icao"],
+      results: [
+        [...row({ rarity: "epic", typecode: "B748", model: "747-8", operator_name: "Lufthansa", city: "San Francisco" }), "@skyhawk_noah", "D-ABYA", "DLH454", "3c4b21", "EDDF"],
+        [...row({ typecode: "MD11", model: "MD-11", operator_name: "N123AB", city: "Oakland" }), "@other", "N571FE", "FDX12", "a1b2c3", "KMEM"],
+        [...row({ typecode: "B744", operator_name: "Atlas Air", city: "@sneaky_handle" }), "@third", "N498MC", "GTI8", "abcdef", "KCVG"],
+      ],
+    };
+    assert.deepEqual(projectCatchRows(evil).columns, COLS, "non-allowlisted columns are dropped");
+    const post = realCatches.build(evil, ctx());
+    const text = [post.hook, post.caption, ...post.hashtags, ...post.altText, ...post.slides.map((s) => s.html), JSON.stringify(post.subject)].join("\n");
+    for (const leak of ["skyhawk", "@other", "@third", "sneaky", "D-ABYA", "DLH454", "3c4b21", "N571FE", "FDX12", "a1b2c3", "N123AB", "N498MC", "GTI8", "EDDF", "KMEM"]) {
+      assert.ok(!text.includes(leak), `leaked ${leak}`);
+    }
+  });
+
+  test("also caught: deduped by model + place, distinct models first, subject excluded", () => {
+    const rows = parseCatchRows(
+      raw(
+        row({ rarity: "epic", typecode: "B748", model: "747-8", operator_name: "Lufthansa", city: "San Francisco" }),
+        row({ rarity: "epic", typecode: "B748", model: "747-8", operator_name: "UPS Airlines", city: "Concord" }), // same model + metro as subject
+        row({ rarity: "epic", typecode: "MD11", model: "MD-11", operator_name: "FedEx Express", city: "Oakland" }),
+        row({ rarity: "epic", typecode: "MD11", model: "MD-11", operator_name: "FedEx Express", city: "Berkeley" }), // dup MD-11 / SF area
+        row({ rarity: "epic", typecode: "MD11", model: "MD-11", operator_name: "FedEx Express", city: "New York" }),
+        row({ rarity: "rare", typecode: "B744", city: "Sacramento" }),
+        row({ rarity: "rare", typecode: "A388", model: "A380-800", operator_name: "Emirates", city: "Stockport", country: "United Kingdom" }),
+      ),
+    );
+    const cands = eligibleCatches(rows);
+    const { subject } = chooseCatch(cands);
+    const others = alsoCaught(cands, subject);
+    const keys = others.map((o) => `${o.row.typecode}|${o.place.key}`);
+    assert.equal(new Set(keys).size, keys.length);
+    assert.ok(!keys.includes(`B748|metro:San Francisco`));
+    // Shown best tier first, then most recent.
+    assert.deepEqual(keys, ["MD11|metro:San Francisco", "MD11|metro:New York", "B744|city:sacramento", "A388|metro:Manchester"]);
+    // With room for only three, a second MD-11 loses to models not yet shown.
+    assert.deepEqual(
+      alsoCaught(cands, subject, 3).map((o) => o.row.typecode),
+      ["MD11", "B744", "A388"],
+    );
+  });
+
+  test("city phrasing is approximate: metro areas, 'near' elsewhere, junk dropped", () => {
+    assert.equal(placeFor("San Francisco", "United States")?.phrase, "in the San Francisco area");
+    assert.equal(placeFor("Concord", "United States")?.phrase, "in the San Francisco area");
+    assert.equal(placeFor("Tucson", "United States")?.phrase, "near Tucson");
+    assert.equal(placeFor("Denpasar", "Indonesia")?.phrase, "near Denpasar, Indonesia");
+    assert.equal(placeFor("Stockport", "United Kingdom")?.phrase, "in the Manchester area");
+    assert.equal(placeFor("Leeds", "United Kingdom")?.phrase, "near Leeds, UK");
+    assert.equal(placeFor(null, "United States"), null);
+    assert.equal(placeFor("", null), null);
+    assert.equal(placeFor("@handle", null), null);
+    assert.equal(placeFor("37.7749", null), null);
+  });
+});
+
 describe("guess-plane", () => {
   test("every catch has a photo on disk and a known type", () => {
     for (const c of CATCHES) {
@@ -218,6 +362,7 @@ describe("every fixture builds a postable-shaped carousel", () => {
     assert.equal(fixture("rare-now").synthetic, true);
     assert.equal(fixture("over-city").synthetic, true);
     assert.equal(fixture("guess-plane").synthetic, false);
+    assert.equal(fixture("real-catches").synthetic, false);
   });
 
   test("guess-plane needs no network", () => {

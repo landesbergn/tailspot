@@ -8,7 +8,7 @@
     "node": ">=22.6"
   },
   "scripts": {
-    "generate": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/cli.ts",
+    "generate": "NODE_USE_ENV_PROXY=1 node --experimental-strip-types --no-warnings=ExperimentalWarning src/cli.ts",
     "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test test/*.test.ts"
   },
   "dependencies": {

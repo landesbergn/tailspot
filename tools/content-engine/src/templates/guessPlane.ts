@@ -95,7 +95,8 @@ export const guessPlane: Template<GuessRaw> = {
   id: "guess-plane",
   label: "Guess the plane",
   needsNetwork: false,
-  params: (dayIndex) => ({ catchId: CATCHES[Math.floor(dayIndex / 3) % CATCHES.length].id }),
+  // Day-by-day, because guess-plane also runs on any day as the fallback.
+  params: (dayIndex) => ({ catchId: CATCHES[((dayIndex % CATCHES.length) + CATCHES.length) % CATCHES.length].id }),
 
   async fetch(params) {
     const c = catchById(params.catchId);

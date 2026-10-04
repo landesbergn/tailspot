@@ -171,4 +171,6 @@ export const TYPE_FACTS: Record<string, string> = {
   A400: "Europe's four-engine turboprop airlifter, with eight-bladed propellers.",
   V22: "A tiltrotor: it takes off like a helicopter and cruises like a plane.",
   H47: "A twin-rotor heavy-lift helicopter. The Chinook first flew in 1961.",
+  T38: "The US Air Force's supersonic jet trainer, in service since 1961. NASA astronauts fly it too.",
+  B753: "The longest single-aisle twinjet Boeing ever built. Only 55 were made.",
 };

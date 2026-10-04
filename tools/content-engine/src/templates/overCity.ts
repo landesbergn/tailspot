@@ -131,7 +131,8 @@ export const overCity: Template<OverCityRaw> = {
   id: "over-city",
   label: "What's over [city] right now",
   needsNetwork: true,
-  params: (dayIndex) => ({ city: CITIES[Math.floor(dayIndex / 3) % CITIES.length].id }),
+  // One over-city slot per 7-day rotation, so the city advances weekly.
+  params: (dayIndex) => ({ city: CITIES[Math.floor(dayIndex / 7) % CITIES.length].id }),
 
   async fetch(params) {
     const city = cityById(params.city);

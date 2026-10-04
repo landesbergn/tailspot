@@ -57,6 +57,8 @@ export interface Post {
   subject: Record<string, unknown>;
   /** Alt text per slide for accessibility (IG supports it). */
   altText: string[];
+  /** Overrides post.json's default `privacy` line when the data differs (real-catches). */
+  privacyNote?: string;
 }
 
 export interface Template<Raw = unknown> {

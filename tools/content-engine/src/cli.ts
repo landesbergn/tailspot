@@ -6,13 +6,14 @@
  *   npm run generate -- [options]
  *
  * Options
- *   --template <id>     rare-now | over-city | guess-plane (default: rotate by --date)
+ *   --template <id>     real-catches | rare-now | over-city | guess-plane (default: rotate by --date)
  *   --date YYYY-MM-DD   post date; drives rotation + seeded choices (default: today, UTC)
  *   --out <dir>         output directory (default: out/<date>-<template>)
  *   --dry-run           fetch/select and print the plan as JSON; no rendering
  *   --fixture           use fixtures/<template>.json instead of the network
  *   --fixture-path <f>  use a specific fixture file (implies --fixture)
  *   --save-fixture <f>  after a live fetch, save the raw inputs as a fixture
+ *                       (the requested/rotated template's, even if it then falls back)
  *   --city <id>         over-city: force a city (sf-bay, london, nyc, tokyo, sydney, bali)
  *   --catch <id>        guess-plane: force a photo (b737, b767, a321, a220, bd700)
  *   --no-stats          don't call Tailspot's /v1/stats
@@ -24,7 +25,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { DEFAULT_OUT_DIR, ENGINE_DIR, FIXTURES_DIR } from "./paths.ts";
 import { fetchStats, type TailspotStats } from "./tailspot.ts";
-import { FALLBACK_TEMPLATE, templateById, templateForDay } from "./templates/index.ts";
+import { fallbackChain, templateById, templateForDay } from "./templates/index.ts";
 import { NoSubjectError, type BuildContext, type DataSource, type Fixture, type Post, type Template } from "./types.ts";
 import { dayIndex, todayUtc } from "./util.ts";
 
@@ -81,6 +82,20 @@ function loadFixture(t: Template<any>, path: string): Loaded {
   };
 }
 
+function saveFixture(path: string, l: Loaded) {
+  const fx: Fixture = {
+    template: l.template.id,
+    capturedAt: l.capturedAt.toISOString(),
+    synthetic: false,
+    params: l.params,
+    raw: l.raw,
+    sources: l.sources,
+    tailspotStats: l.stats,
+  };
+  writeFileSync(path, JSON.stringify(fx, null, 1) + "\n");
+  log(`saved fixture → ${path}`);
+}
+
 async function main() {
   if (args.help) {
     console.log(readFileSync(new URL(import.meta.url), "utf8").split("*/")[0]);
@@ -99,7 +114,18 @@ async function main() {
     return p;
   };
 
-  let loaded: Loaded;
+  const ctxFor = (l: Loaded): BuildContext => ({
+    date,
+    dayIndex: day,
+    seed: `${date}:${l.template.id}`,
+    capturedAt: l.capturedAt,
+    stats: l.stats,
+    sample: l.sample,
+    params: l.params,
+  });
+
+  let loaded!: Loaded;
+  let post!: Post;
   let fallbackFrom: string | null = null;
   if (useFixture) {
     loaded = loadFixture(template, args["fixture-path"] ?? join(FIXTURES_DIR, `${template.id}.json`));
@@ -112,51 +138,38 @@ async function main() {
     if (args.city && template.id === "over-city" && args.city !== loaded.params.city) {
       throw new Error(`fixture holds data for "${loaded.params.city}", not "${args.city}"`);
     }
-  } else {
-    try {
-      loaded = await loadLive(template, paramsFor(template));
-    } catch (e) {
-      if (explicit) throw e;
-      log(`live fetch for ${template.id} failed (${(e as Error).message}); falling back to ${FALLBACK_TEMPLATE.id}`);
-      fallbackFrom = template.id;
-      template = FALLBACK_TEMPLATE;
-      loaded = await loadLive(template, paramsFor(template));
-    }
-    if (args["save-fixture"]) {
-      const fx: Fixture = {
-        template: template.id,
-        capturedAt: loaded.capturedAt.toISOString(),
-        synthetic: false,
-        params: loaded.params,
-        raw: loaded.raw,
-        sources: loaded.sources,
-        tailspotStats: loaded.stats,
-      };
-      writeFileSync(args["save-fixture"], JSON.stringify(fx, null, 1) + "\n");
-      log(`saved fixture → ${args["save-fixture"]}`);
-    }
-  }
-
-  const ctxFor = (l: Loaded): BuildContext => ({
-    date,
-    dayIndex: day,
-    seed: `${date}:${l.template.id}`,
-    capturedAt: l.capturedAt,
-    stats: l.stats,
-    sample: l.sample,
-    params: l.params,
-  });
-
-  let post: Post;
-  try {
-    post = loaded.template.build(loaded.raw, ctxFor(loaded));
-  } catch (e) {
-    if (!(e instanceof NoSubjectError) || explicit || useFixture) throw e;
-    log(`${template.id}: ${e.message}; falling back to ${FALLBACK_TEMPLATE.id}`);
-    fallbackFrom = template.id;
-    template = FALLBACK_TEMPLATE;
-    loaded = await loadLive(template, paramsFor(template));
     post = template.build(loaded.raw, ctxFor(loaded));
+  } else {
+    // Rotated runs walk the fallback chain (real-catches → rare-now →
+    // guess-plane) when a template can't fetch or finds nothing worth posting.
+    // An explicit --template never falls back.
+    const chain = [template, ...(explicit ? [] : fallbackChain(template.id))];
+    for (let i = 0; i < chain.length; i++) {
+      const t = chain[i];
+      const last = i === chain.length - 1;
+      let l: Loaded;
+      try {
+        l = await loadLive(t, paramsFor(t));
+      } catch (e) {
+        if (last) throw e;
+        log(`live fetch for ${t.id} failed (${(e as Error).message}); falling back to ${chain[i + 1].id}`);
+        fallbackFrom ??= t.id;
+        continue;
+      }
+      if (args["save-fixture"] && i === 0) saveFixture(args["save-fixture"], l);
+      try {
+        post = t.build(l.raw, ctxFor(l));
+      } catch (e) {
+        // Only "nothing worth posting" falls back; a real bug should fail loudly.
+        if (!(e instanceof NoSubjectError) || last) throw e;
+        log(`${t.id}: ${e.message}; falling back to ${chain[i + 1].id}`);
+        fallbackFrom ??= t.id;
+        continue;
+      }
+      loaded = l;
+      template = t;
+      break;
+    }
   }
 
   const summary = {
@@ -202,6 +215,7 @@ async function main() {
       youtube: { mode: "auto", format: "shorts", note: "Shorts needs video: slideshow the PNGs (Postiz or ffmpeg) before upload." },
     },
     privacy:
+      post.privacyNote ??
       "Public ADS-B (adsb.lol, ODbL) + Tailspot public aggregate count + Noah's own catch photos only. No user photos, user catch GPS, or user handles. LADD/PIA and privately operated aircraft never spotlighted; positions named at region level.",
   };
   writeFileSync(join(outDir, "post.json"), JSON.stringify(postJson, null, 2) + "\n");
