@@ -929,6 +929,14 @@ nonisolated enum CardSets {
                                 "as-555 fennec", "as555 fennec"],
                   summary: "Twin-engine Ecureuil / TwinStar and military Fennec.",
                   representativeTypecode: "AS55"),
+            .init(id: "fh-h120", canonicalName: "Airbus H120 Colibri", rarity: .uncommon,
+                  modelTokens: ["h-120 colibri", "ec-120 colibri"],
+                  summary: "Quiet light single-engine helicopter, originally introduced as the EC120 Colibri.",
+                  representativeTypecode: "EC20"),
+            .init(id: "fh-gazelle", canonicalName: "Aerospatiale Gazelle", rarity: .uncommon,
+                  modelTokens: ["sa-341 gazelle", "sa-342 gazelle", "sa-341/342 gazelle"],
+                  summary: "Fast light military helicopter built in the SA341 and SA342 series.",
+                  representativeTypecode: "GAZL"),
             // No "ec-130" token here or on H130 below: Lockheed's EC-130
             // Hercules variant canonicalizes to "EC-130 …" and would bleed in.
             .init(id: "fh-h130", canonicalName: "Airbus H130", rarity: .uncommon,
