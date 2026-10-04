@@ -5,10 +5,11 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-10-03 — Fix the 1.2.0 launch hang on big Hangars (branch `fix/trophy-backfill-launch-hang`)
+## 2026-10-04 — 1.2.1: fix the 1.2.0 launch hang on big Hangars (branch `fix/trophy-backfill-launch-hang`)
 
-- A tester upgrading 1.1.1 → 1.2.0 build 102 with ~4,600 catches got a black,
-  frozen screen on every launch. 1.2.0's trophy-date backfill searched
+- A public user upgrading 1.1.1 → 1.2.0 (build 102, live 2026-10-03) with
+  ~4,700 catches got a black, frozen screen on six launches over ~11 minutes,
+  until one launch stayed open long enough to finish. Shipping as 1.2.1. 1.2.0's trophy-date backfill searched
   chronological prefixes of the whole Hangar for every earned trophy,
   synchronously in the launch `.task`, and wrote the dates once, at the end.
   For 4,600 catches that was 36 s on the simulator, so the watchdog killed
