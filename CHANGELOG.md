@@ -5,6 +5,35 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-04 — 1.2.1: fix the 1.2.0 launch hang on big Hangars (branch `fix/trophy-backfill-launch-hang`)
+
+- A public user upgrading 1.1.1 → 1.2.0 (build 102, live 2026-10-03) with
+  ~4,700 catches got a black, frozen screen on six launches over ~11 minutes,
+  until one launch stayed open long enough to finish. Shipping as 1.2.1. 1.2.0's trophy-date backfill searched
+  chronological prefixes of the whole Hangar for every earned trophy,
+  synchronously in the launch `.task`, and wrote the dates once, at the end.
+  For 4,600 catches that was 36 s on the simulator, so the watchdog killed
+  the app, nothing was saved, and the next launch started over.
+- The launch pass now spends at most one prefix pass (a fast path that dates
+  every trophy the newest catch crossed, which covers live unlocks). The rest
+  runs in `TrophyUnlockCenter.finishAchievementDates()`. It sleeps 10 ms
+  between passes, saves each date as soon as it is found, and stops on
+  cancellation or if a catch it is reading gets deleted. The Trophies tab
+  uses the same async path.
+- Each pass is also ~6× cheaper. Nearly all of `Trophies.inputs` (~2.7 s
+  per pass for 4,600 catches, optimized build) was the Set Master check: every
+  locked set entry scanned every catch with substring matches. It now scans
+  `CardSets.distinctMatchKeys`, one key per distinct (typecode, model,
+  canonical) tuple, keeping the first occurrence, so the result and the
+  catch that fills each slot are identical. One pass went 2.65 s → 0.42 s,
+  the full date search 34.6 s → 5.6 s. The Sets screen uses the same keys.
+  This also speeds up the single pass 1.1.1 already ran at launch and on
+  every catch.
+- Known leftovers: the async backfill still runs each pass on the main
+  thread (worst case ~0.4 s hitches for a few seconds after an upgrade,
+  once). The Trophies tab can run a second backfill alongside the launch
+  one; the results are the same, the work is duplicated.
+
 ## 2026-10-02 — Fewer false "Tailspot unreachable" pills (branch `unreachable-pill`)
 
 - Most of these pills weren't outages. Metadata lookups run in `.task(id:)`s

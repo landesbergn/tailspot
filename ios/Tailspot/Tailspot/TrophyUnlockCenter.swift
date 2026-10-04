@@ -48,6 +48,9 @@ final class TrophyUnlockCenter: ObservableObject {
     /// The roster generation this build ships (injectable for tests). See
     /// `Trophies.rosterVersion` for the stamp/reseed/recap contract.
     private let rosterVersion: Int
+    /// Achievement dates the last synchronous pass ran out of budget for —
+    /// drained by `finishAchievementDates()` off the launch path.
+    private var pendingDateBackfill: (catches: [Catch], inputs: TrophyProgressInputs)?
 
     init(
         ledger: UserDefaultsTrophyLedger = UserDefaultsTrophyLedger(),
@@ -83,8 +86,7 @@ final class TrophyUnlockCenter: ObservableObject {
     /// the user's first crossing.
     func enqueueNewUnlocks(from catches: [Catch]) {
         let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
-        TrophyAchievementDates.recordMissing(from: catches, inputs: inputs,
-                                            roster: roster, ledger: ledger, events: events)
+        recordDatesWithinBudget(catches: catches, inputs: inputs)
         guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
@@ -106,12 +108,33 @@ final class TrophyUnlockCenter: ObservableObject {
     /// restore success screen is the moment; a second overlay would pile on.
     func reseedAfterRestore(from catches: [Catch]) {
         let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
-        TrophyAchievementDates.recordMissing(from: catches, inputs: inputs,
-                                            roster: roster, ledger: ledger, events: events)
+        recordDatesWithinBudget(catches: catches, inputs: inputs)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
         // predates it and is now stale relative to the seeded state.
         pendingEvents.removeAll()
+    }
+
+    /// Date what one prefix pass can — the newest-catch fast path, which
+    /// covers every live unlock — and park the rest. Achievement dates must
+    /// never block the caller: an upgrade with thousands of catches needs
+    /// tens of full-Hangar passes (the 1.2.0 launch hang).
+    private func recordDatesWithinBudget(catches: [Catch], inputs: TrophyProgressInputs) {
+        let done = TrophyAchievementDates.recordMissing(
+            from: catches, inputs: inputs, roster: roster, ledger: ledger,
+            events: events, maxEvaluations: 1)
+        pendingDateBackfill = done ? nil : (catches, inputs)
+    }
+
+    /// Finish the dates the last `enqueueNewUnlocks`/`reseedAfterRestore`
+    /// left over, yielding to the UI between passes. Call from a `.task` so
+    /// it is cancelled with its view; a cancelled run keeps what it found.
+    func finishAchievementDates() async {
+        guard let pending = pendingDateBackfill else { return }
+        pendingDateBackfill = nil
+        await TrophyAchievementDates.backfill(
+            from: pending.catches, inputs: pending.inputs, roster: roster,
+            ledger: ledger, events: events)
     }
 
     /// Commit-on-shown: the instant a celebration is presented, record its
