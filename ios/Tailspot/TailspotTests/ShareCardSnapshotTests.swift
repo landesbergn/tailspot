@@ -110,6 +110,30 @@ struct ShareCardSnapshotTests {
             }
             try? png.write(to: dir.appendingPathComponent("\(name).png"))
         }
+
+        // Social formats (square / portrait / story), with and without a
+        // photo + route, plus a long name that wraps past two flap lines.
+        let formatPlanes: [(String, CardPlane)] = [
+            ("rare_photo_route", plane(focus: Self.markerFocus)),
+            ("common_noroute", CardPlane(
+                callsign: "N12633", model: "Cessna OE Bird Dog", carrier: "Private",
+                rarity: .common, type: .ga,
+                altText: "925 ft", speedText: "61 mph", distText: "0.4 mi",
+                isFirstOfType: true)),
+            ("longname", CardPlane(
+                callsign: "RCH4521", model: "McDonnell Douglas KC-10A Extender Tanker",
+                carrier: "United States Air Force",
+                rarity: .legendary, type: .mil,
+                altText: "24,000 ft", speedText: "410 kt", distText: "22.1 km",
+                originIcao: "SUU", destIcao: "PHIK")),
+        ]
+        for (name, p) in formatPlanes {
+            for format in ShareFormat.allCases {
+                guard let ui = CatchShare.uiImage(for: p, format: format),
+                      let png = ui.pngData() else { continue }
+                try? png.write(to: dir.appendingPathComponent("format_\(format.rawValue)_\(name).png"))
+            }
+        }
         #expect(true)
     }
 }

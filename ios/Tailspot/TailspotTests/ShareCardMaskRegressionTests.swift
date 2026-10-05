@@ -102,5 +102,30 @@ struct ShareCardMaskRegressionTests {
         #expect(magenta > 50_000,
                 "Shared card lost its catch photo (found \(magenta) photo pixels). If the hero shows a yellow no-entry placeholder, a PostHog mask tag view is back inside the ImageRenderer tree — see CatchPhotoReplayMask.swift.")
     }
+
+    /// Every social format renders at its exact Instagram-ready pixel size
+    /// AND keeps the catch photo — the format canvases go through their own
+    /// ImageRenderer pass, so the mask fix must hold there too.
+    @Test("Social share formats render at exact size with the catch photo",
+          arguments: ShareFormat.allCases)
+    func formatRenderSizeAndPhoto(format: ShareFormat) throws {
+        let photoURL = try #require(makeSolidMagentaPhoto())
+        defer { try? FileManager.default.removeItem(at: photoURL) }
+
+        let plane = CardPlane(
+            callsign: "KAL082", model: "Airbus A380-800",
+            carrier: "Korean Air",
+            rarity: .rare, type: .wide,
+            altText: "1,675 ft", speedText: "179 kt", distText: "1.2 km",
+            photoURL: photoURL, photoFocus: nil,
+            originIcao: "SFO", destIcao: "ICN",
+            isFirstOfType: true)
+
+        let ui = try #require(CatchShare.uiImage(for: plane, format: format))
+        let px = CGSize(width: ui.size.width * ui.scale, height: ui.size.height * ui.scale)
+        #expect(px == format.pixelSize, "\(format) rendered \(px), expected \(format.pixelSize)")
+        #expect(magentaPixelCount(in: ui) > 20_000,
+                "\(format) share lost its catch photo")
+    }
 }
 #endif

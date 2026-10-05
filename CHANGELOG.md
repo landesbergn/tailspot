@@ -5,6 +5,19 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-05 — Social share formats (branch `claude/serene-feynman-x71op3`)
+
+- The share pill on the catch detail screen opens a new `CatchShareSheet`:
+  pick Square (1:1), Portrait (4:5) or Story (9:16), preview the exact
+  image, then share. Each format renders at Instagram's native 1080 px width.
+- Square and Portrait use `CatchShareCompactCard`, a compact layout from the
+  settled card's atoms (hero, flaps, identity row, stat cells) with a single
+  points total; Story embeds the existing artboard, scaled to fit.
+- `catch_share_opened` moved to the in-sheet Share tap and gained `format`.
+- Tests: per-format pixel size + catch-photo pixels
+  (`ShareCardMaskRegressionTests`); format renders added to the
+  `ShareCardSnapshotTests` visual harness.
+
 ## 2026-10-04 — 1.2.1: fix the 1.2.0 launch hang on big Hangars (branch `fix/trophy-backfill-launch-hang`)
 
 - A public user upgrading 1.1.1 → 1.2.0 (build 102, live 2026-10-03) with
