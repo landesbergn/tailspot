@@ -71,7 +71,20 @@ app shares:
   slash — so a code that could never exist (`/c/K7M4QD2O`, `/c/short`)
   falls through to the 404 page instead of a pointless App Store trip.
   The regex is **quoted** because nginx reads a bare `{6}` as the start of
-  a config block and refuses to start. There is no landing page by design.
+  a config block and refuses to start. There is no landing page for people.
+- **Link previews of `/c/CODE`** — bots that fetch a link to draw its
+  preview card (matched by user agent in the `$link_preview_bot` map:
+  iMessage sends `facebookexternalhit … Twitterbot`, plus WhatsApp, Slack,
+  Discord, Telegram and others) get `public/invite.html` instead of the 302.
+  Its Open Graph tags and `img/invite-preview.jpg` say "challenge invite";
+  without them a pasted invite previewed as the App Store listing. The card
+  is generic, with no challenge name or code, because the site is static and
+  the backend has no public lookup by code. In the app, the Invite share
+  sheet hands Messages its own per-challenge card (`ChallengeInviteCard.swift`),
+  which wins when the user picks Messages directly; Copy + paste and every
+  other app land here. Check with
+  `curl -A 'facebookexternalhit/1.1' https://tailspot.app/c/ABCDEF` (expect
+  200 HTML) versus plain `curl -sI` (expect the 302).
 
 `.well-known` is a dot-directory, which `COPY public/ /usr/share/nginx/html/`
 in the Dockerfile does include (a directory source copies its contents,
