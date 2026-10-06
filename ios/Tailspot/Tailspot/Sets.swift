@@ -725,6 +725,10 @@ nonisolated enum CardSets {
 
     private static let familiesGapB: [CardSet] = [
         .init(id: "fam-cessna", type: .ga, title: "Cessna", entries: [
+            .init(id: "fc140", canonicalName: "Cessna 140", rarity: .common,
+                  modelTokens: ["cessna 140"],
+                  summary: "Postwar two-seat taildragger that helped define Cessna's light-aircraft line.",
+                  representativeTypecode: "C140"),
             .init(id: "fc152", canonicalName: "Cessna 150 / 152", rarity: .common,
                   modelTokens: ["cessna 152", "c152", "152", "cessna 150"], summary: "Two-seat trainer.",
                   representativeTypecode: "C152"),
@@ -1059,6 +1063,12 @@ nonisolated enum CardSets {
                   summary: "Twin pusher-prop business aircraft with three lifting surfaces.",
                   representativeTypecode: "P180"),
         ]),
+        .init(id: "fam-mu2", type: .biz, title: "Mitsubishi MU-2", entries: [
+            .init(id: "fmu2", canonicalName: "Mitsubishi MU-2", rarity: .uncommon,
+                  modelTokens: ["mitsubishi mu-2", "mitsubishi mu 2", "mu-2 marquise", "mu-2 solitaire"],
+                  summary: "Fast twin-turboprop business and utility aircraft built in short- and long-body variants.",
+                  representativeTypecode: "MU2"),
+        ]),
         .init(id: "fam-commuter-props", type: .regional, title: "Commuter props", entries: [
             .init(id: "fcp-islander", canonicalName: "BN-2 Islander", rarity: .uncommon,
                   modelTokens: ["bn-2", "islander"], summary: "Boxy island-hopper. Ten seats, two pistons.",
@@ -1218,6 +1228,10 @@ nonisolated enum CardSets {
                   modelTokens: ["extra ea-400", "aerospace composites ea 400"],
                   summary: "Pressurized single-engine composite tourer from Extra's EA-400 line.",
                   representativeTypecode: "E400"),
+            .init(id: "fsc-extra300", canonicalName: "Extra EA-300", rarity: .common,
+                  modelTokens: ["extra ea-300", "extra 300", "extra ea-330", "extra 330", "extra ea-350", "extra 350"],
+                  summary: "Purpose-built aerobatic family spanning the EA-300, EA-330, and EA-350.",
+                  representativeTypecode: "E300"),
             .init(id: "fsc-lancair-legacy", canonicalName: "Lancair Legacy", rarity: .common,
                   modelTokens: ["lancair legacy"],
                   summary: "Fast two-seat composite kit aircraft offered with fixed or retractable gear.",

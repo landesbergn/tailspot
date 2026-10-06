@@ -225,6 +225,10 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-10-03.
         ("B190", "Beechcraft", "1900"),
         ("GC1", "Globe", "GC-1 Swift"),
+        // Public catalog coverage additions validated 2026-10-06.
+        ("C140", "Cessna", "140"),
+        ("E300", "Extra", "EA-300"),
+        ("MU2", "Mitsubishi", "MU-2"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -323,6 +327,9 @@ struct SetsCoverageTests {
             (("L8", "Luscombe", "8"), "fam-vintage", "fv-luscombe8"),
             (("B190", "Beechcraft", "1900"), "fam-commuter-props", "fcp-b190"),
             (("GC1", "Globe", "GC-1 Swift"), "fam-sport-classics", "fsc-globe-swift"),
+            (("C140", "Cessna", "140"), "fam-cessna", "fc140"),
+            (("E300", "Extra", "EA-300"), "fam-sport-classics", "fsc-extra300"),
+            (("MU2", "Mitsubishi", "MU-2"), "fam-mu2", "fmu2"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -363,6 +370,19 @@ struct SetsCoverageTests {
                 "A Skyeton K-10 Swift must not fill the Globe GC-1 slot")
         #expect(!CardSets.matches(key: CardSets.matchKey(for: scaledSwift), entry: globeSwift),
                 "A Scaled 400 Swift must not fill the Globe GC-1 slot")
+
+        // Adjacent public designators and similarly numbered models must not
+        // fill the newly added Cessna 140, Extra 300, or MU-2 slots.
+        let c140Entry = cessnaSet.entries.first { $0.id == "fc140" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("A140", "Antonov", "An-140"))), entry: c140Entry),
+                "An Antonov An-140 must not fill the Cessna 140 slot")
+        let extra300Entry = classicsSet.entries.first { $0.id == "fsc-extra300" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("E400", "Extra", "EA-400"))), entry: extra300Entry),
+                "An Extra EA-400 must not fill the Extra EA-300 slot")
+        let mu2Entry = CardSets.families.first { $0.id == "fam-mu2" }!
+            .entries.first { $0.id == "fmu2" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("MU23", "Akaflieg Munchen", "Mü-23 Saurier"))), entry: mu2Entry),
+                "An Akaflieg Mü-23 must not fill the Mitsubishi MU-2 slot")
 
         // AS50 covers the single-engine AS350/AS550 family; AS55 is the
         // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
