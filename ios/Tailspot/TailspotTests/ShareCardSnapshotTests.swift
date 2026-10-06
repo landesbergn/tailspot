@@ -111,7 +111,7 @@ struct ShareCardSnapshotTests {
             try? png.write(to: dir.appendingPathComponent("\(name).png"))
         }
 
-        // Social formats (square / portrait / story), with and without a
+        // Social formats (post 4:5 / story 9:16), with and without a
         // photo + route, plus a long name that wraps past two flap lines.
         let formatPlanes: [(String, CardPlane)] = [
             ("rare_photo_route", plane(focus: Self.markerFocus)),

@@ -5,18 +5,21 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-10-05 — Social share formats (branch `claude/serene-feynman-x71op3`)
+## 2026-10-05 — Share by destination (branch `claude/serene-feynman-x71op3`, PR #317)
 
 - The share pill on the catch detail screen opens a new `CatchShareSheet`:
-  pick Square (1:1), Portrait (4:5) or Story (9:16), preview the exact
-  image, then share. Each format renders at Instagram's native 1080 px width.
-- Square and Portrait use `CatchShareCompactCard`, a compact layout from the
-  settled card's atoms (hero, flaps, identity row, stat cells) with a single
-  points total; Story embeds the existing artboard, scaled to fit.
-- `catch_share_opened` moved to the in-sheet Share tap and gained `format`.
-- Tests: per-format pixel size + catch-photo pixels
-  (`ShareCardMaskRegressionTests`); format renders added to the
-  `ShareCardSnapshotTests` visual harness.
+  card preview plus Instagram Story / Instagram Post / More buttons. Each
+  destination picks its own shape (Spotify / Strava pattern).
+- Instagram Story: direct into Instagram's story editor (card sticker over
+  the blurred catch photo, `InstagramStories`) once `META_APP_ID` is set;
+  until then a flattened 1080×1920 image through the system share sheet.
+- Instagram Post: 4:5 1080×1350 `CatchShareCompactCard`, built from the
+  settled card's atoms with a single points total.
+- More: the existing full card plus the App Store link.
+- `catch_share_opened` moved to the destination tap and gained
+  `destination` and `method`.
+- Tests: post/story pixel size + catch-photo pixels, transparent sticker
+  corners, Instagram URL + pasteboard keys (`InstagramStoriesTests`).
 
 ## 2026-10-04 — 1.2.1: fix the 1.2.0 launch hang on big Hangars (branch `fix/trophy-backfill-launch-hang`)
 

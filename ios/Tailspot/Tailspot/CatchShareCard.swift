@@ -19,16 +19,22 @@
 //
 //  Share FORMATS (2026-10-05): the natural artboard is ~1:1.85, which
 //  Instagram's feed crops and other targets letterbox. `ShareFormat` adds
-//  three fixed canvases sized for social posting — Square 1:1 and
-//  Portrait 4:5 (the Instagram feed's two shapes) use a compact layout
-//  built from the same reveal atoms; Story 9:16 frames the full artboard.
-//  The user picks one in `CatchShareSheet`.
+//  two fixed canvases, chosen by DESTINATION in `CatchShareSheet` (the
+//  Spotify / Strava pattern: people pick where to post, the app picks the
+//  shape). Post is 4:5, the tallest shape the Instagram feed shows
+//  uncropped, using a compact layout built from the same reveal atoms.
+//  Story is 9:16: the artboard as a transparent "sticker" over a blurred
+//  catch photo — the same two layers `InstagramStories` hands to
+//  Instagram's own story editor when direct sharing is configured.
 //
 
 import SwiftUI
 
 struct CatchShareCard: View {
     let plane: CardPlane
+    /// false renders on a clear background — the story sticker, which
+    /// sits on a blurred photo instead of the flat app background.
+    var opaque: Bool = true
 
     var body: some View {
         VStack(spacing: 14) {
@@ -48,6 +54,7 @@ struct CatchShareCard: View {
                     .foregroundStyle(plane.rarity.tint)
             }
             .padding(.horizontal, 4)
+            .modifier(StickerLegibility(enabled: !opaque))
 
             SettledCatchCard(
                 plane: plane,
@@ -62,12 +69,24 @@ struct CatchShareCard: View {
                 Text("CAUGHT ON TAILSPOT")
                     .font(Brand.Font.mono(size: 10, weight: .semibold))
                     .tracking(1.5)
-                    .foregroundStyle(Brand.Color.textTertiary)
+                    // Tertiary grey disappears on a bright sky backdrop.
+                    .foregroundStyle(opaque ? Brand.Color.textTertiary : Brand.Color.textSecondary)
             }
+            .modifier(StickerLegibility(enabled: !opaque))
         }
         .padding(20)
         .frame(width: 360)
-        .background(Brand.Color.bgPrimary)
+        .background(opaque ? Brand.Color.bgPrimary : Color.clear)
+    }
+}
+
+/// Soft shadow under the sticker's header and footer, which sit directly
+/// on the photo backdrop instead of the dark card.
+private struct StickerLegibility: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        content.shadow(color: .black.opacity(enabled ? 0.55 : 0), radius: 4, y: 1)
     }
 }
 
@@ -80,19 +99,10 @@ enum CatchShare {
     /// and attribution rationale: AppStoreListing.swift.
     static let storeURL = AppStoreListing.url(campaign: "Tailspot Catch Share")
 
-    /// Stamp the share card into an Image for ShareLink. MainActor because
-    /// ImageRenderer renders a live SwiftUI view. Height follows the card's
-    /// natural size (the split-flap name can wrap to a second line).
-    @MainActor
-    static func image(for plane: CardPlane) -> Image {
-        if let ui = uiImage(for: plane) {
-            return Image(uiImage: ui)
-        }
-        return Image(systemName: "airplane")
-    }
-
-    /// The raw render behind `image(for:)` — split out so tests can assert
-    /// on pixels. `\.replayMaskingDisabled` drops the session-replay photo
+    /// The full share card at its natural height (the split-flap name can
+    /// wrap to a second line) — the "More" destination's image. MainActor
+    /// because ImageRenderer renders a live SwiftUI view.
+    /// `\.replayMaskingDisabled` drops the session-replay photo
     /// mask from this OFFSCREEN tree: ImageRenderer draws the mask's hidden
     /// UIKit tag views as a yellow no-entry placeholder over the hero (the
     /// "photo mask on shared cards" bug), and these pixels never appear on
@@ -108,23 +118,54 @@ enum CatchShare {
         return renderer.uiImage
     }
 
+    /// The artboard on a transparent background, for stories. Instagram's
+    /// story editor takes it as the movable sticker layer.
+    @MainActor
+    static func stickerImage(for plane: CardPlane) -> UIImage? {
+        let renderer = ImageRenderer(
+            content: CatchShareCard(plane: plane, opaque: false)
+                .environment(\.replayMaskingDisabled, true)
+        )
+        renderer.scale = 3
+        renderer.isOpaque = false
+        return renderer.uiImage
+    }
+
+    /// The 9:16 backdrop behind a story sticker: the catch photo, blurred
+    /// and darkened, or the rarity glow when there's no local photo.
+    @MainActor
+    static func storyBackgroundImage(for plane: CardPlane) -> UIImage? {
+        render(CatchShareStoryBackground(plane: plane), format: .story)
+    }
+
     /// Render the share card on a fixed social canvas. Pixel size is exactly
-    /// `format.pixelSize` (canvas points × 3), so the image drops into
-    /// Instagram's feed or a story without a crop. Story embeds the natural
-    /// artboard (rendered first, then scaled to fit), so a long wrapped name
-    /// can never overflow the 9:16 frame.
+    /// `format.pixelSize` (canvas points × 3), so the image drops into the
+    /// Instagram feed or a story without a crop. Story composes the sticker
+    /// (rendered first, then scaled to fit) over its backdrop, so a long
+    /// wrapped name can never overflow the 9:16 frame.
     @MainActor
     static func uiImage(for plane: CardPlane, format: ShareFormat) -> UIImage? {
-        let content: AnyView
         switch format {
-        case .square, .portrait:
-            content = AnyView(CatchShareCompactCard(plane: plane, format: format))
+        case .post:
+            return render(CatchShareCompactCard(plane: plane), format: .post)
         case .story:
-            guard let artboard = uiImage(for: plane) else { return nil }
-            content = AnyView(CatchShareStoryCanvas(plane: plane, artboard: artboard))
+            guard let sticker = stickerImage(for: plane) else { return nil }
+            return storyImage(for: plane, sticker: sticker)
         }
+    }
+
+    /// Story canvas from an already-rendered sticker, so the share sheet
+    /// can reuse one sticker render for both the direct Instagram path and
+    /// this flattened fallback.
+    @MainActor
+    static func storyImage(for plane: CardPlane, sticker: UIImage) -> UIImage? {
+        render(CatchShareStoryCanvas(plane: plane, sticker: sticker), format: .story)
+    }
+
+    @MainActor
+    private static func render(_ view: some View, format: ShareFormat) -> UIImage? {
         let renderer = ImageRenderer(
-            content: content
+            content: view
                 .frame(width: format.canvas.width, height: format.canvas.height)
                 .environment(\.replayMaskingDisabled, true)
         )
@@ -135,52 +176,33 @@ enum CatchShare {
 
 // MARK: - Social formats
 
-/// The fixed-size canvases the share sheet offers. Canvases are in points at
-/// a 360 pt width; the render scale of 3 makes every format 1080 px wide —
-/// Instagram's native width, so nothing gets resampled on upload.
-nonisolated enum ShareFormat: String, CaseIterable, Identifiable, Sendable {
-    case square, portrait, story
-
-    var id: String { rawValue }
-
-    /// Segmented-picker title.
-    var title: String {
-        switch self {
-        case .square: "Square"
-        case .portrait: "Portrait"
-        case .story: "Story"
-        }
-    }
-
-    /// Ratio + where it fits, shown under the picker.
-    var hint: String {
-        switch self {
-        case .square: "1:1 · feed posts"
-        case .portrait: "4:5 · tallest feed post"
-        case .story: "9:16 · stories and reels"
-        }
-    }
+/// The fixed-size canvases behind the share destinations. Canvases are in
+/// points at a 360 pt width; the render scale of 3 makes every format
+/// 1080 px wide, Instagram's native width, so nothing is resampled on upload.
+nonisolated enum ShareFormat: String, CaseIterable, Sendable {
+    /// 4:5, the Instagram feed's tallest uncropped shape.
+    case post
+    /// 9:16, stories and reels.
+    case story
 
     var canvas: CGSize {
         switch self {
-        case .square: CGSize(width: 360, height: 360)
-        case .portrait: CGSize(width: 360, height: 450)
+        case .post: CGSize(width: 360, height: 450)
         case .story: CGSize(width: 360, height: 640)
         }
     }
 
-    /// Rendered size at the share scale (3×): 1080×1080 / 1080×1350 / 1080×1920.
+    /// Rendered size at the share scale (3×): 1080×1350 / 1080×1920.
     var pixelSize: CGSize { CGSize(width: canvas.width * 3, height: canvas.height * 3) }
 }
 
-/// Square and 4:5 layout. The settled card is too tall for these shapes,
-/// so this keeps its vocabulary (rarity frame, photo hero, split-flap name,
+/// 4:5 feed-post layout. The settled card is too tall for this shape, so
+/// this keeps its vocabulary (rarity frame, photo hero, split-flap name,
 /// identity row, stat cells) and drops the ledger to a single points total.
 /// The hero is the flexible element: it takes whatever height the text
-/// leaves, so 4:5 simply gets a taller photo than 1:1.
+/// leaves, so the photo gets every spare point of the canvas.
 struct CatchShareCompactCard: View {
     let plane: CardPlane
-    let format: ShareFormat
 
     private var points: Int {
         let base = plane.rarity.basePoints
@@ -190,7 +212,7 @@ struct CatchShareCompactCard: View {
 
     var body: some View {
         let accent = plane.rarity.tint
-        let canvas = format.canvas
+        let canvas = ShareFormat.post.canvas
         let outerPad: CGFloat = 18
         let cardWidth = canvas.width - 2 * outerPad
         // Stats and type are tuned for the 300 pt prototype, like the
@@ -295,7 +317,7 @@ struct CatchShareCompactCard: View {
     }
 
     /// Settled split-flap name, sized like the settled card but capped at
-    /// two lines — a third line would eat the hero on the square canvas, so
+    /// two lines — a third line would eat into the hero, so
     /// anything past two lines is folded into the second and the cells
     /// shrink to fit.
     private func flapName(width: CGFloat) -> some View {
@@ -365,23 +387,44 @@ struct CatchShareCompactCard: View {
     }
 }
 
-/// 9:16 canvas: the full share artboard, scaled to fit and centered, over a
-/// soft glow in the catch's rarity tint so the empty space above and below
-/// reads as backdrop rather than letterbox.
-struct CatchShareStoryCanvas: View {
+/// 9:16 backdrop: the user's own catch photo, blurred and darkened so the
+/// card reads on top of it; the rarity glow when there's no local photo
+/// (remote Planespotters heroes can't load inside ImageRenderer).
+struct CatchShareStoryBackground: View {
     let plane: CardPlane
-    let artboard: UIImage
 
     var body: some View {
         ZStack {
             Brand.Color.bgPrimary
-            RadialGradient(colors: [plane.rarity.tint.opacity(0.14), .clear],
-                           center: .center, startRadius: 10, endRadius: 340)
-            Image(uiImage: artboard)
+            if let url = plane.photoURL, url.isFileURL,
+               let photo = RevealPhoto.cachedDecode(url: url) {
+                Color.clear
+                    .overlay(Image(uiImage: photo).resizable().scaledToFill())
+                    .clipped()
+                    .blur(radius: 22, opaque: true)
+                    .overlay(Color.black.opacity(0.3))
+            } else {
+                RadialGradient(colors: [plane.rarity.tint.opacity(0.14), .clear],
+                               center: .center, startRadius: 10, endRadius: 340)
+            }
+        }
+    }
+}
+
+/// 9:16 canvas: the transparent artboard sticker, scaled to fit and
+/// centered over the story backdrop.
+struct CatchShareStoryCanvas: View {
+    let plane: CardPlane
+    let sticker: UIImage
+
+    var body: some View {
+        ZStack {
+            CatchShareStoryBackground(plane: plane)
+            Image(uiImage: sticker)
                 .resizable()
                 .scaledToFit()
-                .padding(.horizontal, 8)
-                .padding(.vertical, 40)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 48)
         }
     }
 }
