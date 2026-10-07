@@ -35,6 +35,23 @@ To refresh them, re-run the resize from `marketing/catch-photos/` and keep the
 `.catch-frame` aspect ratio (900/567) in sync with `style.css` — the
 single-screen height budget is computed from it.
 
+## App Store reviews
+
+The hero rotates a few real 5-star reviews from the US App Store, quoted
+verbatim (trimmed to a sentence, never reworded). The same rule applies as
+for the photos: nothing invented. To refresh them, pull the public feed:
+`https://itunes.apple.com/us/rss/customerreviews/id=6773470079/sortBy=mostRecent/json`.
+All quotes share one grid cell, so the longest one sets the height and the
+rotation never reflows the page. On phones they sit below the catch photo.
+
+## Icons
+
+`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` and the nav's
+`img/app-icon.png` are all generated from the iOS icon
+(`ios/Tailspot/Tailspot/Assets.xcassets/AppIcon.appiconset/icon-light.png`)
+with `sips -z`. `favicon.svg` embeds the 128px PNG, base64-encoded, with a
+rounded-square clip. Regenerate all four if the app icon changes.
+
 ## The catch counter
 
 The hero's "N planes caught so far" line is the site's one live number. It is

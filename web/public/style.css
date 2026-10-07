@@ -97,6 +97,19 @@ body > * { position: relative; z-index: 1; }
   text-transform: uppercase;
 }
 .wordmark:hover { color: #fff; }
+/* The iOS app icon beside the wordmark. Corner radius is ~22.5% of the edge,
+   the proportion of iOS's home-screen mask, so it reads as the same icon. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.wordmark-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6.3px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
 
 .nav-links {
   display: flex;
@@ -241,6 +254,39 @@ a.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0
 }
 .btn-ghost:hover { border-color: var(--cyan); color: var(--cyan); }
 .btn-lg { font-size: 0.95rem; padding: 1em 1.9em; }
+
+/* ── App Store reviews ──
+   Sits under the badge in the hero copy. Every quote occupies the same grid
+   cell, so the block is as tall as the longest one and swapping quotes never
+   moves the badge above it. */
+.reviews {
+  margin-top: 1.75rem;
+  max-width: 40ch;
+}
+.review-stars {
+  color: var(--gold);
+  font-size: 0.95rem;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+}
+.review-stack { display: grid; }
+.review {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 500ms ease, visibility 0s linear 500ms;
+}
+.review.is-active {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 500ms ease, visibility 0s;
+}
+.review p {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text);
+}
 
 /* ── Real-catch hero ──
    Was a pure-CSS HUD mockup cycling invented flights. It is now Noah's own
@@ -582,6 +628,20 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
   body:has(.hero) .footer-links { gap: 0.5rem 1.1rem; }
 }
 
+/* Stacked layout: the reviews go BELOW the catch photo, not between the
+   badge and it — the photograph is the page's evidence and stays as high as
+   it can. .hero-copy dissolves (display:contents) so its children become grid
+   rows that `order` can interleave with .hero-visual; the grid gap is zeroed
+   and the two breaks become explicit margins so the title/stat/badge rhythm
+   above (built on margins) is unchanged. Placed after the rhythm block so it
+   wins over that block's .hero-inner gap. */
+@media (max-width: 820px) {
+  .hero-copy { display: contents; }
+  .hero-inner { gap: 0; }
+  .hero-visual { order: 1; margin-top: 1.25rem; }
+  .reviews { order: 2; margin: 1.5rem auto 0; }
+}
+
 @media (max-width: 820px) {
   /* Stacked, the nav badge and the hero badge sit ~60px apart and read as the
      same button printed twice. The hero one keeps its context (it follows the
@@ -616,6 +676,7 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
    product's evidence, not decoration. */
 @media (max-height: 430px) {
   .hero-visual { display: none; }
+  .reviews { display: none; }
 }
 
 /* Landscape phone (~390px of height): even without the mockup the default
@@ -640,7 +701,8 @@ body:has(.hero) .site-footer { margin-top: 0; padding: 1.5rem 1.75rem; }
      faded smoothly: he has Reduce Motion on, and the site read as broken
      rather than considerate. The photos are content; the fade is how one
      hands over to the next. */
-  .catch-photo, .catch-meta { transition-property: opacity !important; }
+  .catch-photo, .catch-meta, .review { transition-property: opacity !important; }
+  .review { transition-duration: 500ms !important; }
   .catch-photo { transition-duration: var(--catch-fade) !important; }
   .catch-meta  { transition-duration: var(--catch-meta-fade) !important; }
   .catch-photo, .catch-meta { transition-timing-function: ease !important; }
