@@ -204,6 +204,12 @@ nonisolated enum ShareFormat: String, CaseIterable, Sendable {
 struct CatchShareCompactCard: View {
     let plane: CardPlane
 
+    /// Inset from the rarity frame to everything inside it.
+    private static let inner: CGFloat = 12
+    /// Concentric with the frame (hero radius minus the inset), so the
+    /// photo's corners follow the frame's instead of pinching inside it.
+    private static let heroRadius: CGFloat = Brand.Radius.hero - inner
+
     private var points: Int {
         let base = plane.rarity.basePoints
         let bonus = plane.isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0
@@ -218,7 +224,7 @@ struct CatchShareCompactCard: View {
         // Stats and type are tuned for the 300 pt prototype, like the
         // settled card; 0.9 keeps the three-up stat row legible at 324 pt.
         let scale: CGFloat = 0.9
-        let inner: CGFloat = 12
+        let inner = Self.inner
 
         VStack(spacing: 10) {
             header(accent: accent)
@@ -229,7 +235,9 @@ struct CatchShareCompactCard: View {
 
                 flapName(width: cardWidth - 2 * inner)
 
-                HStack(alignment: .center, spacing: 8) {
+                // Baseline, not center: the big "+75" would otherwise sit
+                // lower than the callsign text beside it.
+                HStack(alignment: .lastTextBaseline, spacing: 8) {
                     identityRow(callsign: plane.callsign, carrier: plane.carrier,
                                 rarity: plane.rarity, scale: scale)
                     Spacer(minLength: 4)
@@ -277,7 +285,9 @@ struct CatchShareCompactCard: View {
                 .tracking(2)
                 .foregroundStyle(accent)
         }
-        .padding(.horizontal, 4)
+        // The card's inner inset, so the logo and rarity line up with the
+        // photo's edges below instead of floating between them.
+        .padding(.horizontal, Self.inner)
     }
 
     private var footer: some View {
@@ -297,10 +307,10 @@ struct CatchShareCompactCard: View {
     private func hero(accent: Color) -> some View {
         RevealPhoto(url: plane.photoURL, focus: plane.photoFocus)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.card))
+            .clipShape(RoundedRectangle(cornerRadius: Self.heroRadius))
             .overlay(
                 CatchRarityBorder(rarity: plane.rarity,
-                                  cornerRadius: Brand.Radius.card, emphasis: 0.55)
+                                  cornerRadius: Self.heroRadius, emphasis: 0.55)
             )
             .overlay(alignment: .bottomLeading) {
                 if plane.isFirstOfType {
@@ -316,14 +326,15 @@ struct CatchShareCompactCard: View {
             }
     }
 
-    /// Settled split-flap name, sized like the settled card but capped at
-    /// two lines — a third line would eat into the hero, so
-    /// anything past two lines is folded into the second and the cells
-    /// shrink to fit.
+    /// Settled split-flap name, capped at two lines — a third line would
+    /// eat into the hero, so anything past two lines is folded into the
+    /// second and the cells shrink to fit. Cells grow (up to `maxCW`) to
+    /// run the name across the card's width, so it squares up with the
+    /// points and stats instead of stopping short.
     private func flapName(width: CGFloat) -> some View {
         let model = (plane.model ?? "UNKNOWN AIRCRAFT").uppercased()
         let gap: CGFloat = 2
-        let maxCW: CGFloat = 15
+        let maxCW: CGFloat = 20
         let minCW: CGFloat = 9
         let perLine = max(6, Int((width + gap) / (11 + gap)))
         var lines = model.count <= perLine ? [model] : wrapName(model, perLine: perLine)
@@ -333,7 +344,7 @@ struct CatchShareCompactCard: View {
         let longest = CGFloat(lines.map(\.count).max() ?? model.count)
         let cwFit = (width - gap * max(0, longest - 1)) / max(1, longest)
         let cw = min(maxCW, max(minCW, cwFit))
-        let fs = min(13, cw * 0.86)
+        let fs = min(17, cw * 0.86)
         let total = lines.reduce(0) { $0 + $1.count }
         var offset = 0
         let flapLines: [FlapLine] = lines.map { line in

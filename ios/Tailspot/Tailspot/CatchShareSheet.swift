@@ -66,10 +66,10 @@ struct CatchShareSheet: View {
                 HStack(alignment: .top, spacing: 12) {
                     storyButton
                     imageShareButton(post, destination: "instagram_post",
-                                     icon: "rectangle.portrait", label: "Instagram\nPost")
+                                     icon: .instagram, label: "Instagram\nPost")
                     saveButton
                     imageShareButton(card, destination: "more",
-                                     icon: "ellipsis", label: "More\n",
+                                     icon: .symbol("ellipsis"), label: "More\n",
                                      withMessage: true)
                 }
             }
@@ -141,13 +141,13 @@ struct CatchShareSheet: View {
                 InstagramStories.share(sticker: sticker, background: storyBackground)
                 captureShare("instagram_story", method: "direct")
             } label: {
-                tile(icon: "plus.circle", label: "Instagram\nStory")
+                tile(icon: .instagram, label: "Instagram\nStory")
             }
             .buttonStyle(.plain)
             .disabled(sticker == nil)
         } else {
             imageShareButton(story, destination: "instagram_story",
-                             icon: "plus.circle", label: "Instagram\nStory")
+                             icon: .instagram, label: "Instagram\nStory")
         }
     }
 
@@ -157,7 +157,7 @@ struct CatchShareSheet: View {
     /// image that arrives with text.
     @ViewBuilder
     private func imageShareButton(_ ui: UIImage?, destination: String,
-                                  icon: String, label: String,
+                                  icon: ShareTileIcon, label: String,
                                   withMessage: Bool = false) -> some View {
         if let ui {
             Button {
@@ -184,7 +184,7 @@ struct CatchShareSheet: View {
             saved = true
             captureShare("save_photos", method: "direct")
         } label: {
-            tile(icon: saved ? "checkmark" : "arrow.down.to.line",
+            tile(icon: .symbol(saved ? "checkmark" : "square.and.arrow.down"),
                  label: saved ? "Saved\n" : "Save\n")
         }
         .buttonStyle(.plain)
@@ -193,13 +193,24 @@ struct CatchShareSheet: View {
         .sensoryFeedback(.success, trigger: saved)
     }
 
-    private func tile(icon: String, label: String) -> some View {
+    private func tile(icon: ShareTileIcon, label: String) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Brand.Color.bgPrimary)
-                .frame(width: 58, height: 58)
-                .background(Brand.Color.cyan, in: .circle)
+            Group {
+                switch icon {
+                case .symbol(let name):
+                    Image(systemName: name)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Brand.Color.bgPrimary)
+                        .frame(width: 58, height: 58)
+                        .background(Brand.Color.cyan, in: .circle)
+                case .instagram:
+                    InstagramGlyph()
+                        .stroke(.white, lineWidth: 2.6)
+                        .frame(width: 28, height: 28)
+                        .frame(width: 58, height: 58)
+                        .background(InstagramGlyph.gradient, in: .circle)
+                }
+            }
             Text(label)
                 .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption))
                 .multilineTextAlignment(.center)
@@ -223,4 +234,42 @@ struct CatchShareSheet: View {
             "method": .string(method),
         ])
     }
+}
+
+/// What a destination tile shows: an SF Symbol on the app's cyan, or the
+/// Instagram glyph on Instagram's own gradient. The brand mark is what
+/// people scan for in a share row (Spotify and Strava use it too), and
+/// Meta's brand rules allow the glyph, unaltered, for "share to
+/// Instagram" buttons; there's no SF Symbol for it.
+enum ShareTileIcon {
+    case symbol(String)
+    case instagram
+}
+
+/// The Instagram glyph (rounded square, lens, flash dot) drawn as a
+/// stroked path, so the app ships no image asset for it. Proportions follow
+/// Meta's published glyph.
+struct InstagramGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = min(rect.width, rect.height)
+        let r = CGRect(x: rect.midX - s / 2, y: rect.midY - s / 2, width: s, height: s)
+        var p = Path()
+        p.addRoundedRect(in: r, cornerSize: CGSize(width: s * 0.28, height: s * 0.28),
+                         style: .continuous)
+        p.addEllipse(in: r.insetBy(dx: s * 0.27, dy: s * 0.27))
+        let dot = s * 0.07
+        p.addEllipse(in: CGRect(x: r.minX + s * 0.75 - dot / 2, y: r.minY + s * 0.25 - dot / 2,
+                                width: dot, height: dot))
+        return p
+    }
+
+    /// Instagram's brand gradient: warm yellow at the bottom-left through
+    /// orange and magenta to purple-blue at the top-right.
+    static let gradient = RadialGradient(
+        colors: [Color(red: 0.99, green: 0.86, blue: 0.40),
+                 Color(red: 0.98, green: 0.49, blue: 0.12),
+                 Color(red: 0.84, green: 0.16, blue: 0.46),
+                 Color(red: 0.59, green: 0.18, blue: 0.75),
+                 Color(red: 0.31, green: 0.36, blue: 0.84)],
+        center: UnitPoint(x: 0.25, y: 1.05), startRadius: 0, endRadius: 80)
 }

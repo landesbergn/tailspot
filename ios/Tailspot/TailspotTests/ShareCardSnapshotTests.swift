@@ -134,6 +134,36 @@ struct ShareCardSnapshotTests {
                 try? png.write(to: dir.appendingPathComponent("format_\(format.rawValue)_\(name).png"))
             }
         }
+
+        // Share-sheet destination icons, old SF Symbols over the current
+        // set (2026-10-07), for the icon review.
+        func circle(_ name: String) -> some View {
+            Image(systemName: name)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Brand.Color.bgPrimary)
+                .frame(width: 58, height: 58)
+                .background(Brand.Color.cyan, in: .circle)
+        }
+        let insta = InstagramGlyph().stroke(.white, lineWidth: 2.6)
+            .frame(width: 28, height: 28).frame(width: 58, height: 58)
+            .background(InstagramGlyph.gradient, in: .circle)
+        let icons = VStack(spacing: 24) {
+            HStack(spacing: 34) {
+                circle("plus.circle"); circle("rectangle.portrait")
+                circle("arrow.down.to.line"); circle("ellipsis")
+            }
+            HStack(spacing: 34) {
+                insta; insta; circle("square.and.arrow.down"); circle("ellipsis")
+            }
+        }
+        .padding(24)
+        .background(Brand.Color.bgElevated)
+        .environment(\.colorScheme, .dark)
+        let iconRenderer = ImageRenderer(content: icons)
+        iconRenderer.scale = 3
+        if let png = iconRenderer.uiImage?.pngData() {
+            try? png.write(to: dir.appendingPathComponent("share_sheet_icons.png"))
+        }
         #expect(true)
     }
 }
