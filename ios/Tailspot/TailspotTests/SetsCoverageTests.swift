@@ -225,6 +225,10 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-10-03.
         ("B190", "Beechcraft", "1900"),
         ("GC1", "Globe", "GC-1 Swift"),
+        // Public catalog coverage additions validated 2026-10-07.
+        ("CH60", "Roland", "Z-602"),
+        ("DIMO", "Diamond", "HK-36 MPX"),
+        ("FAET", "Atec", "321 Faeta"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -323,6 +327,9 @@ struct SetsCoverageTests {
             (("L8", "Luscombe", "8"), "fam-vintage", "fv-luscombe8"),
             (("B190", "Beechcraft", "1900"), "fam-commuter-props", "fcp-b190"),
             (("GC1", "Globe", "GC-1 Swift"), "fam-sport-classics", "fsc-globe-swift"),
+            (("CH60", "Roland", "Z-602"), "fam-sport-classics", "fsc-zodiac"),
+            (("DIMO", "Diamond", "HK-36 MPX"), "fam-sport-classics", "fsc-dimona"),
+            (("FAET", "Atec", "321 Faeta"), "fam-sport-classics", "fsc-faeta"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -559,6 +566,21 @@ struct SetsCoverageTests {
                 "A Van's RV-6 must not fill the AIEP Air Beetle slot")
         #expect(CardSets.matches(key: CardSets.matchKey(for: vansRV6), entry: vansRVEntry),
                 "A Van's RV-6 still fills the Van's RV slot")
+
+        // Exact designators and qualified tokens keep adjacent public types
+        // out of the Zodiac, Dimona, and Faeta sport-aircraft slots.
+        let zodiacEntry = sportSet.entries.first { $0.id == "fsc-zodiac" }!
+        let blackHawk = mk(("H60", "Sikorsky", "S-70 Black Hawk"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: blackHawk), entry: zodiacEntry),
+                "An H60 Black Hawk must not fill the CH60 Zodiac slot")
+        let dimonaEntry = sportSet.entries.first { $0.id == "fsc-dimona" }!
+        let diamondDA40 = mk(("DA40", "Diamond", "DA-40 Katana"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: diamondDA40), entry: dimonaEntry),
+                "A Diamond DA40 must not fill the HK36 Dimona slot")
+        let faetaEntry = sportSet.entries.first { $0.id == "fsc-faeta" }!
+        let falcon50 = mk(("FA50", "Dassault", "Falcon 50"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: falcon50), entry: faetaEntry),
+                "A Dassault Falcon 50 must not fill the ATEC Faeta slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
