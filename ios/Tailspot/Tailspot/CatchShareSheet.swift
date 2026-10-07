@@ -2,33 +2,67 @@
 //  CatchShareSheet.swift
 //  Tailspot
 //
-//  Share a catch by DESTINATION, the pattern Spotify, Strava and Letterboxd
-//  use: people think "post to my story", not "I want 9:16", so each button
-//  picks the right shape itself (2026-10-05, replacing a Square / Portrait /
-//  Story picker).
+//  Share a catch the way Strava and Spotify do (2026-10-07): a swipeable
+//  preview of every shape on top, destinations underneath. What you see is
+//  what you send. Save, Copy, Messages and More act on the shape on screen,
+//  so a square or a 4:5 post saves as easily as the full card.
 //
-//   - Instagram Story: straight into Instagram's story editor with the card
-//     as a movable sticker over a blurred catch photo (`InstagramStories`).
-//     Without a Meta app ID, or without Instagram installed, the same 9:16
-//     composition goes through the system share sheet instead.
-//   - Instagram Post: the 4:5 compact card through the system share sheet
-//     (Instagram offers no direct feed API to any app).
-//   - Save: the full card straight into Photos.
-//   - More: the full card plus the App Store link, for Messages, WhatsApp,
-//     Mail, Save Image and the rest.
+//  Shapes (`SharePage`): Post 4:5 (Instagram feed), Square 1:1 (X, Threads,
+//  WhatsApp, a square grid), Story 9:16, and the full-height card. Story
+//  has a background picker (the Spotify move): blurred catch photo, rarity
+//  glow, or plain dark.
+//
+//  Destinations:
+//   - Instagram Story: flips the preview to Story, then goes straight into
+//     Instagram's story editor with the card as a movable sticker
+//     (`InstagramStories`). Without a Meta app ID, or without Instagram,
+//     the flattened 9:16 image goes through the system share sheet.
+//   - Instagram Post: flips to Post and opens the system share sheet with
+//     the 4:5 image (Instagram offers no direct feed API to any app).
+//   - Messages: Apple's composer with the image and App Store link attached
+//     (hidden where Messages isn't set up).
+//   - Copy: the image onto the clipboard, for pasting into any chat.
+//   - Save: the image into Photos.
+//   - More: the system share sheet with the image and App Store link.
 //
 //  Instagram's share extension rejects SwiftUI `ShareLink` items with
 //  "Content currently unavailable" (it can't load the lazy Transferable
-//  image, and text alongside the image trips it too), so every destination
-//  hands a plain `UIImage` to `UIActivityViewController` instead, and the
-//  Instagram ones send the image alone (2026-10-07).
+//  image, and text alongside the image trips it too), so destinations hand
+//  a plain `UIImage` to `UIActivityViewController`, and the Instagram ones
+//  send the image alone.
 //
 //  SwiftUI note: ImageRenderer is synchronous and heavy at 3×, so the
 //  images render one at a time in `.task`, yielding between renders so the
-//  preview appears first and the buttons enable as their image lands.
+//  first page appears quickly and the rest fill in behind it.
 //
 
 import SwiftUI
+
+/// One page of the share preview: a shape the catch can be sent as.
+enum SharePage: String, CaseIterable, Identifiable {
+    case post, square, story, card
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .post: "Post"
+        case .square: "Square"
+        case .story: "Story"
+        case .card: "Card"
+        }
+    }
+
+    /// Spoken with the title so VoiceOver users hear the shape.
+    var accessibilityShape: String {
+        switch self {
+        case .post: "4 by 5"
+        case .square: "square"
+        case .story: "9 by 16"
+        case .card: "full card"
+        }
+    }
+}
 
 struct CatchShareSheet: View {
     let plane: CardPlane
@@ -41,37 +75,51 @@ struct CatchShareSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var card: UIImage?
+    /// Opens on Post; tests start elsewhere to snapshot each page.
+    @State private var page: SharePage
+
+    init(plane: CardPlane, shareText: String, shareMessage: String,
+         hasCatchPhoto: Bool, startPage: SharePage = .post) {
+        self.plane = plane
+        self.shareText = shareText
+        self.shareMessage = shareMessage
+        self.hasCatchPhoto = hasCatchPhoto
+        _page = State(initialValue: startPage)
+    }
+    @State private var images: [SharePage: UIImage] = [:]
     @State private var sticker: UIImage?
     @State private var storyBackground: UIImage?
-    @State private var story: UIImage?
-    @State private var post: UIImage?
+    @State private var backdrop: StoryBackdrop = .glow
+    @State private var backdrops: [StoryBackdrop] = []
     @State private var directStories = false
-    /// The system share sheet's contents while it's up.
-    @State private var activity: ActivityRequest?
-    @State private var saved = false
+    @State private var presented: Presented?
+    @State private var savedPages: Set<SharePage> = []
+    @State private var copiedPage: SharePage?
 
-    /// Items for one presentation of the system share sheet.
-    private struct ActivityRequest: Identifiable {
+    /// What's presented over the sheet: the system share sheet or the
+    /// Messages composer.
+    private struct Presented: Identifiable {
+        enum Kind {
+            case activity([Any])
+            case message(UIImage)
+        }
         let id = UUID()
-        let items: [Any]
+        let kind: Kind
     }
+
+    private var current: UIImage? { images[page] }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                preview
+            VStack(spacing: 14) {
+                carousel
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                HStack(alignment: .top, spacing: 12) {
-                    storyButton
-                    imageShareButton(post, destination: "instagram_post",
-                                     icon: .instagram, label: "Instagram\nPost")
-                    saveButton
-                    imageShareButton(card, destination: "more",
-                                     icon: .symbol("ellipsis"), label: "More\n",
-                                     withMessage: true)
-                }
+                pagePicker
+                backdropPicker
+                    .opacity(page == .story && backdrops.count > 1 ? 1 : 0)
+                    .allowsHitTesting(page == .story && backdrops.count > 1)
+                    .accessibilityHidden(page != .story || backdrops.count < 2)
+                actionRow
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -87,154 +135,238 @@ struct CatchShareSheet: View {
             }
         }
         .presentationDragIndicator(.visible)
-        .sheet(item: $activity) { request in
-            ActivityShareSheet(items: request.items) { _ in }
-                .presentationDetents([.medium, .large])
+        .sheet(item: $presented) { p in
+            switch p.kind {
+            case .activity(let items):
+                ActivityShareSheet(items: items) { _ in }
+                    .presentationDetents([.medium, .large])
+            case .message(let image):
+                MessageComposeSheet(image: image, message: shareMessage)
+                    .ignoresSafeArea()
+            }
         }
+        .sensoryFeedback(.success, trigger: savedPages.count)
+        .sensoryFeedback(.success, trigger: copiedPage) { _, new in new != nil }
         .task { await renderAll() }
+        .onChange(of: backdrop) { _, _ in rerenderStory() }
     }
 
-    /// Render in the order the screen needs them: the preview first, then
-    /// the story layers, then the post.
+    // MARK: - Rendering
+
+    /// Render in the order the screen needs them: the opening page first,
+    /// then the other shapes, then the story layers.
     private func renderAll() async {
         directStories = InstagramStories.canShare()
-        if card == nil { card = CatchShare.uiImage(for: plane) }
+        backdrops = StoryBackdrop.available(for: plane)
+        backdrop = StoryBackdrop.default(for: plane)
+        if images[.post] == nil { images[.post] = CatchShare.uiImage(for: plane, format: .post) }
+        await Task.yield()
+        if images[.square] == nil { images[.square] = CatchShare.uiImage(for: plane, format: .square) }
+        await Task.yield()
+        if images[.card] == nil { images[.card] = CatchShare.uiImage(for: plane) }
         await Task.yield()
         if sticker == nil { sticker = CatchShare.stickerImage(for: plane) }
         await Task.yield()
-        if storyBackground == nil { storyBackground = CatchShare.storyBackgroundImage(for: plane) }
-        await Task.yield()
-        if story == nil, let sticker { story = CatchShare.storyImage(for: plane, sticker: sticker) }
-        await Task.yield()
-        if post == nil { post = CatchShare.uiImage(for: plane, format: .post) }
+        rerenderStory()
     }
 
-    /// The card as it will appear; each destination frames it for its shape.
-    private var preview: some View {
-        ZStack {
-            if let card {
-                Image(uiImage: card)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Brand.Radius.row)
-                            .strokeBorder(.white.opacity(0.10), lineWidth: 1)
-                    )
-            } else {
-                ProgressView().tint(Brand.Color.cyan)
+    /// The story backdrop and flattened story for the chosen background.
+    private func rerenderStory() {
+        guard let sticker else { return }
+        storyBackground = CatchShare.storyBackgroundImage(for: plane, backdrop: backdrop)
+        images[.story] = CatchShare.storyImage(for: plane, sticker: sticker, backdrop: backdrop)
+        savedPages.remove(.story)
+    }
+
+    // MARK: - Preview
+
+    /// Swipeable preview, one page per shape, each drawn at its real
+    /// proportions so the user sees exactly what will be sent.
+    private var carousel: some View {
+        TabView(selection: $page) {
+            ForEach(SharePage.allCases) { p in
+                ZStack {
+                    if let ui = images[p] {
+                        Image(uiImage: ui)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: Brand.Radius.row)
+                                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+                            )
+                    } else {
+                        ProgressView().tint(Brand.Color.cyan)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .tag(p)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(p.title) preview, \(p.accessibilityShape)")
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Share preview")
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    /// Named page chips in place of dots, so each shape is findable by
+    /// name and tappable as well as swipeable.
+    private var pagePicker: some View {
+        HStack(spacing: 6) {
+            ForEach(SharePage.allCases) { p in
+                chip(p.title, selected: page == p) {
+                    withAnimation(.snappy) { page = p }
+                }
+            }
+        }
+    }
+
+    private var backdropPicker: some View {
+        HStack(spacing: 6) {
+            Text("BACKGROUND")
+                .font(Brand.Font.mono(size: 10, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(Brand.Color.textTertiary)
+                .padding(.trailing, 4)
+            ForEach(backdrops, id: \.self) { b in
+                chip(b.label, selected: backdrop == b) { backdrop = b }
+            }
+        }
+    }
+
+    private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title.uppercased())
+                .font(Brand.Font.mono(size: 11, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(selected ? Brand.Color.bgPrimary : Brand.Color.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(selected ? Brand.Color.cyan : .white.opacity(0.06),
+                            in: .rect(cornerRadius: Brand.Radius.chip))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - Destinations
 
-    /// Direct into Instagram's story editor when configured and installed;
-    /// otherwise the flattened 9:16 story through the system share sheet.
+    private var actionRow: some View {
+        // Evenly spread when the row fits; scrolls at large Dynamic Type.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 4) { tiles }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 8) { tiles }
+            }
+        }
+    }
+
     @ViewBuilder
-    private var storyButton: some View {
-        if directStories {
-            Button {
-                guard let sticker else { return }
+    private var tiles: some View {
+        tileButton(.instagram, "Story", ready: images[.story] != nil) {
+            withAnimation(.snappy) { page = .story }
+            if directStories, let sticker {
                 InstagramStories.share(sticker: sticker, background: storyBackground)
-                captureShare("instagram_story", method: "direct")
-            } label: {
-                tile(icon: .instagram, label: "Instagram\nStory")
+                captureShare("instagram_story", method: "direct", format: .story)
+            } else if let story = images[.story] {
+                presented = Presented(kind: .activity([story]))
+                captureShare("instagram_story", method: "share_sheet", format: .story)
             }
-            .buttonStyle(.plain)
-            .disabled(sticker == nil)
-        } else {
-            imageShareButton(story, destination: "instagram_story",
-                             icon: .instagram, label: "Instagram\nStory")
+        }
+        tileButton(.instagram, "Post", ready: images[.post] != nil) {
+            withAnimation(.snappy) { page = .post }
+            guard let post = images[.post] else { return }
+            presented = Presented(kind: .activity([post]))
+            captureShare("instagram_post", method: "share_sheet", format: .post)
+        }
+        if MessageComposeSheet.isAvailable {
+            tileButton(.symbol("message.fill"), "Messages", ready: current != nil) {
+                guard let current else { return }
+                presented = Presented(kind: .message(current))
+                captureShare("messages", method: "direct", format: page)
+            }
+        }
+        tileButton(.symbol(copiedPage == page ? "checkmark" : "doc.on.doc"),
+                   copiedPage == page ? "Copied" : "Copy", ready: current != nil) {
+            guard let current else { return }
+            UIPasteboard.general.image = current
+            copiedPage = page
+            captureShare("copy", method: "direct", format: page)
+            let copied = page
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                if copiedPage == copied { copiedPage = nil }
+            }
+        }
+        tileButton(.symbol(savedPages.contains(page) ? "checkmark" : "square.and.arrow.down"),
+                   savedPages.contains(page) ? "Saved" : "Save", ready: current != nil) {
+            guard let current, !savedPages.contains(page) else { return }
+            UIImageWriteToSavedPhotosAlbum(current, nil, nil, nil)
+            savedPages.insert(page)
+            captureShare("save_photos", method: "direct", format: page)
+        }
+        tileButton(.symbol("ellipsis"), "More", ready: current != nil) {
+            guard let current else { return }
+            presented = Presented(kind: .activity([current, shareMessage]))
+            captureShare("more", method: "share_sheet", format: page)
         }
     }
 
-    /// Opens the system share sheet with a rendered image, disabled until
-    /// the image exists. Only "More" adds the App Store link: Messages and
-    /// Mail deliver it with the card, but Instagram's extension refuses an
-    /// image that arrives with text.
-    @ViewBuilder
-    private func imageShareButton(_ ui: UIImage?, destination: String,
-                                  icon: ShareTileIcon, label: String,
-                                  withMessage: Bool = false) -> some View {
-        if let ui {
-            Button {
-                activity = ActivityRequest(items: withMessage ? [ui, shareMessage] : [ui])
-                captureShare(destination, method: "share_sheet")
-            } label: {
-                tile(icon: icon, label: label)
-            }
-            .buttonStyle(.plain)
-        } else {
+    private func tileButton(_ icon: ShareTileIcon, _ label: String, ready: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             tile(icon: icon, label: label)
-                .opacity(0.4)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Preparing image")
-        }
-    }
-
-    /// Saves the full card to Photos in one tap. Needs
-    /// `NSPhotoLibraryAddUsageDescription` (add-only access; iOS asks once).
-    private var saveButton: some View {
-        Button {
-            guard let card, !saved else { return }
-            UIImageWriteToSavedPhotosAlbum(card, nil, nil, nil)
-            saved = true
-            captureShare("save_photos", method: "direct")
-        } label: {
-            tile(icon: .symbol(saved ? "checkmark" : "square.and.arrow.down"),
-                 label: saved ? "Saved\n" : "Save\n")
         }
         .buttonStyle(.plain)
-        .disabled(card == nil)
-        .opacity(card == nil ? 0.4 : 1)
-        .sensoryFeedback(.success, trigger: saved)
+        .disabled(!ready)
+        .opacity(ready ? 1 : 0.4)
+        .accessibilityHint(ready ? "" : "Preparing image")
     }
 
     private func tile(icon: ShareTileIcon, label: String) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 7) {
             Group {
                 switch icon {
                 case .symbol(let name):
                     Image(systemName: name)
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(Brand.Color.bgPrimary)
-                        .frame(width: 58, height: 58)
+                        .frame(width: 50, height: 50)
                         .background(Brand.Color.cyan, in: .circle)
                 case .instagram:
                     InstagramGlyph()
-                        .stroke(.white, lineWidth: 2.6)
-                        .frame(width: 28, height: 28)
-                        .frame(width: 58, height: 58)
+                        .stroke(.white, lineWidth: 2.3)
+                        .frame(width: 24, height: 24)
+                        .frame(width: 50, height: 50)
                         .background(InstagramGlyph.gradient, in: .circle)
                 }
             }
             Text(label)
-                .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption))
-                .multilineTextAlignment(.center)
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption))
                 .foregroundStyle(Brand.Color.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .fixedSize()
         }
+        .frame(minWidth: 52)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label.replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespaces))
+        .accessibilityLabel(icon.isInstagram ? "Instagram \(label)" : label)
     }
 
     /// Share-funnel signal, read next to the "Tailspot Catch Share" campaign
     /// in App Analytics.
-    private func captureShare(_ destination: String, method: String) {
+    private func captureShare(_ destination: String, method: String, format: SharePage) {
         Analytics.capture("catch_share_opened", [
             "rarity": .string(plane.rarity.label),
             "has_photo": .bool(hasCatchPhoto),
             "destination": .string(destination),
             "method": .string(method),
+            "format": .string(format.rawValue),
         ])
     }
 }
+
 
 /// What a destination tile shows: an SF Symbol on the app's cyan, or the
 /// Instagram glyph on Instagram's own gradient. The brand mark is what
@@ -244,6 +376,11 @@ struct CatchShareSheet: View {
 enum ShareTileIcon {
     case symbol(String)
     case instagram
+
+    var isInstagram: Bool {
+        if case .instagram = self { return true }
+        return false
+    }
 }
 
 /// The Instagram glyph (rounded square, lens, flash dot) drawn as a

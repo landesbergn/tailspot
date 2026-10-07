@@ -5,21 +5,33 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
-## 2026-10-05 — Share by destination (branch `claude/serene-feynman-x71op3`, PR #317)
+## 2026-10-05 → 10-07 — Share sheet: shapes + destinations (branch `claude/serene-feynman-x71op3`, PR #317)
 
-- The share pill on the catch detail screen opens a new `CatchShareSheet`:
-  card preview plus Instagram Story / Instagram Post / More buttons. Each
-  destination picks its own shape (Spotify / Strava pattern).
-- Instagram Story: direct into Instagram's story editor (card sticker over
-  the blurred catch photo, `InstagramStories`) once `META_APP_ID` is set;
-  until then a flattened 1080×1920 image through the system share sheet.
-- Instagram Post: 4:5 1080×1350 `CatchShareCompactCard`, built from the
-  settled card's atoms with a single points total.
-- More: the existing full card plus the App Store link.
-- `catch_share_opened` moved to the destination tap and gained
-  `destination` and `method`.
-- Tests: post/story pixel size + catch-photo pixels, transparent sticker
-  corners, Instagram URL + pasteboard keys (`InstagramStoriesTests`).
+- The share pill on the catch detail screen opens a new `CatchShareSheet`
+  (Strava / Spotify pattern): a swipeable preview of every shape on top
+  (Post 4:5, Square 1:1, Story 9:16, full Card, with named chips), and
+  destinations underneath. What you see is what you send: Save, Copy,
+  Messages and More act on the shape on screen.
+- Destinations: Instagram Story, Instagram Post (each flips the preview to
+  its shape), Messages (composer with image + App Store link), Copy (image
+  to clipboard), Save (to Photos), More (system sheet with the link).
+- Story background picker: blurred catch photo, rarity glow, or dark.
+- Instagram Story goes straight into Instagram's story editor (card sticker,
+  `InstagramStories`) once `META_APP_ID` is set; until then a flattened
+  1080×1920 image through the system share sheet.
+- Fixed on device 10-07: Instagram showed "Content currently unavailable"
+  for SwiftUI `ShareLink` items (lazy Transferable image + text), so every
+  destination now hands a plain `UIImage` to `UIActivityViewController`,
+  Instagram's without text. Save Image was missing because the app never
+  declared `NSPhotoLibraryAddUsageDescription`; added.
+- Post/Square card (`CatchShareCompactCard`): header aligned to the photo
+  edges, concentric photo corners, split-flap name runs the card width,
+  points on the callsign baseline.
+- `catch_share_opened` fires on the destination tap with `destination`,
+  `method` and `format`.
+- Tests: every format's pixel size + catch-photo pixels, transparent sticker
+  corners, Instagram URL + pasteboard keys, hosted share-sheet snapshots
+  per page (`CatchShareSheetSnapshotTests`).
 
 ## 2026-10-04 — 1.2.1: fix the 1.2.0 launch hang on big Hangars (branch `fix/trophy-backfill-launch-hang`)
 

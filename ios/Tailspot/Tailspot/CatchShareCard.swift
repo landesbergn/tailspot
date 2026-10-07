@@ -131,11 +131,14 @@ enum CatchShare {
         return renderer.uiImage
     }
 
-    /// The 9:16 backdrop behind a story sticker: the catch photo, blurred
-    /// and darkened, or the rarity glow when there's no local photo.
+    /// The 9:16 backdrop behind a story sticker, in the chosen style
+    /// (default: the blurred catch photo when there is one, else the glow).
     @MainActor
-    static func storyBackgroundImage(for plane: CardPlane) -> UIImage? {
-        render(CatchShareStoryBackground(plane: plane), format: .story)
+    static func storyBackgroundImage(for plane: CardPlane,
+                                     backdrop: StoryBackdrop? = nil) -> UIImage? {
+        render(CatchShareStoryBackground(plane: plane,
+                                         backdrop: backdrop ?? .default(for: plane)),
+               format: .story)
     }
 
     /// Render the share card on a fixed social canvas. Pixel size is exactly
@@ -146,8 +149,8 @@ enum CatchShare {
     @MainActor
     static func uiImage(for plane: CardPlane, format: ShareFormat) -> UIImage? {
         switch format {
-        case .post:
-            return render(CatchShareCompactCard(plane: plane), format: .post)
+        case .post, .square:
+            return render(CatchShareCompactCard(plane: plane, format: format), format: format)
         case .story:
             guard let sticker = stickerImage(for: plane) else { return nil }
             return storyImage(for: plane, sticker: sticker)
@@ -158,8 +161,11 @@ enum CatchShare {
     /// can reuse one sticker render for both the direct Instagram path and
     /// this flattened fallback.
     @MainActor
-    static func storyImage(for plane: CardPlane, sticker: UIImage) -> UIImage? {
-        render(CatchShareStoryCanvas(plane: plane, sticker: sticker), format: .story)
+    static func storyImage(for plane: CardPlane, sticker: UIImage,
+                           backdrop: StoryBackdrop? = nil) -> UIImage? {
+        render(CatchShareStoryCanvas(plane: plane, sticker: sticker,
+                                     backdrop: backdrop ?? .default(for: plane)),
+               format: .story)
     }
 
     @MainActor
@@ -180,19 +186,25 @@ enum CatchShare {
 /// points at a 360 pt width; the render scale of 3 makes every format
 /// 1080 px wide, Instagram's native width, so nothing is resampled on upload.
 nonisolated enum ShareFormat: String, CaseIterable, Sendable {
-    /// 4:5, the Instagram feed's tallest uncropped shape.
+    /// 4:5, the Instagram feed's tallest uncropped shape. The profile
+    /// grid's 3:4 thumbnail trims ~11 pt off each side, inside the card's
+    /// 18 pt margin, so nothing important is cut.
     case post
+    /// 1:1, the shape that survives everywhere else (X, Threads, WhatsApp,
+    /// a square grid) without a crop.
+    case square
     /// 9:16, stories and reels.
     case story
 
     var canvas: CGSize {
         switch self {
         case .post: CGSize(width: 360, height: 450)
+        case .square: CGSize(width: 360, height: 360)
         case .story: CGSize(width: 360, height: 640)
         }
     }
 
-    /// Rendered size at the share scale (3×): 1080×1350 / 1080×1920.
+    /// Rendered size at the share scale (3×): 1080×1350 / 1080×1080 / 1080×1920.
     var pixelSize: CGSize { CGSize(width: canvas.width * 3, height: canvas.height * 3) }
 }
 
@@ -203,6 +215,8 @@ nonisolated enum ShareFormat: String, CaseIterable, Sendable {
 /// leaves, so the photo gets every spare point of the canvas.
 struct CatchShareCompactCard: View {
     let plane: CardPlane
+    /// `.post` (4:5) or `.square` (1:1); the hero absorbs the difference.
+    var format: ShareFormat = .post
 
     /// Inset from the rarity frame to everything inside it.
     private static let inner: CGFloat = 12
@@ -218,7 +232,7 @@ struct CatchShareCompactCard: View {
 
     var body: some View {
         let accent = plane.rarity.tint
-        let canvas = ShareFormat.post.canvas
+        let canvas = format.canvas
         let outerPad: CGFloat = 18
         let cardWidth = canvas.width - 2 * outerPad
         // Stats and type are tuned for the 300 pt prototype, like the
@@ -398,27 +412,75 @@ struct CatchShareCompactCard: View {
     }
 }
 
-/// 9:16 backdrop: the user's own catch photo, blurred and darkened so the
-/// card reads on top of it; the rarity glow when there's no local photo
-/// (remote Planespotters heroes can't load inside ImageRenderer).
+/// The story backdrop styles the share sheet offers (Spotify's tap-to-
+/// change-background, 2026-10-07).
+nonisolated enum StoryBackdrop: String, CaseIterable, Sendable {
+    /// The user's own catch photo, blurred and darkened.
+    case photo
+    /// A soft glow in the rarity's colour.
+    case glow
+    /// The app's flat dark background.
+    case dark
+
+    var label: String {
+        switch self {
+        case .photo: "Photo"
+        case .glow: "Glow"
+        case .dark: "Dark"
+        }
+    }
+
+    /// The catch photo when this catch has a local one (remote
+    /// Planespotters heroes can't load inside ImageRenderer).
+    @MainActor
+    static func localPhoto(for plane: CardPlane) -> UIImage? {
+        guard let url = plane.photoURL, url.isFileURL else { return nil }
+        return RevealPhoto.cachedDecode(url: url)
+    }
+
+    /// Styles that can render for this catch: no Photo without a photo.
+    @MainActor
+    static func available(for plane: CardPlane) -> [StoryBackdrop] {
+        localPhoto(for: plane) == nil ? [.glow, .dark] : allCases
+    }
+
+    @MainActor
+    static func `default`(for plane: CardPlane) -> StoryBackdrop {
+        available(for: plane)[0]
+    }
+}
+
+/// 9:16 backdrop in one of the `StoryBackdrop` styles. `.photo` without a
+/// local photo falls back to the glow.
 struct CatchShareStoryBackground: View {
     let plane: CardPlane
+    var backdrop: StoryBackdrop = .photo
 
     var body: some View {
         ZStack {
             Brand.Color.bgPrimary
-            if let url = plane.photoURL, url.isFileURL,
-               let photo = RevealPhoto.cachedDecode(url: url) {
-                Color.clear
-                    .overlay(Image(uiImage: photo).resizable().scaledToFill())
-                    .clipped()
-                    .blur(radius: 22, opaque: true)
-                    .overlay(Color.black.opacity(0.3))
-            } else {
-                RadialGradient(colors: [plane.rarity.tint.opacity(0.14), .clear],
-                               center: .center, startRadius: 10, endRadius: 340)
+            switch backdrop {
+            case .photo:
+                if let photo = StoryBackdrop.localPhoto(for: plane) {
+                    Color.clear
+                        .overlay(Image(uiImage: photo).resizable().scaledToFill())
+                        .clipped()
+                        .blur(radius: 22, opaque: true)
+                        .overlay(Color.black.opacity(0.3))
+                } else {
+                    glow
+                }
+            case .glow:
+                glow
+            case .dark:
+                EmptyView()
             }
         }
+    }
+
+    private var glow: some View {
+        RadialGradient(colors: [plane.rarity.tint.opacity(0.14), .clear],
+                       center: .center, startRadius: 10, endRadius: 340)
     }
 }
 
@@ -427,10 +489,11 @@ struct CatchShareStoryBackground: View {
 struct CatchShareStoryCanvas: View {
     let plane: CardPlane
     let sticker: UIImage
+    var backdrop: StoryBackdrop = .photo
 
     var body: some View {
         ZStack {
-            CatchShareStoryBackground(plane: plane)
+            CatchShareStoryBackground(plane: plane, backdrop: backdrop)
             Image(uiImage: sticker)
                 .resizable()
                 .scaledToFit()
