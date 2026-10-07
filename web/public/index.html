@@ -84,28 +84,6 @@
         </a>
       </div>
 
-      <!-- Real 5-star App Store reviews (US storefront), quoted verbatim —
-           trimmed to a sentence, never reworded. Same rule as the catch photos: nothing
-           here is invented. All four quotes share one grid cell, so the box
-           is as tall as the longest and the rotation never reflows the
-           hero; the script below only toggles .is-active. -->
-      <figure class="reviews" aria-label="App Store reviews">
-        <div class="review-stars" aria-label="5 out of 5 stars">★★★★★</div>
-        <div class="review-stack">
-          <blockquote class="review is-active">
-            <p>“So much fun and a great reason to get outside and look up at the sky rather than down at my phone.”</p>
-          </blockquote>
-          <blockquote class="review">
-            <p>“Been using this to identify and ‘capture’ planes on my walks and it’s honestly addictive.”</p>
-          </blockquote>
-          <blockquote class="review">
-            <p>“The only app that makes me wish I had smart glasses!”</p>
-          </blockquote>
-          <blockquote class="review">
-            <p>“Such a fun way to interact with the sky around you!”</p>
-          </blockquote>
-        </div>
-      </figure>
     </div>
 
     <!-- Real catches, cross-fading. These are Noah's own photographs, straight
@@ -135,11 +113,70 @@
   </div>
 </header>
 
-<!-- No sections below the hero, on purpose: the page is sized to one
-     viewport (nav + hero + footer, no scroll), so the "How it works" steps
-     and the closing "Get Tailspot" CTA were removed rather than shrunk. The
-     hero's headline and the real catch photos carry the pitch; the badge is
-     the only call to action, and it appears twice above the fold. -->
+<!-- ───────────────── Wall of love ─────────────────
+     Real 5-star App Store reviews (US storefront): each card is the
+     reviewer's own title and text, verbatim (long ones trimmed to their
+     first sentences, never reworded — the longest card sets the band's
+     height, which the single-screen budget counts). Same rule as the catch photos —
+     nothing here is invented, so don't pad the wall with made-up quotes; add
+     cards as real reviews arrive (see web/README.md for the feed).
+
+     A CSS marquee: the list is printed twice and the track slides left by
+     exactly half its width, so the loop seam is invisible. The second copy
+     is aria-hidden so screen readers hear each review once. Hover pauses it;
+     Reduce Motion turns it into a plain swipeable row. -->
+<section class="love" aria-label="App Store reviews">
+  <div class="love-viewport">
+    <ul class="love-track">
+        <li class="love-card">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">So much fun!!</strong>
+          <p class="love-quote">This app is awesome. So much fun and a great reason to get outside and look up at the sky rather than down at my phone.</p>
+        </li>
+        <li class="love-card">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">Eyes to the Skies!</strong>
+          <p class="love-quote">Been using this to identify and “capture” planes on my walks and it’s honestly addictive.</p>
+        </li>
+        <li class="love-card">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">What’s next?!</strong>
+          <p class="love-quote">The only app that makes me wish I had smart glasses! Waiting for the feature that tells me what celebrity I caught flying.</p>
+        </li>
+        <li class="love-card">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">Best New App</strong>
+          <p class="love-quote">Such a fun way to interact with the sky around you! Great app to get with your friends and see who can get the most captures!</p>
+        </li>
+        <li class="love-card" aria-hidden="true">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">So much fun!!</strong>
+          <p class="love-quote">This app is awesome. So much fun and a great reason to get outside and look up at the sky rather than down at my phone.</p>
+        </li>
+        <li class="love-card" aria-hidden="true">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">Eyes to the Skies!</strong>
+          <p class="love-quote">Been using this to identify and “capture” planes on my walks and it’s honestly addictive.</p>
+        </li>
+        <li class="love-card" aria-hidden="true">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">What’s next?!</strong>
+          <p class="love-quote">The only app that makes me wish I had smart glasses! Waiting for the feature that tells me what celebrity I caught flying.</p>
+        </li>
+        <li class="love-card" aria-hidden="true">
+          <span class="love-stars" aria-label="5 out of 5 stars">★★★★★</span>
+          <strong class="love-title">Best New App</strong>
+          <p class="love-quote">Such a fun way to interact with the sky around you! Great app to get with your friends and see who can get the most captures!</p>
+        </li>
+    </ul>
+  </div>
+</section>
+
+<!-- No other sections below the hero, on purpose: the page is sized to one
+     viewport (nav + hero + review band + footer, no scroll on desktop), so
+     the "How it works" steps and the closing "Get Tailspot" CTA were removed
+     rather than shrunk. The headline and the real catch photos carry the
+     pitch; the badge is the only call to action. -->
 
 <footer class="site-footer">
   <div class="footer-brand-group">
@@ -288,19 +325,6 @@
         requestAnimationFrame(tick);
       })
       .catch(function () { /* stays invisible */ });
-  })();
-  // Rotate the App Store quotes. Slower than the catches (and on its own
-  // clock) so the two halves of the hero don't change in lockstep.
-  (function () {
-    var quotes = document.querySelectorAll('.review');
-    if (quotes.length < 2) return;
-    var i = 0;
-    setInterval(function () {
-      if (document.hidden) return;
-      quotes[i].classList.remove('is-active');
-      i = (i + 1) % quotes.length;
-      quotes[i].classList.add('is-active');
-    }, 6000);
   })();
 </script>
 

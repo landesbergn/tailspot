@@ -35,14 +35,24 @@ To refresh them, re-run the resize from `marketing/catch-photos/` and keep the
 `.catch-frame` aspect ratio (900/567) in sync with `style.css` — the
 single-screen height budget is computed from it.
 
-## App Store reviews
+## App Store reviews (the "wall of love")
 
-The hero rotates a few real 5-star reviews from the US App Store, quoted
-verbatim (trimmed to a sentence, never reworded). The same rule applies as
-for the photos: nothing invented. To refresh them, pull the public feed:
+Below the hero, a full-bleed band of 5-star US App Store reviews drifts left
+as a CSS marquee: the card list is printed twice (the copy `aria-hidden`) and
+the track slides by -50%, so the loop has no seam. Hover pauses it; Reduce
+Motion swaps it for a plain swipeable row. Each card is the reviewer's own
+title and text, verbatim (long ones trimmed to their first sentences, never
+reworded), with no names. Same rule as the photos: nothing invented. Add
+cards as real reviews arrive, from the public feed:
 `https://itunes.apple.com/us/rss/customerreviews/id=6773470079/sortBy=mostRecent/json`.
-All quotes share one grid cell, so the longest one sets the height and the
-rotation never reflows the page. On phones they sit below the catch photo.
+
+The band is counted in the desktop single-screen budget (the `515px` in
+`.catch-frame`'s width): the tallest card sets the band's height, so a much
+longer quote makes the photo shrink on short windows, and past a point the
+page scrolls. Re-check at 1280x700 after adding one.
+
+On phones the App Store badge sits top-right in the nav, and the hero badge
+is hidden.
 
 ## Icons
 
