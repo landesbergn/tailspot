@@ -13,8 +13,15 @@
 //     composition goes through the system share sheet instead.
 //   - Instagram Post: the 4:5 compact card through the system share sheet
 //     (Instagram offers no direct feed API to any app).
+//   - Save: the full card straight into Photos.
 //   - More: the full card plus the App Store link, for Messages, WhatsApp,
 //     Mail, Save Image and the rest.
+//
+//  Instagram's share extension rejects SwiftUI `ShareLink` items with
+//  "Content currently unavailable" (it can't load the lazy Transferable
+//  image, and text alongside the image trips it too), so every destination
+//  hands a plain `UIImage` to `UIActivityViewController` instead, and the
+//  Instagram ones send the image alone (2026-10-07).
 //
 //  SwiftUI note: ImageRenderer is synchronous and heavy at 3×, so the
 //  images render one at a time in `.task`, yielding between renders so the
@@ -40,6 +47,15 @@ struct CatchShareSheet: View {
     @State private var story: UIImage?
     @State private var post: UIImage?
     @State private var directStories = false
+    /// The system share sheet's contents while it's up.
+    @State private var activity: ActivityRequest?
+    @State private var saved = false
+
+    /// Items for one presentation of the system share sheet.
+    private struct ActivityRequest: Identifiable {
+        let id = UUID()
+        let items: [Any]
+    }
 
     var body: some View {
         NavigationStack {
@@ -51,8 +67,10 @@ struct CatchShareSheet: View {
                     storyButton
                     imageShareButton(post, destination: "instagram_post",
                                      icon: "rectangle.portrait", label: "Instagram\nPost")
+                    saveButton
                     imageShareButton(card, destination: "more",
-                                     icon: "ellipsis", label: "More\n")
+                                     icon: "ellipsis", label: "More\n",
+                                     withMessage: true)
                 }
             }
             .padding(.horizontal, 16)
@@ -69,6 +87,10 @@ struct CatchShareSheet: View {
             }
         }
         .presentationDragIndicator(.visible)
+        .sheet(item: $activity) { request in
+            ActivityShareSheet(items: request.items) { _ in }
+                .presentationDetents([.medium, .large])
+        }
         .task { await renderAll() }
     }
 
@@ -129,33 +151,46 @@ struct CatchShareSheet: View {
         }
     }
 
-    /// A ShareLink for a rendered image, disabled until the image exists.
-    /// The App Store link travels in `message:`; targets that pair text with
-    /// an attachment (Messages, Mail) deliver both, Instagram drops it.
+    /// Opens the system share sheet with a rendered image, disabled until
+    /// the image exists. Only "More" adds the App Store link: Messages and
+    /// Mail deliver it with the card, but Instagram's extension refuses an
+    /// image that arrives with text.
     @ViewBuilder
     private func imageShareButton(_ ui: UIImage?, destination: String,
-                                  icon: String, label: String) -> some View {
+                                  icon: String, label: String,
+                                  withMessage: Bool = false) -> some View {
         if let ui {
-            let img = Image(uiImage: ui)
-            ShareLink(
-                item: img,
-                message: Text(shareMessage),
-                preview: SharePreview(shareText, image: img)
-            ) {
+            Button {
+                activity = ActivityRequest(items: withMessage ? [ui, shareMessage] : [ui])
+                captureShare(destination, method: "share_sheet")
+            } label: {
                 tile(icon: icon, label: label)
             }
             .buttonStyle(.plain)
-            // ShareLink has no tap callback; a simultaneous gesture marks
-            // the system sheet opening (completion isn't observable).
-            .simultaneousGesture(TapGesture().onEnded {
-                captureShare(destination, method: "share_sheet")
-            })
         } else {
             tile(icon: icon, label: label)
                 .opacity(0.4)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Preparing image")
         }
+    }
+
+    /// Saves the full card to Photos in one tap. Needs
+    /// `NSPhotoLibraryAddUsageDescription` (add-only access; iOS asks once).
+    private var saveButton: some View {
+        Button {
+            guard let card, !saved else { return }
+            UIImageWriteToSavedPhotosAlbum(card, nil, nil, nil)
+            saved = true
+            captureShare("save_photos", method: "direct")
+        } label: {
+            tile(icon: saved ? "checkmark" : "arrow.down.to.line",
+                 label: saved ? "Saved\n" : "Save\n")
+        }
+        .buttonStyle(.plain)
+        .disabled(card == nil)
+        .opacity(card == nil ? 0.4 : 1)
+        .sensoryFeedback(.success, trigger: saved)
     }
 
     private func tile(icon: String, label: String) -> some View {

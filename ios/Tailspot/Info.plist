@@ -28,6 +28,8 @@
 	<true/>
 	<key>MetaAppID</key>
 	<string>$(META_APP_ID)</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Tailspot saves your catch cards to Photos when you tap Save.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Tailspot uses your camera to show planes and the sky behind aircraft labels.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
