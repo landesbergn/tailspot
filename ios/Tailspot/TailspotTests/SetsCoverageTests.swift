@@ -225,6 +225,19 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-10-03.
         ("B190", "Beechcraft", "1900"),
         ("GC1", "Globe", "GC-1 Swift"),
+        // Public catalog coverage additions validated 2026-10-04.
+        ("EC20", "Airbus Helicopters", "H-120 Colibri"),
+        ("GAZL", "Aerospatiale", "SA-341/342 Gazelle"),
+        // Public catalog coverage addition validated 2026-10-05.
+        ("LGEZ", "Rutan", "61 Long-EZ"),
+        // Public catalog coverage additions validated 2026-10-06.
+        ("C140", "Cessna", "140"),
+        ("E300", "Extra", "EA-300"),
+        ("MU2", "Mitsubishi", "MU-2"),
+        // Public catalog coverage additions validated 2026-10-07.
+        ("CH60", "Roland", "Z-602"),
+        ("DIMO", "Diamond", "HK-36 MPX"),
+        ("FAET", "Atec", "321 Faeta"),
         // Public catalog coverage additions validated 2026-10-08.
         ("CTLN", "Fly Synthesis", "Catalina"),
         ("DR40", "Robin", "DR-400 2+2"),
@@ -330,6 +343,15 @@ struct SetsCoverageTests {
             (("L8", "Luscombe", "8"), "fam-vintage", "fv-luscombe8"),
             (("B190", "Beechcraft", "1900"), "fam-commuter-props", "fcp-b190"),
             (("GC1", "Globe", "GC-1 Swift"), "fam-sport-classics", "fsc-globe-swift"),
+            (("EC20", "Airbus Helicopters", "H-120 Colibri"), "fam-heli", "fh-h120"),
+            (("GAZL", "Aerospatiale", "SA-341/342 Gazelle"), "fam-heli", "fh-gazelle"),
+            (("LGEZ", "Rutan", "61 Long-EZ"), "fam-sport-classics", "fsc-longez"),
+            (("C140", "Cessna", "140"), "fam-cessna", "fc140"),
+            (("E300", "Extra", "EA-300"), "fam-sport-classics", "fsc-extra300"),
+            (("MU2", "Mitsubishi", "MU-2"), "fam-mu2", "fmu2"),
+            (("CH60", "Roland", "Z-602"), "fam-sport-classics", "fsc-zodiac"),
+            (("DIMO", "Diamond", "HK-36 MPX"), "fam-sport-classics", "fsc-dimona"),
+            (("FAET", "Atec", "321 Faeta"), "fam-sport-classics", "fsc-faeta"),
             (("CTLN", "Fly Synthesis", "Catalina"), "fam-sport-classics", "fsc-catalina"),
             (("DR40", "Robin", "DR-400 2+2"), "fam-sport-classics", "fsc-dr400"),
             (("EV97", "Evektor", "EV-97 Harmony"), "fam-sport-classics", "fsc-harmony"),
@@ -345,6 +367,29 @@ struct SetsCoverageTests {
             #expect(CardSets.matches(key: key, entry: entry),
                     "\(row.0) must fill \(setID)/\(entryID)")
         }
+    }
+
+    @Test func untypedPublicAliasesFillTheirEstablishedFamilySlots() {
+        let longEZ = Catch(icao24: "alias-longez", callsign: nil,
+                           model: "LongEZ", manufacturer: "Rutan",
+                           caughtAt: Date(), observerLat: 0, observerLon: 0,
+                           slantDistanceMeters: 0, typecode: nil)
+        let f5f = Catch(icao24: "alias-f5f", callsign: nil,
+                        model: "F 5F", manufacturer: "Northrop",
+                        caughtAt: Date(), observerLat: 0, observerLon: 0,
+                        slantDistanceMeters: 0, typecode: nil)
+        let classics = CardSets.families.first { $0.id == "fam-sport-classics" }!
+        let longEZEntry = classics.entries.first { $0.id == "fsc-longez" }!
+        let military = CardSets.families.first { $0.id == "fam-military" }!
+        let f5Entry = military.entries.first { $0.id == "fm-f5" }!
+
+        #expect(CardSets.matches(key: CardSets.matchKey(for: longEZ), entry: longEZEntry))
+        #expect(CardSets.matches(key: CardSets.matchKey(for: f5f), entry: f5Entry))
+
+        let legend = mk(("LGND", "Aeropilot", "L-600"))
+        let shenyangF5 = mk(("MG17", "Shenyang", "F-5"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: legend), entry: longEZEntry))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: shenyangF5), entry: f5Entry))
     }
 
     /// Guard the known bleed traps the token audit found: substring tokens
@@ -377,6 +422,18 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: CardSets.matchKey(for: scaledSwift), entry: globeSwift),
                 "A Scaled 400 Swift must not fill the Globe GC-1 slot")
 
+        // Adjacent public designators and similarly numbered models must not
+        // fill the newly added Cessna 140, Extra 300, or MU-2 slots.
+        let c140Entry = cessnaSet.entries.first { $0.id == "fc140" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("A140", "Antonov", "An-140"))), entry: c140Entry),
+                "An Antonov An-140 must not fill the Cessna 140 slot")
+        let extra300Entry = classicsSet.entries.first { $0.id == "fsc-extra300" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("E400", "Extra", "EA-400"))), entry: extra300Entry),
+                "An Extra EA-400 must not fill the Extra EA-300 slot")
+        let mu2Entry = CardSets.families.first { $0.id == "fam-mu2" }!
+            .entries.first { $0.id == "fmu2" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("MU23", "Akaflieg Munchen", "Mü-23 Saurier"))), entry: mu2Entry),
+                "An Akaflieg Mü-23 must not fill the Mitsubishi MU-2 slot")
         let flySynthesisCatalina = classicsSet.entries.first { $0.id == "fsc-catalina" }!
         let pbyCatalina = mk(("CAT", "Consolidated", "PBY Catalina"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: pbyCatalina), entry: flySynthesisCatalina),
@@ -582,6 +639,21 @@ struct SetsCoverageTests {
                 "A Van's RV-6 must not fill the AIEP Air Beetle slot")
         #expect(CardSets.matches(key: CardSets.matchKey(for: vansRV6), entry: vansRVEntry),
                 "A Van's RV-6 still fills the Van's RV slot")
+
+        // Exact designators and qualified tokens keep adjacent public types
+        // out of the Zodiac, Dimona, and Faeta sport-aircraft slots.
+        let zodiacEntry = sportSet.entries.first { $0.id == "fsc-zodiac" }!
+        let blackHawk = mk(("H60", "Sikorsky", "S-70 Black Hawk"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: blackHawk), entry: zodiacEntry),
+                "An H60 Black Hawk must not fill the CH60 Zodiac slot")
+        let dimonaEntry = sportSet.entries.first { $0.id == "fsc-dimona" }!
+        let diamondDA40 = mk(("DA40", "Diamond", "DA-40 Katana"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: diamondDA40), entry: dimonaEntry),
+                "A Diamond DA40 must not fill the HK36 Dimona slot")
+        let faetaEntry = sportSet.entries.first { $0.id == "fsc-faeta" }!
+        let falcon50 = mk(("FA50", "Dassault", "Falcon 50"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: falcon50), entry: faetaEntry),
+                "A Dassault Falcon 50 must not fill the ATEC Faeta slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the

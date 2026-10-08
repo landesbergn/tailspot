@@ -5629,7 +5629,7 @@
  },
  "EC20": {
   "make": "Airbus Helicopters",
-  "model": "HE-25",
+  "model": "H-120 Colibri",
   "rarity": "uncommon",
   "type": "ga"
  },
@@ -7036,8 +7036,8 @@
   "type": "ga"
  },
  "GAZL": {
-  "make": "Soko",
-  "model": "H-45 Partizan",
+  "make": "Aerospatiale",
+  "model": "SA-341/342 Gazelle",
   "rarity": "uncommon",
   "type": "ga"
  },
