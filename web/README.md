@@ -35,6 +35,33 @@ To refresh them, re-run the resize from `marketing/catch-photos/` and keep the
 `.catch-frame` aspect ratio (900/567) in sync with `style.css` — the
 single-screen height budget is computed from it.
 
+## App Store reviews (the "wall of love")
+
+Below the hero, a full-bleed band of 5-star US App Store reviews drifts left
+as a CSS marquee: the card list is printed twice (the copy `aria-hidden`) and
+the track slides by -50%, so the loop has no seam. Hover pauses it; Reduce
+Motion swaps it for a plain swipeable row. Each card is the reviewer's own
+title and text, verbatim (long ones trimmed to their first sentences, never
+reworded), with no names. Same rule as the photos: nothing invented. Add
+cards as real reviews arrive, from the public feed:
+`https://itunes.apple.com/us/rss/customerreviews/id=6773470079/sortBy=mostRecent/json`.
+
+The band is counted in the desktop single-screen budget (the `515px` in
+`.catch-frame`'s width): the tallest card sets the band's height, so a much
+longer quote makes the photo shrink on short windows, and past a point the
+page scrolls. Re-check at 1280x700 after adding one.
+
+On phones the App Store badge sits top-right in the nav, and the hero badge
+is hidden.
+
+## Icons
+
+`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` and the nav's
+`img/app-icon.png` are all generated from the iOS icon
+(`ios/Tailspot/Tailspot/Assets.xcassets/AppIcon.appiconset/icon-light.png`)
+with `sips -z`. `favicon.svg` embeds the 128px PNG, base64-encoded, with a
+rounded-square clip. Regenerate all four if the app icon changes.
+
 ## The catch counter
 
 The hero's "N planes caught so far" line is the site's one live number. It is
@@ -71,7 +98,20 @@ app shares:
   slash — so a code that could never exist (`/c/K7M4QD2O`, `/c/short`)
   falls through to the 404 page instead of a pointless App Store trip.
   The regex is **quoted** because nginx reads a bare `{6}` as the start of
-  a config block and refuses to start. There is no landing page by design.
+  a config block and refuses to start. There is no landing page for people.
+- **Link previews of `/c/CODE`** — bots that fetch a link to draw its
+  preview card (matched by user agent in the `$link_preview_bot` map:
+  iMessage sends `facebookexternalhit … Twitterbot`, plus WhatsApp, Slack,
+  Discord, Telegram and others) get `public/invite.html` instead of the 302.
+  Its Open Graph tags and `img/invite-preview.jpg` say "challenge invite";
+  without them a pasted invite previewed as the App Store listing. The card
+  is generic, with no challenge name or code, because the site is static and
+  the backend has no public lookup by code. In the app, the Invite share
+  sheet hands Messages its own per-challenge card (`ChallengeInviteCard.swift`),
+  which wins when the user picks Messages directly; Copy + paste and every
+  other app land here. Check with
+  `curl -A 'facebookexternalhit/1.1' https://tailspot.app/c/ABCDEF` (expect
+  200 HTML) versus plain `curl -sI` (expect the 302).
 
 `.well-known` is a dot-directory, which `COPY public/ /usr/share/nginx/html/`
 in the Dockerfile does include (a directory source copies its contents,
