@@ -35,6 +35,33 @@ To refresh them, re-run the resize from `marketing/catch-photos/` and keep the
 `.catch-frame` aspect ratio (900/567) in sync with `style.css` — the
 single-screen height budget is computed from it.
 
+## App Store reviews (the "wall of love")
+
+Below the hero, a full-bleed band of 5-star US App Store reviews drifts left
+as a CSS marquee: the card list is printed twice (the copy `aria-hidden`) and
+the track slides by -50%, so the loop has no seam. Hover pauses it; Reduce
+Motion swaps it for a plain swipeable row. Each card is the reviewer's own
+title and text, verbatim (long ones trimmed to their first sentences, never
+reworded), with no names. Same rule as the photos: nothing invented. Add
+cards as real reviews arrive, from the public feed:
+`https://itunes.apple.com/us/rss/customerreviews/id=6773470079/sortBy=mostRecent/json`.
+
+The band is counted in the desktop single-screen budget (the `515px` in
+`.catch-frame`'s width): the tallest card sets the band's height, so a much
+longer quote makes the photo shrink on short windows, and past a point the
+page scrolls. Re-check at 1280x700 after adding one.
+
+On phones the App Store badge sits top-right in the nav, and the hero badge
+is hidden.
+
+## Icons
+
+`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` and the nav's
+`img/app-icon.png` are all generated from the iOS icon
+(`ios/Tailspot/Tailspot/Assets.xcassets/AppIcon.appiconset/icon-light.png`)
+with `sips -z`. `favicon.svg` embeds the 128px PNG, base64-encoded, with a
+rounded-square clip. Regenerate all four if the app icon changes.
+
 ## The catch counter
 
 The hero's "N planes caught so far" line is the site's one live number. It is
