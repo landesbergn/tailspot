@@ -170,6 +170,10 @@ struct AircraftNamingTests {
         ("SB91", "Saab 91 Safir"),
         ("BE36", "Beechcraft 36 Bonanza"),
         ("C750", "Cessna Citation X"),
+        // 2026-10-04 catch audit: shared designator rows had reduced to
+        // unrelated military names instead of the recognizable families.
+        ("EC20", "Airbus Helicopters H-120 Colibri"),
+        ("GAZL", "Aerospatiale SA-341/342 Gazelle"),
     ])
     func auditBatchNamesResolveFromTypecode(typecode: String, expected: String) {
         #expect(AircraftNaming.canonical(typecode: typecode, manufacturer: nil, model: nil).displayName == expected)
