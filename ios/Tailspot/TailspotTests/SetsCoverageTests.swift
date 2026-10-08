@@ -225,6 +225,11 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-10-03.
         ("B190", "Beechcraft", "1900"),
         ("GC1", "Globe", "GC-1 Swift"),
+        // Public catalog coverage additions validated 2026-10-04.
+        ("EC20", "Airbus Helicopters", "H-120 Colibri"),
+        ("GAZL", "Aerospatiale", "SA-341/342 Gazelle"),
+        // Public catalog coverage addition validated 2026-10-05.
+        ("LGEZ", "Rutan", "61 Long-EZ"),
         // Public catalog coverage additions validated 2026-10-06.
         ("C140", "Cessna", "140"),
         ("E300", "Extra", "EA-300"),
@@ -327,6 +332,9 @@ struct SetsCoverageTests {
             (("L8", "Luscombe", "8"), "fam-vintage", "fv-luscombe8"),
             (("B190", "Beechcraft", "1900"), "fam-commuter-props", "fcp-b190"),
             (("GC1", "Globe", "GC-1 Swift"), "fam-sport-classics", "fsc-globe-swift"),
+            (("EC20", "Airbus Helicopters", "H-120 Colibri"), "fam-heli", "fh-h120"),
+            (("GAZL", "Aerospatiale", "SA-341/342 Gazelle"), "fam-heli", "fh-gazelle"),
+            (("LGEZ", "Rutan", "61 Long-EZ"), "fam-sport-classics", "fsc-longez"),
             (("C140", "Cessna", "140"), "fam-cessna", "fc140"),
             (("E300", "Extra", "EA-300"), "fam-sport-classics", "fsc-extra300"),
             (("MU2", "Mitsubishi", "MU-2"), "fam-mu2", "fmu2"),
@@ -339,6 +347,29 @@ struct SetsCoverageTests {
             #expect(CardSets.matches(key: key, entry: entry),
                     "\(row.0) must fill \(setID)/\(entryID)")
         }
+    }
+
+    @Test func untypedPublicAliasesFillTheirEstablishedFamilySlots() {
+        let longEZ = Catch(icao24: "alias-longez", callsign: nil,
+                           model: "LongEZ", manufacturer: "Rutan",
+                           caughtAt: Date(), observerLat: 0, observerLon: 0,
+                           slantDistanceMeters: 0, typecode: nil)
+        let f5f = Catch(icao24: "alias-f5f", callsign: nil,
+                        model: "F 5F", manufacturer: "Northrop",
+                        caughtAt: Date(), observerLat: 0, observerLon: 0,
+                        slantDistanceMeters: 0, typecode: nil)
+        let classics = CardSets.families.first { $0.id == "fam-sport-classics" }!
+        let longEZEntry = classics.entries.first { $0.id == "fsc-longez" }!
+        let military = CardSets.families.first { $0.id == "fam-military" }!
+        let f5Entry = military.entries.first { $0.id == "fm-f5" }!
+
+        #expect(CardSets.matches(key: CardSets.matchKey(for: longEZ), entry: longEZEntry))
+        #expect(CardSets.matches(key: CardSets.matchKey(for: f5f), entry: f5Entry))
+
+        let legend = mk(("LGND", "Aeropilot", "L-600"))
+        let shenyangF5 = mk(("MG17", "Shenyang", "F-5"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: legend), entry: longEZEntry))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: shenyangF5), entry: f5Entry))
     }
 
     /// Guard the known bleed traps the token audit found: substring tokens
