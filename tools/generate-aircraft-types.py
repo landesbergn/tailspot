@@ -441,6 +441,14 @@ OVERRIDES = {
     # further stripping this should work, but pin it to be safe.
     "EC35": ("Airbus Helicopters", "H-135"),
 
+    # ----- Airbus H120 / Aerospatiale Gazelle -----
+    # Shortest-model reduction picked unrelated military names from shared
+    # designator rows: HE-25 for EC20 and Soko H-45 Partizan for GAZL.
+    # FAA JO 7360.1 and Airbus identify these families as the EC120/H120
+    # Colibri and SA341/SA342 Gazelle respectively.
+    "EC20": ("Airbus Helicopters", "H-120 Colibri"),
+    "GAZL": ("Aerospatiale", "SA-341/342 Gazelle"),
+
     # ----- Aeronca 11 Chief (AR11) -----
     # ICAO: AERONCA "11 Chief" (1 row) vs HINDUSTAN "HUL-26 Pushpak" (1 row).
     # Tie-break alphabetically: AERONCA < HINDUSTAN. Should pick Aeronca.

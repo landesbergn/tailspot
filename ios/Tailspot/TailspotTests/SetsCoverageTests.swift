@@ -225,6 +225,9 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-10-03.
         ("B190", "Beechcraft", "1900"),
         ("GC1", "Globe", "GC-1 Swift"),
+        // Public catalog coverage additions validated 2026-10-04.
+        ("EC20", "Airbus Helicopters", "H-120 Colibri"),
+        ("GAZL", "Aerospatiale", "SA-341/342 Gazelle"),
         // Public catalog coverage addition validated 2026-10-05.
         ("LGEZ", "Rutan", "61 Long-EZ"),
     ]
@@ -325,6 +328,8 @@ struct SetsCoverageTests {
             (("L8", "Luscombe", "8"), "fam-vintage", "fv-luscombe8"),
             (("B190", "Beechcraft", "1900"), "fam-commuter-props", "fcp-b190"),
             (("GC1", "Globe", "GC-1 Swift"), "fam-sport-classics", "fsc-globe-swift"),
+            (("EC20", "Airbus Helicopters", "H-120 Colibri"), "fam-heli", "fh-h120"),
+            (("GAZL", "Aerospatiale", "SA-341/342 Gazelle"), "fam-heli", "fh-gazelle"),
             (("LGEZ", "Rutan", "61 Long-EZ"), "fam-sport-classics", "fsc-longez"),
         ]
 
