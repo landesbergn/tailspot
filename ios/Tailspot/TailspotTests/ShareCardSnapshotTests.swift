@@ -110,6 +110,66 @@ struct ShareCardSnapshotTests {
             }
             try? png.write(to: dir.appendingPathComponent("\(name).png"))
         }
+
+        // Social formats (post 4:5 / story 9:16), with and without a
+        // photo + route, plus a long name that wraps past two flap lines.
+        let formatPlanes: [(String, CardPlane)] = [
+            ("rare_photo_route", plane(focus: Self.markerFocus)),
+            ("common_noroute", CardPlane(
+                callsign: "N12633", model: "Cessna OE Bird Dog", carrier: "Private",
+                rarity: .common, type: .ga,
+                altText: "925 ft", speedText: "61 mph", distText: "0.4 mi",
+                isFirstOfType: true)),
+            ("longname", CardPlane(
+                callsign: "RCH4521", model: "McDonnell Douglas KC-10A Extender Tanker",
+                carrier: "United States Air Force",
+                rarity: .legendary, type: .mil,
+                altText: "24,000 ft", speedText: "410 kt", distText: "22.1 km",
+                originIcao: "SUU", destIcao: "PHIK")),
+        ]
+        for (name, p) in formatPlanes {
+            for format in ShareFormat.allCases {
+                guard let ui = CatchShare.uiImage(for: p, format: format),
+                      let png = ui.pngData() else { continue }
+                try? png.write(to: dir.appendingPathComponent("format_\(format.rawValue)_\(name).png"))
+            }
+        }
+
+        // Share-sheet destination icons, old SF Symbols over the current
+        // set (2026-10-07), for the icon review.
+        func circle(_ name: String) -> some View {
+            Image(systemName: name)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Brand.Color.bgPrimary)
+                .frame(width: 58, height: 58)
+                .background(Brand.Color.cyan, in: .circle)
+        }
+        let insta = InstagramGlyph().stroke(.white, lineWidth: 2.6)
+            .frame(width: 28, height: 28).frame(width: 58, height: 58)
+            .background(InstagramGlyph.gradient, in: .circle)
+        let icons = VStack(spacing: 24) {
+            HStack(spacing: 34) {
+                circle("plus.circle"); circle("rectangle.portrait")
+                circle("arrow.down.to.line"); circle("ellipsis")
+            }
+            HStack(spacing: 14) {
+                insta; insta
+                Image(systemName: "message.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(ShareTileIcon.messagesGreen, in: .circle)
+                circle("doc.on.doc"); circle("square.and.arrow.down"); circle("ellipsis")
+            }
+        }
+        .padding(24)
+        .background(Brand.Color.bgElevated)
+        .environment(\.colorScheme, .dark)
+        let iconRenderer = ImageRenderer(content: icons)
+        iconRenderer.scale = 3
+        if let png = iconRenderer.uiImage?.pngData() {
+            try? png.write(to: dir.appendingPathComponent("share_sheet_icons.png"))
+        }
         #expect(true)
     }
 }

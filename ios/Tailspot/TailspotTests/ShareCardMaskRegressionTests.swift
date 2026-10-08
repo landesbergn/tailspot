@@ -102,5 +102,59 @@ struct ShareCardMaskRegressionTests {
         #expect(magenta > 50_000,
                 "Shared card lost its catch photo (found \(magenta) photo pixels). If the hero shows a yellow no-entry placeholder, a PostHog mask tag view is back inside the ImageRenderer tree — see CatchPhotoReplayMask.swift.")
     }
+
+    /// Every social format renders at its exact Instagram-ready pixel size
+    /// AND keeps the catch photo (the story's blurred backdrop is mostly
+    /// photo too) — the format canvases go through their own ImageRenderer
+    /// pass, so the mask fix must hold there too.
+    @Test("Post and story formats render at exact size with the catch photo",
+          arguments: ShareFormat.allCases)
+    func formatRenderSizeAndPhoto(format: ShareFormat) throws {
+        let photoURL = try #require(makeSolidMagentaPhoto())
+        defer { try? FileManager.default.removeItem(at: photoURL) }
+
+        let plane = CardPlane(
+            callsign: "KAL082", model: "Airbus A380-800",
+            carrier: "Korean Air",
+            rarity: .rare, type: .wide,
+            altText: "1,675 ft", speedText: "179 kt", distText: "1.2 km",
+            photoURL: photoURL, photoFocus: nil,
+            originIcao: "SFO", destIcao: "ICN",
+            isFirstOfType: true)
+
+        let ui = try #require(CatchShare.uiImage(for: plane, format: format))
+        let px = CGSize(width: ui.size.width * ui.scale, height: ui.size.height * ui.scale)
+        #expect(px == format.pixelSize, "\(format) rendered \(px), expected \(format.pixelSize)")
+        #expect(magentaPixelCount(in: ui) > 20_000,
+                "\(format) share lost its catch photo")
+    }
+
+    /// The story sticker must be see-through around the card, or Instagram's
+    /// editor shows a dark slab over the user's backdrop.
+    @Test func storyStickerHasTransparentCorners() throws {
+        let plane = CardPlane(callsign: "N12633", model: "Cessna OE Bird Dog",
+                              carrier: "Private", rarity: .common, type: .ga)
+        let ui = try #require(CatchShare.stickerImage(for: plane))
+        let cg = try #require(ui.cgImage)
+        // Draw just the top-left pixel (the 20 pt padding, outside the card)
+        // into a 1×1 RGBA buffer and read its alpha.
+        var px = [UInt8](repeating: 255, count: 4)
+        let drawn = px.withUnsafeMutableBytes { buf -> Bool in
+            guard let ctx = CGContext(
+                data: buf.baseAddress, width: 1, height: 1,
+                bitsPerComponent: 8, bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            ctx.clear(CGRect(x: 0, y: 0, width: 1, height: 1))
+            // CG's origin is bottom-left: shift so the image's top-left
+            // pixel lands on the buffer's single pixel.
+            ctx.draw(cg, in: CGRect(x: 0, y: -CGFloat(cg.height - 1),
+                                    width: CGFloat(cg.width), height: CGFloat(cg.height)))
+            return true
+        }
+        #expect(drawn)
+        #expect(px[3] == 0, "Sticker corner alpha is \(px[3]); expected transparent")
+    }
 }
 #endif

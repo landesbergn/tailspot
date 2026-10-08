@@ -24,4 +24,10 @@
 // caches resolved Info.plist values per-build).
 POSTHOG_API_KEY =
 
+// META_APP_ID: Facebook/Meta app ID for direct Instagram Stories sharing
+// (InstagramStories.swift). Not a secret: Meta app IDs are public
+// identifiers sent in a URL. Empty → the story button uses the system share
+// sheet instead. Register an app at developers.facebook.com to get one.
+META_APP_ID =
+
 #include? "Tailspot.secrets.xcconfig"
