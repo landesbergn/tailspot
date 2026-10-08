@@ -434,6 +434,7 @@ struct SetsCoverageTests {
             .entries.first { $0.id == "fmu2" }!
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("MU23", "Akaflieg Munchen", "Mü-23 Saurier"))), entry: mu2Entry),
                 "An Akaflieg Mü-23 must not fill the Mitsubishi MU-2 slot")
+
         let flySynthesisCatalina = classicsSet.entries.first { $0.id == "fsc-catalina" }!
         let pbyCatalina = mk(("CAT", "Consolidated", "PBY Catalina"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: pbyCatalina), entry: flySynthesisCatalina),
