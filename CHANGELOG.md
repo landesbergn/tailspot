@@ -27,8 +27,15 @@ Git history + PLAN.md §9 remain the authoritative record.
 - Post/Square card (`CatchShareCompactCard`): header aligned to the photo
   edges, concentric photo corners, split-flap name runs the card width,
   points on the callsign baseline.
-- `catch_share_opened` fires on the destination tap with `destination`,
-  `method` and `format`.
+- Messages tile in Messages green with a white bubble (Strava's share row).
+- Share funnel fully instrumented (`CatchShareAnalytics`, 10-08):
+  `catch_share_opened` (share pill, its pre-sheet meaning),
+  `_format_selected` (format + via swipe/chip/destination),
+  `_backdrop_selected`, `_destination_tapped`, `_completed` (+ method: the
+  chosen activity type, sent, saved, copied, instagram_handoff),
+  `_cancelled`, `_failed` (Save: photos_denied / error), `_closed` (shared,
+  formats_viewed, last_format). Save moved to PhotoKit so success and
+  refusal are observable; a refusal offers Settings.
 - Tests: every format's pixel size + catch-photo pixels, transparent sticker
   corners, Instagram URL + pasteboard keys, hosted share-sheet snapshots
   per page (`CatchShareSheetSnapshotTests`).

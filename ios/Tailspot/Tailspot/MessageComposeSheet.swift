@@ -19,13 +19,15 @@ import SwiftUI
 struct MessageComposeSheet: UIViewControllerRepresentable {
     let image: UIImage
     let message: String
+    /// How the composer ended: sent, cancelled or failed.
+    var onFinish: (MessageComposeResult) -> Void = { _ in }
 
     static var isAvailable: Bool {
         MFMessageComposeViewController.canSendText()
             && MFMessageComposeViewController.canSendAttachments()
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
 
     func makeUIViewController(context: Context) -> MFMessageComposeViewController {
         let controller = MFMessageComposeViewController()
@@ -41,8 +43,15 @@ struct MessageComposeSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: MFMessageComposeViewController, context: Context) {}
 
     final class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
+        let onFinish: (MessageComposeResult) -> Void
+
+        init(onFinish: @escaping (MessageComposeResult) -> Void) {
+            self.onFinish = onFinish
+        }
+
         func messageComposeViewController(_ controller: MFMessageComposeViewController,
                                           didFinishWith result: MessageComposeResult) {
+            onFinish(result)
             controller.dismiss(animated: true)
         }
     }

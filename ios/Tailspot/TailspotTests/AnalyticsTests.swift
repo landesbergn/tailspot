@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import MessageUI
 import Testing
 import UserNotifications
 @testable import Tailspot
@@ -398,6 +399,60 @@ struct AnalyticsFacadeTests {
             #expect(reminderEvents(sink, challengeId: id).count == 4)
             #expect(Set(center.pending.map(\.identifier)).count == 4)
         }
+    }
+
+    // MARK: - Catch share funnel (CatchShareAnalytics)
+
+    /// Every step of the share funnel lands under its own name, with the
+    /// step's fields plus the shared rarity / has_photo context. The plane is
+    /// legendary with a photo so other suites' share events (the snapshot
+    /// sheet uses a common, photo-less plane) can't be mistaken for these.
+    @Test func catchShareFunnelEventsCarryTheirFieldsAndContext() {
+        withSink { sink in
+            let plane = CardPlane(callsign: "RCH4521", model: "KC-10A", carrier: "USAF",
+                                  rarity: .legendary, type: .mil)
+            let a = CatchShareAnalytics(plane: plane, hasCatchPhoto: true)
+            a.sheetOpened()
+            a.formatSelected(.square, via: "swipe")
+            a.backdropSelected(.glow)
+            a.destinationTapped("save_photos", format: .square)
+            a.completed("save_photos", format: .square, method: "saved")
+            a.cancelled("more", format: .post)
+            a.failed("save_photos", format: .story, reason: "photos_denied")
+            a.sheetClosed(shared: true, formatsViewed: 2, lastFormat: .square)
+
+            let mine = sink.captured.filter {
+                $0.event.hasPrefix("catch_share_")
+                    && $0.properties["rarity"]?.jsonValue as? String == Rarity.legendary.label
+                    && $0.properties["has_photo"]?.jsonValue as? Bool == true
+            }
+            func props(_ event: String) -> [String: Any]? {
+                mine.first { $0.event == event }?.properties.mapValues(\.jsonValue)
+            }
+            #expect(mine.map(\.event) == [
+                "catch_share_opened", "catch_share_format_selected",
+                "catch_share_backdrop_selected", "catch_share_destination_tapped",
+                "catch_share_completed", "catch_share_cancelled",
+                "catch_share_failed", "catch_share_closed",
+            ])
+            #expect(props("catch_share_format_selected")?["format"] as? String == "square")
+            #expect(props("catch_share_format_selected")?["via"] as? String == "swipe")
+            #expect(props("catch_share_backdrop_selected")?["backdrop"] as? String == "glow")
+            #expect(props("catch_share_destination_tapped")?["destination"] as? String == "save_photos")
+            #expect(props("catch_share_completed")?["method"] as? String == "saved")
+            #expect(props("catch_share_completed")?["format"] as? String == "square")
+            #expect(props("catch_share_cancelled")?["destination"] as? String == "more")
+            #expect(props("catch_share_failed")?["reason"] as? String == "photos_denied")
+            #expect(props("catch_share_closed")?["shared"] as? Bool == true)
+            #expect(props("catch_share_closed")?["formats_viewed"] as? Int == 2)
+            #expect(props("catch_share_closed")?["last_format"] as? String == "square")
+        }
+    }
+
+    @Test func messagesComposerResultMapsToFunnelOutcome() {
+        #expect(CatchShareAnalytics.outcome(.sent) == .completed)
+        #expect(CatchShareAnalytics.outcome(.cancelled) == .cancelled)
+        #expect(CatchShareAnalytics.outcome(.failed) == .failed)
     }
 }
 

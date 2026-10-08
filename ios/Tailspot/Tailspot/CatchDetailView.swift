@@ -289,10 +289,11 @@ struct CatchDetailView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Delete catch")
             .padding(.trailing, 8)
-            // Share opens a format picker (Square / Portrait / Story) with a
-            // live preview; CatchShareSheet renders the chosen canvas and
-            // owns the ShareLink + the `catch_share_opened` signal.
+            // Share opens CatchShareSheet (swipeable shapes + destinations).
+            // This tap is the top of the share funnel; the sheet reports the
+            // rest (CatchShareAnalytics).
             Button {
+                CatchShareAnalytics(plane: detailPlane, hasCatchPhoto: hasCatchPhoto).sheetOpened()
                 showShareSheet = true
             } label: {
                 chromePillBody(icon: "square.and.arrow.up")

@@ -36,6 +36,8 @@
 //  first page appears quickly and the rest fill in behind it.
 //
 
+import os
+import Photos
 import SwiftUI
 
 /// One page of the share preview: a shape the catch can be sent as.
@@ -95,9 +97,17 @@ struct CatchShareSheet: View {
     @State private var presented: Presented?
     @State private var savedPages: Set<SharePage> = []
     @State private var copiedPage: SharePage?
+    @State private var showPhotosDenied = false
+    /// Funnel bookkeeping for `catch_share_format_selected` /
+    /// `catch_share_closed`. `pendingVia` names a programmatic page change
+    /// (chip or destination tap) so onChange can tell it from a swipe.
+    @State private var pendingVia: String?
+    @State private var viewedPages: Set<SharePage> = []
+    @State private var didShare = false
 
     /// What's presented over the sheet: the system share sheet or the
-    /// Messages composer.
+    /// Messages composer, plus which destination and shape it's sending, so
+    /// the outcome can be reported against them.
     private struct Presented: Identifiable {
         enum Kind {
             case activity([Any])
@@ -105,9 +115,15 @@ struct CatchShareSheet: View {
         }
         let id = UUID()
         let kind: Kind
+        let destination: String
+        let format: SharePage
     }
 
     private var current: UIImage? { images[page] }
+
+    private var analytics: CatchShareAnalytics {
+        CatchShareAnalytics(plane: plane, hasCatchPhoto: hasCatchPhoto)
+    }
 
     var body: some View {
         NavigationStack {
@@ -138,17 +154,64 @@ struct CatchShareSheet: View {
         .sheet(item: $presented) { p in
             switch p.kind {
             case .activity(let items):
-                ActivityShareSheet(items: items) { _ in }
-                    .presentationDetents([.medium, .large])
+                ActivityShareSheet(items: items) { method in
+                    if let method {
+                        reportCompleted(p.destination, format: p.format, method: method)
+                    } else {
+                        analytics.cancelled(p.destination, format: p.format)
+                    }
+                }
+                .presentationDetents([.medium, .large])
             case .message(let image):
-                MessageComposeSheet(image: image, message: shareMessage)
-                    .ignoresSafeArea()
+                MessageComposeSheet(image: image, message: shareMessage) { result in
+                    switch CatchShareAnalytics.outcome(result) {
+                    case .completed:
+                        reportCompleted(p.destination, format: p.format, method: "sent")
+                    case .cancelled:
+                        analytics.cancelled(p.destination, format: p.format)
+                    case .failed:
+                        analytics.failed(p.destination, format: p.format, reason: "send_failed")
+                    }
+                }
+                .ignoresSafeArea()
             }
+        }
+        .alert("Tailspot can't save to Photos", isPresented: $showPhotosDenied) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Allow Tailspot to add photos in Settings, then tap Save again.")
         }
         .sensoryFeedback(.success, trigger: savedPages.count)
         .sensoryFeedback(.success, trigger: copiedPage) { _, new in new != nil }
         .task { await renderAll() }
         .onChange(of: backdrop) { _, _ in rerenderStory() }
+        .onChange(of: page) { _, new in
+            viewedPages.insert(new)
+            analytics.formatSelected(new, via: pendingVia ?? "swipe")
+            pendingVia = nil
+        }
+        .onAppear { viewedPages.insert(page) }
+        .onDisappear {
+            analytics.sheetClosed(shared: didShare, formatsViewed: viewedPages.count,
+                                  lastFormat: page)
+        }
+    }
+
+    private func reportCompleted(_ destination: String, format: SharePage, method: String) {
+        didShare = true
+        analytics.completed(destination, format: format, method: method)
+    }
+
+    /// Move the preview programmatically, tagging why for the funnel.
+    private func show(_ target: SharePage, via: String) {
+        guard target != page else { return }
+        pendingVia = via
+        withAnimation(.snappy) { page = target }
     }
 
     // MARK: - Rendering
@@ -215,7 +278,7 @@ struct CatchShareSheet: View {
         HStack(spacing: 6) {
             ForEach(SharePage.allCases) { p in
                 chip(p.title, selected: page == p) {
-                    withAnimation(.snappy) { page = p }
+                    show(p, via: "chip")
                 }
             }
         }
@@ -229,7 +292,11 @@ struct CatchShareSheet: View {
                 .foregroundStyle(Brand.Color.textTertiary)
                 .padding(.trailing, 4)
             ForEach(backdrops, id: \.self) { b in
-                chip(b.label, selected: backdrop == b) { backdrop = b }
+                chip(b.label, selected: backdrop == b) {
+                    guard backdrop != b else { return }
+                    backdrop = b
+                    analytics.backdropSelected(b)
+                }
             }
         }
     }
@@ -261,37 +328,43 @@ struct CatchShareSheet: View {
         }
     }
 
+
     @ViewBuilder
     private var tiles: some View {
         tileButton(.instagram, "Story", ready: images[.story] != nil) {
-            withAnimation(.snappy) { page = .story }
+            show(.story, via: "destination")
+            analytics.destinationTapped("instagram_story", format: .story)
             if directStories, let sticker {
-                InstagramStories.share(sticker: sticker, background: storyBackground)
-                captureShare("instagram_story", method: "direct", format: .story)
+                if InstagramStories.share(sticker: sticker, background: storyBackground) {
+                    reportCompleted("instagram_story", format: .story, method: "instagram_handoff")
+                }
             } else if let story = images[.story] {
-                presented = Presented(kind: .activity([story]))
-                captureShare("instagram_story", method: "share_sheet", format: .story)
+                presented = Presented(kind: .activity([story]),
+                                      destination: "instagram_story", format: .story)
             }
         }
         tileButton(.instagram, "Post", ready: images[.post] != nil) {
-            withAnimation(.snappy) { page = .post }
+            show(.post, via: "destination")
+            analytics.destinationTapped("instagram_post", format: .post)
             guard let post = images[.post] else { return }
-            presented = Presented(kind: .activity([post]))
-            captureShare("instagram_post", method: "share_sheet", format: .post)
+            presented = Presented(kind: .activity([post]),
+                                  destination: "instagram_post", format: .post)
         }
         if MessageComposeSheet.isAvailable {
-            tileButton(.symbol("message.fill"), "Messages", ready: current != nil) {
+            tileButton(.messages, "Messages", ready: current != nil) {
+                analytics.destinationTapped("messages", format: page)
                 guard let current else { return }
-                presented = Presented(kind: .message(current))
-                captureShare("messages", method: "direct", format: page)
+                presented = Presented(kind: .message(current),
+                                      destination: "messages", format: page)
             }
         }
         tileButton(.symbol(copiedPage == page ? "checkmark" : "doc.on.doc"),
                    copiedPage == page ? "Copied" : "Copy", ready: current != nil) {
+            analytics.destinationTapped("copy", format: page)
             guard let current else { return }
             UIPasteboard.general.image = current
             copiedPage = page
-            captureShare("copy", method: "direct", format: page)
+            reportCompleted("copy", format: page, method: "copied")
             let copied = page
             Task {
                 try? await Task.sleep(for: .seconds(2))
@@ -300,15 +373,41 @@ struct CatchShareSheet: View {
         }
         tileButton(.symbol(savedPages.contains(page) ? "checkmark" : "square.and.arrow.down"),
                    savedPages.contains(page) ? "Saved" : "Save", ready: current != nil) {
+            analytics.destinationTapped("save_photos", format: page)
             guard let current, !savedPages.contains(page) else { return }
-            UIImageWriteToSavedPhotosAlbum(current, nil, nil, nil)
-            savedPages.insert(page)
-            captureShare("save_photos", method: "direct", format: page)
+            save(current, format: page)
         }
         tileButton(.symbol("ellipsis"), "More", ready: current != nil) {
+            analytics.destinationTapped("more", format: page)
             guard let current else { return }
-            presented = Presented(kind: .activity([current, shareMessage]))
-            captureShare("more", method: "share_sheet", format: page)
+            presented = Presented(kind: .activity([current, shareMessage]),
+                                  destination: "more", format: page)
+        }
+    }
+
+    /// Save through PhotoKit rather than UIImageWriteToSavedPhotosAlbum, so
+    /// the result comes back: "Saved" and `catch_share_completed` only on a
+    /// real save; a refusal offers Settings and reports `photos_denied`.
+    ///
+    /// Explain-as-we-go: `performChanges` runs the block on PhotoKit's own
+    /// queue and throws if the user refused add access (iOS asks the first
+    /// time, using NSPhotoLibraryAddUsageDescription).
+    private func save(_ image: UIImage, format: SharePage) {
+        Task {
+            do {
+                try await PHPhotoLibrary.shared().performChanges {
+                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                }
+                savedPages.insert(format)
+                reportCompleted("save_photos", format: format, method: "saved")
+            } catch {
+                let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+                let denied = status == .denied || status == .restricted
+                analytics.failed("save_photos", format: format,
+                                 reason: denied ? "photos_denied" : "error")
+                if denied { showPhotosDenied = true }
+                Log.ui.error("Share save to Photos failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -339,6 +438,12 @@ struct CatchShareSheet: View {
                         .frame(width: 24, height: 24)
                         .frame(width: 50, height: 50)
                         .background(InstagramGlyph.gradient, in: .circle)
+                case .messages:
+                    Image(systemName: "message.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 50, height: 50)
+                        .background(ShareTileIcon.messagesGreen, in: .circle)
                 }
             }
             Text(label)
@@ -353,29 +458,24 @@ struct CatchShareSheet: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(icon.isInstagram ? "Instagram \(label)" : label)
     }
-
-    /// Share-funnel signal, read next to the "Tailspot Catch Share" campaign
-    /// in App Analytics.
-    private func captureShare(_ destination: String, method: String, format: SharePage) {
-        Analytics.capture("catch_share_opened", [
-            "rarity": .string(plane.rarity.label),
-            "has_photo": .bool(hasCatchPhoto),
-            "destination": .string(destination),
-            "method": .string(method),
-            "format": .string(format.rawValue),
-        ])
-    }
 }
 
-
-/// What a destination tile shows: an SF Symbol on the app's cyan, or the
-/// Instagram glyph on Instagram's own gradient. The brand mark is what
-/// people scan for in a share row (Spotify and Strava use it too), and
+/// What a destination tile shows: an SF Symbol on the app's cyan, or a
+/// destination in its own colours, the way Strava's share row does: the
+/// Instagram glyph on Instagram's gradient, a white bubble on Messages
+/// green. The brand mark is what people scan for in a share row, and
 /// Meta's brand rules allow the glyph, unaltered, for "share to
 /// Instagram" buttons; there's no SF Symbol for it.
 enum ShareTileIcon {
     case symbol(String)
     case instagram
+    case messages
+
+    /// Messages' green, lighter at the top like the iOS app icon.
+    static let messagesGreen = LinearGradient(
+        colors: [Color(red: 0.40, green: 0.89, blue: 0.40),
+                 Color(red: 0.11, green: 0.75, blue: 0.23)],
+        startPoint: .top, endPoint: .bottom)
 
     var isInstagram: Bool {
         if case .instagram = self { return true }

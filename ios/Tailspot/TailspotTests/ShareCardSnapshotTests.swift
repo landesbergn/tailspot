@@ -152,8 +152,14 @@ struct ShareCardSnapshotTests {
                 circle("plus.circle"); circle("rectangle.portrait")
                 circle("arrow.down.to.line"); circle("ellipsis")
             }
-            HStack(spacing: 34) {
-                insta; insta; circle("square.and.arrow.down"); circle("ellipsis")
+            HStack(spacing: 14) {
+                insta; insta
+                Image(systemName: "message.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(ShareTileIcon.messagesGreen, in: .circle)
+                circle("doc.on.doc"); circle("square.and.arrow.down"); circle("ellipsis")
             }
         }
         .padding(24)
