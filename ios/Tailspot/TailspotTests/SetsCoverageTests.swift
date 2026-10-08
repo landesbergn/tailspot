@@ -238,6 +238,13 @@ struct SetsCoverageTests {
         ("CH60", "Roland", "Z-602"),
         ("DIMO", "Diamond", "HK-36 MPX"),
         ("FAET", "Atec", "321 Faeta"),
+        // Public catalog coverage additions validated 2026-10-08.
+        ("CTLN", "Fly Synthesis", "Catalina"),
+        ("DR40", "Robin", "DR-400 2+2"),
+        ("EV97", "Evektor", "EV-97 Harmony"),
+        ("FOX", "Skyfox", "CA-25 Impala"),
+        ("HUSK", "Aviat", "A-1 Husky"),
+        ("P149", "Focke-Wulf", "FWP-149"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -345,6 +352,12 @@ struct SetsCoverageTests {
             (("CH60", "Roland", "Z-602"), "fam-sport-classics", "fsc-zodiac"),
             (("DIMO", "Diamond", "HK-36 MPX"), "fam-sport-classics", "fsc-dimona"),
             (("FAET", "Atec", "321 Faeta"), "fam-sport-classics", "fsc-faeta"),
+            (("CTLN", "Fly Synthesis", "Catalina"), "fam-sport-classics", "fsc-catalina"),
+            (("DR40", "Robin", "DR-400 2+2"), "fam-sport-classics", "fsc-dr400"),
+            (("EV97", "Evektor", "EV-97 Harmony"), "fam-sport-classics", "fsc-harmony"),
+            (("FOX", "Skyfox", "CA-25 Impala"), "fam-sport-classics", "fsc-skyfox"),
+            (("HUSK", "Aviat", "A-1 Husky"), "fam-sport-classics", "fsc-husky"),
+            (("P149", "Focke-Wulf", "FWP-149"), "fam-vintage", "fv-p149"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -421,6 +434,16 @@ struct SetsCoverageTests {
             .entries.first { $0.id == "fmu2" }!
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("MU23", "Akaflieg Munchen", "Mü-23 Saurier"))), entry: mu2Entry),
                 "An Akaflieg Mü-23 must not fill the Mitsubishi MU-2 slot")
+
+        let flySynthesisCatalina = classicsSet.entries.first { $0.id == "fsc-catalina" }!
+        let pbyCatalina = mk(("CAT", "Consolidated", "PBY Catalina"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: pbyCatalina), entry: flySynthesisCatalina),
+                "A PBY Catalina must not fill the Fly Synthesis Catalina slot")
+
+        let skyfox = classicsSet.entries.first { $0.id == "fsc-skyfox" }!
+        let kitfox = mk(("FOX", "Skystar", "Kitfox"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: kitfox), entry: skyfox),
+                "The shared FOX designator must not make a Kitfox fill the Skyfox CA-25 slot")
 
         // AS50 covers the single-engine AS350/AS550 family; AS55 is the
         // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
