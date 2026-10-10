@@ -245,6 +245,12 @@ struct SetsCoverageTests {
         ("FOX", "Skyfox", "CA-25 Impala"),
         ("HUSK", "Aviat", "A-1 Husky"),
         ("P149", "Focke-Wulf", "FWP-149"),
+        // Public catalog coverage additions validated 2026-10-09.
+        ("AC90", "Gulfstream", "690 Jetprop Commander 840"),
+        ("BL8", "American Champion", "8 Scout"),
+        ("CC11", "Cub Crafters", "CC-11 Sport Cub"),
+        ("CN35", "CASA", "CN-235"),
+        ("SLG2", "Sonaca", "S-2"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -358,6 +364,11 @@ struct SetsCoverageTests {
             (("FOX", "Skyfox", "CA-25 Impala"), "fam-sport-classics", "fsc-skyfox"),
             (("HUSK", "Aviat", "A-1 Husky"), "fam-sport-classics", "fsc-husky"),
             (("P149", "Focke-Wulf", "FWP-149"), "fam-vintage", "fv-p149"),
+            (("AC90", "Gulfstream", "690 Jetprop Commander 840"), "fam-twin-commander", "ftc-690"),
+            (("BL8", "American Champion", "8 Scout"), "fam-sport-classics", "fsc-scout"),
+            (("CC11", "Cub Crafters", "CC-11 Sport Cub"), "fam-sport-classics", "fsc-sport-cub"),
+            (("CN35", "CASA", "CN-235"), "fam-military", "fm-cn235"),
+            (("SLG2", "Sonaca", "S-2"), "fam-sport-classics", "fsc-sonaca200"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -378,13 +389,20 @@ struct SetsCoverageTests {
                         model: "F 5F", manufacturer: "Northrop",
                         caughtAt: Date(), observerLat: 0, observerLon: 0,
                         slantDistanceMeters: 0, typecode: nil)
+        let boeing777F = Catch(icao24: "alias-777f", callsign: nil,
+                               model: "777F", manufacturer: "Boeing",
+                               caughtAt: Date(), observerLat: 0, observerLon: 0,
+                               slantDistanceMeters: 0, typecode: nil)
         let classics = CardSets.families.first { $0.id == "fam-sport-classics" }!
         let longEZEntry = classics.entries.first { $0.id == "fsc-longez" }!
         let military = CardSets.families.first { $0.id == "fam-military" }!
         let f5Entry = military.entries.first { $0.id == "fm-f5" }!
+        let widebody = CardSets.all.first { $0.id == "wide" }!
+        let boeing777Entry = widebody.entries.first { $0.id == "w-777" }!
 
         #expect(CardSets.matches(key: CardSets.matchKey(for: longEZ), entry: longEZEntry))
         #expect(CardSets.matches(key: CardSets.matchKey(for: f5f), entry: f5Entry))
+        #expect(CardSets.matches(key: CardSets.matchKey(for: boeing777F), entry: boeing777Entry))
 
         let legend = mk(("LGND", "Aeropilot", "L-600"))
         let shenyangF5 = mk(("MG17", "Shenyang", "F-5"))
