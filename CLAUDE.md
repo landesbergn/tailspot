@@ -99,9 +99,10 @@ Ring 0 bin/deploy → Ring 1 main → Ring 2 TestFlight → Ring 3 App Store
   blocks direct pushes (admins included) and requires the green **Unit tests**
   check. Flow: branch → field-test with `bin/deploy` → PR → squash-merge.
   **Merging does not ship; cutting a TestFlight build does not ship.**
-- **Claude may** commit, `bin/deploy`, and merge on green CI autonomously.
-  **Claude may not** promote to Ring 2 or Ring 3 — the Start Build and the App
-  Review submission are Noah's, always.
+- **Claude may** commit, `bin/deploy`, merge on green CI, and **cut TestFlight
+  builds** (`bin/xcode-cloud-build --watch`; Noah's OK 2026-09-07) — one build
+  per batch, and say what went into it. **Claude may not** promote to Ring 3 —
+  the App Review submission and phased release are Noah's, always.
 - **Ring 3 is irreversible.** iOS has no rollback; the only post-hoc levers are
   pull-from-sale, an expedited review, or pausing a phased rollout. Front-load
   the caution — soak on TestFlight, and prefer phased release on every submit.

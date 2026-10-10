@@ -52,6 +52,23 @@ struct SettledCardSnapshotTests {
                 callsign: nil, model: nil, carrier: nil,
                 rarity: .common, type: .ga,
                 altText: nil, speedText: nil, distText: "12.0 km"), false),
+            // Settings → UNITS = m + km/h: the longest readouts the stat row
+            // can carry, formatted by the real converters.
+            ("settled_metric_units", CardPlane(
+                callsign: "JAL305", model: "Boeing 737-800", carrier: "Japan Airlines",
+                rarity: .common, type: .narrow,
+                altText: CardPlane.altText(fromMeters: 10_668, unit: .meters),
+                speedText: CardPlane.speedText(fromMps: 280, unit: .kph),
+                distText: CardPlane.distText(fromMeters: 38_600, unit: .miles),
+                originIcao: "HND", destIcao: "FUK",
+                originName: "Tokyo", destName: "Fukuoka"), false),
+            // No route → the DIST slot shows, here in miles.
+            ("settled_noroute_miles", CardPlane(
+                callsign: "N4521C", model: "Cessna 172", carrier: "Private",
+                rarity: .common, type: .ga,
+                altText: CardPlane.altText(fromMeters: 1_100, unit: .meters),
+                speedText: CardPlane.speedText(fromMps: 52, unit: .mph),
+                distText: CardPlane.distText(fromMeters: 3_800, unit: .miles)), false),
         ]
 
         for (name, plane, fot) in cases {

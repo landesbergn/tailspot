@@ -51,9 +51,35 @@ struct ErrorCopyTests {
         #expect(ErrorCopy.pill(for: wrapped) == "NO INTERNET — RETRYING")
     }
 
-    @Test func ambiguousTimeoutStaysServerSide() {
-        // A timeout can be either side of the wire; "unreachable" is
-        // honest for both, "no internet" only for one.
-        #expect(!ErrorCopy.isOffline(URLError(.timedOut)))
+    @Test func timeoutsAndDNSReadWeakConnection() {
+        // One bar of cellular times out or loses the DNS lookup; the user
+        // has *a* connection, it just can't carry the request (2026-10-02).
+        for code in [URLError.Code.timedOut, .cannotFindHost, .dnsLookupFailed] {
+            let error = URLError(code)
+            #expect(!ErrorCopy.isOffline(error))
+            #expect(ErrorCopy.isWeakConnection(error))
+            #expect(ErrorCopy.pill(for: error) == "WEAK CONNECTION — RETRYING")
+            #expect(ErrorCopy.prose(for: error) == "Your connection is weak. Try again in a moment.")
+            #expect(ErrorCopy.bucket(for: error) == "weak")
+        }
+        // Wrapped account transport errors see through too.
+        #expect(ErrorCopy.isWeakConnection(AccountError.transport(URLError(.timedOut))))
+    }
+
+    @Test func refusedConnectionStaysServerSide() {
+        let refused = URLError(.cannotConnectToHost)
+        #expect(!ErrorCopy.isWeakConnection(refused))
+        #expect(ErrorCopy.pill(for: refused) == "TAILSPOT UNREACHABLE — RETRYING")
+        #expect(ErrorCopy.bucket(for: refused) == "server")
+    }
+
+    @Test func cancellationIsRecognizedInEveryShape() {
+        // The bug behind most "Tailspot unreachable" pills: a lookup the
+        // app cancelled itself read as a server failure.
+        #expect(ErrorCopy.isCancellation(URLError(.cancelled)))
+        #expect(ErrorCopy.isCancellation(CancellationError()))
+        #expect(ErrorCopy.isCancellation(AccountError.transport(URLError(.cancelled))))
+        #expect(!ErrorCopy.isCancellation(URLError(.timedOut)))
+        #expect(!ErrorCopy.isCancellation(ADSBSourceError.http(status: 503)))
     }
 }

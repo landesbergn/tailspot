@@ -144,6 +144,36 @@ export const devices = pgTable(
      * (`npm run device:disable`). Nothing in the request path ever writes it.
      */
     disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    /**
+     * Growth attribution (Challenges v1, migration 0010, spec D19): the
+     * challenge whose invite brought this device into the app. Stamped ONCE by
+     * the join path when a device that registered within the last 7 days joins
+     * its first challenge; never overwritten, never cleared. A plain uuid (no
+     * FK) so the two tables have no declaration-order dependency and a
+     * challenge row can never be blocked from deletion by an attribution.
+     */
+    referredByChallengeId: uuid("referred_by_challenge_id"),
+    /**
+     * APNs device token (hex) for push, plus which APNs environment minted it
+     * (migration 0011). Nullable and unowned by the rest of the system: push is
+     * strictly additive — a device with no token simply never gets a
+     * notification, and clearing the token is always a safe fallback.
+     *
+     * A token belongs to ONE install: the same token arriving from a different
+     * device row (an app restore onto a new anonymous identity) CLEARS it from
+     * the previous row, so we can never fan one physical phone's notifications
+     * out of two identities. `apns_environment` matters because a sandbox
+     * (Xcode/TestFlight-dev) token is rejected by the production APNs host and
+     * vice versa — the host is chosen per-token, not per-deploy.
+     *
+     * Written only by POST/DELETE /v1/devices/push-token and by the sender's
+     * invalid-token cleanup (410 / BadDeviceToken / Unregistered).
+     */
+    apnsToken: text("apns_token"),
+    /** "sandbox" | "production" — which APNs host this token is valid against. */
+    apnsEnvironment: text("apns_environment"),
+    /** Last time the token was (re)registered; audit + staleness triage. */
+    apnsUpdatedAt: timestamp("apns_updated_at", { withTimezone: true }),
   },
   (t) => ({
     /**
@@ -258,6 +288,13 @@ export const catches = pgTable(
   (t) => ({
     byDevice: index("catches_device_idx").on(t.deviceId),
     byIcao: index("catches_icao_idx").on(t.icao24),
+    /**
+     * (device, caught_at) — the shape of every windowed per-device read: a
+     * challenge's standings and catch logs (migration 0010), and the
+     * leaderboard's week/month windows, which previously walked the device
+     * index and filtered on caught_at.
+     */
+    byDeviceCaughtAt: index("catches_device_caught_idx").on(t.deviceId, t.caughtAt),
     /** Idempotency scope: one catchUuid per device (see column comment). */
     deviceCatchUuidUnique: uniqueIndex("catches_device_catch_uuid_unique").on(
       t.deviceId,
@@ -357,3 +394,130 @@ export const alltimeToppers = pgTable("alltime_toppers", {
   /** When this device was FIRST observed at all-time #1. */
   firstToppedAt: timestamp("first_topped_at", { withTimezone: true }).notNull(),
 });
+
+/**
+ * Challenges (Challenges v1, migration 0010 — spec docs/reviews/2026-09-15-challenges-v1-spec.html).
+ *
+ * A challenge is a WINDOW plus a SCORER. `kind` is the quest seam (spec D18):
+ * v1 writes only `'private'` (an invite-code race scored by summed standard
+ * points); a later public quest carries `kind = 'quest'`, a null `code`, and an
+ * objective. Status is never stored — it is derived from the timestamps
+ * (`cancelledAt` → cancelled; before `startsAt` → upcoming; before `endsAt` →
+ * live; after → finished) so a clock is the only input.
+ *
+ * `finalizedAt`/`outcome` are written by the DECIDE-ON-READ path (the first
+ * read after `endsAt`), the same pattern as weekly champions: results are
+ * frozen into `challenge_results` in one transaction so a later rescore never
+ * rewrites a placement somebody has already seen.
+ */
+export const challenges = pgTable(
+  "challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** 'private' (v1) | 'quest' (future). Plain text, not an enum — no migration per kind. */
+    kind: text("kind").notNull().default("private"),
+    /** Invite code: 8 chars from an unambiguous alphabet. Null for a future public quest. */
+    code: text("code").unique(),
+    /** Creator-chosen display name (3–24 chars, profanity-checked). */
+    name: text("name").notNull(),
+    creatorDeviceId: uuid("creator_device_id")
+      .notNull()
+      .references(() => devices.id),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** '1h' | '24h' | '3d' | '7d' — the preset that produced endsAt, for display. */
+    durationPreset: text("duration_preset").notNull(),
+    maxParticipants: integer("max_participants").notNull().default(10),
+    /** Creator cancellation (allowed only before startsAt). Null = not cancelled. */
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    /** When the decide-on-read pass froze the results. Null = not yet finalized. */
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    /** null | 'decided' | 'no_contest' — set together with finalizedAt. */
+    outcome: text("outcome"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => ({
+    byCreator: index("challenges_creator_idx").on(t.creatorDeviceId),
+    /**
+     * "Ended but not yet frozen". There is NO sweep job — finalization is
+     * lazy (the first read after `endsAt` freezes the results); this index
+     * serves the predicate that read uses, notably `listForDevice`'s
+     * due-but-unfinalized lookup.
+     */
+    pendingFinalize: index("challenges_pending_finalize_idx")
+      .on(t.endsAt)
+      .where(sql`${t.finalizedAt} is null`),
+  }),
+);
+
+/**
+ * "I'm in." One row per (challenge, device). `leftAt` non-null = left (the
+ * row is kept so a rejoin is an UPDATE back to null and history stays
+ * auditable). `joinedAsNewDevice` is the growth attribution flag (spec D19):
+ * true when the device registered within 7 days of joining and had never
+ * joined a challenge before.
+ */
+export const challengeParticipants = pgTable(
+  "challenge_participants",
+  {
+    challengeId: uuid("challenge_id")
+      .notNull()
+      .references(() => challenges.id),
+    deviceId: uuid("device_id")
+      .notNull()
+      .references(() => devices.id),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull(),
+    leftAt: timestamp("left_at", { withTimezone: true }),
+    joinedAsNewDevice: boolean("joined_as_new_device").notNull().default(false),
+    /**
+     * The placement this participant held the LAST time standings were
+     * evaluated (migration 0011). This is the memory the "someone passed you"
+     * push is derived from: a catch upload re-evaluates the live standings and
+     * anyone whose new placement is numerically WORSE than this value was
+     * overtaken. Seeded at join (and at create, for the creator) from the
+     * standings at that moment — 1 when alone — so the first evaluation after
+     * joining compares against something real rather than firing on null.
+     *
+     * Null means "never evaluated": never a notification, only a seed.
+     */
+    lastPlacement: integer("last_placement"),
+    /**
+     * When this participant was last told they'd been passed, in THIS
+     * challenge. The 30-minute cooldown is read off this column, so a
+     * back-and-forth race can't turn into a notification storm. Null = never
+     * notified.
+     */
+    overtakenNotifiedAt: timestamp("overtaken_notified_at", { withTimezone: true }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.challengeId, t.deviceId] }),
+    /** "Which challenges am I in?" — the hub's list read. */
+    byDeviceActive: index("challenge_participants_device_active_idx")
+      .on(t.deviceId)
+      .where(sql`${t.leftAt} is null`),
+  }),
+);
+
+/**
+ * Frozen results, written once at finalization. `placement` is competition
+ * ranking (1, 1, 3 — ties share, the next placement is skipped); everyone at
+ * placement 1 is a winner. `rarityBreakdown` is `{ "<tier>": count }`.
+ */
+export const challengeResults = pgTable(
+  "challenge_results",
+  {
+    challengeId: uuid("challenge_id")
+      .notNull()
+      .references(() => challenges.id),
+    deviceId: uuid("device_id")
+      .notNull()
+      .references(() => devices.id),
+    placement: integer("placement").notNull(),
+    points: integer("points").notNull(),
+    catches: integer("catches").notNull(),
+    rarityBreakdown: jsonb("rarity_breakdown").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.challengeId, t.deviceId] }),
+  }),
+);

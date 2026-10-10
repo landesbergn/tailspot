@@ -3,12 +3,16 @@
 //  Tailspot
 //
 //  Organised into three sections:
-//    SPOTTER   — handle claim (the only real identity setting; everything
-//                else that once lived here was a fake affordance and has
-//                been removed — see git history for the inventory).
+//    SPOTTER   — the handle row, which opens HandleEditSheet (the only
+//                real identity setting; everything else that once lived
+//                here was a fake affordance and has been removed; see the
+//                file's history for the inventory).
 //    REMINDERS — the streak-protection mute toggle (StreakReminders.swift),
 //                with an honest permission-denied state that routes to iOS
 //                Settings and heals on return.
+//    UNITS     — altitude (ft / m), speed (kt / mph / km/h) and distance
+//                (km / mi) pickers bound to UnitPreferences; every card
+//                re-formats live.
 //    ABOUT     — legal links (Privacy Policy, Terms, Attributions —
 //                ODbL attribution for adsb.lol data is a licence
 //                obligation), data-source credits, plus the tap-to-copy
@@ -25,17 +29,22 @@ struct SettingsScreen: View {
     /// Streak-protection reminders (default ON; muting cancels any pending
     /// nudge on the next sync below). Key shared with StreakReminderCenter.
     @AppStorage(StreakReminders.enabledKey) private var streakRemindersEnabled = true
+    @AppStorage(ChallengeReminderScheduler.enabledKey) private var challengeRemindersEnabled = true
+    /// Display units. `@Bindable` is Observation's binding bridge — the
+    /// pickers write straight into the shared preference (which persists to
+    /// UserDefaults itself), and every card reading it re-renders.
+    @Bindable private var units = UnitPreferences.shared
 
-    @State private var handleDraft: String = ""
-    @State private var handleTakenError: String? = nil
-    @State private var isSavingHandle = false
-    @State private var savedHandleSuccess: String? = nil   // brief "claimed" confirmation
+    @State private var showHandleSheet = false
     /// System notification permission, re-read on foreground so granting in
     /// iOS Settings heals the row without a relaunch.
     @State private var notifStatus: UNAuthorizationStatus = .notDetermined
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    private let accountClient = TailspotAccountClient()
+    /// Optional: Settings renders in snapshot harnesses and previews with no
+    /// Challenges model in the environment. `@Environment(Type.self)` with an
+    /// optional type is Observation's "inject it if it's there" form.
+    @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
 
     #if DEBUG
     /// Snapshot seam — the visual-pass harness can't drive the real
@@ -46,10 +55,8 @@ struct SettingsScreen: View {
 
     private var notifDenied: Bool { notifStatus == .denied }
 
-    /// True when the draft differs from the saved handle and is non-empty.
-    private var isDirty: Bool {
-        let t = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !t.isEmpty && t != handle
+    private var isHandleClaimed: Bool {
+        AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
     }
 
     var body: some View {
@@ -58,82 +65,27 @@ struct SettingsScreen: View {
             // MARK: SPOTTER
 
             Section {
-                VStack(alignment: .leading, spacing: 0) {
+                // One row that opens the same sheet as tapping the handle on
+                // Profile (2026-09-30), replacing the always-editable field.
+                Button { showHandleSheet = true } label: {
                     HStack(spacing: 6) {
                         Text("Handle")
+                            .foregroundStyle(Brand.Color.textPrimary)
                         Spacer()
-                        Text("@")
+                        Text(isHandleClaimed ? "@\(handle)" : "Claim a handle")
+                            .font(isHandleClaimed ? Brand.Font.mono(size: 17, relativeTo: .body) : .body)
+                            .foregroundStyle(isHandleClaimed ? Brand.Color.textSecondary : Brand.Color.cyan)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Brand.Color.textTertiary)
-                        TextField("handle", text: $handleDraft)
-                            .multilineTextAlignment(.trailing)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .font(Brand.Font.mono(size: 17, relativeTo: .body))
-                            .accessibilityLabel("Handle")
-                            .onChange(of: handleDraft) { _, _ in
-                                handleTakenError = nil
-                                savedHandleSuccess = nil
-                            }
-                            .onSubmit { Task { await saveHandle() } }
-                        if isSavingHandle {
-                            ProgressView()
-                                .scaleEffect(0.75)
-                                .tint(Brand.Color.cyan)
-                        }
+                            .accessibilityHidden(true)
                     }
-
-                    // Inline error (409 taken) — shown below the field.
-                    if let takenMsg = handleTakenError {
-                        Label(takenMsg, systemImage: "exclamationmark.circle.fill")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.alertCaution)
-                            .padding(.top, 6)
-                    }
-
-                    // Transient success confirmation — clears automatically.
-                    if let successMsg = savedHandleSuccess {
-                        Label(successMsg, systemImage: "checkmark.circle.fill")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.alertNormal)
-                            .padding(.top, 6)
-                    }
-                }
-
-                // Explicit Save / Claim button — disabled while no change or invalid.
-                // Complements onSubmit (Return key) so the user always has a
-                // visible affordance, especially on external keyboards where Return
-                // focus is not obvious.
-                Button {
-                    Task { await saveHandle() }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if isSavingHandle {
-                            // Match the button's dark foreground (bgPrimary on
-                            // cyan), not white — higher contrast on the cyan fill.
-                            ProgressView().scaleEffect(0.85).tint(Brand.Color.bgPrimary)
-                        } else {
-                            Text("Save handle")
-                                .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, 10)
-                    .background(isDirty ? Brand.Color.cyan : Brand.Color.bgElevated,
-                                in: .rect(cornerRadius: Brand.Radius.row))
-                    .foregroundStyle(isDirty ? Brand.Color.bgPrimary : Brand.Color.textTertiary)
-                    // The filled capsule renders ~35 pt; the frame carries
-                    // the 44 pt hit target without inflating the row visual.
-                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(!isDirty || isSavingHandle)
-                .animation(.easeInOut(duration: 0.15), value: isDirty)
-                // The button draws its own fill; clear the row so the idle
-                // (bgElevated) state doesn't vanish into the section row color.
-                .listRowBackground(Color.clear)
-
+                .accessibilityHint(isHandleClaimed ? "Opens a sheet to change it" : "Opens a sheet to pick one")
             } header: {
                 Text("SPOTTER")
                     .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
@@ -141,7 +93,9 @@ struct SettingsScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .textCase(nil)
             } footer: {
-                Text("Your handle is the only thing visible on the leaderboard. Claim it to reserve your spot.")
+                Text(isHandleClaimed
+                     ? "Your handle is the only thing visible on the leaderboard."
+                     : "Your handle is the only thing visible on the leaderboard. Claim it to reserve your spot.")
             }
             .listRowBackground(Brand.Color.bgElevated)
 
@@ -157,6 +111,18 @@ struct SettingsScreen: View {
                 .tint(Brand.Color.cyan)
                 // Denied → the toggle alone goes inert (`.disabled` on the
                 // whole row would also kill the recovery path below).
+                .disabled(notifDenied)
+                // Challenge reminders (2026-09-15): starts, ending soon,
+                // finished — local notifications planned by
+                // ChallengeReminderScheduler. Shares the streak toggle's
+                // authorization state; its own on/off key.
+                Toggle(isOn: $challengeRemindersEnabled) {
+                    Text("Challenges")
+                        .foregroundStyle(notifDenied
+                                         ? Brand.Color.textTertiary
+                                         : Brand.Color.textPrimary)
+                }
+                .tint(Brand.Color.cyan)
                 .disabled(notifDenied)
                 if notifDenied {
                     Button {
@@ -185,8 +151,23 @@ struct SettingsScreen: View {
                     .textCase(nil)
             } footer: {
                 Text(notifDenied
-                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges."
-                     : "Get notified if your streak is at risk.")
+                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges and challenge reminders."
+                     : "Get notified if your streak is at risk, and when a challenge starts, is about to end, or finishes.")
+            }
+            .listRowBackground(Brand.Color.bgElevated)
+
+            // MARK: UNITS
+
+            Section {
+                unitRow("Altitude", selection: $units.altitude, accessibilityLabel: "Altitude unit")
+                unitRow("Speed", selection: $units.speed, accessibilityLabel: "Speed unit")
+                unitRow("Distance", selection: $units.distance, accessibilityLabel: "Distance unit")
+            } header: {
+                Text("UNITS")
+                    .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .textCase(nil)
             }
             .listRowBackground(Brand.Color.bgElevated)
 
@@ -227,15 +208,8 @@ struct SettingsScreen: View {
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        // Prefill only a genuinely claimed handle. For an unclaimed user the
-        // stored value is still the "spotter_42" placeholder — prefilling it
-        // as the field's VALUE reads as "your handle is spotter_42", the same
-        // display-as-if-claimed leak the Profile header had. Empty draft →
-        // the field shows its "handle" prompt instead.
-        .onAppear {
-            handleDraft = AnalyticsIdentity.isClaimedHandle(
-                handle, placeholder: SpotterHandle.defaultPlaceholder
-            ) ? handle : ""
+        .sheet(isPresented: $showHandleSheet) {
+            HandleEditSheet(source: "settings")
         }
         .task { await refreshNotifStatus() }
         // Heal-on-return: the user goes to iOS Settings from the denied
@@ -262,6 +236,23 @@ struct SettingsScreen: View {
                 await StreakReminderCenter.shared.sync(context: modelContext)
             }
         }
+        // Same shape as the streak toggle above — it was the only one of the
+        // two that asked for permission or re-planned, so switching
+        // Challenges on did nothing until the next foreground, and switching
+        // it off left already-scheduled reminders to fire.
+        .onChange(of: challengeRemindersEnabled) { _, enabled in
+            Task { @MainActor in
+                if enabled,
+                   await StreakReminderCenter.shared.authorizationStatus() == .notDetermined {
+                    _ = await StreakReminderCenter.shared.requestPermission()
+                    await refreshNotifStatus()
+                }
+                // ON re-plans every open challenge; OFF makes the wanted set
+                // empty, so the sync removes every pending challenge
+                // reminder immediately.
+                challenges?.resyncReminders()
+            }
+        }
     }
 
     /// Re-read the system permission (or the snapshot harness override).
@@ -275,54 +266,45 @@ struct SettingsScreen: View {
         notifStatus = await StreakReminderCenter.shared.authorizationStatus()
     }
 
-    // MARK: - Handle claim
+    // MARK: - Unit row
 
-    /// Send the current `handleDraft` to the backend. On success persists
-    /// locally and shows a brief confirmation. On 409 shows an inline
-    /// "taken" error. Non-handle-taken errors are logged and persisted
-    /// locally anyway (backend claim can be retried on next launch).
-    private func saveHandle() async {
-        let trimmed = handleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed == handleDraft,   // already trimmed — don't re-trim mid-type
-              !trimmed.isEmpty else { return }
-        isSavingHandle = true
-        defer { isSavingHandle = false }
-        do {
-            let deviceId = try await accountClient.ensureRegistered()
-            try await accountClient.claimHandle(trimmed)
-            handle = trimmed
-            // Record the backend confirmation so HandleSyncer treats this
-            // handle as already-synced and won't redundantly re-claim it.
-            UserDefaults.standard.set(trimmed, forKey: SpotterHandle.confirmedKey)
-            handleTakenError = nil
-            savedHandleSuccess = "@\(trimmed) claimed"
-            // Identify to the canonical server device id (established by
-            // `ensureRegistered()` above) and `$set` the handle in ONE call, so
-            // SDK events, session replay, and the handle all resolve to a single
-            // canonical person. See AnalyticsIdentity.
-            Analytics.identify(deviceId, handle: trimmed)
-            Analytics.capture("handle_claimed", ["result": .string("success")])
-            // Stop the spinner BEFORE the auto-clear sleep — the deferred
-            // reset only fires at function exit, which would otherwise keep
-            // the Save button spinning/disabled for the whole 3 s.
-            isSavingHandle = false
-            // Auto-clear the success state after 3 s.
-            try? await Task.sleep(for: .seconds(3))
-            if savedHandleSuccess == "@\(trimmed) claimed" {
-                savedHandleSuccess = nil
+    /// "Altitude   [ ft | m ]" — a label with a trailing segmented picker.
+    /// Generic over the unit enum so both rows share one construction; the
+    /// picker's own label is hidden (the row text is the label) and the
+    /// accessibility name is supplied explicitly so VoiceOver still announces
+    /// what the control changes.
+    @ViewBuilder
+    private func unitRow<U: CaseIterable & Identifiable & Hashable>(
+        _ title: String,
+        selection: Binding<U>,
+        accessibilityLabel: String
+    ) -> some View where U.AllCases: RandomAccessCollection {
+        HStack {
+            Text(title)
+                .foregroundStyle(Brand.Color.textPrimary)
+            Spacer()
+            Picker(title, selection: selection) {
+                ForEach(U.allCases) { unit in
+                    Text(unitSymbol(unit))
+                        .font(Brand.Font.mono(size: 13, weight: .semibold, relativeTo: .footnote))
+                        .tag(unit)
+                }
             }
-        } catch AccountError.handleTaken {
-            handleTakenError = "@\(trimmed) is already taken"
-            Analytics.capture("handle_claimed", ["result": .string("taken")])
-        } catch AccountError.handleNotAllowed {
-            // Server validation / profanity rejection (422) — terminal for
-            // this handle; never persist it locally (see OnboardingFlow).
-            handleTakenError = "@\(trimmed) isn't allowed"
-            Analytics.capture("handle_claimed", ["result": .string("not_allowed")])
-        } catch {
-            Log.ui.error("Settings: handle claim failed (non-fatal): \(error, privacy: .public)")
-            handle = trimmed
-            handleTakenError = nil
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            // Segments size to their longest label; cap the control so the
+            // row title keeps its space on narrow phones.
+            .frame(maxWidth: U.allCases.count > 2 ? 190 : 130)
+            .accessibilityLabel(accessibilityLabel)
+        }
+    }
+
+    private func unitSymbol<U>(_ unit: U) -> String {
+        switch unit {
+        case let u as AltitudeUnit: u.symbol
+        case let u as SpeedUnit: u.symbol
+        case let u as DistanceUnit: u.symbol
+        default: "\(unit)"
         }
     }
 

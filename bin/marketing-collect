@@ -4,7 +4,9 @@
 #
 # This step used to be manual, and the mapping is NOT one-to-one: the
 # collection card is shot 07 but sits in slide 2, and the reveal (shot 02)
-# is a spare that no slide currently uses. Getting it wrong silently ships
+# is a spare that no slide currently uses. Challenges render three shots
+# (mkt_08 live detail, mkt_08b with my catch log open, mkt_09 the hub); only
+# mkt_08 fills slide 7, the other two are spares. Getting it wrong silently ships
 # the wrong screen, so it lives in a script.
 #
 # Usage: bin/marketing-collect            (after a MARKETING_CAPTURE run)
@@ -22,6 +24,7 @@ map=(
   "mkt_04_hangar_sets:slide4-hangar-sets.png"
   "mkt_05_trophies:slide5-trophies.png"
   "mkt_06_leaderboard:slide6-leaderboard.png"
+  "mkt_08_challenge_live:slide7-challenges.png"
 )
 
 copied=0 missing=0

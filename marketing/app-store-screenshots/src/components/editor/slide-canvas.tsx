@@ -376,11 +376,14 @@ function getDefaultRects(
         },
       };
     case "device-top":
+      // The phone used to start 10% above the canvas, which clipped the top
+      // of the screen and made a full-screen shot (the reveal) read as cut
+      // off. Keep the whole phone in frame and drop the caption beneath it.
       return {
-        caption: { x: cW * 0.08, y: cH * 0.65, width: capW, height: capH, align: "center" },
+        caption: { x: cW * 0.08, y: cH * 0.78, width: capW, height: capH, align: "center" },
         device: {
           x: (cW - deviceW) / 2,
-          y: -cH * 0.1,
+          y: cH * 0.03,
           width: deviceW,
           height: deviceH,
         },
@@ -652,8 +655,16 @@ export function DeckCanvas({
         );
       })}
 
-      {slides.map((slide, index) => {
+      {/* Isolated screens draw last so nothing later can overflow onto them. */}
+      {slides
+        .map((slide, index) => ({ slide, index }))
+        .sort((a, b) => Number(!!a.slide.isolated) - Number(!!b.slide.isolated))
+        .map(({ slide, index }) => {
         if (slide.layout === "feature-graphic" || device === "feature-graphic") return null;
+        // An isolated screen on a connected canvas gets its own clipped,
+        // z-raised box (below) with its background repainted, so other
+        // screens' overflow can't land on it.
+        const isolatedHere = connectedCanvas && !!slide.isolated;
         const selectedElementId =
           selectedElement?.slideId === slide.id ? selectedElement.elementId : null;
         const perSlideEdit: EditHandlers | undefined = editable
@@ -682,13 +693,13 @@ export function DeckCanvas({
             selectedElementId={selectedElementId}
             previewScale={previewScale}
             hideEmpty={hideEmpty}
-            screenX={connectedCanvas ? index * cW : 0}
-            boundsW={connectedCanvas ? totalW : cW}
+            screenX={connectedCanvas && !isolatedHere ? index * cW : 0}
+            boundsW={connectedCanvas && !isolatedHere ? totalW : cW}
             boundsH={cH}
-            allowCrossScreen={connectedCanvas}
+            allowCrossScreen={connectedCanvas && !isolatedHere}
           />
         );
-        if (connectedCanvas) return elements;
+        if (connectedCanvas && !isolatedHere) return elements;
         return (
           <div
             key={`${slide.id}-elements-isolated`}
@@ -699,8 +710,15 @@ export function DeckCanvas({
               width: cW,
               height: cH,
               overflow: "hidden",
+              // Elements on the shared canvas carry their own z-indexes
+              // (devices 2-3, text 4+); a stacking context above them all is
+              // what actually keeps a neighbour's overflow off this screen.
+              ...(isolatedHere ? { zIndex: 1000 } : {}),
             }}
           >
+            {/* Repaint the background so overflow from neighbours drawn
+                earlier on the shared canvas is covered. */}
+            {isolatedHere && <SlideBackground slide={slide} cW={cW} cH={cH} theme={theme} />}
             {elements}
           </div>
         );

@@ -62,6 +62,15 @@ struct RevealSnapshotTests {
                 callsign: "N4521C", model: nil, carrier: "Private",
                 rarity: .common, type: .ga,
                 altText: "3,609 ft", speedText: "101 kt", distText: "3.8 km")),
+            // Settings → UNITS = m + mph, through the real converters.
+            ("a220_route_metric_units", CardPlane(
+                callsign: "JBU613", model: "Airbus A220-300", carrier: "JetBlue",
+                rarity: .uncommon, type: .narrow,
+                altText: CardPlane.altText(fromMeters: 10_800, unit: .meters),
+                speedText: CardPlane.speedText(fromMps: 232, unit: .mph),
+                distText: "14.5 km",
+                originIcao: "KBOS", destIcao: "KSFO",
+                originName: "Boston Logan", destName: "San Francisco")),
         ]
 
         // Render the FULL screen (card + CTA) at iPhone size so card↔CTA

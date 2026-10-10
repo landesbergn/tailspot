@@ -27,6 +27,62 @@ import Foundation
 import SwiftData
 import os
 
+/// What a Catch row can tell the backend's validator: the observer pose at
+/// shutter press and the caught plane's ADS-B fix. All optional — every field
+/// is absent on rows written before the app recorded them, and an all-nil
+/// value produces byte-for-byte the request the app sent before this change.
+///
+/// `nonisolated` because it's a plain value type: pulling it out of
+/// `CatchUploader` (which is `@MainActor`) lets the mapping be unit-tested
+/// without a SwiftData container. See ios/CLAUDE.md on default MainActor
+/// isolation.
+nonisolated struct CatchUploadPose: Equatable, Sendable {
+    var headingDeg: Double?
+    var elevationDeg: Double?
+    var headingAccuracyDeg: Double?
+    var aircraft: UploadCatchRequest.Aircraft?
+
+    static let empty = CatchUploadPose()
+
+    /// Read the pose + aircraft position out of a stored
+    /// `Catch.captureDiagnosticsJSON` blob.
+    ///
+    /// Deliberately total (never throws, never fails a catch): anything it
+    /// can't read becomes nil, which uploads as JSON null and validates as
+    /// "unverifiable" — the pre-2026-09-07 behaviour.
+    ///
+    /// Two rules worth knowing:
+    ///  - `headingAccuracyDeg` is `CLLocation.headingAccuracy`, where a
+    ///    NEGATIVE value means "the OS says this heading is invalid". The
+    ///    validator WIDENS its bearing tolerance by whatever we send, so a
+    ///    negative would tighten it — nonsense. Map it to nil instead.
+    ///  - the aircraft block is all-or-nothing: the backend requires
+    ///    lat + lon + altitudeMeters together (a partial object is a 422),
+    ///    so a blob missing any one of them sends no block at all.
+    static func from(diagnosticsJSON: String?) -> CatchUploadPose {
+        guard let diag = CatchCaptureDiagnostics.from(json: diagnosticsJSON) else {
+            return .empty
+        }
+        let aircraft: UploadCatchRequest.Aircraft? = {
+            guard let lat = diag.aircraftLat,
+                  let lon = diag.aircraftLon,
+                  let alt = diag.aircraftAltitudeMeters else { return nil }
+            return .init(
+                lat: lat,
+                lon: lon,
+                altitudeMeters: alt,
+                positionTimestamp: diag.aircraftPositionTimestamp?.timeIntervalSince1970
+            )
+        }()
+        return CatchUploadPose(
+            headingDeg: diag.headingDeg,
+            elevationDeg: diag.cameraElevationDeg,
+            headingAccuracyDeg: diag.headingAccuracyDeg.flatMap { $0 < 0 ? nil : $0 },
+            aircraft: aircraft
+        )
+    }
+}
+
 @MainActor
 class CatchUploader {
     private let client: TailspotAccountClient
@@ -52,6 +108,12 @@ class CatchUploader {
         $0.uploadedAt == nil
     }
 
+    /// A row the user deleted since the fetch: deleted-but-unsaved, or saved
+    /// and detached from its context.
+    static func isGone(_ row: Catch) -> Bool {
+        row.isDeleted || row.modelContext == nil
+    }
+
     func uploadPending(context: ModelContext) async {
         let pendingRows: [Catch]
         do {
@@ -75,6 +137,7 @@ class CatchUploader {
         }
 
         var successCount = 0
+        let deletions = CatchDeletionSync()
         // The backend rate-limits catch uploads (token bucket, ~60/min per
         // device). The old loop blasted every pending row straight through, so
         // a backlog backfill drained the bucket in milliseconds, most rows got
@@ -87,13 +150,28 @@ class CatchUploader {
 
         uploadLoop:
         for catchRow in pendingRows {
+            // The sweep awaits the network per row, and a Hangar delete can
+            // land in between. A deleted row must not be uploaded (it would
+            // start counting again), and its properties can't be read.
+            // `isDeleted` alone isn't enough: it is only true between
+            // `delete()` and `save()`, and the delete sites save at once —
+            // after that the model has simply left its context.
+            if Self.isGone(catchRow) { continue }
+            let icao = catchRow.icao24
             // Assign a stable UUID for this catch if it doesn't have one yet.
             if catchRow.serverUuid == nil {
                 catchRow.serverUuid = UUID().uuidString
             }
             guard let uuid = catchRow.serverUuid else { continue }
 
+            // The pose the phone held at shutter press, read back out of the
+            // row's capture-diagnostics blob. Rows written before the app
+            // recorded it yield `.empty` and upload exactly as they did.
+            let pose = CatchUploadPose.from(diagnosticsJSON: catchRow.captureDiagnosticsJSON)
+
             while true {
+                // A 429 wait below can outlast a Hangar delete.
+                if Self.isGone(catchRow) || deletions.wasDeleted(uuid) { break }
                 do {
                     let response = try await client.uploadCatch(
                         catchUuid: uuid,
@@ -102,9 +180,14 @@ class CatchUploader {
                         caughtAt: catchRow.caughtAt,
                         observerLat: catchRow.observerLat,
                         observerLon: catchRow.observerLon,
-                        headingDeg: nil,
-                        elevationDeg: nil,
-                        headingAccuracyDeg: nil,
+                        headingDeg: pose.headingDeg,
+                        elevationDeg: pose.elevationDeg,
+                        headingAccuracyDeg: pose.headingAccuracyDeg,
+                        // The caught plane's ADS-B fix at press time. Together
+                        // with the pose above this is what the server's
+                        // validator correlates; nil → JSON null → the catch is
+                        // accepted and recorded "unverifiable".
+                        aircraft: pose.aircraft,
                         // The frozen bonus-round guess (game-layer PR2). The
                         // wire carries the guess VALUE only — the server
                         // verifies it against its own truth and awards the
@@ -113,6 +196,13 @@ class CatchUploader {
                         guessKind: catchRow.guessKind,
                         guessValue: catchRow.guessValue
                     )
+                    // Deleted while this POST was in flight: the DELETE may
+                    // have reached the server first (a no-op), so this POST
+                    // just put the catch back. Send the delete again.
+                    if Self.isGone(catchRow) || deletions.wasDeleted(uuid) {
+                        CatchDeletionSync.deleteRemotely([uuid])
+                        break
+                    }
                     // Mark uploaded regardless of duplicate status — both mean
                     // the server has accepted this catch.
                     catchRow.uploadedAt = Date()
@@ -142,7 +232,7 @@ class CatchUploader {
                 } catch {
                     // Non-rate-limit error: leave this row pending and move on.
                     Log.ui.error(
-                        "CatchUploader: upload failed icao=\(catchRow.icao24, privacy: .public) err=\(error, privacy: .public)"
+                        "CatchUploader: upload failed icao=\(icao, privacy: .public) err=\(error, privacy: .public)"
                     )
                     break
                 }

@@ -119,6 +119,179 @@ Postgres at most once a minute.
 { "catches": 5812, "asOf": "2026-09-05T23:41:07.000Z" }
 ```
 
+### Challenges v1 (`/v1/challenges`, `/v1/invites`)
+
+Head-to-head and small-group races over a shared time window, scored with the
+standard catch points. Spec: `docs/reviews/2026-09-15-challenges-v1-spec.html`.
+**Deployed dark**: every route below except `/config` answers `404` until
+`CHALLENGES_ENABLED=true` is set on the Fly app.
+
+| Route | Auth | Limit | Notes |
+|---|---|---|---|
+| `GET /v1/challenges/config` | none (browser `Origin` allowlisted like `/v1/stats`; no-Origin callers allowed) | 60/min/IP | `{ enabled, availability, minBuild, appStoreURL }` — the client and the landing page read this to explain "off", "TestFlight only" or "update the app". Answers even when disabled. |
+| `POST /v1/challenges` | bearer + claimed handle | 30/h/device | body `{ name, duration: "1h"\|"24h"\|"3d"\|"7d", start?: "now"\|ISO }` (scheduled start 15 min – 14 d out). 201 with the detail payload; creator is the first participant. |
+| `GET /v1/challenges?scope=open\|history` | bearer | 120/min/device (kept — the hub reads it on every appear and pull-to-refresh) | `{ open: [...], history: [...] }` for the caller, **50 per bucket**, open soonest-end-first, history newest-first; `scope` returns one bucket (default both). Rows carry `creatorHandle`, `participantCount` (active) and `myResult` (frozen placement, history only). One batched read, no per-row queries. |
+| `GET /v1/challenges/:id` | bearer, active participant | 120/min/device | `{ challenge, standings, me, winners }`. Finalizes on the first read after `endsAt`. 404 for anyone else (never 403). |
+| `GET /v1/challenges/:id/log/:handle` | bearer, active participant | 120/min/device | That spotter's in-window catches: **make + model, rarity, points, caughtAt only** — never callsign, hex, registration, operator, position or verdict. |
+| `POST /v1/challenges/:id/leave` | bearer, active participant | 30/h/device | 204. Creator leaving an upcoming challenge cancels it. 409 after the end. |
+| `POST /v1/challenges/:id/cancel` | bearer, creator | 30/h/device | 204 before start; 409 once live. |
+| `GET /v1/invites/:code` | bearer | 30/min/IP **before** the token lookup | Join-sheet preview: `{ challenge, participants, needsHandle, alreadyIn, canJoin, reason? }`. Unknown code → 404. |
+| `POST /v1/invites/:code/join` | bearer + claimed handle | 30/min/IP + 30/h/device | 200 detail (+ `alreadyIn`, `newDevice`); 409 full (10); 410 ended/cancelled; 422 no handle. Joining is idempotent; a leaver can rejoin. |
+| `GET /v1/invites/:code/preview` | none, browser `Origin` allowlisted | 30/min/IP, 60 s memo | Landing-page preview: name, creator handle, window, participant count, status. Never a participant list. |
+
+Rules the store enforces (all from the spec's decided list): status is derived
+from the clock, never stored; joins are open until `endsAt` and a joiner's
+earlier in-window catches count; a catch counts iff `caught_at ∈ [starts_at,
+ends_at)` **and** `created_at <= ends_at` (no upload grace); ties share
+placement (1, 1, 3) and everyone at 1 wins; fewer than two participants or
+zero total points at the end is `no_contest`; results freeze into
+`challenge_results` on the first read after the end and never move under a
+rescore; disabled devices are invisible everywhere. Growth attribution: a
+device that registered within 7 days and joins its first challenge gets
+`challenge_participants.joined_as_new_device = true` and
+`devices.referred_by_challenge_id` stamped once.
+
+The scorer is an interface (`src/challenges/scorer.ts`) with one
+implementation — the seam for future public quests (`challenges.kind`).
+
+Not in v1: there is **no rename route** (a challenge's name is fixed at
+creation; the client must not offer a rename) and no participant removal by the
+creator. Push tokens arrived after v1 — see **Device push tokens** and
+**Overtaken pushes** below. Concurrency: `join`, `leave` and finalization all take
+`SELECT … FOR UPDATE` on the challenge row, so two joins racing at 9/10 can't
+both land, standings + outcome freeze from one snapshot, and a join or leave
+arriving after the freeze is refused (409 / 410) rather than silently landing
+in a challenge that will never score it. Capacity counts the same participants
+the preview shows — active rows whose device isn't disabled. `join` also locks
+the **device** row (order: challenge → device) so one new device joining two
+challenges at once can only claim the growth-attribution credit once.
+
+### Device push tokens
+
+| Route | Auth | Limit | Notes |
+|---|---|---|---|
+| `POST /v1/devices/push-token` | bearer | 30/h/device (per-IP metered first) | body `{ token, environment, build? }` → `204`. `token` is 64–200 hex characters (stored lowercased), `environment` is `"sandbox"` or `"production"`, `build` is accepted for triage and not stored (`null` counts as absent). `422` on any other shape. |
+| `DELETE /v1/devices/push-token` | bearer | 30/h/device | `204`. Clears the caller's token; pushes silently stop. Clearing a device that has none is a no-op `204`. |
+
+**A token belongs to one install.** Registering a token that another `devices`
+row already holds **clears it from that row** in the same transaction. This
+case is real — restoring a phone from backup, or reinstalling and registering a
+fresh anonymous device, can hand the same APNs token to a second identity, and
+if both kept it one phone would receive the other identity's notifications.
+
+**No proof of possession — accepted, but watched.** Registration proves the
+caller holds the device's *bearer token* and nothing more; it does not prove
+they hold the *APNs* token they are claiming. Someone with a leaked bearer
+token could therefore point that device's notifications at their own phone.
+The leak is the real problem and the fix is `device:disable`; the mitigation
+here is visibility, because a token changing hands is the one observable
+symptom. Every move logs a `warn` naming **both device ids** (never the token)
+and bumps a per-process counter, so a burst stands out in the Fly log.
+
+`environment` is stored because a token minted against the sandbox APNs host is
+rejected by the production host and vice versa: the host is chosen **per token**
+(`api.push.apple.com` / `api.sandbox.push.apple.com`), not per deploy. A
+TestFlight build uses the production environment; only a development (Xcode)
+build is sandbox.
+
+### Overtaken pushes
+
+The one notification the backend sends today: **someone passed you in a live
+challenge.**
+
+After a *fresh* `POST /v1/catches` (a replayed `catchUuid` changes nothing, so
+it doesn't count), the route schedules an evaluation with `setImmediate` —
+after the reply is on the wire, fire-and-forget. For every challenge that is
+**live** right now and that the uploader is an active participant of (the 20
+soonest to end, so one upload can't fan out unboundedly), the current standings
+are re-derived once and each participant's placement is compared with the one
+remembered in `challenge_participants.last_placement`. A numerically worse
+placement means somebody went past them, and the uploader is who to name. Every
+participant's `last_placement` is then written forward, the uploader's included.
+
+**Three phases, and the network is not in the locked one.**
+
+1. Under `SELECT … FOR UPDATE` on the challenge row — the same lock `join`,
+   `leave` and finalization take — read the roster, decide the recipients, write
+   everyone's new `last_placement`, stamp `overtaken_notified_at` for the
+   recipients, commit. Two phones uploading in the same second are serialised
+   here, so they can't both read a stale board and double-notify.
+2. **Outside every transaction**, send to all recipients in parallel, each
+   capped at 5 seconds. Sending inside the lock was an outage waiting to happen:
+   nine recipients × a 5 s APNs timeout is a 45 s lock, and `statement_timeout`
+   is 5 s, so every concurrent join, leave, finalize and standings read on that
+   challenge would 500 while we waited on Apple.
+3. A second, short transaction undoes phase 1 for sends that failed retryably.
+
+**A blip doesn't lose the notification.** If a send fails in a retryable way
+(429, any 5xx, a 403 `ExpiredProviderToken`, or a transport that never
+answered), phase 3 restores that participant's previous `last_placement` and
+`overtaken_notified_at`, so the next catch sees the slip again and tries once
+more. A dead token, a missing token, the cooldown and "push disabled" leave the
+advance in place — there is nothing to retry in any of those. Phase 3 takes no
+lock and writes unconditionally, so it can land the pre-round values on top of a
+placement a concurrent evaluation wrote in the meantime: the restored baseline
+predates the slip, so that can cost a **duplicate** push (a 5xx that actually
+delivered, say) but never a lost one, and phase 1's lock still means nobody is
+notified twice inside a cooldown that is standing. The cost of
+writing optimistically is bounded: if the process dies between phases, one
+participant silently misses one notification, which beats a 45-second lock.
+
+**It only names the passer when it can prove it.** A participant's baseline can
+predate somebody else's catch (a held-back retry, a skipped evaluation, an older
+seed), so the uploader isn't necessarily who went past them. The push names the
+uploader only when they were level with or behind that participant at the last
+evaluation and are ahead now; otherwise the copy is nameless — *"You've dropped
+to 3rd in Weekend Flyoff."*
+
+`last_placement` is seeded at create (the creator is alone, so 1st) and inside
+the join transaction from the board the joiner walks into — their earlier
+in-window catches count, so a joiner can arrive anywhere. **Null means "never
+evaluated" and never notifies**, which is also what an un-migrated row looks
+like.
+
+It will not: notify the uploader, fire for an upcoming / finished / cancelled
+challenge, reach a disabled device, notify the same person twice within 30
+minutes in the same challenge (`overtaken_notified_at`), do anything at all
+when `CHALLENGES_ENABLED` is off, or throw — every failure is logged and
+swallowed, because the catch was answered `201` before any of this ran.
+
+The payload, which the iOS client is built against:
+
+```json
+{
+  "aps": {
+    "alert": { "title": "You got passed",
+               "body": "@ada just passed you in Weekend Flyoff. You're now 2nd." },
+    "sound": "default",
+    "thread-id": "<challengeId>"
+  },
+  "challengeId": "<challengeId>",
+  "kind": "overtaken"
+}
+```
+
+A shared placement reads "You're now tied for 2nd." Changing any key here is a
+client-visible contract change.
+
+The sender (`src/push/apns.ts`) has no dependencies: an ES256 provider JWT
+signed with Node's `crypto` (refreshed every 50 minutes) and one HTTP/2 POST
+per notification via the built-in `http2` module, with `apns-push-type: alert`,
+`apns-priority: 10` and a one-hour `apns-expiration`. A `410`, or a `400` with
+reason `BadDeviceToken` / `Unregistered`, clears the stored token — the app was
+deleted, or the token belongs to the other environment. Every send is raced
+against its own deadline and resolves even if the HTTP/2 stream is torn down
+without a response (a GOAWAY or RST). A timeout or transport error also destroys
+the cached HTTP/2 session, because a half-open session accepts streams and never
+answers them — keeping it would turn one timeout into every later send timing
+out until the process restarted — and a 403 `ExpiredProviderToken` invalidates
+the cached JWT so the next send mints a fresh one instead of re-presenting a
+credential Apple just refused. `createApnsTransport` signs one JWT at startup,
+so a mangled `APNS_KEY_P8` boots as "push disabled" with a loud line rather than
+as "push enabled" that fails every send. `ApnsTransport` is the seam tests inject a fake
+into, and `connect` is injectable so the request shape is unit-tested against a
+stub session.
+
 ### Configuration (env)
 
 | Var | Default | Meaning |
@@ -129,6 +302,28 @@ Postgres at most once a minute.
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
 | `DATABASE_URL` | — | Postgres connection string. Required for `/v1/metadata` and the ingest jobs; read lazily (the position-only endpoints don't need it). |
 | `STATS_ALLOWED_ORIGINS` | — | Comma-separated extra browser origins allowed to read `/v1/stats` (tailspot.app, www, and the preview site are always allowed). |
+| `CHALLENGES_ENABLED` | — (off) | `true` turns the Challenges routes on. Anything else: every challenge route except `GET /v1/challenges/config` answers 404 (the kill switch). Read once at startup. |
+| `CHALLENGES_AVAILABILITY` | `testflight` | `testflight` or `public` — what `/v1/challenges/config` reports so the landing page can say "TestFlight only" during the soak. |
+| `CHALLENGES_MIN_BUILD` | `0` | Minimum client `CFBundleVersion` for Challenges, reported by `/config`; the app shows "update Tailspot" below it. |
+| `CHALLENGES_INVITE_BASE_URL` | `https://tailspot.app/c` | Invite links are `<base>/<CODE>`. |
+| `APNS_KEY_P8` | — (push off) | Contents of the APNs auth key (`.p8`), **not** a path. Newlines may arrive as literal `\n`; they're normalised. |
+| `APNS_KEY_ID` | — (push off) | The 10-character key id — the JWT's `kid`. |
+| `APNS_TEAM_ID` | — (push off) | The Apple Developer team id — the JWT's `iss`. |
+| `APNS_BUNDLE_ID` | `com.landesberg.Tailspot` | The `apns-topic` header. |
+
+If any of `APNS_KEY_P8` / `APNS_KEY_ID` / `APNS_TEAM_ID` is unset the sender is
+a **no-op** that logs `push disabled` once at startup — nothing else changes.
+Set them with:
+
+```sh
+fly secrets set -a tailspot-api \
+  APNS_KEY_P8="$(cat AuthKey_XXXXXXXXXX.p8)" \
+  APNS_KEY_ID=XXXXXXXXXX \
+  APNS_TEAM_ID=YYYYYYYYYY
+```
+
+The `.p8` is a credential: keep it out of the repo (nothing in `backend/`
+should ever hold one) and out of shell history.
 
 **Providers.** The primary is **adsb.lol** (`https://api.adsb.lol`), whose only
 geographic query is point+radius (`GET /v2/point/{lat}/{lon}/{radius}`, radius
@@ -283,6 +478,18 @@ Re-disabling an already-disabled device is a reported no-op, so the original
 > `release_command`, so a deploy does *not* run them. `0009_device-disabled-at`
 > must be applied (`DATABASE_URL=… npm run db:migrate`) **before** deploying the
 > code that reads `disabled_at`, or every auth lookup 500s on a missing column.
+>
+> The same applies to **`0011_push-tokens-overtaken`** (device push tokens +
+> the challenge placement memory), and the consequence of getting the order
+> wrong is bigger than "pushes don't work". Drizzle names **every** column of a
+> table in its INSERT statements, whatever the values object contains — so the
+> moment `apns_token` and `last_placement` exist in `src/db/schema.ts`, an
+> un-migrated database fails **device registration** (`POST /v1/devices`),
+> **challenge creation** and **joining**, not just notifications.
+> `test/seedBaseline.test.ts` pins that, so this warning can't quietly become
+> untrue. The migration itself is additive — five nullable columns, no backfill
+> — so applying it ahead of the deploy is always safe, and it is the only safe
+> order.
 
 ## Tests
 
@@ -350,3 +557,27 @@ DATABASE_URL=… npm run db:migrate
 DATABASE_URL=… npm run ingest:doc8643 -- <path-to-AircraftTypes.json>
 DATABASE_URL=… npm run ingest:faa -- <extracted-FAA-dir>
 ```
+
+## Alerting (phase 2 of the 2026-09-06 hardening — click-through checklist)
+
+Sentry (org `noah-lc`, project `broken-darkness-5055`) already has the `/readyz`
+uptime monitor and an issue rule for high-priority issues. The sustained-fallback
+alerter (`src/providers/fallbackAlert.ts`) reports through Sentry, so a dead
+adsb.lol primary surfaces as an issue after five minutes. What is **not** yet
+configured — and can only be set up in a browser, not from the CLI — are the
+traffic-shape alerts below. Fly exposes the metrics in its hosted Grafana
+(`fly dashboard metrics` opens it, or https://fly-metrics.net); create each as a
+Grafana alert rule on the `tailspot-api` app with a notification to email.
+
+| Signal | Metric (Fly Grafana) | Threshold | Why |
+|---|---|---|---|
+| 5xx ratio | `fly_app_http_responses_count{status=~"5.."}` / total | > 2 % for 5 min | A broken deploy or a dead DB shows up here before users report it. |
+| 429 volume | `fly_app_http_responses_count{status="429"}` | > 30/min for 10 min | Either abuse hitting the limiters or a shipped client in a retry storm — both need eyes. |
+| API memory | `fly_instance_memory_mem_available{app="tailspot-api"}` | < 40 MB for 5 min | The VM is 256 MB; the limiter and tile-cache maps are bounded now, but this is the tripwire if anything else grows. |
+| DB memory | `fly_instance_memory_mem_available{app="tailspot-db"}` | < 40 MB for 5 min | The DB OOM'd once (2026-07-11). |
+| Request rate | `sum(rate(fly_app_http_responses_count[5m]))` | > 3× the trailing-7-day same-hour median for 15 min | Volumetric abuse or a runaway client. Start with a fixed threshold (e.g. > 50 req/s) if the relative rule is awkward in Grafana. |
+
+Keep the in-code signals as they are: `/readyz` for liveness+DB, Sentry issues
+for exceptions, the fallback alerter for the upstream feed. Do not add a
+challenge-based CDN in front of the API: the iOS client's `URLSession` cannot
+solve one, and Fly's edge already absorbs L3/L4 floods (see PLAN §9, 2026-09-06).

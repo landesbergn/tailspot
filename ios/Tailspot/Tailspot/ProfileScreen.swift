@@ -55,6 +55,9 @@ struct ProfileScreen: View {
     @AppStorage(LeaderboardStandingCache.weeklyWinsKey) private var cachedWeeklyWins: Int = 0
     @AppStorage(LeaderboardStandingCache.monthlyWinsKey) private var cachedMonthlyWins: Int = 0
     private let accountClient = TailspotAccountClient()
+    @State private var showHandleSheet = false
+    /// "Handle changed to @x" confirmation, cleared after a few seconds.
+    @State private var handleToast: String?
 
     var body: some View {
         // Aggregate the Hangar ONCE per render. `stats` and `inputs` used to be
@@ -102,6 +105,25 @@ struct ProfileScreen: View {
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .task { await loadStanding() }
+            .sheet(isPresented: $showHandleSheet) {
+                HandleEditSheet(source: "profile") { saved in
+                    showToast(saved)
+                }
+            }
+            .overlay(alignment: .top) {
+                if let handleToast {
+                    Label(handleToast, systemImage: "checkmark.circle.fill")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .symbolRenderingMode(.multicolor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.top, 6)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Done") { dismiss() }
@@ -119,13 +141,14 @@ struct ProfileScreen: View {
                     // aligned like its Done sibling, hit target included.
                     // A direct ShareLink, deliberately minimal (Noah,
                     // 2026-07-08): one tap → the system share sheet with a
-                    // short invite + the App Store link. Messages inflates
-                    // the standalone link into one rich store-listing
-                    // bubble — the whole message, by design; a rendered
-                    // stat-card image was tried and cut as too much.
+                    // short invite with the claimed username + the App Store
+                    // link. Messages renders the link as a rich store-listing
+                    // bubble and keeps the username in the accompanying text.
                     ShareLink(
                         item: Self.inviteURL,
-                        message: Text("Join me on Tailspot:")
+                        message: isHandleClaimed
+                            ? Text("Join me on Tailspot! My username is @\(handle).")
+                            : Text("Join me on Tailspot:")
                     ) {
                         Image(systemName: "square.and.arrow.up")
                             .fontWeight(.bold)
@@ -156,6 +179,19 @@ struct ProfileScreen: View {
     /// codes, the invite trophy) is PLAN §9 #10.
     // Internal (not private) so CatchShareLinkTests can pin the campaign.
     static let inviteURL = AppStoreListing.url(campaign: "Tailspot Profile Share")
+
+    /// Show the rename confirmation, then clear it. A second rename inside
+    /// the window replaces the text and restarts the clock.
+    private func showToast(_ saved: String) {
+        let text = "Handle changed to @\(saved)"
+        withAnimation(.easeOut(duration: 0.2)) { handleToast = text }
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            if handleToast == text {
+                withAnimation(.easeIn(duration: 0.2)) { handleToast = nil }
+            }
+        }
+    }
 
     // MARK: - Standing fetch
 
@@ -231,50 +267,59 @@ struct ProfileScreen: View {
         let rankLabel = cachedServerRank >= 1 ? Self.ordinalRank(cachedServerRank) : "—"
         let hasChampionWins = cachedWeeklyWins >= 1 || cachedMonthlyWins >= 1
         return VStack(spacing: 14) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(Brand.Color.bgPrimary)
-                    Circle()
-                        .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1.5)
-                    if isHandleClaimed {
-                        Text(initials)
-                            .font(Brand.Font.mono(size: 18, weight: .bold))
-                            .foregroundStyle(Brand.Color.cyan)
-                    } else {
-                        // No initials to show yet — a quiet person glyph,
-                        // not fake "SP" initials off the placeholder.
-                        Image(systemName: "person")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(Brand.Color.textTertiary)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .frame(width: 56, height: 56)
-                VStack(alignment: .leading, spacing: 2) {
-                    if isHandleClaimed {
-                        Text("@\(handle)")
-                            .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
-                            .tracking(0.4)
-                            .foregroundStyle(Brand.Color.textPrimary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        if let joined = joinedDateLabel {
-                            Text(joined)
-                                .font(Brand.Font.caption)
-                                .foregroundStyle(Brand.Color.textSecondary)
+            // The whole identity row (avatar, handle, pencil) is one button
+            // that opens the handle sheet — claimed or not (2026-09-30).
+            Button { showHandleSheet = true } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(Brand.Color.bgPrimary)
+                        Circle()
+                            .strokeBorder(Brand.Color.cyan.opacity(0.40), lineWidth: 1.5)
+                        if isHandleClaimed {
+                            Text(initials)
+                                .font(Brand.Font.mono(size: 18, weight: .bold))
+                                .foregroundStyle(Brand.Color.cyan)
                         } else {
-                            Text("ready to spot")
-                                .font(Brand.Font.caption)
-                                .foregroundStyle(Brand.Color.textSecondary)
+                            // No initials to show yet — a quiet person glyph,
+                            // not fake "SP" initials off the placeholder.
+                            Image(systemName: "person")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(Brand.Color.textTertiary)
+                                .accessibilityHidden(true)
                         }
-                    } else {
-                        // Unclaimed: a designed affordance, not "@spotter_42"
-                        // masquerading as a handle. Taps into the existing
-                        // claim flow (Settings → SPOTTER).
-                        NavigationLink {
-                            SettingsScreen()
-                        } label: {
+                    }
+                    .frame(width: 56, height: 56)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if isHandleClaimed {
+                            HStack(spacing: 8) {
+                                Text("@\(handle)")
+                                    .font(Brand.Font.mono(size: 20, weight: .bold, relativeTo: .title3))
+                                    .tracking(0.4)
+                                    .foregroundStyle(Brand.Color.textPrimary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                // Small, quiet "this is editable" cue.
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Brand.Color.cyan)
+                                    .frame(width: 24, height: 24)
+                                    .background(Brand.Color.bgPrimary.opacity(0.7), in: Circle())
+                                    .accessibilityHidden(true)
+                            }
+                            if let joined = joinedDateLabel {
+                                Text(joined)
+                                    .font(Brand.Font.caption)
+                                    .foregroundStyle(Brand.Color.textSecondary)
+                            } else {
+                                Text("ready to spot")
+                                    .font(Brand.Font.caption)
+                                    .foregroundStyle(Brand.Color.textSecondary)
+                            }
+                        } else {
+                            // Unclaimed: a designed affordance, not "@spotter_42"
+                            // masquerading as a handle. The enclosing button opens
+                            // the handle sheet in its "Pick a handle" mode.
                             HStack(spacing: 6) {
                                 Text("CLAIM YOUR HANDLE")
                                     .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
@@ -285,19 +330,20 @@ struct ProfileScreen: View {
                                     .foregroundStyle(Brand.Color.cyan.opacity(0.7))
                                     .accessibilityHidden(true)
                             }
-                            // The row is ~16 pt tall; growing it to 44 would
-                            // shift the whole identity header, so the HIG hit
-                            // target comes from an expanded hit shape instead.
-                            .contentShape(Rectangle().inset(by: -14))
+                            Text("shown on the global leaderboard")
+                                .font(Brand.Font.caption)
+                                .foregroundStyle(Brand.Color.textSecondary)
                         }
-                        .buttonStyle(.plain)
-                        Text("shown on the global leaderboard")
-                            .font(Brand.Font.caption)
-                            .foregroundStyle(Brand.Color.textSecondary)
                     }
+                    Spacer()
                 }
-                Spacer()
+                // The row is 56 pt (the avatar), so the whole row is a
+                // comfortable hit target without an inset hit shape.
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isHandleClaimed ? "Your handle, @\(handle)" : "Claim your handle")
+            .accessibilityHint(isHandleClaimed ? "Opens a sheet to change it" : "Opens a sheet to pick one")
             HStack(spacing: 0) {
                 VStack(spacing: 2) {
                     Text(displayPoints.formatted(.number))
@@ -697,31 +743,76 @@ struct ProfileScreen: View {
 
     // "Sets" deliberately absent: the Hangar's default segment IS Sets, so
     // the quick card was a duplicate door (Noah, 2026-07-08).
+    /// Map and Challenges. Leaders left this row on 2026-09-15 when it
+    /// moved to the catch screen's bottom bar (Challenges phase 0); the
+    /// Challenges tile took its place (phase 2). It carries a count badge
+    /// of the challenges you're in (live + upcoming) — it used to carry the
+    /// headline as a subtitle, which didn't fit the tile (2026-09-27) — or,
+    /// until the hub is first opened, the same discovery dot as the Leaders
+    /// flag (2026-09-30). The
+    /// tile exists
+    /// only once the server config has said the feature is available on
+    /// this build; before that (feature not deployed, kill switch on,
+    /// build too old, config unreachable) Map stands alone rather than a
+    /// tile opening onto an error.
     private var quickLinks: some View {
+        // `fixedSize(vertical:)` + `maxHeight: .infinity` on each tile makes
+        // both as tall as the taller one, so Map doesn't sit short next to
+        // a Challenges tile with a subtitle.
         HStack(spacing: 10) {
             quickLink(label: "Map", glyph: "map") { MapScreen() }
-            quickLink(label: "Leaders", glyph: "list.number") { LeaderboardScreen() }
+            if let challenges, challenges.verdict == .available {
+                quickLink(label: "Challenges", glyph: "flag.checkered",
+                          indicator: ChallengeEntryIndicator(active: challenges.activeCount,
+                                                             hubSeen: challenges.hubSeen)) {
+                    ChallengesHub(source: "profile_tile")
+                }
+            }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func quickLink<Dest: View>(label: String, glyph: String, @ViewBuilder destination: @escaping () -> Dest) -> some View {
+    /// Optional: nil in the snapshot harness and previews (nothing injects
+    /// it there), so the tile renders its cold-state copy instead of crashing.
+    @Environment(ChallengesModel.self) private var challenges: ChallengesModel?
+
+    private func quickLink<Dest: View>(label: String, glyph: String,
+                                       indicator: ChallengeEntryIndicator = .none,
+                                       @ViewBuilder destination: @escaping () -> Dest) -> some View {
         NavigationLink {
             destination()
         } label: {
             VStack(spacing: 6) {
+                // A fixed slot so glyphs of different shapes (map vs flag)
+                // land at the same size and baseline.
                 Image(systemName: glyph)
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Brand.Color.cyan)
+                    .frame(width: 28, height: 24)
+                    .overlay(alignment: .topTrailing) {
+                        switch indicator {
+                        case .count(let n):
+                            ChallengeCountBadge(count: n)
+                                .offset(x: 10, y: -7)
+                        case .discovery:
+                            ChallengeDiscoveryDot()
+                                .offset(x: 4, y: -2)
+                        case .none:
+                            EmptyView()
+                        }
+                    }
                     .accessibilityHidden(true)
                 Text(label)
                     .font(Brand.Font.caption.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.vertical, 14)
             .glassEffect(Self.brandGlass, in: .rect(cornerRadius: Brand.Radius.card))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(indicator.accessibilityValue)
     }
 
     // MARK: - Section links (reference / settings)

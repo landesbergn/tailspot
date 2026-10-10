@@ -22,7 +22,7 @@
  * capacity problem); it covers the sub-second blip.
  */
 
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
 import {
   CURRENT_SCORING_VERSION,
   type GuessKind,
@@ -86,6 +86,53 @@ export interface IdentityStore {
    * itself still races the 409 path, so this is freshness, not a reservation.
    */
   takenHandles(handles: string[]): Promise<Set<string>>;
+  /**
+   * Store this device's APNs token, replacing whatever it had.
+   *
+   * A token belongs to exactly ONE install, so registering it here CLEARS it
+   * from any other device row that holds it. That case is real: restoring a
+   * phone from a backup, or reinstalling and registering a fresh anonymous
+   * device, can hand the same APNs token to a second `devices` row — and if
+   * both kept it, one physical phone would receive another identity's
+   * notifications. Last writer wins, which is also the truth (APNs gave the
+   * token to whoever asked most recently).
+   */
+  setPushToken(
+    deviceId: string,
+    token: string,
+    environment: PushEnvironment,
+    now: Date,
+  ): Promise<SetPushTokenResult>;
+  /** Forget this device's push token (the client's opt-out / sign-off path). */
+  clearPushToken(deviceId: string): Promise<void>;
+}
+
+/** Which APNs host a stored token is valid against. Mirrors push/apns.ts. */
+export type PushEnvironment = "sandbox" | "production";
+
+/**
+ * The ONE way to strip a push token from a device row. Every path that gives a
+ * token up — eviction when it moves to another install, the client's explicit
+ * DELETE, and the sender's dead-token cleanup — uses this, so a row can never
+ * end up half-cleared (no token but a stale `apns_environment`, or a
+ * `apns_updated_at` that outlives the token it described).
+ */
+export const CLEARED_PUSH_TOKEN = {
+  apnsToken: null,
+  apnsEnvironment: null,
+  apnsUpdatedAt: null,
+} as const;
+
+/** What `setPushToken` did, so the route can report a token that MOVED. */
+export interface SetPushTokenResult {
+  /**
+   * Device ids the token was taken away from. Normally empty. A non-empty list
+   * is worth a look: the honest cause is a restore or reinstall, but it is also
+   * what a replayed/leaked bearer token would look like — registration proves
+   * possession of the bearer token and nothing more, so this is the only signal
+   * we get. Never log the token itself.
+   */
+  movedFrom: string[];
 }
 
 export class DrizzleIdentityStore implements IdentityStore {
@@ -134,6 +181,33 @@ export class DrizzleIdentityStore implements IdentityStore {
     // reopen the taken-check race; the route's own error path is the safety net.
     await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
     return { ok: true, handle };
+  }
+
+  async setPushToken(
+    deviceId: string,
+    token: string,
+    environment: PushEnvironment,
+    now: Date,
+  ): Promise<SetPushTokenResult> {
+    // Both writes in ONE transaction: between the clear and the set, a token
+    // must never be on zero rows (a lost notification) or on two (a leak to
+    // another identity).
+    return this.db.transaction(async (tx) => {
+      const moved = await tx
+        .update(devices)
+        .set(CLEARED_PUSH_TOKEN)
+        .where(and(eq(devices.apnsToken, token), ne(devices.id, deviceId)))
+        .returning({ id: devices.id });
+      await tx
+        .update(devices)
+        .set({ apnsToken: token, apnsEnvironment: environment, apnsUpdatedAt: now })
+        .where(eq(devices.id, deviceId));
+      return { movedFrom: moved.map((m) => m.id) };
+    });
+  }
+
+  async clearPushToken(deviceId: string): Promise<void> {
+    await this.db.update(devices).set(CLEARED_PUSH_TOKEN).where(eq(devices.id, deviceId));
   }
 
   async takenHandles(handles: string[]): Promise<Set<string>> {
@@ -288,6 +362,12 @@ export interface LeaderboardEntry {
   catches: number;
 }
 
+/** A public leaderboard page and its qualifying count before the limit. */
+export interface LeaderboardPage {
+  entries: LeaderboardEntry[];
+  totalCatchers: number;
+}
+
 /**
  * The caller's own standing (present whenever a valid token is sent).
  * `rank` 0 = unranked (zero in-window points) — clients render it as "no
@@ -375,12 +455,21 @@ export interface CatchStore {
    */
   listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage>;
   /**
-   * Top-N devices WITH a handle AND at least one IN-WINDOW catch, by total
+   * Delete `deviceId`'s catch `catchUuid` — the user deleted it in the Hangar,
+   * so it must stop counting everywhere: leaderboard points, live challenge
+   * scores, and Hangar restore all read this table. Scoped to the device
+   * (another device's row with the same uuid is untouched). Returns whether a
+   * row was removed. Frozen results (weekly/monthly crowns already decided,
+   * finished challenges' frozen standings) are NOT recomputed.
+   */
+  deleteCatch(deviceId: string, catchUuid: string): Promise<boolean>;
+  /**
+   * Top-N enabled devices WITH a handle AND positive IN-WINDOW points, by total
    * in-window points. `since` scopes the window: only catches with
    * `caughtAt >= since` count (omit for the all-time board — the pre-windows
    * behavior, unchanged).
    */
-  leaderboard(limit: number, since?: Date): Promise<LeaderboardEntry[]>;
+  leaderboard(limit: number, since?: Date): Promise<LeaderboardPage>;
   /**
    * The given device's rank + total points — computed over ALL devices
    * (handle-less devices accrue points and occupy ranks invisibly). `since`
@@ -585,6 +674,16 @@ export class DrizzleCatchStore implements CatchStore {
     };
   }
 
+  async deleteCatch(deviceId: string, catchUuid: string): Promise<boolean> {
+    const removed = await withDbRetry(() =>
+      this.db
+        .delete(catches)
+        .where(and(eq(catches.deviceId, deviceId), eq(catches.catchUuid, catchUuid)))
+        .returning({ id: catches.id }),
+    );
+    return removed.length > 0;
+  }
+
   async listCatches(deviceId: string, limit: number, offset: number): Promise<CatchPage> {
     // Total first: the client sizes its restore prompt on this, and it must be
     // the device's FULL count even when the page window is smaller.
@@ -656,13 +755,11 @@ export class DrizzleCatchStore implements CatchStore {
     };
   }
 
-  async leaderboard(limit: number, since?: Date): Promise<LeaderboardEntry[]> {
+  async leaderboard(limit: number, since?: Date): Promise<LeaderboardPage> {
     // Aggregate points + catch count per device — only those WITH a handle
-    // AND at least one catch.
-    // Windowing lives in the JOIN condition, not a WHERE: a LEFT JOIN keeps
-    // every device row while only in-window catches contribute to the sums,
-    // so the `having count > 0` entry ticket naturally becomes "at least one
-    // catch IN THE WINDOW".
+    // AND positive points in the selected window.
+    // Windowing lives in the JOIN condition; HAVING applies the same positive
+    // points requirement to both the entries and their total count.
     // Ordering: points DESC, then created_at ASC, then device id ASC. The id is
     // the FINAL tiebreaker so the order is TOTAL and DETERMINISTIC even in the
     // (rare) case where two devices share a createdAt timestamp — the same data
@@ -676,6 +773,9 @@ export class DrizzleCatchStore implements CatchStore {
           handle: devices.handle,
           points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("points"),
           catches: sql<number>`count(${catches.id})`.as("catches"),
+          // Window functions run after HAVING and before LIMIT, so the total
+          // counts qualifying devices, not catch rows or just this page.
+          totalCatchers: sql<number>`count(*) over ()`,
           createdAt: devices.createdAt,
         })
         .from(devices)
@@ -693,19 +793,21 @@ export class DrizzleCatchStore implements CatchStore {
         .groupBy(devices.id, devices.handle, devices.createdAt)
         // A claimed handle alone doesn't put you on the public board — onboarding
         // mints handles for drive-by installs (suggestion chips), and those
-        // 0-point rows were padding the bottom of the leaderboard. One catch is
-        // the entry ticket.
-        .having(sql`count(${catches.id}) > 0`)
+        // 0-point rows were padding the bottom of the leaderboard.
+        .having(sql`coalesce(sum(${catches.points}), 0) > 0`)
         .orderBy(desc(sql`points`), devices.createdAt, devices.id)
         .limit(limit),
     );
 
-    return rows.map((r, i) => ({
-      rank: i + 1,
-      handle: r.handle as string,
-      points: Number(r.points),
-      catches: Number(r.catches),
-    }));
+    return {
+      totalCatchers: Number(rows[0]?.totalCatchers ?? 0),
+      entries: rows.map((r, i) => ({
+        rank: i + 1,
+        handle: r.handle as string,
+        points: Number(r.points),
+        catches: Number(r.catches),
+      })),
+    };
   }
 
   async myStanding(deviceId: string, since?: Date): Promise<MyStanding | null> {

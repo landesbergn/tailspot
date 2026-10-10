@@ -35,6 +35,7 @@ struct CatchDetailView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showDeleteConfirm = false
+    @State private var showShareSheet = false
     /// Photos-style zoom transition for the user's own catch photo: the
     /// card hero feeds it (HeroZoomSource inside SettledCatchCard), the
     /// overlay at this screen's root renders the morph + open viewer.
@@ -112,6 +113,12 @@ struct CatchDetailView: View {
                 Analytics.capture("catch_photo_viewer_opened",
                                   ["source": .string("detail"), "method": .string(method)])
             }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            CatchShareSheet(plane: detailPlane,
+                            shareText: shareText,
+                            shareMessage: shareMessage,
+                            hasCatchPhoto: hasCatchPhoto)
         }
         .alert(deleteTitle, isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { performDelete() }
@@ -270,10 +277,7 @@ struct CatchDetailView: View {
     /// discs with a white 10% hairline. System nav bar is hidden so they
     /// own the top of the view.
     private var chromeBar: some View {
-        // Render the share card once per build (ImageRenderer is synchronous;
-        // this view isn't on a hot render path).
-        let img = shareImage
-        return HStack {
+        HStack {
             chromePill(icon: presentedModally ? "xmark" : "chevron.left") { dismiss() }
                 .accessibilityLabel(presentedModally ? "Close" : "Back")
             Spacer()
@@ -285,41 +289,19 @@ struct CatchDetailView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Delete catch")
             .padding(.trailing, 8)
-            // Share a polished card image (not just text) so friends get a
-            // clean card instead of a screenshot; the text rides as the
-            // preview title. The App Store link travels in `message:` —
-            // ShareLink's one item stays the image, and targets that pair
-            // text with an attachment (Messages, Mail) deliver both, so the
-            // recipient finally has a path to install. Text-hostile targets
-            // (e.g. Instagram stories) drop the message and share the card
-            // alone — same as before this link existed.
-            ShareLink(
-                item: img,
-                message: Text(shareMessage),
-                preview: SharePreview(shareText, image: img)
-            ) {
+            // Share opens CatchShareSheet (swipeable shapes + destinations).
+            // This tap is the top of the share funnel; the sheet reports the
+            // rest (CatchShareAnalytics).
+            Button {
+                CatchShareAnalytics(plane: detailPlane, hasCatchPhoto: hasCatchPhoto).sheetOpened()
+                showShareSheet = true
+            } label: {
                 chromePillBody(icon: "square.and.arrow.up")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Share catch")
-            // ShareLink exposes no tap callback; a simultaneous gesture
-            // gives the share-funnel signal (opened, not necessarily
-            // completed — completion isn't observable). Read next to the
-            // "Tailspot Catch Share" campaign in App Analytics.
-            .simultaneousGesture(TapGesture().onEnded {
-                Analytics.capture("catch_share_opened", [
-                    "rarity": .string(detailPlane.rarity.label),
-                    "has_photo": .bool(hasCatchPhoto),
-                ])
-            })
         }
         .padding(.horizontal, 16)
-    }
-
-    /// Rendered share-card image for this catch — the settled card in share
-    /// chrome; the local capture photo when present, else the sky placeholder.
-    private var shareImage: Image {
-        CatchShare.image(for: detailPlane)
     }
 
     private func chromePill(icon: String, action: @escaping () -> Void) -> some View {
@@ -408,6 +390,9 @@ struct CatchDetailView: View {
             rarity: row.allCatches.first?.resolvedRarity.rawValue,
             source: .hangarDelete
         )
+        // Capture the server ids BEFORE the delete — a deleted model's
+        // properties can't be read afterwards.
+        let serverUuids = row.allCatches.compactMap(\.serverUuid)
         for c in row.allCatches {
             CatchPhotoStore.delete(filename: c.photoFilename)
             modelContext.delete(c)
@@ -415,6 +400,9 @@ struct CatchDetailView: View {
         do { try modelContext.save() } catch {
             Log.adsb.error("Detail delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+        // …and off the server, so it stops counting toward the leaderboard
+        // and challenge scores.
+        CatchDeletionSync.deleteRemotely(serverUuids)
         dismiss()
     }
 

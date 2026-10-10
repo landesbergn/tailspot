@@ -98,6 +98,8 @@ struct HangarRecentView: View {
     }
 
     private func performDelete(row: HangarRow) {
+        // Capture the server ids BEFORE the delete (see CatchDeletionSync).
+        let serverUuids = row.allCatches.compactMap(\.serverUuid)
         for c in row.allCatches {
             // Drop the photo file with the row — deleting only the
             // model row orphaned JPEGs in Documents/catches forever.
@@ -107,6 +109,7 @@ struct HangarRecentView: View {
         do { try modelContext.save() } catch {
             Log.adsb.error("Hangar delete failed for \(row.icao24, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+        CatchDeletionSync.deleteRemotely(serverUuids)
         rowToDelete = nil
     }
 }
