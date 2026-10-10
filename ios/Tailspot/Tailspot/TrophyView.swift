@@ -1131,29 +1131,6 @@ let trophyIconNames = [
     "laurel", "crowns", "summit",
 ]
 
-#if DEBUG
-/// DEBUG-only grid of every trophy icon (in the earned cyan hex) for visual
-/// review — "loop through each badge". Presented from the debug panel.
-struct TrophyIconGallery: View {
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 22) {
-                ForEach(trophyIconNames, id: \.self) { name in
-                    VStack(spacing: 8) {
-                        TrophyView(tier: .platinum, iconName: name, size: 76)
-                        Text(name)
-                            .font(Brand.Font.mono(size: 10, weight: .semibold))
-                            .foregroundStyle(Brand.Color.textTertiary)
-                    }
-                }
-            }
-            .padding(24)
-        }
-        .background(Brand.Color.bgPrimary)
-    }
-}
-#endif
-
 #Preview {
     ScrollView {
         let tiers: [TrophyTier] = [.bronze, .silver, .gold, .platinum]

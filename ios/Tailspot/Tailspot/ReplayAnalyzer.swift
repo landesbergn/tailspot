@@ -4,18 +4,22 @@
 //
 //  Offline-replay side of the harness. Reads a `.jsonl` produced by
 //  `ReplayRecorder` and runs each tick through the same annotation /
-//  visibility / lock-on logic the live app uses — emitting per-tick
+//  visibility / membership logic the live app uses — emitting per-tick
 //  diagnostics so a recorded session can be inspected and (eventually)
 //  regression-tested against engine changes.
 //
 //  Design notes:
 //  - Pure: no UI, no I/O beyond optionally reading a file. Tests
 //    construct ReplayEvents in-memory and feed them straight in.
-//  - Uses the same `ObservedAircraft.annotate` and `closestTargetIcao24`
+//  - Uses the same `ObservedAircraft.annotate` and `chooseCatchMembers`
 //    helpers as ContentView/ADSBManager — when those change, the
 //    analyzer automatically picks up the change. That's the point.
-//  - `LockOnEngine` is stateful, so the analyzer creates a fresh one
-//    per `analyze(_:)` call. Multiple analyze calls don't share state.
+//  - Pin events survive the frame-is-the-catch redesign as ASSERTIONS:
+//    a `tapPin` in a recording has always meant "the observer saw this
+//    plane here", which is exactly the assertion the live tap makes
+//    now. The analyzer's membership simulation treats the pinned plane
+//    as asserted until an `unpin` (old recordings) — the live 15 s
+//    off-frame grace is not simulated.
 //
 
 import Foundation
@@ -40,12 +44,17 @@ struct ReplayTickReport: Equatable, Sendable {
     /// Count of aircraft passing the visibility predicate
     /// (above-horizon + within 30 km).
     let visibleCount: Int
-    /// Icao24 of the visible aircraft whose projection is closest to
-    /// screen center within the lock-zone radius, or nil.
-    let closestToCenterIcao24: String?
-    /// Lock-on engine state after processing this tick. Lets a caller
-    /// see idle → locked → sticky progression across the session.
-    let lockState: LockOnEngine.State
+    /// The simulated press membership at this tick — what the capture
+    /// button would catch (frame-is-the-catch: bright on-frame planes +
+    /// the pinned/asserted plane, size-ranked, capped at
+    /// `maxCatchTargets`). Empty = button disabled.
+    let chosenIcaos: [String]
+    /// The membership WITHOUT the user's assertion — what the app would
+    /// have chosen on its own. The failure-mode bench compares this
+    /// against the pin (ground truth): a full-tier on-frame plane the
+    /// user saw that ambient membership excludes is the crowded-out /
+    /// wrong-plane class (mode 5).
+    let ambientChosenIcaos: [String]
 
     struct AircraftReport: Equatable, Sendable {
         let icao24: String
@@ -54,6 +63,9 @@ struct ReplayTickReport: Equatable, Sendable {
         let elevationDeg: Double
         let slantDistanceMeters: Double
         let isVisible: Bool
+        /// `.full` visibility tier — the bright band press membership
+        /// draws from (faint planes need an assertion).
+        let isFullTier: Bool
         /// Projected position on the configured screen, or nil if
         /// outside the camera FOV.
         let screenPosition: CGPoint?
@@ -142,17 +154,16 @@ nonisolated extension ReplayReport {
         out.append("  \(total) aircraft, \(vis) visible")
 
         for ar in tick.aircraft {
-            out.append(describeAircraft(ar, closestIcao: tick.closestToCenterIcao24))
+            out.append(describeAircraft(ar, chosenIcaos: tick.chosenIcaos))
         }
 
-        // Lock state.
-        out.append("  closest-to-center: \(tick.closestToCenterIcao24 ?? "—")")
-        out.append("  lock: \(describeLock(tick.lockState))")
+        // Press membership.
+        out.append("  chosen: \(tick.chosenIcaos.isEmpty ? "—" : tick.chosenIcaos.joined(separator: ", "))")
         return out
     }
 
-    private static func describeAircraft(_ ar: ReplayTickReport.AircraftReport, closestIcao: String?) -> String {
-        let marker = (ar.icao24 == closestIcao) ? "·" : " "
+    private static func describeAircraft(_ ar: ReplayTickReport.AircraftReport, chosenIcaos: [String]) -> String {
+        let marker = chosenIcaos.contains(ar.icao24) ? "·" : " "
         let cs = (ar.callsign ?? "").padding(toLength: 8, withPad: " ", startingAt: 0)
         let bearing = String(format: "brg=%5.1f°", ar.bearingDeg)
         let elev = String(format: "el=%+5.1f°", ar.elevationDeg)
@@ -168,14 +179,6 @@ nonisolated extension ReplayReport {
         return "   \(marker) \(ar.icao24)  \(cs)  \(bearing)  \(elev)  \(slant)  \(status)"
     }
 
-    private static func describeLock(_ state: LockOnEngine.State) -> String {
-        switch state {
-        case .idle:                                 return "idle"
-        case .locked(let icao, _):                  return "locked(\(icao))"
-        case .sticky(let icao, _):                  return "sticky(\(icao))"
-        }
-    }
-
     private static func formatHeaderDate(_ d: Date) -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss 'UTC'"
@@ -187,20 +190,18 @@ nonisolated extension ReplayReport {
 // MARK: - Analyzer
 
 /// Configuration for one analysis run. Defaults match an iPhone 16 in
-/// portrait orientation; override for other hardware. The lock-zone
-/// radius mirrors ContentView's default (80 px).
+/// portrait orientation; override for other hardware.
 @MainActor
 struct ReplayAnalyzer {
     var screenSize: CGSize = CGSize(width: 393, height: 852)
     var hfovDeg: Double = 56
     var vfovDeg: Double = 72
-    var lockZoneRadius: CGFloat = 80
 
     /// Analyze a sequence of events. `session-start` events update the
     /// report header; `tick` events become one TickReport each;
-    /// `tapPin` / `unpin` events update the running pin state and
-    /// (for tapPin) immediately `forceLock` the engine — matching
-    /// what ContentView does live.
+    /// `tapPin` / `unpin` events update the running assertion state the
+    /// membership simulation consumes — matching what ContentView's
+    /// tap-assert path does live.
     ///
     /// Events are processed in **timestamp order**, not array order.
     /// Files written by `ReplayRecorder` happen to be sorted (writes
@@ -214,7 +215,6 @@ struct ReplayAnalyzer {
         let ordered = events.sorted { $0.timestamp < $1.timestamp }
 
         var sessionStart: ReplayEvent.SessionStart?
-        let engine = LockOnEngine()
         var pinnedIcao: String?
         var tickReports: [ReplayTickReport] = []
         // Visibility-hysteresis state, carried across ticks so a plane at
@@ -228,17 +228,13 @@ struct ReplayAnalyzer {
                 sessionStart = s
             case .tapPin(let p):
                 pinnedIcao = p.icao24
-                engine.forceLock(targetIcao24: p.icao24, now: p.timestamp)
             case .emptyTap:
-                // Diagnostic ground truth only — no engine effect.
+                // Diagnostic ground truth only — no membership effect.
                 break
             case .unpin:
                 pinnedIcao = nil
-                // Engine state isn't reset here — the next tick will
-                // drive it via update() with the center-driven target,
-                // mirroring ContentView's behavior.
             case .tick(let t):
-                tickReports.append(report(for: t, engine: engine, pinnedIcao: pinnedIcao, shownIcaos: &shownIcaos))
+                tickReports.append(report(for: t, pinnedIcao: pinnedIcao, shownIcaos: &shownIcaos))
             }
         }
 
@@ -253,7 +249,7 @@ struct ReplayAnalyzer {
 
     // MARK: - Internals
 
-    private func report(for tick: ReplayEvent.Tick, engine: LockOnEngine, pinnedIcao: String? = nil, shownIcaos: inout Set<String>) -> ReplayTickReport {
+    private func report(for tick: ReplayEvent.Tick, pinnedIcao: String? = nil, shownIcaos: inout Set<String>) -> ReplayTickReport {
         let observer = reconstructObserver(from: tick)
 
         // Camera zoom changes the effective FOV: at 2× the same screen
@@ -282,6 +278,7 @@ struct ReplayAnalyzer {
         // an observer.
         var summaries: [ReplayTickReport.AircraftReport] = []
         var visibleObs: [ObservedAircraft] = []
+        var memberCandidates: [MembershipCandidate] = []
 
         if let observer {
             // Match ADSBManager's sort: nearest-first. Build a parallel
@@ -318,28 +315,38 @@ struct ReplayAnalyzer {
                     elevationDeg: obs.elevationDeg,
                     slantDistanceMeters: obs.slantDistanceMeters,
                     isVisible: isVisible,
+                    isFullTier: obs.visibilityTier == .full,
                     screenPosition: screenPos
                 ))
+                // Membership simulation input — mirrors ContentView's
+                // candidate build: on-frame planes only; the pinned plane
+                // counts as asserted (hidden tier included — that is what
+                // a tap-rescue assertion does live); no camera in a
+                // replay, so the occlusion demote never fires.
+                let isAsserted = snap.icao24 == pinnedIcao && !obs.grounded
+                if screenPos != nil, isVisible || isAsserted {
+                    memberCandidates.append(MembershipCandidate(
+                        icao24: snap.icao24,
+                        arcmin: obs.apparentSizeArcminutes,
+                        isFullTier: obs.visibilityTier == .full,
+                        isAsserted: isAsserted,
+                        isOccluded: false
+                    ))
+                }
             }
         }
 
-        let closest = closestTargetIcao24(
-            in: visibleObs,
-            phoneHeadingDeg: tick.sensor.headingDeg ?? 0,
-            cameraElevationDeg: tick.sensor.cameraElevationDeg,
-            rollDeg: rollDeg,
-            screenSize: screenSize,
-            hfovDeg: effectiveHfov,
-            vfovDeg: effectiveVfov,
-            lockZoneRadius: lockZoneRadius
-        )
-        // Match ContentView: if the pinned plane is still visible,
-        // it wins; otherwise fall back to the center-driven closest.
-        let pinStillVisible = pinnedIcao.map { id in
-            visibleObs.contains { $0.aircraft.icao24 == id }
-        } ?? false
-        let target = pinStillVisible ? pinnedIcao : closest
-        engine.update(closestTargetIcao24: target, now: tick.timestamp)
+        let membership = chooseCatchMembers(memberCandidates)
+        // The counterfactual the bench scores against: membership with the
+        // user's assertion stripped — what the app would choose unaided.
+        let ambient = chooseCatchMembers(memberCandidates.compactMap { c in
+            guard c.isAsserted else { return c }
+            guard c.isFullTier else { return nil }  // faint/hidden only entered via the assertion
+            return MembershipCandidate(
+                icao24: c.icao24, arcmin: c.arcmin, isFullTier: c.isFullTier,
+                isAsserted: false, isOccluded: c.isOccluded
+            )
+        })
 
         return ReplayTickReport(
             timestamp: tick.timestamp,
@@ -349,8 +356,8 @@ struct ReplayAnalyzer {
             cameraElevationDeg: tick.sensor.cameraElevationDeg,
             aircraft: summaries,
             visibleCount: visibleObs.count,
-            closestToCenterIcao24: closest,
-            lockState: engine.state
+            chosenIcaos: membership.chosen,
+            ambientChosenIcaos: ambient.chosen
         )
     }
 

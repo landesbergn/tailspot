@@ -42,8 +42,11 @@ final class VisualConfirmationPipeline: ObservableObject {
     /// Kill switch. Ships ON by default (2026-06-26 go-live — previously
     /// Release-OFF pending a formal field gate; enabled to learn from real
     /// users instead, since worst case it no-ops to the geometric prediction).
-    /// The debug overlay can still toggle it off on a dev build; production
-    /// has no user-facing toggle by design.
+    /// No toggle anywhere since the 2026-09-05 wrench-panel declutter: it only
+    /// ever gated the live pre-press tracking (legacy catch mode) and the
+    /// `visual_confirm_enabled` telemetry property — the catch-time snap runs
+    /// regardless. The UserDefaults read stays so an older install's stored
+    /// OFF is still honored.
     var enabled: Bool {
         get { UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? Self.defaultEnabled }
         set {

@@ -7,8 +7,8 @@ root `CLAUDE.md`.
 
 
 The traps that cause real bugs. For subsystem internals (replay recorder/analyzer,
-Hangar grouping, lock-on engine, metadata cache, camera zoom/tap-to-ID), read the
-source + each one's focused test file — they're not restated here.
+Hangar grouping, catch membership, metadata cache, camera zoom/tap-to-assert), read
+the source + each one's focused test file — they're not restated here.
 
 - **MainActor default isolation (Xcode 26).** `SWIFT_DEFAULT_ACTOR_ISOLATION =
   MainActor` — every type/extension/global is implicitly `@MainActor` unless marked
@@ -22,8 +22,8 @@ source + each one's focused test file — they're not restated here.
 - **One ADS-B source, injectable.** `ADSBManager.init(source:)` takes a single
   `ADSBSource`; the protocol seam exists only so tests substitute a fixture and a
   future provider can drop in — there is **no runtime source toggle** (the
-  LIVE/MOCK/OpenSky cycle was removed; the debug row is a static `[TAILSPOT API]`
-  indicator). If the backend is unreachable the app shows an error / empty sky
+  LIVE/MOCK/OpenSky cycle was removed, and the wrench panel's static source
+  label went in the 2026-09-05 declutter). If the backend is unreachable the app shows an error / empty sky
   rather than degrading — intended, for debugging clarity.
 - **Split fetch from annotation.** `ADSBManager` runs two loops: `pollTask` (every
   ~10 s, matching the backend tile cache's TTL — `/v1/aircraft` has no rate limit)
@@ -53,24 +53,65 @@ source + each one's focused test file — they're not restated here.
   **elevation-dependent distance band** (a near→full→contrail curve — see the field
   data in `ADSBManager.swift`, not a single km cap). A reported "missing plane
   label" is usually the filter doing its job — check below-horizon / too-far first.
-  Genuinely-visible-but-filtered planes are reachable via **tap-to-reveal**
-  (`revealedIcao`: a tap pins + force-locks the single nearest in-data plane when
-  `shouldTapReveal` says so — reason `filtered` (hidden by the band) **or**
-  `off-frame` (a visible-tier plane projected off-screen, usually a compass/heading
-  error; DAL972, 2026-07-11); `grounded` never reveals, and the parked-plane
-  toast only fires when the parked plane is within `groundedToastMaxSlantMeters`
-  (1 km) — beyond that it classifies `grounded-far` and is rescued like
-  `filtered-far` (parked OAK freighters on the horizon beat the visible plane
-  on angle; the Bay Bridge case, 2026-08-26)). The tap's subject is NOT
-  simply the angular-nearest in-data plane: a `filtered-far`/`grounded-far`
-  winner is rescued by
-  the nearest actionable plane in the cone, and the beyond-eyeshot toast only
-  shows when nothing in data is within reveal reach — quoting the
-  distance-nearest slant (`chooseEmptySkyTapSubject` / `farTapToastSlantMeters`;
-  the Dumbarton drive, 2026-07-20 — a car-corrupted compass let a 50 km stranger
-  beat the visible arrival on angle). **Don't loosen the ambient
-  filter to chase one** — it resurfaces the MLAT clutter the precision lean kills
-  (see the `FieldReplays` regression).
+  Genuinely-visible-but-filtered planes are reachable via **tap-assert**
+  (`assertedPlanes`: a tap asserts the diagnosed plane when `shouldTapReveal`
+  says so — reason `filtered` (hidden by the band) **or** `off-frame` (a
+  visible-tier plane projected off-screen, usually a compass/heading error;
+  DAL972, 2026-07-11) **or** `filtered-precise` (past reveal reach, but the
+  tap landed within `precisionTapRevealMaxOffsetDeg` = 2.5° of the plane's
+  projection — a dead-on tap is explicit intent even beyond the band; the
+  WGN211 747 freighter at 33 km / 18.7°, 2026-09-05. Requires airborne +
+  above the horizon; the ambient band is untouched, and the couch/Dumbarton
+  replays pin the false-positive budget); a tap on a FAINT-tier label
+  promotes it the same way. In `CatchMode.legacy` the same reasons pin +
+  force-lock instead (`revealPlane` branches on the mode).
+  Asserted planes label bright, are guaranteed a press slot, skip the occlusion
+  demote, and expire via the 1 Hz prune (on frame + 15 s grace). `grounded`
+  never asserts, and the parked-plane toast only fires when the parked plane is
+  within `groundedToastMaxSlantMeters` (1 km) — beyond that it classifies
+  `grounded-far` and is rescued like `filtered-far` (parked OAK freighters on
+  the horizon beat the visible plane on angle; the Bay Bridge case,
+  2026-08-26)). The tap's subject is NOT simply the angular-nearest in-data
+  plane: a `filtered-far`/`grounded-far` winner is rescued by the nearest
+  actionable plane in the cone, and the beyond-eyeshot toast only shows when
+  nothing in data is within reveal reach — quoting the distance-nearest slant
+  (`chooseEmptySkyTapSubject` / `farTapToastSlantMeters`; the Dumbarton drive,
+  2026-07-20 — a car-corrupted compass let a 50 km stranger beat the visible
+  arrival on angle). **Don't loosen the ambient filter to chase one** — it
+  resurfaces the MLAT clutter the precision lean kills (see the `FieldReplays`
+  regression).
+- **Frame is the catch (2026-08-28).** Press membership is `chooseCatchMembers`
+  (`CatchMembership.swift`): bright (`.full`) tier on frame, occlusion-demoted
+  via the live sky grid, asserted planes guaranteed, arcmin-ranked, capped at
+  `maxCatchTargets` (3). Three load-bearing invariants: **bright = in the
+  press** (the label hierarchy IS the catch promise — never render a
+  non-member full-bright), **membership freezes at the shutter** (catch-time
+  vision snaps brackets and feeds gates but never edits the caught set), and
+  **there is no selection** — no zones, pins, or dominance; don't add a
+  "pick this plane" affordance back without reopening the decision record
+  (`docs/plans/2026-08-28-feat-frame-is-the-catch.md`). The detector runs at
+  catch time only; `VisualConfirmationPipeline.updateTarget` is the kept-but-
+  unarmed live-tracking upgrade path.
+- **Catch-mode A/B switch (2026-09-02, Ring 0 only).** `CatchMode.swift`:
+  `.frame` (the model above) vs `.legacy` (the shipped v1.1.x zones-and-pins
+  model — `LockOnEngine.swift` + its zone/dominance helpers, restored for the
+  comparison). UserDefaults-backed (`tailspot.debug.catchMode`), **honored
+  only in DEBUG builds** — `CatchMode.effective` is `.frame` on Release, so a
+  flipped phone can't leak the legacy model into TestFlight. The wrench-panel
+  `catchModeRow` is the only writer (`setCatchMode` clears the other mode's
+  state); an OLD CATCH RULE badge sits under the zoom pill while it's on.
+  **Wrench-panel toggles are feature flags in plain language** (Noah,
+  2026-09-05): a real `Toggle` per flag via `debugFlagRow` — title + one
+  "On: … Off: …" sentence ("Building/tree check", "Plane-in-photo check",
+  "New catch rule") — never internal names like L2/L4/enforce/shadow/
+  membership on screen, no per-row hint text, one consistent look.
+  Both modes branch at ONE render funnel (`resolveFrameSelection` →
+  `FrameSelection`) plus the tap handler, Gate 5, and the diagnostics
+  selector; `catch_performed` / `catch_pipeline_timing` carry `catch_mode`.
+  The legacy invariants above ("no selection", "bright = in the press") hold
+  for `.frame` only — legacy renders pinned/dimmed, no chosen highlight.
+  Delete `LockOnEngine.swift`, `CatchMode.swift` and the legacy tests once
+  the comparison is decided.
 - **The catch pipeline reads the shutter-press snapshot, never live sensors.**
   `runCatch` snapshots pose + observations (`press*`) before its first await;
   everything downstream — bracket projection, capture diagnostics — uses the

@@ -8,6 +8,10 @@
 //  wide (180 px) zone would have swept up is excluded by the 100 px catch
 //  zone, so you have to point at a plane to catch it.
 //
+//
+//  LEGACY CATCH MODE (`CatchMode.legacy`): this covers the pre-#229 catch
+//  interaction, restored 2026-09-02 for the wrench-panel A/B against
+//  frame-is-the-catch. Goes when `LockOnEngine.swift` goes.
 
 import Testing
 import Foundation
