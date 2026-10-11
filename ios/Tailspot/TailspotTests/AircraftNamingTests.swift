@@ -214,7 +214,7 @@ struct AircraftNamingTests {
                 "civil rotorcraft must remain GA")
         // Military-only fighters and trainers that used to fall through to
         // the jet/turboprop defaults (narrow / GA).
-        for tc in ["F18H", "F18S", "TEX2"] {
+        for tc in ["F18H", "F18S", "TEX2", "T33", "F86", "HUNT", "P38", "A1", "MG15", "MG17"] {
             #expect(AircraftNaming.aircraftType(forTypecode: tc) == .mil, "\(tc) should be MIL")
         }
     }

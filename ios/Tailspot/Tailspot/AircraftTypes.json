@@ -9,7 +9,7 @@
   "make": "Douglas",
   "model": "A-1 Skyraider",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "A10": {
   "lengthFt": 53.3,
@@ -6225,7 +6225,7 @@
   "make": "North American",
   "model": "F-86 Sabre",
   "rarity": "epic",
-  "type": "narrow"
+  "type": "mil"
  },
  "F8L": {
   "make": "Aeromere",
@@ -7717,7 +7717,7 @@
   "make": "Hawker",
   "model": "Hunter",
   "rarity": "rare",
-  "type": "narrow"
+  "type": "mil"
  },
  "HURI": {
   "make": "Hawker",
@@ -9987,13 +9987,13 @@
   "make": "Mikoyan",
   "model": "MiG-15",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "MG17": {
   "make": "Mikoyan",
   "model": "MiG-17",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "MG19": {
   "make": "Shenyang",
@@ -11127,7 +11127,7 @@
   "make": "Lockheed",
   "model": "P-38 Lightning",
   "rarity": "epic",
-  "type": "ga"
+  "type": "mil"
  },
  "P39": {
   "make": "Bell",
@@ -14593,7 +14593,7 @@
   "make": "Lockheed",
   "model": "T-33 Shooting Star",
   "rarity": "rare",
-  "type": "narrow"
+  "type": "mil"
  },
  "T334": {
   "make": "Tupolev",

@@ -1145,6 +1145,7 @@ nonisolated enum CardSets {
             .init(id: "fm-hornet", canonicalName: "F/A-18 Hornet / Super Hornet", rarity: .legendary,
                   modelTokens: ["f/a-18"],
                   summary: "Carrier strike fighter. The Blue Angels fly the Super Hornet.",
+                  exactTypecodes: ["F18H"],
                   representativeTypecode: "F18S"),
             .init(id: "fm-t38", canonicalName: "Northrop T-38 Talon", rarity: .epic,
                   modelTokens: ["northrop t-38 talon"],
@@ -1269,6 +1270,12 @@ nonisolated enum CardSets {
             .init(id: "fv-p51", canonicalName: "P-51 Mustang", rarity: .rare,
                   modelTokens: ["p-51", "tf-51"], summary: "The WWII fighter. Merlin sound included.",
                   representativeTypecode: "P51"),
+            // The Avenger's home now that the Daher TBM slot excludes it
+            // (FAA raw models read "TBM-3E" and used to fill that slot).
+            .init(id: "fv-tbm", canonicalName: "Grumman TBM Avenger", rarity: .rare,
+                  modelTokens: ["tbm avenger", "tbm-3"],
+                  summary: "WWII carrier torpedo bomber. The biggest single-engine warbird you'll see.",
+                  representativeTypecode: "TBM"),
         ]),
         .init(id: "fam-sport-classics", type: .ga, title: "Sport & classics", entries: [
             .init(id: "fsc-mooney", canonicalName: "Mooney M20", rarity: .common,

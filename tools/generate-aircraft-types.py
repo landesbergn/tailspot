@@ -831,6 +831,9 @@ MIL = {
     # Military-only fighters and trainers that otherwise fall through to the
     # jet/turboprop defaults (narrow / ga).
     'F18H','F18S','TEX2',
+    # Warbird fighters / attack / jet trainers (2026-10-11 sweep) — were
+    # narrow (airliner badge) or ga.
+    'T33','F86','HUNT','P38','A1','MG15','MG17',
 }
 # Regional jets absent from the prefix regex below — BAe 146, Avro RJ,
 # Fokker 70/100/F28, Dornier 328JET, Antonov An-148/158. Exact-match like
