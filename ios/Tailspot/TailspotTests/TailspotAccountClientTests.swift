@@ -279,6 +279,28 @@ struct TailspotAccountClientDTOTests {
         #expect((obj["observer"] as? [String: Any])?["headingAccuracyDeg"] is NSNull)
     }
 
+    @Test func uploadCatchRequestEncodes_callsignNull() throws {
+        // A plane broadcasting no flight id (military MLAT, much GA) has a nil
+        // callsign. It must encode as an EXPLICIT null: backends before
+        // 2026-10-10 422'd the absent key, and the catch never uploaded.
+        let req = UploadCatchRequest(
+            catchUuid: "22222222-2222-4222-8222-222222222222",
+            icao24: "af9e20",
+            callsign: nil,
+            caughtAt: 1_791_680_099.0,
+            observer: .init(lat: 37.80, lon: -122.45,
+                            headingDeg: 300.0, elevationDeg: 10.0,
+                            headingAccuracyDeg: 8.0),
+            aircraft: nil,
+            guess: nil
+        )
+
+        let data = try JSONEncoder().encode(req)
+        let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        #expect(obj.keys.contains("callsign"))
+        #expect(obj["callsign"] is NSNull)
+    }
+
     // ── AccountError ─────────────────────────────────────────────────
 
     @Test func accountErrorDescriptions() {

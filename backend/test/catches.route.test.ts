@@ -218,12 +218,34 @@ describe("POST /v1/catches", () => {
     expect(badAuth.statusCode).toBe(401);
   });
 
+  // Shipped iOS builds encode a nil callsign with `encodeIfPresent`, so the KEY
+  // IS ABSENT (not null) for every plane broadcasting no flight id — military
+  // MLAT contacts, much GA. This was a 422 from June to 2026-10-10, and those
+  // catches sat pending on phones forever. Absent must mean null.
+  it("accepts a catch whose callsign key is absent, storing a null callsign", async () => {
+    const body: Record<string, unknown> = catchBody(
+      "aaaaaa",
+      "c0c0c0c0-0000-4000-8000-000000000001",
+    );
+    body.callsign = undefined; // JSON serialization drops it → the key is absent on the wire
+    const res = await post(body);
+    expect(res.statusCode).toBe(201);
+    const rows = await db
+      .select({ callsign: catches.callsign })
+      .from(catches)
+      .where(eq(catches.catchUuid, "c0c0c0c0-0000-4000-8000-000000000001"))
+      .limit(1);
+    expect(rows[0]).toEqual({ callsign: null });
+  });
+
   describe("422 on malformed bodies", () => {
     const base = catchBody("aaaaaa", "55555555-5555-4555-8555-555555555555");
     const cases: Array<[string, unknown]> = [
       ["missing catchUuid", { ...base, catchUuid: undefined }],
       ["non-uuid catchUuid", { ...base, catchUuid: "not-a-uuid" }],
       ["bad icao24", { ...base, icao24: "xyz" }],
+      // Absent is fine (see above); a present non-string is still malformed.
+      ["callsign wrong type", { ...base, callsign: 123 }],
       ["missing caughtAt", { ...base, caughtAt: undefined }],
       ["missing observer", { ...base, observer: undefined }],
       ["observer out of range", { ...base, observer: { ...base.observer, lat: 999 } }],

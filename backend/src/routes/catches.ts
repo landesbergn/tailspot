@@ -259,46 +259,64 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
 
     // ── Parse + validate the body shape (422 on malformed) ──────────────────
     const body = (request.body ?? {}) as Record<string, unknown>;
+    // Every rejection is logged with its reason. Clients retry a 422'd catch
+    // forever and report nothing, so the server log is the only place a
+    // rejected-catch class can surface (the absent-callsign 422 hid for four
+    // months this way).
+    const reject = (error: string) => {
+      request.log.warn(
+        {
+          deviceId: device.id,
+          icao24: typeof body.icao24 === "string" ? body.icao24 : null,
+          error,
+          userAgent: request.headers["user-agent"] ?? null,
+        },
+        "catch rejected (422)",
+      );
+      return reply.code(422).send({ error });
+    };
 
     const catchUuid = body.catchUuid;
     if (typeof catchUuid !== "string" || !UUID_RE.test(catchUuid)) {
-      return reply.code(422).send({ error: "catchUuid must be a uuid" });
+      return reject("catchUuid must be a uuid");
     }
     const icao24Raw = body.icao24;
     if (typeof icao24Raw !== "string" || !ICAO24_RE.test(icao24Raw.toLowerCase())) {
-      return reply.code(422).send({ error: "icao24 must be six hex digits" });
+      return reject("icao24 must be six hex digits");
     }
     const icao24 = icao24Raw.toLowerCase();
 
+    // Absent ≡ null: shipped iOS builds omit the key (encodeIfPresent) when the
+    // plane broadcasts no callsign. Only a present non-string is malformed.
     const callsignRaw = body.callsign;
-    if (callsignRaw !== null && typeof callsignRaw !== "string") {
-      return reply.code(422).send({ error: "callsign must be a string or null" });
+    if (callsignRaw !== undefined && callsignRaw !== null && typeof callsignRaw !== "string") {
+      return reject("callsign must be a string or null");
     }
     const callsign = typeof callsignRaw === "string" ? callsignRaw.trim() || null : null;
 
     const caughtAt = num(body.caughtAt);
     if (caughtAt === null) {
-      return reply.code(422).send({ error: "caughtAt must be a unix-seconds number" });
+      return reject("caughtAt must be a unix-seconds number");
     }
 
     const observerRaw = body.observer;
     const aircraftRaw = body.aircraft;
     if (typeof observerRaw !== "object" || observerRaw === null) {
-      return reply.code(422).send({ error: "observer object required" });
+      return reject("observer object required");
     }
     // The aircraft block is NULLABLE (the whole object may be null). iOS Catch
     // rows recorded before WP 1.7 never stored the aircraft's position; they're
     // backfilled with aircraft:null. A present-but-non-object aircraft is still
     // malformed (422). Null → no angular validation, verdict "unverifiable".
     if (aircraftRaw !== null && typeof aircraftRaw !== "object") {
-      return reply.code(422).send({ error: "aircraft must be an object or null" });
+      return reject("aircraft must be an object or null");
     }
     const o = observerRaw as Record<string, unknown>;
 
     const obsLat = num(o.lat, 90);
     const obsLon = num(o.lon, 180);
     if (obsLat === null || obsLon === null) {
-      return reply.code(422).send({ error: "observer.lat/lon must be valid coordinates" });
+      return reject("observer.lat/lon must be valid coordinates");
     }
     // Pose angles are nullable (a catch from a device without a heading fix is
     // valid — it just validates as "unverifiable"). present-but-not-number → 422.
@@ -310,7 +328,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       elevationDeg === undefined ||
       headingAccuracyDeg === undefined
     ) {
-      return reply.code(422).send({ error: "observer pose angles must be numbers or null" });
+      return reject("observer pose angles must be numbers or null");
     }
 
     // Parse the aircraft block only when present. Null → all aircraft fields null.
@@ -321,15 +339,11 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       const acLon = num(a.lon, 180);
       const acAlt = num(a.altitudeMeters);
       if (acLat === null || acLon === null || acAlt === null) {
-        return reply
-          .code(422)
-          .send({ error: "aircraft.lat/lon/altitudeMeters must be valid numbers" });
+        return reject("aircraft.lat/lon/altitudeMeters must be valid numbers");
       }
       const aircraftPositionTimestamp = numOrNull(a.positionTimestamp);
       if (aircraftPositionTimestamp === undefined) {
-        return reply
-          .code(422)
-          .send({ error: "aircraft.positionTimestamp must be a number or null" });
+        return reject("aircraft.positionTimestamp must be a number or null");
       }
       aircraft = {
         lat: acLat,
@@ -348,15 +362,15 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     let guess: { kind: GuessKind; value: string } | null = null;
     if (guessRaw !== undefined && guessRaw !== null) {
       if (typeof guessRaw !== "object") {
-        return reply.code(422).send({ error: "guess must be an object" });
+        return reject("guess must be an object");
       }
       const g = guessRaw as Record<string, unknown>;
       if (!isGuessKind(g.kind)) {
-        return reply.code(422).send({ error: 'guess.kind must be "route" or "type"' });
+        return reject('guess.kind must be "route" or "type"');
       }
       const value = typeof g.value === "string" ? g.value.trim().toUpperCase() : "";
       if (value === "" || value.length > GUESS_VALUE_MAX_LENGTH) {
-        return reply.code(422).send({ error: "guess.value must be a short non-empty string" });
+        return reject("guess.value must be a short non-empty string");
       }
       guess = { kind: g.kind, value };
     }

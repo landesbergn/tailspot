@@ -5,6 +5,15 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-10 — Catch uploads without a callsign (branch `fix/catch-upload-422`)
+
+- `POST /v1/catches` 422'd any catch whose `callsign` key was absent, which
+  is how iOS encodes a nil callsign (`encodeIfPresent`). Planes with no
+  flight id (military MLAT, much GA) never uploaded; the app retried them
+  forever and logged nothing. Present since June.
+- Server: absent callsign ≡ null; every 422 logged with its reason.
+- iOS: callsign encodes as an explicit null (ships in 1.2.2).
+
 ## 2026-10-10 — Fleet Week catch audit (branch `claude/review-recent-plane-catches-cccd5f`)
 
 - Noah's SF Fleet Week catches: Patriots Jet Team L-39 (common, too low), USAF
