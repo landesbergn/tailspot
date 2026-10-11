@@ -48,6 +48,7 @@ describe("POST /v1/catches", () => {
   let app: FastifyInstance;
   let db: Database;
   let token: string;
+  let logLines: Array<Record<string, unknown>>;
 
   beforeEach(async () => {
     db = await makeTestDb();
@@ -87,11 +88,13 @@ describe("POST /v1/catches", () => {
       source: "faa",
     });
 
+    logLines = [];
     app = await buildApp({
       identityStore: new DrizzleIdentityStore(db),
       catchStore: new DrizzleCatchStore(db),
       nowSeconds: () => NOW,
       rateLimitNow: () => 0, // frozen — stay under the 60/min catch cap
+      logStream: { write: (line: string) => logLines.push(JSON.parse(line)) },
     });
 
     const reg = await app.inject({ method: "POST", url: "/v1/devices" });
@@ -236,6 +239,35 @@ describe("POST /v1/catches", () => {
       .where(eq(catches.catchUuid, "c0c0c0c0-0000-4000-8000-000000000001"))
       .limit(1);
     expect(rows[0]).toEqual({ callsign: null });
+  });
+
+  it("accepts absent pose angles and an absent aircraft block as null", async () => {
+    const body = catchBody("aaaaaa", "c0c0c0c0-0000-4000-8000-000000000002") as Record<
+      string,
+      unknown
+    >;
+    body.observer = { lat: OBS.lat, lon: OBS.lon }; // no heading/elevation/accuracy keys
+    body.aircraft = undefined;
+    const res = await post(body);
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("logs a 422 once at warn with its reason, device and (truncated) icao24", async () => {
+    const bad = {
+      ...catchBody("aaaaaa", "c0c0c0c0-0000-4000-8000-000000000003"),
+      icao24: "x".repeat(5000),
+    };
+    const res = await post(bad);
+    expect(res.statusCode).toBe(422);
+    // The client retries a stuck catch every pass: the repeat stays below info.
+    expect((await post(bad)).statusCode).toBe(422);
+    const rejected = logLines.filter((l) => l.msg === "catch rejected (422)");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      error: "icao24 must be six hex digits",
+      icao24: "x".repeat(32),
+      deviceId: expect.any(String),
+    });
   });
 
   describe("422 on malformed bodies", () => {

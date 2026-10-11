@@ -118,9 +118,13 @@ function num(v: unknown, range?: number): number | null {
   return v;
 }
 
-/** A finite number OR explicit null (for nullable fields). undefined → "missing". */
+/**
+ * A finite number, or null for an explicit null OR an absent key (nullable
+ * fields: absent ≡ null, since Swift's synthesized encoding omits nil keys).
+ * Returns undefined only for a PRESENT non-number, which is malformed.
+ */
 function numOrNull(v: unknown): number | null | undefined {
-  if (v === null) return null;
+  if (v === null || v === undefined) return null;
   if (typeof v === "number" && Number.isFinite(v)) return v;
   return undefined; // signals malformed (present but not number|null)
 }
@@ -243,6 +247,12 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     return reply.code(204).send();
   });
 
+  // (device, reason) pairs already logged at warn. A stuck catch is retried on
+  // every upload pass, so repeats drop to debug (silent at the production info
+  // level). Bounded like the API's other in-memory maps: cleared when full.
+  const rejectionsSeen = new Set<string>();
+  const REJECTIONS_SEEN_MAX = 10_000;
+
   app.post("/v1/catches", async (request, reply) => {
     if (ipLimited(request, reply)) return reply;
 
@@ -264,12 +274,20 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     // rejected-catch class can surface (the absent-callsign 422 hid for four
     // months this way).
     const reject = (error: string) => {
-      request.log.warn(
+      const seenKey = `${device.id}|${error}`;
+      const firstTime = !rejectionsSeen.has(seenKey);
+      if (firstTime) {
+        if (rejectionsSeen.size >= REJECTIONS_SEEN_MAX) rejectionsSeen.clear();
+        rejectionsSeen.add(seenKey);
+      }
+      request.log[firstTime ? "warn" : "debug"](
         {
           deviceId: device.id,
-          icao24: typeof body.icao24 === "string" ? body.icao24 : null,
+          // Client-controlled strings, truncated: one of these branches fires
+          // precisely because icao24 is malformed (and could be ~64 KB).
+          icao24: typeof body.icao24 === "string" ? body.icao24.slice(0, 32) : null,
           error,
-          userAgent: request.headers["user-agent"] ?? null,
+          userAgent: request.headers["user-agent"]?.slice(0, 200) ?? null,
         },
         "catch rejected (422)",
       );
@@ -300,7 +318,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     }
 
     const observerRaw = body.observer;
-    const aircraftRaw = body.aircraft;
+    const aircraftRaw = body.aircraft ?? null; // absent ≡ null, like callsign
     if (typeof observerRaw !== "object" || observerRaw === null) {
       return reject("observer object required");
     }
