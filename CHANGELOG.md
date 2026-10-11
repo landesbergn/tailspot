@@ -5,6 +5,23 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-10 — Fleet Week catch audit (branch `claude/review-recent-plane-catches-cccd5f`)
+
+- Noah's SF Fleet Week catches: Patriots Jet Team L-39 (common, too low), USAF
+  T-6A shown as "Hawker Beechcraft 3000", P-51 shown as "A-36 Mustang", and
+  AF9E20 (a VQ-3 E-6B out of Travis, per the ADSBx db, tar1090-db, its adsb.lol
+  track and the airshow lineup) with no type at all.
+- Prod registry heal: reviewed fill-missing delta from that day's ADSBx
+  `basic-ac-db` (39,713 rows), guarded against changing any existing value,
+  backups kept; `rescore` moved 102 Unknown catches up for +1,040 points.
+- `AircraftTypes.json`: name overrides for TEX2 / P51 / F18S / F18H, military
+  category for F18H / F18S / TEX2, re-tiers (Hornets legendary, TEX2 epic, L39
+  rare), scoring version 6. Vintage T-6 set slot excludes TEX2.
+- Correction to the first-pass analysis: the "11 Unknown military catches"
+  were duplicate-catch telemetry rows, not Unknown catches. The real gap was
+  that two catches (U-2, E-6B) never uploaded, which led to the 422 finding
+  (split into its own task).
+
 ## 2026-10-05 → 10-07 — Share sheet: shapes + destinations (branch `claude/serene-feynman-x71op3`, PR #317)
 
 - The share pill on the catch detail screen opens a new `CatchShareSheet`
