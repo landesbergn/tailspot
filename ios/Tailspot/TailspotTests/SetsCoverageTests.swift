@@ -465,9 +465,9 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: CardSets.matchKey(for: as50), entry: as55Entry),
                 "An AS50 single-engine Fennec must not fill the AS55 twin slot")
 
-        // A P-51 (canonical "A-36 Mustang") must not fill Citation Mustang,
+        // A P-51 (canonical "P-51 Mustang") must not fill Citation Mustang,
         // and a Citation Mustang must not fill the P-51 warbird slot.
-        let p51 = mk(("P51", "North American", "A-36 Mustang"))
+        let p51 = mk(("P51", "North American", "P-51 Mustang"))
         let p51Key = CardSets.matchKey(for: p51)
         let citationSet = CardSets.families.first { $0.id == "fam-citation" }!
         let citMustang = citationSet.entries.first { $0.id == "fc-mustang" }!
@@ -583,11 +583,20 @@ struct SetsCoverageTests {
         let originalTexan = mk(("T6", "North American", "T-6 Texan"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: originalTexan), entry: texanIIEntry),
                 "The piston T-6 Texan must not fill the turboprop Texan II slot")
-        let texanII = mk(("TEX2", "Hawker Beechcraft", "3000"))
         let originalTexanEntry = CardSets.families.first { $0.id == "fam-vintage" }!
             .entries.first { $0.id == "fv-t6" }!
-        #expect(!CardSets.matches(key: CardSets.matchKey(for: texanII), entry: originalTexanEntry),
-                "The TEX2 Texan II must not fill the vintage piston T-6 slot")
+        // Both the pre-2026-10-10 stored model ("3000") and the current one:
+        // the canonical "T-6 Texan 2" contains the slot's "texan" token, so
+        // only the TEX2 exclusion keeps it out.
+        for texanII in [mk(("TEX2", "Hawker Beechcraft", "3000")),
+                        mk(("TEX2", "Beechcraft", "T-6 Texan 2"))] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: texanII), entry: originalTexanEntry),
+                    "The TEX2 Texan II must not fill the vintage piston T-6 slot")
+            #expect(CardSets.matches(key: CardSets.matchKey(for: texanII), entry: texanIIEntry),
+                    "The TEX2 Texan II must fill its own military slot")
+        }
+        #expect(CardSets.matches(key: CardSets.matchKey(for: originalTexan), entry: originalTexanEntry),
+                "The piston T-6 Texan must still fill the vintage slot")
 
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
