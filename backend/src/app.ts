@@ -145,11 +145,18 @@ export interface BuildAppOptions {
    * Postgres (`SELECT 1`) through the shared pool — see GET /readyz.
    */
   readyProbe?: () => Promise<void>;
+  /**
+   * Route log lines to this stream instead of the default logger (which is off
+   * under NODE_ENV=test). Tests use it to assert what the server logs.
+   */
+  logStream?: { write(line: string): void };
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: process.env.NODE_ENV !== "test",
+    logger: options.logStream
+      ? { level: "info", stream: options.logStream }
+      : process.env.NODE_ENV !== "test",
     // ── Resource ceilings (256 MB shared-cpu VM — see fly.toml) ──────────────
     // Fastify ships with NO request timeout and NO connection timeout, so a
     // client that opens a socket and dribbles bytes (or never finishes a body)
