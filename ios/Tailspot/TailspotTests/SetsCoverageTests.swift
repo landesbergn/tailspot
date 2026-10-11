@@ -245,6 +245,10 @@ struct SetsCoverageTests {
         ("FOX", "Skyfox", "CA-25 Impala"),
         ("HUSK", "Aviat", "A-1 Husky"),
         ("P149", "Focke-Wulf", "FWP-149"),
+        // Public catalog coverage additions validated 2026-10-10.
+        ("C425", "Cessna", "425 Corsair"),
+        ("PA22", "Piper", "PA-22 Colt"),
+        ("SBR1", "Rockwell", "Sabre 40"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -358,6 +362,9 @@ struct SetsCoverageTests {
             (("FOX", "Skyfox", "CA-25 Impala"), "fam-sport-classics", "fsc-skyfox"),
             (("HUSK", "Aviat", "A-1 Husky"), "fam-sport-classics", "fsc-husky"),
             (("P149", "Focke-Wulf", "FWP-149"), "fam-vintage", "fv-p149"),
+            (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
+            (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
+            (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -444,6 +451,12 @@ struct SetsCoverageTests {
         let kitfox = mk(("FOX", "Skystar", "Kitfox"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: kitfox), entry: skyfox),
                 "The shared FOX designator must not make a Kitfox fill the Skyfox CA-25 slot")
+
+        let sabreliner = CardSets.families.first { $0.id == "fam-classic-biz" }!
+            .entries.first { $0.id == "fcb-sabreliner" }!
+        let sabre75 = mk(("SBR2", "Rockwell", "Sabre 75"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: sabre75), entry: sabreliner),
+                "A Sabre 75 must not fill the Sabreliner 40 / 60 slot")
 
         // AS50 covers the single-engine AS350/AS550 family; AS55 is the
         // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
