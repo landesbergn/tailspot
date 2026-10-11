@@ -180,6 +180,16 @@ struct AircraftNamingTests {
         ("P51", "North American P-51 Mustang"),
         ("F18S", "Boeing F/A-18E/F Super Hornet"),
         ("F18H", "McDonnell Douglas F/A-18 Hornet"),
+        // 2026-10-11 warbird sweep: variant, licensee and export names.
+        ("T33", "Lockheed T-33 Shooting Star"),
+        ("P38", "Lockheed P-38 Lightning"),
+        ("F86", "North American F-86 Sabre"),
+        ("A1", "Douglas A-1 Skyraider"),
+        ("TBM", "Grumman TBM Avenger"),
+        ("T6", "North American T-6 Texan"),
+        ("SPIT", "Supermarine Spitfire"),
+        ("MG15", "Mikoyan MiG-15"),
+        ("MG17", "Mikoyan MiG-17"),
     ])
     func auditBatchNamesResolveFromTypecode(typecode: String, expected: String) {
         #expect(AircraftNaming.canonical(typecode: typecode, manufacturer: nil, model: nil).displayName == expected)
@@ -204,7 +214,7 @@ struct AircraftNamingTests {
                 "civil rotorcraft must remain GA")
         // Military-only fighters and trainers that used to fall through to
         // the jet/turboprop defaults (narrow / GA).
-        for tc in ["F18H", "F18S", "TEX2"] {
+        for tc in ["F18H", "F18S", "TEX2", "T33", "F86", "HUNT", "P38", "A1", "MG15", "MG17"] {
             #expect(AircraftNaming.aircraftType(forTypecode: tc) == .mil, "\(tc) should be MIL")
         }
     }
@@ -220,6 +230,18 @@ struct AircraftNamingTests {
         ("P51", Rarity.rare),
     ])
     func fleetWeekRetier(typecode: String, expected: Rarity) {
+        #expect(AircraftNaming.rarity(forTypecode: typecode) == expected)
+    }
+
+    /// 2026-10-11 warbird sweep: rare ≈ P-51 scarcity, epic ≈ B-17 /
+    /// Spitfire (a handful airworthy). All were common before except T6/SPIT.
+    @Test(arguments: [
+        ("T33", Rarity.rare), ("TBM", Rarity.rare), ("T28", Rarity.rare),
+        ("L29", Rarity.rare), ("HUNT", Rarity.rare), ("T6", Rarity.rare),
+        ("P38", Rarity.epic), ("F86", Rarity.epic), ("A1", Rarity.epic),
+        ("MG15", Rarity.epic), ("MG17", Rarity.epic), ("SPIT", Rarity.epic),
+    ])
+    func warbirdRetier(typecode: String, expected: Rarity) {
         #expect(AircraftNaming.rarity(forTypecode: typecode) == expected)
     }
 

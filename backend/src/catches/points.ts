@@ -63,8 +63,11 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *       F18S) → legendary (the old "F18" pin matched no real designator),
  *       T-6 Texan 2 (TEX2) → epic, L-39 (L39) → rare. Reload `typecodes`
  *       (`ingest:doc8643`) BEFORE the rescore, or it re-derives the old tiers.
+ *   7 — warbird sweep (2026-10-11): T-33, TBM Avenger, T-28, L-29, Hunter →
+ *       rare; P-38, F-86, A-1 Skyraider, MiG-15, MiG-17 → epic. Same order:
+ *       reload `typecodes`, then rescore.
  */
-export const CURRENT_SCORING_VERSION = 6;
+export const CURRENT_SCORING_VERSION = 7;
 
 /** Type guard for a known rarity tier string. */
 function isRarity(value: string | null | undefined): value is Rarity {

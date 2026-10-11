@@ -5,6 +5,13 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-11 — Warbird names and tiers (branch `fix/warbird-names-tiers`)
+
+- Noah's T-33 catch read "Lockheed AT-33", Common. Fixed names for T33, P38,
+  F86, A1, TBM, T6, SPIT, MG15, MG17; re-tiered ten warbirds (rare/epic).
+- Sets: Hornet / Super Hornet slot; the Daher TBM slot excludes the TBM
+  Avenger. Scoring version 7.
+
 ## 2026-10-10 — Catch uploads without a callsign (branch `fix/catch-upload-422`)
 
 - `POST /v1/catches` 422'd any catch whose `callsign` key was absent, which
