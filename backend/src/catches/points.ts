@@ -59,8 +59,12 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *   5 — rarity accuracy audit (2026-08-27): low-sky-presence Epic, vintage,
  *       and niche commuter types re-tiered. Existing catches intentionally
  *       float to the corrected tier and points under the normal rescore path.
+ *   6 — Fleet Week re-tier (2026-10-10): F/A-18 Hornet + Super Hornet (F18H /
+ *       F18S) → legendary (the old "F18" pin matched no real designator),
+ *       T-6 Texan 2 (TEX2) → epic, L-39 (L39) → rare. Reload `typecodes`
+ *       (`ingest:doc8643`) BEFORE the rescore, or it re-derives the old tiers.
  */
-export const CURRENT_SCORING_VERSION = 5;
+export const CURRENT_SCORING_VERSION = 6;
 
 /** Type guard for a known rarity tier string. */
 function isRarity(value: string | null | undefined): value is Rarity {

@@ -6058,17 +6058,17 @@
  "F18H": {
   "lengthFt": 56.0,
   "make": "McDonnell Douglas",
-  "model": "C-15",
-  "rarity": "common",
-  "type": "narrow",
+  "model": "F/A-18 Hornet",
+  "rarity": "legendary",
+  "type": "mil",
   "wingspanFt": 40.4
  },
  "F18S": {
   "lengthFt": 60.1,
   "make": "Boeing",
-  "model": "EA-18 Growler",
-  "rarity": "common",
-  "type": "narrow",
+  "model": "F/A-18E/F Super Hornet",
+  "rarity": "legendary",
+  "type": "mil",
   "wingspanFt": 44.7
  },
  "F1FV": {
@@ -8938,7 +8938,7 @@
  "L39": {
   "make": "Aero",
   "model": "L-39 Albatros",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "L4": {
@@ -11170,7 +11170,7 @@
  "P51": {
   "lengthFt": 32.3,
   "make": "North American",
-  "model": "A-36 Mustang",
+  "model": "P-51 Mustang",
   "rarity": "rare",
   "type": "ga",
   "wingspanFt": 37.0
@@ -14901,10 +14901,10 @@
  },
  "TEX2": {
   "lengthFt": 33.2,
-  "make": "Hawker Beechcraft",
-  "model": "3000",
-  "rarity": "common",
-  "type": "ga",
+  "make": "Beechcraft",
+  "model": "T-6 Texan 2",
+  "rarity": "epic",
+  "type": "mil",
   "wingspanFt": 33.4
  },
  "TEXA": {
