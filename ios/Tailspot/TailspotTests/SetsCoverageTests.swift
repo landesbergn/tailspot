@@ -616,6 +616,23 @@ struct SetsCoverageTests {
         #expect(CardSets.matches(key: CardSets.matchKey(for: originalTexan), entry: originalTexanEntry),
                 "The piston T-6 Texan must still fill the vintage slot")
 
+        // The WWII "TBM Avenger" must not fill the Daher TBM turboprop slot
+        // (shared "tbm" token); a real TBM 9xx still does.
+        let daherEntry = CardSets.families.flatMap(\.entries).first { $0.id == "ftp-tbm" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("TBM", "Grumman", "TBM Avenger"))), entry: daherEntry),
+                "The Grumman TBM Avenger must not fill the Daher TBM slot")
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("TBM9", "Daher", "TBM 900"))), entry: daherEntry))
+
+        // Both Hornet designators fill the Hornet slot; a DH.87 Hornet Moth does not.
+        let hornetEntry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-hornet" }!
+        for hornet in [mk(("F18S", "Boeing", "F/A-18E/F Super Hornet")),
+                       mk(("F18H", "McDonnell Douglas", "F/A-18 Hornet"))] {
+            #expect(CardSets.matches(key: CardSets.matchKey(for: hornet), entry: hornetEntry))
+        }
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("DH87", "De Havilland", "DH-87 Hornet Moth"))),
+                                  entry: hornetEntry))
+
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
         let piperSet = CardSets.families.first { $0.id == "fam-piper" }!

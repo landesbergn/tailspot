@@ -593,6 +593,18 @@ OVERRIDES = {
     "P51":  ("North American", "P-51 Mustang"),   # was the A-36 dive-bomber variant
     "F18S": ("Boeing", "F/A-18E/F Super Hornet"), # was the EA-18 Growler derivative
     "F18H": ("McDonnell Douglas", "F/A-18 Hornet"),  # was Spain's "C-15"
+
+    # ----- 2026-10-11 warbird sweep (same failure: a variant, licensee or
+    # export name beat the type airshow crowds know). DOC 8643 rows. -----
+    "T33":  ("Lockheed", "T-33 Shooting Star"),   # was the "AT-33" attack conversion
+    "P38":  ("Lockheed", "P-38 Lightning"),       # was the F-5 recon variant
+    "F86":  ("North American", "F-86 Sabre"),     # was licensee "Bombardier CL-13"
+    "A1":   ("Douglas", "A-1 Skyraider"),         # was pre-1962 "AD Skyraider"
+    "TBM":  ("Grumman", "TBM Avenger"),           # was "TBF"; most survivors are TBMs
+    "T6":   ("North American", "T-6 Texan"),      # was the BC-1 prototype basic combat type
+    "SPIT": ("Supermarine", "Spitfire"),          # was the naval "Seafire"
+    "MG15": ("Mikoyan", "MiG-15"),                # was Polish licensee "LiM-1"
+    "MG17": ("Mikoyan", "MiG-17"),                # was Chinese "Shenyang F-5"
 }
 
 
@@ -986,6 +998,10 @@ RARITY_OVERRIDES = {
     "GLEX": "rare",       # Bombardier Global Express / 6000
     "P51":  "rare", "T6": "rare", "AT6": "rare",   # P-51 Mustang, T-6 Texan (100+ fly — abundant for warbirds)
     "L39":  "rare",       # L-39 Albatros (civil warbird jet; display teams, not daily traffic)
+    # 2026-10-11 warbird sweep: rare ≈ P-51 scarcity (dozens–100+ airworthy,
+    # airshow regulars); epic ≈ B-17 / Spitfire (a handful airworthy).
+    "T33":  "rare", "TBM": "rare", "T28": "rare", "L29": "rare", "HUNT": "rare",
+    "P38":  "epic", "F86": "epic", "A1": "epic", "MG15": "epic", "MG17": "epic",
     "B25":  "rare",       # B-25 Mitchell
     "DC3":  "rare", "JU52": "rare", "AN2": "rare", "BE18": "rare",   # vintage classics
     # scarce owner-flown / vintage types and very small commuter fleets

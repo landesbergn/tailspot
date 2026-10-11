@@ -1072,7 +1072,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "PC12"),
             .init(id: "ftp-tbm", canonicalName: "Daher TBM", rarity: .uncommon,
                   modelTokens: ["tbm"], summary: "Fast personal turboprop — 700 through 960.",
-                  representativeTypecode: "TBM9"),
+                  representativeTypecode: "TBM9",
+                  // The WWII Grumman "TBM Avenger" (TBM) shares the token.
+                  excludedTypecodes: ["TBM"]),
             .init(id: "ftp-kodiak", canonicalName: "Kodiak 100", rarity: .common,
                   modelTokens: ["kodiak"], summary: "Short-field utility single. Floats optional.",
                   representativeTypecode: "K100"),
@@ -1137,6 +1139,13 @@ nonisolated enum CardSets {
                                 "northrop f 5f"],
                   summary: "Light supersonic fighter used for training, aggressor, and allied service.",
                   representativeTypecode: "F5"),
+            // Both designators: F18H (A–D Hornet) and F18S (E/F Super Hornet,
+            // the Blue Angels since 2021). "f/a-18", never bare "hornet" —
+            // the DH.87 Hornet Moth and homebuilt Hornets would bleed in.
+            .init(id: "fm-hornet", canonicalName: "F/A-18 Hornet / Super Hornet", rarity: .legendary,
+                  modelTokens: ["f/a-18"],
+                  summary: "Carrier strike fighter. The Blue Angels fly the Super Hornet.",
+                  representativeTypecode: "F18S"),
             .init(id: "fm-t38", canonicalName: "Northrop T-38 Talon", rarity: .epic,
                   modelTokens: ["northrop t-38 talon"],
                   summary: "Twin-engine supersonic advanced trainer used for fighter and bomber pilot preparation.",
