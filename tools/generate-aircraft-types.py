@@ -583,6 +583,16 @@ OVERRIDES = {
     "SB91": ("Saab", "91 Safir"),                # De Schelde was a licensee
     "BE36": ("Beechcraft", "36 Bonanza"),        # was duplicated "36 Bonanza 36"
     "C750": ("Cessna", "Citation X"),             # was numeric "750 Citation 10"
+
+    # ----- 2026-10-10 Fleet Week field catches -----
+    # Shortest-model-wins picked a certification number or a variant/licensee
+    # name over the type everyone knows. Each name is a DOC 8643 ModelFullName
+    # row ("F/A-18" restores the slash DOC 8643 drops; the Super Hornet name
+    # spans its E and F rows, like "MD 500 / 530" above).
+    "TEX2": ("Beechcraft", "T-6 Texan 2"),        # was civil type cert "3000"
+    "P51":  ("North American", "P-51 Mustang"),   # was the A-36 dive-bomber variant
+    "F18S": ("Boeing", "F/A-18E/F Super Hornet"), # was the EA-18 Growler derivative
+    "F18H": ("McDonnell Douglas", "F/A-18 Hornet"),  # was Spain's "C-15"
 }
 
 
@@ -806,6 +816,9 @@ MIL = {
     # Military rotorcraft / tiltrotors. These must be checked before the
     # generic rotorcraft→GA fallback below.
     'H47','H60','H64','H53','H46','UH1','V22','NH90','A129','AS65',
+    # Military-only fighters and trainers that otherwise fall through to the
+    # jet/turboprop defaults (narrow / ga).
+    'F18H','F18S','TEX2',
 }
 # Regional jets absent from the prefix regex below — BAe 146, Avro RJ,
 # Fokker 70/100/F28, Dornier 328JET, Antonov An-148/158. Exact-match like
@@ -916,6 +929,9 @@ RARITY_OVERRIDES = {
     "E3TF": "legendary", "E3CF": "legendary",  # E-3 Sentry (AWACS)
     "E6":   "legendary",  # E-6 Mercury (TACAMO command)
     "F15":  "legendary", "F16": "legendary", "F18": "legendary",
+    # DOC 8643 has no plain "F18": Hornets are F18H, Super Hornets (the Blue
+    # Angels since 2021) F18S. The "F18" pin above never matched anything.
+    "F18H": "legendary", "F18S": "legendary",
     "F22":  "legendary", "F35": "legendary",   # US fighters
     "A10":  "legendary",  # A-10 Thunderbolt II
     "A4":   "legendary",  # A-4 Skyhawk
@@ -938,7 +954,7 @@ RARITY_OVERRIDES = {
     "H60":  "epic", "H64": "epic", "H47": "epic", "H53": "epic", "H46": "epic",
     "UH1":  "epic", "V22": "epic", "NH90": "epic", "A129": "epic",
     # military jet trainers → epic
-    "T38":  "epic", "PC21": "epic",
+    "T38":  "epic", "PC21": "epic", "TEX2": "epic",   # TEX2 = T-6 Texan 2 (PC-21 peer)
     "A318": "epic",       # A318 "Baby Bus" (4 left, Air France, retiring 2026)
     "A342": "epic",       # A340-200 (3 total)
     "B732": "epic",       # 737-200 (~9 pax left)
@@ -969,6 +985,7 @@ RARITY_OVERRIDES = {
     "GL5T": "rare",       # Bombardier Global 5000
     "GLEX": "rare",       # Bombardier Global Express / 6000
     "P51":  "rare", "T6": "rare", "AT6": "rare",   # P-51 Mustang, T-6 Texan (100+ fly — abundant for warbirds)
+    "L39":  "rare",       # L-39 Albatros (civil warbird jet; display teams, not daily traffic)
     "B25":  "rare",       # B-25 Mitchell
     "DC3":  "rare", "JU52": "rare", "AN2": "rare", "BE18": "rare",   # vintage classics
     # scarce owner-flown / vintage types and very small commuter fleets

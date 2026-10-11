@@ -47,6 +47,11 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
     /// the code — so the slot matches `modelTokens` against the catch's own
     /// recorded model string only.
     let ambiguousTypecode: Bool
+    /// ICAO typecodes that can never fill this slot, checked before any other
+    /// match path. For a broad token that a different airframe's name also
+    /// contains: the vintage T-6 slot's "texan" would otherwise swallow the
+    /// TEX2 turboprop now that its canonical name is "T-6 Texan 2".
+    let excludedTypecodes: [String]
 
     /// Tier that colors the locked silhouette. Derives from the single
     /// source of truth (the activity table) when a typecode resolves;
@@ -64,6 +69,7 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
          exactTypecodes: [String] = [],
          representativeTypecode: String? = nil,
          ambiguousTypecode: Bool = false,
+         excludedTypecodes: [String] = [],
          matchesUnidentified: Bool = false) {
         self.id = id
         self.canonicalName = canonicalName
@@ -73,6 +79,7 @@ nonisolated struct CardSetEntry: Identifiable, Hashable, Sendable {
         self.exactTypecodes = exactTypecodes
         self.representativeTypecode = representativeTypecode
         self.ambiguousTypecode = ambiguousTypecode
+        self.excludedTypecodes = excludedTypecodes
         self.matchesUnidentified = matchesUnidentified
     }
 }
@@ -578,7 +585,7 @@ nonisolated enum CardSets {
                   summary: "The fast, long-range top of the line.",
                   representativeTypecode: "C700"),
             // "citation mustang", not bare "mustang" — a P-51 resolves to
-            // canonical "A-36 Mustang" and would bleed into this slot.
+            // canonical "P-51 Mustang" and would bleed into this slot.
             .init(id: "fc-mustang", canonicalName: "Citation Mustang", rarity: .uncommon,
                   modelTokens: ["citation mustang", "510 citation"], summary: "Entry-level very-light Citation.",
                   representativeTypecode: "C510"),
@@ -1214,7 +1221,8 @@ nonisolated enum CardSets {
                   representativeTypecode: "DC3"),
             .init(id: "fv-t6", canonicalName: "T-6 Texan", rarity: .rare,
                   modelTokens: ["texan", "harvard", "at-6"], summary: "WWII advanced trainer. The airshow growl.",
-                  representativeTypecode: "T6"),
+                  representativeTypecode: "T6",
+                  excludedTypecodes: ["TEX2"]),
             .init(id: "fv-cj6", canonicalName: "Nanchang CJ-6", rarity: .rare,
                   modelTokens: ["nanchang cj-6", "hongdu cj-6", "hongdu bt-6"],
                   summary: "Chinese military trainer now commonly flown as a warbird.",
@@ -1511,6 +1519,12 @@ nonisolated enum CardSets {
             return (key.typecode?.isEmpty ?? true)
                 && key.rawModelLowercased.isEmpty
                 && key.canonicalLowercased.isEmpty
+        }
+        if let ctc = key.typecode,
+           entry.excludedTypecodes.contains(where: {
+               $0.caseInsensitiveCompare(ctc) == .orderedSame
+           }) {
+            return false
         }
         if let ctc = key.typecode,
            entry.exactTypecodes.contains(where: {

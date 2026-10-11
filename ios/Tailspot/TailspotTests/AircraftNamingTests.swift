@@ -174,6 +174,12 @@ struct AircraftNamingTests {
         // unrelated military names instead of the recognizable families.
         ("EC20", "Airbus Helicopters H-120 Colibri"),
         ("GAZL", "Aerospatiale SA-341/342 Gazelle"),
+        // 2026-10-10 Fleet Week catches: certification numbers and variant
+        // names had beaten the type everyone knows.
+        ("TEX2", "Beechcraft T-6 Texan 2"),
+        ("P51", "North American P-51 Mustang"),
+        ("F18S", "Boeing F/A-18E/F Super Hornet"),
+        ("F18H", "McDonnell Douglas F/A-18 Hornet"),
     ])
     func auditBatchNamesResolveFromTypecode(typecode: String, expected: String) {
         #expect(AircraftNaming.canonical(typecode: typecode, manufacturer: nil, model: nil).displayName == expected)
@@ -196,6 +202,25 @@ struct AircraftNamingTests {
         }
         #expect(AircraftNaming.aircraftType(forTypecode: "R44") == .ga,
                 "civil rotorcraft must remain GA")
+        // Military-only fighters and trainers that used to fall through to
+        // the jet/turboprop defaults (narrow / GA).
+        for tc in ["F18H", "F18S", "TEX2"] {
+            #expect(AircraftNaming.aircraftType(forTypecode: tc) == .mil, "\(tc) should be MIL")
+        }
+    }
+
+    /// 2026-10-10 Fleet Week re-tier. The plain "F18" legendary pin never
+    /// matched (DOC 8643 only has F18H / F18S), so the Blue Angels' Super
+    /// Hornets scored as common.
+    @Test(arguments: [
+        ("F18S", Rarity.legendary),
+        ("F18H", Rarity.legendary),
+        ("TEX2", Rarity.epic),
+        ("L39", Rarity.rare),
+        ("P51", Rarity.rare),
+    ])
+    func fleetWeekRetier(typecode: String, expected: Rarity) {
+        #expect(AircraftNaming.rarity(forTypecode: typecode) == expected)
     }
 
     // MARK: - Fallback: Boeing customer-code collapse
