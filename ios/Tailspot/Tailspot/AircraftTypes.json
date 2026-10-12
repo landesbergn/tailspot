@@ -8238,7 +8238,7 @@
  "JCOM": {
   "make": "Aero Commander",
   "model": "1121 Jet Commander",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "biz"
  },
  "JCRU": {
@@ -9185,7 +9185,7 @@
   "lengthFt": 43.3,
   "make": "Learjet",
   "model": "23",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 35.6
  },
@@ -9193,7 +9193,7 @@
   "lengthFt": 43.3,
   "make": "Learjet",
   "model": "24",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 35.6
  },
@@ -13321,17 +13321,17 @@
  },
  "SBR1": {
   "lengthFt": 46.9,
-  "make": "Rockwell",
-  "model": "Sabre 40",
-  "rarity": "uncommon",
+  "make": "North American",
+  "model": "Sabreliner 40 / 60",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 44.7
  },
  "SBR2": {
   "lengthFt": 46.9,
   "make": "Rockwell",
-  "model": "NA-265 Sabre 75",
-  "rarity": "uncommon",
+  "model": "Sabre 75 / 80",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 44.7
  },
@@ -14592,7 +14592,7 @@
  "T33": {
   "make": "Lockheed",
   "model": "T-33 Shooting Star",
-  "rarity": "rare",
+  "rarity": "epic",
   "type": "mil"
  },
  "T334": {
