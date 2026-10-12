@@ -6,12 +6,13 @@ scaffold, not this pipeline).
 
 ```
 marketing/
+├─ releases/<version>/      what each App Store version uploaded — START HERE to upload
 ├─ catch-photos/            real catch photos, committed — see its README
+├─ app-store-creative/      header / search results builder (compose.py)
 └─ app-store-screenshots/   the Next.js deck editor
    ├─ app-store-screenshots.json      the deck: copy, layout, which file per slide
    ├─ public/screenshots/apple/iphone/en/   the seven source screenshots
-   ├─ export/                          current store-ready PNGs (gitignored)
-   └─ export-archive/<version>/        what actually shipped for that version
+   └─ export/                          current store-ready PNGs (gitignored)
 ```
 
 ## The seven slides
@@ -140,9 +141,13 @@ Sizes live in `src/lib/constants.ts` (`EXPORT_SIZES`).
 ## Before a submission
 
 1. Re-capture if any UI on slides 2–7 changed since the last export.
-2. Export the bundle; upload from `export/ios/iphone/1284x2778/en/`.
-3. Once the version ships, copy the set to `export-archive/<version>/` so
-   there's a record of what each listing actually showed.
+2. Export the bundle (and run `app-store-creative/compose.py` if the
+   creative assets changed).
+3. `bin/marketing-release vX.Y.Z` packages it into `marketing/releases/vX.Y.Z/`
+   (committed): `screenshots/` in upload order plus `creative/`. Upload from
+   there, then flip the status in that folder's README and the index.
+   `marketing/releases/README.md` is the history of every listing.
+   (The old gitignored `export-archive/` sets were migrated there on 2026-10-12.)
 
 ## Header and Search Results (creative assets)
 
