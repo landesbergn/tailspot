@@ -229,6 +229,10 @@ struct MarketingSnapshotTests {
 
     // MARK: - Shot 2b · The collection card (real catch, real photo)
 
+    /// SPARE since 2026-10-12: slide 2 now comes from
+    /// `renderFleetWeekCollectionCard` (mkt_07_fleet_week_e6); kept like
+    /// mkt_02_reveal in case the deck wants the BD-700 card back.
+    ///
     /// "Add each catch to your collection" — the real BD-700 catch's settled
     /// card, its hero photo the actual JPEG the app composed at capture time,
     /// floating on the dusk gradient the app's own onboarding uses.
@@ -353,7 +357,8 @@ struct MarketingSnapshotTests {
         // The photo is 9:16; the screen is taller. Fill by height and slide
         // left so both the brackets and the bridge tower stay in frame.
         let fillHeight = Self.screen.height
-        let fillWidth = fillHeight * 1728 / 3072
+        let aspect = photo.map { $0.size.width / $0.size.height } ?? (1728.0 / 3072.0)
+        let fillWidth = fillHeight * aspect
         let xShift: CGFloat = -40
         let bracketCenter = CGPoint(x: 0.3370 * fillWidth + xShift, y: 0.5343 * fillHeight)
         let bracketHalf: CGFloat = 0.2963 * fillWidth / 2  // measured: box = 29.63 % of frame width

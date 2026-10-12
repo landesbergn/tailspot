@@ -36,12 +36,12 @@ edge (slide 6's two phones reach into slides 5 and 7). A slide with
 canvas inside its own clip, so nothing bleeds onto it or off it. Slide 7
 uses it; flipping it on for another slide changes only that slide's export.
 
-`mkt_02_reveal` also renders but **no slide uses it** — it's a spare if the
+`mkt_02_reveal` and `mkt_07_collection` (the old BD-700 slide 2) also render but **no slide uses them** — it's a spare if the
 deck ever wants the reveal screen. Likewise `mkt_08b_challenge_live_expanded`
 (my catch log open) and `mkt_09_challenges_hub` render as Challenges spares. `bin/marketing-collect` owns the
 shot → filename mapping so nobody has to remember the crossover.
 
-## Regenerating slides 2–7
+## Regenerating slides 1–7
 
 ```bash
 bin/marketing-stage-photos          # real catch photos → /private/tmp
@@ -100,8 +100,9 @@ catch photo of the C-27J over the Golden Gate (`catch-photos/fw_c27j_golden_gate
 brackets baked in by `CatchPhotoComposer` at capture), filling the screen,
 with the HUD's pinned label and capture button drawn on top by
 `renderFleetWeekHUD` using the same styling as `PlaneLabel` / `captureButton`.
-The sky, plane and brackets are untouched; only the label and button are
-added, which is what the live HUD shows. Faces: the crowd is mostly backs of
+The sky, plane and brackets are untouched. Only the pinned label and the
+capture button are added; the live HUD also shows the Hangar and profile
+buttons, which this render leaves out. Faces: the crowd is mostly backs of
 heads, but a few strangers are recognisable at full size.
 
 The previous slide 1, described below, was a real HUD screenshot.

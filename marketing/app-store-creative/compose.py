@@ -22,6 +22,22 @@ SNAPS = Path(sys.argv[1] if len(sys.argv) > 1 else "/private/tmp/tailspot_snaps/
 OUT = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).parent / "out")
 FONT_BOLD = "/Library/Fonts/SF-Pro-Display-Bold.otf"
 FONT_MED = "/Library/Fonts/SF-Pro-Display-Medium.otf"
+SYSTEM_SF = "/System/Library/Fonts/SFNS.ttf"   # variable SF, present on every Mac
+
+
+def font(path, size, weight):
+    """SF Pro Display when Apple's installer has been run; otherwise the
+    system's variable SF at the matching weight (same family, same metrics
+    to within a pixel or two)."""
+    try:
+        return ImageFont.truetype(path, size)
+    except OSError:
+        f = ImageFont.truetype(SYSTEM_SF, size)
+        try:
+            f.set_variation_by_name(weight)
+        except Exception:
+            pass
+        return f
 
 # The deck's "tailspot-dusk" gradient (constants.ts bgGradient).
 STOPS = [(0.0, (0x0A, 0x12, 0x26)), (0.62, (0x17, 0x21, 0x3D)), (1.0, (0x3B, 0x30, 0x40))]
@@ -86,21 +102,14 @@ def place(canvas, im, cx, cy, angle=0.0, shadow=True):
 
 def text_block(canvas, x, y, lines, size, sub=None, sub_size=None, accent_line=None, width=None):
     d = ImageDraw.Draw(canvas)
-    f = ImageFont.truetype(FONT_BOLD, size)
+    f = font(FONT_BOLD, size, "Bold")
     lh = round(size * 1.08)
     for i, line in enumerate(lines):
         d.text((x, y + i * lh), line, font=f, fill=CYAN if i == accent_line else INK)
     y_end = y + len(lines) * lh
     if sub:
-        fs = ImageFont.truetype(FONT_MED, sub_size)
-        words, row, rows = sub.split(), "", []
-        for w in words:
-            trial = (row + " " + w).strip()
-            if width and d.textlength(trial, font=fs) > width:
-                rows.append(row); row = w
-            else:
-                row = trial
-        rows.append(row)
+        fs = font(FONT_MED, sub_size, "Medium")
+        rows = wrap(sub, fs, width)
         sy = y_end + round(size * 0.45)
         for i, r in enumerate(rows):
             d.text((x, sy + i * round(sub_size * 1.35)), r, font=fs, fill=MUTED)
@@ -108,18 +117,34 @@ def text_block(canvas, x, y, lines, size, sub=None, sub_size=None, accent_line=N
     return y_end
 
 
-def text_height(lines, size, sub_rows, sub_size):
-    return len(lines) * round(size * 1.08) + round(size * 0.45) + sub_rows * round(sub_size * 1.35)
+def wrap(text, f, width):
+    d = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    row, rows = "", []
+    for w in text.split():
+        trial = (row + " " + w).strip()
+        if width and d.textlength(trial, font=f) > width:
+            rows.append(row); row = w
+        else:
+            row = trial
+    rows.append(row)
+    return rows
+
+
+def text_height(lines, size, sub, sub_size, width):
+    """Height of the block text_block will draw, from the rows the subline
+    actually wraps to (so editing the copy can't knock it off-centre)."""
+    rows = len(wrap(sub, font(FONT_MED, sub_size, "Medium"), width))
+    return len(lines) * round(size * 1.08) + round(size * 0.45) + rows * round(sub_size * 1.35)
 
 
 def header():
     W, H = 3840, 1646
     c = gradient(W, H)
     lines = ["Catch the planes", "flying overhead."]
-    th = text_height(lines, 150, 2, 58)
+    sub = "Point your iPhone at the sky. Every catch is a real plane, identified live."
+    th = text_height(lines, 150, sub, 58, 1500)
     text_block(c, 330, (H - th) // 2, lines, 150, accent_line=1,
-               sub="Point your iPhone at the sky. Every catch is a real plane, identified live.",
-               sub_size=58, width=1500)
+               sub=sub, sub_size=58, width=1500)
     side = card("t33", 1180)
     place(c, side, 2270, 860, angle=8)
     side = card("t6", 1180)
@@ -132,10 +157,10 @@ def phone_and_card(W, H, scale, text_x, phone_cx, card_cx, card_h=0.70):
     c = gradient(W, H)
     lines = ["Point at the sky.", "Catch real planes."]
     size, sub_size = round(170 * scale), round(64 * scale)
-    th = text_height(lines, size, 3, sub_size)
+    sub = "Tailspot identifies the aircraft overhead and adds each one to your collection."
+    th = text_height(lines, size, sub, sub_size, round(1350 * scale))
     text_block(c, text_x, (H - th) // 2, lines, size, accent_line=1,
-               sub="Tailspot identifies the aircraft overhead and adds each one to your collection.",
-               sub_size=sub_size, width=round(1350 * scale))
+               sub=sub, sub_size=sub_size, width=round(1350 * scale))
     p = phone(round(H * 0.86))
     place(c, p, phone_cx, H // 2)
     place(c, card("e6", round(H * card_h)), card_cx, round(H * 0.54), angle=-6)

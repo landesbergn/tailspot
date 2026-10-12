@@ -21,7 +21,7 @@ TEST_RUNNER_MARKETING_CAPTURE=1 xcodebuild test \
   -destination 'platform=iOS Simulator,id=<sim>' -parallel-testing-enabled NO \
   "-only-testing:TailspotTests/MarketingSnapshotTests/renderFleetWeekHUD()" \
   "-only-testing:TailspotTests/MarketingSnapshotTests/renderFleetWeekCardParts()"
-python3 marketing/app-store-creative/compose.py   # needs Pillow
+python3 marketing/app-store-creative/compose.py   # needs Pillow; uses SF Pro Display if installed, else the system SF
 ```
 
 (Swift Testing filters need the trailing `()`; without it xcodebuild runs 0
