@@ -1,12 +1,11 @@
-# v1.2.3
+# v1.2.2
 
-**Status:** ready, not uploaded. If 1.2.2 hasn't been submitted yet, this
-set can go with 1.2.2 instead: rename the folder to v1.2.2.  
+**Status:** ready, not uploaded.  
 **Packaged:** 2026-10-12 from `16739e7`
 
 ## Upload
 
-- Screenshots: App Store Connect → v1.2.3 → iPhone screenshots → drag `screenshots/` in order.
+- Screenshots: App Store Connect → 1.2.2 → iPhone screenshots → drag `screenshots/` in order.
 - Header and search results: App Store Connect → App Store → creative assets → `creative/`.
 
 ## Contents

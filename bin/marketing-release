@@ -1,8 +1,8 @@
 #!/bin/bash
 # Package the current App Store marketing set as a versioned release folder.
 #
-#   bin/marketing-release v1.2.3            # copy the current set into marketing/releases/v1.2.3/
-#   bin/marketing-release v1.2.3 --force    # overwrite an existing folder
+#   bin/marketing-release v1.2.4            # copy the current set into marketing/releases/v1.2.4/
+#   bin/marketing-release v1.2.4 --force    # overwrite an existing folder
 #
 # What it copies:
 #   screenshots/  the iPhone set at 1284x2778 (the size App Store Connect's
