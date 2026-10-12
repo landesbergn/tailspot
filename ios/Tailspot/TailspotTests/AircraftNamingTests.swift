@@ -190,6 +190,8 @@ struct AircraftNamingTests {
         ("SPIT", "Supermarine Spitfire"),
         ("MG15", "Mikoyan MiG-15"),
         ("MG17", "Mikoyan MiG-17"),
+        ("SBR1", "North American Sabreliner 40 / 60"),
+        ("SBR2", "Rockwell Sabre 75 / 80"),
     ])
     func auditBatchNamesResolveFromTypecode(typecode: String, expected: String) {
         #expect(AircraftNaming.canonical(typecode: typecode, manufacturer: nil, model: nil).displayName == expected)
@@ -236,13 +238,20 @@ struct AircraftNamingTests {
     /// 2026-10-11 warbird sweep: rare ≈ P-51 scarcity, epic ≈ B-17 /
     /// Spitfire (a handful airworthy). All were common before except T6/SPIT.
     @Test(arguments: [
-        ("T33", Rarity.rare), ("TBM", Rarity.rare), ("T28", Rarity.rare),
+        ("T33", Rarity.epic), ("TBM", Rarity.rare), ("T28", Rarity.rare),
         ("L29", Rarity.rare), ("HUNT", Rarity.rare), ("T6", Rarity.rare),
         ("P38", Rarity.epic), ("F86", Rarity.epic), ("A1", Rarity.epic),
         ("MG15", Rarity.epic), ("MG17", Rarity.epic), ("SPIT", Rarity.epic),
     ])
     func warbirdRetier(typecode: String, expected: Rarity) {
         #expect(AircraftNaming.rarity(forTypecode: typecode) == expected)
+    }
+
+    /// First-generation business jets now flown mostly by museums and
+    /// airshow teams sit above the working-bizjet uncommon default.
+    @Test(arguments: ["SBR1", "SBR2", "LJ23", "LJ24", "JCOM"])
+    func classicBizjetsAreRare(typecode: String) {
+        #expect(AircraftNaming.rarity(forTypecode: typecode) == .rare)
     }
 
     // MARK: - Fallback: Boeing customer-code collapse
