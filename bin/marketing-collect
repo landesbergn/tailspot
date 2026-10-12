@@ -19,7 +19,8 @@ dst="$repo/marketing/app-store-screenshots/public/screenshots/apple/iphone/en"
 # shot name → deck filename. slide1 is NOT here: it is Noah's real field
 # capture (docs/ga/screenshots-raw/), not a rendered shot.
 map=(
-  "mkt_07_collection:slide2-collection-card.png"
+  "mkt_01_fleet_week:slide1-ar-catch.png"
+  "mkt_07_fleet_week_e6:slide2-collection-card.png"
   "mkt_03_guess_round:slide3-guess-round.png"
   "mkt_04_hangar_sets:slide4-hangar-sets.png"
   "mkt_05_trophies:slide5-trophies.png"

@@ -1,0 +1,104 @@
+#!/bin/bash
+# Package the current App Store marketing set as a versioned release folder.
+#
+#   bin/marketing-release v1.2.4            # copy the current set into marketing/releases/v1.2.4/
+#   bin/marketing-release v1.2.4 --force    # overwrite an existing folder
+#
+# What it copies:
+#   screenshots/  the iPhone set at 1284x2778 (the size App Store Connect's
+#                 iPhone slot takes) from app-store-screenshots/export/,
+#                 renamed by slide: 01-ar-catch.png, 02-collection-card.png, …
+#   creative/     header / search results / universal from app-store-creative/out/
+# and writes a README.md stub (status: ready, not uploaded) plus a row in
+# marketing/releases/README.md. Edit the stub's "What changed" and flip the
+# status once you upload.
+#
+# Export the deck first (editor → Export bundle, unzip into export/) and run
+# app-store-creative/compose.py, or this packages stale files.
+set -euo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+version="${1:-}"
+force="${2:-}"
+if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "usage: bin/marketing-release vX.Y.Z [--force]" >&2
+  exit 2
+fi
+
+shots_src="$repo/marketing/app-store-screenshots/export/ios/iphone/1284x2778/en"
+creative_src="$repo/marketing/app-store-creative/out"
+deck="$repo/marketing/app-store-screenshots/app-store-screenshots.json"
+dst="$repo/marketing/releases/$version"
+
+if [ ! -d "$shots_src" ]; then
+  echo "no exported screenshots at $shots_src — export the deck first" >&2
+  exit 1
+fi
+if [ -e "$dst" ] && [ "$force" != "--force" ]; then
+  echo "$dst already exists (pass --force to overwrite)" >&2
+  exit 1
+fi
+rm -rf "$dst"
+mkdir -p "$dst/screenshots"
+
+# Slide slugs come from the deck: slide N's screenshot file is slideN-<slug>.png.
+slugs=$(/usr/bin/python3 -I - "$deck" <<'PY'
+import json, re, sys
+deck = json.load(open(sys.argv[1]))
+for s in deck["slidesByDevice"]["iphone"]:
+    name = s["screenshot"].rsplit("/", 1)[-1]
+    print(re.sub(r"^slide\d+-", "", name.rsplit(".", 1)[0]))
+PY
+)
+
+i=0
+while IFS= read -r slug; do
+  i=$((i + 1))
+  n=$(printf "%02d" "$i")
+  src=$(ls "$shots_src"/"$n"-*.png 2>/dev/null | head -1 || true)
+  if [ -z "$src" ]; then
+    echo "missing exported slide $n in $shots_src" >&2
+    exit 1
+  fi
+  cp "$src" "$dst/screenshots/$n-$slug.png"
+done <<< "$slugs"
+
+if ls "$creative_src"/*.png >/dev/null 2>&1; then
+  mkdir -p "$dst/creative"
+  cp "$creative_src"/*.png "$dst/creative/"
+fi
+
+commit=$(git -C "$repo" rev-parse --short HEAD)
+today=$(date +%Y-%m-%d)
+{
+  echo "# $version"
+  echo
+  echo "**Status:** ready, not uploaded  "
+  echo "**Packaged:** $today from \`$commit\`"
+  echo
+  echo "## Upload"
+  echo
+  echo "- Screenshots: App Store Connect → $version → iPhone screenshots → drag \`screenshots/\` in order."
+  if [ -d "$dst/creative" ]; then
+    echo "- Header and search results: App Store Connect → App Store → creative assets → \`creative/\`."
+  fi
+  echo
+  echo "## Contents"
+  echo
+  for f in "$dst"/screenshots/*.png; do echo "- \`screenshots/$(basename "$f")\`"; done
+  if [ -d "$dst/creative" ]; then
+    for f in "$dst"/creative/*.png; do echo "- \`creative/$(basename "$f")\`"; done
+  fi
+  echo
+  echo "## What changed"
+  echo
+  echo "(fill in)"
+} > "$dst/README.md"
+
+index="$repo/marketing/releases/README.md"
+if ! grep -q "\[$version\]" "$index"; then
+  echo "| [$version]($version/) | $today | ready, not uploaded | (fill in) |" >> "$index"
+fi
+
+echo "packaged $version → $dst ($i screenshots$( [ -d "$dst/creative" ] && echo ", creative assets"))"
+echo "edit $dst/README.md (What changed) and the index row; flip the status after uploading"
