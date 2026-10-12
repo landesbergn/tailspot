@@ -1,6 +1,6 @@
 # v1.2.2
 
-**Status:** ready, not uploaded.  
+**Status:** uploaded. Screenshots and the header / search results assets went up with 1.2.2, submitted to App Review 2026-10-12 (build 107).  
 **Packaged:** 2026-10-12 from `16739e7`
 
 ## Upload
