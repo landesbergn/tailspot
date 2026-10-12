@@ -31,3 +31,10 @@ Every card and the HUD screen are the app's own views; `compose.py` only
 lays them out on the deck's dusk gradient and sets the headline in SF Pro
 Display. Header: the airshow trio (T-33, Patriots L-39, T-6). Search and
 universal: the HUD (C-27J over the Golden Gate) beside the Legendary E-6.
+Headlines only, no subline (too small to read at these scales).
+
+**The header is cropped on iPhone.** App Store Connect's preview shows a
+16:9 centre crop of the 21:9 image (about 2926 of 3840 px), with the back
+and share buttons over the top corners. `header()` sizes the headline and
+cards as one group that fits inside that crop with a margin; check the
+Preview tool in App Store Connect after any layout change.

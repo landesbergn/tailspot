@@ -138,29 +138,52 @@ def text_height(lines, size, sub, sub_size, width):
 
 
 def header():
+    """Headline + the airshow trio, laid out as ONE group centred in the
+    frame. On iPhone the product page shows a 16:9 centre crop of this 21:9
+    image (about 2926 of the 3840 px; ~457 px fall off each side), with the
+    back / share buttons over the top corners. So the group is scaled to fit
+    inside that crop with a margin. No subline: at header scale it was too
+    small to read (Noah, 2026-10-12)."""
     W, H = 3840, 1646
+    crop_w = H * 16 / 9                 # what an iPhone actually shows
+    max_group_w = crop_w - 2 * 170      # keep a margin inside the crop
     c = gradient(W, H)
     lines = ["Catch the planes", "flying overhead."]
-    sub = "Point your iPhone at the sky. Every catch is a real plane, identified live."
-    th = text_height(lines, 150, sub, 58, 1500)
-    text_block(c, 330, (H - th) // 2, lines, 150, accent_line=1,
-               sub=sub, sub_size=58, width=1500)
-    side = card("t33", 1180)
-    place(c, side, 2270, 860, angle=8)
-    side = card("t6", 1180)
-    place(c, side, 3330, 860, angle=-8)
-    place(c, card("l39", 1360), 2800, 823)
+
+    def layout(k):
+        size = round(150 * k)
+        f = font(FONT_BOLD, size, "Bold")
+        text_w = max(ImageDraw.Draw(c).textlength(l, font=f) for l in lines)
+        gap, spread, tilt = 130 * k, 530 * k, 8
+        t33, l39, t6 = card("t33", round(1180 * k)), card("l39", round(1360 * k)), card("t6", round(1180 * k))
+        left = -spread - t33.rotate(tilt, expand=True).width / 2
+        right = spread + t6.rotate(-tilt, expand=True).width / 2
+        return size, text_w, gap, spread, tilt, (t33, l39, t6), left, right, text_w + gap + right - left
+
+    k = 1.0
+    while True:
+        size, text_w, gap, spread, tilt, (t33, l39, t6), left, right, group_w = layout(k)
+        if group_w <= max_group_w or k < 0.5:
+            break
+        k -= 0.02
+    x0 = (W - group_w) / 2
+    front_cx = x0 + text_w + gap - left
+
+    th = len(lines) * round(size * 1.08)
+    text_block(c, round(x0), (H - th) // 2, lines, size, accent_line=1)
+    place(c, t33, front_cx - spread, H / 2 + 37 * k, angle=tilt)
+    place(c, t6, front_cx + spread, H / 2 + 37 * k, angle=-tilt)
+    place(c, l39, front_cx, H / 2)
     return c
 
 
 def phone_and_card(W, H, scale, text_x, phone_cx, card_cx, card_h=0.70):
     c = gradient(W, H)
     lines = ["Point at the sky.", "Catch real planes."]
-    size, sub_size = round(170 * scale), round(64 * scale)
-    sub = "Tailspot identifies the aircraft overhead and adds each one to your collection."
-    th = text_height(lines, size, sub, sub_size, round(1350 * scale))
-    text_block(c, text_x, (H - th) // 2, lines, size, accent_line=1,
-               sub=sub, sub_size=sub_size, width=round(1350 * scale))
+    # No subline: too small to read at search-results scale (Noah, 2026-10-12).
+    size = round(170 * scale)
+    th = len(lines) * round(size * 1.08)
+    text_block(c, text_x, (H - th) // 2, lines, size, accent_line=1)
     p = phone(round(H * 0.86))
     place(c, p, phone_cx, H // 2)
     place(c, card("e6", round(H * card_h)), card_cx, round(H * 0.54), angle=-6)
