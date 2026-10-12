@@ -472,9 +472,13 @@ struct SetsCoverageTests {
 
         let sabreliner = CardSets.families.first { $0.id == "fam-classic-biz" }!
             .entries.first { $0.id == "fcb-sabreliner" }!
-        let sabre75 = mk(("SBR2", "Rockwell", "Sabre 75"))
-        #expect(!CardSets.matches(key: CardSets.matchKey(for: sabre75), entry: sabreliner),
-                "A Sabre 75 must not fill the Sabreliner 40 / 60 slot")
+        // Old stored model and the 2026-10-11 canonical name, both directions.
+        for sabre75 in [mk(("SBR2", "Rockwell", "Sabre 75")), mk(("SBR2", "Rockwell", "Sabre 75 / 80"))] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: sabre75), entry: sabreliner),
+                    "A Sabre 75 must not fill the Sabreliner 40 / 60 slot")
+        }
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("SBR1", "North American", "Sabreliner 40 / 60"))),
+                                 entry: sabreliner))
 
         // AS50 covers the single-engine AS350/AS550 family; AS55 is the
         // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
