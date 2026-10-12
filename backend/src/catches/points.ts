@@ -66,8 +66,10 @@ export const UNKNOWN_RARITY_POINTS = 10;
  *   7 — warbird sweep (2026-10-11): T-33, TBM Avenger, T-28, L-29, Hunter →
  *       rare; P-38, F-86, A-1 Skyraider, MiG-15, MiG-17 → epic. Same order:
  *       reload `typecodes`, then rescore.
+ *   8 — classic jets (2026-10-11): T-33 rare → epic; Sabreliner (SBR1, SBR2),
+ *       Learjet 23/24 and Jet Commander uncommon → rare. Same order.
  */
-export const CURRENT_SCORING_VERSION = 7;
+export const CURRENT_SCORING_VERSION = 8;
 
 /** Type guard for a known rarity tier string. */
 function isRarity(value: string | null | undefined): value is Rarity {

@@ -1202,7 +1202,7 @@ nonisolated enum CardSets {
                   representativeTypecode: "PC7"),
         ]),
         .init(id: "fam-classic-biz", type: .biz, title: "Classic bizjets", entries: [
-            .init(id: "fcb-sabreliner", canonicalName: "Rockwell Sabreliner 40 / 60", rarity: .uncommon,
+            .init(id: "fcb-sabreliner", canonicalName: "North American Sabreliner 40 / 60", rarity: .uncommon,
                   modelTokens: ["rockwell na-265 sabre 40", "rockwell sabre 40",
                                 "north american sabreliner 40", "north american sabreliner 60"],
                   summary: "Early American twin-engine business jet, also flown as the military T-39.",

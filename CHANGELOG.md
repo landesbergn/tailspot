@@ -5,6 +5,12 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-11 — Classic-jet tiers (branch `fix/classic-jets-tiers`)
+
+- From Noah's Fleet Week weekend review: T-33 → epic; Sabreliner 40/60 and
+  75/80, Learjet 23/24, Jet Commander → rare; Sabreliner names fixed.
+  Scoring version 8. Build 107.
+
 ## 2026-10-11 — Warbird names and tiers (branch `fix/warbird-names-tiers`)
 
 - Noah's T-33 catch read "Lockheed AT-33", Common. Fixed names for T33, P38,
