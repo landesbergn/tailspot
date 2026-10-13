@@ -123,7 +123,21 @@ Nothing is used for **Tracking** (Apple's cross-app/ad sense) — `NSPrivacyTrac
   (Bali field data). Mitigation is expectation-setting: the description's
   coverage paragraph + the in-app empty-sky messaging.
 
-## What's New — v1.2.0 (train opened 2026-09-15) ← NEXT SUBMISSION
+## v1.2.2 — ✅ SHIPPED 2026-10-12 (build 107, released all at once)
+
+Promotional text (swapped in on release day, 2026-10-13):
+
+> New: share your catches. Turn any plane into a post, a square, a story or
+> the full card, and send it straight to Messages or Instagram.
+
+(135 chars.) Replaces the 1.2.0 Challenges line.
+
+What's New: Noah's text as submitted in App Store Connect (the draft was
+share sheet / real names and tiers for warbirds and military jets / no-callsign
+catches now count). Screenshots and the first header / search results creative
+assets: `marketing/releases/v1.2.2/`.
+
+## What's New — v1.2.0 — ✅ SHIPPED 2026-10-03 (build 102)
 
 Covers everything on `main` after **c5955a4**, the last commit in the shipped
 1.1.1 build 94. The Challenges release. Backend (API v42, migrations 0010 +
