@@ -2,10 +2,9 @@
 //  CameraFOVTests.swift
 //  TailspotTests
 //
-//  The aspect-aware FOV must (1) leave every slab iPhone exactly where the
-//  hand-tuned 56° × 72° put it, and (2) re-crop correctly for iPhone Duo's
-//  wider inner display, where aspect-fill trades the top/bottom of the
-//  video for its full width.
+//  The aspect-aware FOV must (1) leave every slab iPhone EXACTLY at the
+//  hand-tuned 56° × 72°, and (2) re-crop for iPhone Duo's wider displays,
+//  where aspect-fill trades the top/bottom of the video for its width.
 //
 
 import Testing
@@ -28,21 +27,20 @@ struct CameraFOVTests {
         #expect(abs(fov.vfovDeg - 72) < 1e-9)
     }
 
-    @Test func otherSlabIPhonesStayWithinADegree() {
-        // 16 Pro Max (440 × 956) and 16e (390 × 844): same tall shape.
-        for size in [CGSize(width: 440, height: 956), CGSize(width: 390, height: 844)] {
+    @Test func everySlabIPhoneKeepsTheExactReference() {
+        // No existing device may change. Points sizes of every iPhone
+        // shape seen in PostHog: 16/17 Pro, Pro Max, Air, 16e/14, minis,
+        // and the iPhone SE (16:9 — the closest call, just under 9:16).
+        let slabs = [
+            CGSize(width: 402, height: 874), CGSize(width: 440, height: 956),
+            CGSize(width: 420, height: 912), CGSize(width: 390, height: 844),
+            CGSize(width: 375, height: 812), CGSize(width: 375, height: 667),
+        ]
+        for size in slabs {
             let fov = CameraFOV.base(for: size)
-            #expect(abs(fov.hfovDeg - 56) < 1)
-            #expect(abs(fov.vfovDeg - 72) < 1e-9)
+            #expect(fov.hfovDeg == 56)
+            #expect(fov.vfovDeg == 72)
         }
-    }
-
-    @Test func narrowScreenKeepsFullVideoHeight() {
-        // Anything narrower than the 9:16 video shows its full height, so
-        // vertical FOV is pinned while horizontal follows the width.
-        let narrow = CameraFOV.base(for: CGSize(width: 300, height: 900))
-        #expect(abs(narrow.vfovDeg - 72) < 1e-9)
-        #expect(narrow.hfovDeg < 56)
     }
 
     @Test func duoInnerTradesHeightForWidth() {
@@ -61,14 +59,6 @@ struct CameraFOVTests {
         let wider = CameraFOV.base(for: CGSize(width: 1000, height: 1100))
         #expect(abs(duo.hfovDeg - wider.hfovDeg) < 1e-9)
         #expect(wider.vfovDeg < duo.vfovDeg)
-    }
-
-    @Test func continuousAtTheVideoAspect() {
-        // The two crop regimes must meet at exactly 9:16 — no jump.
-        let below = CameraFOV.base(for: CGSize(width: 9 - 1e-6, height: 16))
-        let above = CameraFOV.base(for: CGSize(width: 9 + 1e-6, height: 16))
-        #expect(abs(below.hfovDeg - above.hfovDeg) < 1e-3)
-        #expect(abs(below.vfovDeg - above.vfovDeg) < 1e-3)
     }
 
     @Test func duoOuterIsAlsoWiderThanTheVideo() {

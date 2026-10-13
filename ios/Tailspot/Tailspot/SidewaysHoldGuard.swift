@@ -39,14 +39,24 @@ nonisolated enum SpottingLayout {
 }
 
 struct SidewaysHoldGuard: View {
+    @State private var isSideways = false
+
     var body: some View {
-        GeometryReader { geo in
-            if SpottingLayout.isSideways(geo.size) {
-                SidewaysHoldCard()
-                    .frame(width: geo.size.width, height: geo.size.height)
+        // `onGeometryChange` reports the full-screen size without wrapping
+        // content in a GeometryReader. `allowsHitTesting(isSideways)` makes
+        // pass-through explicit: in the normal portrait case this view can
+        // never intercept a tap meant for the AR view or the bottom bar.
+        Color.clear
+            .onGeometryChange(for: Bool.self) { proxy in
+                SpottingLayout.isSideways(proxy.size)
+            } action: { sideways in
+                isSideways = sideways
             }
-        }
-        .ignoresSafeArea()
+            .overlay {
+                if isSideways { SidewaysHoldCard() }
+            }
+            .allowsHitTesting(isSideways)
+            .ignoresSafeArea()
     }
 }
 

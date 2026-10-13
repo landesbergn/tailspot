@@ -13,7 +13,7 @@ tech talk and the iPhone Duo group-lab Q&A on the developer forums
 | Area | Apple's guidance | Tailspot status |
 |---|---|---|
 | Portrait pin | Outer display honors `UISupportedInterfaceOrientations`; the **inner display does not** | **Guarded.** `SidewaysHoldGuard` covers the AR view with a "hold it upright" card whenever the layout is wider than tall, so a rotated UI can't produce a 90°-off ID. Fires `sideways_hold_guard_shown`. Inert on slab iPhones. |
-| Field of view | n/a (our own model) | **Fixed.** Both Duo displays are wider than the 9:16 video, so aspect-fill crops top/bottom instead of the sides. `CameraFOV` re-crops the iPhone 16 calibration per screen shape: Duo ≈ 66° × 60° vs 56° × 72°. Slab iPhones unchanged (unit-tested). |
+| Field of view | n/a (our own model) | **Estimated, unverified.** Both Duo displays are wider than the 9:16 video, so aspect-fill crops top/bottom instead of the sides. `CameraFOV` gives Duo ≈ 66° × 60°. Every slab iPhone, SE included, returns exactly 56° × 72° (gated by aspect, pinned by tests). The Duo numbers are an extrapolation from hand-tuned constants that don't fit a pinhole model, and they assume a 9:16 preview format; `CameraPreview` now logs the real format so a device run can confirm it. |
 | Size classes | Inner display reports regular × regular | Nothing to do: the app never branches on size class. |
 | `UIScreen.main` | Ambiguous with two displays; use the window scene's screen | Not used anywhere. |
 | Core Motion | Attitude is in the **chassis** frame unless `CMMotionManager.deviceMotionBody` is set to the view's display (iOS 27.1 SDK) | **Open — needs Xcode 27.1 + a device.** Our elevation (`asin(gravity.z)`) and roll are chassis-frame. Fine closed and fully open (both halves coplanar); a *partially* open hinge may skew elevation if the IMU and camera sit in different halves. |
@@ -22,8 +22,15 @@ tech talk and the iPhone Duo group-lab Q&A on the developer forums
 | Letterboxing | iOS 26 SDK: iPhone aspect on inner. iOS 27 SDK: extends left of the status bar. **iOS 27.1 SDK: edge to edge** | The build SDK is whatever Xcode Cloud's workflow selects (App Store Connect, not this repo). Local Xcode is 27.0 and GitHub CI pins 26.6. Moving to 27.1 is a release-train decision. |
 | Screenshots | Duo sets (inner 2007 × 2853, outer 1398 × 2034) optional now; reportedly **required from April 2027** for apps built with the 27.1 SDK | Not made yet. The 6.9" set stays the required fallback. |
 
+## How this was verified, and what wasn't
+
+- **Existing iPhones: unchanged by construction.** FOV only changes for screens wider than 9:16, which no slab iPhone is. Unit tests pin exact 56° × 72° for every iPhone shape in the last 30 days of PostHog (incl. 5 iPhone SE users). The guard is `allowsHitTesting(false)` unless sideways, which the portrait pin keeps from happening on a slab iPhone.
+- **Not verified:** anything on Duo hardware or a Duo simulator. That means the Duo FOV values, whether the inner display actually rotates the UI, whether the guard card looks right there, and the half-open hinge.
+- **After launch:** check PostHog for `sideways_hold_guard_shown` and catch-confirmation broken down by Duo device model.
+
 ## Before calling it done (needs Noah / hardware)
 
+0. **On your phone (`bin/deploy`):** check the Xcode console line `CameraPreview: active format …`. It should be 16:9 (e.g. 1920x1080). If it isn't, the Duo FOV estimate needs redoing.
 1. **Field test on a real iPhone Duo** (or a Duo workshop): closed, fully open,
    and half-open. Check the reticle lands on a plane at screen center *and*
    near the edges (that's where the FOV change shows), and that turning the

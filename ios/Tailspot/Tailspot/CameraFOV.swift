@@ -15,12 +15,17 @@
 //  slice of sky. Feeding the iPhone 16 numbers to an iPhone Duo would put
 //  AR labels several degrees off toward the screen edges.
 //
-//  Model: a pinhole camera, so the visible half-extents scale as tan(half
-//  angle). We keep the iPhone 16 calibration exactly (including whatever
-//  H/V anisotropy the hand-tuned constants carry — factor `k`), and only
-//  re-crop it for other aspect ratios. At the reference aspect this
-//  returns 56 × 72 to floating-point precision, so existing iPhones are
-//  unchanged.
+//  Scope — only screens WIDER than the video change. Every slab iPhone
+//  (iPhone SE's 16:9 included) is narrower than 9:16 and returns the
+//  reference 56 × 72 exactly, so existing devices can't regress. Wider
+//  screens (iPhone Duo, both displays) get a pinhole re-crop of the
+//  iPhone 16 calibration: tan(half angle) scales with the visible extent.
+//
+//  Caveat: the hand-tuned reference constants don't fit a pure pinhole
+//  (factor `k` ≈ 1.6, where 1 would be consistent), so the Duo numbers
+//  are an estimate, not a measurement. They also assume the 9:16 preview
+//  format; CameraPreview logs the real format at session start so that
+//  assumption can be checked on device. See docs/iphone-duo.md.
 //
 
 import CoreGraphics
@@ -55,19 +60,15 @@ nonisolated enum CameraFOV {
         // pure pinhole at the reference aspect. Preserved for every shape.
         let k = (tanH0 / tanV0) / referenceAspect
 
-        let tanH: Double
-        let tanV: Double
-        if aspect <= previewAspect {
-            // Screen narrower than the video (every slab iPhone): the
-            // video's full height is visible, the sides are cropped.
-            tanV = tanV0
-            tanH = tanV0 * aspect * k
-        } else {
-            // Screen wider than the video (iPhone Duo inner display): the
-            // full width is visible, the top and bottom are cropped.
-            tanH = tanV0 * previewAspect * k
-            tanV = tanH / (aspect * k)
+        // Screen narrower than the video (every slab iPhone): keep the
+        // field-tuned constants untouched.
+        guard aspect > previewAspect else {
+            return (referenceHfovDeg, referenceVfovDeg)
         }
+        // Screen wider than the video (iPhone Duo): the full width is
+        // visible, the top and bottom are cropped.
+        let tanH = tanV0 * previewAspect * k
+        let tanV = tanH / (aspect * k)
         return (2 * atan(tanH) * 180 / .pi, 2 * atan(tanV) * 180 / .pi)
     }
 
