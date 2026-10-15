@@ -255,6 +255,11 @@ struct SetsCoverageTests {
         ("C425", "Cessna", "425 Corsair"),
         ("PA22", "Piper", "PA-22 Colt"),
         ("SBR1", "Rockwell", "Sabre 40"),
+        // Public catalog coverage additions validated 2026-10-15.
+        ("B779", "Boeing", "777-9"),
+        ("FK9", "B & F Technik", "FK-9"),
+        ("RISN", "Porto", "Risen"),
+        ("WT9", "Aerospool", "WT-9 Dynamic"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -376,6 +381,10 @@ struct SetsCoverageTests {
             (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
             (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
             (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
+            (("B779", "Boeing", "777-9"), "fam-777", "f777-9"),
+            (("FK9", "B & F Technik", "FK-9"), "fam-sport-classics", "fsc-fk9"),
+            (("RISN", "Porto", "Risen"), "fam-sport-classics", "fsc-risen"),
+            (("WT9", "Aerospool", "WT-9 Dynamic"), "fam-sport-classics", "fsc-wt9"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -723,6 +732,22 @@ struct SetsCoverageTests {
         let falcon50 = mk(("FA50", "Dassault", "Falcon 50"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: falcon50), entry: faetaEntry),
                 "A Dassault Falcon 50 must not fill the ATEC Faeta slot")
+
+        // Adjacent public designators and qualified tokens stay separate from
+        // the new 777-9 and light-sport slots.
+        let b777xEntry = CardSets.families.first { $0.id == "fam-777" }!
+            .entries.first { $0.id == "f777-9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("B789", "Boeing", "787-9 Dreamliner"))),
+                                    entry: b777xEntry),
+                "A 787-9 must not fill the 777-9 slot")
+        let fk9Entry = sportSet.entries.first { $0.id == "fsc-fk9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("F9F", "Grumman", "F9F Panther"))),
+                                    entry: fk9Entry),
+                "An F9F Panther must not fill the FK9 slot")
+        let wt9Entry = sportSet.entries.first { $0.id == "fsc-wt9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("WT10", "Aerospool", "WT-10 Advantic"))),
+                                    entry: wt9Entry),
+                "An Aerospool WT10 must not fill the WT9 slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
