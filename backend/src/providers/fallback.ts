@@ -33,6 +33,9 @@ export interface FallbackProviderOptions {
    * Edge-triggered, not level: a primary that never failed never fires it.
    */
   onRecovered?: () => void;
+  /** Called when the secondary fails too, with the secondary's error. Without
+   *  it a dead backup is invisible until the primary also wobbles. */
+  onSecondaryFailure?: (secondaryError: unknown) => void;
 }
 
 export class FallbackProvider implements PositionProvider {
@@ -69,15 +72,20 @@ export class FallbackProvider implements PositionProvider {
     }
     this.engaged = true;
     this.options.onFallback?.(primaryError);
+    let secondaryError: unknown;
     try {
       return await this.secondary.aircraftInBbox(bbox);
-    } catch (secondaryError) {
-      throw new UpstreamError(
-        `both providers failed: ${this.primary.name} (${describe(primaryError)}); ` +
-          `${this.secondary.name} (${describe(secondaryError)})`,
-        secondaryError,
-      );
+    } catch (err) {
+      secondaryError = err;
     }
+    // Outside the try, like the other hooks, so a broken listener can't be
+    // mistaken for a failed secondary.
+    this.options.onSecondaryFailure?.(secondaryError);
+    throw new UpstreamError(
+      `both providers failed: ${this.primary.name} (${describe(primaryError)}); ` +
+        `${this.secondary.name} (${describe(secondaryError)})`,
+      secondaryError,
+    );
   }
 }
 

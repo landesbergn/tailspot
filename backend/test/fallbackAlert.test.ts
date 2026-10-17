@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FallbackProvider } from "../src/providers/fallback.js";
 import {
+  FeedFailureAlerter,
   type SustainedFallbackAlert,
   SustainedFallbackAlerter,
 } from "../src/providers/fallbackAlert.js";
@@ -66,14 +67,15 @@ describe("SustainedFallbackAlerter", () => {
     expect(alerts).toHaveLength(3);
   });
 
-  it("resets the clock when the primary serves again", () => {
+  it("resets the clock once the primary has stayed healthy for the quiet window", () => {
     const { alerter, alerts, advance } = harness();
     alerter.recordFallback(new Error("down"));
     advance(4 * MINUTE);
     alerter.recordRecovery();
+    advance(2 * MINUTE);
 
-    // A new failure right after recovery starts from zero — the earlier four
-    // minutes must not accumulate into an alert one minute later.
+    // A new failure after a held recovery starts from zero — the earlier four
+    // minutes must not accumulate into an alert two minutes later.
     alerter.recordFallback(new Error("down again"));
     advance(2 * MINUTE);
     alerter.recordFallback(new Error("down again"));
@@ -96,6 +98,28 @@ describe("SustainedFallbackAlerter", () => {
       alerter.recordFallback(new Error("down"));
     }
     expect(alerts).toHaveLength(1);
+  });
+
+  it("alerts on a flapping feed: stray successes don't restart the clock", () => {
+    const { alerter, alerts, advance } = harness();
+    // The 2026-10-17 shape: mostly failing, one success every ~40 s.
+    for (let elapsed = 0; elapsed <= 6 * MINUTE; elapsed += 10_000) {
+      if (elapsed % 40_000 === 0) alerter.recordRecovery();
+      else alerter.recordFallback(new Error("flapping"));
+      advance(10_000);
+    }
+    expect(alerts).toHaveLength(1);
+  });
+
+  it("stays silent for isolated blips spread out over time", () => {
+    const { alerter, alerts, advance } = harness();
+    for (let i = 0; i < 10; i++) {
+      alerter.recordFallback(new Error("blip"));
+      advance(10_000);
+      alerter.recordRecovery();
+      advance(10 * MINUTE);
+    }
+    expect(alerts).toEqual([]);
   });
 
   it("reports engagement state", () => {
@@ -179,5 +203,47 @@ describe("FallbackProvider onRecovered", () => {
     await fallback.aircraftInBbox(BBOX);
     await fallback.aircraftInBbox(BBOX);
     expect(events).toEqual([]);
+  });
+});
+
+describe("FeedFailureAlerter", () => {
+  it("alerts on the first failure, then at most once per hour", () => {
+    let now = 0;
+    const alerts: unknown[] = [];
+    const alerter = new FeedFailureAlerter({ now: () => now, onAlert: (e) => alerts.push(e) });
+    const err = new Error("airplaneslive returned HTTP 403");
+    alerter.recordFailure(err);
+    expect(alerts).toEqual([err]);
+    for (let i = 0; i < 50; i++) {
+      now += MINUTE;
+      alerter.recordFailure(new Error("again"));
+    }
+    expect(alerts).toHaveLength(1);
+    now += 10 * MINUTE; // 60 min after the first alert
+    alerter.recordFailure(new Error("still"));
+    expect(alerts).toHaveLength(2);
+  });
+});
+
+describe("FallbackProvider onSecondaryFailure", () => {
+  it("reports the secondary's error when both feeds fail, and only then", async () => {
+    const primary = flakyPrimary();
+    const secondaryErr = new Error("HTTP 403");
+    const failures: unknown[] = [];
+    const fallback = new FallbackProvider(
+      primary.provider,
+      {
+        name: "secondary",
+        async aircraftInBbox() {
+          throw secondaryErr;
+        },
+      },
+      { onSecondaryFailure: (e) => failures.push(e) },
+    );
+
+    await fallback.aircraftInBbox(BBOX); // primary healthy — secondary untouched
+    primary.fail();
+    await expect(fallback.aircraftInBbox(BBOX)).rejects.toThrow("both providers failed");
+    expect(failures).toEqual([secondaryErr]);
   });
 });

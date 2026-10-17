@@ -23,7 +23,7 @@ import {
   type RouteEnricher,
   type RouteResolver,
 } from "./providers/adsblolRoutes.js";
-import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
+import { FeedFailureAlerter, SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
 import { type PositionProvider, selectProvider } from "./providers/index.js";
 import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
@@ -197,9 +197,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // A log line is enough to explain an incident after the fact, but nobody
   // watches the Fly log live, so a primary that stays dead for hours reads as
   // a healthy system. The alerter turns the engage/recover edges into ONE
-  // Sentry message per hour once the fallback has been continuously engaged
-  // for five minutes — the timing logic lives in SustainedFallbackAlerter and
-  // is unit-tested with an injected clock.
+  // Sentry message per hour once the fallback has been engaged for five
+  // minutes (a flapping feed counts as engaged) — the timing logic lives in
+  // SustainedFallbackAlerter and is unit-tested with an injected clock.
   const fallbackAlerter = new SustainedFallbackAlerter({
     // Shares the rate limiters' injectable clock (same unix-ms units), the way
     // the /v1/stats memo does — one fake clock per test, not three.
@@ -208,7 +208,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       const minutes = Math.round(engagedForMs / 60_000);
       app.log.error(
         { err: primaryError, engagedForMs },
-        `primary position feed has been down for ~${minutes} min; still serving the fallback`,
+        `primary position feed has been failing for ~${minutes} min`,
       );
       // Imported lazily so app.ts's static graph stays Sentry-free (the test
       // suite builds this app constantly and should never load the SDK). This
@@ -224,6 +224,22 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         .catch((err) => app.log.warn({ err }, "could not report sustained fallback to Sentry"));
     },
   });
+  // The backup feed has no sustain threshold: any failure there means the
+  // fallback is gone, which is worth a Sentry issue the same day (hourly cap).
+  const backupFeedAlerter = new FeedFailureAlerter({
+    now: options.rateLimitNow,
+    onAlert: (err) => {
+      app.log.error({ err }, "backup position feed failed");
+      void import("@sentry/node")
+        .then((Sentry) =>
+          Sentry.captureMessage("Backup position feed failing", {
+            level: "error",
+            extra: { error: err instanceof Error ? err.message : String(err) },
+          }),
+        )
+        .catch((e) => app.log.warn({ err: e }, "could not report backup feed failure to Sentry"));
+    },
+  });
   const provider =
     options.provider ??
     selectProvider(process.env, {
@@ -235,6 +251,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         app.log.info("primary position feed recovered; fallback disengaged");
         fallbackAlerter.recordRecovery();
       },
+      onSecondaryFailure: (err) => backupFeedAlerter.recordFailure(err),
     });
 
   // Cache TTL / staleness from env, overridable per-build (tests pass explicit
