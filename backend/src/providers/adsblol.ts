@@ -222,19 +222,24 @@ export class AdsbLolProvider implements PositionProvider {
     };
   }
 
+  /**
+   * One request, retried ONCE if the connection is dropped (ECONNRESET and
+   * friends) before an answer arrives. On 2026-10-17 adsb.lol was resetting
+   * connections under load, and a second attempt often got through. Both
+   * attempts share one `timeoutMs` deadline, so a retry never makes the
+   * caller wait longer than before. HTTP errors (403, 429, 5xx) and timeouts
+   * are NOT retried: those are answers, not dropped connections.
+   */
   private async fetchJson(url: string): Promise<AdsbLolResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(url, {
-        method: "GET",
-        headers: { accept: "application/json", "user-agent": "tailspot-backend" },
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        throw new UpstreamError(`${this.name} returned HTTP ${res.status}`);
+      try {
+        return await this.fetchOnce(url, controller.signal);
+      } catch (err) {
+        if (!isDroppedConnection(err) || controller.signal.aborted) throw err;
+        return await this.fetchOnce(url, controller.signal);
       }
-      return (await res.json()) as AdsbLolResponse;
     } catch (err) {
       if (err instanceof UpstreamError) throw err;
       throw new UpstreamError(`${this.name} request failed`, err);
@@ -242,4 +247,34 @@ export class AdsbLolProvider implements PositionProvider {
       clearTimeout(timer);
     }
   }
+
+  private async fetchOnce(url: string, signal: AbortSignal): Promise<AdsbLolResponse> {
+    const res = await this.fetchFn(url, {
+      method: "GET",
+      headers: { accept: "application/json", "user-agent": "tailspot-backend" },
+      signal,
+    });
+    if (!res.ok) {
+      throw new UpstreamError(`${this.name} returned HTTP ${res.status}`);
+    }
+    return (await res.json()) as AdsbLolResponse;
+  }
+}
+
+/** Socket-level codes meaning "the connection died", as opposed to an answer. */
+const DROPPED_CONNECTION_CODES = new Set(["ECONNRESET", "EPIPE", "ECONNREFUSED", "UND_ERR_SOCKET"]);
+
+/**
+ * True when `err` (or a `.cause` it wraps) is a dropped connection. Node's
+ * fetch reports these as `TypeError: fetch failed` with the socket error as
+ * `.cause`, so walk the chain, depth-bounded like `isTransientConnectionError`.
+ */
+function isDroppedConnection(err: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < 5; depth++) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && DROPPED_CONNECTION_CODES.has(code)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
