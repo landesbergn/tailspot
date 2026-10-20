@@ -39,7 +39,7 @@ fixed canary bbox through the same tile cache the phones use:
 ```
 
 `checks.feed` is one of `ok`, `stale` (serving last-good inside the 60 s
-window), `fallback` (fresh data, but from airplanes.live because adsb.lol is
+window), `fallback` (fresh data, but from adsb.fi because adsb.lol is
 down), `unavailable` (upstream failed, nothing to serve — phones get 503) or
 `timeout`. The first three are 200: users are getting planes. The last two,
 or `db: "unavailable"`, are 503. Budgets are 3 s for the DB and 4 s for the
@@ -332,7 +332,7 @@ stub session.
 
 | Var | Default | Meaning |
 |---|---|---|
-| `POSITION_PROVIDER` | — (composite) | Unset: adsb.lol primary with airplanes.live failover. `adsblol` or `airplaneslive`: that provider only. Read once at startup. |
+| `POSITION_PROVIDER` | — (composite) | Unset: adsb.lol primary with adsb.fi failover (airplanes.live until 2026-10-19 — it 403s Fly's network pending an access request). `adsblol`, `adsbfi` or `airplaneslive`: that provider only. Read once at startup. |
 | `CACHE_TTL_SECONDS` | `10` | Fresh-cache window. |
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
@@ -367,8 +367,11 @@ in NM) — so the adapter fetches the smallest circle covering the bbox and
 filters back to the rectangle. readsb feeds report feet / knots and don't carry
 `origin_country`, so the adapter converts to meters / m·s⁻¹ and derives the
 country from the icao24 via the ICAO Annex 10 24-bit allocation table. The
-**airplanes.live** failover speaks the same readsb dialect (same adapter,
-different host) and kicks in when adsb.lol errors.
+**adsb.fi** failover speaks the same readsb dialect (same adapter, different
+host and path) and kicks in when adsb.lol errors. airplanes.live filled that role
+until 2026-10-19, when it turned out to refuse Fly's network outright (HTTP 403,
+"email us for access"); its adapter stays in the tree behind
+`POSITION_PROVIDER=airplaneslive`.
 
 ## Running locally
 
@@ -603,7 +606,7 @@ What pages Noah, and why each exists (all verified firing or configured
 |---|---|---|---|
 | **Product is down** | Sentry uptime monitor 8072647 on `GET /readyz`, 60 s, 3 fails → issue → email | Process dead, DB unreachable, **position feed unable to serve planes** (both upstreams failing past the cache window) | The one monitor the free plan allows, so `/readyz` folds every dependency into one URL. |
 | **Feed outage (in-process)** | `SustainedFallbackAlerter` → Sentry message `Position feed DOWN: both providers failing for ~N min` (level fatal, fingerprint `position-feed-outage`) | Both feeds failing on real traffic for 5+ min; one message per hour | Driven by `FallbackProvider.onBothFailed`; clears when either feed serves. |
-| **Feed degraded** | Same alerter → `Position feed fallback sustained for ~N min` (level error, fingerprint `position-feed-fallback`) | adsb.lol down, airplanes.live carrying the product | Informational; users still get planes. |
+| **Feed degraded** | Same alerter → `Position feed fallback sustained for ~N min` (level error, fingerprint `position-feed-fallback`) | adsb.lol down, adsb.fi carrying the product | Informational; users still get planes. |
 | **New error** | Sentry issue rule 3591520 "Send a notification for high priority issues" → email | The first event of any new high-priority issue | This is ALL that fired during the outage: one email on 2026-09-25, then 38 silent repeats. |
 | **Ongoing error** | Sentry issue rule "Ongoing error: hourly reminder…" → email, at most hourly per issue | Any error-level issue older than 30 min that keeps producing events | The fix for the row above: a repeat is a page, not a footnote. |
 | **Users see the error pill** | PostHog alert on the `adsb_fetch_error_shown` insight, unique users per hour, checked hourly → email | The client-side view: phones showing "Tailspot unreachable", whatever the cause | Independent of the backend's own opinion; also catches an app-side break. |
@@ -614,7 +617,10 @@ What pages Noah, and why each exists (all verified firing or configured
 through Fly's *shared* IPv4 address, whose reputation is set by every tenant on
 that host; adsb.lol's limits are "dynamic based on the environment load" (its
 README) and airplanes.live sits behind Cloudflare. Both answered this laptop
-instantly while refusing the machine. The lever is a static egress IP, **allocated 2026-10-19**
+instantly while refusing the machine. airplanes.live's 403 survived the dedicated IP: its body asks projects to email
+contact@airplanes.live for access (a policy gate, not reputation), so the fallback
+moved to **adsb.fi** the same night (`src/providers/adsbfi.ts`; confirmed 200 from
+the machine). For adsb.lol the lever is a static egress IP, **allocated 2026-10-19**
 (`fly ips allocate-egress --app tailspot-api -r sjc` → IPv4 209.71.113.155 plus an
 IPv6, $3.60/mo, persists across deploys; `fly ips list` shows it as type `egress`).
 It is still a Fly-range address, so a Cloudflare ASN-level block would survive it. adsb.lol also answers over IPv6 and says API keys

@@ -5,6 +5,15 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-19 — adsb.fi becomes the fallback feed (branch `claude/adsbfi-fallback`)
+
+- airplanes.live still 403s from the dedicated egress IP; its error body asks
+  projects to email for access. A fallback that cannot be reached is none.
+- `AdsbFiProvider`: the adsb.lol client pointed at adsb.fi's v3 path (same
+  rows, same `now`). Default composite is now `adsblol+adsbfi`;
+  `POSITION_PROVIDER=airplaneslive` remains for if access is granted.
+- Attribution for adsb.fi on the site's attributions page and the Settings row.
+
 ## 2026-10-19 — Feed-outage alerting (branch `claude/tailspot-monitoring-alerts-1d2fb3`)
 
 - Sixteen days of 503s from `/v1/aircraft` (adsb.lol 429 + airplanes.live 403

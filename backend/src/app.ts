@@ -203,7 +203,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Provider is selected ONCE at build time (env read here, not per-request).
-  // The default is adsb.lol with an airplanes.live fallback; every engaged
+  // The default is adsb.lol with an adsb.fi fallback; every engaged
   // fallback is logged — a silently-dead primary must not look healthy (the
   // client-side silent-failover lesson from the 2026-06-21 cutover).
   //
@@ -269,7 +269,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.provider ??
     selectProvider(process.env, {
       onFallback: (err) => {
-        app.log.warn({ err }, "primary position feed failed; serving airplanes.live fallback");
+        app.log.warn({ err }, "primary position feed failed; serving the fallback feed");
         fallbackAlerter.recordFallback(err);
       },
       onRecovered: () => {
@@ -389,7 +389,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // per-callsign-cached lookup that attaches `route` without blocking the
   // position response (see AdsbLolRouteService). Enabled whenever adsb.lol is
   // the (primary) provider — `startsWith` also matches the default
-  // "adsblol+airplaneslive" fallback composite — and outside tests (so the
+  // "adsblol+adsbfi" fallback composite — and outside tests (so the
   // route suite never hits the network); an injected override (tests) always
   // wins. Route lookups deliberately stay adsb.lol-direct even when positions
   // are served by the fallback: routes are cached, non-blocking metadata.

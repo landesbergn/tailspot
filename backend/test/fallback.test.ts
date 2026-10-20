@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AdsbFiProvider } from "../src/providers/adsbfi.js";
 import { AirplanesLiveProvider } from "../src/providers/airplaneslive.js";
 import { FallbackProvider } from "../src/providers/fallback.js";
 import { selectProvider } from "../src/providers/index.js";
@@ -183,13 +184,74 @@ describe("AirplanesLiveProvider", () => {
   });
 });
 
+describe("AdsbFiProvider", () => {
+  it("hits opendata.adsb.fi's v3 lat/lon/dist path and parses the shared readsb shape", async () => {
+    const urls: string[] = [];
+    const fetchFn = (async (url: RequestInfo | URL) => {
+      urls.push(String(url));
+      // The real v3 response, trimmed: same `ac` rows and ms `now` as adsb.lol.
+      return new Response(
+        JSON.stringify({
+          ac: [
+            {
+              hex: "a0cb44",
+              flight: "POD2    ",
+              r: "N150MB",
+              t: "CL30",
+              category: "A2",
+              alt_baro: 16325,
+              alt_geom: 16500,
+              gs: 333.5,
+              track: 167.01,
+              lat: 37.5,
+              lon: -122.5,
+              seen_pos: 0.452,
+            },
+          ],
+          msg: "No error",
+          now: 1_792_475_184_001,
+          total: 1,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const provider = new AdsbFiProvider({ fetchFn });
+    const snap = await provider.aircraftInBbox(BBOX);
+
+    expect(provider.name).toBe("adsbfi");
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toMatch(
+      /^https:\/\/opendata\.adsb\.fi\/api\/v3\/lat\/[\d.-]+\/lon\/[\d.-]+\/dist\/\d+$/,
+    );
+    expect(snap.fetchedAt).toBe(Math.floor(1_792_475_184_001 / 1000));
+    expect(snap.aircraft).toHaveLength(1);
+    expect(snap.aircraft[0]).toMatchObject({
+      icao24: "a0cb44",
+      callsign: "POD2",
+      registration: "N150MB",
+      typecode: "CL30",
+      category: "A2",
+    });
+  });
+
+  it("names its errors after itself", async () => {
+    const fetchFn = (async () => new Response("nope", { status: 429 })) as typeof fetch;
+    const provider = new AdsbFiProvider({ fetchFn });
+    await expect(provider.aircraftInBbox(BBOX)).rejects.toThrow(/adsbfi returned HTTP 429/);
+  });
+});
+
 describe("selectProvider", () => {
-  it("defaults to the adsb.lol + airplanes.live fallback composite", () => {
-    expect(selectProvider({}).name).toBe("adsblol+airplaneslive");
+  it("defaults to the adsb.lol + adsb.fi fallback composite", () => {
+    // airplanes.live was the fallback until 2026-10-19; it refuses Fly's network
+    // (HTTP 403, policy), so a composite naming it would be a fallback in name only.
+    expect(selectProvider({}).name).toBe("adsblol+adsbfi");
   });
 
   it("still selects single providers explicitly", () => {
     expect(selectProvider({ POSITION_PROVIDER: "adsblol" }).name).toBe("adsblol");
+    expect(selectProvider({ POSITION_PROVIDER: "adsbfi" }).name).toBe("adsbfi");
     expect(selectProvider({ POSITION_PROVIDER: "airplaneslive" }).name).toBe("airplaneslive");
   });
 
