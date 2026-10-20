@@ -269,7 +269,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.provider ??
     selectProvider(process.env, {
       onFallback: (err) => {
-        app.log.warn({ err }, "primary position feed failed; serving airplanes.live fallback");
+        app.log.warn({ err }, "primary position feed failed; serving the fallback feed");
         fallbackAlerter.recordFallback(err);
       },
       onRecovered: () => {

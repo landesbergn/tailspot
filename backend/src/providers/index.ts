@@ -1,3 +1,4 @@
+import { AdsbFiProvider } from "./adsbfi.js";
 import { AdsbLolProvider } from "./adsblol.js";
 import { AirplanesLiveProvider } from "./airplaneslive.js";
 import { FallbackProvider, type FallbackProviderOptions } from "./fallback.js";
@@ -6,6 +7,7 @@ import type { PositionProvider } from "./types.js";
 export * from "./types.js";
 export { AdsbLolProvider, normalizeAdsbLol } from "./adsblol.js";
 export { AirplanesLiveProvider } from "./airplaneslive.js";
+export { AdsbFiProvider } from "./adsbfi.js";
 export { FallbackProvider } from "./fallback.js";
 export { countryForIcao24 } from "./icaoCountry.js";
 export {
@@ -21,9 +23,13 @@ export {
  * (the result is captured in buildApp's closure), so flipping the env mid-run
  * has no effect — restart to change providers.
  *
- *   (unset)                          — adsb.lol primary, airplanes.live fallback
+ *   (unset)                          — adsb.lol primary, adsb.fi fallback
+ *                                      (airplanes.live was the fallback until
+ *                                      2026-10-19; it 403s Fly's network — see
+ *                                      adsbfi.ts)
  *   POSITION_PROVIDER=adsblol       — adsb.lol only (pre-2026-07 behavior)
- *   POSITION_PROVIDER=airplaneslive — airplanes.live only (debugging a feed)
+ *   POSITION_PROVIDER=adsbfi        — adsb.fi only (debugging a feed)
+ *   POSITION_PROVIDER=airplaneslive — airplanes.live only (if they grant access)
  *
  * Any other value (e.g. the long-removed "opensky") throws at startup rather
  * than silently degrading to the fallback pair — a misconfigured deploy should
@@ -37,17 +43,15 @@ export function selectProvider(
   switch (choice) {
     case "adsblol":
       return new AdsbLolProvider();
+    case "adsbfi":
+      return new AdsbFiProvider();
     case "airplaneslive":
       return new AirplanesLiveProvider();
     case "":
-      return new FallbackProvider(
-        new AdsbLolProvider(),
-        new AirplanesLiveProvider(),
-        fallbackOptions,
-      );
+      return new FallbackProvider(new AdsbLolProvider(), new AdsbFiProvider(), fallbackOptions);
     default:
       throw new Error(
-        `Unknown POSITION_PROVIDER "${env.POSITION_PROVIDER}" — use "adsblol", "airplaneslive", or leave unset for the fallback pair.`,
+        `Unknown POSITION_PROVIDER "${env.POSITION_PROVIDER}" — use "adsblol", "adsbfi", "airplaneslive", or leave unset for the fallback pair.`,
       );
   }
 }

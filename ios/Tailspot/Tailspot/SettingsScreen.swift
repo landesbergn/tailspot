@@ -184,7 +184,7 @@ struct SettingsScreen: View {
                 legalLink(label: "Attributions",
                           url: URL(string: "https://tailspot.app/attributions.html")!)
 
-                LabeledContent("Live aircraft data", value: "adsb.lol")
+                LabeledContent("Live aircraft data", value: "adsb.lol · adsb.fi")
                 LabeledContent("Photos", value: "Planespotters.net")
 
             } header: {
