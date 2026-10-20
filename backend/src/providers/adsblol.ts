@@ -236,6 +236,7 @@ export class AdsbLolProvider implements PositionProvider {
     return {
       fetchedAt,
       aircraft: normalizeAdsbLol(resp, fetchedAt, bbox),
+      provider: this.name,
     };
   }
 

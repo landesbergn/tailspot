@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
+import { FallbackProvider } from "../src/providers/fallback.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../src/providers/types.js";
 import { UpstreamError } from "../src/providers/types.js";
 import { DEFAULT_CANARY_BBOX, type FeedProbeResult } from "../src/routes/feedProbe.js";
@@ -14,7 +15,7 @@ import { DEFAULT_CANARY_BBOX, type FeedProbeResult } from "../src/routes/feedPro
 
 interface ReadyBody {
   status: "ok" | "unavailable";
-  checks: { db: string; feed: string; feedSource?: string };
+  checks: { db: string; feed: string; feedSource?: string; feedProvider?: string };
 }
 
 /** Controllable stub feed: counts calls, records bboxes, can fail or hang. */
@@ -69,7 +70,7 @@ describe("GET /readyz", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<ReadyBody>()).toEqual({
       status: "ok",
-      checks: { db: "ok", feed: "ok", feedSource: "probe" },
+      checks: { db: "ok", feed: "ok", feedSource: "probe", feedProvider: "stub" },
     });
   });
 
@@ -79,7 +80,7 @@ describe("GET /readyz", () => {
     expect(res.statusCode).toBe(503);
     expect(res.json<ReadyBody>()).toEqual({
       status: "unavailable",
-      checks: { db: "unavailable", feed: "ok", feedSource: "probe" },
+      checks: { db: "unavailable", feed: "ok", feedSource: "probe", feedProvider: "stub" },
     });
   });
 
@@ -119,7 +120,7 @@ describe("GET /readyz", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json<ReadyBody>()).toEqual({
       status: "ok",
-      checks: { db: "ok", feed: "stale", feedSource: "probe" },
+      checks: { db: "ok", feed: "stale", feedSource: "probe", feedProvider: "stub" },
     });
 
     // Past the stale window there is nothing left to serve.
@@ -173,7 +174,12 @@ describe("GET /readyz", () => {
     nowMs += 30_000;
     const res = await a.inject({ method: "GET", url: "/readyz" });
     expect(res.statusCode).toBe(200);
-    expect(res.json<ReadyBody>().checks).toEqual({ db: "ok", feed: "ok", feedSource: "organic" });
+    expect(res.json<ReadyBody>().checks).toEqual({
+      db: "ok",
+      feed: "ok",
+      feedSource: "organic",
+      feedProvider: "stub",
+    });
     expect(provider.calls).toHaveLength(1); // no canary fetch
 
     // Past the organic window with no traffic, the canary fetches for itself.
@@ -293,6 +299,35 @@ describe("GET /readyz probe robustness", () => {
       const res = await app.inject({ method: "GET", url: "/readyz" });
       expect(res.statusCode).toBe(503);
       expect(res.json<ReadyBody>().checks).toEqual({ db: "unavailable", feed: "unavailable" });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("GET /readyz names the feed that proved readiness", () => {
+  it("reports the composite's MEMBER that served, not the pair's name", async () => {
+    const primary = new StubProvider();
+    primary.shouldFail = true;
+    const secondary: PositionProvider = {
+      name: "backup",
+      async aircraftInBbox(): Promise<ProviderSnapshot> {
+        return { fetchedAt: 1_700_000_100, aircraft: [] };
+      },
+    };
+    const app = await buildApp({
+      readyProbe: async () => {},
+      provider: new FallbackProvider(primary, secondary),
+      cacheConfig: { ttlSeconds: 10, staleMaxSeconds: 60, tileSizeDeg: 0.25 },
+    });
+    try {
+      const res = await app.inject({ method: "GET", url: "/readyz" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<ReadyBody>().checks).toMatchObject({
+        feed: "ok",
+        feedSource: "probe",
+        feedProvider: "backup",
+      });
     } finally {
       await app.close();
     }

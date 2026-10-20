@@ -265,3 +265,35 @@ describe("selectProvider", () => {
     );
   });
 });
+
+describe("FallbackProvider names the member that served", () => {
+  it("stamps the primary's name on a primary success", async () => {
+    const primary = stub("p", snapshot(111));
+    const secondary = stub("s", snapshot(222));
+    const fallback = new FallbackProvider(primary.provider, secondary.provider);
+
+    const snap = await fallback.aircraftInBbox(BBOX);
+
+    expect(snap.provider).toBe("p");
+  });
+
+  it("stamps the secondary's name when the fallback serves — the member, not 'p+s'", async () => {
+    const primary = stub("p", new UpstreamError("p exploded"));
+    const secondary = stub("s", snapshot(222));
+    const fallback = new FallbackProvider(primary.provider, secondary.provider);
+
+    const snap = await fallback.aircraftInBbox(BBOX);
+
+    expect(snap.provider).toBe("s");
+    expect(fallback.name).toBe("p+s");
+  });
+
+  it("leaves an adapter's own stamp alone", async () => {
+    const primary = stub("p", { ...snapshot(111), provider: "adsbfi" });
+    const fallback = new FallbackProvider(primary.provider, stub("s", snapshot(222)).provider);
+
+    const snap = await fallback.aircraftInBbox(BBOX);
+
+    expect(snap.provider).toBe("adsbfi");
+  });
+});
