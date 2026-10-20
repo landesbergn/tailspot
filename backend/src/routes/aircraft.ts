@@ -59,7 +59,13 @@ function parseCoord(v: unknown): number | undefined {
   return undefined;
 }
 
-export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteOptions): void {
+/**
+ * Registers GET /v1/aircraft and returns the tile cache it serves from, so the
+ * readiness canary (GET /readyz, see routes/feedProbe.ts) can ask the SAME
+ * cache the phones use — one shared fetch per tile per TTL, never a second
+ * upstream code path that could be healthy while the real one is not.
+ */
+export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteOptions): TileCache {
   const cache = new TileCache(opts.provider, opts.cacheConfig, opts.now, opts.onFreshSnapshot);
 
   app.get("/v1/aircraft", async (request, reply) => {
@@ -105,4 +111,6 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
       return reply.code(503).send({ error: "upstream unavailable" });
     }
   });
+
+  return cache;
 }

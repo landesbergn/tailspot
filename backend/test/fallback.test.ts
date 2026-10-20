@@ -88,6 +88,62 @@ describe("FallbackProvider", () => {
     expect(message).toContain("s down");
   });
 
+  it("reports onBothFailed with the composite error, and only then", async () => {
+    // The hard-outage edge: with both feeds dead the phone gets a 503 once the
+    // tile cache's last-good window closes. This is the signal the outage
+    // alerter in app.ts turns into "Position feed DOWN".
+    const primary = stub("p", new UpstreamError("p down"));
+    const secondary = stub("s", new UpstreamError("s down"));
+    const both: UpstreamError[] = [];
+    const served: number[] = [];
+    const fallback = new FallbackProvider(primary.provider, secondary.provider, {
+      onBothFailed: (err) => both.push(err),
+      onSecondaryServed: () => served.push(1),
+    });
+
+    const thrown = await fallback.aircraftInBbox(BBOX).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(both).toHaveLength(1);
+    expect(both[0]).toBe(thrown);
+    expect(both[0].message).toContain("p down");
+    expect(both[0].message).toContain("s down");
+    expect(served).toEqual([]);
+  });
+
+  it("reports onSecondaryServed when the backup feed carries the request (the all-clear for an outage)", async () => {
+    const primary = stub("p", new UpstreamError("p down"));
+    const secondary = stub("s", snapshot(222));
+    const both: unknown[] = [];
+    const served: number[] = [];
+    const fallback = new FallbackProvider(primary.provider, secondary.provider, {
+      onBothFailed: (err) => both.push(err),
+      onSecondaryServed: () => served.push(1),
+    });
+
+    await fallback.aircraftInBbox(BBOX);
+    await fallback.aircraftInBbox(BBOX);
+
+    expect(served).toEqual([1, 1]); // level-triggered: every served request
+    expect(both).toEqual([]);
+  });
+
+  it("never reports onSecondaryServed or onBothFailed while the primary is healthy", async () => {
+    const primary = stub("p", snapshot(111));
+    const secondary = stub("s", snapshot(222));
+    const calls: string[] = [];
+    const fallback = new FallbackProvider(primary.provider, secondary.provider, {
+      onBothFailed: () => calls.push("both"),
+      onSecondaryServed: () => calls.push("secondary"),
+    });
+
+    await fallback.aircraftInBbox(BBOX);
+
+    expect(calls).toEqual([]);
+  });
+
   it("composes its name from both providers (drives the route-enricher gate)", () => {
     const fallback = new FallbackProvider(
       stub("adsblol", snapshot(1)).provider,
