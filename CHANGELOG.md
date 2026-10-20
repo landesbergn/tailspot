@@ -17,7 +17,9 @@ Git history + PLAN.md §9 remain the authoritative record.
   Sentry message, separate from the degraded "serving the fallback" one.
 - New Sentry rule re-notifies hourly while an error-level issue keeps firing;
   new PostHog alert on unique users seeing the error pill.
-- Root cause (shared egress IP reputation) left for Noah: static egress IP.
+- Root cause (shared egress IP reputation) fixed the same night: Noah OK'd a
+  static egress IP (`fly ips allocate-egress`, 209.71.113.155); adsb.lol
+  answered it within three minutes and the feed recovered.
 
 ## 2026-10-11 — Classic-jet tiers (branch `fix/classic-jets-tiers`)
 

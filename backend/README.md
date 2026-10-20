@@ -614,10 +614,10 @@ What pages Noah, and why each exists (all verified firing or configured
 through Fly's *shared* IPv4 address, whose reputation is set by every tenant on
 that host; adsb.lol's limits are "dynamic based on the environment load" (its
 README) and airplanes.live sits behind Cloudflare. Both answered this laptop
-instantly while refusing the machine. The lever is a static egress IP
-(`fly ips allocate-egress --app tailspot-api -r sjc`, $3.60/mo, persists across
-deploys) — a Noah decision because it costs money, and no guarantee against a
-Cloudflare ASN-level block. adsb.lol also answers over IPv6 and says API keys
+instantly while refusing the machine. The lever is a static egress IP, **allocated 2026-10-19**
+(`fly ips allocate-egress --app tailspot-api -r sjc` → IPv4 209.71.113.155 plus an
+IPv6, $3.60/mo, persists across deploys; `fly ips list` shows it as type `egress`).
+It is still a Fly-range address, so a Cloudflare ASN-level block would survive it. adsb.lol also answers over IPv6 and says API keys
 for feeders are coming; neither is wired yet.
 
 ### Not yet configured (phase 2 of the 2026-09-06 hardening — click-through checklist)
