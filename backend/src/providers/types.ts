@@ -113,6 +113,15 @@ export interface NormalizedAircraft {
 export interface ProviderSnapshot {
   fetchedAt: number;
   aircraft: NormalizedAircraft[];
+  /**
+   * The adapter that produced this snapshot ("adsbfi", "adsblol"), stamped by
+   * the adapter itself and carried through the composite, the tile cache and
+   * the wire unchanged. Added 2026-10-20: during that morning's outage nothing
+   * recorded which feed had served a given response, so "are we on the
+   * fallback?" could only be inferred from the absence of warnings. Optional
+   * on the type for stubs; the tile cache fills it from the provider's name.
+   */
+  provider?: string;
 }
 
 /**

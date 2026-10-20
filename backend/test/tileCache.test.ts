@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../src/providers/types.js";
-import { DEFAULT_TILE_CONFIG, MAX_TILE_ENTRIES, TileCache } from "../src/routes/tileCache.js";
+import {
+  DEFAULT_TILE_CONFIG,
+  MAX_TILE_ENTRIES,
+  TileCache,
+  type UpstreamFetchEvent,
+} from "../src/routes/tileCache.js";
 
 /**
  * Regression tests for the tile-fetch/cache-key agreement.
@@ -174,5 +179,129 @@ describe("TileCache feed-health timestamps (what the readiness canary reads)", (
     await cache.get(bbox);
     expect(cache.lastFreshFetchAt).toBe(1_030_000);
     expect(cache.lastFailureAt).toBe(1_015_000);
+  });
+});
+
+/**
+ * Which feed served, and when. Added after the 2026-10-20 outage, when the
+ * only record of "are we on adsb.fi or adsb.lol right now?" was the absence of
+ * fallback warnings in a log Fly keeps for minutes.
+ */
+describe("TileCache upstream fetch reporting", () => {
+  const bbox: Bbox = { lamin: 37.61, lomin: -122.51, lamax: 38.11, lomax: -121.99 };
+
+  function namedProvider(name: string, stamped?: string): PositionProvider {
+    return {
+      name,
+      async aircraftInBbox(): Promise<ProviderSnapshot> {
+        return {
+          fetchedAt: 1_750_000_000,
+          aircraft: [],
+          ...(stamped !== undefined ? { provider: stamped } : {}),
+        };
+      },
+    };
+  }
+
+  it("reports one event per genuine upstream fetch, naming the provider — none on a fresh hit", async () => {
+    const events: UpstreamFetchEvent[] = [];
+    let t = 1_000_000;
+    const cache = new TileCache(
+      namedProvider("stub"),
+      {},
+      () => t,
+      undefined,
+      (e) => events.push(e),
+    );
+
+    await cache.get(bbox);
+    await cache.get(bbox); // inside the TTL → cache hit, no event
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({
+      provider: "stub",
+      tile: cache.tileKey(bbox),
+      aircraft: 0,
+      fetchedAt: 1_750_000_000,
+      upstreamMs: 0,
+    });
+
+    t += 11_000; // past the TTL → refetch → second event
+    await cache.get(bbox);
+    expect(events).toHaveLength(2);
+  });
+
+  it("stamps the snapshot with the provider's name when the adapter didn't, and remembers it", async () => {
+    const cache = new TileCache(namedProvider("stub"), {}, () => 0);
+    expect(cache.lastFreshProvider).toBeUndefined();
+
+    const { snapshot } = await cache.get(bbox);
+
+    expect(snapshot.provider).toBe("stub");
+    expect(cache.lastFreshProvider).toBe("stub");
+  });
+
+  it("keeps the adapter's own stamp (a composite's member, never the composite)", async () => {
+    const events: UpstreamFetchEvent[] = [];
+    const cache = new TileCache(
+      namedProvider("adsbfi+adsblol", "adsblol"),
+      {},
+      () => 0,
+      undefined,
+      (e) => events.push(e),
+    );
+
+    const { snapshot } = await cache.get(bbox);
+
+    expect(snapshot.provider).toBe("adsblol");
+    expect(events[0]?.provider).toBe("adsblol");
+    expect(cache.lastFreshProvider).toBe("adsblol");
+  });
+
+  it("a throwing report sink never breaks the fetch", async () => {
+    const cache = new TileCache(
+      namedProvider("stub"),
+      {},
+      () => 0,
+      undefined,
+      () => {
+        throw new Error("log sink broke");
+      },
+    );
+
+    await expect(cache.get(bbox)).resolves.toMatchObject({ stale: false });
+  });
+});
+
+describe("TileCache upstream fetch reporting on failure", () => {
+  const bbox: Bbox = { lamin: 37.61, lomin: -122.51, lamax: 38.11, lomax: -121.99 };
+
+  it("a last-good (stale) serve emits NO fetch event — only genuine fetches count", async () => {
+    let fail = false;
+    const provider: PositionProvider = {
+      name: "stub",
+      async aircraftInBbox(): Promise<ProviderSnapshot> {
+        if (fail) throw new Error("upstream down");
+        return { fetchedAt: 1_750_000_000, aircraft: [] };
+      },
+    };
+    const events: UpstreamFetchEvent[] = [];
+    let t = 1_000_000;
+    const cache = new TileCache(
+      provider,
+      {},
+      () => t,
+      undefined,
+      (e) => events.push(e),
+    );
+
+    await cache.get(bbox); // genuine fetch → 1 event
+    fail = true;
+    t += 11_000; // past the TTL, inside the 60 s stale window
+    const served = await cache.get(bbox);
+
+    expect(served.stale).toBe(true);
+    expect(served.snapshot.provider).toBe("stub"); // the ORIGINAL producer
+    expect(events).toHaveLength(1);
+    expect(cache.lastFreshProvider).toBe("stub");
   });
 });

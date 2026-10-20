@@ -55,6 +55,8 @@ export interface FeedProbeResult {
    * from its cache). Visible on /readyz so a human can tell the two apart.
    */
   source?: "organic" | "probe";
+  /** The feed that produced the proving snapshot ("adsbfi", "adsblol"), when known. */
+  provider?: string;
   /** Aircraft in the served snapshot, when one was served. */
   aircraft?: number;
   /** Upstream snapshot time (unix seconds), when one was served. */
@@ -129,13 +131,15 @@ export function makeFeedProbe(
       (failed === undefined || fresh > failed) &&
       now() - fresh < organicWindowMs
     ) {
-      return { status: "ok", source: "organic" };
+      const provider = cache.lastFreshProvider;
+      return { status: "ok", source: "organic", ...(provider !== undefined ? { provider } : {}) };
     }
     try {
       const { snapshot, stale } = await cache.get(bbox);
       return {
         status: stale ? "stale" : "ok",
         source: "probe",
+        ...(snapshot.provider !== undefined ? { provider: snapshot.provider } : {}),
         aircraft: snapshot.aircraft.length,
         fetchedAt: snapshot.fetchedAt,
       };

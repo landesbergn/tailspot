@@ -221,6 +221,9 @@ describe("AdsbLolProvider.aircraftInBbox", () => {
     expect(snapshot.fetchedAt).toBe(FETCHED_AT);
     // 3 in-bbox survivors (UA, JAL, DLH); decoy 4ca8e1 is outside the bbox.
     expect(snapshot.aircraft.length).toBe(3);
+    // The adapter names itself so the wire, the log and the registry can say
+    // which feed produced the data (adsb.fi / airplanes.live inherit via name).
+    expect(snapshot.provider).toBe("adsblol");
   });
 
   it("throws UpstreamError on a non-OK upstream status", async () => {

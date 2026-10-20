@@ -410,6 +410,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     now: options.now,
     onFreshSnapshot,
     routeEnricher,
+    // One info line per genuine upstream fetch (≤ 1 per tile per 10 s): which
+    // feed answered, how many planes, how long it took. This is the record of
+    // "which API served when" — the engage/recover warnings above only mark
+    // the edges, and during the 2026-10-20 outage nothing said which feed had
+    // produced any given response.
+    onUpstreamFetch: (event) => app.log.info(event, "position feed fetched"),
   });
 
   /**
@@ -423,7 +429,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    *   { "status": "ok" | "unavailable",
    *     "checks": { "db": "ok" | "unavailable",
    *                 "feed": "ok" | "stale" | "fallback" | "unavailable" | "timeout",
-   *                 "feedSource": "organic" | "probe" } }   // absent on timeout
+   *                 "feedSource": "organic" | "probe",      // absent on timeout
+   *                 "feedProvider": "adsbfi" | "adsblol" } }  // the feed that
+   *                                                           // produced the proof
    *
    * `stale` (serving last-good) and `fallback` (on the backup feed) are still
    * 200 — users are getting planes — but visible in the body for a human
@@ -453,6 +461,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // synchronously (a misconfigured injection, a getDb() that rejects before
     // awaiting) is a 503 like any other failure, never a 500 out of Promise.all.
     let feedSource: "organic" | "probe" | undefined;
+    let feedProvider: string | undefined;
     const [db, feed] = await Promise.all([
       withTimeout(Promise.resolve().then(readyProbe), 3_000, "database probe").then(
         () => "ok" as const,
@@ -464,6 +473,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       withTimeout(Promise.resolve().then(feedProbe), 4_000, "position feed probe").then(
         (result) => {
           feedSource = result.source;
+          feedProvider = result.provider;
           if (result.status === "unavailable") {
             request.log.warn({ err: result.error }, "readiness: position feed probe failed");
             return result.status;
@@ -493,7 +503,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // upstream quota.
     const body = {
       status: ready ? "ok" : "unavailable",
-      checks: { db, feed, ...(feedSource ? { feedSource } : {}) },
+      checks: {
+        db,
+        feed,
+        ...(feedSource ? { feedSource } : {}),
+        ...(feedProvider ? { feedProvider } : {}),
+      },
     };
     return ready ? body : reply.code(503).send(body);
   });
