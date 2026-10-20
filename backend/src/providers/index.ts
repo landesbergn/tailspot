@@ -23,10 +23,13 @@ export {
  * (the result is captured in buildApp's closure), so flipping the env mid-run
  * has no effect — restart to change providers.
  *
- *   (unset)                          — adsb.lol primary, adsb.fi fallback
- *                                      (airplanes.live was the fallback until
- *                                      2026-10-19; it 403s Fly's network — see
- *                                      adsbfi.ts)
+ *   (unset)                          — adsb.fi primary, adsb.lol fallback
+ *                                      (adsb.lol was primary until 2026-10-20:
+ *                                      it now caps a client at 500 requests a
+ *                                      DAY, which one polling phone exhausts
+ *                                      in ~80 min; adsb.fi publishes 1 req/s
+ *                                      and no daily cap — see adsbfi.ts.
+ *                                      airplanes.live 403s Fly's network.)
  *   POSITION_PROVIDER=adsblol       — adsb.lol only (pre-2026-07 behavior)
  *   POSITION_PROVIDER=adsbfi        — adsb.fi only (debugging a feed)
  *   POSITION_PROVIDER=airplaneslive — airplanes.live only (if they grant access)
@@ -48,7 +51,7 @@ export function selectProvider(
     case "airplaneslive":
       return new AirplanesLiveProvider();
     case "":
-      return new FallbackProvider(new AdsbLolProvider(), new AdsbFiProvider(), fallbackOptions);
+      return new FallbackProvider(new AdsbFiProvider(), new AdsbLolProvider(), fallbackOptions);
     default:
       throw new Error(
         `Unknown POSITION_PROVIDER "${env.POSITION_PROVIDER}" — use "adsblol", "adsbfi", "airplaneslive", or leave unset for the fallback pair.`,

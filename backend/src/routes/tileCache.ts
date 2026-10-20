@@ -93,6 +93,26 @@ export class TileCache {
   private readonly inFlight = new Map<string, Promise<ProviderSnapshot>>();
   private readonly config: TileCacheConfig;
   private readonly now: () => number;
+  /** Unix ms of the last genuine upstream fetch that succeeded (any tile). */
+  private lastFreshFetchAtMs: number | undefined;
+  /** Unix ms of the last upstream fetch that failed (any tile), whether or
+   *  not last-good data covered it. */
+  private lastFailureAtMs: number | undefined;
+
+  /**
+   * Feed health as organic traffic proves it. The readiness canary reads these
+   * so it can answer "the feed works" from the phones' own fetches instead of
+   * spending an upstream request of its own every minute — adsb.lol caps a
+   * client at 500 requests a DAY (x-ratelimit-limit, observed 2026-10-20),
+   * and a once-a-minute canary alone is 1,440. Undefined until the first
+   * fetch of each kind.
+   */
+  get lastFreshFetchAt(): number | undefined {
+    return this.lastFreshFetchAtMs;
+  }
+  get lastFailureAt(): number | undefined {
+    return this.lastFailureAtMs;
+  }
 
   constructor(
     private readonly provider: PositionProvider,
@@ -221,7 +241,9 @@ export class TileCache {
    * least-recently-written first, which is what both bounds want.
    */
   private store(key: string, snapshot: ProviderSnapshot): void {
-    const nowSec = Math.floor(this.now() / 1000);
+    const nowMs = this.now();
+    const nowSec = Math.floor(nowMs / 1000);
+    this.lastFreshFetchAtMs = nowMs;
     this.entries.delete(key);
     this.entries.set(key, { snapshot, storedAt: nowSec });
 
@@ -243,6 +265,7 @@ export class TileCache {
 
   /** Serve last-good if fresh enough; otherwise throw NoFreshDataError. */
   private fallbackOrThrow(key: string, nowSec: number, cause: unknown): TileResult {
+    this.lastFailureAtMs = this.now();
     const cached = this.entries.get(key);
     if (cached && nowSec - cached.storedAt < this.config.staleMaxSeconds) {
       // Carry the snapshot's true fetchedAt so the client sees real staleness.

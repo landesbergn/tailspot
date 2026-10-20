@@ -179,6 +179,23 @@ function trimField(v: string | null | undefined): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
+/**
+ * Render the IETF RateLimit headers (and Retry-After) a readsb aggregator
+ * sends, for log/alert text. Null when none are present. Exported for tests.
+ */
+export function rateLimitSummary(headers: Headers): string | null {
+  const parts: string[] = [];
+  const limit = headers.get("x-ratelimit-limit") ?? headers.get("ratelimit-limit");
+  const remaining = headers.get("x-ratelimit-remaining") ?? headers.get("ratelimit-remaining");
+  const reset = headers.get("x-ratelimit-reset") ?? headers.get("ratelimit-reset");
+  const retryAfter = headers.get("retry-after");
+  if (limit) parts.push(`ratelimit-limit=${limit}`);
+  if (remaining) parts.push(`remaining=${remaining}`);
+  if (reset) parts.push(`reset=${reset}s`);
+  if (retryAfter) parts.push(`retry-after=${retryAfter}`);
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
 export interface AdsbLolProviderOptions {
   baseUrl?: string;
   timeoutMs?: number;
@@ -241,7 +258,15 @@ export class AdsbLolProvider implements PositionProvider {
         signal: controller.signal,
       });
       if (!res.ok) {
-        throw new UpstreamError(`${this.name} returned HTTP ${res.status}`);
+        // Quota headers travel in the message so the Fly log and Sentry show
+        // WHICH bucket said no. adsb.lol publishes `x-ratelimit-limit: 4,
+        // 4;w=1, 60;w=60, 500;w=86400` — per second, per minute, per DAY —
+        // and on 2026-10-20 the daily one was inferred from timing because
+        // nothing had recorded it.
+        const quota = rateLimitSummary(res.headers);
+        throw new UpstreamError(
+          `${this.name} returned HTTP ${res.status}${quota ? ` (${quota})` : ""}`,
+        );
       }
       return (await res.json()) as AdsbLolResponse;
     } catch (err) {

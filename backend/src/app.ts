@@ -213,6 +213,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Sentry message per hour once the fallback has been continuously engaged
   // for five minutes — the timing logic lives in SustainedFallbackAlerter and
   // is unit-tested with an injected clock.
+  // (Since 2026-10-20 the primary is adsb.fi and the fallback adsb.lol.)
   const fallbackAlerter = new SustainedFallbackAlerter({
     // Shares the rate limiters' injectable clock (same unix-ms units), the way
     // the /v1/stats memo does — one fake clock per test, not three.
@@ -388,14 +389,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // via a separate routeset POST, so each served snapshot is passed through a
   // per-callsign-cached lookup that attaches `route` without blocking the
   // position response (see AdsbLolRouteService). Enabled whenever adsb.lol is
-  // the (primary) provider — `startsWith` also matches the default
-  // "adsblol+adsbfi" fallback composite — and outside tests (so the
-  // route suite never hits the network); an injected override (tests) always
-  // wins. Route lookups deliberately stay adsb.lol-direct even when positions
-  // are served by the fallback: routes are cached, non-blocking metadata.
+  // anywhere in the provider chain — the composite's name is the members
+  // joined by "+", and since 2026-10-20 adsb.lol is the FALLBACK half of the
+  // default "adsbfi+adsblol" — and outside tests (so the route suite never
+  // hits the network); an injected override (tests) always wins. Route
+  // lookups stay adsb.lol-direct whichever feed serves positions: routes are
+  // cached per callsign, non-blocking metadata, and adsb.lol is the only
+  // aggregator with a route DB. They do draw on adsb.lol's 500/day quota.
   const routeEnricher =
     options.routeEnricher ??
-    (process.env.NODE_ENV !== "test" && provider.name.startsWith("adsblol")
+    (process.env.NODE_ENV !== "test" && provider.name.split("+").includes("adsblol")
       ? new AdsbLolRouteService({
           onError: (err) => app.log.warn({ err }, "route lookup failed"),
         })
@@ -441,7 +444,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   const feedProbe =
     options.feedProbe ??
-    makeFeedProbe(tileCache, options.canaryBbox ?? parseCanaryBbox(process.env.CANARY_BBOX));
+    makeFeedProbe(tileCache, options.canaryBbox ?? parseCanaryBbox(process.env.CANARY_BBOX), {
+      now: options.now,
+    });
   app.get("/readyz", async (request, reply) => {
     // Each probe is entered through a resolved promise so a probe that throws
     // synchronously (a misconfigured injection, a getDb() that rejects before

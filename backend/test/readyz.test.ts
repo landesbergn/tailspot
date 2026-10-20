@@ -103,8 +103,15 @@ describe("GET /readyz", () => {
     expect(first.json<ReadyBody>().checks.feed).toBe("ok");
 
     // Past the 10 s fresh TTL, inside the 60 s stale window, upstream now dead.
+    // A phone polls the canary tile first: it is served stale and that fetch
+    // records the failure, so the canary no longer trusts the organic success.
     provider.shouldFail = true;
     nowMs += 15_000;
+    const { lamin, lomin, lamax, lomax } = DEFAULT_CANARY_BBOX;
+    await a.inject({
+      method: "GET",
+      url: `/v1/aircraft?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`,
+    });
     const second = await a.inject({ method: "GET", url: "/readyz" });
     expect(second.statusCode).toBe(200);
     expect(second.json<ReadyBody>()).toEqual({ status: "ok", checks: { db: "ok", feed: "stale" } });
@@ -138,6 +145,64 @@ describe("GET /readyz", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(provider.calls).toHaveLength(1);
+  });
+
+  it("answers from organic traffic without an upstream call when a phone just fetched successfully", async () => {
+    // adsb.lol allows 500 requests a DAY per client (x-ratelimit-limit,
+    // 2026-10-20). A canary that fetched on every one-a-minute monitor probe
+    // was 1,440 of those by itself. When phones are polling, their fetches ARE
+    // the canary.
+    let nowMs = 1_700_000_000_000;
+    const provider = new StubProvider();
+    const a = await build({ provider, now: () => nowMs });
+
+    // A phone over New York (a different tile from the Bay Area canary).
+    const ny = await a.inject({
+      method: "GET",
+      url: "/v1/aircraft?lamin=40.6&lomin=-74.1&lamax=40.8&lomax=-73.9",
+    });
+    expect(ny.statusCode).toBe(200);
+    expect(provider.calls).toHaveLength(1);
+
+    nowMs += 30_000;
+    const res = await a.inject({ method: "GET", url: "/readyz" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<ReadyBody>().checks.feed).toBe("ok");
+    expect(provider.calls).toHaveLength(1); // no canary fetch
+
+    // Past the organic window with no traffic, the canary fetches for itself.
+    nowMs += 120_000;
+    await a.inject({ method: "GET", url: "/readyz" });
+    expect(provider.calls).toHaveLength(2);
+  });
+
+  it("does NOT trust organic traffic once a fetch has failed after the last success", async () => {
+    let nowMs = 1_700_000_000_000;
+    const provider = new StubProvider();
+    const a = await build({ provider, now: () => nowMs });
+    await a.inject({
+      method: "GET",
+      url: "/v1/aircraft?lamin=40.6&lomin=-74.1&lamax=40.8&lomax=-73.9",
+    });
+    expect(provider.calls).toHaveLength(1);
+
+    // Upstream dies; the next New York poll is served stale but records the failure.
+    provider.shouldFail = true;
+    nowMs += 15_000;
+    const stale = await a.inject({
+      method: "GET",
+      url: "/v1/aircraft?lamin=40.6&lomin=-74.1&lamax=40.8&lomax=-73.9",
+    });
+    expect(stale.statusCode).toBe(200);
+    expect(provider.calls).toHaveLength(2);
+
+    // The success is still inside the organic window, but a failure is newer:
+    // the canary must probe for itself — and find the outage.
+    nowMs += 5_000;
+    const res = await a.inject({ method: "GET", url: "/readyz" });
+    expect(provider.calls).toHaveLength(3);
+    expect(res.statusCode).toBe(503);
+    expect(res.json<ReadyBody>().checks.feed).toBe("unavailable");
   });
 
   it("fetches the configured canary bbox (expanded to its cache tile)", async () => {
