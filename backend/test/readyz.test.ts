@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../src/providers/types.js";
 import { UpstreamError } from "../src/providers/types.js";
-import { DEFAULT_CANARY_BBOX } from "../src/routes/feedProbe.js";
+import { DEFAULT_CANARY_BBOX, type FeedProbeResult } from "../src/routes/feedProbe.js";
 
 /**
  * /readyz is the ONE URL the external uptime monitor watches, so it has to
@@ -203,5 +203,26 @@ describe("GET /readyz", () => {
     const res = await app.inject({ method: "GET", url: "/readyz" });
     expect(res.statusCode).toBe(503);
     expect(res.json<ReadyBody>().checks.feed).toBe("unavailable");
+  });
+});
+
+describe("GET /readyz probe robustness", () => {
+  it("treats a probe that throws synchronously as 503, not 500", async () => {
+    const app = await buildApp({
+      readyProbe: () => {
+        throw new Error("sync misconfiguration");
+      },
+      provider: new StubProvider(),
+      feedProbe: (() => {
+        throw new Error("sync misconfiguration");
+      }) as unknown as () => Promise<FeedProbeResult>,
+    });
+    try {
+      const res = await app.inject({ method: "GET", url: "/readyz" });
+      expect(res.statusCode).toBe(503);
+      expect(res.json<ReadyBody>().checks).toEqual({ db: "unavailable", feed: "unavailable" });
+    } finally {
+      await app.close();
+    }
   });
 });

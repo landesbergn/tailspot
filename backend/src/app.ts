@@ -443,15 +443,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.feedProbe ??
     makeFeedProbe(tileCache, options.canaryBbox ?? parseCanaryBbox(process.env.CANARY_BBOX));
   app.get("/readyz", async (request, reply) => {
+    // Each probe is entered through a resolved promise so a probe that throws
+    // synchronously (a misconfigured injection, a getDb() that rejects before
+    // awaiting) is a 503 like any other failure, never a 500 out of Promise.all.
     const [db, feed] = await Promise.all([
-      withTimeout(readyProbe(), 3_000, "database probe").then(
+      withTimeout(Promise.resolve().then(readyProbe), 3_000, "database probe").then(
         () => "ok" as const,
         (err: unknown) => {
           request.log.warn({ err }, "readiness: database probe failed");
           return "unavailable" as const;
         },
       ),
-      withTimeout(feedProbe(), 4_000, "position feed probe").then(
+      withTimeout(Promise.resolve().then(feedProbe), 4_000, "position feed probe").then(
         (result) => {
           if (result.status === "unavailable") {
             request.log.warn({ err: result.error }, "readiness: position feed probe failed");
@@ -462,8 +465,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           return result.status === "ok" && fallbackAlerter.isEngaged ? "fallback" : result.status;
         },
         (err: unknown) => {
-          request.log.warn({ err }, "readiness: position feed probe timed out");
-          return "timeout" as const;
+          // makeFeedProbe never rejects, so a rejection here is the deadline —
+          // or an injected/broken probe, which is an outage of the probe itself.
+          const timedOut = err instanceof ProbeTimeoutError;
+          request.log.warn(
+            { err },
+            timedOut ? "readiness: position feed probe timed out" : "readiness: position feed probe threw",
+          );
+          return timedOut ? ("timeout" as const) : ("unavailable" as const);
         },
       ),
     ]);
@@ -780,10 +789,17 @@ function envFloat(name: string): number | undefined {
  * unobserved (Promise.race already subscribed to it, so a late rejection is
  * handled, not "unhandled").
  */
+class ProbeTimeoutError extends Error {
+  constructor(label: string, ms: number) {
+    super(`${label} timed out after ${ms} ms`);
+    this.name = "ProbeTimeoutError";
+  }
+}
+
 function withTimeout<T>(probe: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms} ms`)), ms);
+    timer = setTimeout(() => reject(new ProbeTimeoutError(label, ms)), ms);
   });
   return Promise.race([probe, deadline]).finally(() => clearTimeout(timer));
 }
