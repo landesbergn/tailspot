@@ -24,12 +24,13 @@ import {
   type RouteResolver,
 } from "./providers/adsblolRoutes.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
-import { type PositionProvider, selectProvider } from "./providers/index.js";
+import { type Bbox, type PositionProvider, selectProvider } from "./providers/index.js";
 import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
 import { type ChallengesAvailability, registerChallengesRoutes } from "./routes/challenges.js";
 import { registerDevicesRoutes } from "./routes/devices.js";
+import { type FeedProbeResult, makeFeedProbe, parseCanaryBbox } from "./routes/feedProbe.js";
 import { registerHandlesRoute } from "./routes/handles.js";
 import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerLeaderboardRoute } from "./routes/leaderboard.js";
@@ -146,6 +147,18 @@ export interface BuildAppOptions {
    */
   readyProbe?: () => Promise<void>;
   /**
+   * Position-feed probe override for GET /readyz (tests inject a hang or a
+   * canned result). Production probes the live tile cache for `canaryBbox` —
+   * see routes/feedProbe.ts.
+   */
+  feedProbe?: () => Promise<FeedProbeResult>;
+  /**
+   * The sky the readiness canary watches. Production reads `CANARY_BBOX` once
+   * at build time (default: the Bay Area); tests pass a bbox that matches
+   * their stub provider's fixture.
+   */
+  canaryBbox?: Bbox;
+  /**
    * Route log lines to this stream instead of the default logger (which is off
    * under NODE_ENV=test). Tests use it to assert what the server logs.
    */
@@ -216,12 +229,40 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // is itself a no-op when SENTRY_DSN is unset — see instrument.ts.
       void import("@sentry/node")
         .then((Sentry) =>
-          Sentry.captureMessage(
-            `Position feed fallback sustained for ~${minutes} min`,
-            "error" as const,
-          ),
+          Sentry.captureMessage(`Position feed fallback sustained for ~${minutes} min`, {
+            level: "error",
+            // Pinned so every hour of one incident lands in ONE issue (the
+            // minutes in the title vary; Sentry's message grouping mostly
+            // coped, this makes it certain) and so it can never merge with the
+            // outage issue below.
+            fingerprint: ["position-feed-fallback"],
+          }),
         )
         .catch((err) => app.log.warn({ err }, "could not report sustained fallback to Sentry"));
+    },
+  });
+  // The second, louder alerter: BOTH feeds failing. Same state machine, same
+  // thresholds, different edge — it engages on FallbackProvider.onBothFailed
+  // and clears when EITHER feed serves. This is the "users are getting 503"
+  // signal; the one above is "we are on the backup feed". From 2026-10-03 to
+  // 2026-10-19 only the first existed, so a total outage read as a degraded
+  // one. (The uptime canary on /readyz is the belt to this suspender.)
+  const outageAlerter = new SustainedFallbackAlerter({
+    now: options.rateLimitNow,
+    onAlert: ({ engagedForMs, primaryError }) => {
+      const minutes = Math.round(engagedForMs / 60_000);
+      app.log.error(
+        { err: primaryError, engagedForMs },
+        `position feed DOWN for ~${minutes} min: both providers failing, clients get 503 past the last-good window`,
+      );
+      void import("@sentry/node")
+        .then((Sentry) =>
+          Sentry.captureMessage(`Position feed DOWN: both providers failing for ~${minutes} min`, {
+            level: "fatal",
+            fingerprint: ["position-feed-outage"],
+          }),
+        )
+        .catch((err) => app.log.warn({ err }, "could not report feed outage to Sentry"));
     },
   });
   const provider =
@@ -234,7 +275,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       onRecovered: () => {
         app.log.info("primary position feed recovered; fallback disengaged");
         fallbackAlerter.recordRecovery();
+        outageAlerter.recordRecovery();
       },
+      // Not logged here: the aircraft route already warns per request when it
+      // has nothing to serve, and a log line per poll during an outage is
+      // noise. The alerter turns the stream into one message per hour.
+      onBothFailed: (err) => outageAlerter.recordFallback(err),
+      onSecondaryServed: () => outageAlerter.recordRecovery(),
     });
 
   // Cache TTL / staleness from env, overridable per-build (tests pass explicit
@@ -305,10 +352,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   /**
    * GET /healthz
    * Fly.io health check (fly.toml [[http_service.checks]]). Returns 200 as long
-   * as the process is up and can handle requests. Deliberately NO DB ping: Fly
-   * restarts machines that fail this check, and restarting the API because the
-   * *database* is down would just add churn on top of the real outage. End-to-end
-   * readiness (process + DB) lives at /readyz.
+   * as the process is up and can handle requests. Deliberately NO DB ping and
+   * NO upstream probe: Fly restarts machines that fail this check, and
+   * restarting the API because the *database* or *adsb.lol* is down would just
+   * add churn on top of the real outage. End-to-end readiness (process + DB +
+   * position feed) lives at /readyz, registered after the aircraft route below.
    *
    * The body is deliberately just `{ status: "ok" }`. It used to include the
    * package version, which told an unauthenticated caller exactly which build
@@ -319,43 +367,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    */
   app.get("/healthz", async () => {
     return { status: "ok" };
-  });
-
-  /**
-   * GET /readyz
-   * End-to-end readiness: 200 only when the process is up AND Postgres answers
-   * a `SELECT 1` within 3 s. This is the URL the external uptime monitor watches
-   * (Sentry monitor 8072647) — unlike /healthz it turns a dead/unreachable DB
-   * into a visible outage instead of a slow trickle of 500s.
-   *
-   * The probe is resolved lazily per-request (same pattern as the stores below):
-   * building the app never touches DATABASE_URL, so DB-less tests stay DB-less —
-   * hitting /readyz without a database simply reports 503, which is the truth.
-   * The 3 s cap keeps a hung DB connection from dragging the response past the
-   * monitor's own timeout; the stray timer is cleared so injected test probes
-   * don't leak into vitest's open-handle check.
-   */
-  const readyProbe =
-    options.readyProbe ??
-    (async () => {
-      await getDb().execute(sql`select 1`);
-    });
-  app.get("/readyz", async (request, reply) => {
-    let timer: NodeJS.Timeout | undefined;
-    try {
-      await Promise.race([
-        readyProbe(),
-        new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new Error("readiness probe timed out")), 3_000);
-        }),
-      ]);
-      return { status: "ok" };
-    } catch (err) {
-      request.log.warn({ err }, "readiness probe failed");
-      return reply.code(503).send({ status: "unavailable" });
-    } finally {
-      clearTimeout(timer);
-    }
   });
 
   // GET /v1/aircraft — cached, single-flighted position proxy (WP 1.3).
@@ -389,13 +400,87 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           onError: (err) => app.log.warn({ err }, "route lookup failed"),
         })
       : undefined);
-  registerAircraftRoute(app, {
+  const tileCache = registerAircraftRoute(app, {
     provider,
     ipLimiter: aircraftLimiter,
     cacheConfig,
     now: options.now,
     onFreshSnapshot,
     routeEnricher,
+  });
+
+  /**
+   * GET /readyz
+   * End-to-end readiness: 200 only when the process is up, Postgres answers a
+   * `SELECT 1`, AND the position feed can serve planes for the canary bbox
+   * through the same tile cache the phones use. This is the URL the external
+   * uptime monitor watches (Sentry monitor 8072647). Three failure modes, one
+   * URL, because the free Sentry plan has exactly one uptime slot:
+   *
+   *   { "status": "ok" | "unavailable",
+   *     "checks": { "db": "ok" | "unavailable",
+   *                 "feed": "ok" | "stale" | "fallback" | "unavailable" | "timeout" } }
+   *
+   * `stale` (serving last-good) and `fallback` (on the backup feed) are still
+   * 200 — users are getting planes — but visible in the body for a human
+   * reading the monitor's captured response. `unavailable` / `timeout` on
+   * either check is 503. Until 2026-10-19 this route checked only the DB, and
+   * a sixteen-day feed outage never turned it red (see routes/feedProbe.ts).
+   *
+   * Budgets: the DB gets 3 s, the feed 4 s, both run concurrently, so the
+   * response always lands inside the monitor's 5 s timeout. A probe that
+   * overruns is reported, not awaited; the timers are cleared so injected test
+   * probes don't leak into vitest's open-handle check. The DB probe is resolved
+   * lazily per-request (same pattern as the stores below): building the app
+   * never touches DATABASE_URL, so DB-less tests stay DB-less.
+   */
+  const readyProbe =
+    options.readyProbe ??
+    (async () => {
+      await getDb().execute(sql`select 1`);
+    });
+  const feedProbe =
+    options.feedProbe ??
+    makeFeedProbe(tileCache, options.canaryBbox ?? parseCanaryBbox(process.env.CANARY_BBOX));
+  app.get("/readyz", async (request, reply) => {
+    // Each probe is entered through a resolved promise so a probe that throws
+    // synchronously (a misconfigured injection, a getDb() that rejects before
+    // awaiting) is a 503 like any other failure, never a 500 out of Promise.all.
+    const [db, feed] = await Promise.all([
+      withTimeout(Promise.resolve().then(readyProbe), 3_000, "database probe").then(
+        () => "ok" as const,
+        (err: unknown) => {
+          request.log.warn({ err }, "readiness: database probe failed");
+          return "unavailable" as const;
+        },
+      ),
+      withTimeout(Promise.resolve().then(feedProbe), 4_000, "position feed probe").then(
+        (result) => {
+          if (result.status === "unavailable") {
+            request.log.warn({ err: result.error }, "readiness: position feed probe failed");
+            return result.status;
+          }
+          // Fresh data while the primary is down is worth naming: it says the
+          // backup feed is carrying the product right now.
+          return result.status === "ok" && fallbackAlerter.isEngaged ? "fallback" : result.status;
+        },
+        (err: unknown) => {
+          // makeFeedProbe never rejects, so a rejection here is the deadline —
+          // or an injected/broken probe, which is an outage of the probe itself.
+          const timedOut = err instanceof ProbeTimeoutError;
+          request.log.warn(
+            { err },
+            timedOut
+              ? "readiness: position feed probe timed out"
+              : "readiness: position feed probe threw",
+          );
+          return timedOut ? ("timeout" as const) : ("unavailable" as const);
+        },
+      ),
+    ]);
+    const ready = db === "ok" && (feed === "ok" || feed === "stale" || feed === "fallback");
+    const body = { status: ready ? "ok" : "unavailable", checks: { db, feed } };
+    return ready ? body : reply.code(503).send(body);
   });
 
   // GET /v1/routes/{callsign} — per-callsign route lookup for the iOS catch
@@ -694,4 +779,29 @@ function envFloat(name: string): number | undefined {
   if (raw === undefined || raw.trim() === "") return undefined;
   const n = Number.parseFloat(raw);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * Race a probe against a deadline. Used by /readyz so one hung dependency
+ * (a DB socket, an upstream that accepted the TCP connection and went quiet)
+ * cannot drag the whole readiness answer past the uptime monitor's timeout —
+ * a late answer and no answer look identical to the monitor. The timer is
+ * always cleared, so a probe that settles first leaves nothing behind for
+ * vitest's open-handle check, and a probe that loses the race keeps running
+ * unobserved (Promise.race already subscribed to it, so a late rejection is
+ * handled, not "unhandled").
+ */
+class ProbeTimeoutError extends Error {
+  constructor(label: string, ms: number) {
+    super(`${label} timed out after ${ms} ms`);
+    this.name = "ProbeTimeoutError";
+  }
+}
+
+function withTimeout<T>(probe: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new ProbeTimeoutError(label, ms)), ms);
+  });
+  return Promise.race([probe, deadline]).finally(() => clearTimeout(timer));
 }

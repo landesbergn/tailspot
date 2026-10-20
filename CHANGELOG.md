@@ -5,6 +5,22 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-19 — Feed-outage alerting (branch `claude/tailspot-monitoring-alerts-1d2fb3`)
+
+- Sixteen days of 503s from `/v1/aircraft` (adsb.lol 429 + airplanes.live 403
+  against Fly's shared egress IP) reached Noah through users, not monitoring:
+  the uptime monitor watched `/healthz`, `/readyz` checked only the DB, and the
+  Sentry rule emailed once per new issue.
+- `/readyz` now probes the position feed through the live tile cache
+  (`src/routes/feedProbe.ts`) alongside the DB; the uptime monitor points at it.
+- A second in-process alerter reports "both providers failing" as a fatal
+  Sentry message, separate from the degraded "serving the fallback" one.
+- New Sentry rule re-notifies hourly while an error-level issue keeps firing;
+  new PostHog alert on unique users seeing the error pill.
+- Root cause (shared egress IP reputation) fixed the same night: Noah OK'd a
+  static egress IP (`fly ips allocate-egress`, 209.71.113.155); adsb.lol
+  answered it within three minutes and the feed recovered.
+
 ## 2026-10-11 — Classic-jet tiers (branch `fix/classic-jets-tiers`)
 
 - From Noah's Fleet Week weekend review: T-33 → epic; Sabreliner 40/60 and
