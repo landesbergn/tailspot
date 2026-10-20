@@ -255,6 +255,8 @@ struct SetsCoverageTests {
         ("C425", "Cessna", "425 Corsair"),
         ("PA22", "Piper", "PA-22 Colt"),
         ("SBR1", "Rockwell", "Sabre 40"),
+        // Public catalog coverage additions validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -376,6 +378,7 @@ struct SetsCoverageTests {
             (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
             (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
             (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -385,6 +388,14 @@ struct SetsCoverageTests {
             #expect(CardSets.matches(key: key, entry: entry),
                     "\(row.0) must fill \(setID)/\(entryID)")
         }
+    }
+
+    @Test func falcon6XRuleDoesNotBleedIntoFairchildLookalike() {
+        let falcon6X = CardSets.families.first { $0.id == "fam-falcon" }!
+            .entries.first { $0.id == "ffa6x" }!
+
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("FA62", "Fairchild", "M-62 Cornell"))),
+                                    entry: falcon6X))
     }
 
     @Test func untypedPublicAliasesFillTheirEstablishedFamilySlots() {
