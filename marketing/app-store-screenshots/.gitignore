@@ -8,6 +8,6 @@ next-env.d.ts
 
 # Store-ready PNGs. Regenerable via Export bundle, so kept out of history.
 #   export/                       the current set (what you upload)
-#   export-archive/<version>/     what was actually shipped for that version
+#   export-archive/<version>/     legacy local archive; history now lives in marketing/releases/
 export
 export-archive

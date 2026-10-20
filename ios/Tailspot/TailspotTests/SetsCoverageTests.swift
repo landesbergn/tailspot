@@ -489,9 +489,13 @@ struct SetsCoverageTests {
 
         let sabreliner = CardSets.families.first { $0.id == "fam-classic-biz" }!
             .entries.first { $0.id == "fcb-sabreliner" }!
-        let sabre75 = mk(("SBR2", "Rockwell", "Sabre 75"))
-        #expect(!CardSets.matches(key: CardSets.matchKey(for: sabre75), entry: sabreliner),
-                "A Sabre 75 must not fill the Sabreliner 40 / 60 slot")
+        // Old stored model and the 2026-10-11 canonical name, both directions.
+        for sabre75 in [mk(("SBR2", "Rockwell", "Sabre 75")), mk(("SBR2", "Rockwell", "Sabre 75 / 80"))] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: sabre75), entry: sabreliner),
+                    "A Sabre 75 must not fill the Sabreliner 40 / 60 slot")
+        }
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("SBR1", "North American", "Sabreliner 40 / 60"))),
+                                 entry: sabreliner))
 
         // AS50 covers the single-engine AS350/AS550 family; AS55 is the
         // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
@@ -632,6 +636,30 @@ struct SetsCoverageTests {
         }
         #expect(CardSets.matches(key: CardSets.matchKey(for: originalTexan), entry: originalTexanEntry),
                 "The piston T-6 Texan must still fill the vintage slot")
+
+        // The WWII "TBM Avenger" must not fill the Daher TBM turboprop slot
+        // (shared "tbm" token); a real TBM 9xx still does.
+        let daherEntry = CardSets.families.flatMap(\.entries).first { $0.id == "ftp-tbm" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("TBM", "Grumman", "TBM Avenger"))), entry: daherEntry),
+                "The Grumman TBM Avenger must not fill the Daher TBM slot")
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("TBM9", "Daher", "TBM 900"))), entry: daherEntry))
+        // ...and the Avenger still counts: it has its own vintage slot.
+        let avengerEntry = CardSets.families.first { $0.id == "fam-vintage" }!
+            .entries.first { $0.id == "fv-tbm" }!
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("TBM", "Grumman", "TBM-3E"))), entry: avengerEntry))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("TBM9", "Daher", "TBM 900"))), entry: avengerEntry))
+
+        // Both Hornet designators fill the Hornet slot; a DH.87 Hornet Moth does not.
+        let hornetEntry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-hornet" }!
+        // Raw models without the slash: membership must come from the
+        // typecode, not from the display name happening to contain "f/a-18".
+        for hornet in [mk(("F18S", "Boeing", "FA-18E")),
+                       mk(("F18H", "McDonnell Douglas", "FA-18C"))] {
+            #expect(CardSets.matches(key: CardSets.matchKey(for: hornet), entry: hornetEntry))
+        }
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("DH87", "De Havilland", "DH-87 Hornet Moth"))),
+                                  entry: hornetEntry))
 
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.

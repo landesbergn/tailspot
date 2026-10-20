@@ -593,6 +593,22 @@ OVERRIDES = {
     "P51":  ("North American", "P-51 Mustang"),   # was the A-36 dive-bomber variant
     "F18S": ("Boeing", "F/A-18E/F Super Hornet"), # was the EA-18 Growler derivative
     "F18H": ("McDonnell Douglas", "F/A-18 Hornet"),  # was Spain's "C-15"
+
+    # ----- 2026-10-11 warbird sweep (same failure: a variant, licensee or
+    # export name beat the type airshow crowds know). DOC 8643 rows. -----
+    "T33":  ("Lockheed", "T-33 Shooting Star"),   # was the "AT-33" attack conversion
+    "P38":  ("Lockheed", "P-38 Lightning"),       # was the F-5 recon variant
+    "F86":  ("North American", "F-86 Sabre"),     # was licensee "Bombardier CL-13"
+    "A1":   ("Douglas", "A-1 Skyraider"),         # was pre-1962 "AD Skyraider"
+    "TBM":  ("Grumman", "TBM Avenger"),           # was "TBF"; most survivors are TBMs
+    "T6":   ("North American", "T-6 Texan"),      # was the BC-1 prototype basic combat type
+    "SPIT": ("Supermarine", "Spitfire"),          # was the naval "Seafire"
+    "MG15": ("Mikoyan", "MiG-15"),                # was Polish licensee "LiM-1"
+    "MG17": ("Mikoyan", "MiG-17"),                # was Chinese "Shenyang F-5"
+    # 2026-10-11 classic jets: SBR1 spans the Sabreliner 40 and 60 rows (the
+    # Redstar airshow jet is a 60), SBR2 the Sabre 75 and 80 rows.
+    "SBR1": ("North American", "Sabreliner 40 / 60"),  # was "Rockwell Sabre 40"
+    "SBR2": ("Rockwell", "Sabre 75 / 80"),             # was "NA-265 Sabre 75"
 }
 
 
@@ -819,6 +835,9 @@ MIL = {
     # Military-only fighters and trainers that otherwise fall through to the
     # jet/turboprop defaults (narrow / ga).
     'F18H','F18S','TEX2',
+    # Warbird fighters / attack / jet trainers (2026-10-11 sweep) — were
+    # narrow (airliner badge) or ga.
+    'T33','F86','HUNT','P38','A1','MG15','MG17',
 }
 # Regional jets absent from the prefix regex below — BAe 146, Avro RJ,
 # Fokker 70/100/F28, Dornier 328JET, Antonov An-148/158. Exact-match like
@@ -986,6 +1005,17 @@ RARITY_OVERRIDES = {
     "GLEX": "rare",       # Bombardier Global Express / 6000
     "P51":  "rare", "T6": "rare", "AT6": "rare",   # P-51 Mustang, T-6 Texan (100+ fly — abundant for warbirds)
     "L39":  "rare",       # L-39 Albatros (civil warbird jet; display teams, not daily traffic)
+    # 2026-10-11 warbird sweep: rare ≈ P-51 scarcity (dozens–100+ airworthy,
+    # airshow regulars); epic ≈ B-17 / Spitfire (a handful airworthy).
+    "TBM": "rare", "T28": "rare", "L29": "rare", "HUNT": "rare",
+    "P38":  "epic", "F86": "epic", "A1": "epic", "MG15": "epic", "MG17": "epic",
+    # T-33: fewer airworthy than the Spitfire (epic), flown a few hours a year
+    # at airshows — a Rare A380 flies daily (Noah's ACEMKR3 catch, 2026-10-11).
+    "T33":  "epic",
+    # First-generation business jets now flown mostly by museums and airshow
+    # teams: far scarcer than the working bizjet fleet the uncommon default
+    # describes (Noah's Redstar Sabreliner catch, PTJ8).
+    "SBR1": "rare", "SBR2": "rare", "LJ23": "rare", "LJ24": "rare", "JCOM": "rare",
     "B25":  "rare",       # B-25 Mitchell
     "DC3":  "rare", "JU52": "rare", "AN2": "rare", "BE18": "rare",   # vintage classics
     # scarce owner-flown / vintage types and very small commuter fleets

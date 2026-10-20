@@ -1080,7 +1080,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "PC12"),
             .init(id: "ftp-tbm", canonicalName: "Daher TBM", rarity: .uncommon,
                   modelTokens: ["tbm"], summary: "Fast personal turboprop — 700 through 960.",
-                  representativeTypecode: "TBM9"),
+                  representativeTypecode: "TBM9",
+                  // The WWII Grumman "TBM Avenger" (TBM) shares the token.
+                  excludedTypecodes: ["TBM"]),
             .init(id: "ftp-kodiak", canonicalName: "Kodiak 100", rarity: .common,
                   modelTokens: ["kodiak"], summary: "Short-field utility single. Floats optional.",
                   representativeTypecode: "K100"),
@@ -1153,6 +1155,14 @@ nonisolated enum CardSets {
                                 "northrop f 5f"],
                   summary: "Light supersonic fighter used for training, aggressor, and allied service.",
                   representativeTypecode: "F5"),
+            // Both designators: F18H (A–D Hornet) and F18S (E/F Super Hornet,
+            // the Blue Angels since 2021). "f/a-18", never bare "hornet" —
+            // the DH.87 Hornet Moth and homebuilt Hornets would bleed in.
+            .init(id: "fm-hornet", canonicalName: "F/A-18 Hornet / Super Hornet", rarity: .legendary,
+                  modelTokens: ["f/a-18"],
+                  summary: "Carrier strike fighter. The Blue Angels fly the Super Hornet.",
+                  exactTypecodes: ["F18H"],
+                  representativeTypecode: "F18S"),
             .init(id: "fm-t38", canonicalName: "Northrop T-38 Talon", rarity: .epic,
                   modelTokens: ["northrop t-38 talon"],
                   summary: "Twin-engine supersonic advanced trainer used for fighter and bomber pilot preparation.",
@@ -1216,7 +1226,7 @@ nonisolated enum CardSets {
                   representativeTypecode: "U2"),
         ]),
         .init(id: "fam-classic-biz", type: .biz, title: "Classic bizjets", entries: [
-            .init(id: "fcb-sabreliner", canonicalName: "Rockwell Sabreliner 40 / 60", rarity: .uncommon,
+            .init(id: "fcb-sabreliner", canonicalName: "North American Sabreliner 40 / 60", rarity: .uncommon,
                   modelTokens: ["rockwell na-265 sabre 40", "rockwell sabre 40",
                                 "north american sabreliner 40", "north american sabreliner 60"],
                   summary: "Early American twin-engine business jet, also flown as the military T-39.",
@@ -1288,6 +1298,12 @@ nonisolated enum CardSets {
             .init(id: "fv-p51", canonicalName: "P-51 Mustang", rarity: .rare,
                   modelTokens: ["p-51", "tf-51"], summary: "The WWII fighter. Merlin sound included.",
                   representativeTypecode: "P51"),
+            // The Avenger's home now that the Daher TBM slot excludes it
+            // (FAA raw models read "TBM-3E" and used to fill that slot).
+            .init(id: "fv-tbm", canonicalName: "Grumman TBM Avenger", rarity: .rare,
+                  modelTokens: ["tbm avenger", "tbm-3"],
+                  summary: "WWII carrier torpedo bomber. The biggest single-engine warbird you'll see.",
+                  representativeTypecode: "TBM"),
         ]),
         .init(id: "fam-sport-classics", type: .ga, title: "Sport & classics", entries: [
             .init(id: "fsc-mooney", canonicalName: "Mooney M20", rarity: .common,
