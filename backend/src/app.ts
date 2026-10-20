@@ -422,7 +422,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    *
    *   { "status": "ok" | "unavailable",
    *     "checks": { "db": "ok" | "unavailable",
-   *                 "feed": "ok" | "stale" | "fallback" | "unavailable" | "timeout" } }
+   *                 "feed": "ok" | "stale" | "fallback" | "unavailable" | "timeout",
+   *                 "feedSource": "organic" | "probe" } }   // absent on timeout
    *
    * `stale` (serving last-good) and `fallback` (on the backup feed) are still
    * 200 — users are getting planes — but visible in the body for a human
@@ -451,6 +452,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Each probe is entered through a resolved promise so a probe that throws
     // synchronously (a misconfigured injection, a getDb() that rejects before
     // awaiting) is a 503 like any other failure, never a 500 out of Promise.all.
+    let feedSource: "organic" | "probe" | undefined;
     const [db, feed] = await Promise.all([
       withTimeout(Promise.resolve().then(readyProbe), 3_000, "database probe").then(
         () => "ok" as const,
@@ -461,6 +463,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       ),
       withTimeout(Promise.resolve().then(feedProbe), 4_000, "position feed probe").then(
         (result) => {
+          feedSource = result.source;
           if (result.status === "unavailable") {
             request.log.warn({ err: result.error }, "readiness: position feed probe failed");
             return result.status;
@@ -484,7 +487,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       ),
     ]);
     const ready = db === "ok" && (feed === "ok" || feed === "stale" || feed === "fallback");
-    const body = { status: ready ? "ok" : "unavailable", checks: { db, feed } };
+    // `feedSource` says whether the feed verdict came from a phone's own recent
+    // fetch (`organic`, no request made) or the canary tile (`probe`); absent on
+    // a timeout. It is what a human reads to know whether the canary is spending
+    // upstream quota.
+    const body = {
+      status: ready ? "ok" : "unavailable",
+      checks: { db, feed, ...(feedSource ? { feedSource } : {}) },
+    };
     return ready ? body : reply.code(503).send(body);
   });
 

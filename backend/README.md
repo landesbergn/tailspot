@@ -41,8 +41,9 @@ fixed canary bbox through the same tile cache the phones use:
 `checks.feed` is one of `ok`, `stale` (serving last-good inside the 60 s
 window), `fallback` (fresh data, but from adsb.lol because adsb.fi is
 down), `unavailable` (upstream failed, nothing to serve — phones get 503) or
-`timeout`. Each check also reports `source`: `organic` (a phone's recent
-successful fetch proved the feed, no request made) or `probe`. The first three are 200: users are getting planes. The last two,
+`timeout`. `checks.feedSource` says how the feed verdict was reached:
+`organic` (a phone's recent successful fetch proved the feed, no request made)
+or `probe` (the canary tile was fetched); absent on a timeout. The first three are 200: users are getting planes. The last two,
 or `db: "unavailable"`, are 503. Budgets are 3 s for the DB and 4 s for the
 feed, run concurrently, so the answer always lands inside the monitor's 5 s.
 

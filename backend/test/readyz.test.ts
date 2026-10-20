@@ -14,7 +14,7 @@ import { DEFAULT_CANARY_BBOX, type FeedProbeResult } from "../src/routes/feedPro
 
 interface ReadyBody {
   status: "ok" | "unavailable";
-  checks: { db: string; feed: string };
+  checks: { db: string; feed: string; feedSource?: string };
 }
 
 /** Controllable stub feed: counts calls, records bboxes, can fail or hang. */
@@ -67,7 +67,10 @@ describe("GET /readyz", () => {
     const a = await build({});
     const res = await a.inject({ method: "GET", url: "/readyz" });
     expect(res.statusCode).toBe(200);
-    expect(res.json<ReadyBody>()).toEqual({ status: "ok", checks: { db: "ok", feed: "ok" } });
+    expect(res.json<ReadyBody>()).toEqual({
+      status: "ok",
+      checks: { db: "ok", feed: "ok", feedSource: "probe" },
+    });
   });
 
   it("responds 503 and names the DB when the DB probe rejects, even with a healthy feed", async () => {
@@ -76,7 +79,7 @@ describe("GET /readyz", () => {
     expect(res.statusCode).toBe(503);
     expect(res.json<ReadyBody>()).toEqual({
       status: "unavailable",
-      checks: { db: "unavailable", feed: "ok" },
+      checks: { db: "unavailable", feed: "ok", feedSource: "probe" },
     });
   });
 
@@ -90,7 +93,7 @@ describe("GET /readyz", () => {
     expect(res.statusCode).toBe(503);
     expect(res.json<ReadyBody>()).toEqual({
       status: "unavailable",
-      checks: { db: "ok", feed: "unavailable" },
+      checks: { db: "ok", feed: "unavailable", feedSource: "probe" },
     });
   });
 
@@ -114,7 +117,10 @@ describe("GET /readyz", () => {
     });
     const second = await a.inject({ method: "GET", url: "/readyz" });
     expect(second.statusCode).toBe(200);
-    expect(second.json<ReadyBody>()).toEqual({ status: "ok", checks: { db: "ok", feed: "stale" } });
+    expect(second.json<ReadyBody>()).toEqual({
+      status: "ok",
+      checks: { db: "ok", feed: "stale", feedSource: "probe" },
+    });
 
     // Past the stale window there is nothing left to serve.
     nowMs += 60_000;
@@ -167,7 +173,7 @@ describe("GET /readyz", () => {
     nowMs += 30_000;
     const res = await a.inject({ method: "GET", url: "/readyz" });
     expect(res.statusCode).toBe(200);
-    expect(res.json<ReadyBody>().checks.feed).toBe("ok");
+    expect(res.json<ReadyBody>().checks).toEqual({ db: "ok", feed: "ok", feedSource: "organic" });
     expect(provider.calls).toHaveLength(1); // no canary fetch
 
     // Past the organic window with no traffic, the canary fetches for itself.
@@ -253,6 +259,7 @@ describe("GET /readyz", () => {
     await vi.advanceTimersByTimeAsync(4_100);
     const res = await pending;
     expect(res.statusCode).toBe(503);
+    // No feedSource on a timeout: the probe never answered.
     expect(res.json<ReadyBody>()).toEqual({
       status: "unavailable",
       checks: { db: "ok", feed: "timeout" },
