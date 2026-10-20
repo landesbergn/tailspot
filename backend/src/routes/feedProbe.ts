@@ -131,14 +131,15 @@ export function makeFeedProbe(
       (failed === undefined || fresh > failed) &&
       now() - fresh < organicWindowMs
     ) {
-      return { status: "ok", source: "organic", provider: cache.lastFreshProvider };
+      const provider = cache.lastFreshProvider;
+      return { status: "ok", source: "organic", ...(provider !== undefined ? { provider } : {}) };
     }
     try {
       const { snapshot, stale } = await cache.get(bbox);
       return {
         status: stale ? "stale" : "ok",
         source: "probe",
-        provider: snapshot.provider,
+        ...(snapshot.provider !== undefined ? { provider: snapshot.provider } : {}),
         aircraft: snapshot.aircraft.length,
         fetchedAt: snapshot.fetchedAt,
       };

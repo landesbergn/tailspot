@@ -238,14 +238,12 @@ export class TileCache {
         // Every served snapshot names its feed. Real adapters stamp themselves
         // (and the composite stamps its member); this only covers a provider
         // that didn't, so the name is never missing downstream.
-        const snapshot: ProviderSnapshot & { provider: string } =
-          raw.provider === undefined
-            ? { ...raw, provider: this.provider.name }
-            : { ...raw, provider: raw.provider };
+        const provider = raw.provider ?? this.provider.name;
+        const snapshot = raw.provider === undefined ? { ...raw, provider } : raw;
         this.store(key, snapshot);
         try {
           this.onUpstreamFetch?.({
-            provider: snapshot.provider,
+            provider,
             tile: key,
             aircraft: snapshot.aircraft.length,
             fetchedAt: snapshot.fetchedAt,

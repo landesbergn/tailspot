@@ -271,3 +271,37 @@ describe("TileCache upstream fetch reporting", () => {
     await expect(cache.get(bbox)).resolves.toMatchObject({ stale: false });
   });
 });
+
+describe("TileCache upstream fetch reporting on failure", () => {
+  const bbox: Bbox = { lamin: 37.61, lomin: -122.51, lamax: 38.11, lomax: -121.99 };
+
+  it("a last-good (stale) serve emits NO fetch event — only genuine fetches count", async () => {
+    let fail = false;
+    const provider: PositionProvider = {
+      name: "stub",
+      async aircraftInBbox(): Promise<ProviderSnapshot> {
+        if (fail) throw new Error("upstream down");
+        return { fetchedAt: 1_750_000_000, aircraft: [] };
+      },
+    };
+    const events: UpstreamFetchEvent[] = [];
+    let t = 1_000_000;
+    const cache = new TileCache(
+      provider,
+      {},
+      () => t,
+      undefined,
+      (e) => events.push(e),
+    );
+
+    await cache.get(bbox); // genuine fetch → 1 event
+    fail = true;
+    t += 11_000; // past the TTL, inside the 60 s stale window
+    const served = await cache.get(bbox);
+
+    expect(served.stale).toBe(true);
+    expect(served.snapshot.provider).toBe("stub"); // the ORIGINAL producer
+    expect(events).toHaveLength(1);
+    expect(cache.lastFreshProvider).toBe("stub");
+  });
+});

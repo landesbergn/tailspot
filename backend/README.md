@@ -35,7 +35,7 @@ Postgres answers `SELECT 1` **and** the position feed can serve planes for a
 fixed canary bbox through the same tile cache the phones use:
 
 ```jsonc
-{ "status": "ok", "checks": { "db": "ok", "feed": "ok" } }
+{ "status": "ok", "checks": { "db": "ok", "feed": "ok", "feedSource": "organic", "feedProvider": "adsbfi" } }
 ```
 
 `checks.feed` is one of `ok`, `stale` (serving last-good inside the 60 s
@@ -43,7 +43,13 @@ window), `fallback` (fresh data, but from adsb.lol because adsb.fi is
 down), `unavailable` (upstream failed, nothing to serve — phones get 503) or
 `timeout`. `checks.feedSource` says how the feed verdict was reached:
 `organic` (a phone's recent successful fetch proved the feed, no request made)
-or `probe` (the canary tile was fetched); absent on a timeout. The first three are 200: users are getting planes. The last two,
+or `probe` (the canary tile was fetched); absent on a timeout. `checks.feedProvider`
+names the feed that produced the proving snapshot (`adsbfi` or `adsblol`), so the
+monitor's captured body says which API was serving at that moment; absent when
+nothing has been served. The same name is on every `/v1/aircraft` response and
+in the Fly log: each genuine upstream fetch (never a cache hit or a last-good
+serve) logs one `position feed fetched` line with `provider`, `tile`,
+`aircraft`, `fetchedAt` and `upstreamMs`. The first three are 200: users are getting planes. The last two,
 or `db: "unavailable"`, are 503. Budgets are 3 s for the DB and 4 s for the
 feed, run concurrently, so the answer always lands inside the monitor's 5 s.
 
@@ -69,6 +75,8 @@ degrees and returns a normalized, SI-unit snapshot of aircraft inside it:
 ```jsonc
 {
   "fetchedAt": 1781116526,        // unix SECONDS of the upstream snapshot (NOT serve time)
+  "provider": "adsbfi",           // the feed that produced it ("adsbfi" | "adsblol"); additive
+                                  // 2026-10-20, a stale serve keeps the ORIGINAL producer
   "aircraft": [
     {
       "icao24": "a92d6d",          // lowercase hex
