@@ -21,6 +21,16 @@ import { AdsbLolProvider, type AdsbLolProviderOptions } from "./adsblol.js";
  * reached is not a fallback. The class is kept (POSITION_PROVIDER=
  * airplaneslive) in case that email is answered.
  *
+ * Bake-off 2026-10-19 23:05 PT (laptop, 25 NM, seven places, tools in the
+ * session notes): coverage is the adsb.lol set almost exactly — Bay Area 46/46
+ * shared, London 58/59 (+3 only on adsb.fi), New York 28/34 (+5), Denver 17/21
+ * (+1); typecode presence equal or better (London 60/61 vs 52/59); MLAT rows
+ * present where adsb.lol has them. Latency over 8 sequential Bay Area calls:
+ * adsb.fi median 216 ms / p95 228, airplanes.live 379 / 407, adsb.lol 1925 /
+ * 2611 (adsb.lol was slow that night). airplanes.live had +3 Bay Area planes
+ * (MLAT) but 23 vs 34 in New York. Good enough to be primary; kept as the
+ * fallback because adsb.lol has the route DB and the longer track record.
+ *
  * Terms (adsbfi/opendata README): public endpoints are limited to 1 request
  * per second, 4xx responses count toward a temporary IP restriction, "for
  * personal, non-commercial use only", and "You must cite adsb.fi and include a
