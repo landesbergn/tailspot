@@ -150,9 +150,12 @@ describe("FallbackProvider", () => {
       stub("adsblol", snapshot(1)).provider,
       stub("airplaneslive", snapshot(2)).provider,
     );
-    // app.ts enables adsb.lol route enrichment via name.startsWith("adsblol").
+    // app.ts enables adsb.lol route enrichment when "adsblol" is any member
+    // of the "+"-joined composite name (it is the FALLBACK half by default).
     expect(fallback.name).toBe("adsblol+airplaneslive");
-    expect(fallback.name.startsWith("adsblol")).toBe(true);
+    expect(fallback.name.split("+").includes("adsblol")).toBe(true);
+    expect("adsbfi+adsblol".split("+").includes("adsblol")).toBe(true);
+    expect("adsbfi+adsbone".split("+").includes("adsblol")).toBe(false);
   });
 });
 
@@ -243,10 +246,11 @@ describe("AdsbFiProvider", () => {
 });
 
 describe("selectProvider", () => {
-  it("defaults to the adsb.lol + adsb.fi fallback composite", () => {
-    // airplanes.live was the fallback until 2026-10-19; it refuses Fly's network
-    // (HTTP 403, policy), so a composite naming it would be a fallback in name only.
-    expect(selectProvider({}).name).toBe("adsblol+adsbfi");
+  it("defaults to adsb.fi primary with adsb.lol as the fallback", () => {
+    // adsb.lol caps a client at 500 requests a day (2026-10-20); one polling
+    // phone exhausts that in ~80 minutes, so it can only ever be the backup.
+    // airplanes.live refuses Fly's network outright (HTTP 403, policy).
+    expect(selectProvider({}).name).toBe("adsbfi+adsblol");
   });
 
   it("still selects single providers explicitly", () => {

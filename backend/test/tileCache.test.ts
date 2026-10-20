@@ -137,3 +137,42 @@ describe("TileCache memory bounds", () => {
     expect(cache.size).toBe(MAX_TILE_ENTRIES);
   });
 });
+
+describe("TileCache feed-health timestamps (what the readiness canary reads)", () => {
+  const bbox: Bbox = { lamin: 37.61, lomin: -122.51, lamax: 38.11, lomax: -121.99 };
+
+  it("records the last fresh fetch and the last failure, any tile", async () => {
+    let nowMs = 1_000_000;
+    let fail = false;
+    const provider: PositionProvider = {
+      name: "stub",
+      async aircraftInBbox(): Promise<ProviderSnapshot> {
+        if (fail) throw new Error("down");
+        return { fetchedAt: 1, aircraft: [] };
+      },
+    };
+    const cache = new TileCache(provider, {}, () => nowMs);
+    expect(cache.lastFreshFetchAt).toBeUndefined();
+    expect(cache.lastFailureAt).toBeUndefined();
+
+    await cache.get(bbox);
+    expect(cache.lastFreshFetchAt).toBe(1_000_000);
+    expect(cache.lastFailureAt).toBeUndefined();
+
+    // Past the TTL, upstream dead: last-good is served (stale) AND the failure
+    // is recorded — the canary must not read "served stale" as "feed healthy".
+    nowMs += 15_000;
+    fail = true;
+    const r = await cache.get(bbox);
+    expect(r.stale).toBe(true);
+    expect(cache.lastFailureAt).toBe(1_015_000);
+    expect(cache.lastFreshFetchAt).toBe(1_000_000);
+
+    // Recovery moves the fresh mark past the failure mark.
+    nowMs += 15_000;
+    fail = false;
+    await cache.get(bbox);
+    expect(cache.lastFreshFetchAt).toBe(1_030_000);
+    expect(cache.lastFailureAt).toBe(1_015_000);
+  });
+});
