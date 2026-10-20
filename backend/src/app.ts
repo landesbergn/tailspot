@@ -470,7 +470,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           const timedOut = err instanceof ProbeTimeoutError;
           request.log.warn(
             { err },
-            timedOut ? "readiness: position feed probe timed out" : "readiness: position feed probe threw",
+            timedOut
+              ? "readiness: position feed probe timed out"
+              : "readiness: position feed probe threw",
           );
           return timedOut ? ("timeout" as const) : ("unavailable" as const);
         },
