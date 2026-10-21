@@ -66,14 +66,15 @@ describe("SustainedFallbackAlerter", () => {
     expect(alerts).toHaveLength(3);
   });
 
-  it("resets the clock when the primary serves again", () => {
+  it("resets the clock once the primary has stayed healthy for the quiet window", () => {
     const { alerter, alerts, advance } = harness();
     alerter.recordFallback(new Error("down"));
     advance(4 * MINUTE);
     alerter.recordRecovery();
+    advance(2 * MINUTE);
 
-    // A new failure right after recovery starts from zero — the earlier four
-    // minutes must not accumulate into an alert one minute later.
+    // A new failure after a held recovery starts from zero — the earlier four
+    // minutes must not accumulate into an alert two minutes later.
     alerter.recordFallback(new Error("down again"));
     advance(2 * MINUTE);
     alerter.recordFallback(new Error("down again"));
@@ -96,6 +97,28 @@ describe("SustainedFallbackAlerter", () => {
       alerter.recordFallback(new Error("down"));
     }
     expect(alerts).toHaveLength(1);
+  });
+
+  it("alerts on a flapping feed: stray successes don't restart the clock", () => {
+    const { alerter, alerts, advance } = harness();
+    // The 2026-10-17 shape: mostly failing, one success every ~40 s.
+    for (let elapsed = 0; elapsed <= 6 * MINUTE; elapsed += 10_000) {
+      if (elapsed % 40_000 === 0) alerter.recordRecovery();
+      else alerter.recordFallback(new Error("flapping"));
+      advance(10_000);
+    }
+    expect(alerts).toHaveLength(1);
+  });
+
+  it("stays silent for isolated blips spread out over time", () => {
+    const { alerter, alerts, advance } = harness();
+    for (let i = 0; i < 10; i++) {
+      alerter.recordFallback(new Error("blip"));
+      advance(10_000);
+      alerter.recordRecovery();
+      advance(10 * MINUTE);
+    }
+    expect(alerts).toEqual([]);
   });
 
   it("reports engagement state", () => {

@@ -15,8 +15,12 @@
  *     (5 min), ONE alert is emitted;
  *   - `minIntervalMs` (1 h) rate-limits the alerts so a day-long adsb.lol
  *     outage produces roughly one page per hour, not one per poll;
- *   - a successful primary response resets the clock — a flapping feed never
- *     accumulates its way past the threshold.
+ *   - the clock only resets once the primary has stayed healthy for
+ *     `quietMs` (2 min). An isolated blip still ends cleanly, but a FLAPPING
+ *     feed (mostly failing, with the odd success) is one continuous incident.
+ *     The first version reset on any single success, so on 2026-10-17 adsb.lol
+ *     failed most requests for hours and Sentry never heard about it: every
+ *     stray success restarted the five-minute clock.
  *
  * Deliberately NO timers. Evaluation happens on the events themselves, which
  * means nothing keeps the event loop alive and tests need no fake timers (just
@@ -40,6 +44,8 @@ export interface SustainedFallbackAlerterOptions {
   sustainedForMs?: number;
   /** Minimum gap between alerts. Default 1 h. */
   minIntervalMs?: number;
+  /** How long the primary must stay healthy before a run ends. Default 2 min. */
+  quietMs?: number;
   /** Injectable clock (unix ms) — tests pass a fake; production uses Date.now. */
   now?: () => number;
   /**
@@ -52,33 +58,44 @@ export interface SustainedFallbackAlerterOptions {
 
 const FIVE_MINUTES_MS = 5 * 60_000;
 const ONE_HOUR_MS = 60 * 60_000;
+const TWO_MINUTES_MS = 2 * 60_000;
 
 export class SustainedFallbackAlerter {
   private readonly sustainedForMs: number;
   private readonly minIntervalMs: number;
+  private readonly quietMs: number;
   private readonly now: () => number;
   private readonly onAlert?: (alert: SustainedFallbackAlert) => void;
 
-  /** When the current unbroken run of fallback engagements started (unix ms). */
+  /** When the current run of fallback engagements started (unix ms). */
   private engagedAt: number | undefined;
+  /** When the primary last came back during this run; undefined while failing. */
+  private recoveredAt: number | undefined;
   /** When we last emitted an alert (unix ms) — drives the rate limit. */
   private lastAlertAt: number | undefined;
 
   constructor(options: SustainedFallbackAlerterOptions = {}) {
     this.sustainedForMs = options.sustainedForMs ?? FIVE_MINUTES_MS;
     this.minIntervalMs = options.minIntervalMs ?? ONE_HOUR_MS;
+    this.quietMs = options.quietMs ?? TWO_MINUTES_MS;
     this.now = options.now ?? Date.now;
     this.onAlert = options.onAlert;
   }
 
   /** True while the primary is believed to be failing (exposed for tests/log context). */
   get isEngaged(): boolean {
-    return this.engagedAt !== undefined;
+    return this.engagedAt !== undefined && this.recoveredAt === undefined;
   }
 
   /** Record one fallback engagement, and alert if it has now been sustained. */
   recordFallback(primaryError: unknown): void {
     const now = this.now();
+    // A recovery that held for the quiet window ended the previous run; one
+    // that didn't is just a gap inside the same incident.
+    if (this.recoveredAt !== undefined && now - this.recoveredAt >= this.quietMs) {
+      this.engagedAt = undefined;
+    }
+    this.recoveredAt = undefined;
     // First failure of this run: start the clock. Note we do NOT alert here even
     // if the threshold were zero — an alert needs a second event to prove the
     // outage persisted, which is exactly the point.
@@ -93,8 +110,13 @@ export class SustainedFallbackAlerter {
     this.onAlert?.({ engagedForMs, primaryError });
   }
 
-  /** Record a successful primary response — ends the run and resets the clock. */
+  /**
+   * Record a successful primary response. The run ends only if no further
+   * fallback arrives within `quietMs`; see the header.
+   */
   recordRecovery(): void {
-    this.engagedAt = undefined;
+    if (this.engagedAt !== undefined && this.recoveredAt === undefined) {
+      this.recoveredAt = this.now();
+    }
   }
 }
