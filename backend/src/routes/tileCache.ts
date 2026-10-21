@@ -77,6 +77,25 @@ export interface TileResult {
   stale: boolean;
 }
 
+/**
+ * One genuine upstream fetch that succeeded — the unit of "which feed is
+ * serving right now". Cache hits and last-good serves never produce one, so
+ * the stream is bounded by the tile TTL (≤ 1 per tile per 10 s), which makes
+ * it cheap enough to log every one. app.ts does exactly that.
+ */
+export interface UpstreamFetchEvent {
+  /** The adapter that answered ("adsbfi", "adsblol") — the member, never the composite. */
+  provider: string;
+  /** Cache key of the tile fetched. */
+  tile: string;
+  /** Aircraft in the snapshot. */
+  aircraft: number;
+  /** Upstream snapshot time (unix seconds). */
+  fetchedAt: number;
+  /** Wall-clock duration of the upstream call (ms, from the injected clock). */
+  upstreamMs: number;
+}
+
 /** Thrown when upstream failed AND no acceptably-fresh cache exists → 503. */
 export class NoFreshDataError extends Error {
   constructor(
@@ -93,6 +112,31 @@ export class TileCache {
   private readonly inFlight = new Map<string, Promise<ProviderSnapshot>>();
   private readonly config: TileCacheConfig;
   private readonly now: () => number;
+  /** Unix ms of the last genuine upstream fetch that succeeded (any tile). */
+  private lastFreshFetchAtMs: number | undefined;
+  /** Unix ms of the last upstream fetch that failed (any tile), whether or
+   *  not last-good data covered it. */
+  private lastFailureAtMs: number | undefined;
+  /** `provider` of the last genuine fetch that succeeded — what /readyz names. */
+  private lastFreshProviderName: string | undefined;
+
+  /**
+   * Feed health as organic traffic proves it. The readiness canary reads these
+   * so it can answer "the feed works" from the phones' own fetches instead of
+   * spending an upstream request of its own every minute — adsb.lol caps a
+   * client at 500 requests a DAY (x-ratelimit-limit, observed 2026-10-20),
+   * and a once-a-minute canary alone is 1,440. Undefined until the first
+   * fetch of each kind.
+   */
+  get lastFreshFetchAt(): number | undefined {
+    return this.lastFreshFetchAtMs;
+  }
+  get lastFailureAt(): number | undefined {
+    return this.lastFailureAtMs;
+  }
+  get lastFreshProvider(): string | undefined {
+    return this.lastFreshProviderName;
+  }
 
   constructor(
     private readonly provider: PositionProvider,
@@ -106,6 +150,12 @@ export class TileCache {
      * `makeRegistryEnrichSink`. Must never throw into the fetch path (wrapped).
      */
     private readonly onFreshSnapshot?: (snapshot: ProviderSnapshot) => void,
+    /**
+     * Fired once per genuine upstream fetch that succeeded, after the snapshot
+     * is stored, with who answered and how long it took. The per-fetch log
+     * line in production. Same never-throws-into-the-fetch rule as above.
+     */
+    private readonly onUpstreamFetch?: (event: UpstreamFetchEvent) => void,
   ) {
     // Merge defaults, ignoring explicit `undefined` overrides (env-derived
     // config passes undefined for unset vars — those must NOT clobber defaults).
@@ -181,10 +231,27 @@ export class TileCache {
     // 3. Start a new upstream fetch; stash it so concurrent callers share it.
     // Fetch the EXPANDED tile (not the raw request) so the cached snapshot is
     // valid for every bbox that maps to this key — see tileBbox() doc.
+    const startedMs = this.now();
     const fetchPromise = this.provider
       .aircraftInBbox(this.tileBbox(bbox))
-      .then((snapshot) => {
+      .then((raw) => {
+        // Every served snapshot names its feed. Real adapters stamp themselves
+        // (and the composite stamps its member); this only covers a provider
+        // that didn't, so the name is never missing downstream.
+        const provider = raw.provider ?? this.provider.name;
+        const snapshot = raw.provider === undefined ? { ...raw, provider } : raw;
         this.store(key, snapshot);
+        try {
+          this.onUpstreamFetch?.({
+            provider,
+            tile: key,
+            aircraft: snapshot.aircraft.length,
+            fetchedAt: snapshot.fetchedAt,
+            upstreamMs: this.now() - startedMs,
+          });
+        } catch {
+          /* swallow: a broken log sink must not affect the served response */
+        }
         // Opportunistic registry enrichment — best-effort, never breaks the fetch.
         try {
           this.onFreshSnapshot?.(snapshot);
@@ -221,7 +288,10 @@ export class TileCache {
    * least-recently-written first, which is what both bounds want.
    */
   private store(key: string, snapshot: ProviderSnapshot): void {
-    const nowSec = Math.floor(this.now() / 1000);
+    const nowMs = this.now();
+    const nowSec = Math.floor(nowMs / 1000);
+    this.lastFreshFetchAtMs = nowMs;
+    this.lastFreshProviderName = snapshot.provider;
     this.entries.delete(key);
     this.entries.set(key, { snapshot, storedAt: nowSec });
 
@@ -243,6 +313,7 @@ export class TileCache {
 
   /** Serve last-good if fresh enough; otherwise throw NoFreshDataError. */
   private fallbackOrThrow(key: string, nowSec: number, cause: unknown): TileResult {
+    this.lastFailureAtMs = this.now();
     const cached = this.entries.get(key);
     if (cached && nowSec - cached.storedAt < this.config.staleMaxSeconds) {
       // Carry the snapshot's true fetchedAt so the client sees real staleness.

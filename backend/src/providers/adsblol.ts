@@ -179,6 +179,23 @@ function trimField(v: string | null | undefined): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
+/**
+ * Render the IETF RateLimit headers (and Retry-After) a readsb aggregator
+ * sends, for log/alert text. Null when none are present. Exported for tests.
+ */
+export function rateLimitSummary(headers: Headers): string | null {
+  const parts: string[] = [];
+  const limit = headers.get("x-ratelimit-limit") ?? headers.get("ratelimit-limit");
+  const remaining = headers.get("x-ratelimit-remaining") ?? headers.get("ratelimit-remaining");
+  const reset = headers.get("x-ratelimit-reset") ?? headers.get("ratelimit-reset");
+  const retryAfter = headers.get("retry-after");
+  if (limit) parts.push(`ratelimit-limit=${limit}`);
+  if (remaining) parts.push(`remaining=${remaining}`);
+  if (reset) parts.push(`reset=${reset}s`);
+  if (retryAfter) parts.push(`retry-after=${retryAfter}`);
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
 export interface AdsbLolProviderOptions {
   baseUrl?: string;
   timeoutMs?: number;
@@ -191,7 +208,7 @@ export class AdsbLolProvider implements PositionProvider {
   // thin subclass pointing the same readsb client at a different aggregator —
   // can override it.
   readonly name: string = "adsblol";
-  private readonly baseUrl: string;
+  protected readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
 
@@ -207,7 +224,7 @@ export class AdsbLolProvider implements PositionProvider {
     // route already rejects bboxes > 4 sq deg, so the covering radius is small
     // in practice and the clamp is just a defensive guard.
     const radiusNm = Math.min(MAX_RADIUS_NM, Math.max(1, Math.ceil(bboxCoveringRadiusNm(bbox))));
-    const url = `${this.baseUrl}/v2/point/${center.lat}/${center.lon}/${radiusNm}`;
+    const url = this.pointUrl(center.lat, center.lon, radiusNm);
 
     const resp = await this.fetchJson(url);
     // adsb.lol `now` is milliseconds; the contract is unix seconds.
@@ -219,7 +236,17 @@ export class AdsbLolProvider implements PositionProvider {
     return {
       fetchedAt,
       aircraft: normalizeAdsbLol(resp, fetchedAt, bbox),
+      provider: this.name,
     };
+  }
+
+  /**
+   * The point+radius URL for this aggregator. adsb.lol and airplanes.live use
+   * the ADSBExchange-v2 path; adsb.fi serves the identical response from a
+   * different path, so the subclass overrides only this (see adsbfi.ts).
+   */
+  protected pointUrl(lat: number, lon: number, radiusNm: number): string {
+    return `${this.baseUrl}/v2/point/${lat}/${lon}/${radiusNm}`;
   }
 
   private async fetchJson(url: string): Promise<AdsbLolResponse> {
@@ -232,7 +259,15 @@ export class AdsbLolProvider implements PositionProvider {
         signal: controller.signal,
       });
       if (!res.ok) {
-        throw new UpstreamError(`${this.name} returned HTTP ${res.status}`);
+        // Quota headers travel in the message so the Fly log and Sentry show
+        // WHICH bucket said no. adsb.lol publishes `x-ratelimit-limit: 4,
+        // 4;w=1, 60;w=60, 500;w=86400` — per second, per minute, per DAY —
+        // and on 2026-10-20 the daily one was inferred from timing because
+        // nothing had recorded it.
+        const quota = rateLimitSummary(res.headers);
+        throw new UpstreamError(
+          `${this.name} returned HTTP ${res.status}${quota ? ` (${quota})` : ""}`,
+        );
       }
       return (await res.json()) as AdsbLolResponse;
     } catch (err) {
