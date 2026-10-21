@@ -110,6 +110,24 @@ struct FamilySetsTests {
         #expect(!CardSets.matches(catch: trainer, entry: entry("fam-commuter-props", "fcp-p2012")))
     }
 
+    @Test func recentPublicTypecodesStayInTheirNarrowFamilySlots() {
+        let flightDesign = entry("fam-sport-classics", "fsc-flight-design-ct")
+        #expect(CardSets.matches(catch: mk(typecode: "FDCT"), entry: flightDesign))
+        #expect(!CardSets.matches(catch: mk(typecode: "FD2E"), entry: flightDesign))
+
+        let skyleader = entry("fam-sport-classics", "fsc-skyleader600")
+        #expect(CardSets.matches(catch: mk(typecode: "J600"), entry: skyleader))
+        #expect(!CardSets.matches(catch: mk(typecode: "J400"), entry: skyleader))
+
+        let metro = entry("fam-commuter-props", "fcp-metro")
+        #expect(CardSets.matches(catch: mk(typecode: "SW4"), entry: metro))
+        #expect(!CardSets.matches(catch: mk(typecode: "SW3"), entry: metro))
+
+        let tampico = entry("fam-sport-classics", "fsc-tampico")
+        #expect(CardSets.matches(catch: mk(typecode: "TAMP"), entry: tampico))
+        #expect(!CardSets.matches(catch: mk(typecode: "TBM7"), entry: tampico))
+    }
+
     @Test func citationXNameDoesNotBleedIntoXLS() {
         let topCitation = entry("fam-citation", "fc-longitude")
         #expect(CardSets.matches(catch: mk(typecode: "C750"), entry: topCitation))
