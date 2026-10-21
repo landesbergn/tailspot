@@ -223,6 +223,9 @@ describe("AdsbLolProvider.aircraftInBbox", () => {
     expect(snapshot.fetchedAt).toBe(FETCHED_AT);
     // 3 in-bbox survivors (UA, JAL, DLH); decoy 4ca8e1 is outside the bbox.
     expect(snapshot.aircraft.length).toBe(3);
+    // The adapter names itself so the wire, the log and the registry can say
+    // which feed produced the data (adsb.fi / airplanes.live inherit via name).
+    expect(snapshot.provider).toBe("adsblol");
   });
 
   it("throws UpstreamError on a non-OK upstream status", async () => {
@@ -314,5 +317,30 @@ describe("AdsbLolProvider.aircraftInBbox", () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe("rate-limit headers in upstream errors", () => {
+  it("names the quota bucket on a 429 so the log says which limit said no", async () => {
+    const { AdsbLolProvider: Provider, rateLimitSummary } = await import(
+      "../src/providers/adsblol.js"
+    );
+    const fetchFn = (async () =>
+      new Response("rate limited", {
+        status: 429,
+        headers: {
+          "x-ratelimit-limit": "4, 4;w=1, 60;w=60, 500;w=86400",
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": "31200",
+        },
+      })) as typeof fetch;
+    const provider = new Provider({ fetchFn });
+    await expect(
+      provider.aircraftInBbox({ lamin: 37.0, lomin: -123.0, lamax: 38.0, lomax: -122.0 }),
+    ).rejects.toThrow(
+      /adsblol returned HTTP 429 \(ratelimit-limit=4, 4;w=1, 60;w=60, 500;w=86400 remaining=0 reset=31200s\)/,
+    );
+    expect(rateLimitSummary(new Headers())).toBeNull();
+    expect(rateLimitSummary(new Headers({ "retry-after": "60" }))).toBe("retry-after=60");
   });
 });

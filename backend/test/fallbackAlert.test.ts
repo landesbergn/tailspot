@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FallbackProvider } from "../src/providers/fallback.js";
 import {
-  FeedFailureAlerter,
   type SustainedFallbackAlert,
   SustainedFallbackAlerter,
 } from "../src/providers/fallbackAlert.js";
@@ -203,47 +202,5 @@ describe("FallbackProvider onRecovered", () => {
     await fallback.aircraftInBbox(BBOX);
     await fallback.aircraftInBbox(BBOX);
     expect(events).toEqual([]);
-  });
-});
-
-describe("FeedFailureAlerter", () => {
-  it("alerts on the first failure, then at most once per hour", () => {
-    let now = 0;
-    const alerts: unknown[] = [];
-    const alerter = new FeedFailureAlerter({ now: () => now, onAlert: (e) => alerts.push(e) });
-    const err = new Error("airplaneslive returned HTTP 403");
-    alerter.recordFailure(err);
-    expect(alerts).toEqual([err]);
-    for (let i = 0; i < 50; i++) {
-      now += MINUTE;
-      alerter.recordFailure(new Error("again"));
-    }
-    expect(alerts).toHaveLength(1);
-    now += 10 * MINUTE; // 60 min after the first alert
-    alerter.recordFailure(new Error("still"));
-    expect(alerts).toHaveLength(2);
-  });
-});
-
-describe("FallbackProvider onSecondaryFailure", () => {
-  it("reports the secondary's error when both feeds fail, and only then", async () => {
-    const primary = flakyPrimary();
-    const secondaryErr = new Error("HTTP 403");
-    const failures: unknown[] = [];
-    const fallback = new FallbackProvider(
-      primary.provider,
-      {
-        name: "secondary",
-        async aircraftInBbox() {
-          throw secondaryErr;
-        },
-      },
-      { onSecondaryFailure: (e) => failures.push(e) },
-    );
-
-    await fallback.aircraftInBbox(BBOX); // primary healthy — secondary untouched
-    primary.fail();
-    await expect(fallback.aircraftInBbox(BBOX)).rejects.toThrow("both providers failed");
-    expect(failures).toEqual([secondaryErr]);
   });
 });

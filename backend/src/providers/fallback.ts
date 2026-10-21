@@ -33,9 +33,22 @@ export interface FallbackProviderOptions {
    * Edge-triggered, not level: a primary that never failed never fires it.
    */
   onRecovered?: () => void;
-  /** Called when the secondary fails too, with the secondary's error. Without
-   *  it a dead backup is invisible until the primary also wobbles. */
-  onSecondaryFailure?: (secondaryError: unknown) => void;
+  /**
+   * Called when the secondary serves a request — i.e. the fallback actually
+   * worked. Level-triggered (every such request), because it is the "all
+   * clear" for `onBothFailed` below: a hard outage ends the moment EITHER feed
+   * answers, and onRecovered only reports the primary.
+   */
+  onSecondaryServed?: () => void;
+  /**
+   * Called when BOTH feeds failed for a request, with the composite error that
+   * is about to be thrown. This is the signal that matters most and that
+   * `onFallback` alone cannot express: with the secondary dead too there is no
+   * fallback, the tile cache is all that stands between the phone and a 503.
+   * For sixteen days in 2026-10 the hourly Sentry message read "still serving
+   * the fallback" while nobody was being served anything.
+   */
+  onBothFailed?: (error: UpstreamError) => void;
 }
 
 export class FallbackProvider implements PositionProvider {
@@ -68,25 +81,41 @@ export class FallbackProvider implements PositionProvider {
         this.engaged = false;
         this.options.onRecovered?.();
       }
-      return snapshot;
+      return stamp(snapshot, this.primary.name);
     }
     this.engaged = true;
     this.options.onFallback?.(primaryError);
     let secondaryError: unknown;
+    let fallbackSnapshot: ProviderSnapshot | undefined;
     try {
-      return await this.secondary.aircraftInBbox(bbox);
+      fallbackSnapshot = await this.secondary.aircraftInBbox(bbox);
     } catch (err) {
       secondaryError = err;
     }
-    // Outside the try, like the other hooks, so a broken listener can't be
-    // mistaken for a failed secondary.
-    this.options.onSecondaryFailure?.(secondaryError);
-    throw new UpstreamError(
+    // Listeners run outside the try blocks for the same reason as above: a
+    // throwing listener must never be mistaken for a failed feed, nor replace
+    // the composite error a caller is about to receive.
+    if (fallbackSnapshot !== undefined) {
+      this.options.onSecondaryServed?.();
+      return stamp(fallbackSnapshot, this.secondary.name);
+    }
+    const bothFailed = new UpstreamError(
       `both providers failed: ${this.primary.name} (${describe(primaryError)}); ` +
         `${this.secondary.name} (${describe(secondaryError)})`,
       secondaryError,
     );
+    this.options.onBothFailed?.(bothFailed);
+    throw bothFailed;
   }
+}
+
+/**
+ * Name the member that answered when it didn't name itself (stubs, a future
+ * adapter that forgets). A real adapter's own stamp wins, so the served
+ * snapshot always says "adsbfi" or "adsblol" — never "adsbfi+adsblol".
+ */
+function stamp(snapshot: ProviderSnapshot, provider: string): ProviderSnapshot {
+  return snapshot.provider === undefined ? { ...snapshot, provider } : snapshot;
 }
 
 function describe(err: unknown): string {
