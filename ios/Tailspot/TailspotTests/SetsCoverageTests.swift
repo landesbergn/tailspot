@@ -263,6 +263,8 @@ struct SetsCoverageTests {
         ("P8", "Boeing", "P-8 Poseidon"),
         ("SF25", "Scheibe", "SF-25 Falke"),
         ("T33", "Lockheed", "T-33 Shooting Star"),
+        // Public catalog coverage addition validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
         // Public catalog coverage additions validated 2026-10-11.
         ("A337", "Airbus", "A330-700 Beluga XL"),
         ("A400", "Airbus", "A400M Atlas"),
@@ -400,6 +402,7 @@ struct SetsCoverageTests {
             (("P8", "Boeing", "P-8 Poseidon"), "fam-military", "fm-p8"),
             (("SF25", "Scheibe", "SF-25 Falke"), "fam-sport-classics", "fsc-sf25"),
             (("T33", "Lockheed", "T-33 Shooting Star"), "fam-military", "fm-t33"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
             (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
