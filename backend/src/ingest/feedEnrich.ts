@@ -27,7 +27,9 @@ import { upsertRegistryFillMissing } from "./registryUpsert.js";
 /**
  * Extract registry rows from a fresh snapshot: one per aircraft that carries a
  * typecode (a position-only contact adds no registry signal worth a write).
- * Pure — no I/O. `source` is tagged "adsblol".
+ * Pure — no I/O. `source` is the feed that produced the snapshot ("adsbfi" /
+ * "adsblol" — `ProviderSnapshot.provider`); "adsblol" only for an unstamped
+ * snapshot, which was every row until 2026-10-20 regardless of the real feed.
  */
 export function registryRowsFromSnapshot(snapshot: ProviderSnapshot): RegistryInsert[] {
   const rows: RegistryInsert[] = [];
@@ -41,7 +43,7 @@ export function registryRowsFromSnapshot(snapshot: ProviderSnapshot): RegistryIn
       manufacturerRaw: null,
       modelRaw: null,
       typecode,
-      source: "adsblol",
+      source: snapshot.provider ?? "adsblol",
     });
   }
   return rows;
