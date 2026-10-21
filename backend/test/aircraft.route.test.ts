@@ -271,3 +271,61 @@ describe("GET /v1/aircraft", () => {
     expect(provider.calls).toBe(2);
   });
 });
+
+/**
+ * "Which feed served this?" — on the wire and in the log. Added after the
+ * 2026-10-20 outage, when no response or log line said whether adsb.fi or
+ * adsb.lol had produced the planes a phone was looking at.
+ */
+describe("GET /v1/aircraft names its feed", () => {
+  let app: FastifyInstance | undefined;
+
+  afterEach(async () => {
+    await app?.close();
+    app = undefined;
+  });
+
+  it("carries the provider on the wire, and a stale serve keeps the ORIGINAL producer", async () => {
+    const provider = new StubProvider();
+    let t = 1_000_000;
+    app = await buildApp({
+      provider,
+      cacheConfig: { ttlSeconds: 10, staleMaxSeconds: 60, tileSizeDeg: 0.25 },
+      now: () => t,
+    });
+
+    const fresh = await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    expect(fresh.json<{ provider?: string }>().provider).toBe("stub");
+
+    provider.shouldFail = true;
+    t += 11_000; // past the TTL, inside the stale window → last-good serve
+    const stale = await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    expect(stale.statusCode).toBe(200);
+    expect(stale.json<{ provider?: string }>().provider).toBe("stub");
+  });
+
+  it("logs one 'position feed fetched' line per upstream fetch with the provider, never per cache hit", async () => {
+    const provider = new StubProvider();
+    const logLines: Array<Record<string, unknown>> = [];
+    app = await buildApp({
+      provider,
+      cacheConfig: { ttlSeconds: 10, staleMaxSeconds: 60, tileSizeDeg: 0.25 },
+      logStream: { write: (line: string) => logLines.push(JSON.parse(line)) },
+    });
+
+    await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` });
+    await app.inject({ method: "GET", url: `/v1/aircraft?${VALID_QS}` }); // cache hit
+    await app.inject({ method: "GET", url: `/v1/aircraft?${SECOND_TILE_QS}` }); // second tile
+
+    const fetched = logLines.filter((l) => l.msg === "position feed fetched");
+    expect(provider.calls).toBe(2);
+    expect(fetched).toHaveLength(2);
+    expect(fetched[0]).toMatchObject({
+      provider: "stub",
+      aircraft: 1,
+      fetchedAt: provider.fetchedAt,
+    });
+    expect(typeof fetched[0]?.tile).toBe("string");
+    expect(typeof fetched[0]?.upstreamMs).toBe("number");
+  });
+});

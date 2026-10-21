@@ -43,6 +43,10 @@ primary_region = "sjc"
     soft_limit = 100
     hard_limit = 200
 
+  # Liveness ONLY. Keep this on /healthz, never /readyz: Fly restarts a machine
+  # that fails its check, and /readyz also goes red when Postgres or the ADS-B
+  # upstreams are down — restarting the API would not fix either and would add
+  # churn to the outage. The external uptime monitor is what watches /readyz.
   [[http_service.checks]]
     grace_period = "5s"
     interval = "15s"
