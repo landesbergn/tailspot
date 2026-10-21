@@ -260,6 +260,11 @@ struct SetsCoverageTests {
         ("J600", "Jihlavan", "JA-600 Rapid 600"),
         ("SW4", "Fairchild", "SA-227 Metro"),
         ("TAMP", "Socata", "TB-9 Tampico"),
+        // Public catalog coverage additions validated 2026-10-15.
+        ("B779", "Boeing", "777-9"),
+        ("FK9", "B & F Technik", "FK-9"),
+        ("RISN", "Porto", "Risen"),
+        ("WT9", "Aerospool", "WT-9 Dynamic"),
         // Public catalog coverage additions validated 2026-10-14.
         ("A342", "Airbus", "A340-200"),
         ("G3", "Remos", "G-3 Mirage"),
@@ -410,6 +415,10 @@ struct SetsCoverageTests {
             (("J600", "Jihlavan", "JA-600 Rapid 600"), "fam-sport-classics", "fsc-skyleader600"),
             (("SW4", "Fairchild", "SA-227 Metro"), "fam-commuter-props", "fcp-metro"),
             (("TAMP", "Socata", "TB-9 Tampico"), "fam-sport-classics", "fsc-tampico"),
+            (("B779", "Boeing", "777-9"), "fam-777", "f777-9"),
+            (("FK9", "B & F Technik", "FK-9"), "fam-sport-classics", "fsc-fk9"),
+            (("RISN", "Porto", "Risen"), "fam-sport-classics", "fsc-risen"),
+            (("WT9", "Aerospool", "WT-9 Dynamic"), "fam-sport-classics", "fsc-wt9"),
             (("A342", "Airbus", "A340-200"), "fam-a340", "fa340-200"),
             (("G3", "Remos", "G-3 Mirage"), "fam-sport-classics", "fsc-remos-g3"),
             (("PNR3", "Alpi", "Pioneer 300"), "fam-sport-classics", "fsc-pioneer300"),
@@ -778,6 +787,22 @@ struct SetsCoverageTests {
         let falcon50 = mk(("FA50", "Dassault", "Falcon 50"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: falcon50), entry: faetaEntry),
                 "A Dassault Falcon 50 must not fill the ATEC Faeta slot")
+
+        // Adjacent public designators and qualified tokens stay separate from
+        // the new 777-9 and light-sport slots.
+        let b777xEntry = CardSets.families.first { $0.id == "fam-777" }!
+            .entries.first { $0.id == "f777-9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("B789", "Boeing", "787-9 Dreamliner"))),
+                                    entry: b777xEntry),
+                "A 787-9 must not fill the 777-9 slot")
+        let fk9Entry = sportSet.entries.first { $0.id == "fsc-fk9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("F9F", "Grumman", "F9F Panther"))),
+                                    entry: fk9Entry),
+                "An F9F Panther must not fill the FK9 slot")
+        let wt9Entry = sportSet.entries.first { $0.id == "fsc-wt9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("WT10", "Aerospool", "WT-10 Advantic"))),
+                                    entry: wt9Entry),
+                "An Aerospool WT10 must not fill the WT9 slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
