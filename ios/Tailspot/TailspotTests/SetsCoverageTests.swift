@@ -255,6 +255,8 @@ struct SetsCoverageTests {
         ("C425", "Cessna", "425 Corsair"),
         ("PA22", "Piper", "PA-22 Colt"),
         ("SBR1", "Rockwell", "Sabre 40"),
+        // Public catalog coverage addition validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
         // Public catalog coverage additions validated 2026-10-11.
         ("A337", "Airbus", "A330-700 Beluga XL"),
         ("A400", "Airbus", "A400M Atlas"),
@@ -385,6 +387,7 @@ struct SetsCoverageTests {
             (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
             (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
             (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
             (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
