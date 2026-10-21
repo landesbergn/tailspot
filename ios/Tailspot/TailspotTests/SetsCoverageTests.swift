@@ -261,6 +261,15 @@ struct SetsCoverageTests {
         ("PNR3", "Alpi", "Pioneer 300"),
         ("T18", "Classic Sport", "S-18"),
         ("TL30", "Tl Ultralight", "TL-3000 Sirius"),
+        // Public catalog coverage additions validated 2026-10-11.
+        ("A337", "Airbus", "A330-700 Beluga XL"),
+        ("A400", "Airbus", "A400M Atlas"),
+        ("DH82", "De Havilland", "DH-82 Queen Bee"),
+        ("E6", "Boeing", "E-6 Mercury"),
+        ("L39", "Aero", "L-39 Albatros"),
+        ("LA4", "Lake", "LA-4"),
+        ("S92", "Sikorsky", "S-92"),
+        ("U2", "Lockheed", "U-2"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -387,6 +396,14 @@ struct SetsCoverageTests {
             (("PNR3", "Alpi", "Pioneer 300"), "fam-sport-classics", "fsc-pioneer300"),
             (("T18", "Classic Sport", "S-18"), "fam-sport-classics", "fsc-s18"),
             (("TL30", "Tl Ultralight", "TL-3000 Sirius"), "fam-sport-classics", "fsc-sirius"),
+            (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
+            (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
+            (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
+            (("E6", "Boeing", "E-6 Mercury"), "fam-military", "fm-e6"),
+            (("L39", "Aero", "L-39 Albatros"), "fam-military", "fm-l39"),
+            (("LA4", "Lake", "LA-4"), "fam-sport-classics", "fsc-lake-la4"),
+            (("S92", "Sikorsky", "S-92"), "fam-heli", "fh-s92"),
+            (("U2", "Lockheed", "U-2"), "fam-military", "fm-u2"),
         ]
 
         for (row, setID, entryID) in assignments {

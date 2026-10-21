@@ -18,10 +18,54 @@ identity and claimable handles — no sign-in, no PII beyond a self-chosen handl
 
 ### `GET /healthz`
 
-Liveness probe. Returns `{ "status": "ok" }`. It used to include the package
-version; that was free reconnaissance for an unauthenticated caller and nothing
-consumed it, so it was removed (2026-09-06). For the running version, use
+Liveness probe, and the only thing Fly's own health check watches
+(`fly.toml`). Returns `{ "status": "ok" }` as long as the process can answer.
+Deliberately no DB ping and no upstream probe: Fly restarts machines that fail
+this check, and restarting the API because Postgres or adsb.lol is down would
+add churn to the real outage. It used to include the package version; that was
+free reconnaissance for an unauthenticated caller and nothing consumed it, so it
+was removed (2026-09-06). For the running version, use
 `fly image show -a tailspot-api`.
+
+### `GET /readyz`
+
+End-to-end readiness, and the URL the external uptime monitor watches (Sentry
+monitor 8072647, every 60 s, down after 3 consecutive failures). 200 only when
+Postgres answers `SELECT 1` **and** the position feed can serve planes for a
+fixed canary bbox through the same tile cache the phones use:
+
+```jsonc
+{ "status": "ok", "checks": { "db": "ok", "feed": "ok", "feedSource": "organic", "feedProvider": "adsbfi" } }
+```
+
+`checks.feed` is one of `ok`, `stale` (serving last-good inside the 60 s
+window), `fallback` (fresh data, but from adsb.lol because adsb.fi is
+down), `unavailable` (upstream failed, nothing to serve — phones get 503) or
+`timeout`. `checks.feedSource` says how the feed verdict was reached:
+`organic` (a phone's recent successful fetch proved the feed, no request made)
+or `probe` (the canary tile was fetched); absent on a timeout. `checks.feedProvider`
+names the feed that produced the proving snapshot (`adsbfi` or `adsblol`), so the
+monitor's captured body says which API was serving at that moment; absent when
+nothing has been served. The same name is on every `/v1/aircraft` response and
+in the Fly log: each genuine upstream fetch (never a cache hit or a last-good
+serve) logs one `position feed fetched` line with `provider`, `tile`,
+`aircraft`, `fetchedAt` and `upstreamMs`. The first three are 200: users are getting planes. The last two,
+or `db: "unavailable"`, are 503. Budgets are 3 s for the DB and 4 s for the
+feed, run concurrently, so the answer always lands inside the monitor's 5 s.
+
+The canary goes through `TileCache.get`, so a probe inside the 10 s TTL is a map
+read and a miss is one upstream fetch shared with anyone looking at that tile;
+the monitor therefore costs at most one upstream request per minute. The default
+bbox is the Bay Area; `CANARY_BBOX=lamin,lomin,lamax,lomax` moves it, and a
+malformed value fails the boot. A quiet sky is not a failure, only a failed
+fetch is.
+
+**Why it exists (2026-10-19).** From 2026-10-03 to 2026-10-19 adsb.lol
+rate-limited Fly's *shared* IPv4 egress (HTTP 429) and airplanes.live refused it
+(HTTP 403), so every `/v1/aircraft` call 503'd once the cache aged out. The
+process was up and the DB was fine, so `/healthz` stayed green, the uptime
+monitor (then on `/healthz`) never fired, and the first reports came from users
+sixteen days in. See `src/routes/feedProbe.ts`.
 
 ### `GET /v1/aircraft?lamin=&lomin=&lamax=&lomax=` (WP 1.2 + 1.3)
 
@@ -31,6 +75,8 @@ degrees and returns a normalized, SI-unit snapshot of aircraft inside it:
 ```jsonc
 {
   "fetchedAt": 1781116526,        // unix SECONDS of the upstream snapshot (NOT serve time)
+  "provider": "adsbfi",           // the feed that produced it ("adsbfi" | "adsblol"); additive
+                                  // 2026-10-20, a stale serve keeps the ORIGINAL producer
   "aircraft": [
     {
       "icao24": "a92d6d",          // lowercase hex
@@ -296,7 +342,7 @@ stub session.
 
 | Var | Default | Meaning |
 |---|---|---|
-| `POSITION_PROVIDER` | — (composite) | Unset: adsb.lol primary with airplanes.live failover. `adsblol` or `airplaneslive`: that provider only. Read once at startup. |
+| `POSITION_PROVIDER` | — (composite) | Unset: **adsb.fi primary with adsb.lol failover** (swapped 2026-10-20: adsb.lol caps a client at 500 requests/day; see *Upstream quotas*). `adsblol`, `adsbfi` or `airplaneslive`: that provider only (airplanes.live 403s Fly's network pending an access request). Read once at startup. |
 | `CACHE_TTL_SECONDS` | `10` | Fresh-cache window. |
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
@@ -330,9 +376,32 @@ geographic query is point+radius (`GET /v2/point/{lat}/{lon}/{radius}`, radius
 in NM) — so the adapter fetches the smallest circle covering the bbox and
 filters back to the rectangle. readsb feeds report feet / knots and don't carry
 `origin_country`, so the adapter converts to meters / m·s⁻¹ and derives the
-country from the icao24 via the ICAO Annex 10 24-bit allocation table. The
-**airplanes.live** failover speaks the same readsb dialect (same adapter,
-different host) and kicks in when adsb.lol errors.
+country from the icao24 via the ICAO Annex 10 24-bit allocation table. Since
+2026-10-20 **adsb.fi is the primary** and adsb.lol the failover (same adapter,
+different host and path): adsb.lol now enforces a 500-requests-per-day cap per
+client, which one polling phone exhausts in about 80 minutes. airplanes.live
+was the failover until 2026-10-19, when it turned out to refuse Fly's network
+outright (HTTP 403, "email us for access"); its adapter stays in the tree behind
+`POSITION_PROVIDER=airplaneslive`. Route lookups (`/v1/routes`, the catch-time
+route guess, the `route` field on `/v1/aircraft`) stay on adsb.lol, the only
+aggregator with a route DB, and draw on that same daily quota.
+
+### Upstream quotas (observed from response headers, 2026-10-20)
+
+| Feed | Published limit | How we stay under it |
+|---|---|---|
+| adsb.lol | `x-ratelimit-limit: 4, 4;w=1, 60;w=60, 500;w=86400` — 4/s, 60/min, **500/day** per client IP | Fallback only, plus per-callsign route lookups (30 min positive / 10 min negative cache). A 429 from any bucket is logged with the headers (`rateLimitSummary`). |
+| adsb.fi | 1 req/s per IP; 4xx responses count toward a temporary IP restriction; personal, non-commercial; cite with a link | Primary. The tile cache allows one fetch per 0.25° tile per 10 s; the canary answers from organic traffic when a phone fetched within 120 s. |
+| airplanes.live | Access by email approval; Fly's network gets 403 | Not in the default chain. |
+
+**Why the readiness canary matters here.** The uptime monitor probes `/readyz`
+once a minute from three regions. Before 2026-10-20 every probe outside the 10 s
+tile TTL was an upstream fetch — about 1,440 a day, three times adsb.lol's
+daily cap, which is how the dedicated egress IP got rate-limited eight hours
+after it was allocated. The canary now answers `ok` (`source: organic`) when the
+tile cache saw a successful fetch within 120 s and no failure since, and only
+fetches for itself when there is no such proof — see
+`TileCache.lastFreshFetchAt` / `lastFailureAt`.
 
 ## Running locally
 
@@ -558,14 +627,39 @@ DATABASE_URL=… npm run ingest:doc8643 -- <path-to-AircraftTypes.json>
 DATABASE_URL=… npm run ingest:faa -- <extracted-FAA-dir>
 ```
 
-## Alerting (phase 2 of the 2026-09-06 hardening — click-through checklist)
+## Alerting
 
-Sentry (org `noah-lc`, project `broken-darkness-5055`) already has the `/readyz`
-uptime monitor and an issue rule for high-priority issues. The sustained-fallback
-alerter (`src/providers/fallbackAlert.ts`) reports through Sentry, so a dead
-adsb.lol primary surfaces as an issue after five minutes. What is **not** yet
-configured — and can only be set up in a browser, not from the CLI — are the
-traffic-shape alerts below. Fly exposes the metrics in its hosted Grafana
+What pages Noah, and why each exists (all verified firing or configured
+2026-10-19 after the sixteen-day feed outage nobody was told about):
+
+| Signal | Where | What it catches | Notes |
+|---|---|---|---|
+| **Product is down** | Sentry uptime monitor 8072647 on `GET /readyz`, 60 s, 3 fails → issue → email | Process dead, DB unreachable, **position feed unable to serve planes** (both upstreams failing past the cache window) | The one monitor the free plan allows, so `/readyz` folds every dependency into one URL. |
+| **Feed outage (in-process)** | `SustainedFallbackAlerter` → Sentry message `Position feed DOWN: both providers failing for ~N min` (level fatal, fingerprint `position-feed-outage`) | Both feeds failing on real traffic for 5+ min; one message per hour | Driven by `FallbackProvider.onBothFailed`; clears when either feed serves. |
+| **Feed degraded** | Same alerter → `Position feed fallback sustained for ~N min` (level error, fingerprint `position-feed-fallback`) | the primary (adsb.fi) down, adsb.lol carrying the product — minutes, not hours, on its 500/day quota | Informational; users still get planes. |
+| **New error** | Sentry issue rule 3591520 "Send a notification for high priority issues" → email | The first event of any new high-priority issue | This is ALL that fired during the outage: one email on 2026-09-25, then 38 silent repeats. |
+| **Ongoing error** | Sentry issue rule "Ongoing error: hourly reminder…" → email, at most hourly per issue | Any error-level issue older than 30 min that keeps producing events | The fix for the row above: a repeat is a page, not a footnote. |
+| **Users see the error pill** | PostHog alert on the `adsb_fetch_error_shown` insight, unique users per hour, checked hourly → email | The client-side view: phones showing "Tailspot unreachable", whatever the cause | Independent of the backend's own opinion; also catches an app-side break. |
+| **iOS crashes** | PostHog alert on `metrickit_crash` (insight qVoxt9uL) | Crashes delivered by MetricKit | Unchanged. |
+| **Dead app** | PostHog zero-DAU canary (daily) | A full day with no `Application Opened` | Unchanged. |
+
+**The 2026-10 root cause is not fixed by any of this.** The Fly machine egresses
+through Fly's *shared* IPv4 address, whose reputation is set by every tenant on
+that host; adsb.lol's limits are "dynamic based on the environment load" (its
+README) and airplanes.live sits behind Cloudflare. Both answered this laptop
+instantly while refusing the machine. airplanes.live's 403 survived the dedicated IP: its body asks projects to email
+contact@airplanes.live for access (a policy gate, not reputation), so the fallback
+moved to **adsb.fi** the same night (`src/providers/adsbfi.ts`; confirmed 200 from
+the machine). For adsb.lol the lever is a static egress IP, **allocated 2026-10-19**
+(`fly ips allocate-egress --app tailspot-api -r sjc` → IPv4 209.71.113.155 plus an
+IPv6, $3.60/mo, persists across deploys; `fly ips list` shows it as type `egress`).
+It is still a Fly-range address, so a Cloudflare ASN-level block would survive it. adsb.lol also answers over IPv6 and says API keys
+for feeders are coming; neither is wired yet.
+
+### Not yet configured (phase 2 of the 2026-09-06 hardening — click-through checklist)
+
+The traffic-shape alerts below can only be set up in a browser, not from the
+CLI. Fly exposes the metrics in its hosted Grafana
 (`fly dashboard metrics` opens it, or https://fly-metrics.net); create each as a
 Grafana alert rule on the `tailspot-api` app with a notification to email.
 
@@ -577,7 +671,7 @@ Grafana alert rule on the `tailspot-api` app with a notification to email.
 | DB memory | `fly_instance_memory_mem_available{app="tailspot-db"}` | < 40 MB for 5 min | The DB OOM'd once (2026-07-11). |
 | Request rate | `sum(rate(fly_app_http_responses_count[5m]))` | > 3× the trailing-7-day same-hour median for 15 min | Volumetric abuse or a runaway client. Start with a fixed threshold (e.g. > 50 req/s) if the relative rule is awkward in Grafana. |
 
-Keep the in-code signals as they are: `/readyz` for liveness+DB, Sentry issues
-for exceptions, the fallback alerter for the upstream feed. Do not add a
+Keep the in-code signals as they are: `/readyz` for process+DB+feed, Sentry
+issues for exceptions, the two alerters for the upstream feed. Do not add a
 challenge-based CDN in front of the API: the iOS client's `URLSession` cannot
 solve one, and Fly's edge already absorbs L3/L4 floods (see PLAN §9, 2026-09-06).

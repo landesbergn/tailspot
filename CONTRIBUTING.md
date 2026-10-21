@@ -237,7 +237,8 @@ months; some users never update.
   already imposes on SwiftData migrations, extended to the wire contract. Don't
   remove or repurpose a field that a released build reads.
 - **Server before client, always.** Deploy the backend, confirm it's healthy
-  (`/healthz`), *then* promote the client that depends on it.
+  (`/readyz` — process, DB and the position feed), *then* promote the client
+  that depends on it.
 - **Snapshot the database before running migrations.** Drizzle migrations now
   run against real users' catches.
 - Backend changes still go through a PR and the **Backend tests** check; the
