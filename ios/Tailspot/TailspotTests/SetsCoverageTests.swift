@@ -290,6 +290,8 @@ struct SetsCoverageTests {
         ("LA4", "Lake", "LA-4"),
         ("S92", "Sikorsky", "S-92"),
         ("U2", "Lockheed", "U-2"),
+        // Public catalog coverage addition validated 2026-10-21.
+        ("B3XM", "Boeing", "737 MAX 10"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -440,6 +442,7 @@ struct SetsCoverageTests {
             (("LA4", "Lake", "LA-4"), "fam-sport-classics", "fsc-lake-la4"),
             (("S92", "Sikorsky", "S-92"), "fam-heli", "fh-s92"),
             (("U2", "Lockheed", "U-2"), "fam-military", "fm-u2"),
+            (("B3XM", "Boeing", "737 MAX 10"), "fam-737", "f737-max10"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -803,6 +806,13 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("WT10", "Aerospool", "WT-10 Advantic"))),
                                     entry: wt9Entry),
                 "An Aerospool WT10 must not fill the WT9 slot")
+
+        // Each MAX family slot remains variant-specific.
+        let max10Entry = CardSets.families.first { $0.id == "fam-737" }!
+            .entries.first { $0.id == "f737-max10" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("B38M", "Boeing", "737 MAX 8"))),
+                                    entry: max10Entry),
+                "A 737 MAX 8 must not fill the 737 MAX 10 slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the

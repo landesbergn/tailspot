@@ -413,6 +413,10 @@ nonisolated enum CardSets {
                   modelTokens: ["max 9", "737 max 9", "737-9 max"],
                   summary: "Stretched MAX. United and Alaska fly the most.",
                   representativeTypecode: "B39M"),
+            .init(id: "f737-max10", canonicalName: "737 MAX 10", rarity: .common,
+                  modelTokens: ["max 10", "737 max 10", "737-10 max"],
+                  summary: "The longest 737 MAX. Built for high-capacity routes.",
+                  representativeTypecode: "B3XM"),
         ]),
         .init(id: "fam-a320", type: .narrow, title: "Airbus A320", entries: [
             // Classic ceo variants are TYPECODE-ONLY (empty tokens): the neo
