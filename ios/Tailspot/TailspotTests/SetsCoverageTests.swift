@@ -260,6 +260,8 @@ struct SetsCoverageTests {
         ("J600", "Jihlavan", "JA-600 Rapid 600"),
         ("SW4", "Fairchild", "SA-227 Metro"),
         ("TAMP", "Socata", "TB-9 Tampico"),
+        // Public catalog coverage addition validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
         // Public catalog coverage additions validated 2026-10-11.
         ("A337", "Airbus", "A330-700 Beluga XL"),
         ("A400", "Airbus", "A400M Atlas"),
@@ -394,6 +396,7 @@ struct SetsCoverageTests {
             (("J600", "Jihlavan", "JA-600 Rapid 600"), "fam-sport-classics", "fsc-skyleader600"),
             (("SW4", "Fairchild", "SA-227 Metro"), "fam-commuter-props", "fcp-metro"),
             (("TAMP", "Socata", "TB-9 Tampico"), "fam-sport-classics", "fsc-tampico"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
             (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
