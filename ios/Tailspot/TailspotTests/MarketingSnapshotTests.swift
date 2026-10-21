@@ -229,6 +229,10 @@ struct MarketingSnapshotTests {
 
     // MARK: - Shot 2b · The collection card (real catch, real photo)
 
+    /// SPARE since 2026-10-12: slide 2 now comes from
+    /// `renderFleetWeekCollectionCard` (mkt_07_fleet_week_e6); kept like
+    /// mkt_02_reveal in case the deck wants the BD-700 card back.
+    ///
     /// "Add each catch to your collection" — the real BD-700 catch's settled
     /// card, its hero photo the actual JPEG the app composed at capture time,
     /// floating on the dusk gradient the app's own onboarding uses.
@@ -255,6 +259,187 @@ struct MarketingSnapshotTests {
         }
         .frame(width: Self.screen.width, height: Self.screen.height)
         writeOffscreen(view, name: "mkt_07_collection")
+    }
+
+    // MARK: - Fleet Week 2026 (SF, Oct 10–11) — real catches, real values
+    //
+    // Every value below is what Noah's phone recorded (altitude, speed and
+    // slant from the Catch row, converted to ft / kt / km like the rest of
+    // the deck), and every photo is the app's own composed catch JPEG with
+    // the lock-on brackets it baked in at capture. Points follow the
+    // current tiers (scoring version 8): base + first-of-type where the
+    // catch was the first of its type.
+
+    private func fwC27J() -> CardPlane {
+        CardPlane(callsign: "C2703", model: "C-27J Spartan", carrier: nil,
+                  rarity: .epic, type: .mil,
+                  altText: "427 ft", speedText: "132 kt", distText: "1.9 km",
+                  photoURL: realPhoto("fw_c27j_golden_gate"),
+                  photoFocus: CGPoint(x: 0.3370, y: 0.5343),
+                  isFirstOfType: true)
+    }
+
+    /// No callsign was broadcast, so the card shows its tier in that slot,
+    /// exactly as the phone did. Not first of type (AF9E20 was, the day before).
+    private func fwE6() -> CardPlane {
+        CardPlane(callsign: nil, model: "E-6 Mercury", carrier: nil,
+                  rarity: .legendary, type: .mil,
+                  altText: "1,801 ft", speedText: "135 kt", distText: "1.3 km",
+                  photoURL: realPhoto("fw_e6_crowd"),
+                  photoFocus: CGPoint(x: 0.4119, y: 0.5022))
+    }
+
+    private func fwT6() -> CardPlane {
+        CardPlane(callsign: "T6", model: "T-6 Texan 2", carrier: nil,
+                  rarity: .epic, type: .mil,
+                  altText: "476 ft", speedText: "316 kt", distText: "1.2 km",
+                  photoURL: realPhoto("fw_t6_texan2"),
+                  photoFocus: CGPoint(x: 0.4081, y: 0.5460),
+                  isFirstOfType: true)
+    }
+
+    /// The Patriots' six-ship pass with red / white / blue smoke. A repeat
+    /// L-39 for Noah (the first was the day before), so no first-of-type.
+    private func fwL39() -> CardPlane {
+        CardPlane(callsign: "PTJ1", model: "L-39 Albatros", carrier: nil,
+                  rarity: .rare, type: .ga,
+                  altText: "200 ft", speedText: "252 kt", distText: "0.8 km",
+                  photoURL: realPhoto("fw_l39_patriots"),
+                  photoFocus: CGPoint(x: 0.4073, y: 0.7100))
+    }
+
+    private func fwT33() -> CardPlane {
+        CardPlane(callsign: "ACEMKR3", model: "T-33 Shooting Star", carrier: "Private",
+                  rarity: .epic, type: .mil,
+                  altText: "2,126 ft", speedText: "183 kt", distText: "1.7 km",
+                  photoURL: realPhoto("fw_t33_acemaker"),
+                  photoFocus: CGPoint(x: 0.3779, y: 0.3959),
+                  isFirstOfType: true)
+    }
+
+    /// Transparent, custom-size offscreen writer for parts that get composed
+    /// into the landscape store assets (header / search / universal). Same
+    /// drawHierarchy path as `writeOffscreen` (photo-bearing cards need it),
+    /// but with a clear background so the PNG keeps its alpha.
+    private func writeOffscreenPart(_ view: some View, size: CGSize, scale: CGFloat, name: String) {
+        try? FileManager.default.createDirectory(
+            at: Self.dir, withIntermediateDirectories: true)
+        let bounds = CGRect(origin: .zero, size: size)
+        let host = UIHostingController(rootView: view.ignoresSafeArea())
+        host.view.backgroundColor = .clear
+        let window = UIWindow(frame: bounds)
+        window.backgroundColor = .clear
+        window.rootViewController = host
+        window.overrideUserInterfaceStyle = .dark
+        window.isHidden = false
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = scale
+        fmt.opaque = false
+        let png = UIGraphicsImageRenderer(bounds: bounds, format: fmt).pngData { _ in
+            host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        }
+        try? png.write(to: Self.dir.appendingPathComponent("\(name).png"))
+        window.isHidden = true
+        Self.retained.append(window)
+    }
+
+    /// Slide 1 — "Point at the sky and capture planes overhead." The real
+    /// C-27J frame over the Golden Gate fills the screen; the brackets in
+    /// it are the ones the app drew. On top, the HUD's own pinned-label
+    /// styling and capture button (copied from PlaneLabel / captureButton,
+    /// which are private to ContentView). Nothing about the sky is synthetic.
+    @Test func renderFleetWeekHUD() {
+        let rarity = resolveAROverlayRarity(typecode: "C27J", manufacturer: nil,
+                                            model: nil, operatorName: nil)
+        let photo = realPhoto("fw_c27j_golden_gate").flatMap { UIImage(contentsOfFile: $0.path) }
+        // The photo is 9:16; the screen is taller. Fill by height and slide
+        // left so both the brackets and the bridge tower stay in frame.
+        let fillHeight = Self.screen.height
+        let aspect = photo.map { $0.size.width / $0.size.height } ?? (1728.0 / 3072.0)
+        let fillWidth = fillHeight * aspect
+        let xShift: CGFloat = -40
+        let bracketCenter = CGPoint(x: 0.3370 * fillWidth + xShift, y: 0.5343 * fillHeight)
+        let bracketHalf: CGFloat = 0.2963 * fillWidth / 2  // measured: box = 29.63 % of frame width
+        let view = ZStack(alignment: .topLeading) {
+            // Overlay (not a ZStack child) so the wider photo can't resize
+            // the stack and get re-centred: xShift is the only horizontal move.
+            Color.black.overlay(alignment: .topLeading) {
+                if let photo {
+                    Image(uiImage: photo).resizable()
+                        .frame(width: fillWidth, height: fillHeight)
+                        .offset(x: xShift)
+                }
+            }
+            HStack(spacing: 4) {
+                Text("C2703")
+                    .font(Brand.Font.mono(size: 11, weight: .bold))
+                    .foregroundStyle(Brand.Color.cyan)
+                Text("· \(rarity.label) +\(rarity.basePoints)")
+                    .font(Brand.Font.mono(size: 9, weight: .semibold))
+                    .foregroundStyle(rarity.tint)
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Brand.Color.bgPrimary.opacity(0.55), in: .rect(cornerRadius: 4))
+            .fixedSize()
+            .position(x: bracketCenter.x, y: bracketCenter.y + bracketHalf + 14)
+            ZStack {
+                Circle().fill(Brand.Color.bgPrimary.opacity(0.7)).frame(width: 72, height: 72)
+                Circle().strokeBorder(Brand.Color.cyan, lineWidth: 2.5).frame(width: 72, height: 72)
+                Circle().fill(Brand.Color.cyan.opacity(0.15)).frame(width: 60, height: 60)
+                Text("CAPTURE")
+                    .font(Brand.Font.mono(size: 10, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(Brand.Color.cyan)
+            }
+            .position(x: Self.screen.width / 2, y: Self.screen.height - 82)
+            // Dynamic Island (hardware) — the deck's slide 1 keeps it and
+            // drops the rest of the status bar.
+            Capsule().fill(.black).frame(width: 126, height: 37)
+                .position(x: Self.screen.width / 2, y: 11 + 18.5)
+        }
+        .frame(width: Self.screen.width, height: Self.screen.height)
+        .clipped()
+        writeOffscreen(view, name: "mkt_01_fleet_week")
+    }
+
+    /// Slide 2 — "Add each catch to your collection." Same composition as
+    /// `renderCollectionCard`, with the Legendary E-6 Mercury.
+    @Test func renderFleetWeekCollectionCard() {
+        let front = fwE6()
+        let view = ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: Color(red: 0.04, green: 0.07, blue: 0.15), location: 0),
+                    .init(color: Color(red: 0.09, green: 0.13, blue: 0.24), location: 0.62),
+                    .init(color: Color(red: 0.23, green: 0.19, blue: 0.25), location: 1),
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            SettledCatchCard(plane: front, isFirstOfType: front.isFirstOfType, width: 372)
+                .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
+        }
+        .frame(width: Self.screen.width, height: Self.screen.height)
+        writeOffscreen(view, name: "mkt_07_fleet_week_e6")
+    }
+
+    /// Individual cards (transparent PNGs at 4x) for the landscape store
+    /// assets, which are composed outside the simulator.
+    @Test func renderFleetWeekCardParts() {
+        let cards: [(String, CardPlane)] = [
+            ("part_card_e6", fwE6()), ("part_card_c27j", fwC27J()),
+            ("part_card_t6", fwT6()), ("part_card_l39", fwL39()),
+            ("part_card_t33", fwT33()),
+        ]
+        for (name, plane) in cards {
+            let view = SettledCatchCard(plane: plane, isFirstOfType: plane.isFirstOfType, width: 372)
+                .frame(width: 372)
+                .padding(40)
+                .frame(width: 452, height: 900)
+            writeOffscreenPart(view, size: CGSize(width: 452, height: 900), scale: 4, name: name)
+        }
     }
 
     // MARK: - Shot 3 · The guess round (chips popped, route masked)
