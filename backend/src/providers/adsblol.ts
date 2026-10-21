@@ -249,27 +249,25 @@ export class AdsbLolProvider implements PositionProvider {
     return `${this.baseUrl}/v2/point/${lat}/${lon}/${radiusNm}`;
   }
 
+  /**
+   * One request, retried ONCE if the connection is dropped (ECONNRESET and
+   * friends) before an answer arrives. On 2026-10-17 adsb.lol was resetting
+   * connections under load, and a second attempt often got through. Both
+   * attempts share one `timeoutMs` deadline, so a retry never makes the
+   * caller wait longer than before. HTTP errors (403, 429, 5xx) and timeouts
+   * are NOT retried: those are answers, not dropped connections — and a
+   * retried 429 would spend adsb.lol's daily quota twice for nothing.
+   */
   private async fetchJson(url: string): Promise<AdsbLolResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(url, {
-        method: "GET",
-        headers: { accept: "application/json", "user-agent": "tailspot-backend" },
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        // Quota headers travel in the message so the Fly log and Sentry show
-        // WHICH bucket said no. adsb.lol publishes `x-ratelimit-limit: 4,
-        // 4;w=1, 60;w=60, 500;w=86400` — per second, per minute, per DAY —
-        // and on 2026-10-20 the daily one was inferred from timing because
-        // nothing had recorded it.
-        const quota = rateLimitSummary(res.headers);
-        throw new UpstreamError(
-          `${this.name} returned HTTP ${res.status}${quota ? ` (${quota})` : ""}`,
-        );
+      try {
+        return await this.fetchOnce(url, controller.signal);
+      } catch (err) {
+        if (!isDroppedConnection(err) || controller.signal.aborted) throw err;
+        return await this.fetchOnce(url, controller.signal);
       }
-      return (await res.json()) as AdsbLolResponse;
     } catch (err) {
       if (err instanceof UpstreamError) throw err;
       throw new UpstreamError(`${this.name} request failed`, err);
@@ -277,4 +275,42 @@ export class AdsbLolProvider implements PositionProvider {
       clearTimeout(timer);
     }
   }
+
+  private async fetchOnce(url: string, signal: AbortSignal): Promise<AdsbLolResponse> {
+    const res = await this.fetchFn(url, {
+      method: "GET",
+      headers: { accept: "application/json", "user-agent": "tailspot-backend" },
+      signal,
+    });
+    if (!res.ok) {
+      // Quota headers travel in the message so the Fly log and Sentry show
+      // WHICH bucket said no. adsb.lol publishes `x-ratelimit-limit: 4,
+      // 4;w=1, 60;w=60, 500;w=86400` — per second, per minute, per DAY —
+      // and on 2026-10-20 the daily one was inferred from timing because
+      // nothing had recorded it.
+      const quota = rateLimitSummary(res.headers);
+      throw new UpstreamError(
+        `${this.name} returned HTTP ${res.status}${quota ? ` (${quota})` : ""}`,
+      );
+    }
+    return (await res.json()) as AdsbLolResponse;
+  }
+}
+
+/** Socket-level codes meaning "the connection died", as opposed to an answer. */
+const DROPPED_CONNECTION_CODES = new Set(["ECONNRESET", "EPIPE", "ECONNREFUSED", "UND_ERR_SOCKET"]);
+
+/**
+ * True when `err` (or a `.cause` it wraps) is a dropped connection. Node's
+ * fetch reports these as `TypeError: fetch failed` with the socket error as
+ * `.cause`, so walk the chain, depth-bounded like `isTransientConnectionError`.
+ */
+function isDroppedConnection(err: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < 5; depth++) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && DROPPED_CONNECTION_CODES.has(code)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }

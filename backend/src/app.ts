@@ -210,8 +210,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // A log line is enough to explain an incident after the fact, but nobody
   // watches the Fly log live, so a primary that stays dead for hours reads as
   // a healthy system. The alerter turns the engage/recover edges into ONE
-  // Sentry message per hour once the fallback has been continuously engaged
-  // for five minutes — the timing logic lives in SustainedFallbackAlerter and
+  // Sentry message per hour once the fallback has been engaged for five
+  // minutes (a flapping feed counts as engaged: a run only ends after two
+  // quiet minutes) — the timing logic lives in SustainedFallbackAlerter and
   // is unit-tested with an injected clock.
   // (Since 2026-10-20 the primary is adsb.fi and the fallback adsb.lol.)
   const fallbackAlerter = new SustainedFallbackAlerter({
