@@ -133,6 +133,18 @@ struct FamilySetsTests {
         #expect(!CardSets.matches(catch: mk(typecode: "GLIM", model: "DG 300"), entry: sailplane))
     }
 
+    @Test func genericUltralightDesignatorMatchesExactly() {
+        let ultralight = entry("fam-sport-classics", "fsc-ultralight")
+        #expect(CardSets.matches(catch: mk(typecode: "ULAC"), entry: ultralight))
+        #expect(!CardSets.matches(catch: mk(typecode: "UHEL"), entry: ultralight))
+    }
+
+    @Test func sharedT18DesignatorUsesS18ModelIdentity() {
+        let s18 = entry("fam-sport-classics", "fsc-s18")
+        #expect(CardSets.matches(catch: mk(typecode: "T18", model: "S-18"), entry: s18))
+        #expect(!CardSets.matches(catch: mk(typecode: "T18", model: "T-18 Tiger"), entry: s18))
+    }
+
     @Test func douglasFamilyTree() {
         // Any MD-80 variant fills the ONE MD-80 series slot — the old
         // per-variant tokens silently orphaned MD-81/83/87 catches.
