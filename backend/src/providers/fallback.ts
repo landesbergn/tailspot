@@ -81,7 +81,7 @@ export class FallbackProvider implements PositionProvider {
         this.engaged = false;
         this.options.onRecovered?.();
       }
-      return snapshot;
+      return stamp(snapshot, this.primary.name);
     }
     this.engaged = true;
     this.options.onFallback?.(primaryError);
@@ -97,7 +97,7 @@ export class FallbackProvider implements PositionProvider {
     // the composite error a caller is about to receive.
     if (fallbackSnapshot !== undefined) {
       this.options.onSecondaryServed?.();
-      return fallbackSnapshot;
+      return stamp(fallbackSnapshot, this.secondary.name);
     }
     const bothFailed = new UpstreamError(
       `both providers failed: ${this.primary.name} (${describe(primaryError)}); ` +
@@ -107,6 +107,15 @@ export class FallbackProvider implements PositionProvider {
     this.options.onBothFailed?.(bothFailed);
     throw bothFailed;
   }
+}
+
+/**
+ * Name the member that answered when it didn't name itself (stubs, a future
+ * adapter that forgets). A real adapter's own stamp wins, so the served
+ * snapshot always says "adsbfi" or "adsblol" — never "adsbfi+adsblol".
+ */
+function stamp(snapshot: ProviderSnapshot, provider: string): ProviderSnapshot {
+  return snapshot.provider === undefined ? { ...snapshot, provider } : snapshot;
 }
 
 function describe(err: unknown): string {

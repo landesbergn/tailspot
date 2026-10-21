@@ -49,6 +49,14 @@ export type FeedStatus = "ok" | "stale" | "fallback" | "unavailable" | "timeout"
 
 export interface FeedProbeResult {
   status: FeedStatus;
+  /**
+   * `organic`: answered from the phones' own recent successful fetch, no
+   * upstream request made. `probe`: the canary tile was fetched (or served
+   * from its cache). Visible on /readyz so a human can tell the two apart.
+   */
+  source?: "organic" | "probe";
+  /** The feed that produced the proving snapshot ("adsbfi", "adsblol"), when known. */
+  provider?: string;
   /** Aircraft in the served snapshot, when one was served. */
   aircraft?: number;
   /** Upstream snapshot time (unix seconds), when one was served. */
@@ -86,22 +94,57 @@ function finiteOrUndefined(n: number): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+export interface FeedProbeOptions {
+  /**
+   * If a genuine upstream fetch succeeded this recently (ms) — and nothing
+   * has failed since — the probe answers `ok` without fetching. Default 120 s:
+   * phones poll every 10 s, so during any real use the canary costs nothing,
+   * and the feed is still re-proven at least every two minutes. This is what
+   * keeps the uptime monitor from spending adsb.lol's 500-a-day quota.
+   */
+  organicWindowMs?: number;
+  /** Injectable clock (unix ms); must match the cache's. */
+  now?: () => number;
+}
+
+const DEFAULT_ORGANIC_WINDOW_MS = 120_000;
+
 /**
  * Build the probe over the live tile cache. Never throws: an upstream failure
  * with no servable cache is reported as `unavailable` with the cause attached,
  * so /readyz can log it and answer 503 without an exception path.
  */
-export function makeFeedProbe(cache: TileCache, bbox: Bbox): () => Promise<FeedProbeResult> {
+export function makeFeedProbe(
+  cache: TileCache,
+  bbox: Bbox,
+  options: FeedProbeOptions = {},
+): () => Promise<FeedProbeResult> {
+  const organicWindowMs = options.organicWindowMs ?? DEFAULT_ORGANIC_WINDOW_MS;
+  const now = options.now ?? Date.now;
   return async () => {
+    // Organic proof first: a phone's fetch that succeeded moments ago, with no
+    // failure after it, is a better canary than one more request of our own.
+    const fresh = cache.lastFreshFetchAt;
+    const failed = cache.lastFailureAt;
+    if (
+      fresh !== undefined &&
+      (failed === undefined || fresh > failed) &&
+      now() - fresh < organicWindowMs
+    ) {
+      const provider = cache.lastFreshProvider;
+      return { status: "ok", source: "organic", ...(provider !== undefined ? { provider } : {}) };
+    }
     try {
       const { snapshot, stale } = await cache.get(bbox);
       return {
         status: stale ? "stale" : "ok",
+        source: "probe",
+        ...(snapshot.provider !== undefined ? { provider: snapshot.provider } : {}),
         aircraft: snapshot.aircraft.length,
         fetchedAt: snapshot.fetchedAt,
       };
     } catch (err) {
-      return { status: "unavailable", error: err };
+      return { status: "unavailable", source: "probe", error: err };
     }
   };
 }
