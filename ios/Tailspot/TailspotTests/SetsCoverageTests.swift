@@ -260,6 +260,8 @@ struct SetsCoverageTests {
         ("FK9", "B & F Technik", "FK-9"),
         ("RISN", "Porto", "Risen"),
         ("WT9", "Aerospool", "WT-9 Dynamic"),
+        // Public catalog coverage addition validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
         // Public catalog coverage additions validated 2026-10-11.
         ("A337", "Airbus", "A330-700 Beluga XL"),
         ("A400", "Airbus", "A400M Atlas"),
@@ -394,6 +396,7 @@ struct SetsCoverageTests {
             (("FK9", "B & F Technik", "FK-9"), "fam-sport-classics", "fsc-fk9"),
             (("RISN", "Porto", "Risen"), "fam-sport-classics", "fsc-risen"),
             (("WT9", "Aerospool", "WT-9 Dynamic"), "fam-sport-classics", "fsc-wt9"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
             (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
