@@ -255,6 +255,11 @@ struct SetsCoverageTests {
         ("C425", "Cessna", "425 Corsair"),
         ("PA22", "Piper", "PA-22 Colt"),
         ("SBR1", "Rockwell", "Sabre 40"),
+        // Public catalog coverage additions validated 2026-10-16.
+        ("FDCT", "Flight Design", "CT"),
+        ("J600", "Jihlavan", "JA-600 Rapid 600"),
+        ("SW4", "Fairchild", "SA-227 Metro"),
+        ("TAMP", "Socata", "TB-9 Tampico"),
         // Public catalog coverage additions validated 2026-10-15.
         ("B779", "Boeing", "777-9"),
         ("FK9", "B & F Technik", "FK-9"),
@@ -406,6 +411,10 @@ struct SetsCoverageTests {
             (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
             (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
             (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
+            (("FDCT", "Flight Design", "CT"), "fam-sport-classics", "fsc-flight-design-ct"),
+            (("J600", "Jihlavan", "JA-600 Rapid 600"), "fam-sport-classics", "fsc-skyleader600"),
+            (("SW4", "Fairchild", "SA-227 Metro"), "fam-commuter-props", "fcp-metro"),
+            (("TAMP", "Socata", "TB-9 Tampico"), "fam-sport-classics", "fsc-tampico"),
             (("B779", "Boeing", "777-9"), "fam-777", "f777-9"),
             (("FK9", "B & F Technik", "FK-9"), "fam-sport-classics", "fsc-fk9"),
             (("RISN", "Porto", "Risen"), "fam-sport-classics", "fsc-risen"),
