@@ -8,6 +8,7 @@ import {
 } from "./challenges/overtaken.js";
 import { PrivatePointsScorer } from "./challenges/scorer.js";
 import { type ChallengeStore, DrizzleChallengeStore } from "./challenges/store.js";
+import { registerCompression } from "./compression.js";
 import { getDb } from "./db/client.js";
 import { RateLimiter } from "./identity/rateLimiter.js";
 import {
@@ -18,13 +19,17 @@ import {
 } from "./identity/store.js";
 import { makeRegistryEnrichSink } from "./ingest/feedEnrich.js";
 import { DrizzleMetadataStore, type MetadataStore } from "./metadata/store.js";
+import { ErrorRateAlerter } from "./monitoring/errorRate.js";
+import { reportToSentry } from "./monitoring/report.js";
 import {
   AdsbLolRouteService,
   type RouteEnricher,
   type RouteResolver,
 } from "./providers/adsblolRoutes.js";
+import { CircuitOpenError } from "./providers/circuitBreaker.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
 import { type Bbox, type PositionProvider, selectProvider } from "./providers/index.js";
+import { UpstreamBudget } from "./providers/upstreamBudget.js";
 import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
 import { registerCatchesRoute } from "./routes/catches.js";
@@ -159,6 +164,13 @@ export interface BuildAppOptions {
    */
   canaryBbox?: Bbox;
   /**
+   * Upstream request budget override. Production builds one from
+   * `UPSTREAM_RPS` (default 0.8/s, under adsb.fi's 1/s). When `provider` is
+   * injected (tests) there is no budget unless one is passed here, so route
+   * tests are not slowed by real waits.
+   */
+  upstreamBudget?: UpstreamBudget;
+  /**
    * Route log lines to this stream instead of the default logger (which is off
    * under NODE_ENV=test). Tests use it to assert what the server logs.
    */
@@ -202,8 +214,35 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     trustProxy: false,
   });
 
+  // Gzip JSON bodies over 1 KB for clients that accept it (all iOS builds do,
+  // via URLSession). The aircraft list is the main beneficiary.
+  registerCompression(app);
+
+  // Alert when 5xx answers pile up, whatever produced them: most of ours are
+  // deliberate 503 replies that Sentry's error handler never sees. /readyz and
+  // /healthz are excluded: the uptime monitor already pages on those.
+  const errorRateAlerter = new ErrorRateAlerter({
+    now: options.rateLimitNow,
+    onAlert: ({ errors, total, windowMs, routes }) => {
+      const pct = Math.round((errors / total) * 100);
+      const mins = Math.round(windowMs / 60_000);
+      const top = routes
+        .slice(0, 3)
+        .map((r) => `${r.route} ${r.errors}`)
+        .join(", ");
+      const message = `API 5xx rate ${pct}% (${errors} of ${total}) over ${mins} min: ${top}`;
+      app.log.error({ errors, total, routes }, message);
+      reportToSentry(app.log, message, "error", ["api-5xx-rate"]);
+    },
+  });
+  app.addHook("onResponse", async (request, reply) => {
+    const route = request.routeOptions.url ?? "unmatched";
+    if (route === "/readyz" || route === "/healthz") return;
+    errorRateAlerter.record(reply.statusCode, route);
+  });
+
   // Provider is selected ONCE at build time (env read here, not per-request).
-  // The default is adsb.lol with an adsb.fi fallback; every engaged
+  // The default is adsb.fi with an adsb.lol fallback; every engaged
   // fallback is logged — a silently-dead primary must not look healthy (the
   // client-side silent-failover lesson from the 2026-06-21 cutover).
   //
@@ -267,24 +306,65 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         .catch((err) => app.log.warn({ err }, "could not report feed outage to Sentry"));
     },
   });
+  // A feed that answers 429 or 403 is telling us to stop, and adsb.fi counts
+  // those answers toward an IP ban: that gets its own alert, at most hourly
+  // per feed. Other circuit openings are logged only; if they last, the
+  // sustained-fallback and outage alerters above already page.
+  const lastRejectedAlertAt = new Map<string, number>();
+  const alertNow = options.rateLimitNow ?? Date.now;
   const provider =
     options.provider ??
-    selectProvider(process.env, {
-      onFallback: (err) => {
-        app.log.warn({ err }, "primary position feed failed; serving the fallback feed");
-        fallbackAlerter.recordFallback(err);
+    selectProvider(
+      process.env,
+      {
+        onFallback: (err) => {
+          // While the primary's circuit is open every request "fails" instantly;
+          // the opening itself was logged once, so don't repeat it per poll.
+          if (!(err instanceof CircuitOpenError)) {
+            app.log.warn({ err }, "primary position feed failed; serving the fallback feed");
+          }
+          fallbackAlerter.recordFallback(err);
+        },
+        onRecovered: () => {
+          app.log.info("primary position feed recovered; fallback disengaged");
+          fallbackAlerter.recordRecovery();
+          outageAlerter.recordRecovery();
+        },
+        // Not logged here: the aircraft route already warns per request when it
+        // has nothing to serve, and a log line per poll during an outage is
+        // noise. The alerter turns the stream into one message per hour.
+        onBothFailed: (err) => outageAlerter.recordFallback(err),
+        onSecondaryServed: () => outageAlerter.recordRecovery(),
       },
-      onRecovered: () => {
-        app.log.info("primary position feed recovered; fallback disengaged");
-        fallbackAlerter.recordRecovery();
-        outageAlerter.recordRecovery();
+      {
+        now: options.rateLimitNow,
+        onOpen: ({ provider: feed, cooldownMs, error, rejected }) => {
+          const secs = Math.round(cooldownMs / 1000);
+          app.log.warn(
+            { err: error, provider: feed, cooldownMs },
+            `${feed} circuit opened; skipping it for ${secs} s`,
+          );
+          if (!rejected) return;
+          const now = alertNow();
+          const last = lastRejectedAlertAt.get(feed);
+          if (last !== undefined && now - last < 60 * 60_000) return;
+          lastRejectedAlertAt.set(feed, now);
+          const why = error instanceof Error ? error.message : String(error);
+          reportToSentry(
+            app.log,
+            `Position feed ${feed} is rejecting our requests: ${why}`,
+            "error",
+            ["position-feed-rejected", feed],
+          );
+        },
+        onClose: ({ provider: feed, openForMs }) => {
+          app.log.info(
+            { provider: feed, openForMs },
+            `${feed} circuit closed after ${Math.round(openForMs / 1000)} s`,
+          );
+        },
       },
-      // Not logged here: the aircraft route already warns per request when it
-      // has nothing to serve, and a log line per poll during an outage is
-      // noise. The alerter turns the stream into one message per hour.
-      onBothFailed: (err) => outageAlerter.recordFallback(err),
-      onSecondaryServed: () => outageAlerter.recordRecovery(),
-    });
+    );
 
   // Cache TTL / staleness from env, overridable per-build (tests pass explicit
   // values). Falls back to TileCache's documented defaults when unset.
@@ -404,8 +484,43 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           onError: (err) => app.log.warn({ err }, "route lookup failed"),
         })
       : undefined);
+  // ── Upstream request budget ───────────────────────────────────────────────
+  // At most UPSTREAM_RPS (default 0.8) feed requests per second from this
+  // process, under adsb.fi's 1/s. When the budget is spent, a tile up to 30 s
+  // old is served from cache instead of refreshed; a tile with nothing
+  // servable waits up to 2 s for a slot. See providers/upstreamBudget.ts.
+  //
+  // If the budget stays saturated for five minutes (same state machine as the
+  // feed alerters: a run ends after two quiet minutes), that is the signal to
+  // revisit capacity, so it alerts at most hourly.
+  const upstreamBudget =
+    options.upstreamBudget ??
+    (options.provider === undefined
+      ? new UpstreamBudget({ ratePerSecond: envFloat("UPSTREAM_RPS") })
+      : undefined);
+  const budgetAlerter = new SustainedFallbackAlerter({
+    now: options.rateLimitNow,
+    onAlert: ({ engagedForMs }) => {
+      const minutes = Math.round(engagedForMs / 60_000);
+      const message = `Position feed request budget saturated for ~${minutes} min: serving cached planes up to 30 s old`;
+      app.log.error({ engagedForMs, refused: upstreamBudget?.refused }, message);
+      reportToSentry(app.log, message, "error", ["position-feed-budget"]);
+    },
+  });
   const tileCache = registerAircraftRoute(app, {
     provider,
+    throttle: upstreamBudget
+      ? {
+          budget: upstreamBudget,
+          onThrottled: (event) => {
+            if (event.kind === "refused") {
+              app.log.warn(event, "position feed budget refused a tile with nothing cached");
+            }
+            budgetAlerter.recordFallback(event);
+          },
+          onGranted: () => budgetAlerter.recordRecovery(),
+        }
+      : undefined,
     ipLimiter: aircraftLimiter,
     cacheConfig,
     now: options.now,

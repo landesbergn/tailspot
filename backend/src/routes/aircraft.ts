@@ -8,6 +8,7 @@ import {
   NoFreshDataError,
   TileCache,
   type TileCacheConfig,
+  type TileCacheThrottle,
   type UpstreamFetchEvent,
 } from "./tileCache.js";
 
@@ -62,6 +63,8 @@ export interface AircraftRouteOptions {
    * always supplies one.
    */
   ipLimiter?: RateLimiter;
+  /** Upstream request cap (see providers/upstreamBudget.ts). Omitted → none. */
+  throttle?: TileCacheThrottle;
 }
 
 /** Parse a query value to a finite number, or undefined if absent/non-numeric. */
@@ -87,6 +90,7 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
     opts.now,
     opts.onFreshSnapshot,
     opts.onUpstreamFetch,
+    opts.throttle,
   );
 
   app.get("/v1/aircraft", async (request, reply) => {

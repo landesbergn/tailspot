@@ -1,6 +1,7 @@
 import { AdsbFiProvider } from "./adsbfi.js";
 import { AdsbLolProvider } from "./adsblol.js";
 import { AirplanesLiveProvider } from "./airplaneslive.js";
+import { type CircuitBreakerOptions, CircuitBreakerProvider } from "./circuitBreaker.js";
 import { FallbackProvider, type FallbackProviderOptions } from "./fallback.js";
 import type { PositionProvider } from "./types.js";
 
@@ -9,6 +10,8 @@ export { AdsbLolProvider, normalizeAdsbLol } from "./adsblol.js";
 export { AirplanesLiveProvider } from "./airplaneslive.js";
 export { AdsbFiProvider } from "./adsbfi.js";
 export { FallbackProvider } from "./fallback.js";
+export { CircuitBreakerProvider, CircuitOpenError } from "./circuitBreaker.js";
+export { UpstreamBudget } from "./upstreamBudget.js";
 export { countryForIcao24 } from "./icaoCountry.js";
 export {
   validateBbox,
@@ -34,6 +37,10 @@ export {
  *   POSITION_PROVIDER=adsbfi        — adsb.fi only (debugging a feed)
  *   POSITION_PROVIDER=airplaneslive — airplanes.live only (if they grant access)
  *
+ * In the default pair, each feed sits behind its own CircuitBreakerProvider
+ * (`breakerOptions` carries the alert hooks): a feed that 429s, 403s or keeps
+ * failing is skipped for a cooldown instead of being retried on every poll.
+ *
  * Any other value (e.g. the long-removed "opensky") throws at startup rather
  * than silently degrading to the fallback pair — a misconfigured deploy should
  * fail loudly, not quietly change providers.
@@ -41,6 +48,7 @@ export {
 export function selectProvider(
   env: NodeJS.ProcessEnv = process.env,
   fallbackOptions: FallbackProviderOptions = {},
+  breakerOptions: CircuitBreakerOptions = {},
 ): PositionProvider {
   const choice = (env.POSITION_PROVIDER ?? "").toLowerCase();
   switch (choice) {
@@ -51,7 +59,11 @@ export function selectProvider(
     case "airplaneslive":
       return new AirplanesLiveProvider();
     case "":
-      return new FallbackProvider(new AdsbFiProvider(), new AdsbLolProvider(), fallbackOptions);
+      return new FallbackProvider(
+        new CircuitBreakerProvider(new AdsbFiProvider(), breakerOptions),
+        new CircuitBreakerProvider(new AdsbLolProvider(), breakerOptions),
+        fallbackOptions,
+      );
     default:
       throw new Error(
         `Unknown POSITION_PROVIDER "${env.POSITION_PROVIDER}" — use "adsblol", "adsbfi", "airplaneslive", or leave unset for the fallback pair.`,

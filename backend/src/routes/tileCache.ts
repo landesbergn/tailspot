@@ -1,4 +1,5 @@
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/types.js";
+import type { UpstreamBudget } from "../providers/upstreamBudget.js";
 
 /**
  * Region-tile in-memory cache with single-flight dedup and bounded-staleness
@@ -96,6 +97,48 @@ export interface UpstreamFetchEvent {
   upstreamMs: number;
 }
 
+/**
+ * Optional cap on upstream requests (see providers/upstreamBudget.ts). With it,
+ * a tile past its TTL is refreshed only when a slot is free; otherwise the
+ * cached snapshot is served a little longer (up to `maxThrottledAgeSeconds`).
+ * A tile with nothing servable waits up to `maxWaitMs` for a slot.
+ */
+export interface TileCacheThrottle {
+  budget: UpstreamBudget;
+  /** Longest a request with nothing servable waits for a slot. Default 2000 ms. */
+  maxWaitMs?: number;
+  /**
+   * Oldest cached tile served instead of a refresh when no slot is free.
+   * Default 30 s. Kept well under the 60 s last-good window: the app shows
+   * planes where the snapshot says they were, and an airliner covers ~7 km
+   * in 30 s. Past this age the refresh waits for a slot like a cold tile.
+   */
+  maxThrottledAgeSeconds?: number;
+  /** Fired each time the budget makes us serve cache or refuse a request. */
+  onThrottled?: (event: ThrottleEvent) => void;
+  /** Fired each time the budget grants an upstream request. */
+  onGranted?: () => void;
+}
+
+export interface ThrottleEvent {
+  /** `served-cache`: a refresh was skipped and cache served. `refused`: no slot within maxWaitMs. */
+  kind: "served-cache" | "refused";
+  tile: string;
+  /** Age of the cached snapshot that was served (s), when one was. */
+  cacheAgeSeconds?: number;
+}
+
+export const DEFAULT_THROTTLE_MAX_WAIT_MS = 2_000;
+export const DEFAULT_MAX_THROTTLED_AGE_SECONDS = 30;
+
+/** The budget had no slot within maxWaitMs. Not an upstream failure. */
+export class BudgetExhaustedError extends Error {
+  constructor(message = "position feed request budget exhausted") {
+    super(message);
+    this.name = "BudgetExhaustedError";
+  }
+}
+
 /** Thrown when upstream failed AND no acceptably-fresh cache exists → 503. */
 export class NoFreshDataError extends Error {
   constructor(
@@ -156,6 +199,8 @@ export class TileCache {
      * line in production. Same never-throws-into-the-fetch rule as above.
      */
     private readonly onUpstreamFetch?: (event: UpstreamFetchEvent) => void,
+    /** Optional upstream request cap. Omitted → every refresh fetches (tests). */
+    private readonly throttle?: TileCacheThrottle,
   ) {
     // Merge defaults, ignoring explicit `undefined` overrides (env-derived
     // config passes undefined for unset vars — those must NOT clobber defaults).
@@ -228,41 +273,68 @@ export class TileCache {
       }
     }
 
-    // 3. Start a new upstream fetch; stash it so concurrent callers share it.
+    // 3. Budget check (when configured). A refresh with a recent-enough cache
+    // takes a slot only if one is free right now, else serves the cache; a
+    // request with nothing servable waits for a slot inside the shared fetch
+    // below, so concurrent callers for the same tile wait once, together.
+    let waitForSlot = false;
+    if (this.throttle) {
+      const maxAge = Math.min(
+        this.throttle.maxThrottledAgeSeconds ?? DEFAULT_MAX_THROTTLED_AGE_SECONDS,
+        this.config.staleMaxSeconds,
+      );
+      const age = cached ? nowSec - cached.storedAt : undefined;
+      if (cached && age !== undefined && age < maxAge) {
+        if (!this.throttle.budget.tryTake()) {
+          this.notifyThrottled({ kind: "served-cache", tile: key, cacheAgeSeconds: age });
+          return { snapshot: cached.snapshot, stale: true };
+        }
+        this.notifyGranted();
+      } else {
+        waitForSlot = true;
+      }
+    }
+
+    // 4. Start a new upstream fetch; stash it so concurrent callers share it.
     // Fetch the EXPANDED tile (not the raw request) so the cached snapshot is
     // valid for every bbox that maps to this key — see tileBbox() doc.
-    const startedMs = this.now();
-    const fetchPromise = this.provider
-      .aircraftInBbox(this.tileBbox(bbox))
-      .then((raw) => {
-        // Every served snapshot names its feed. Real adapters stamp themselves
-        // (and the composite stamps its member); this only covers a provider
-        // that didn't, so the name is never missing downstream.
-        const provider = raw.provider ?? this.provider.name;
-        const snapshot = raw.provider === undefined ? { ...raw, provider } : raw;
-        this.store(key, snapshot);
-        try {
-          this.onUpstreamFetch?.({
-            provider,
-            tile: key,
-            aircraft: snapshot.aircraft.length,
-            fetchedAt: snapshot.fetchedAt,
-            upstreamMs: this.now() - startedMs,
-          });
-        } catch {
-          /* swallow: a broken log sink must not affect the served response */
-        }
-        // Opportunistic registry enrichment — best-effort, never breaks the fetch.
-        try {
-          this.onFreshSnapshot?.(snapshot);
-        } catch {
-          /* swallow: background enrichment must not affect the served response */
-        }
-        return snapshot;
-      })
-      .finally(() => {
-        this.inFlight.delete(key);
-      });
+    const fetchPromise = (async () => {
+      if (waitForSlot && this.throttle) {
+        const ok = await this.throttle.budget.take(
+          this.throttle.maxWaitMs ?? DEFAULT_THROTTLE_MAX_WAIT_MS,
+        );
+        if (!ok) throw new BudgetExhaustedError();
+        this.notifyGranted();
+      }
+      const startedMs = this.now();
+      const raw = await this.provider.aircraftInBbox(this.tileBbox(bbox));
+      // Every served snapshot names its feed. Real adapters stamp themselves
+      // (and the composite stamps its member); this only covers a provider
+      // that didn't, so the name is never missing downstream.
+      const provider = raw.provider ?? this.provider.name;
+      const snapshot = raw.provider === undefined ? { ...raw, provider } : raw;
+      this.store(key, snapshot);
+      try {
+        this.onUpstreamFetch?.({
+          provider,
+          tile: key,
+          aircraft: snapshot.aircraft.length,
+          fetchedAt: snapshot.fetchedAt,
+          upstreamMs: this.now() - startedMs,
+        });
+      } catch {
+        /* swallow: a broken log sink must not affect the served response */
+      }
+      // Opportunistic registry enrichment — best-effort, never breaks the fetch.
+      try {
+        this.onFreshSnapshot?.(snapshot);
+      } catch {
+        /* swallow: background enrichment must not affect the served response */
+      }
+      return snapshot;
+    })().finally(() => {
+      this.inFlight.delete(key);
+    });
     this.inFlight.set(key, fetchPromise);
 
     try {
@@ -270,6 +342,22 @@ export class TileCache {
       return { snapshot, stale: false };
     } catch (err) {
       return this.fallbackOrThrow(key, nowSec, err);
+    }
+  }
+
+  private notifyThrottled(event: ThrottleEvent): void {
+    try {
+      this.throttle?.onThrottled?.(event);
+    } catch {
+      /* swallow: an alert sink must not affect the served response */
+    }
+  }
+
+  private notifyGranted(): void {
+    try {
+      this.throttle?.onGranted?.();
+    } catch {
+      /* swallow: an alert sink must not affect the served response */
     }
   }
 
@@ -313,12 +401,24 @@ export class TileCache {
 
   /** Serve last-good if fresh enough; otherwise throw NoFreshDataError. */
   private fallbackOrThrow(key: string, nowSec: number, cause: unknown): TileResult {
-    this.lastFailureAtMs = this.now();
+    const budgetRefused = cause instanceof BudgetExhaustedError;
+    // A refused budget slot is our own load shedding, not a feed failure: it
+    // must not make /readyz distrust the feed (feedProbe reads lastFailureAt).
+    if (budgetRefused) {
+      this.notifyThrottled({ kind: "refused", tile: key });
+    } else {
+      this.lastFailureAtMs = this.now();
+    }
     const cached = this.entries.get(key);
     if (cached && nowSec - cached.storedAt < this.config.staleMaxSeconds) {
       // Carry the snapshot's true fetchedAt so the client sees real staleness.
       return { snapshot: cached.snapshot, stale: true };
     }
-    throw new NoFreshDataError("upstream unavailable and no fresh cache", cause);
+    throw new NoFreshDataError(
+      budgetRefused
+        ? "position feed request budget exhausted and no fresh cache"
+        : "upstream unavailable and no fresh cache",
+      cause,
+    );
   }
 }
