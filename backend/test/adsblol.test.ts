@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -221,11 +223,124 @@ describe("AdsbLolProvider.aircraftInBbox", () => {
     expect(snapshot.fetchedAt).toBe(FETCHED_AT);
     // 3 in-bbox survivors (UA, JAL, DLH); decoy 4ca8e1 is outside the bbox.
     expect(snapshot.aircraft.length).toBe(3);
+    // The adapter names itself so the wire, the log and the registry can say
+    // which feed produced the data (adsb.fi / airplanes.live inherit via name).
+    expect(snapshot.provider).toBe("adsblol");
   });
 
   it("throws UpstreamError on a non-OK upstream status", async () => {
     const fetchFn = (async () => new Response("nope", { status: 502 })) as unknown as typeof fetch;
     const provider = new AdsbLolProvider({ baseUrl: "https://example.test", fetchFn });
     await expect(provider.aircraftInBbox(SF_BBOX)).rejects.toThrow(/HTTP 502/);
+  });
+
+  it("retries once when the connection is reset, and succeeds", async () => {
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls++;
+      if (calls === 1) {
+        throw new TypeError("fetch failed", {
+          cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }),
+        });
+      }
+      return new Response(JSON.stringify(FIXTURE), { status: 200 });
+    }) as unknown as typeof fetch;
+    const provider = new AdsbLolProvider({ baseUrl: "https://example.test", fetchFn });
+    const snapshot = await provider.aircraftInBbox(SF_BBOX);
+    expect(calls).toBe(2);
+    expect(snapshot.aircraft.length).toBe(3);
+  });
+
+  it("gives up after one retry", async () => {
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls++;
+      throw new TypeError("fetch failed", {
+        cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }),
+      });
+    }) as unknown as typeof fetch;
+    const provider = new AdsbLolProvider({ baseUrl: "https://example.test", fetchFn });
+    await expect(provider.aircraftInBbox(SF_BBOX)).rejects.toThrow(/request failed/);
+    expect(calls).toBe(2);
+  });
+
+  it("does not retry an HTTP error or a timeout", async () => {
+    let calls = 0;
+    const http = new AdsbLolProvider({
+      baseUrl: "https://example.test",
+      fetchFn: (async () => {
+        calls++;
+        return new Response("forbidden", { status: 403 });
+      }) as unknown as typeof fetch,
+    });
+    await expect(http.aircraftInBbox(SF_BBOX)).rejects.toThrow(/HTTP 403/);
+    expect(calls).toBe(1);
+
+    calls = 0;
+    const hang = new AdsbLolProvider({
+      baseUrl: "https://example.test",
+      timeoutMs: 20,
+      fetchFn: ((_url: string, init: RequestInit) => {
+        calls++;
+        return new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("This operation was aborted", "AbortError")),
+          );
+        });
+      }) as unknown as typeof fetch,
+    });
+    await expect(hang.aircraftInBbox(SF_BBOX)).rejects.toThrow(/request failed/);
+    expect(calls).toBe(1);
+  });
+
+  it("recovers from a real dropped socket using Node's own fetch", async () => {
+    // First connection is destroyed mid-request (what adsb.lol did on
+    // 2026-10-17); the second is answered. Exercises the real undici error
+    // shape rather than a hand-built one.
+    let connections = 0;
+    const server = createServer((req, res) => {
+      connections++;
+      if (connections === 1) {
+        req.socket.destroy();
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(FIXTURE));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const provider = new AdsbLolProvider({ baseUrl: `http://127.0.0.1:${port}` });
+      const snapshot = await provider.aircraftInBbox(SF_BBOX);
+      expect(connections).toBe(2);
+      expect(snapshot.aircraft.length).toBe(3);
+    } finally {
+      server.close();
+    }
+  });
+});
+
+describe("rate-limit headers in upstream errors", () => {
+  it("names the quota bucket on a 429 so the log says which limit said no", async () => {
+    const { AdsbLolProvider: Provider, rateLimitSummary } = await import(
+      "../src/providers/adsblol.js"
+    );
+    const fetchFn = (async () =>
+      new Response("rate limited", {
+        status: 429,
+        headers: {
+          "x-ratelimit-limit": "4, 4;w=1, 60;w=60, 500;w=86400",
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": "31200",
+        },
+      })) as typeof fetch;
+    const provider = new Provider({ fetchFn });
+    await expect(
+      provider.aircraftInBbox({ lamin: 37.0, lomin: -123.0, lamax: 38.0, lomax: -122.0 }),
+    ).rejects.toThrow(
+      /adsblol returned HTTP 429 \(ratelimit-limit=4, 4;w=1, 60;w=60, 500;w=86400 remaining=0 reset=31200s\)/,
+    );
+    expect(rateLimitSummary(new Headers())).toBeNull();
+    expect(rateLimitSummary(new Headers({ "retry-after": "60" }))).toBe("retry-after=60");
   });
 });

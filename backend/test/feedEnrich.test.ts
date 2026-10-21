@@ -138,3 +138,18 @@ describe("feed enrichment end to end (snapshot → registry → metadata)", () =
     expect(us?.typecode).toBe("C172"); // was null → filled
   });
 });
+
+describe("registryRowsFromSnapshot source label", () => {
+  it("tags rows with the feed that produced the snapshot (adsb.fi since 2026-10-20)", () => {
+    const rows = registryRowsFromSnapshot({
+      ...snapshot([ac({ icao24: "76cdb5", typecode: "A359" })]),
+      provider: "adsbfi",
+    });
+    expect(rows.map((r) => r.source)).toEqual(["adsbfi"]);
+  });
+
+  it("falls back to 'adsblol' for an unstamped snapshot (every row before 2026-10-20)", () => {
+    const rows = registryRowsFromSnapshot(snapshot([ac({ icao24: "76cdb5", typecode: "A359" })]));
+    expect(rows.map((r) => r.source)).toEqual(["adsblol"]);
+  });
+});
