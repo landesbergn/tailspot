@@ -145,7 +145,7 @@ struct HandleEditSnapshotTests {
         window.rootViewController = host
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
-        try? await Task.sleep(for: .seconds(0.5))
+        await SnapshotSettle.wait(host.view, bounds: bounds, atMost: 0.5)
         let png = UIGraphicsImageRenderer(bounds: bounds).pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
         }

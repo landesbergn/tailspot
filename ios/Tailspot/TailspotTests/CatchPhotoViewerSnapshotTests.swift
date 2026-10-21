@@ -93,7 +93,7 @@ struct CatchPhotoViewerSnapshotTests {
         // Drive the zoom the pinch would: 3x, then pan-ish via zoom rect.
         if let scroll {
             scroll.setZoomScale(3, animated: false)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+            SnapshotSettle.spin(host.view, bounds: Self.bounds, atMost: 0.2)
             snapshotWindow(host, as: "photo_viewer_3x_zoomed")
         }
         window.isHidden = true
@@ -123,7 +123,7 @@ struct CatchPhotoViewerSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        SnapshotSettle.spin(host.view, bounds: Self.bounds, atMost: 0.3)
         snapshotWindow(host, as: "photo_viewer_entry_card")
         window.isHidden = true
     }

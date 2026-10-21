@@ -39,7 +39,7 @@ struct LeadersSheetSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         hostVC.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        SnapshotSettle.spin(hostVC.view, bounds: bounds, atMost: 0.4)
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             hostVC.view.drawHierarchy(in: bounds, afterScreenUpdates: true)

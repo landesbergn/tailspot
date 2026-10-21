@@ -5,6 +5,21 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-21 — Faster unit tests: snapshot waits poll instead of sleep (branch `claude/unit-test-performance-a92ab8`)
+
+- CI's test phase was 134 s, and the tests ran one after another (the main
+  actor serializes them), so fixed sleeps counted in full. The window-hosted
+  snapshot harnesses slept 0.3–3 s per shot; that was roughly 55–60 s.
+- New `TailspotTests/SnapshotSettle.swift` samples the view every 50 ms and
+  captures once it draws the same pixels four samples running, falling back
+  to the old fixed wait as a cap. The reveal harness keeps a 2.2 s floor
+  for the timed ceremony (it was 4 s).
+- The 11 affected suites went from 97.8 s to 56.0 s locally, and the full
+  suite runs in 71 s. All 97 PNGs were diffed against two fixed-sleep runs:
+  the only differences are the randomized onboarding suggestions,
+  mid-animation pixels that also vary between baseline runs, and the known
+  Liquid Glass offscreen garble on the Leaders picker.
+
 ## 2026-10-20 — adsb.fi becomes the primary feed (branch `claude/adsbfi-primary`)
 
 - Second outage, caught by the new alerts within 5 minutes: adsb.lol 429'd

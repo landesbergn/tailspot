@@ -40,7 +40,7 @@ struct TrophyRecapSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        SnapshotSettle.spin(host.view, bounds: bounds, atMost: 0.3)
         // Explicit scale: the default (screen scale, 3×) would push the tall
         // full-list captures past Metal's max texture extent and come out
         // blank — 1× is plenty for a layout eyeball at 4000+ points.

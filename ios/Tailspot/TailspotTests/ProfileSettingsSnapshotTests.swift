@@ -37,8 +37,8 @@ struct ProfileSettingsSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        // One run-loop turn so async layout (List cells) settles.
-        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        // Let async layout (List cells) settle.
+        SnapshotSettle.spin(host.view, bounds: bounds, atMost: 0.3)
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)

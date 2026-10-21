@@ -39,8 +39,9 @@ struct CatchShareSheetSnapshotTests {
         window.rootViewController = host
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
-        // The sheet renders its images in .task; give them time to land.
-        try await Task.sleep(for: .seconds(3))
+        // The sheet renders its images in .task; the page shows a spinner
+        // until its image lands, so the frame only holds still once loaded.
+        await SnapshotSettle.wait(host.view, bounds: bounds, atMost: 3)
         host.view.layoutIfNeeded()
         let png = UIGraphicsImageRenderer(bounds: bounds).pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)

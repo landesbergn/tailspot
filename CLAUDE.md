@@ -78,8 +78,13 @@ xcodebuild test \
   -only-testing:TailspotTests
 ```
 
-First run ~3 min (sim cold-boot); cached ~30–60 s. Browse `TailspotTests/` for
-coverage — inline inventories drift. **`ADSBManager.init(source: ADSBSource =
+First run ~3 min (sim cold-boot); after that the test phase itself is ~70 s on a
+dev Mac (1454 tests, 2026-10-21). Browse `TailspotTests/` for coverage — inline
+inventories drift. **The suite runs on the main actor, so it is effectively
+serial: every fixed sleep adds straight to wall clock.** Window-hosted snapshot
+harnesses wait through `SnapshotSettle` (poll until the frame holds still,
+capped at a fallback) — use it instead of a fixed `RunLoop.run(until:)` or
+`Task.sleep` settle in new ones. **`ADSBManager.init(source: ADSBSource =
 TailspotBackendClient())`** has a defaulted param so production uses the real
 backend and tests inject a fixture; `ContentView`'s `@StateObject private var adsb
 = ADSBManager()` depends on the no-arg default — don't break that shape.

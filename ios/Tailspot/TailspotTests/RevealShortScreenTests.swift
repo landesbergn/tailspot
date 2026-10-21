@@ -72,21 +72,25 @@ struct RevealShortScreenTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        // Poll rather than sleep a fixed span: at least 4 s (past the uncommon
-        // tier's 1.9 s ceremony and the 0.3 s settle fade), then until the
-        // caller's condition holds, capped at 30 s. The full suite runs test
-        // clones in parallel and starves the main thread, so a flat sleep is
-        // not a reliable wait. Each tick forces a layout pass so `contentSize`
-        // reflects the current card, not a mid-transition frame.
+        // Poll rather than sleep a fixed span: past the uncommon tier's 1.9 s
+        // ceremony and the 0.3 s settle fade, until the caller's condition
+        // holds (capped at 30 s), then until the frame stops changing — a
+        // starved main thread (parallel test clones) runs the fade late, and
+        // the stability wait absorbs that. Each tick forces a layout pass so
+        // `contentSize` reflects the current card, not a mid-transition frame.
         let started = Date()
         var scroll: UIScrollView?
         repeat {
-            try? await Task.sleep(for: .seconds(0.25))
+            try? await Task.sleep(for: .seconds(0.1))
             host.view.setNeedsLayout()
             host.view.layoutIfNeeded()
             scroll = firstScrollView(in: host.view)
-            if Date().timeIntervalSince(started) >= 4, let scroll, settledWhen(scroll) { break }
+            if Date().timeIntervalSince(started) >= 2.2, let scroll, settledWhen(scroll) { break }
         } while Date().timeIntervalSince(started) < 30
+        await SnapshotSettle.wait(host.view, bounds: window.bounds, atMost: 2)
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        scroll = firstScrollView(in: host.view)
         return Hosted(host: host, window: window, scroll: scroll)
     }
 
@@ -126,7 +130,7 @@ struct RevealShortScreenTests {
 
         scrollView.setContentOffset(
             CGPoint(x: 0, y: scrollView.contentSize.height - scrollView.bounds.height), animated: false)
-        try? await Task.sleep(for: .seconds(0.3))
+        await SnapshotSettle.wait(hosted.host.view, bounds: bounds, atMost: 0.3)
         snapshot(hosted.host.view, bounds: bounds, as: "se_live_scrolled")
     }
 
