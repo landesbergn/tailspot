@@ -97,6 +97,18 @@ describe("TileCache with an upstream budget", () => {
     expect(s.cache.lastFailureAt).toBeUndefined();
   });
 
+  it("reports one refusal for a shared wait, however many callers share it", async () => {
+    const s = setup({ maxWaitMs: 500 });
+    await s.cache.get(BAY);
+    const results = await Promise.allSettled([
+      s.cache.get(NYC),
+      s.cache.get(NYC),
+      s.cache.get(NYC),
+    ]);
+    expect(results.every((r) => r.status === "rejected")).toBe(true);
+    expect(s.events.filter((e) => e.kind === "refused")).toHaveLength(1);
+  });
+
   it("treats a cache older than 30 s as cold: it waits for a slot instead of serving old planes", async () => {
     const s = setup();
     await s.cache.get(BAY);

@@ -143,6 +143,66 @@ describe("CircuitBreakerProvider", () => {
     expect(opened.map((e) => e.cooldownMs)).toEqual([30_000, 60_000]);
   });
 
+  it("a late failure from a request already in flight never shortens the cooldown", async () => {
+    let releaseSlow: () => void = () => {};
+    const slowGate = new Promise<void>((r) => {
+      releaseSlow = r;
+    });
+    let calls = 0;
+    const inner: PositionProvider = {
+      name: "adsblol",
+      async aircraftInBbox() {
+        calls++;
+        if (calls === 1) {
+          await slowGate;
+          throw new UpstreamError("adsblol request failed");
+        }
+        throw http(429, 600);
+      },
+    };
+    let t = 0;
+    const opened: CircuitOpenEvent[] = [];
+    const breaker = new CircuitBreakerProvider(inner, {
+      failureThreshold: 1,
+      now: () => t,
+      onOpen: (e) => opened.push(e),
+    });
+    const slow = breaker.aircraftInBbox(BBOX); // in flight before the 429
+    await expect(breaker.aircraftInBbox(BBOX)).rejects.toThrow("HTTP 429");
+    releaseSlow();
+    await expect(slow).rejects.toThrow("request failed");
+    // Still closed to traffic for the full 600 s, and only one opening announced.
+    t += 31_000;
+    await expect(breaker.aircraftInBbox(BBOX)).rejects.toBeInstanceOf(CircuitOpenError);
+    expect(opened).toHaveLength(1);
+    expect(calls).toBe(2);
+  });
+
+  it("says a trial is in flight rather than 'next try in 0 s'", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let calls = 0;
+    const inner: PositionProvider = {
+      name: "adsbfi",
+      async aircraftInBbox() {
+        calls++;
+        if (calls === 1) throw http(429);
+        await gate;
+        return { fetchedAt: 1, aircraft: [] };
+      },
+    };
+    let t = 0;
+    const breaker = new CircuitBreakerProvider(inner, { now: () => t });
+    await expect(breaker.aircraftInBbox(BBOX)).rejects.toThrow();
+    t += 30_000;
+    const trial = breaker.aircraftInBbox(BBOX);
+    await expect(breaker.aircraftInBbox(BBOX)).rejects.toThrow("trial request in flight");
+    release();
+    await trial;
+  });
+
   it("reports how long it was open when a trial succeeds", async () => {
     const inner = new ScriptedProvider("adsbfi", [http(429), "ok"]);
     const { breaker, closed, advance } = harness(inner);

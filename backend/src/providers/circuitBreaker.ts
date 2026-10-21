@@ -53,12 +53,14 @@ export interface CircuitOpenEvent {
 
 /** The circuit is open: the feed was not called. */
 export class CircuitOpenError extends UpstreamError {
-  constructor(provider: string, retryInMs: number, lastError: unknown) {
+  /** `retryInMs` undefined means a trial request is in flight right now. */
+  constructor(provider: string, retryInMs: number | undefined, lastError: unknown) {
     const why = lastError instanceof Error ? lastError.message : String(lastError);
-    super(
-      `${provider} circuit open, next try in ${Math.ceil(retryInMs / 1000)} s (after: ${why})`,
-      lastError,
-    );
+    const when =
+      retryInMs === undefined
+        ? "trial request in flight"
+        : `next try in ${Math.ceil(retryInMs / 1000)} s`;
+    super(`${provider} circuit open, ${when} (after: ${why})`, lastError);
     this.name = "CircuitOpenError";
   }
 }
@@ -103,7 +105,7 @@ export class CircuitBreakerProvider implements PositionProvider {
     const now = this.now();
     if (this.state === "half-open") {
       // A trial is already in flight; everyone else keeps failing fast.
-      throw new CircuitOpenError(this.name, 0, this.lastError);
+      throw new CircuitOpenError(this.name, undefined, this.lastError);
     }
     if (this.state === "open") {
       if (now < this.openUntil) {
@@ -154,6 +156,17 @@ export class CircuitBreakerProvider implements PositionProvider {
     const cooldownMs = clamp(asked ?? backoff, this.minCooldownMs, this.maxCooldownMs);
 
     const now = this.now();
+    // A request that was already in flight when the circuit opened can fail
+    // afterwards. It must not SHORTEN the cooldown (a late timeout after a
+    // 10-minute Retry-After would otherwise re-probe after 30 s) and is not a
+    // new opening worth announcing; it may only extend the current one.
+    if (this.state === "open" && !trial) {
+      if (now + cooldownMs > this.openUntil) {
+        this.openUntil = now + cooldownMs;
+        this.lastCooldownMs = cooldownMs;
+      }
+      return;
+    }
     if (this.state === "closed") this.openedAt = now;
     this.state = "open";
     this.openUntil = now + cooldownMs;

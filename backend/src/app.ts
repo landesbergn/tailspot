@@ -264,22 +264,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         { err: primaryError, engagedForMs },
         `primary position feed has been down for ~${minutes} min; still serving the fallback`,
       );
-      // Imported lazily so app.ts's static graph stays Sentry-free (the test
-      // suite builds this app constantly and should never load the SDK). This
-      // path only runs after a five-minute production outage; captureMessage
-      // is itself a no-op when SENTRY_DSN is unset — see instrument.ts.
-      void import("@sentry/node")
-        .then((Sentry) =>
-          Sentry.captureMessage(`Position feed fallback sustained for ~${minutes} min`, {
-            level: "error",
-            // Pinned so every hour of one incident lands in ONE issue (the
-            // minutes in the title vary; Sentry's message grouping mostly
-            // coped, this makes it certain) and so it can never merge with the
-            // outage issue below.
-            fingerprint: ["position-feed-fallback"],
-          }),
-        )
-        .catch((err) => app.log.warn({ err }, "could not report sustained fallback to Sentry"));
+      // Fingerprint pinned so every hour of one incident lands in ONE issue
+      // (the minutes in the title vary) and never merges with the outage
+      // issue below. reportToSentry imports the SDK lazily; see its header.
+      reportToSentry(app.log, `Position feed fallback sustained for ~${minutes} min`, "error", [
+        "position-feed-fallback",
+      ]);
     },
   });
   // The second, louder alerter: BOTH feeds failing. Same state machine, same
@@ -296,14 +286,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         { err: primaryError, engagedForMs },
         `position feed DOWN for ~${minutes} min: both providers failing, clients get 503 past the last-good window`,
       );
-      void import("@sentry/node")
-        .then((Sentry) =>
-          Sentry.captureMessage(`Position feed DOWN: both providers failing for ~${minutes} min`, {
-            level: "fatal",
-            fingerprint: ["position-feed-outage"],
-          }),
-        )
-        .catch((err) => app.log.warn({ err }, "could not report feed outage to Sentry"));
+      reportToSentry(
+        app.log,
+        `Position feed DOWN: both providers failing for ~${minutes} min`,
+        "fatal",
+        ["position-feed-outage"],
+      );
     },
   });
   // A feed that answers 429 or 403 is telling us to stop, and adsb.fi counts
@@ -498,6 +486,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     (options.provider === undefined
       ? new UpstreamBudget({ ratePerSecond: envFloat("UPSTREAM_RPS") })
       : undefined);
+  const SATURATED_CACHE_AGE_SECONDS = 20;
   const budgetAlerter = new SustainedFallbackAlerter({
     now: options.rateLimitNow,
     onAlert: ({ engagedForMs }) => {
@@ -515,8 +504,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           onThrottled: (event) => {
             if (event.kind === "refused") {
               app.log.warn(event, "position feed budget refused a tile with nothing cached");
+              budgetAlerter.recordFallback(event);
+              return;
             }
-            budgetAlerter.recordFallback(event);
+            // Two tiles wanting a refresh within 1.25 s of each other is
+            // routine: one serves an ~11 s cache and refreshes on its next
+            // poll. Only a refresh deferred until the cache is twice the TTL
+            // old means the budget is genuinely short.
+            if ((event.cacheAgeSeconds ?? 0) >= SATURATED_CACHE_AGE_SECONDS) {
+              budgetAlerter.recordFallback(event);
+            }
           },
           onGranted: () => budgetAlerter.recordRecovery(),
         }

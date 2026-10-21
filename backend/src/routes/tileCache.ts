@@ -303,7 +303,11 @@ export class TileCache {
         const ok = await this.throttle.budget.take(
           this.throttle.maxWaitMs ?? DEFAULT_THROTTLE_MAX_WAIT_MS,
         );
-        if (!ok) throw new BudgetExhaustedError();
+        if (!ok) {
+          // Reported here, once per shared wait, not in each waiter's catch.
+          this.notifyThrottled({ kind: "refused", tile: key });
+          throw new BudgetExhaustedError();
+        }
         this.notifyGranted();
       }
       const startedMs = this.now();
@@ -404,11 +408,7 @@ export class TileCache {
     const budgetRefused = cause instanceof BudgetExhaustedError;
     // A refused budget slot is our own load shedding, not a feed failure: it
     // must not make /readyz distrust the feed (feedProbe reads lastFailureAt).
-    if (budgetRefused) {
-      this.notifyThrottled({ kind: "refused", tile: key });
-    } else {
-      this.lastFailureAtMs = this.now();
-    }
+    if (!budgetRefused) this.lastFailureAtMs = this.now();
     const cached = this.entries.get(key);
     if (cached && nowSec - cached.storedAt < this.config.staleMaxSeconds) {
       // Carry the snapshot's true fetchedAt so the client sees real staleness.
