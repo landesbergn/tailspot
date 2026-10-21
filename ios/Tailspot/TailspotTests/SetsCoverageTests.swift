@@ -261,6 +261,8 @@ struct SetsCoverageTests {
         ("PNR3", "Alpi", "Pioneer 300"),
         ("T18", "Classic Sport", "S-18"),
         ("TL30", "Tl Ultralight", "TL-3000 Sirius"),
+        // Public catalog coverage addition validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
         // Public catalog coverage additions validated 2026-10-11.
         ("A337", "Airbus", "A330-700 Beluga XL"),
         ("A400", "Airbus", "A400M Atlas"),
@@ -396,6 +398,7 @@ struct SetsCoverageTests {
             (("PNR3", "Alpi", "Pioneer 300"), "fam-sport-classics", "fsc-pioneer300"),
             (("T18", "Classic Sport", "S-18"), "fam-sport-classics", "fsc-s18"),
             (("TL30", "Tl Ultralight", "TL-3000 Sirius"), "fam-sport-classics", "fsc-sirius"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
             (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
