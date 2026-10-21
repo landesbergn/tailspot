@@ -255,6 +255,14 @@ struct SetsCoverageTests {
         ("C425", "Cessna", "425 Corsair"),
         ("PA22", "Piper", "PA-22 Colt"),
         ("SBR1", "Rockwell", "Sabre 40"),
+        // Public catalog coverage additions validated 2026-10-12.
+        ("A210", "Aquila", "A-210"),
+        ("CH2T", "Amd", "CH-2000 Alarus"),
+        ("DV20", "Diamond", "DA-20 Falcon"),
+        ("MT", "Autogyro", "MT-03"),
+        ("P8", "Boeing", "P-8 Poseidon"),
+        ("SF25", "Scheibe", "SF-25 Falke"),
+        ("T33", "Lockheed", "T-33 Shooting Star"),
         // Public catalog coverage addition validated 2026-10-19.
         ("FA6X", "Dassault", "Falcon 6X"),
         // Public catalog coverage additions validated 2026-10-11.
@@ -387,6 +395,13 @@ struct SetsCoverageTests {
             (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
             (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
             (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
+            (("A210", "Aquila", "A-210"), "fam-sport-classics", "fsc-aquila-a210"),
+            (("CH2T", "Amd", "CH-2000 Alarus"), "fam-sport-classics", "fsc-alarus"),
+            (("DV20", "Diamond", "DA-20 Falcon"), "fam-diamond", "fda20"),
+            (("MT", "Autogyro", "MT-03"), "fam-sport-classics", "fsc-mt03"),
+            (("P8", "Boeing", "P-8 Poseidon"), "fam-military", "fm-p8"),
+            (("SF25", "Scheibe", "SF-25 Falke"), "fam-sport-classics", "fsc-sf25"),
+            (("T33", "Lockheed", "T-33 Shooting Star"), "fam-military", "fm-t33"),
             (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
             (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
