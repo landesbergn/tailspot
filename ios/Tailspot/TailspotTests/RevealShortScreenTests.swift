@@ -85,6 +85,9 @@ struct RevealShortScreenTests {
             host.view.setNeedsLayout()
             host.view.layoutIfNeeded()
             scroll = firstScrollView(in: host.view)
+            // 2.2 s is bell206's tier (uncommon: 1.9 s + 0.3 s fade); a rarer
+            // fixture needs a longer floor — the stability wait below can't
+            // see a ceremony that's still animating.
             if Date().timeIntervalSince(started) >= 2.2, let scroll, settledWhen(scroll) { break }
         } while Date().timeIntervalSince(started) < 30
         await SnapshotSettle.wait(host.view, bounds: window.bounds, atMost: 2)

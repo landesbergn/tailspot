@@ -34,7 +34,7 @@ struct ChallengeScreensSnapshotTests {
     enum Device { case iphone16, se }
 
     private func snapshot<V: View>(_ view: V, as name: String, settle: TimeInterval = 0.6,
-                                   device: Device = .iphone16) {
+                                   animated: Bool = false, device: Device = .iphone16) {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = device == .se
             ? CGRect(x: 0, y: 0, width: 375, height: 667)
@@ -45,7 +45,13 @@ struct ChallengeScreensSnapshotTests {
         window.overrideUserInterfaceStyle = .dark
         window.makeKeyAndVisible()
         host.view.layoutIfNeeded()
-        SnapshotSettle.spin(host.view, bounds: bounds, atMost: settle)
+        // `animated` shots wait out a running animation, which the settle
+        // sampler can't see (see SnapshotSettle) — hold those in full.
+        if animated {
+            RunLoop.main.run(until: Date().addingTimeInterval(settle))
+        } else {
+            SnapshotSettle.spin(host.view, bounds: bounds, atMost: settle)
+        }
         let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let png = renderer.pngData { _ in
             host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
@@ -210,7 +216,8 @@ struct ChallengeScreensSnapshotTests {
         // First view: nothing seen yet.
         let (first, _) = await makeModel()
         await first.loadDetail(id: "c-won")
-        snapshot(detail(first, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first", settle: 1.0)
+        snapshot(detail(first, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first",
+                 settle: 1.0, animated: true)
         #expect(first.seenResultIds.contains("c-won"), "opening the results must mark them seen")
 
         // Reduce Motion: laurels are simply present.
@@ -234,7 +241,7 @@ struct ChallengeScreensSnapshotTests {
         let (se, _) = await makeModel()
         await se.loadDetail(id: "c-won")
         snapshot(detail(se, id: "c-won", reduceMotion: false), as: "challenge_detail_results_first_se",
-                 settle: 1.0, device: .se)
+                 settle: 1.0, animated: true, device: .se)
     }
 
     /// A suite-named `UserDefaults` carrying a claimed handle, injected into

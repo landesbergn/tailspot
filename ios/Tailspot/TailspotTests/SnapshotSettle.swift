@@ -9,10 +9,13 @@
 //  runs on the main actor, so it is effectively serial, and ~60 s of the CI
 //  run was snapshot harnesses waiting on screens that had already settled.
 //
-//  `atMost` is the old fixed wait, so a view that never holds still (a
-//  blinking caret, a spinner, a repeating animation) times out exactly where
-//  it used to be captured — never later. A spinner that holds the frame
-//  unstable until an async image lands is what makes "stable" mean "loaded".
+//  `atMost` is the old fixed wait, so the poll is never slower than the
+//  sleep it replaced. What it detects is committed content changes (layout
+//  passes, an async image or `.task` result landing); it does NOT see a
+//  Core Animation / SwiftUI animation in flight, which draws from the
+//  presentation layer — a mid-animation screen reads as still within the
+//  ~0.2 s minimum. A shot that waits out an animation must keep a fixed
+//  wait or pass `atLeast` (see ChallengeScreensSnapshotTests' `animated`).
 //
 //  Two flavours, matching the two harness styles already in the suite:
 //  `spin` pumps the run loop (synchronous tests), `wait` sleeps between
