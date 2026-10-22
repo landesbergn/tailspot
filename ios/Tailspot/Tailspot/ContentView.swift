@@ -1015,12 +1015,14 @@ struct ContentView: View {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
+                    releaseGuessHold(for: reveal)
                     presentPostRevealMomentIfNeeded()
                 },
                 onViewInHangar: {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
+                    releaseGuessHold(for: reveal)
                     primarySheet = .hangar
                     presentPostRevealMomentIfNeeded()
                 },
@@ -1059,6 +1061,7 @@ struct ContentView: View {
                     } else if !reveal.isSimulated {
                         CatchTelemetry.fireGuessRoundSkipped(kind: .route, elapsedMs: elapsedMs)
                     }
+                    releaseGuessHold(for: reveal)
                 },
                 streakDays: reveal.streakDays,
                 loader: reveal.loader
@@ -2506,15 +2509,9 @@ struct ContentView: View {
                 // reveal carries the multiplicity message.
                 catchHaptic &+= 1
                 Log.adsb.notice("Caught \(newCatches.count, privacy: .public) plane(s); \(duplicates.count, privacy: .public) duplicate(s)")
-                // Per-catch immediate upload (2026-08-24): push the fresh
-                // row(s) to the backend NOW instead of waiting
-                // for the next foreground transition — a first-time user
-                // otherwise opened Profile/Leaderboard with 0 server-side
-                // points and no rank. Fire-and-forget; uploadPending is
-                // idempotent and serverUuid-deduped, so overlapping the
-                // scene-activation sweep is safe, and a failure just defers
-                // to that sweep.
-                Task { await CatchUploader().uploadPending(context: modelContext) }
+                // The per-catch immediate upload kick lives below the bonus
+                // round decision (see "Per-catch immediate upload"), so a
+                // catch hosting a route guess can be held until it resolves.
                 // Reverse-geocode the observer position ONCE for the
                 // batch (every row shares it) and stamp the new rows.
                 // Post-save and fire-and-forget: a catch never waits
@@ -2664,6 +2661,31 @@ struct ContentView: View {
                 }
             }
 
+            // Per-catch immediate upload (2026-08-24): push the fresh row(s)
+            // to the backend NOW instead of waiting for the next foreground
+            // transition — a first-time user otherwise opened Profile/
+            // Leaderboard with 0 server-side points and no rank. Fire-and-
+            // forget; uploadPending is idempotent and serverUuid-deduped, so
+            // overlapping the scene-activation sweep is safe, and a failure
+            // just defers to that sweep.
+            //
+            // A catch hosting a route-guess round is HELD first (2026-10-21):
+            // a row is POSTed once, so uploading before the answer meant the
+            // server never saw the guess and never awarded its bonus. The
+            // reveal's resolve/dismiss callbacks release the hold and upload.
+            // No hold when the user already closed the early shell (nothing
+            // left on screen to answer). This must stay in the same MainActor
+            // run as the save above (no `await` in between), so no sweep can
+            // slip the row out before the hold lands. The guess round never
+            // fires on a first catch, so the first-catch rank upload is
+            // still immediate.
+            if !newCatches.isEmpty {
+                if let payload = guessPayload, earlyLoader == nil || pendingReveal != nil {
+                    CatchUploader.holdForGuess(payload.row, context: modelContext)
+                }
+                Task { await CatchUploader().uploadPending(context: modelContext) }
+            }
+
             let presentMs: Int
             let revealMode: String
             if let loader = earlyLoader {
@@ -2704,6 +2726,18 @@ struct ContentView: View {
                 totalMs: Int(Date().timeIntervalSince(tapAt) * 1000)
             )
         }
+    }
+
+    /// Release the reveal's route-guess upload hold, if it placed one, and
+    /// upload the row now (with the frozen guess, when one was answered).
+    /// Called from every path that ends the bonus round: answer, skip, and
+    /// both reveal-close buttons. Lives outside `body` because body is at
+    /// the compiler's type-check budget. The shell path's row arrives via the
+    /// loader, so read it from there first. A no-op for un-held rows and for
+    /// the ✦ Catch simulation's transient row (never held).
+    private func releaseGuessHold(for reveal: PendingReveal) {
+        CatchUploader.releaseGuessHold(for: reveal.loader?.row ?? reveal.row,
+                                       context: modelContext)
     }
 
     /// Build the route guess question off a fresh catch row, or nil when no

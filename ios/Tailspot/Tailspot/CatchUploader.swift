@@ -21,6 +21,13 @@
 //    Overlapping sweeps are safe: both run on the MainActor over the same
 //    context, and the serverUuid assigned before the first POST makes any
 //    double-send a server-side duplicate, not a double catch.
+//  - Guess holds (2026-10-21): a fresh catch that hosts a route-guess bonus
+//    round is HELD out of every sweep until the guess resolves (answer,
+//    skip, or reveal dismiss), because a row is only ever POSTed once and
+//    the server can only award the bonus for a guess it sees. Before the
+//    hold, the immediate upload above always beat the guess, and almost no
+//    route-guess bonus reached the server from 1.1.0 on. See
+//    `CatchUploadHolds`.
 //
 
 import Foundation
@@ -83,8 +90,85 @@ nonisolated struct CatchUploadPose: Equatable, Sendable {
     }
 }
 
+/// Which pending rows are waiting on their route-guess answer, keyed by the
+/// row's `serverUuid`, with the moment each hold was placed.
+///
+/// A plain value type with no SwiftData in it, so the hold rules are unit-
+/// tested directly (CatchUploadHoldTests). The live registry is the single
+/// `CatchUploader.guessHolds` below. It is in memory only on purpose: if the
+/// app is killed mid-reveal the hold is simply gone, and the row uploads on
+/// the next launch without its guess (exactly what happened before holds).
+nonisolated struct CatchUploadHolds: Equatable, Sendable {
+    /// A hold that is never released (a reveal path that forgot to, a user
+    /// who left the bonus chips up for minutes) must not strand the catch:
+    /// after this long the row uploads anyway, without the guess. A real
+    /// answer lands within seconds of the chips popping.
+    static let timeout: TimeInterval = 120
+
+    private(set) var placedAt: [String: Date] = [:]
+
+    mutating func hold(_ key: String, now: Date = Date()) {
+        placedAt[key] = now
+    }
+
+    /// Remove the hold. Returns true when there was one, so the caller only
+    /// kicks an upload when releasing actually freed a row.
+    @discardableResult
+    mutating func release(_ key: String) -> Bool {
+        placedAt.removeValue(forKey: key) != nil
+    }
+
+    /// Should the uploader skip this row right now? A row with no
+    /// `serverUuid` can't have been held (the hold assigns one first).
+    static func isHeld(key: String?, holds: [String: Date], now: Date,
+                       timeout: TimeInterval = CatchUploadHolds.timeout) -> Bool {
+        guard let key, let placed = holds[key] else { return false }
+        return now.timeIntervalSince(placed) < timeout
+    }
+
+    func isHeld(_ key: String?, now: Date = Date()) -> Bool {
+        Self.isHeld(key: key, holds: placedAt, now: now)
+    }
+}
+
 @MainActor
 class CatchUploader {
+    /// The app's one hold registry. `static` on a `@MainActor` class makes it
+    /// MainActor-isolated too, so every read and write happens on the main
+    /// thread alongside the SwiftData rows it describes. No lock needed.
+    static var guessHolds = CatchUploadHolds()
+
+    /// Hold `row` out of uploads until its route guess resolves, and schedule
+    /// one sweep just past the timeout so a hold nobody released still
+    /// uploads within ~2 minutes instead of waiting for the next foreground.
+    ///
+    /// Assigns the row's `serverUuid` if it has none (the uploader would do
+    /// the same on its first attempt), so the hold has a stable key.
+    static func holdForGuess(_ row: Catch, context: ModelContext) {
+        if row.serverUuid == nil { row.serverUuid = UUID().uuidString }
+        guard let key = row.serverUuid else { return }
+        guessHolds.hold(key)
+        Log.ui.info("CatchUploader: holding \(row.icao24, privacy: .public) for its route guess")
+        Task {
+            try? await Task.sleep(for: .seconds(CatchUploadHolds.timeout + 1))
+            await CatchUploader().uploadPending(context: context)
+        }
+    }
+
+    /// Release `row`'s guess hold (if any) and upload it now. Called when the
+    /// reveal's bonus round resolves or the reveal closes. A no-op for a row
+    /// that was never held, so every reveal-ending path can call it safely.
+    static func releaseGuessHold(for row: Catch?, context: ModelContext) {
+        guard let key = row?.serverUuid, guessHolds.release(key) else { return }
+        Task { await CatchUploader().uploadPending(context: context) }
+    }
+
+    /// True when the live registry says to skip this row right now.
+    static func isHeldForGuess(_ row: Catch, now: Date = Date()) -> Bool {
+        guessHolds.isHeld(row.serverUuid, now: now)
+    }
+
+
     private let client: TailspotAccountClient
 
     init(client: TailspotAccountClient = TailspotAccountClient()) {
@@ -115,16 +199,20 @@ class CatchUploader {
     }
 
     func uploadPending(context: ModelContext) async {
-        let pendingRows: [Catch]
+        let fetchedRows: [Catch]
         do {
             var descriptor = FetchDescriptor<Catch>(predicate: Self.pendingPredicate)
             descriptor.sortBy = [SortDescriptor(\Catch.caughtAt, order: .forward)]
-            pendingRows = try context.fetch(descriptor)
+            fetchedRows = try context.fetch(descriptor)
         } catch {
             Log.ui.error("CatchUploader: fetch pending failed: \(error, privacy: .public)")
             return
         }
 
+        // Rows waiting on a route-guess answer sit this sweep out (see
+        // `CatchUploadHolds`). The loop below re-checks per row, because a
+        // hold can be placed while this sweep is awaiting the network.
+        let pendingRows = fetchedRows.filter { !Self.isHeldForGuess($0) }
         guard !pendingRows.isEmpty else { return }
         Log.ui.info("CatchUploader: \(pendingRows.count, privacy: .public) pending catch(es) to upload")
 
@@ -172,6 +260,9 @@ class CatchUploader {
             while true {
                 // A 429 wait below can outlast a Hangar delete.
                 if Self.isGone(catchRow) || deletions.wasDeleted(uuid) { break }
+                // ...or a guess hold placed after this sweep's fetch. The
+                // release kicks its own sweep, so skipping here loses nothing.
+                if Self.isHeldForGuess(catchRow) { break }
                 do {
                     let response = try await client.uploadCatch(
                         catchUuid: uuid,
