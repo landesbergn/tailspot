@@ -192,6 +192,67 @@ struct FamilySetsTests {
                 "A 777-300ER must NOT fill the 777-300 slot")
     }
 
+    // MARK: (b2) Catalog-wide one-slot invariant
+
+    /// Typecodes that are DELIBERATELY allowed to fill more than one family
+    /// slot, keyed by typecode → the exact slot ids it may fill. Keep this
+    /// tiny and justify every line: each extra slot is progress the user
+    /// earns twice from one catch.
+    private static let intendedMultiSlot: [String: Set<String>] = [:]
+
+    /// Every typecode in the bundled catalog (AircraftTypes.json) fills AT
+    /// MOST ONE slot across ALL families, unless `intendedMultiSlot` says
+    /// otherwise. A substring token like "206", "at-6" or "a220" happily
+    /// matches a different airframe's canonical name, and that bleed is
+    /// silent: one catch quietly fills two slots, so a family can read
+    /// "complete" before the user has caught every variant (and the derived
+    /// Set Collector / Set Master trophies follow it). This simulates a
+    /// typecode-only catch of every catalog aircraft against every slot.
+    @Test func everyCatalogTypecodeFillsAtMostOneSlot() {
+        let slots = CardSets.families.flatMap { set in set.entries.map { (set.id, $0) } }
+        var offenders: [String] = []
+        for tc in AircraftNaming.table.keys.sorted() {
+            let key = CardSets.matchKey(for: mk(typecode: tc))
+            let hits = slots.filter { CardSets.matches(key: key, entry: $0.1) }
+            guard hits.count > 1 else { continue }
+            let hitIds = Set(hits.map(\.1.id))
+            if let allowed = Self.intendedMultiSlot[tc], hitIds.isSubset(of: allowed) { continue }
+            offenders.append("\(tc) → " + hits.map { "\($0.0)/\($0.1.id)" }.joined(separator: ", "))
+        }
+        #expect(offenders.isEmpty,
+                "Typecodes filling more than one family slot:\n\(offenders.joined(separator: "\n"))")
+    }
+
+    /// The leak fixes are exclusions, not token removals — the airframes
+    /// each slot is FOR must still land in it.
+    @Test(arguments: [
+        ("C206", "fam-cessna", "fc206"),
+        ("T206", "fam-cessna", "fc206"),
+        ("C207", "fam-cessna", "fc206"),
+        ("B772", "fam-777", "f777-200"),
+        ("BCS3", "fam-a220", "fa220-300"),
+        ("B06", "fam-heli", "fh-b206"),
+    ])
+    func leakFixesKeepTheIntendedSlot(typecode: String, familyId: String, entryId: String) {
+        #expect(CardSets.matches(catch: mk(typecode: typecode), entry: entry(familyId, entryId)))
+    }
+
+    @Test(arguments: [
+        ("B06", "fam-cessna", "fc206"),
+        ("B06T", "fam-cessna", "fc206"),
+        ("AT6T", "fam-vintage", "fv-t6"),
+        ("IA63", "fam-vintage", "fv-t6"),
+        ("B77L", "fam-777", "f777-200"),
+        ("B350", "fam-beech", "fbe20"),
+        ("BCS1", "fam-a220", "fa220-300"),
+        ("C207", "fam-cessna", "fc185"),
+        ("CRJX", "fam-crj", "fcrj100"),
+    ])
+    func knownLeaksStayOutOfTheWrongSlot(typecode: String, familyId: String, entryId: String) {
+        #expect(!CardSets.matches(catch: mk(typecode: typecode), entry: entry(familyId, entryId)),
+                "\(typecode) must not fill \(familyId)/\(entryId)")
+    }
+
     @Test func familyProgressCountsDistinctVariants() {
         let a320 = family("fam-a320")
         let caught = [mk(typecode: "A320"), mk(typecode: "A21N"), mk(typecode: "A20N")]
@@ -202,9 +263,7 @@ struct FamilySetsTests {
 
     // MARK: (c) Lens + identity invariants
 
-    @Test func lensMapsToTheRightArrays() {
-        #expect(CardSets.sets(for: .type).map(\.id) == CardSets.all.map(\.id))
-        #expect(CardSets.sets(for: .family).map(\.id) == CardSets.families.map(\.id))
+    @Test func familyRosterIsMeaningful() {
         #expect(CardSets.families.count >= 10, "expected a meaningful roster of families")
     }
 

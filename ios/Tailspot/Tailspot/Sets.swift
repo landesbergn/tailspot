@@ -4,8 +4,10 @@
 //
 //  Collectible card sets. Each set is a curated list of airframes
 //  identified by a model substring + a "canonical model name" the
-//  set page displays. Sets are organized by `AircraftType` so the
-//  Hangar can show "Wide-body 4 / 14", "Narrow-body 2 / 12", etc.
+//  set page displays. The Hangar's Sets tab shows the make/model
+//  FAMILIES (`CardSets.families`, "Boeing 737 · 3 of 9 variants").
+//  The older per-`AircraftType` sets (`CardSets.all`) no longer have a
+//  screen; trophy and rarity tests still read them.
 //
 //  Curation philosophy: a set is a complete-able quest, not a tier
 //  list. Common types still belong (a 737-800 should appear in the
@@ -441,7 +443,9 @@ nonisolated enum CardSets {
         .init(id: "fam-777", type: .wide, title: "Boeing 777", entries: [
             .init(id: "f777-200", canonicalName: "777-200", rarity: .uncommon,
                   modelTokens: ["777-200", "777-2"], summary: "Original 777. Twin GE90s.",
-                  representativeTypecode: "B772"),
+                  representativeTypecode: "B772",
+                  // "777-200" is a prefix of the 777-200LR's name; B77L has its own slot.
+                  excludedTypecodes: ["B77L"]),
             .init(id: "f777-200lr", canonicalName: "777-200LR", rarity: .uncommon,
                   modelTokens: ["777-200lr", "777lr"], summary: "Ultra-long-range. 'Worldliner'.",
                   representativeTypecode: "B77L"),
@@ -556,7 +560,9 @@ nonisolated enum CardSets {
             .init(id: "fcrj100", canonicalName: "CRJ-100", rarity: .common,
                   modelTokens: ["bombardier crj-100", "canadair crj-100", "crj100", "crj 100"],
                   summary: "The first Canadair Regional Jet and the start of the CRJ family.",
-                  representativeTypecode: "CRJ1"),
+                  representativeTypecode: "CRJ1",
+                  // "bombardier crj-100" is a prefix of "crj-1000"; CRJX has its own slot.
+                  excludedTypecodes: ["CRJX"]),
             .init(id: "fcrj200", canonicalName: "CRJ-200", rarity: .common,
                   modelTokens: ["crj-2", "crj200", "crj 200"], summary: "The original 50-seat regional jet.",
                   representativeTypecode: "CRJ2"),
@@ -644,7 +650,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "BCS1"),
             .init(id: "fa220-300", canonicalName: "A220-300", rarity: .uncommon,
                   modelTokens: ["a220-300", "a220", "bcs3", "cs300"], summary: "The common A220. Quiet, efficient.",
-                  representativeTypecode: "BCS3"),
+                  representativeTypecode: "BCS3",
+                  // The bare "a220" token also matches the A220-100, which has its own slot.
+                  excludedTypecodes: ["BCS1"]),
         ]),
         .init(id: "fam-a380", type: .wide, title: "Airbus A380", entries: [
             .init(id: "fa380", canonicalName: "A380-800", rarity: .epic,
@@ -769,14 +777,19 @@ nonisolated enum CardSets {
                   representativeTypecode: "C182"),
             .init(id: "fc185", canonicalName: "Cessna 180 / 185", rarity: .common,
                   modelTokens: ["skywagon", "cessna 180", "cessna 185"], summary: "Taildragger workhorse. Bush and floats.",
-                  representativeTypecode: "C185"),
+                  representativeTypecode: "C185",
+                  // The 207 is also marketed as a Skywagon; it belongs in the 206 / 207 slot.
+                  excludedTypecodes: ["C207"]),
             .init(id: "fc195", canonicalName: "Cessna 195", rarity: .common,
                   modelTokens: ["cessna 195", "195 (lc-126)"],
                   summary: "Postwar radial-engine cabin single with a classic tailwheel stance.",
                   representativeTypecode: "C195"),
             .init(id: "fc206", canonicalName: "Cessna 206 / 207", rarity: .common,
                   modelTokens: ["cessna 206", "c206", "206", "stationair", "cessna 207"], summary: "Hauler / floatplane single.",
-                  representativeTypecode: "C206"),
+                  representativeTypecode: "C206",
+                  // The bare "206" token also matches "Bell 206 JetRanger" and the
+                  // 206LT TwinRanger, which belong in the Helicopters family.
+                  excludedTypecodes: ["B06", "B06T"]),
             .init(id: "fc208", canonicalName: "Cessna 208 Caravan", rarity: .common,
                   modelTokens: ["caravan", "c208", "208"], summary: "Single turboprop utility hauler.",
                   representativeTypecode: "C208"),
@@ -885,7 +898,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "BE58"),
             .init(id: "fbe20", canonicalName: "King Air 200", rarity: .uncommon,
                   modelTokens: ["king air 200", "super king air", "be20", "b200"], summary: "The ubiquitous business turboprop.",
-                  representativeTypecode: "BE20"),
+                  representativeTypecode: "BE20",
+                  // The King Air 350 is a "Super King Air" too; B350 has its own slot.
+                  excludedTypecodes: ["B350"]),
             .init(id: "fb350", canonicalName: "King Air 350", rarity: .uncommon,
                   modelTokens: ["king air 350", "b350"], summary: "Stretched King Air.",
                   representativeTypecode: "B350"),
@@ -1311,7 +1326,9 @@ nonisolated enum CardSets {
             .init(id: "fv-t6", canonicalName: "T-6 Texan", rarity: .rare,
                   modelTokens: ["texan", "harvard", "at-6"], summary: "WWII advanced trainer. The airshow growl.",
                   representativeTypecode: "T6",
-                  excludedTypecodes: ["TEX2"]),
+                  // "at-6" is also a substring of the Air Tractor AT-602 and the
+                  // FMA IA-63 Pampa ("AT-63").
+                  excludedTypecodes: ["TEX2", "AT6T", "IA63"]),
             .init(id: "fv-cj6", canonicalName: "Nanchang CJ-6", rarity: .rare,
                   modelTokens: ["nanchang cj-6", "hongdu cj-6", "hongdu bt-6"],
                   summary: "Chinese military trainer now commonly flown as a warbird.",
@@ -1763,27 +1780,5 @@ nonisolated enum CardSets {
     /// note on `status(of:against:)` about batching many sets via keys.
     static func progress(of set: CardSet, against catches: [Catch]) -> (caught: Int, total: Int) {
         progress(of: set, againstKeys: matchKeys(for: catches))
-    }
-
-    /// The set list for a given browser lens.
-    static func sets(for lens: SetLens) -> [CardSet] {
-        switch lens {
-        case .type:   return all
-        case .family: return families
-        }
-    }
-}
-
-/// The two ways to slice the collection in the Sets browser.
-///   .type   — broad category (every narrow-body together)   → `CardSets.all`
-///   .family — airframe lineage (every 737 variant together) → `CardSets.families`
-nonisolated enum SetLens: String, CaseIterable, Identifiable, Sendable {
-    case type, family
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .type:   return "By Type"
-        case .family: return "By Family"
-        }
     }
 }
