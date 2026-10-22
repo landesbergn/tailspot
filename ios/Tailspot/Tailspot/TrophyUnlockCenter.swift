@@ -18,14 +18,14 @@
 import Foundation
 import Combine
 
-/// The one-time "trophy case" recap shown on first launch after a roster
-/// expansion (or the very first seed), so existing testers get one
-/// celebratory moment instead of a per-trophy celebration flood. Carries
-/// the full earned set so the recap sheet can render the actual trophies,
-/// not just a count.
+/// The one-time "trophy case" recap shown on the very first seed (every
+/// earned trophy) or on first launch after a roster bump (only the trophies
+/// that bump newly acknowledged), so existing testers get one celebratory
+/// moment instead of a per-trophy celebration flood. Carries the trophies
+/// themselves so the recap sheet can render them, not just a count.
 nonisolated struct TrophyRecap: Equatable, Sendable {
-    /// Every achievement earned under the CURRENT roster, in roster order
-    /// (earned secrets included — earning reveals them, house rule).
+    /// The recapped achievements, in roster order (earned secrets included
+    /// — earning reveals them, house rule).
     let achievements: [Achievement]
     var earned: Int { achievements.count }
 }
@@ -79,18 +79,34 @@ final class TrophyUnlockCenter: ObservableObject {
     ///    roster grew since this device last seeded, so newly-added trophies
     ///    the user already qualifies for (e.g. Four Figures on an existing
     ///    2,000-point Hangar) are acknowledged silently and recapped as ONE
-    ///    "trophy case" moment instead of a toast flood.
+    ///    "trophy case" moment instead of a toast flood. That recap lists
+    ///    ONLY what the reseed newly acknowledged (earned now, not in the
+    ///    previous ledger) — a user with nothing new sees no recap — and
+    ///    each of those fires `trophy_unlocked` with `via: "reseed"` so the
+    ///    bump's effect is visible in analytics.
     /// Both stamp the current roster version and queue the recap only when
-    /// something is actually earned — a fresh install never sees it.
+    /// it has something to show — a fresh install never sees it.
     /// Callers should fire this once at app launch so the seed lands before
     /// the user's first crossing.
     func enqueueNewUnlocks(from catches: [Catch]) {
         let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
         recordDatesWithinBudget(catches: catches, inputs: inputs)
-        guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
+        guard ledger.isSeeded else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
-            queueRecapIfNeeded(inputs: inputs)
+            queueRecap(roster.filter { $0.isEarned(inputs: inputs) })
+            return
+        }
+        guard ledger.rosterVersion >= rosterVersion else {
+            // Diff BEFORE the seed overwrites the ledger: these are the
+            // trophies this reseed is about to acknowledge for the first time.
+            let newlyAcknowledged = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
+            TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
+            ledger.markRosterVersion(rosterVersion)
+            for event in newlyAcknowledged {
+                Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
+            }
+            queueRecap(newlyAcknowledged.map(\.achievement))
             return
         }
         let fresh = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
@@ -148,13 +164,22 @@ final class TrophyUnlockCenter: ObservableObject {
         let alreadyShown = ledger.acknowledgedOrdinal(for: event.achievementID) >= event.newTier.ordinal
         ledger.setAcknowledged(event.newTier.ordinal, for: event.achievementID)
         guard !alreadyShown else { return }
-        Analytics.capture("trophy_unlocked", [
+        Analytics.capture("trophy_unlocked", Self.unlockProperties(event))
+    }
+
+    /// `trophy_unlocked` properties. `via` is set only for unlocks granted
+    /// without a toast (`"reseed"`: a roster-bump reseed acknowledged it);
+    /// a live toast carries no `via`, the shape it has always had.
+    static func unlockProperties(_ event: TrophyUnlockEvent, via: String? = nil) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
             "achievement": .string(event.achievementID),
             "title": .string(event.achievement.title),
             "tier": .string(event.newTier.rawValue),
             "kind": .string(event.kind == .badgeEarned ? "badge" : "tier_up"),
             "secret": .bool(event.achievement.secret),
-        ])
+        ]
+        if let via { props["via"] = .string(via) }
+        return props
     }
 
     /// Pop the head after it's been seen (tap-to-dismiss advances the queue).
@@ -184,12 +209,12 @@ final class TrophyUnlockCenter: ObservableObject {
         pendingRecap = nil
     }
 
-    private func queueRecapIfNeeded(inputs: TrophyProgressInputs) {
-        let earned = roster.filter { $0.isEarned(inputs: inputs) }
-        // Nothing earned (fresh install, or an install that never caught) →
-        // no recap; the version stamp is already written, so no re-check.
-        guard !earned.isEmpty else { return }
-        pendingRecap = TrophyRecap(achievements: earned)
+    private func queueRecap(_ achievements: [Achievement]) {
+        // Nothing to show (fresh install, an install that never caught, or a
+        // roster bump that changed nothing for this user) → no recap; the
+        // version stamp is already written, so no re-check.
+        guard !achievements.isEmpty else { return }
+        pendingRecap = TrophyRecap(achievements: achievements)
     }
 
     #if DEBUG

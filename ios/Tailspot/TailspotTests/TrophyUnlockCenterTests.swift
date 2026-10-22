@@ -158,27 +158,81 @@ struct TrophyUnlockCenterTests {
     /// An EXISTING tester: seeded ledger, but stamped behind the current
     /// roster generation. The next enqueue must RESEED — silently
     /// acknowledging trophies the new roster hands them — and present ONE
-    /// recap instead of an unlock flood.
+    /// recap of just those, instead of an unlock flood.
     @Test func staleRosterStampReseedsAndRecapsWithoutFlood() {
         let ledger = freshLedger()
-        // Yesterday's build: seeded under roster version 1 (a center pinned
-        // to version 1 over the SAME ledger + roster).
-        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
-        old.enqueueNewUnlocks(from: catches(3, legendary: 1))   // seeds; medal gold + badge earned
+        // Yesterday's build: roster version 1 WITHOUT the badge (a center
+        // pinned to version 1 over the SAME ledger), so its seed acknowledged
+        // only the medal.
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster.filter { $0.id != "b" }, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(3, legendary: 1))   // seeds; medal gold earned
+        old.dismissRecap()
         #expect(ledger.rosterVersion == 1)
 
-        // Today's build (version 2). Same Hangar → reseed + recap, NO events.
+        // Today's build (version 2) adds the badge, already qualified for →
+        // reseed + a recap of ONLY the badge (the medal was already
+        // acknowledged), NO events.
         let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
         new.enqueueNewUnlocks(from: catches(3, legendary: 1))
         #expect(new.pendingEvents.isEmpty, "version bump must absorb, not flood")
-        #expect(new.pendingRecap?.earned == 2)
+        #expect(new.pendingRecap?.achievements.map(\.id) == ["b"])
         #expect(ledger.rosterVersion == 2)
+        #expect(ledger.acknowledgedOrdinal(for: "b") == TrophyTier.silver.ordinal)
 
         // After the stamp, normal diffing resumes (no recap re-queues).
         new.dismissRecap()
         new.enqueueNewUnlocks(from: catches(3, legendary: 1))
         #expect(new.pendingRecap == nil)
         #expect(new.pendingEvents.isEmpty)
+    }
+
+    /// A roster bump that hands this user NOTHING new (everything earned was
+    /// already in the ledger) restamps silently: no recap of old trophies.
+    @Test func staleStampWithNothingNewQueuesNoRecap() {
+        let ledger = freshLedger()
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(3, legendary: 1))   // medal gold + badge
+        old.dismissRecap()
+        let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
+        new.enqueueNewUnlocks(from: catches(3, legendary: 1))
+        #expect(new.pendingRecap == nil)
+        #expect(new.pendingEvents.isEmpty)
+        #expect(ledger.rosterVersion == 2)
+    }
+
+    /// A medal that climbed a tier while the stamp was stale (e.g. tiers
+    /// earned on a build that hadn't diffed yet) is part of what the reseed
+    /// newly acknowledges, so it is recapped too.
+    @Test func staleStampRecapsATierClimbTheLedgerHadNotSeen() {
+        let ledger = freshLedger()
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(1))   // seed at bronze
+        old.dismissRecap()
+        let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
+        new.enqueueNewUnlocks(from: catches(2))   // silver, never acknowledged
+        #expect(new.pendingRecap?.achievements.map(\.id) == ["m"])
+        #expect(new.pendingEvents.isEmpty)
+    }
+
+    /// The first-ever seed (unseeded ledger) still recaps the WHOLE earned
+    /// set — that is the "you have a trophy case" introduction.
+    @Test func firstSeedStillRecapsEverythingEarned() {
+        let center = TrophyUnlockCenter(ledger: freshLedger(), roster: roster)
+        center.enqueueNewUnlocks(from: catches(3, legendary: 1))
+        #expect(center.pendingRecap?.achievements.map(\.id) == ["m", "b"])
+    }
+
+    /// `trophy_unlocked` shape: a live toast keeps its historical keys (no
+    /// `via`); a reseed grant is marked `via: "reseed"`.
+    @Test func unlockPropertiesMarkReseedGrants() {
+        let event = TrophyUnlockEvent(achievement: roster[1], newTier: .silver, kind: .badgeEarned)
+        let live = TrophyUnlockCenter.unlockProperties(event)
+        #expect(live["via"] == nil)
+        #expect(live["achievement"]?.jsonValue as? String == "b")
+        #expect(live["kind"]?.jsonValue as? String == "badge")
+        let reseed = TrophyUnlockCenter.unlockProperties(event, via: "reseed")
+        #expect(reseed["via"]?.jsonValue as? String == "reseed")
+        #expect(Set(reseed.keys) == Set(live.keys).union(["via"]))
     }
 
     /// A seeded-but-stale ledger with NOTHING earned (installed, never

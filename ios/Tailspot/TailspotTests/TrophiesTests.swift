@@ -962,9 +962,9 @@ struct TrophiesUnearnableFixTests {
     private let press = Date(timeIntervalSince1970: 1_716_000_000)
 
     private func mk(icao: String = String(UUID().uuidString.prefix(6)).lowercased(),
-                    typecode: String? = nil, model: String? = nil,
+                    typecode: String? = nil, model: String? = nil, manufacturer: String? = nil,
                     at: Date = Date(timeIntervalSince1970: 1_716_000_000)) -> Catch {
-        Catch(icao24: icao, callsign: nil, model: model, manufacturer: nil,
+        Catch(icao24: icao, callsign: nil, model: model, manufacturer: manufacturer,
               caughtAt: at, observerLat: 0, observerLon: 0,
               slantDistanceMeters: 1000, typecode: typecode)
     }
@@ -1024,8 +1024,8 @@ struct TrophiesUnearnableFixTests {
     }
 
     @Test func fiveVintageCatchesEarnLivingHistory() {
-        // Living History counts CATCHES, not distinct models: three repeat
-        // DC-3s plus two Stearmans is five.
+        // Living History counts distinct AIRFRAMES, not distinct models:
+        // three different DC-3 airframes plus two Stearmans is five.
         let catches = [mk(typecode: "DC3"), mk(typecode: "DC3"), mk(typecode: "DC3"),
                        mk(typecode: "ST75"), mk(typecode: "ST75", model: "75 Kaydet")]
         let inputs = Trophies.inputs(from: catches)
@@ -1041,7 +1041,8 @@ struct TrophiesUnearnableFixTests {
         #expect(without.distinctTypes == 6)
         #expect(ach("fulldeck").isEarned(inputs: without) == false)
         let with = Trophies.inputs(from: six + [mk(typecode: "DC3")])
-        #expect(with.distinctTypes == 7)
+        #expect(with.distinctTypes == 6)   // the DC-3 is GA in the table
+        #expect(with.fullDeckTypes == 7)
         #expect(ach("fulldeck").isEarned(inputs: with))
     }
 
@@ -1055,6 +1056,64 @@ struct TrophiesUnearnableFixTests {
         let naive = catches.filter { c in vintage.entries.contains { CardSets.matches(catch: c, entry: $0) } }.count
         #expect(naive == 5)
         #expect(Trophies.inputs(from: catches).heritageCatches == naive)
+    }
+
+    @Test func oneResidentAirframeCaughtRepeatedlyIsOneHeritage() {
+        // The local Cub caught on five different days is ONE heritage
+        // aircraft — Living History needs five airframes, not five rows.
+        let day: Double = 86_400
+        let cub = (0..<5).map { i in
+            mk(icao: "a1cub1", typecode: "PA18", model: "PA-18 Super Cub",
+               at: press.addingTimeInterval(Double(i) * day))
+        }
+        let inputs = Trophies.inputs(from: cub)
+        #expect(inputs.heritageCatches == 1)
+        #expect(ach("heritage").isEarned(inputs: inputs))
+        #expect(ach("heritage2").isEarned(inputs: inputs) == false)
+    }
+
+    @Test func modernLookalikesAreNotHeritage() {
+        // Names that hit a vintage token but are modern airframes.
+        let modern = [
+            mk(typecode: "CC11", model: "CC11-160 Carbon Cub SS"),         // CubCrafters, by typecode
+            mk(typecode: nil, model: "Carbon Cub EX-3"),                   // CubCrafters, by token
+            mk(typecode: "TEX2", model: "T-6A Texan II"),                  // Beechcraft, by typecode
+            mk(typecode: nil, model: "T-6A Texan II"),                     // no typecode, by token
+            mk(typecode: nil, model: "T-6A Texan", manufacturer: "RAYTHEON AIRCRAFT CO"),  // by builder
+            mk(typecode: nil, model: "AT-6B Wolverine", manufacturer: "TEXTRON AVIATION"),
+            mk(typecode: "TEXA", model: "Texan"),                          // Fly Synthesis microlight
+        ]
+        #expect(Trophies.inputs(from: modern).heritageCatches == 0)
+        // The real warbird with the same "T-6A Texan" model string still counts.
+        let warbird = mk(typecode: nil, model: "T-6A Texan", manufacturer: "NORTH AMERICAN")
+        #expect(Trophies.inputs(from: modern + [warbird]).heritageCatches == 1)
+        #expect(Trophies.inputs(from: [mk(typecode: "T6", model: "T-6G Texan")]).heritageCatches == 1)
+    }
+
+    @Test func superCubStillCountsAsHeritage() {
+        // Open taste call (Noah): until decided, the PA-18 keeps its credit.
+        #expect(Trophies.inputs(from: [mk(typecode: "PA18", model: "PA-18 Super Cub")]).heritageCatches == 1)
+    }
+
+    @Test func vintageCatchDoesNotInflateVarietyPack() {
+        // Four table types, one of them GA via a DC-3. The heritage stand-in
+        // is Full Deck's alone: Variety Pack (and the Hangar chips) see 4.
+        let four = [mk(typecode: "B738"), mk(typecode: "B789"), mk(typecode: "E75L"), mk(typecode: "DC3")]
+        let inputs = Trophies.inputs(from: four)
+        #expect(inputs.distinctTypes == 4)
+        #expect(inputs.fullDeckTypes == 5)
+        #expect(ach("varietypack").isEarned(inputs: inputs) == false)
+    }
+
+    @Test func memberwiseInputsDefaultFullDeckToDistinctTypes() {
+        // Call sites that only set distinctTypes keep Full Deck's old reading.
+        let inputs = TrophyProgressInputs(
+            totalCatches: 0, uniqueAirframes: 0, wideBodyCatches: 0, regionalCatches: 0,
+            heritageCatches: 0, rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
+            rarePlusUnique: 0, longestSlantKm: 0, bestMultiCatchCount: 0, nightCatches: 0,
+            distinctTypes: 7)
+        #expect(inputs.fullDeckTypes == 7)
+        #expect(ach("fulldeck").isEarned(inputs: inputs))
     }
 
     // MARK: Roster bump → one recap
@@ -1081,8 +1140,10 @@ struct TrophiesUnearnableFixTests {
         let new = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
         new.enqueueNewUnlocks(from: hangar)
         #expect(new.pendingEvents.isEmpty, "the bump must absorb, not toast each trophy")
+        // The recap carries ONLY what the reseed newly acknowledged — not
+        // First Catch & co., which the old ledger already had.
         let recapIDs = Set(new.pendingRecap?.achievements.map(\.id) ?? [])
-        #expect(recapIDs.isSuperset(of: newlyEarnable))
+        #expect(recapIDs == Set(newlyEarnable))
         #expect(ledger.rosterVersion == 4)
 
         // Once dismissed, a re-diff stays quiet.
