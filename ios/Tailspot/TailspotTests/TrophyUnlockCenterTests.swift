@@ -305,4 +305,109 @@ struct TrophyUnlockCenterTests {
         center.enqueueNewUnlocks(from: [c1, c2])
         #expect(center.pendingEvents.contains { $0.achievementID == "mrworldwide" })
     }
+
+    // MARK: - Inputs memo (2026-10 large-Hangar perf)
+
+    /// Re-diffing an unchanged Hangar (sheet close, grounded tap with no new
+    /// event) reuses the memoized inputs: no second full pass.
+    @Test func unchangedRediffReusesInputs() {
+        let suite = isolatedSuite()
+        let center = TrophyUnlockCenter(ledger: freshLedger(), roster: roster,
+                                        events: TrophyEventStore(defaults: suite),
+                                        standing: LeaderboardStandingCache(defaults: suite))
+        let hangar = catches(3)
+        center.enqueueNewUnlocks(from: hangar)
+        #expect(center.fullInputsPasses == 1)
+        center.enqueueNewUnlocks(from: hangar)
+        center.enqueueNewUnlocks(from: hangar)
+        #expect(center.fullInputsPasses == 1)
+    }
+
+    /// A memo hit still runs the ledger diff, so an event parked at the head
+    /// survives and a crossing that was queued isn't lost or duplicated.
+    @Test func memoHitStillDiffsAgainstTheLedger() {
+        let suite = isolatedSuite()
+        let ledger = freshLedger()
+        let center = TrophyUnlockCenter(ledger: ledger, roster: roster,
+                                        events: TrophyEventStore(defaults: suite),
+                                        standing: LeaderboardStandingCache(defaults: suite))
+        let one = catches(1)
+        center.enqueueNewUnlocks(from: one)                 // seed bronze
+        let two = one + catches(1)
+        center.enqueueNewUnlocks(from: two)                 // silver event
+        #expect(center.pendingEvents.map(\.newTier) == [.silver])
+        center.enqueueNewUnlocks(from: two)                 // memo hit: deduped, not dropped
+        #expect(center.pendingEvents.map(\.newTier) == [.silver])
+        center.markShown(center.head!)
+        center.advance()
+        center.enqueueNewUnlocks(from: two)                 // memo hit: acknowledged stays quiet
+        #expect(center.pendingEvents.isEmpty)
+        #expect(center.fullInputsPasses == 2)
+    }
+
+    /// The bonus round stamps `guessCorrect` after the row is saved, and
+    /// `CatchFingerprint` doesn't hash it. The memo key must, or a correct
+    /// call would never celebrate Sharp Eye-style trophies.
+    @Test func lateGuessVerdictBustsTheMemo() {
+        let suite = isolatedSuite()
+        let guessRoster = [Achievement(
+            id: "g", title: "Guesser", summary: "", iconName: "catcher",
+            tiers: [.init(tier: .silver, at: 1)],
+            progress: { $0.correctGuesses }
+        )]
+        let center = TrophyUnlockCenter(ledger: freshLedger(), roster: guessRoster,
+                                        events: TrophyEventStore(defaults: suite),
+                                        standing: LeaderboardStandingCache(defaults: suite))
+        let hangar = catches(2)
+        center.enqueueNewUnlocks(from: hangar)              // seed: no guesses yet
+        #expect(center.pendingEvents.isEmpty)
+        hangar[1].guessCorrect = true                       // the reveal's verdict
+        center.enqueueNewUnlocks(from: hangar)
+        #expect(center.pendingEvents.map(\.achievementID) == ["g"])
+        #expect(center.fullInputsPasses == 2)
+    }
+
+    /// The grounded easter egg records an event and re-diffs the SAME
+    /// Hangar; the event count is in the memo key, so Ground Stop fires now.
+    @Test func groundedEventBustsTheMemo() {
+        let suite = isolatedSuite()
+        let events = TrophyEventStore(defaults: suite)
+        let center = TrophyUnlockCenter(ledger: freshLedger(), events: events,
+                                        standing: LeaderboardStandingCache(defaults: suite))
+        let hangar = catches(1)
+        center.enqueueNewUnlocks(from: hangar)              // seed
+        events.record(.groundedCatchAttempt)
+        center.enqueueNewUnlocks(from: hangar)
+        #expect(center.pendingEvents.contains { $0.achievementID == "groundstop" })
+    }
+
+    /// Typecode backfill (CatchBackfill / CatchDetailView) changes rarity on
+    /// an existing row without changing the count — the memo must recompute.
+    @Test func typecodeBackfillBustsTheMemo() {
+        let suite = isolatedSuite()
+        let center = TrophyUnlockCenter(ledger: freshLedger(), roster: roster,
+                                        events: TrophyEventStore(defaults: suite),
+                                        standing: LeaderboardStandingCache(defaults: suite))
+        let hangar = catches(3)
+        center.enqueueNewUnlocks(from: hangar)              // seed: no legendary
+        hangar[0].typecode = "B2"                           // backfill → legendary tier
+        center.enqueueNewUnlocks(from: hangar)
+        #expect(center.pendingEvents.map(\.achievementID) == ["b"])
+    }
+
+    /// Legacy rows (no frozen day key) bucket in the CURRENT zone, and the
+    /// hour-of-day trophies always do, so the token carries the zone.
+    @Test func tokenTracksTimeZoneAndDayKey() {
+        let hangar = catches(2)
+        let suite = isolatedSuite()
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let la = TimeZone(identifier: "America/Los_Angeles")!
+        let bali = TimeZone(identifier: "Asia/Makassar")!
+        let base = TrophyInputsToken.of(hangar, events: events, standing: standing, timeZone: la)
+        #expect(TrophyInputsToken.of(hangar, events: events, standing: standing, timeZone: la) == base)
+        #expect(TrophyInputsToken.of(hangar, events: events, standing: standing, timeZone: bali) != base)
+        hangar[0].caughtDayKey = nil
+        #expect(TrophyInputsToken.of(hangar, events: events, standing: standing, timeZone: la) != base)
+    }
 }

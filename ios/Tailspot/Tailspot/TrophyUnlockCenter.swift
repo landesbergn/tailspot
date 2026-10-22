@@ -30,6 +30,48 @@ nonisolated struct TrophyRecap: Equatable, Sendable {
     var earned: Int { achievements.count }
 }
 
+/// Content token for everything `Trophies.inputs` reads, so a caller can
+/// memoize the inputs and skip the full-Hangar pass when nothing changed.
+///
+/// `CatchFingerprint` covers the row fields the Hangar views read, but
+/// `Trophies.inputs` reads three more things it doesn't hash:
+///  • `guessCorrect` — the bonus round sets it AFTER the row is saved, and
+///    it drives Sharp Eye / Hot Streak;
+///  • `caughtDayKey` — the frozen streak day (nil on legacy rows, which
+///    then bucket in the CURRENT time zone);
+///  • the current time zone itself — the hour-of-day trophies (night,
+///    red-eye, dawn, weekend) read `caughtAt` through a calendar in the
+///    phone's zone, so flying home can change them without a row edit.
+/// Plus the two UserDefaults-backed stores (grounded easter-egg events,
+/// cached leaderboard standing). Missing any of these would serve stale
+/// inputs, and a stale input is a missed (or late) celebration.
+///
+/// Cost: two cheap hashing passes over the rows — a few field reads each,
+/// far less than one `inputs` pass (no rarity/type lookups, no set
+/// matching, no calendar math).
+enum TrophyInputsToken {
+    static func of(
+        _ catches: [Catch],
+        events: TrophyEventStore = TrophyEventStore(),
+        standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        timeZone: TimeZone = .current
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(CatchFingerprint.of(catches))
+        for c in catches {
+            hasher.combine(c.guessCorrect)
+            hasher.combine(c.caughtDayKey)
+        }
+        hasher.combine(timeZone.identifier)
+        for event in TrophyEventStore.Event.allCases {
+            hasher.combine(events.count(of: event))
+        }
+        hasher.combine(standing.weeklyWins)
+        hasher.combine(standing.everToppedAllTime)
+        return hasher.finalize()
+    }
+}
+
 @MainActor
 final class TrophyUnlockCenter: ObservableObject {
     /// FIFO queue of newly-crossed trophies awaiting their moment.
@@ -51,6 +93,21 @@ final class TrophyUnlockCenter: ObservableObject {
     /// Achievement dates the last synchronous pass ran out of budget for —
     /// drained by `finishAchievementDates()` off the launch path.
     private var pendingDateBackfill: (catches: [Catch], inputs: TrophyProgressInputs)?
+    /// The last inputs this center computed, keyed by `TrophyInputsToken`.
+    /// Most re-diffs see an unchanged Hangar — every sheet close, a grounded
+    /// tap, the second diff of a catch whose geocode found nothing new — and
+    /// on a big Hangar each full `Trophies.inputs` pass is hundreds of ms on
+    /// the main thread (0.42 s at 4,600 catches). A token match reuses these
+    /// inputs, so those re-diffs cost a hashing pass instead.
+    private var memo: (token: Int, inputs: TrophyProgressInputs)?
+
+    #if DEBUG
+    /// How many full-Hangar `Trophies.inputs` passes this center has run
+    /// (memo misses). Test-only instrumentation: LargeHangarBudgetTests pins
+    /// "an unchanged diff does 0 passes, one new catch does exactly 1" so
+    /// the next per-catch cost slip fails a test instead of a big Hangar.
+    private(set) var fullInputsPasses = 0
+    #endif
 
     init(
         ledger: UserDefaultsTrophyLedger = UserDefaultsTrophyLedger(),
@@ -84,9 +141,21 @@ final class TrophyUnlockCenter: ObservableObject {
     /// something is actually earned — a fresh install never sees it.
     /// Callers should fire this once at app launch so the seed lands before
     /// the user's first crossing.
+    ///
+    /// Memoized: when the Hangar (and the event/standing stores) haven't
+    /// changed since the last call, the previous inputs are reused and the
+    /// bounded date pass is skipped — it already ran for these exact inputs,
+    /// and anything it parked is still parked. The ledger diff itself always
+    /// runs (it's cheap), so acknowledgments made since the last call count.
     func enqueueNewUnlocks(from catches: [Catch]) {
-        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
-        recordDatesWithinBudget(catches: catches, inputs: inputs)
+        let token = TrophyInputsToken.of(catches, events: events, standing: standing)
+        let inputs: TrophyProgressInputs
+        if let memo, memo.token == token {
+            inputs = memo.inputs
+        } else {
+            inputs = computeInputs(catches, token: token)
+            recordDatesWithinBudget(catches: catches, inputs: inputs)
+        }
         guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
@@ -107,12 +176,24 @@ final class TrophyUnlockCenter: ObservableObject {
     /// and must not re-toast one by one. Deliberately NO recap either: the
     /// restore success screen is the moment; a second overlay would pile on.
     func reseedAfterRestore(from catches: [Catch]) {
-        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
+        let token = TrophyInputsToken.of(catches, events: events, standing: standing)
+        let inputs = computeInputs(catches, token: token)
         recordDatesWithinBudget(catches: catches, inputs: inputs)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
         // predates it and is now stale relative to the seeded state.
         pendingEvents.removeAll()
+    }
+
+    /// The one place this center runs a full-Hangar `Trophies.inputs` pass;
+    /// stores the result as the memo for `token`.
+    private func computeInputs(_ catches: [Catch], token: Int) -> TrophyProgressInputs {
+        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
+        memo = (token, inputs)
+        #if DEBUG
+        fullInputsPasses += 1
+        #endif
+        return inputs
     }
 
     /// Date what one prefix pass can — the newest-catch fast path, which
