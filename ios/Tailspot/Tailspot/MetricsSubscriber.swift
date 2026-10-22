@@ -24,9 +24,11 @@
 //
 //  Diagnostic payloads (MXDiagnosticPayload, iOS 14+) are processed
 //  separately: one `metrickit_crash` event per crash and one `metrickit_hang`
-//  per hang diagnostic, each with the build it came from and the top 8 frames
-//  of the crashed or hung thread as binary name + offset + binary UUID (and,
-//  for crashes, the exception, signal and termination reason). That is enough
+//  per hang diagnostic, each with the build it came from, the top 8 frames
+//  of the crashed or hung thread, and the first 5 frames from the Tailspot
+//  binary itself (system frames usually fill the top 8), all as binary name +
+//  offset + binary UUID (and, for crashes, the exception, signal and
+//  termination reason). That is enough
 //  to symbolicate with `atos` against the archived dSYM without App Store
 //  Connect. No file paths or user data: MetricKitParser documents exactly
 //  what is kept.

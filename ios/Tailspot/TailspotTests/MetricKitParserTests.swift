@@ -124,6 +124,79 @@ struct MetricKitParserTests {
         #expect(!parsed.topFrames.contains { $0.hasPrefix("libsystem_kernel") })
     }
 
+    /// The realistic shape: an uncaught-exception SIGABRT with 12 system
+    /// frames (abort machinery, objc/C++ terminate, CoreFoundation) on top of
+    /// the first Tailspot frame, then 7 more Tailspot frames.
+    private static func systemOnTopCrashJSON() -> Data {
+        var chain: [(String, Int, String)] = [
+            ("libsystem_kernel.dylib", 0x1, coreUUID), ("libsystem_pthread.dylib", 0x2, coreUUID),
+            ("libsystem_c.dylib", 0x3, coreUUID), ("libc++abi.dylib", 0x4, coreUUID),
+            ("libc++abi.dylib", 0x5, coreUUID), ("libobjc.A.dylib", 0x6, coreUUID),
+            ("libc++abi.dylib", 0x7, coreUUID), ("libc++abi.dylib", 0x8, coreUUID),
+            ("libobjc.A.dylib", 0x9, coreUUID), ("CoreFoundation", 0xa, coreUUID),
+            ("CoreData", 0xb, coreUUID), ("SwiftData", 0xc, coreUUID),
+        ]
+        for i in 0..<8 { chain.append(("Tailspot", 0x2000 + i, appUUID)) }
+        let json: [String: Any] = [
+            "diagnosticMetaData": ["appBuildVersion": "107", "signal": 6, "exceptionType": 10],
+            "callStackTree": ["callStacks": [[
+                "threadAttributed": true,
+                "callStackRootFrames": [frameChain(chain)],
+            ]]],
+        ]
+        return try! JSONSerialization.data(withJSONObject: json)
+    }
+
+    @Test func appFramesReachPastSystemFramesOnTop() {
+        let parsed = MetricKitParser.parseDiagnostic(Self.systemOnTopCrashJSON(), appBinaryName: "Tailspot")
+        // The top 8 never reach our code: that is exactly why app_frames exists.
+        #expect(parsed.topFrames.count == MetricKitParser.maxFrames)
+        #expect(!parsed.topFrames.contains { $0.hasPrefix("Tailspot+") })
+        #expect(parsed.firstAppFrameIndex == 12)
+        #expect(parsed.appFrames.count == MetricKitParser.maxAppFrames)
+        #expect(parsed.appFrames.first == "Tailspot+0x2000 (\(Self.appUUID))")
+        #expect(parsed.appFrames.last == "Tailspot+0x2004 (\(Self.appUUID))")
+
+        let props = MetricKitParser.crashProperties(
+            diagnosticJSON: Self.systemOnTopCrashJSON(), appBinaryName: "Tailspot")
+        let appFrames = string(props["app_frames"])?.split(separator: "\n") ?? []
+        #expect(appFrames.count == MetricKitParser.maxAppFrames)
+        #expect(appFrames.first == "Tailspot+0x2000 (\(Self.appUUID))")
+        #expect(int(props["first_app_frame_index"]) == 12)
+        #expect(string(props["signal_name"]) == "SIGABRT")
+    }
+
+    @Test func noAppFrameMeansNoAppFramesField() {
+        // Same stack, but the app binary is named something else: the walk
+        // finds no app frame, so the field is absent rather than empty.
+        let props = MetricKitParser.crashProperties(
+            diagnosticJSON: Self.systemOnTopCrashJSON(), appBinaryName: "SomeOtherApp")
+        #expect(bool(props["parse_ok"]) == true)
+        #expect(props["app_frames"] == nil)
+        #expect(props["first_app_frame_index"] == nil)
+    }
+
+    @Test func stackWalkIsBounded() {
+        // A 300-deep system-only stack with our frame below the walk limit.
+        var chain = (0..<300).map { ("libdeep.dylib", $0, Self.coreUUID) }
+        chain.append(("Tailspot", 0x1, Self.appUUID))
+        let tree: [String: Any] = ["callStacks": [[
+            "threadAttributed": true, "callStackRootFrames": [Self.frameChain(chain)],
+        ]]]
+        let walk = MetricKitParser.walkAttributedStack(callStackTree: tree, appBinaryName: "Tailspot")
+        #expect(walk.top.count == MetricKitParser.maxFrames)
+        #expect(walk.app.isEmpty)
+        #expect(walk.firstAppIndex == nil)
+    }
+
+    @Test func appBinaryNameComesFromInfoPlist() {
+        // The test host is the app, so its executable is "Tailspot".
+        #expect(MetricKitParser.appBinaryName == "Tailspot")
+        let parsed = MetricKitParser.parseDiagnostic(Self.crashJSON())
+        #expect(parsed.firstAppFrameIndex == 1)
+        #expect(parsed.appFrames.first == "Tailspot+0x1e240 (\(Self.appUUID))")
+    }
+
     @Test func terminationReasonIsTruncatedAndCarriesNoPaths() {
         let props = MetricKitParser.crashProperties(diagnosticJSON: Self.crashJSON())
         let reason = string(props["termination_reason"]) ?? ""

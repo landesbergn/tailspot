@@ -51,6 +51,19 @@ nonisolated enum MetricKitParser {
     /// Frames of the crashed/hung thread we keep. Enough to see "which of our
     /// functions was on top" without making the event large.
     static let maxFrames = 8
+    /// Frames of OUR binary we keep, wherever they sit in the stack. A crash
+    /// or hang usually has several system frames on top (abort machinery,
+    /// SwiftData/CoreData/sqlite, mach_msg), so the top 8 alone often never
+    /// reach a Tailspot function; these are the ones that say where we were.
+    static let maxAppFrames = 5
+    /// How far down the stack we walk looking for app frames. A bound, so a
+    /// deep recursion (or a malformed cyclic-looking chain) stays cheap.
+    static let maxWalkFrames = 128
+    /// The app's executable name, which is what MetricKit puts in
+    /// `binaryName` for our own frames. Read from Info.plist so a rename
+    /// can't silently break the match; "Tailspot" if the key is missing.
+    static let appBinaryName: String =
+        Bundle.main.infoDictionary?["CFBundleExecutable"] as? String ?? "Tailspot"
     /// Cap on Apple's free-text termination reason.
     static let maxTerminationReasonLength = 200
     /// Cap on the raw-JSON fallback sent when parsing fails.
@@ -72,6 +85,11 @@ nonisolated enum MetricKitParser {
         var hangDurationSeconds: Double?
         /// "Tailspot+0x1e240 (UUID)" strings, top frame first.
         var topFrames: [String] = []
+        /// The first `maxAppFrames` frames from the app's own binary, top
+        /// first, found anywhere in the first `maxWalkFrames` of the stack.
+        var appFrames: [String] = []
+        /// Stack depth (0 = top) of the first app frame, if there is one.
+        var firstAppFrameIndex: Int?
         /// True when the JSON decoded AND a call stack with frames was found.
         var parseOK: Bool = false
     }
@@ -79,7 +97,7 @@ nonisolated enum MetricKitParser {
     /// Parse one diagnostic's `jsonRepresentation()`. Never throws: malformed
     /// input comes back with `parseOK == false` so the caller can still send
     /// the event (with a raw fallback) instead of losing the crash entirely.
-    static func parseDiagnostic(_ data: Data) -> Diagnostic {
+    static func parseDiagnostic(_ data: Data, appBinaryName: String = MetricKitParser.appBinaryName) -> Diagnostic {
         var out = Diagnostic()
         guard let object = try? JSONSerialization.jsonObject(with: data),
               let root = object as? [String: Any] else {
@@ -98,16 +116,23 @@ nonisolated enum MetricKitParser {
         }
 
         if let tree = root["callStackTree"] as? [String: Any] {
-            out.topFrames = topFrames(callStackTree: tree)
+            let walk = walkAttributedStack(callStackTree: tree, appBinaryName: appBinaryName)
+            out.topFrames = walk.top
+            out.appFrames = walk.app
+            out.firstAppFrameIndex = walk.firstAppIndex
         }
         out.parseOK = !out.topFrames.isEmpty
         return out
     }
 
-    /// The attributed thread's first `maxFrames` frames, top first.
-    static func topFrames(callStackTree tree: [String: Any]) -> [String] {
+    /// Walk the attributed thread's stack once, top first, collecting the
+    /// first `maxFrames` frames AND the first `maxAppFrames` frames from our
+    /// own binary (bounded at `maxWalkFrames` deep).
+    static func walkAttributedStack(callStackTree tree: [String: Any],
+                                    appBinaryName: String = MetricKitParser.appBinaryName)
+        -> (top: [String], app: [String], firstAppIndex: Int?) {
         guard let stacks = tree["callStacks"] as? [[String: Any]], !stacks.isEmpty else {
-            return []
+            return ([], [], nil)
         }
         // `threadAttributed` marks the thread the diagnostic is about (the
         // crashed thread, or the main thread for a hang). Fall back to the
@@ -115,16 +140,32 @@ nonisolated enum MetricKitParser {
         let stack = stacks.first { ($0["threadAttributed"] as? Bool) == true } ?? stacks[0]
         guard let roots = stack["callStackRootFrames"] as? [[String: Any]],
               var frame = roots.first else {
-            return []
+            return ([], [], nil)
         }
 
-        var frames: [String] = []
-        while frames.count < maxFrames {
-            frames.append(describe(frame: frame))
+        var top: [String] = []
+        var app: [String] = []
+        var firstAppIndex: Int?
+        var depth = 0
+        while depth < maxWalkFrames {
+            let isApp = binaryName(string(frame["binaryName"])) == appBinaryName
+            if top.count < maxFrames { top.append(describe(frame: frame)) }
+            if isApp && app.count < maxAppFrames {
+                if firstAppIndex == nil { firstAppIndex = depth }
+                app.append(describe(frame: frame))
+            }
+            // Stop early once both lists are full.
+            if top.count >= maxFrames && app.count >= maxAppFrames { break }
             guard let next = (frame["subFrames"] as? [[String: Any]])?.first else { break }
             frame = next
+            depth += 1
         }
-        return frames
+        return (top, app, firstAppIndex)
+    }
+
+    /// The attributed thread's first `maxFrames` frames, top first.
+    static func topFrames(callStackTree tree: [String: Any]) -> [String] {
+        walkAttributedStack(callStackTree: tree).top
     }
 
     /// "Tailspot+0x1e240 (UUID)". `atos -o Tailspot.dSYM -l 0x0 0x1e240`-style
@@ -161,8 +202,9 @@ nonisolated enum MetricKitParser {
 
     /// Properties for one `metrickit_crash` event.
     static func crashProperties(diagnosticJSON json: Data,
-                                typed: TypedFields = TypedFields()) -> [String: AnalyticsValue] {
-        let parsed = parseDiagnostic(json)
+                                typed: TypedFields = TypedFields(),
+                                appBinaryName: String = MetricKitParser.appBinaryName) -> [String: AnalyticsValue] {
+        let parsed = parseDiagnostic(json, appBinaryName: appBinaryName)
         var props = commonProperties(parsed: parsed, typed: typed, json: json)
         // Kept so the existing "crashes per day" series doesn't break: every
         // event is now exactly one crash.
@@ -188,8 +230,9 @@ nonisolated enum MetricKitParser {
 
     /// Properties for one `metrickit_hang` event.
     static func hangProperties(diagnosticJSON json: Data,
-                               typed: TypedFields = TypedFields()) -> [String: AnalyticsValue] {
-        let parsed = parseDiagnostic(json)
+                               typed: TypedFields = TypedFields(),
+                               appBinaryName: String = MetricKitParser.appBinaryName) -> [String: AnalyticsValue] {
+        let parsed = parseDiagnostic(json, appBinaryName: appBinaryName)
         var props = commonProperties(parsed: parsed, typed: typed, json: json)
         if let seconds = typed.hangDurationSeconds ?? parsed.hangDurationSeconds {
             props["hang_duration_s"] = .double(seconds)
@@ -209,6 +252,14 @@ nonisolated enum MetricKitParser {
         if let os = typed.osVersion ?? parsed.osVersion { props["diag_os_version"] = .string(os) }
         if !parsed.topFrames.isEmpty {
             props["top_frames"] = .string(parsed.topFrames.joined(separator: "\n"))
+            // Absent (not empty) when no app frame was found in the walk, so
+            // "the stack never touched our code" is a filterable state.
+            if !parsed.appFrames.isEmpty {
+                props["app_frames"] = .string(parsed.appFrames.joined(separator: "\n"))
+            }
+            if let index = parsed.firstAppFrameIndex {
+                props["first_app_frame_index"] = .int(index)
+            }
         } else {
             props["raw_fallback"] = .string(rawFallback(json))
         }
