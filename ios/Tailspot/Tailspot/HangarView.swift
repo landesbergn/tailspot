@@ -35,11 +35,10 @@ struct HangarView: View {
         )
     }
 
-    /// One shared namespace for every zoom transition inside this stack
-    /// (tail row → catch detail). Published through the environment so source cells
-    /// and the `navigationDestination` destinations — which live in
-    /// different views — can match by the route's stable id. See
-    /// `HangarZoomNamespace.swift`.
+    /// Shared namespace for zoom transitions inside this stack. Since the
+    /// type-set detail views were deleted, nothing calls `matchedZoomSource`,
+    /// so the catch-detail destination falls back to a standard push. Kept
+    /// so a future source cell can opt back in. See `HangarZoomNamespace.swift`.
     @Namespace private var zoomNamespace
 
     var body: some View {
