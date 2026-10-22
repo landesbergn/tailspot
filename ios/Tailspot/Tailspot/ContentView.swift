@@ -293,7 +293,7 @@ struct ContentView: View {
     /// Empty-sky pill states already reported this session
     /// (`empty_sky_state_shown` fires once per variant per session).
     @State private var emptySkyVariantsReported: Set<ActivationTelemetry.EmptySkyVariant> = []
-    /// When `activationFunnelTick` first ran this session. "Stuck scanning"
+    /// When `emptySkyFunnelTick` first ran this session. "Stuck scanning"
     /// is measured from here.
     @State private var activationSessionStart: Date?
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
@@ -1140,10 +1140,11 @@ struct ContentView: View {
                 .sorted()
                 .joined(separator: ",")
 
-            // first_label_on_screen + empty_sky_state_shown. Runs here at
-            // ~1 Hz, never in the 30 Hz render pass, and before the
-            // first_plane_seen early-return below.
-            activationFunnelTick(observed: observed, interactive: interactive)
+            // first_label_on_screen. Runs here at ~1 Hz, never in the 30 Hz
+            // render pass, and before the first_plane_seen early-return
+            // below. (empty_sky_state_shown runs from the 1 Hz `.task` loop
+            // instead; see `emptySkyFunnelTick`.)
+            activationFunnelTick(interactive: interactive)
 
             // Activation funnel: fire once when the first plane is actually
             // visible (post-filter). The fire is once-per-install (persisted);
@@ -1169,6 +1170,7 @@ struct ContentView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 labelSuppressionTick()
+                emptySkyFunnelTick()
             }
         }
         .sheet(isPresented: replaySheetPresented) {
@@ -1232,36 +1234,47 @@ struct ContentView: View {
         )
     }
 
-    /// The ~1 Hz activation-funnel step, called from the
-    /// `.onReceive(adsb.$observed)` hook (never from `body`). `observed` is
-    /// the value being published, which `adsb.observed` doesn't hold yet.
-    private func activationFunnelTick(observed: [ObservedAircraft], interactive: [ObservedAircraft]) {
+    /// Only count what the user could see: no opaque sheet over the AR
+    /// view, app in the foreground, and no permission recovery card
+    /// standing in for the sky view.
+    private var activationFunnelCanCount: Bool {
+        !arOccluded && scenePhase == .active && !cameraDenied && !locationDenied
+    }
+
+    /// `first_label_on_screen`, called from the `.onReceive(adsb.$observed)`
+    /// hook (never from `body`). `interactive` comes from the value being
+    /// published, which `adsb.observed` doesn't hold yet.
+    private func activationFunnelTick(interactive: [ObservedAircraft]) {
+        guard activationFunnelCanCount, !firstLabelOnScreenLatched else { return }
+        // `interactive` is already empty while labels are suppressed, so a
+        // suppressed frame can't fire it.
+        if ActivationTelemetry.firstLabelOnScreenFired() {
+            firstLabelOnScreenLatched = true
+        } else if !interactive.isEmpty {
+            ActivationTelemetry.fireFirstLabelOnScreenOnce(
+                headingAccuracyDeg: location.headingAccuracy,
+                visibleCount: interactive.count,
+                onScreenCount: onScreenLabelCount(interactive)
+            )
+            firstLabelOnScreenLatched = ActivationTelemetry.firstLabelOnScreenFired()
+        }
+    }
+
+    /// `empty_sky_state_shown`, called once a second from the `.task` loop
+    /// in `body` (next to `labelSuppressionTick`). It deliberately does NOT
+    /// hang off `adsb.$observed`: without a GPS fix ADSBManager never
+    /// publishes, so an observed-driven check would go quiet in exactly the
+    /// "stuck on SCANNING SKY" case it exists to catch.
+    private func emptySkyFunnelTick() {
         let now = Date()
         let sessionStart = activationSessionStart ?? now
         if activationSessionStart == nil { activationSessionStart = now }
+        guard activationFunnelCanCount else { return }
 
-        // Only count what the user could see: no opaque sheet over the AR
-        // view, app in the foreground, and no permission recovery card
-        // standing in for the sky view.
-        guard !arOccluded, scenePhase == .active, !cameraDenied, !locationDenied else { return }
-
-        // first_label_on_screen. `interactive` is already empty while labels
-        // are suppressed, so a suppressed frame can't fire it.
-        if !firstLabelOnScreenLatched {
-            if ActivationTelemetry.firstLabelOnScreenFired() {
-                firstLabelOnScreenLatched = true
-            } else if !interactive.isEmpty {
-                ActivationTelemetry.fireFirstLabelOnScreenOnce(
-                    headingAccuracyDeg: location.headingAccuracy,
-                    visibleCount: interactive.count,
-                    onScreenCount: onScreenLabelCount(interactive)
-                )
-                firstLabelOnScreenLatched = ActivationTelemetry.firstLabelOnScreenFired()
-            }
-        }
-
-        // empty_sky_state_shown: the same counts the empty-sky pill uses
-        // (grounded planes are parked, not "nearby" traffic).
+        // The same counts the empty-sky pill uses (grounded planes are
+        // parked, not "nearby" traffic).
+        let observed = adsb.observed
+        let interactive = interactiveVisible(observed)
         let airborne = observed.filter { !$0.grounded }
         guard let variant = ActivationTelemetry.emptySkyVariant(
             visibleCount: interactive.count,
@@ -1280,7 +1293,8 @@ struct ContentView: View {
             variant: variant,
             rawCount: airborne.count,
             nearestSlantMeters: airborne.map(\.slantDistanceMeters).min(),
-            secondsInSession: secondsInSession
+            secondsInSession: secondsInSession,
+            hasLocation: location.latitude != nil && location.longitude != nil
         )
     }
 

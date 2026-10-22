@@ -315,14 +315,27 @@ struct ActivationTelemetryTests {
 
     @Test func emptySkyPropertiesCarryVariantCountAndNearest() {
         let p = ActivationTelemetry.emptySkyProperties(
-            variant: .nNearby, rawCount: 6, nearestSlantMeters: 31_449, secondsInSession: 12.6)
+            variant: .nNearby, rawCount: 6, nearestSlantMeters: 31_449, secondsInSession: 12.6,
+            hasLocation: true)
         #expect(p["variant"]?.jsonValue as? String == "n-nearby")
+        #expect(p["has_location"]?.jsonValue as? Bool == true)
         #expect(p["raw_count"]?.jsonValue as? Int == 6)
         #expect(p["nearest_slant_km"]?.jsonValue as? Double == 31.4)
         #expect(p["seconds_in_session"]?.jsonValue as? Double == 13)
         let empty = ActivationTelemetry.emptySkyProperties(
-            variant: .noneNearby, rawCount: 0, nearestSlantMeters: nil, secondsInSession: 3)
+            variant: .noneNearby, rawCount: 0, nearestSlantMeters: nil, secondsInSession: 3,
+            hasLocation: true)
         #expect(empty["nearest_slant_km"] == nil)
+    }
+
+    @Test func stuckScanningSaysWhetherThereIsAFix() {
+        // The no-fix case is the common stuck-SCANNING cause; the property
+        // must be present (false), not left off, so the funnel can split on it.
+        let p = ActivationTelemetry.emptySkyProperties(
+            variant: .scanning, rawCount: 0, nearestSlantMeters: nil, secondsInSession: 30,
+            hasLocation: false)
+        #expect(p["variant"]?.jsonValue as? String == "scanning")
+        #expect(p["has_location"]?.jsonValue as? Bool == false)
     }
 
     // MARK: - Permission recovery + location accuracy

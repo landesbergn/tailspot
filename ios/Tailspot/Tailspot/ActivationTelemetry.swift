@@ -31,6 +31,11 @@
 //  pill said, once per variant per session) and the permission recovery
 //  card pair (shown / Open Settings tapped).
 //
+//  empty_sky_state_shown is driven by ContentView's 1 Hz timer loop, not by
+//  the ADS-B publish: with no GPS fix the feed never publishes, and that is
+//  the most common way to be stuck on SCANNING SKY. `has_location` splits
+//  "no fix yet" from "fix, but the feed is slow or failing".
+//
 //  Reading the label milestones: they shipped in 1.2.3. Installs from before
 //  then had already latched ar_first_frame without a timestamp, so they fire
 //  the new events once after updating, WITHOUT `seconds_since_ar_first_frame`.
@@ -238,12 +243,15 @@ nonisolated enum ActivationTelemetry {
         variant: EmptySkyVariant,
         rawCount: Int,
         nearestSlantMeters: Double?,
-        secondsInSession: Double
+        secondsInSession: Double,
+        hasLocation: Bool
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "variant": .string(variant.rawValue),
             "raw_count": .int(rawCount),
             "seconds_in_session": .double(secondsInSession.rounded()),
+            // false = no GPS fix yet, so the feed can't even be asked.
+            "has_location": .bool(hasLocation),
         ]
         if let m = nearestSlantMeters {
             // One decimal place of km keeps the value easy to bucket.
@@ -360,11 +368,13 @@ nonisolated enum ActivationTelemetry {
         variant: EmptySkyVariant,
         rawCount: Int,
         nearestSlantMeters: Double?,
-        secondsInSession: Double
+        secondsInSession: Double,
+        hasLocation: Bool
     ) {
         Analytics.capture(emptySkyStateShownEvent, emptySkyProperties(
             variant: variant, rawCount: rawCount,
-            nearestSlantMeters: nearestSlantMeters, secondsInSession: secondsInSession
+            nearestSlantMeters: nearestSlantMeters, secondsInSession: secondsInSession,
+            hasLocation: hasLocation
         ))
     }
 
