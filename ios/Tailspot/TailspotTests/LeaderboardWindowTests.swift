@@ -406,3 +406,193 @@ struct ChampionBannerCopyTests {
         #expect(ChampionBanner.noChampionSubtitle(window: .month) == "The sky was quiet last month.")
     }
 }
+
+// MARK: - Weekly race gap
+
+@Suite("Weekly race gap")
+struct RaceGapTests {
+
+    /// The live 2026-10-21 week board shape: two whales, then a tight pack.
+    private static let livePoints = [3705, 1360, 985, 460, 405, 230, 220, 215, 165, 145, 95, 45]
+
+    private func board(_ points: [Int] = livePoints) -> [LeaderboardEntry] {
+        points.enumerated().map { i, p in
+            LeaderboardEntry(rank: i + 1, handle: "s\(i + 1)", points: p, catches: 1)
+        }
+    }
+
+    private func week(_ entries: [LeaderboardEntry], me: MyStanding?) -> LeaderboardResponse {
+        LeaderboardResponse(entries: entries, me: me, window: "week",
+                            resetsAt: "2026-10-26T00:00:00.000Z", champions: nil)
+    }
+
+    @Test func commonCatchYardstickIsPinnedToScoring() {
+        #expect(RaceGap.commonCatchPoints == Rarity.common.basePoints)
+        #expect(RaceGap.commonCatchPoints == 10)
+    }
+
+    /// Outside the visible Top 10: pass the row directly above, plus the
+    /// separate Top 10 clause.
+    @Test func midPack_passesRowAbove_andReportsTopTen() throws {
+        let gap = try #require(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 12, points: 45)),
+            window: .week, myHandle: "s12"))
+        #expect(gap.target == .pass(handle: "s11"))
+        #expect(gap.points == 51)            // 95 − 45 + 1
+        #expect(gap.catchesEquivalent == 6)  // ⌈51 / 10⌉
+        #expect(gap.topTenPoints == 101)     // 145 − 45 + 1
+        #expect(gap.headline == "51 PTS TO PASS @s11")
+        #expect(gap.topTenLine == "101 PTS TO THE TOP 10")
+        #expect(gap.detail(resetWeekday: "SUNDAY") == "≈ 6 COMMON CATCHES · RESETS SUNDAY")
+        #expect(gap.detail(resetWeekday: nil) == "≈ 6 COMMON CATCHES")
+    }
+
+    /// Directly below the tenth: the Top 10 IS the pass target, so the
+    /// clause is not repeated.
+    @Test func eleventh_topTenClauseNotRepeated() throws {
+        let gap = try #require(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 11, points: 95)),
+            window: .week, myHandle: "s11"))
+        #expect(gap.target == .pass(handle: "s10"))
+        #expect(gap.points == 51)
+        #expect(gap.topTenPoints == nil)
+        #expect(gap.topTenLine == nil)
+    }
+
+    /// The trap the scope warns about: `me.rank` counts handle-less and
+    /// disabled devices, so it runs ahead of my row position. Indexing by
+    /// rank (`entries[rank − 2]`) would name the wrong spotter.
+    @Test func hiddenDevicesInflatingMyRank_doNotChangeTheTarget() throws {
+        // Row 11 on the board, but three hidden devices rank above me.
+        let gap = try #require(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 14, points: 95)),
+            window: .week, myHandle: "s11"))
+        #expect(gap.target == .pass(handle: "s10"))
+        #expect(gap.points == 51)
+        #expect(!gap.headline.contains("#"))
+        #expect(!gap.headline.contains("14"))
+    }
+
+    /// Ties break by registration time, so a tied spotter above me needs
+    /// exactly one more point, not zero.
+    @Test func tieWithRowAbove_needsOnePoint() throws {
+        let entries = board([300, 200, 200, 100])
+        let gap = try #require(RaceGap.compute(
+            response: week(entries, me: MyStanding(rank: 3, points: 200)),
+            window: .week, myHandle: "s3"))
+        #expect(gap.target == .pass(handle: "s2"))
+        #expect(gap.points == 1)
+        #expect(gap.catchesEquivalent == 1)
+        #expect(gap.headline == "1 PT TO PASS @s2")
+        #expect(gap.detail(resetWeekday: nil) == "≈ 1 COMMON CATCH")
+    }
+
+    @Test func handleMatchIsCaseInsensitive() throws {
+        let gap = try #require(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 11, points: 95)),
+            window: .week, myHandle: "S11"))
+        #expect(gap.target == .pass(handle: "s10"))
+    }
+
+    @Test func iAmFirst_hidden() {
+        #expect(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 1, points: 3705)),
+            window: .week, myHandle: "s1") == nil)
+    }
+
+    /// Inside the Top 10: pass the row above, no Top 10 clause.
+    @Test func insideTopTen_noTopTenClause() throws {
+        let gap = try #require(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 8, points: 215)),
+            window: .week, myHandle: "s8"))
+        #expect(gap.target == .pass(handle: "s7"))
+        #expect(gap.points == 6)
+        #expect(gap.topTenPoints == nil)
+    }
+
+    /// #2 trails the whale by 2,345 pts: far past 20 common catches, so the
+    /// line hides instead of showing a hopeless goal.
+    @Test func hugeGap_hidden() {
+        #expect(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 2, points: 1360)),
+            window: .week, myHandle: "s2") == nil)
+    }
+
+    @Test func gapCeilingBoundary() throws {
+        // 200 pts = exactly 20 common catches → shown; 201 → hidden.
+        let shown = try #require(RaceGap.compute(
+            response: week(board([300, 101]), me: MyStanding(rank: 2, points: 101)),
+            window: .week, myHandle: "s2"))
+        #expect(shown.points == 200)
+        #expect(RaceGap.compute(
+            response: week(board([300, 100]), me: MyStanding(rank: 2, points: 100)),
+            window: .week, myHandle: "s2") == nil)
+    }
+
+    /// The Top 10 clause has its own ceiling: hidden when out of reach even
+    /// though the row-above goal is shown.
+    @Test func topTenClauseHiddenPastCeiling() throws {
+        let points = [900, 800, 700, 600, 500, 450, 420, 400, 390, 380, 60, 50]
+        let gap = try #require(RaceGap.compute(
+            response: week(board(points), me: MyStanding(rank: 12, points: 50)),
+            window: .week, myHandle: "s12"))
+        #expect(gap.points == 11)
+        #expect(gap.topTenPoints == nil)  // 331 pts away
+    }
+
+    /// No handle and nothing caught this week: one point earns a row.
+    @Test func noHandle_zeroPoints_makeTheBoard() throws {
+        let gap = try #require(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 0, points: 0)),
+            window: .week, myHandle: nil))
+        #expect(gap.target == .makeBoard)
+        #expect(gap.points == 1)
+        #expect(gap.topTenPoints == nil)
+        #expect(gap.headline == "1 PT TO MAKE THE BOARD")
+    }
+
+    /// No handle but already holding points: the gap is zero, so the line
+    /// hides and the existing "claim a handle" hint carries the message.
+    @Test func noHandle_withPoints_hidden() {
+        #expect(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 9, points: 160)),
+            window: .week, myHandle: nil) == nil)
+    }
+
+    /// A handled spotter off a FULL board (50 rows) must beat the last row.
+    @Test func offFullBoard_beatTheLastRow() throws {
+        let full = board((0..<LeaderboardResponse.displayLimit).map { 600 - $0 * 10 })  // last = 110
+        let gap = try #require(RaceGap.compute(
+            response: week(full, me: MyStanding(rank: 60, points: 95)),
+            window: .week, myHandle: "notlisted"))
+        #expect(gap.target == .makeBoard)
+        #expect(gap.points == 16)
+    }
+
+    @Test func emptyBoard_hidden() {
+        #expect(RaceGap.compute(
+            response: week([], me: MyStanding(rank: 0, points: 0)),
+            window: .week, myHandle: "noah") == nil)
+    }
+
+    @Test func notRegistered_hidden() {
+        #expect(RaceGap.compute(response: week(board(), me: nil),
+                                window: .week, myHandle: "s11") == nil)
+    }
+
+    @Test func monthAndAllTime_hidden() {
+        let me = MyStanding(rank: 11, points: 95)
+        let month = LeaderboardResponse(entries: board(), me: me, window: "month",
+                                        resetsAt: "2026-11-01T00:00:00.000Z")
+        let all = LeaderboardResponse(entries: board(), me: me, window: "all")
+        #expect(RaceGap.compute(response: month, window: .month, myHandle: "s11") == nil)
+        #expect(RaceGap.compute(response: all, window: .all, myHandle: "s11") == nil)
+    }
+
+    /// FAIL-SOFT: the pre-windows backend sends no `window` key and its
+    /// board is ALL-TIME, even though the screen files it under `.week`.
+    @Test func oldBackendWithoutWindowKey_hidden() {
+        let old = LeaderboardResponse(entries: board(), me: MyStanding(rank: 11, points: 95))
+        #expect(RaceGap.compute(response: old, window: .week, myHandle: "s11") == nil)
+    }
+}
