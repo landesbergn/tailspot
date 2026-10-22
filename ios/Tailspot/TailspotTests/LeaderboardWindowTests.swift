@@ -541,14 +541,33 @@ struct RaceGapTests {
     }
 
     /// No handle and nothing caught this week: one point earns a row.
-    @Test func noHandle_zeroPoints_makeTheBoard() throws {
+    @Test func handled_zeroPoints_makeTheBoard() throws {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 0, points: 0)),
-            window: .week, myHandle: nil))
+            window: .week, myHandle: "notlisted"))
         #expect(gap.target == .makeBoard)
         #expect(gap.points == 1)
         #expect(gap.topTenPoints == nil)
         #expect(gap.headline == "1 PT TO MAKE THE BOARD")
+    }
+
+    /// No handle, nothing caught: hidden. The backend lists only handled
+    /// devices, so "1 PT TO MAKE THE BOARD" would be a false promise — one
+    /// catch later the line would vanish and still no row would appear.
+    /// The "claim a handle" hint is the only call to action.
+    @Test func noHandle_zeroPoints_hidden() {
+        #expect(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 0, points: 0)),
+            window: .week, myHandle: nil) == nil)
+    }
+
+    /// No handle, off a FULL board (50 rows) with points below the last
+    /// row: still hidden — earning the gap wouldn't earn a row either.
+    @Test func noHandle_offFullBoard_hidden() {
+        let full = board((0..<LeaderboardResponse.displayLimit).map { 600 - $0 * 10 })  // last = 110
+        #expect(RaceGap.compute(
+            response: week(full, me: MyStanding(rank: 60, points: 40)),
+            window: .week, myHandle: nil) == nil)
     }
 
     /// No handle but already holding points: the gap is zero, so the line

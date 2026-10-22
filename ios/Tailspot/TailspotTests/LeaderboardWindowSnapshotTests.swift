@@ -227,7 +227,13 @@ struct LeaderboardWindowSnapshotTests {
                        selected: .week, container: container),
                  as: "racegap_week_whale_hidden", height: tall)
 
-        // No handle, nothing caught this week → "TO MAKE THE BOARD".
+        // Handled, nothing caught this week → "1 PT TO MAKE THE BOARD".
+        defaults.set("notlisted", forKey: SpotterHandle.storageKey)
+        snapshot(board([.week: week(MyStanding(rank: 0, points: 0))],
+                       selected: .week, container: container),
+                 as: "racegap_week_makeboard", height: tall)
+
+        // No handle → no gap line; the "claim a handle" hint stands alone.
         defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
         snapshot(board([.week: week(MyStanding(rank: 0, points: 0))],
                        selected: .week, container: container),

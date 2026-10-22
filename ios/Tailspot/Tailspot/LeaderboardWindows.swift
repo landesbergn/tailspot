@@ -125,8 +125,11 @@ nonisolated struct RaceGap: Equatable, Sendable {
     enum Target: Equatable, Sendable {
         /// Overtake this spotter (the row directly above mine).
         case pass(handle: String)
-        /// Not on the visible board yet (no handle, or nothing caught
-        /// this week): points needed to earn a row.
+        /// Has a handle but no row on the visible board yet (nothing caught
+        /// this week, or below the last row of a full board): points
+        /// needed to earn a row. Never used for handle-less devices — the
+        /// backend lists only handled devices, so no number of points
+        /// earns them a row.
         case makeBoard
     }
 
@@ -187,11 +190,14 @@ nonisolated struct RaceGap: Equatable, Sendable {
             target = .pass(handle: above.handle)
             gap = above.points - me.points + 1
         } else {
-            // Not a row on the board. With room left (under the display
-            // limit), any point earns a row; a full board means beating
-            // the last row. Handle-less devices already holding enough
-            // points get nil here — the existing "claim a handle" hint is
-            // their whole story.
+            // Handle-less devices never get a row (the backend lists only
+            // handled devices in `entries`), so a points goal would be a
+            // promise points alone can't keep. The existing "claim a
+            // handle" hint is their whole story.
+            guard myHandle != nil else { return nil }
+            // Handled but not a row on the board. With room left (under
+            // the display limit), any point earns a row; a full board
+            // means beating the last row.
             target = .makeBoard
             if entries.count < LeaderboardResponse.displayLimit {
                 gap = 1 - me.points
