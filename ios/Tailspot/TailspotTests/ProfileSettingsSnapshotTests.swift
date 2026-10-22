@@ -306,6 +306,14 @@ struct RemindersRowStateTests {
         #expect(RemindersRowState.resolve(authorization: .notDetermined, anyToggleOn: false) == .toggles)
     }
 
+    /// nil = the async permission read hasn't returned yet (first frame of
+    /// every Settings open). Must show the toggles, not flash "Turn on
+    /// reminders" at someone who granted permission long ago.
+    @Test func unreadStatusShowsToggles() {
+        #expect(RemindersRowState.resolve(authorization: nil, anyToggleOn: true) == .toggles)
+        #expect(RemindersRowState.resolve(authorization: nil, anyToggleOn: false) == .toggles)
+    }
+
     @Test func deniedIsDeniedWhateverTheToggles() {
         #expect(RemindersRowState.resolve(authorization: .denied, anyToggleOn: true) == .denied)
         #expect(RemindersRowState.resolve(authorization: .denied, anyToggleOn: false) == .denied)

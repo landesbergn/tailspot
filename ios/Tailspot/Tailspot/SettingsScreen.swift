@@ -38,8 +38,12 @@ struct SettingsScreen: View {
 
     @State private var showHandleSheet = false
     /// System notification permission, re-read on foreground so granting in
-    /// iOS Settings heals the row without a relaunch.
-    @State private var notifStatus: UNAuthorizationStatus = .notDetermined
+    /// iOS Settings heals the row without a relaunch. Optional on purpose:
+    /// nil means "not read yet" (the async read in `.task` hasn't returned),
+    /// which is different from `.notDetermined` ("iOS never asked"). Starting
+    /// at `.notDetermined` flashed "Turn on reminders" for a frame on every
+    /// open, even for people who granted permission long ago.
+    @State private var notifStatus: UNAuthorizationStatus? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     /// Optional: Settings renders in snapshot harnesses and previews with no
@@ -426,10 +430,14 @@ nonisolated enum RemindersRowState: Equatable, Sendable {
     /// fires the system prompt).
     case toggles
 
-    static func resolve(authorization: UNAuthorizationStatus, anyToggleOn: Bool) -> RemindersRowState {
+    /// `authorization` is nil until the async permission read returns; that
+    /// first frame shows the toggles (the common, granted look) rather than
+    /// guessing "never asked" and flickering.
+    static func resolve(authorization: UNAuthorizationStatus?, anyToggleOn: Bool) -> RemindersRowState {
         switch authorization {
-        case .notDetermined: anyToggleOn ? .needsPermission : .toggles
-        case .denied: .denied
+        case nil: .toggles
+        case .notDetermined?: anyToggleOn ? .needsPermission : .toggles
+        case .denied?: .denied
         // .authorized, .provisional, .ephemeral and any future case keep
         // today's ON state.
         default: .toggles
