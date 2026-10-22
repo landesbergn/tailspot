@@ -334,8 +334,12 @@ nonisolated enum Trophies {
     /// historical crown backfill, absorbs them into ONE recap), 4 = the
     /// 2026-10-21 wiring fix that made Constellation, Heritage, Living
     /// History and Full Deck earnable (multi-catch shipped and vintage
-    /// catches now count as heritage; the ~20 users who already qualify get
-    /// one recap instead of a burst of toasts). Bump this
+    /// catches now count as heritage). Note the bump's reach: the reseed
+    /// recap lists EVERY earned trophy, not just the newly-earnable ones, so
+    /// every user with any earned trophy sees one trophy-case recap on first
+    /// launch of 1.2.3 — including users with nothing new in it. The ~20
+    /// users who now qualify for one of the four get it there instead of a
+    /// burst of toasts. Bump this
     /// whenever a roster change should be absorbed-and-recapped rather than
     /// celebrated one toast at a time.
     static let rosterVersion = 4
