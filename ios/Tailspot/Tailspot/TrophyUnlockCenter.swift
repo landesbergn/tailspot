@@ -105,6 +105,14 @@ final class TrophyUnlockCenter: ObservableObject {
     /// at 4,600 catches). A token match reuses these
     /// inputs, so those re-diffs cost a hashing pass instead.
     private var memo: (token: Int, inputs: TrophyProgressInputs)?
+    /// Whether the last bounded date pass for the memoized inputs found
+    /// nothing left to date. A memo hit skips that pass, which is only safe
+    /// when the dates are done or the remainder is still parked: a
+    /// `finishAchievementDates` run takes the parked work and may stop early
+    /// (cancelled with its view, or a row deleted mid-run), and without this
+    /// flag no later hit would re-park it, so those trophies would never get
+    /// a date until some unrelated row change busted the memo.
+    private var memoDatesDone = false
 
     #if DEBUG
     /// How many full-Hangar `Trophies.inputs` passes this center has run
@@ -149,8 +157,10 @@ final class TrophyUnlockCenter: ObservableObject {
     ///
     /// Memoized: when the Hangar (and the event/standing stores) haven't
     /// changed since the last call, the previous inputs are reused and the
-    /// bounded date pass is skipped — it already ran for these exact inputs,
-    /// and anything it parked is still parked. The ledger diff itself always
+    /// bounded date pass is skipped — it already ran for these exact inputs
+    /// — unless it left work that is no longer parked (a backfill that was
+    /// interrupted), in which case it runs again to re-park the rest. The
+    /// ledger diff itself always
     /// runs (it's cheap), so acknowledgments made since the last call count.
     ///
     /// Trade-off: the token is hashed on EVERY call, including the two that
@@ -168,6 +178,12 @@ final class TrophyUnlockCenter: ObservableObject {
         let inputs: TrophyProgressInputs
         if let memo, memo.token == token {
             inputs = memo.inputs
+            // Resume an interrupted backfill (see `memoDatesDone`). Once the
+            // dates are done this is skipped; until then each hit costs at
+            // most one bounded probe, same as a miss.
+            if !memoDatesDone, pendingDateBackfill == nil {
+                recordDatesWithinBudget(catches: catches, inputs: inputs)
+            }
         } else {
             inputs = computeInputs(catches, token: token)
             recordDatesWithinBudget(catches: catches, inputs: inputs)
@@ -221,6 +237,7 @@ final class TrophyUnlockCenter: ObservableObject {
             from: catches, inputs: inputs, roster: roster, ledger: ledger,
             events: events, maxEvaluations: 1)
         pendingDateBackfill = done ? nil : (catches, inputs)
+        memoDatesDone = done
     }
 
     /// Finish the dates the last `enqueueNewUnlocks`/`reseedAfterRestore`

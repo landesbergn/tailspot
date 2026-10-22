@@ -411,4 +411,44 @@ struct TrophyUnlockCenterTests {
         hangar[0].caughtDayKey = nil
         #expect(TrophyInputsToken.of(hangar, events: events, standing: standing, timeZone: la) != base)
     }
+
+    /// The Hangar Trophies tab and the center/Profile must memo on the same
+    /// key, or a late `guessCorrect` stamp or a time-zone change recomputes
+    /// Profile while the tab keeps serving stale inputs.
+    @Test func hangarTrophiesTabUsesTheSameKey() {
+        let hangar = catches(2)
+        let suite = isolatedSuite()
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let la = TimeZone(identifier: "America/Los_Angeles")!
+        let bali = TimeZone(identifier: "Asia/Makassar")!
+        func key(_ tz: TimeZone) -> Int {
+            HangarTrophiesView.memoKey(hangar, events: events, standing: standing, timeZone: tz)
+        }
+        let base = key(la)
+        #expect(base == TrophyInputsToken.of(hangar, events: events, standing: standing, timeZone: la))
+        #expect(key(bali) != base)
+        hangar[1].guessCorrect = true                       // the bonus round's late stamp
+        #expect(key(la) != base)
+    }
+
+    /// Profile's memo key follows the DEBUG wrench streak override, which
+    /// `Streaks.summary` honours: toggling it must recompute the Profile
+    /// streak instead of serving the pre-toggle value.
+    @Test func profileKeyTracksTheStreakOverride() {
+        let hangar = catches(2)
+        let suite = isolatedSuite()
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let now = Date(timeIntervalSince1970: 1_716_000_000)
+        func key(_ forced: Streaks.Summary?) -> Int {
+            ProfileDerived.token(catches: hangar, events: events, standing: standing,
+                                 now: now, streakOverride: forced)
+        }
+        let off = key(nil)
+        let forced = key(Streaks.Summary(current: 5, longest: 7, caughtToday: false))
+        #expect(forced != off)
+        #expect(key(Streaks.Summary(current: 5, longest: 7, caughtToday: true)) != forced)
+        #expect(key(nil) == off)
+    }
 }

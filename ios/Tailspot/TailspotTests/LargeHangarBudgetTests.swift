@@ -9,17 +9,20 @@
 //  here instead of on the biggest users' phones.
 //
 //  Three kinds of check, most deterministic first:
-//   1. Pass counts. `TrophyUnlockCenter` counts its full-Hangar
-//      `Trophies.inputs` passes (DEBUG only). An unchanged re-diff (every
-//      sheet close) must do 0, one new catch exactly 1. Exact, never flaky.
-//   2. Wall-clock budgets on the three heavy derivations, as the MINIMUM of
-//      3 runs (the least-disturbed run) against ~5x headroom over what the
-//      Debug simulator measured. Loose on purpose: CI is a shared runner
-//      running other suites in parallel, and a flapping required check gets
-//      loosened until it's useless.
-//   3. Growth: doubling the rows (10k → 20k) must cost under 3x. Catches an
-//      accidental O(N²) without depending on the machine's absolute speed.
-//      Only for operations above ~100 ms, where the ratio is stable.
+//   1. Pass counts and memo hits. `TrophyUnlockCenter` counts its
+//      full-Hangar `Trophies.inputs` passes (DEBUG only). An unchanged
+//      re-diff (every sheet close) must do 0, one new catch exactly 1.
+//      Exact, never flaky. THIS is the regression guard.
+//   2. Wall-clock ceilings on the three heavy derivations, as the MINIMUM
+//      of 3 runs (the least-disturbed run) against ~10x headroom over what
+//      the Debug simulator measured. They run in the required Unit-tests
+//      check on a shared macos-26 runner, so they only catch an
+//      order-of-magnitude slip (a new per-row lookup gone quadratic), never
+//      a 2x drift. A flapping required check blocks every merge under the
+//      strict ruleset, so the ceilings stay this loose.
+//   3. Growth: quadrupling the rows (2.5k → 10k) must cost under 10x.
+//      Linear is ~4x and quadratic ~16x, so the gap is wide enough for a
+//      shared runner's noise without depending on its absolute speed.
 //
 //  Deliberately NOT timed: a full `TrophyAchievementDates.recordMissing`
 //  (tens of prefix passes — minutes at this size in Debug). Its launch-path
@@ -42,12 +45,13 @@ struct LargeHangarBudgetTests {
 
     // MARK: - Fixture
 
-    /// 20,000 managed rows, built once for the whole suite (insert + fetch is
-    /// several seconds in Debug). The 10k cases take every other row, NOT a
-    /// prefix: the rows are newest-first, so a prefix would cover only the
-    /// newest half of the 300 days and be a differently shaped Hangar.
-    private static let hangar20k: [Catch] = makeHangar(count: 20_000)
-    private static let hangar10k: [Catch] = stride(from: 0, to: hangar20k.count, by: 2).map { hangar20k[$0] }
+    /// 10,000 managed rows, built once for the whole suite (insert + fetch is
+    /// a few seconds in Debug). The growth check's 2.5k Hangar takes every
+    /// fourth row, NOT a prefix: the rows are newest-first, so a prefix would
+    /// cover only the newest quarter of the 300 days and be a differently
+    /// shaped Hangar.
+    private static let hangar10k: [Catch] = makeHangar(count: 10_000)
+    private static let hangar2500: [Catch] = stride(from: 0, to: hangar10k.count, by: 4).map { hangar10k[$0] }
 
     /// Deterministic generator (SplitMix64) so every run times the same data.
     private struct SeededRNG: RandomNumberGenerator {
@@ -146,9 +150,19 @@ struct LargeHangarBudgetTests {
               typecode: "B738", country: "Country 0")
     }
 
-    private func isolatedCenter() -> TrophyUnlockCenter {
-        let suite = UserDefaults(suiteName: "test.budget.\(UUID().uuidString)")!
-        return TrophyUnlockCenter(
+    /// A throwaway UserDefaults suite. Callers `defer { drop(name) }` so the
+    /// UUID-named plist doesn't pile up in the simulator across runs.
+    private func makeSuite(_ prefix: String = "test.budget") -> (name: String, defaults: UserDefaults) {
+        let name = "\(prefix).\(UUID().uuidString)"
+        return (name, UserDefaults(suiteName: name)!)
+    }
+
+    private func drop(_ suiteName: String) {
+        UserDefaults().removePersistentDomain(forName: suiteName)
+    }
+
+    private func makeCenter(in suite: UserDefaults) -> TrophyUnlockCenter {
+        TrophyUnlockCenter(
             ledger: UserDefaultsTrophyLedger(defaults: suite),
             events: TrophyEventStore(defaults: suite),
             standing: LeaderboardStandingCache(defaults: suite))
@@ -189,7 +203,9 @@ struct LargeHangarBudgetTests {
     // MARK: - 1. Pass counts (deterministic)
 
     @Test func unchangedRediffDoesNoInputsPass() {
-        let center = isolatedCenter()
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let center = makeCenter(in: suite)
         let rows = Self.hangar10k
         center.enqueueNewUnlocks(from: rows)          // launch: seed
         let afterLaunch = center.fullInputsPasses
@@ -206,7 +222,8 @@ struct LargeHangarBudgetTests {
     /// a parked plane. Only the first tap can change the inputs (Ground Stop
     /// reads "ever happened", not a count), so only the first may pay a pass.
     @Test func repeatGroundedTapsAreMemoHits() {
-        let suite = UserDefaults(suiteName: "test.budget.\(UUID().uuidString)")!
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
         let events = TrophyEventStore(defaults: suite)
         let center = TrophyUnlockCenter(
             ledger: UserDefaultsTrophyLedger(defaults: suite),
@@ -227,7 +244,9 @@ struct LargeHangarBudgetTests {
     }
 
     @Test func oneNewCatchDoesExactlyOneInputsPass() {
-        let center = isolatedCenter()
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let center = makeCenter(in: suite)
         let rows = Self.hangar10k
         center.enqueueNewUnlocks(from: rows)
         let before = center.fullInputsPasses
@@ -242,7 +261,9 @@ struct LargeHangarBudgetTests {
     }
 
     @Test func lateStampOnTheNewCatchDoesOneMorePass() {
-        let center = isolatedCenter()
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let center = makeCenter(in: suite)
         let fresh = newCatch(icao: "f00d02")
         fresh.country = nil
         let rows = [fresh] + Self.hangar10k
@@ -257,66 +278,76 @@ struct LargeHangarBudgetTests {
     /// points + rank on each open). Those writes must not change the memo
     /// key; a weekly-win change (a trophy input) must.
     @Test func profileTokenIgnoresPointsAndRankWrites() {
-        let suite = UserDefaults(suiteName: "test.budget.profile.\(UUID().uuidString)")!
+        let (suiteName, suite) = makeSuite("test.budget.profile")
+        defer { drop(suiteName) }
         let events = TrophyEventStore(defaults: suite)
         let standing = LeaderboardStandingCache(defaults: suite)
         let rows = Self.hangar10k
         let now = Date(timeIntervalSince1970: 1_760_000_000)
         let box = DerivedCacheBox<ProfileDerived>()
         var computes = 0
-        func render() {
-            _ = box.value(for: ProfileDerived.token(catches: rows, events: events,
-                                                    standing: standing, now: now)) {
+        // `streakOverride: nil` pins the key against the wrench panel's
+        // UserDefaults.standard override, which a Debug test run could see.
+        @discardableResult
+        func render(at date: Date) -> ProfileDerived {
+            box.value(for: ProfileDerived.token(catches: rows, events: events, standing: standing,
+                                                now: date, streakOverride: nil)) {
                 computes += 1
-                return ProfileDerived(catches: rows, events: events, standing: standing, now: now)
+                return ProfileDerived(catches: rows, events: events, standing: standing, now: date)
             }
         }
-        render()
+        let first = render(at: now)
         standing.update(from: MyStanding(rank: 12, points: 4_200))   // points/rank only
-        render()
-        render()
+        render(at: now)
+        render(at: now)
         #expect(computes == 1)
         standing.update(from: MyStanding(rank: 1, points: 4_300, weeklyWins: 1))
-        render()
+        render(at: now)
         #expect(computes == 2)
-        // A new day changes the streak even with no new catch.
-        _ = box.value(for: ProfileDerived.token(catches: rows, events: events, standing: standing,
-                                                now: now.addingTimeInterval(86_400))) {
-            computes += 1
-            return ProfileDerived(catches: rows, events: events, standing: standing, now: now)
-        }
+        // Two days on with no new catch: the key rolls over, the recompute
+        // runs at the NEW date, and the streak it serves has lapsed. (The
+        // fixture's newest catch is at `now` and ~33 rows land per day, so
+        // the streak is live at `now`.)
+        #expect(first.streak.current > 0, "precondition: a live streak at the newest catch")
+        let later = render(at: now.addingTimeInterval(2 * 86_400))
         #expect(computes == 3)
+        #expect(later.streak.current == 0)
     }
 
-    // MARK: - 2. Wall-clock budgets (min of 3, ~5x headroom)
+    // MARK: - 2. Wall-clock ceilings (min of 3, ~10x headroom)
 
     /// Budgets and the measurements behind them live in `Budget` below.
     @Test func trophyInputsWithinBudgetAt10k() {
         let rows = Self.hangar10k
         let t = fastest { Self.sink &+= Trophies.inputs(from: rows).totalCatches }
         print("[LargeHangarBudget] Trophies.inputs @10k: \(Int(t * 1000)) ms")
-        #expect(t < Budget.inputs10k, "Trophies.inputs took \(t) s at 10k rows")
+        #expect(t < Budget.inputs10k,
+                "Trophies.inputs took \(t) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.inputs10k) s: an order-of-magnitude slip, not runner noise")
     }
 
     @Test func hangarGroupingWithinBudgetAt10k() {
         let rows = Self.hangar10k
         let t = fastest { Self.sink &+= HangarGrouping.group(rows, by: .recent).count }
         print("[LargeHangarBudget] HangarGrouping.group @10k: \(Int(t * 1000)) ms")
-        #expect(t < Budget.grouping10k, "HangarGrouping.group took \(t) s at 10k rows")
+        #expect(t < Budget.grouping10k,
+                "HangarGrouping.group took \(t) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.grouping10k) s: an order-of-magnitude slip, not runner noise")
     }
 
     @Test func distinctMatchKeysWithinBudgetAt10k() {
         let rows = Self.hangar10k
         let t = fastest { Self.sink &+= CardSets.distinctMatchKeys(for: rows).count }
         print("[LargeHangarBudget] CardSets.distinctMatchKeys @10k: \(Int(t * 1000)) ms")
-        #expect(t < Budget.matchKeys10k, "distinctMatchKeys took \(t) s at 10k rows")
+        #expect(t < Budget.matchKeys10k,
+                "distinctMatchKeys took \(t) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.matchKeys10k) s: an order-of-magnitude slip, not runner noise")
     }
 
     /// Not a budget: logs what a memo-hit re-diff costs (the hashing pass)
     /// next to a full pass, for the PR record. Asserts only the ordering.
     @Test func memoHitIsCheaperThanAFullPass() {
         let rows = Self.hangar10k
-        let center = isolatedCenter()
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let center = makeCenter(in: suite)
         center.enqueueNewUnlocks(from: rows)
         let hit = fastest { center.enqueueNewUnlocks(from: rows) }
         let full = fastest { Self.sink &+= Trophies.inputs(from: rows).totalCatches }
@@ -336,29 +367,32 @@ struct LargeHangarBudgetTests {
         #expect(token < full)
     }
 
-    // MARK: - 3. Growth (10k → 20k under 3x)
+    // MARK: - 3. Growth (2.5k → 10k under 10x)
 
     @Test func trophyInputsScalesLinearly() {
-        let small = Self.hangar10k
-        let large = Self.hangar20k
-        let t10 = fastest { Self.sink &+= Trophies.inputs(from: small).totalCatches }
-        let t20 = fastest { Self.sink &+= Trophies.inputs(from: large).totalCatches }
-        print("[LargeHangarBudget] Trophies.inputs 10k \(Int(t10 * 1000)) ms → 20k \(Int(t20 * 1000)) ms (\(t20 / t10)x)")
-        #expect(t20 < t10 * 3, "doubling the Hangar cost \(t20 / t10)x — something went quadratic")
+        let small = Self.hangar2500
+        let large = Self.hangar10k
+        let tSmall = fastest { Self.sink &+= Trophies.inputs(from: small).totalCatches }
+        let tLarge = fastest { Self.sink &+= Trophies.inputs(from: large).totalCatches }
+        let ratio = tLarge / tSmall
+        print("[LargeHangarBudget] Trophies.inputs 2.5k \(Int(tSmall * 1000)) ms → 10k \(Int(tLarge * 1000)) ms (\(ratio)x)")
+        #expect(ratio < 10, "4x the rows cost \(ratio)x (linear ≈ 4x, quadratic ≈ 16x) — something went quadratic")
     }
 
     // No growth check for HangarGrouping: at ~110-220 ms per 10k it sits at
     // the noise floor (one calibration run measured 20k FASTER than 10k), so
     // a ratio on it would flap. Its absolute budget above still guards it.
 
-    /// Budgets in seconds, ~5x the Debug iPhone 17 simulator measurement at
-    /// 10k rows (min of 3, 2026-10-22, with five other builders' test runs
+    /// Ceilings in seconds, ~10x the Debug iPhone 17 simulator measurement
+    /// at 10k rows (min of 3, 2026-10-22, with five other builders' test runs
     /// sharing the Mac): inputs 0.60-0.95 s, grouping 0.11-0.20 s, match
-    /// keys 0.03-0.06 s (floored at 0.5 s — too short to budget tightly
-    /// without flaps).
+    /// keys 0.03-0.06 s (floored at 1 s — too short to bound tightly without
+    /// flaps). Deliberately generous: these gate the required CI check on a
+    /// shared runner. If one ever trips on noise, raise it; the pass-count
+    /// tests above are the precise guard.
     private enum Budget {
-        static let inputs10k = 5.0
-        static let grouping10k = 1.0
-        static let matchKeys10k = 0.5
+        static let inputs10k = 10.0
+        static let grouping10k = 2.0
+        static let matchKeys10k = 1.0
     }
 }

@@ -963,6 +963,12 @@ struct ProfileDerived {
     /// day it is, so today's key is folded in: the first render after
     /// midnight recomputes instead of showing yesterday's streak state.
     ///
+    /// In DEBUG builds the wrench panel's forced streak (`StreakDebug`) is
+    /// folded in too: `Streaks.summary` honours it, so toggling it must
+    /// recompute, or Profile keeps the real streak while the reveal shows
+    /// the forced one (the two-streaks bug the override's funnel exists to
+    /// prevent). Always nil in release builds.
+    ///
     /// Deliberately NOT in the key: the server points/rank that
     /// `loadStanding` writes on every open. They feed the headline directly,
     /// never these derivations, so those writes re-render without a recompute.
@@ -970,12 +976,26 @@ struct ProfileDerived {
         catches: [Catch],
         events: TrophyEventStore = TrophyEventStore(),
         standing: LeaderboardStandingCache = LeaderboardStandingCache(),
-        now: Date = Date()
+        now: Date = Date(),
+        streakOverride: Streaks.Summary? = debugStreakOverride
     ) -> Int {
         var hasher = Hasher()
         hasher.combine(TrophyInputsToken.of(catches, events: events, standing: standing))
         hasher.combine(Streaks.dayKey(for: now))
+        hasher.combine(streakOverride?.current)
+        hasher.combine(streakOverride?.longest)
+        hasher.combine(streakOverride?.caughtToday)
         return hasher.finalize()
+    }
+
+    /// The wrench panel's streak override in DEBUG; nil in release, where
+    /// `StreakDebug` doesn't exist.
+    static var debugStreakOverride: Streaks.Summary? {
+        #if DEBUG
+        StreakDebug.override
+        #else
+        nil
+        #endif
     }
 }
 
