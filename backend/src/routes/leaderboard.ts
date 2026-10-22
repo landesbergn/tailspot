@@ -89,9 +89,13 @@ export function registerLeaderboardRoute(
     const window = parseWindow(q.window);
     const now = clock();
 
-    // Window scoping: `since` bounds the point sums/ranks; `resetsAt` tells
-    // the client when this board rolls over (null = never, the all-time board).
+    // Window scoping: [`since`, `until`) bounds the point sums/ranks; `until`
+    // is also `resetsAt`, which tells the client when this board rolls over
+    // (null = never, the all-time board). The upper bound keeps a catch
+    // stamped in the future off this window's board — it counts on the board
+    // of the week/month it claims, like the crowns already do.
     let since: Date | undefined;
+    let until: Date | undefined;
     let resetsAt: string | null = null;
     let champions: ChampionEntry[] | null = null;
     let monthlyChampions: MonthlyChampionEntry[] | null = null;
@@ -104,20 +108,22 @@ export function registerLeaderboardRoute(
 
     if (window === "week") {
       since = weekStartUtc(now);
-      resetsAt = nextWeekStartUtc(now).toISOString();
+      until = nextWeekStartUtc(now);
+      resetsAt = until.toISOString();
       // Decide-on-read: freeze any closed-but-undecided weeks, then serve the
       // last closed week's champion(s).
       await catchStore.ensureWeeksDecided(now);
       champions = await catchStore.champions(utcDateString(addDaysUtc(since, -7)));
     } else if (window === "month") {
       since = monthStartUtc(now);
-      resetsAt = nextMonthStartUtc(now).toISOString();
+      until = nextMonthStartUtc(now);
+      resetsAt = until.toISOString();
       monthlyChampions = await catchStore.monthlyChampions(
         utcDateString(previousMonthStartUtc(now)),
       );
     }
 
-    const { entries, totalCatchers } = await catchStore.leaderboard(limit, since);
+    const { entries, totalCatchers } = await catchStore.leaderboard(limit, since, until);
 
     // Serving the all-time board just computed the all-time #1 — observe it
     // into the topper ledger (first sighting wins) before `me` reads the flag,
@@ -138,7 +144,7 @@ export function registerLeaderboardRoute(
       everToppedAllTime: boolean;
     } | null = null;
     if (device) {
-      const standing = await catchStore.myStanding(device.id, since);
+      const standing = await catchStore.myStanding(device.id, since, until);
       if (standing) {
         me = {
           rank: standing.rank,

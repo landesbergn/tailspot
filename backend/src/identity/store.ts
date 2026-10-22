@@ -465,18 +465,22 @@ export interface CatchStore {
   deleteCatch(deviceId: string, catchUuid: string): Promise<boolean>;
   /**
    * Top-N enabled devices WITH a handle AND positive IN-WINDOW points, by total
-   * in-window points. `since` scopes the window: only catches with
-   * `caughtAt >= since` count (omit for the all-time board — the pre-windows
-   * behavior, unchanged).
+   * in-window points. `since` and `until` scope the window to the half-open
+   * range `since <= caughtAt < until` — the same [start, end) the crowns and
+   * challenges use. Omit both for the all-time board (the pre-windows
+   * behavior, unchanged). `until` is the window's `resetsAt`: without it a
+   * catch stamped in the FUTURE (a clock set ahead, or a hand-made request)
+   * would count on this board and every later one until its date arrived.
    */
-  leaderboard(limit: number, since?: Date): Promise<LeaderboardPage>;
+  leaderboard(limit: number, since?: Date, until?: Date): Promise<LeaderboardPage>;
   /**
    * The given device's rank + total points — computed over ALL devices
    * (handle-less devices accrue points and occupy ranks invisibly). `since`
-   * scopes both my points AND everyone's, so the rank is the in-window rank.
+   * and `until` scope both my points AND everyone's, so the rank is the
+   * in-window rank (same [since, until) range as `leaderboard`).
    * Null only for an unknown device id.
    */
-  myStanding(deviceId: string, since?: Date): Promise<MyStanding | null>;
+  myStanding(deviceId: string, since?: Date, until?: Date): Promise<MyStanding | null>;
   /**
    * DECIDE-ON-READ: make sure every closed week (Monday-00:00-UTC boundaries)
    * since the earliest catch has its champion(s) frozen in `weekly_champions`.
@@ -515,6 +519,27 @@ export interface CatchStore {
    * reach the server (there is no delete route), so this is kept catches only.
    */
   countCatches(): Promise<number>;
+}
+
+/**
+ * The LEFT JOIN condition from `devices` to the catches that count in a board
+ * window: `since <= caughtAt < until`, each bound applied only when given.
+ * Shared by `leaderboard` and `myStanding` so the board's entries and the
+ * caller's `me` can never disagree about which catches are in the window.
+ *
+ * The upper bound matters because the server stores whatever `caughtAt` the
+ * client sent. With only a lower bound, a catch dated next year sits on every
+ * weekly board between now and then, while the crown for each of those weeks
+ * (which uses [start, end)) ignores it — so the live #1 and the crown
+ * disagree. Bounding the live boards the same way keeps them consistent; the
+ * catch still counts, on the board for the week it claims to be from.
+ */
+function windowedCatchJoin(since?: Date, until?: Date) {
+  return and(
+    eq(catches.deviceId, devices.id),
+    since ? gte(catches.caughtAt, since) : undefined,
+    until ? lt(catches.caughtAt, until) : undefined,
+  );
 }
 
 export class DrizzleCatchStore implements CatchStore {
@@ -755,7 +780,7 @@ export class DrizzleCatchStore implements CatchStore {
     };
   }
 
-  async leaderboard(limit: number, since?: Date): Promise<LeaderboardPage> {
+  async leaderboard(limit: number, since?: Date, until?: Date): Promise<LeaderboardPage> {
     // Aggregate points + catch count per device — only those WITH a handle
     // AND positive points in the selected window.
     // Windowing lives in the JOIN condition; HAVING applies the same positive
@@ -764,9 +789,7 @@ export class DrizzleCatchStore implements CatchStore {
     // the FINAL tiebreaker so the order is TOTAL and DETERMINISTIC even in the
     // (rare) case where two devices share a createdAt timestamp — the same data
     // always yields the same order. Rank is the 1-based row position.
-    const joinOn = since
-      ? and(eq(catches.deviceId, devices.id), gte(catches.caughtAt, since))
-      : eq(catches.deviceId, devices.id);
+    const joinOn = windowedCatchJoin(since, until);
     const rows = await withDbRetry(() =>
       this.db
         .select({
@@ -810,13 +833,11 @@ export class DrizzleCatchStore implements CatchStore {
     };
   }
 
-  async myStanding(deviceId: string, since?: Date): Promise<MyStanding | null> {
+  async myStanding(deviceId: string, since?: Date, until?: Date): Promise<MyStanding | null> {
     // Windowing mirrors `leaderboard`: the filter lives in the LEFT JOIN so a
     // device with no in-window catches still ranks (with 0 points) rather than
     // vanishing.
-    const joinOn = since
-      ? and(eq(catches.deviceId, devices.id), gte(catches.caughtAt, since))
-      : eq(catches.deviceId, devices.id);
+    const joinOn = windowedCatchJoin(since, until);
 
     // The device's own total (in-window) points.
     const mine = await withDbRetry(() =>

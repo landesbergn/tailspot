@@ -39,6 +39,9 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
   let app: FastifyInstance;
   let db: Database;
   let uuidSeq = 0;
+  // The app's clock, in unix seconds. Starts at NOW for every test; a test
+  // that needs time to pass (a future-dated catch's week arriving) moves it.
+  let clockSeconds = NOW;
 
   function nextUuid(): string {
     uuidSeq += 1;
@@ -48,11 +51,12 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
 
   beforeEach(async () => {
     uuidSeq = 0;
+    clockSeconds = NOW;
     db = await makeTestDb();
     app = await buildApp({
       identityStore: new DrizzleIdentityStore(db),
       catchStore: new DrizzleCatchStore(db),
-      nowSeconds: () => NOW,
+      nowSeconds: () => clockSeconds,
       rateLimitNow: () => 0,
     });
   });
@@ -210,6 +214,51 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
     expect(all.window).toBe("all");
     expect(all.resetsAt).toBeNull();
     expect(all.champions).toBeNull();
+  });
+
+  it("a future-dated catch stays off the live boards until its own week/month arrives", async () => {
+    const alice = await register();
+    const mallory = await register();
+    await claim(alice.token, "Alice");
+    await claim(mallory.token, "Mallory");
+
+    await seedCatch(alice.deviceId, 10, utc(2026, 7, 9)); // this week (honest)
+    // Stamped in the future: next week (Mon Jul 20) and next month (Aug 5).
+    await seedCatch(mallory.deviceId, 1000, utc(2026, 7, 20, 9));
+    await seedCatch(mallory.deviceId, 5000, utc(2026, 8, 5, 9));
+
+    // Today (Sat Jul 11): neither future catch is on the week board, and the
+    // entries and Mallory's own `me` agree on that.
+    const week = await get("/v1/leaderboard?window=week", mallory.token);
+    expect(week.entries).toEqual([{ rank: 1, handle: "Alice", points: 10, catches: 1 }]);
+    expect(week.me.rank).toBe(0);
+    expect(week.me.points).toBe(0);
+
+    // The month board ends Aug 1: the Jul 20 catch is inside July (it counts,
+    // exactly as July's crown will count it); the Aug 5 one is not.
+    const month = await get("/v1/leaderboard?window=month", mallory.token);
+    expect(month.entries).toEqual([
+      { rank: 1, handle: "Mallory", points: 1000, catches: 1 },
+      { rank: 2, handle: "Alice", points: 10, catches: 1 },
+    ]);
+    expect(month.me.points).toBe(1000);
+
+    // The all-time board has no window, so it is unchanged by the bound.
+    const all = await get("/v1/leaderboard", mallory.token);
+    expect(all.entries[0]).toEqual({ rank: 1, handle: "Mallory", points: 6000, catches: 2 });
+
+    // Tue Jul 21: the Jul 20 catch's week has arrived, so it counts now.
+    clockSeconds = Math.floor(Date.UTC(2026, 6, 21, 12) / 1000);
+    const nextWeek = await get("/v1/leaderboard?window=week", mallory.token);
+    expect(nextWeek.entries).toEqual([{ rank: 1, handle: "Mallory", points: 1000, catches: 1 }]);
+    expect(nextWeek.me).toMatchObject({ rank: 1, points: 1000 });
+
+    // Thu Aug 6: the Aug 5 catch is on August's month board and its week's.
+    clockSeconds = Math.floor(Date.UTC(2026, 7, 6, 12) / 1000);
+    const august = await get("/v1/leaderboard?window=month", mallory.token);
+    expect(august.entries).toEqual([{ rank: 1, handle: "Mallory", points: 5000, catches: 1 }]);
+    const augustWeek = await get("/v1/leaderboard?window=week", mallory.token);
+    expect(augustWeek.me).toMatchObject({ rank: 1, points: 5000 });
   });
 
   it("month window starts on the 1st UTC and resets on the next 1st", async () => {
