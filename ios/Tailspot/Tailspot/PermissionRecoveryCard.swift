@@ -63,12 +63,17 @@ struct PermissionRecoveryCard: View {
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
+                ActivationTelemetry.firePermissionRecoverySettingsTapped(
+                    cameraDenied: cameraDenied, locationDenied: locationDenied
+                )
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             } label: {
                 Text("Open Settings")
-                    .font(.system(size: 15, weight: .bold))
+                    // Semantic button style so the label scales with
+                    // Dynamic Type (was a fixed 15 pt).
+                    .font(Brand.Font.button)
                     .foregroundStyle(.black.opacity(0.88))
                     .padding(.horizontal, 26)
                     .padding(.vertical, 12)
@@ -85,6 +90,16 @@ struct PermissionRecoveryCard: View {
             RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.alertCaution.opacity(0.35), lineWidth: 1)
         )
+        // Activation funnel: a denied permission is a first-run dead end, so
+        // record that the card was seen (and, above, whether Open Settings
+        // was tapped). `.onAppear` runs when the card enters the screen, not
+        // on every redraw, so this is once per appearance. Image snapshots
+        // (ImageRenderer) don't run it.
+        .onAppear {
+            ActivationTelemetry.firePermissionRecoveryShown(
+                cameraDenied: cameraDenied, locationDenied: locationDenied
+            )
+        }
     }
 }
 

@@ -286,6 +286,16 @@ struct ContentView: View {
     /// itself is once-per-install (persisted), but this short-circuits the
     /// per-tick filter work in `.onReceive(adsb.$observed)` after it's latched.
     @State private var firstPlaneSeenLatched = false
+    /// Session latch for `first_label_on_screen` (a label actually drawn in
+    /// frame). Like `firstPlaneSeenLatched`, it only saves the 1 Hz projection
+    /// work once the install-wide latch is set; see `activationFunnelTick`.
+    @State private var firstLabelOnScreenLatched = false
+    /// Empty-sky pill states already reported this session
+    /// (`empty_sky_state_shown` fires once per variant per session).
+    @State private var emptySkyVariantsReported: Set<ActivationTelemetry.EmptySkyVariant> = []
+    /// When `activationFunnelTick` first ran this session. "Stuck scanning"
+    /// is measured from here.
+    @State private var activationSessionStart: Date?
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
     /// row doesn't do a FileManager directory scan on every body eval. Refreshed
     /// when the debug panel opens and after a recording is toggled off.
@@ -1124,10 +1134,16 @@ struct ContentView: View {
             // `observed` publish) instead of in `body` on every 30 Hz frame.
             // Must run before the latch's early-return below, or the signature
             // would freeze once the activation telemetry latches.
-            visibleIcaoSignature = interactiveVisible(observed)
+            let interactive = interactiveVisible(observed)
+            visibleIcaoSignature = interactive
                 .map(\.aircraft.icao24)
                 .sorted()
                 .joined(separator: ",")
+
+            // first_label_on_screen + empty_sky_state_shown. Runs here at
+            // ~1 Hz, never in the 30 Hz render pass, and before the
+            // first_plane_seen early-return below.
+            activationFunnelTick(observed: observed, interactive: interactive)
 
             // Activation funnel: fire once when the first plane is actually
             // visible (post-filter). The fire is once-per-install (persisted);
@@ -1192,6 +1208,94 @@ struct ContentView: View {
             $0.isLikelyVisibleToObserver
                 || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
         }
+    }
+
+    // MARK: - Activation funnel (label milestones + empty sky)
+
+    /// How many of `planes` project inside the camera frame for the current
+    /// pose and zoom: the same inputs the 30 Hz label loop uses (including
+    /// its `heading ?? 0` fallback), so it counts the labels actually drawn.
+    private func onScreenLabelCount(_ planes: [ObservedAircraft]) -> Int {
+        let roll = Geo.rollDeg(
+            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+        )
+        let basis = Geo.cameraBasis(
+            headingDeg: location.heading ?? 0,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: roll
+        )
+        return ActivationTelemetry.onScreenCount(
+            targets: planes.map { (bearingDeg: $0.bearingDeg, elevationDeg: $0.elevationDeg) },
+            basis: basis,
+            hfovDeg: Self.baseHfovDeg / zoom,
+            vfovDeg: Self.baseVfovDeg / zoom
+        )
+    }
+
+    /// The ~1 Hz activation-funnel step, called from the
+    /// `.onReceive(adsb.$observed)` hook (never from `body`). `observed` is
+    /// the value being published, which `adsb.observed` doesn't hold yet.
+    private func activationFunnelTick(observed: [ObservedAircraft], interactive: [ObservedAircraft]) {
+        let now = Date()
+        let sessionStart = activationSessionStart ?? now
+        if activationSessionStart == nil { activationSessionStart = now }
+
+        // Only count what the user could see: no opaque sheet over the AR
+        // view, app in the foreground, and no permission recovery card
+        // standing in for the sky view.
+        guard !arOccluded, scenePhase == .active, !cameraDenied, !locationDenied else { return }
+
+        // first_label_on_screen. `interactive` is already empty while labels
+        // are suppressed, so a suppressed frame can't fire it.
+        if !firstLabelOnScreenLatched {
+            if ActivationTelemetry.firstLabelOnScreenFired() {
+                firstLabelOnScreenLatched = true
+            } else if !interactive.isEmpty {
+                ActivationTelemetry.fireFirstLabelOnScreenOnce(
+                    headingAccuracyDeg: location.headingAccuracy,
+                    visibleCount: interactive.count,
+                    onScreenCount: onScreenLabelCount(interactive)
+                )
+                firstLabelOnScreenLatched = ActivationTelemetry.firstLabelOnScreenFired()
+            }
+        }
+
+        // empty_sky_state_shown: the same counts the empty-sky pill uses
+        // (grounded planes are parked, not "nearby" traffic).
+        let airborne = observed.filter { !$0.grounded }
+        guard let variant = ActivationTelemetry.emptySkyVariant(
+            visibleCount: interactive.count,
+            rawCount: airborne.count,
+            hasError: adsb.lastError != nil || adsb.lastErrorUserMessage != nil,
+            neverFetched: adsb.lastFetched == nil,
+            isReconnecting: adsb.isReconnecting,
+            labelsSuppressed: suppressAmbientLabels
+        ) else { return }
+        let secondsInSession = now.timeIntervalSince(sessionStart)
+        guard ActivationTelemetry.shouldReportEmptySky(
+            variant, alreadyReported: emptySkyVariantsReported, secondsInSession: secondsInSession
+        ) else { return }
+        emptySkyVariantsReported.insert(variant)
+        ActivationTelemetry.fireEmptySkyStateShown(
+            variant: variant,
+            rawCount: airborne.count,
+            nearestSlantMeters: airborne.map(\.slantDistanceMeters).min(),
+            secondsInSession: secondsInSession
+        )
+    }
+
+    /// `first_label_tap`, called at each label pin site. Taps happen at human
+    /// speed, so the projection here costs nothing; the install latch inside
+    /// the fire makes every tap after the first a no-op.
+    private func fireFirstLabelTap(via: String) {
+        guard !UserDefaults.standard.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey) else { return }
+        let interactive = interactiveVisible(adsb.observed)
+        ActivationTelemetry.fireFirstLabelTapOnce(
+            via: via,
+            headingAccuracyDeg: location.headingAccuracy,
+            visibleCount: interactive.count,
+            onScreenCount: onScreenLabelCount(interactive)
+        )
     }
 
     /// True when an OPAQUE modal fully covers the camera / AR view — the
@@ -3946,6 +4050,7 @@ struct ContentView: View {
             pinnedIcao = icao
             revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
+            fireFirstLabelTap(via: "voiceover")
             lockOn.forceLock(targetIcao24: icao, now: now)
         }
     }
@@ -4051,6 +4156,7 @@ struct ContentView: View {
                 pinnedIcao = icao
                 revealedIcao = nil   // a normal pin is a visible plane, not a reveal
                 recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
+                fireFirstLabelTap(via: "direct")
                 // forceLock is the only way into .locked — the user
                 // just pointed at this plane, so the engine jumps
                 // straight to a locked state.
@@ -4085,6 +4191,7 @@ struct ContentView: View {
             pinnedIcao = icao
             revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
+            fireFirstLabelTap(via: "widened")
             lockOn.forceLock(targetIcao24: icao, now: now)
             return
         }
