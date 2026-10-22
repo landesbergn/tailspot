@@ -129,6 +129,26 @@ nonisolated struct CatchUploadHolds: Equatable, Sendable {
     func isHeld(_ key: String?, now: Date = Date()) -> Bool {
         Self.isHeld(key: key, holds: placedAt, now: now)
     }
+
+    /// Should runCatch hold this catch's upload for its route guess?
+    ///
+    /// Only when a guess question was attached AND a reveal that can show it
+    /// is (or is about to be) on screen:
+    ///   - no early shell (`earlyShell == nil`): runCatch presents the reveal
+    ///     itself, with the question, right after this decision → hold.
+    ///   - an early shell: hold only if the reveal on screen is THAT shell.
+    ///     If the user closed it (nothing on screen), or closed it and started
+    ///     another catch (a different shell on screen), nobody can answer
+    ///     this catch's question, and the other catch's callbacks only
+    ///     release their own row, so a hold would just strand this one until
+    ///     the 120 s expiry.
+    /// Takes `AnyObject` so it is testable without building a RevealLoader.
+    static func shouldHold(hasGuess: Bool, earlyShell: AnyObject?,
+                           shellOnScreen: AnyObject?) -> Bool {
+        guard hasGuess else { return false }
+        guard let earlyShell else { return true }
+        return shellOnScreen === earlyShell
+    }
 }
 
 @MainActor
@@ -151,8 +171,26 @@ class CatchUploader {
         Log.ui.info("CatchUploader: holding \(row.icao24, privacy: .public) for its route guess")
         Task {
             try? await Task.sleep(for: .seconds(CatchUploadHolds.timeout + 1))
+            // Released early: the release already uploaded, so skip the
+            // sweep. Otherwise this drops the expired entry from the registry
+            // and uploads the row without its guess.
+            //
+            // Known limit: a guess answered after this point is lost. The row
+            // is already POSTed, and the backend keeps the original row on a
+            // replayed catchUuid (ON CONFLICT DO NOTHING), so the client can't
+            // fix it alone. It needs the backend fill-in of a late guess on
+            // replay (a separate backend follow-up).
+            guard expireGuessHold(key) else { return }
             await CatchUploader().uploadPending(context: context)
         }
+    }
+
+    /// The timeout path: remove `key`'s hold so the registry never keeps an
+    /// expired entry. Returns false when the hold was already released (the
+    /// answer or reveal close got there first), so the caller skips its
+    /// sweep.
+    static func expireGuessHold(_ key: String) -> Bool {
+        guessHolds.release(key)
     }
 
     /// Release `row`'s guess hold (if any) and upload it now. Called when the
@@ -167,7 +205,6 @@ class CatchUploader {
     static func isHeldForGuess(_ row: Catch, now: Date = Date()) -> Bool {
         guessHolds.isHeld(row.serverUuid, now: now)
     }
-
 
     private let client: TailspotAccountClient
 

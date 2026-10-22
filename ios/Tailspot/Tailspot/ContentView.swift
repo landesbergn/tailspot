@@ -2673,14 +2673,18 @@ struct ContentView: View {
             // a row is POSTed once, so uploading before the answer meant the
             // server never saw the guess and never awarded its bonus. The
             // reveal's resolve/dismiss callbacks release the hold and upload.
-            // No hold when the user already closed the early shell (nothing
-            // left on screen to answer). This must stay in the same MainActor
+            // No hold when this catch's early shell is no longer the reveal
+            // on screen (closed, or replaced by another catch's reveal), see
+            // `CatchUploadHolds.shouldHold`. This must stay in the same MainActor
             // run as the save above (no `await` in between), so no sweep can
             // slip the row out before the hold lands. The guess round never
             // fires on a first catch, so the first-catch rank upload is
             // still immediate.
             if !newCatches.isEmpty {
-                if let payload = guessPayload, earlyLoader == nil || pendingReveal != nil {
+                if let payload = guessPayload,
+                   CatchUploadHolds.shouldHold(hasGuess: true,
+                                               earlyShell: earlyLoader,
+                                               shellOnScreen: pendingReveal?.loader) {
                     CatchUploader.holdForGuess(payload.row, context: modelContext)
                 }
                 Task { await CatchUploader().uploadPending(context: modelContext) }
