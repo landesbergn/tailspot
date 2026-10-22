@@ -290,12 +290,15 @@ struct ContentView: View {
     /// frame). Like `firstPlaneSeenLatched`, it only saves the 1 Hz projection
     /// work once the install-wide latch is set; see `activationFunnelTick`.
     @State private var firstLabelOnScreenLatched = false
-    /// Empty-sky pill states already reported this session
-    /// (`empty_sky_state_shown` fires once per variant per session).
-    @State private var emptySkyVariantsReported: Set<ActivationTelemetry.EmptySkyVariant> = []
-    /// When `emptySkyFunnelTick` first ran this session. "Stuck scanning"
-    /// is measured from here.
-    @State private var activationSessionStart: Date?
+    /// `empty_sky_state_shown` session: its start ("stuck scanning" is
+    /// measured from here) and the variants already reported (once per
+    /// variant per session). Reset when the app goes to the background, in
+    /// the `.onChange(of: scenePhase)` handler.
+    @State private var emptySkySession = ActivationTelemetry.EmptySkySession()
+    /// Whether the permission recovery card was showing on the last 1 Hz
+    /// tick, so `permission_recovery_shown` fires once per hidden-to-shown
+    /// transition (see `permissionRecoveryFunnelTick`).
+    @State private var permissionRecoveryWasShowing = false
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
     /// row doesn't do a FileManager directory scan on every body eval. Refreshed
     /// when the debug panel opens and after a recording is toggled off.
@@ -951,6 +954,10 @@ struct ContentView: View {
                 motion.stop()
                 adsb.stop()
                 visualConfirm.updateTarget(nil)
+                // A trip to the background ends the empty-sky session, so
+                // the return starts fresh variants and a fresh clock.
+                // (.inactive alone, e.g. pulling down Control Center, doesn't.)
+                if phase == .background { emptySkySession.reset() }
             @unknown default:
                 break
             }
@@ -1171,6 +1178,7 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(1))
                 labelSuppressionTick()
                 emptySkyFunnelTick()
+                permissionRecoveryFunnelTick()
             }
         }
         .sheet(isPresented: replaySheetPresented) {
@@ -1215,30 +1223,29 @@ struct ContentView: View {
     // MARK: - Activation funnel (label milestones + empty sky)
 
     /// How many of `planes` project inside the camera frame for the current
-    /// pose and zoom: the same inputs the 30 Hz label loop uses (including
-    /// its `heading ?? 0` fallback), so it counts the labels actually drawn.
-    private func onScreenLabelCount(_ planes: [ObservedAircraft]) -> Int {
-        let roll = Geo.rollDeg(
-            gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
-        )
-        let basis = Geo.cameraBasis(
-            headingDeg: location.heading ?? 0,
-            cameraElevationDeg: motion.cameraElevationDeg,
-            rollDeg: roll
-        )
-        return ActivationTelemetry.onScreenCount(
+    /// pose and zoom: the same inputs the 30 Hz label loop uses, so it
+    /// counts the labels actually drawn. nil until the compass has a real
+    /// heading (the renderer's `heading ?? 0` fallback would otherwise make
+    /// this count against a made-up direction).
+    private func onScreenLabelCount(_ planes: [ObservedAircraft]) -> Int? {
+        ActivationTelemetry.onScreenCount(
             targets: planes.map { (bearingDeg: $0.bearingDeg, elevationDeg: $0.elevationDeg) },
-            basis: basis,
+            headingDeg: location.heading,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: Geo.rollDeg(
+                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+            ),
             hfovDeg: Self.baseHfovDeg / zoom,
             vfovDeg: Self.baseVfovDeg / zoom
         )
     }
 
     /// Only count what the user could see: no opaque sheet over the AR
-    /// view, app in the foreground, and no permission recovery card
-    /// standing in for the sky view.
+    /// view, app in the foreground, a live camera (authorized, not just
+    /// "not denied": while the prompt is pending there's no picture), and
+    /// no permission recovery card standing in for the sky view.
     private var activationFunnelCanCount: Bool {
-        !arOccluded && scenePhase == .active && !cameraDenied && !locationDenied
+        !arOccluded && scenePhase == .active && cameraAuthorized && !locationDenied
     }
 
     /// `first_label_on_screen`, called from the `.onReceive(adsb.$observed)`
@@ -1250,11 +1257,11 @@ struct ContentView: View {
         // suppressed frame can't fire it.
         if ActivationTelemetry.firstLabelOnScreenFired() {
             firstLabelOnScreenLatched = true
-        } else if !interactive.isEmpty {
+        } else if !interactive.isEmpty, let onScreen = onScreenLabelCount(interactive) {
             ActivationTelemetry.fireFirstLabelOnScreenOnce(
                 headingAccuracyDeg: location.headingAccuracy,
                 visibleCount: interactive.count,
-                onScreenCount: onScreenLabelCount(interactive)
+                onScreenCount: onScreen
             )
             firstLabelOnScreenLatched = ActivationTelemetry.firstLabelOnScreenFired()
         }
@@ -1266,9 +1273,13 @@ struct ContentView: View {
     /// publishes, so an observed-driven check would go quiet in exactly the
     /// "stuck on SCANNING SKY" case it exists to catch.
     private func emptySkyFunnelTick() {
+        // Nothing left to report this session.
+        guard !emptySkySession.isComplete else { return }
+        // Start the session clock only while in the foreground, so a tick
+        // that lands just after a background reset can't start it early.
+        guard scenePhase == .active else { return }
         let now = Date()
-        let sessionStart = activationSessionStart ?? now
-        if activationSessionStart == nil { activationSessionStart = now }
+        let secondsInSession = emptySkySession.secondsInSession(now: now)
         guard activationFunnelCanCount else { return }
 
         // The same counts the empty-sky pill uses (grounded planes are
@@ -1284,11 +1295,7 @@ struct ContentView: View {
             isReconnecting: adsb.isReconnecting,
             labelsSuppressed: suppressAmbientLabels
         ) else { return }
-        let secondsInSession = now.timeIntervalSince(sessionStart)
-        guard ActivationTelemetry.shouldReportEmptySky(
-            variant, alreadyReported: emptySkyVariantsReported, secondsInSession: secondsInSession
-        ) else { return }
-        emptySkyVariantsReported.insert(variant)
+        guard emptySkySession.claim(variant, now: now) else { return }
         ActivationTelemetry.fireEmptySkyStateShown(
             variant: variant,
             rawCount: airborne.count,
@@ -1298,13 +1305,33 @@ struct ContentView: View {
         )
     }
 
+    /// `permission_recovery_shown`, called once a second from the `.task`
+    /// loop in `body`. Fires on each hidden-to-shown transition of the
+    /// recovery card (the same `cameraDenied || locationDenied` condition
+    /// `body` uses to show it). Driven from this state rather than the
+    /// card's `.onAppear`, which remounts and snapshot harnesses re-run.
+    /// Foreground only, so the card counts when the user could see it.
+    private func permissionRecoveryFunnelTick() {
+        guard scenePhase == .active else { return }
+        let showing = cameraDenied || locationDenied
+        defer { permissionRecoveryWasShowing = showing }
+        guard ActivationTelemetry.recoveryCardBecameVisible(
+            wasShowing: permissionRecoveryWasShowing, isShowing: showing
+        ) else { return }
+        ActivationTelemetry.firePermissionRecoveryShown(
+            cameraDenied: cameraDenied, locationDenied: locationDenied
+        )
+    }
+
     /// `first_label_tap`, called at each label pin site. Taps happen at human
     /// speed, so the projection here costs nothing; the install latch inside
     /// the fire makes every tap after the first a no-op.
     private func fireFirstLabelTap(via: String) {
         guard !UserDefaults.standard.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey) else { return }
         let interactive = interactiveVisible(adsb.observed)
-        ActivationTelemetry.fireFirstLabelTapOnce(
+        // recordLabelTap fires first_label_on_screen first if the 1 Hz
+        // sampler hasn't yet, so a quick tap can't land before it.
+        ActivationTelemetry.recordLabelTap(
             via: via,
             headingAccuracyDeg: location.headingAccuracy,
             visibleCount: interactive.count,

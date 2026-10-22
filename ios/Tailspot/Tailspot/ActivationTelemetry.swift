@@ -159,6 +159,25 @@ nonisolated enum ActivationTelemetry {
         }
     }
 
+    /// `onScreenCount` for a raw pose. Returns nil while the compass has no
+    /// heading yet: the label renderer falls back to heading 0 then, so a
+    /// count would be measured against a made-up direction. The 1 Hz
+    /// caller treats nil as "can't tell yet" and doesn't latch.
+    static func onScreenCount(
+        targets: [(bearingDeg: Double, elevationDeg: Double)],
+        headingDeg: Double?,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double
+    ) -> Int? {
+        guard let headingDeg else { return nil }
+        let basis = Geo.cameraBasis(
+            headingDeg: headingDeg, cameraElevationDeg: cameraElevationDeg, rollDeg: rollDeg
+        )
+        return onScreenCount(targets: targets, basis: basis, hfovDeg: hfovDeg, vfovDeg: vfovDeg)
+    }
+
     /// Seconds since this install's first camera frame, or nil when the
     /// stamp is missing (an install that latched before 1.2.3).
     static func secondsSinceARFirstFrame(
@@ -171,17 +190,19 @@ nonisolated enum ActivationTelemetry {
 
     /// Properties shared by both label milestones. Heading accuracy and the
     /// time since the first frame are left off when unknown (no compass fix
-    /// yet, or a pre-1.2.3 install) instead of being sent as a fake 0.
+    /// yet, or a pre-1.2.3 install) instead of being sent as a fake 0. The
+    /// on-screen count is left off too when there was no heading to
+    /// measure it against.
     static func labelProperties(
         headingAccuracyDeg: Double?,
         secondsSinceARFirstFrame: Double?,
         visibleCount: Int,
-        onScreenCount: Int
+        onScreenCount: Int?
     ) -> [String: AnalyticsValue] {
         var props: [String: AnalyticsValue] = [
             "visible_count": .int(visibleCount),
-            "on_screen_count": .int(onScreenCount),
         ]
+        if let onScreenCount { props["on_screen_count"] = .int(onScreenCount) }
         // CoreLocation reports a negative accuracy for an invalid heading.
         if let a = headingAccuracyDeg, a >= 0 { props["heading_accuracy_deg"] = .double(a) }
         if let s = secondsSinceARFirstFrame { props["seconds_since_ar_first_frame"] = .double(s.rounded()) }
@@ -237,6 +258,46 @@ nonisolated enum ActivationTelemetry {
         guard !alreadyReported.contains(variant) else { return false }
         if variant == .scanning { return secondsInSession >= scanningReportAfterSeconds }
         return true
+    }
+
+    /// Per-session state for `empty_sky_state_shown`: when the session
+    /// started and which variants it has reported. ContentView holds one as
+    /// `@State` and resets it when the app goes to the background, so a
+    /// return from the background is a new session (fresh variants, and
+    /// `seconds_in_session` doesn't count time spent in the background).
+    struct EmptySkySession: Equatable, Sendable {
+        private(set) var start: Date?
+        private(set) var reported: Set<EmptySkyVariant> = []
+
+        /// Every variant has been reported, so the 1 Hz tick can stop work.
+        var isComplete: Bool { reported.count == EmptySkyVariant.allCases.count }
+
+        /// Seconds since the session started, starting it at `now` on the
+        /// first call.
+        mutating func secondsInSession(now: Date) -> Double {
+            if start == nil { start = now }
+            return now.timeIntervalSince(start ?? now)
+        }
+
+        /// True (and records the variant) when `variant` should report now.
+        mutating func claim(_ variant: EmptySkyVariant, now: Date) -> Bool {
+            let seconds = secondsInSession(now: now)
+            guard shouldReportEmptySky(variant, alreadyReported: reported, secondsInSession: seconds) else {
+                return false
+            }
+            reported.insert(variant)
+            return true
+        }
+
+        mutating func reset() { self = EmptySkySession() }
+    }
+
+    /// `permission_recovery_shown` fires when the recovery card goes from
+    /// hidden to showing, once per transition. It's driven from ContentView's
+    /// state, not the card's `.onAppear`, so remounts and snapshot harnesses
+    /// don't re-fire it.
+    static func recoveryCardBecameVisible(wasShowing: Bool, isShowing: Bool) -> Bool {
+        isShowing && !wasShowing
     }
 
     static func emptySkyProperties(
@@ -347,7 +408,7 @@ nonisolated enum ActivationTelemetry {
         via: String,
         headingAccuracyDeg: Double?,
         visibleCount: Int,
-        onScreenCount: Int,
+        onScreenCount: Int?,
         now: Date = Date(),
         defaults: UserDefaults = .standard
     ) {
@@ -361,6 +422,38 @@ nonisolated enum ActivationTelemetry {
         )
         props["via"] = .string(via)
         Analytics.capture(firstLabelTapEvent, props)
+    }
+
+    /// The label-tap entry point for the pin sites. A tapped label was on
+    /// screen by definition, but `first_label_on_screen` is only sampled at
+    /// ~1 Hz, so a quick first tap could beat it. This fires the on-screen
+    /// milestone first when it hasn't fired yet (with at least the tapped
+    /// label counted), so the funnel never shows a tap without, or before,
+    /// an on-screen label.
+    static func recordLabelTap(
+        via: String,
+        headingAccuracyDeg: Double?,
+        visibleCount: Int,
+        onScreenCount: Int?,
+        now: Date = Date(),
+        defaults: UserDefaults = .standard
+    ) {
+        guard !defaults.bool(forKey: firstLabelTapFiredKey) else { return }
+        fireFirstLabelOnScreenOnce(
+            headingAccuracyDeg: headingAccuracyDeg,
+            visibleCount: visibleCount,
+            onScreenCount: max(onScreenCount ?? 0, 1),
+            now: now,
+            defaults: defaults
+        )
+        fireFirstLabelTapOnce(
+            via: via,
+            headingAccuracyDeg: headingAccuracyDeg,
+            visibleCount: visibleCount,
+            onScreenCount: onScreenCount,
+            now: now,
+            defaults: defaults
+        )
     }
 
     /// Session-scoped (the caller holds the per-variant latch).

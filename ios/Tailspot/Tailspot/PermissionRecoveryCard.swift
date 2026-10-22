@@ -90,16 +90,9 @@ struct PermissionRecoveryCard: View {
             RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.alertCaution.opacity(0.35), lineWidth: 1)
         )
-        // Activation funnel: a denied permission is a first-run dead end, so
-        // record that the card was seen (and, above, whether Open Settings
-        // was tapped). `.onAppear` runs when the card enters the screen, not
-        // on every redraw, so this is once per appearance. Image snapshots
-        // (ImageRenderer) don't run it.
-        .onAppear {
-            ActivationTelemetry.firePermissionRecoveryShown(
-                cameraDenied: cameraDenied, locationDenied: locationDenied
-            )
-        }
+        // `permission_recovery_shown` is fired by ContentView when the card's
+        // show condition turns on (permissionRecoveryFunnelTick), not from
+        // `.onAppear` here, so remounts and snapshot harnesses don't re-fire it.
     }
 }
 

@@ -359,4 +359,112 @@ struct ActivationTelemetryTests {
         #expect(ActivationTelemetry.locationAccuracyName(.fullAccuracy) == "precise")
         #expect(ActivationTelemetry.locationAccuracyName(.reducedAccuracy) == "approximate")
     }
+
+    // MARK: - Review fixes: tap ordering, real heading, sessions, recovery
+
+    @Test func aQuickFirstTapLatchesOnScreenFirst() throws {
+        // The tap can beat the 1 Hz on-screen sampler; the funnel must still
+        // show the on-screen milestone, with the tapped label counted.
+        let defaults = try freshDefaults()
+        ActivationTelemetry.recordLabelTap(
+            via: "direct", headingAccuracyDeg: 10, visibleCount: 2, onScreenCount: 0, defaults: defaults)
+        #expect(ActivationTelemetry.firstLabelOnScreenFired(defaults: defaults))
+        #expect(defaults.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey))
+    }
+
+    @Test func aTapWithNoHeadingStillLatchesBothMilestones() throws {
+        let defaults = try freshDefaults()
+        ActivationTelemetry.recordLabelTap(
+            via: "voiceover", headingAccuracyDeg: nil, visibleCount: 1, onScreenCount: nil, defaults: defaults)
+        #expect(ActivationTelemetry.firstLabelOnScreenFired(defaults: defaults))
+        #expect(defaults.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey))
+    }
+
+    @Test func aTapAfterOnScreenLeavesItAlone() throws {
+        // On-screen already fired from the sampler; the tap only adds its own.
+        let defaults = try freshDefaults()
+        ActivationTelemetry.fireFirstLabelOnScreenOnce(
+            headingAccuracyDeg: 10, visibleCount: 1, onScreenCount: 1, defaults: defaults)
+        ActivationTelemetry.recordLabelTap(
+            via: "widened", headingAccuracyDeg: 10, visibleCount: 1, onScreenCount: 1, defaults: defaults)
+        #expect(ActivationTelemetry.firstLabelOnScreenFired(defaults: defaults))
+        #expect(defaults.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey))
+    }
+
+    @Test func onScreenCountIsUnknownWithoutAHeading() {
+        // No compass heading yet: the renderer would draw at heading 0, so a
+        // count would be measured against a made-up direction.
+        let target = [(bearingDeg: 5.0, elevationDeg: 28.0)]
+        #expect(ActivationTelemetry.onScreenCount(
+            targets: target, headingDeg: nil, cameraElevationDeg: 30, rollDeg: 0,
+            hfovDeg: 56, vfovDeg: 72) == nil)
+        #expect(ActivationTelemetry.onScreenCount(
+            targets: target, headingDeg: 0, cameraElevationDeg: 30, rollDeg: 0,
+            hfovDeg: 56, vfovDeg: 72) == 1)
+        // Real heading pointing away: a real zero, not unknown.
+        #expect(ActivationTelemetry.onScreenCount(
+            targets: target, headingDeg: 180, cameraElevationDeg: 30, rollDeg: 0,
+            hfovDeg: 56, vfovDeg: 72) == 0)
+    }
+
+    @Test func labelPropertiesOmitOnScreenCountWhenUnmeasured() {
+        let p = ActivationTelemetry.labelProperties(
+            headingAccuracyDeg: nil, secondsSinceARFirstFrame: nil, visibleCount: 2, onScreenCount: nil)
+        #expect(p["on_screen_count"] == nil)
+        #expect(p["visible_count"]?.jsonValue as? Int == 2)
+    }
+
+    @Test func emptySkySessionClockStartsOnFirstTick() {
+        var session = ActivationTelemetry.EmptySkySession()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let r1 = session.secondsInSession(now: t0)
+        #expect(r1 == 0)
+        let r2 = session.secondsInSession(now: t0.addingTimeInterval(7))
+        #expect(r2 == 7)
+    }
+
+    @Test func emptySkySessionClaimsEachVariantOnce() {
+        var session = ActivationTelemetry.EmptySkySession()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let r3 = session.claim(.scanning, now: t0)
+        #expect(!r3)  // too early
+        let r4 = session.claim(.scanning, now: t0.addingTimeInterval(6))
+        #expect(r4)
+        let r5 = session.claim(.scanning, now: t0.addingTimeInterval(9))
+        #expect(!r5)  // already reported
+        #expect(!session.isComplete)
+        let r6 = session.claim(.noneNearby, now: t0.addingTimeInterval(10))
+        #expect(r6)
+        let r7 = session.claim(.nNearby, now: t0.addingTimeInterval(11))
+        #expect(r7)
+        #expect(session.isComplete)
+    }
+
+    @Test func emptySkySessionResetStartsAFreshSession() {
+        // Returning from the background: variants report again and the
+        // clock restarts, so background time isn't in seconds_in_session.
+        var session = ActivationTelemetry.EmptySkySession()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        _ = session.secondsInSession(now: t0)
+        let r8 = session.claim(.nNearby, now: t0.addingTimeInterval(1))
+        #expect(r8)
+        session.reset()
+        #expect(session.start == nil)
+        #expect(session.reported.isEmpty)
+        let back = t0.addingTimeInterval(3_600)
+        let r9 = session.secondsInSession(now: back)
+        #expect(r9 == 0)
+        let r10 = session.claim(.nNearby, now: back)
+        #expect(r10)
+        // Scanning waits for the fresh session's own 5 s, not the old one's.
+        let r11 = session.claim(.scanning, now: back.addingTimeInterval(1))
+        #expect(!r11)
+    }
+
+    @Test func recoveryCardReportsOncePerShowTransition() {
+        #expect(ActivationTelemetry.recoveryCardBecameVisible(wasShowing: false, isShowing: true))
+        #expect(!ActivationTelemetry.recoveryCardBecameVisible(wasShowing: true, isShowing: true))
+        #expect(!ActivationTelemetry.recoveryCardBecameVisible(wasShowing: true, isShowing: false))
+        #expect(!ActivationTelemetry.recoveryCardBecameVisible(wasShowing: false, isShowing: false))
+    }
 }
