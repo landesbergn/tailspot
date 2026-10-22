@@ -368,7 +368,8 @@ struct TrophyUnlockCenterTests {
     }
 
     /// The grounded easter egg records an event and re-diffs the SAME
-    /// Hangar; the event count is in the memo key, so Ground Stop fires now.
+    /// Hangar; whether the event has occurred is in the memo key, so Ground
+    /// Stop fires now.
     @Test func groundedEventBustsTheMemo() {
         let suite = isolatedSuite()
         let events = TrophyEventStore(defaults: suite)

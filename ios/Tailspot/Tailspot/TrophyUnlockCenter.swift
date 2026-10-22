@@ -42,9 +42,9 @@ nonisolated struct TrophyRecap: Equatable, Sendable {
 ///  • the current time zone itself — the hour-of-day trophies (night,
 ///    red-eye, dawn, weekend) read `caughtAt` through a calendar in the
 ///    phone's zone, so flying home can change them without a row edit.
-/// Plus the two UserDefaults-backed stores (grounded easter-egg events,
-/// cached leaderboard standing). Missing any of these would serve stale
-/// inputs, and a stale input is a missed (or late) celebration.
+/// Plus the two UserDefaults-backed stores (whether each easter-egg event
+/// has occurred, cached leaderboard standing). Missing any of these would
+/// serve stale inputs, and a stale input is a missed (or late) celebration.
 ///
 /// Cost: two cheap hashing passes over the rows — a few field reads each,
 /// far less than one `inputs` pass (no rarity/type lookups, no set
@@ -63,8 +63,13 @@ enum TrophyInputsToken {
             hasher.combine(c.caughtDayKey)
         }
         hasher.combine(timeZone.identifier)
+        // `hasOccurred`, not `count(of:)`: the inputs only read whether an
+        // event ever happened, and `record` bumps the counter on EVERY call.
+        // Hashing the count made each grounded tap a guaranteed memo miss
+        // (a hashing pass plus a full pass); hashing the flag makes only the
+        // first tap — the one that can earn Ground Stop — miss.
         for event in TrophyEventStore.Event.allCases {
-            hasher.combine(events.count(of: event))
+            hasher.combine(events.hasOccurred(event))
         }
         hasher.combine(standing.weeklyWins)
         hasher.combine(standing.everToppedAllTime)
@@ -94,10 +99,10 @@ final class TrophyUnlockCenter: ObservableObject {
     /// drained by `finishAchievementDates()` off the launch path.
     private var pendingDateBackfill: (catches: [Catch], inputs: TrophyProgressInputs)?
     /// The last inputs this center computed, keyed by `TrophyInputsToken`.
-    /// Most re-diffs see an unchanged Hangar — every sheet close, a grounded
-    /// tap, the second diff of a catch whose geocode found nothing new — and
-    /// on a big Hangar each full `Trophies.inputs` pass is hundreds of ms on
-    /// the main thread (0.42 s at 4,600 catches). A token match reuses these
+    /// Most re-diffs see an unchanged Hangar — every sheet close, every
+    /// grounded tap after the first — and on a big Hangar each full
+    /// `Trophies.inputs` pass is hundreds of ms on the main thread (0.42 s
+    /// at 4,600 catches). A token match reuses these
     /// inputs, so those re-diffs cost a hashing pass instead.
     private var memo: (token: Int, inputs: TrophyProgressInputs)?
 

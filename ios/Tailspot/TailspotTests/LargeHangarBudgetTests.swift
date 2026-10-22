@@ -194,11 +194,36 @@ struct LargeHangarBudgetTests {
         center.enqueueNewUnlocks(from: rows)          // launch: seed
         let afterLaunch = center.fullInputsPasses
         #expect(afterLaunch == 1)
-        // Sheet close, sheet close, grounded tap with nothing new: all hits.
+        // Three sheet closes with nothing new: all hits. (Repeat grounded
+        // taps are pinned separately in repeatGroundedTapsAreMemoHits.)
         center.enqueueNewUnlocks(from: rows)
         center.enqueueNewUnlocks(from: rows)
         center.enqueueNewUnlocks(from: rows)
         #expect(center.fullInputsPasses == afterLaunch)
+    }
+
+    /// The grounded easter egg records an event and re-diffs on EVERY tap of
+    /// a parked plane. Only the first tap can change the inputs (Ground Stop
+    /// reads "ever happened", not a count), so only the first may pay a pass.
+    @Test func repeatGroundedTapsAreMemoHits() {
+        let suite = UserDefaults(suiteName: "test.budget.\(UUID().uuidString)")!
+        let events = TrophyEventStore(defaults: suite)
+        let center = TrophyUnlockCenter(
+            ledger: UserDefaultsTrophyLedger(defaults: suite),
+            events: events,
+            standing: LeaderboardStandingCache(defaults: suite))
+        let rows = Self.hangar10k
+        center.enqueueNewUnlocks(from: rows)          // launch: seed
+        let afterLaunch = center.fullInputsPasses
+        events.record(.groundedCatchAttempt)          // first tap
+        center.enqueueNewUnlocks(from: rows)
+        #expect(center.fullInputsPasses == afterLaunch + 1)
+        #expect(center.pendingEvents.contains { $0.achievementID == "groundstop" })
+        events.record(.groundedCatchAttempt)          // second and third taps
+        center.enqueueNewUnlocks(from: rows)
+        events.record(.groundedCatchAttempt)
+        center.enqueueNewUnlocks(from: rows)
+        #expect(center.fullInputsPasses == afterLaunch + 1)
     }
 
     @Test func oneNewCatchDoesExactlyOneInputsPass() {
