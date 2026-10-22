@@ -162,13 +162,20 @@ nonisolated struct RaceGap: Equatable, Sendable {
     /// The gap for this board, or nil when the line should be hidden.
     ///
     /// - `myHandle`: the local handle, or nil when the device has none.
+    /// - `handleConfirmed`: whether the server has acknowledged `myHandle`
+    ///   for this device (`SpotterHandle.isConfirmed`). The make-the-board
+    ///   goal needs it: a stranded handle (claim 409'd or never synced) gets
+    ///   no row however many points it earns.
     ///
     /// Hidden when: not the week window (month/all-time, or the pre-windows
-    /// backend with no `window` key), no `me` (not registered), an empty
-    /// board, I'm first on the board, or the gap is past `maxCatches`.
+    /// backend with no `window` key), no `me` (not registered — also a
+    /// disabled device, whose token the server no longer resolves), an
+    /// empty board, I'm first on the board, a not-yet-confirmed handle that
+    /// isn't on the board, or the gap is past `maxCatches`.
     static func compute(response: LeaderboardResponse,
                         window: LeaderboardWindow,
-                        myHandle: String?) -> RaceGap? {
+                        myHandle: String?,
+                        handleConfirmed: Bool) -> RaceGap? {
         guard window == .week,
               response.window == LeaderboardWindow.week.rawValue,
               let me = response.me else { return nil }
@@ -176,8 +183,13 @@ nonisolated struct RaceGap: Equatable, Sendable {
         guard !entries.isEmpty else { return nil }
 
         let myIndex = myHandle.flatMap { handle in
-            entries.firstIndex { $0.handle.lowercased() == handle.lowercased() }
+            entries.firstIndex { $0.isHandle(handle) }
         }
+        // `me` comes from a separate server query (myStanding) than the
+        // rows; a catch uploading between the two leaves them out of step.
+        // When I'm a row, measure from MY ROW's points so the line always
+        // agrees with the numbers printed on the board above it.
+        let myPoints = myIndex.map { entries[$0].points } ?? me.points
 
         let target: Target
         let gap: Int
@@ -188,21 +200,34 @@ nonisolated struct RaceGap: Equatable, Sendable {
             guard myIndex > 0 else { return nil }  // I'm #1
             let above = entries[myIndex - 1]
             target = .pass(handle: above.handle)
-            gap = above.points - me.points + 1
+            gap = above.points - myPoints + 1
         } else {
             // Handle-less devices never get a row (the backend lists only
             // handled devices in `entries`), so a points goal would be a
             // promise points alone can't keep. The existing "claim a
             // handle" hint is their whole story.
             guard myHandle != nil else { return nil }
-            // Handled but not a row on the board. With room left (under
-            // the display limit), any point earns a row; a full board
-            // means beating the last row.
+            // Stranded: the server doesn't hold this handle, so no number
+            // of points earns a row. Being ON the board (the branch above)
+            // already proves the server has it, so only this path checks.
+            guard handleConfirmed else { return nil }
+            // Handled but not a row on the board. With room left, any
+            // point earns a row; a full board means beating the last row.
+            // "Full" trusts the server's `totalCatchers` (qualifying
+            // spotters before the row limit) as well as the row count, so
+            // a short response can't promise "1 PT" when the real board is
+            // full. An older server without the count falls back to rows.
+            //
+            // Belt and braces for a strand the marker missed: a device
+            // with points that still isn't a row on a board with room can't
+            // be listed, and the gap below comes out ≤ 0 and hides.
             target = .makeBoard
-            if entries.count < LeaderboardResponse.displayLimit {
-                gap = 1 - me.points
+            let boardFull = entries.count >= LeaderboardResponse.displayLimit
+                || (response.totalCatchers ?? 0) >= LeaderboardResponse.displayLimit
+            if boardFull {
+                gap = entries[entries.count - 1].points - myPoints + 1
             } else {
-                gap = entries[entries.count - 1].points - me.points + 1
+                gap = 1 - myPoints
             }
         }
         guard gap >= 1, catches(for: gap) <= maxCatches else { return nil }
@@ -211,7 +236,7 @@ nonisolated struct RaceGap: Equatable, Sendable {
         // when the tenth isn't the very spotter I'm already told to pass.
         var topTen: Int? = nil
         if let myIndex, myIndex > 10, entries.count >= 10 {
-            let tenthGap = entries[9].points - me.points + 1
+            let tenthGap = entries[9].points - myPoints + 1
             if tenthGap >= 1, catches(for: tenthGap) <= maxCatches {
                 topTen = tenthGap
             }
@@ -245,7 +270,73 @@ nonisolated struct RaceGap: Equatable, Sendable {
         return "\(catches) · RESETS \(resetWeekday)"
     }
 
+    /// VoiceOver prose for the whole row — the same facts as `headline`,
+    /// `topTenLine` and `detail` (reset day included), without "≈"/"PTS".
+    func spoken(resetWeekday: String?) -> String {
+        let goal: String
+        switch target {
+        case .pass(let handle): goal = "to pass \(handle)"
+        case .makeBoard:        goal = "to make the board"
+        }
+        let n = catchesEquivalent
+        var text = "\(Self.spokenPoints(points)) \(goal), "
+            + "about \(n) common catch\(n == 1 ? "" : "es")"
+        if let top = topTenPoints {
+            text += ". \(Self.spokenPoints(top)) to the top 10"
+        }
+        if let resetWeekday {
+            text += ". Resets \(resetWeekday.capitalized)"
+        }
+        return text
+    }
+
+    /// Analytics `target` value for `leaderboard_gap_shown`.
+    var analyticsTarget: String {
+        switch target {
+        case .pass:      return "pass"
+        case .makeBoard: return "make_board"
+        }
+    }
+
+    /// Dedup key for `leaderboard_gap_shown`: one event per goal per
+    /// screen visit, however often the row scrolls back into view.
+    var reportKey: String {
+        switch target {
+        case .pass(let handle): return "pass:\(handle.lowercased())"
+        case .makeBoard:        return "make_board"
+        }
+    }
+
+    private static func spokenPoints(_ value: Int) -> String {
+        "\(value) point\(value == 1 ? "" : "s")"
+    }
+
     private static func pts(_ value: Int) -> String {
         value == 1 ? "1 PT" : "\(value.formatted(.number)) PTS"
+    }
+}
+
+extension LeaderboardEntry {
+    /// Case-insensitive handle match — the one "is this row me?" rule shared
+    /// by the board's highlight and `RaceGap`.
+    nonisolated func isHandle(_ handle: String) -> Bool {
+        self.handle.lowercased() == handle.lowercased()
+    }
+}
+
+extension SpotterHandle {
+    /// The public handle, or nil for empty / the untouched placeholder —
+    /// the "has a handle" test the leaderboard uses.
+    nonisolated static func publicHandle(_ stored: String?) -> String? {
+        guard let stored, !stored.isEmpty, stored != defaultPlaceholder else { return nil }
+        return stored
+    }
+
+    /// True when the server has acknowledged `handle` for this device: the
+    /// `confirmedKey` marker matches it (the same test `HandleSyncer` uses
+    /// to decide nothing needs syncing).
+    nonisolated static func isConfirmed(_ handle: String?, confirmed: String?) -> Bool {
+        guard let handle, let confirmed else { return false }
+        return handle == confirmed
     }
 }

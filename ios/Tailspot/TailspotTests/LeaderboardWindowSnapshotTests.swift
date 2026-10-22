@@ -183,7 +183,11 @@ struct LeaderboardWindowSnapshotTests {
     @Test func renderRaceGapBoards() throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
-        defer { defaults.set(savedHandle, forKey: SpotterHandle.storageKey) }
+        let savedConfirmed = defaults.object(forKey: SpotterHandle.confirmedKey)
+        defer {
+            defaults.set(savedHandle, forKey: SpotterHandle.storageKey)
+            defaults.set(savedConfirmed, forKey: SpotterHandle.confirmedKey)
+        }
         let container = try emptyContainer()
 
         let points = [3705, 1360, 985, 460, 405, 230, 220, 215, 165, 145, 95, 45]
@@ -227,11 +231,19 @@ struct LeaderboardWindowSnapshotTests {
                        selected: .week, container: container),
                  as: "racegap_week_whale_hidden", height: tall)
 
-        // Handled, nothing caught this week → "1 PT TO MAKE THE BOARD".
+        // Handled (server-confirmed), nothing caught this week →
+        // "1 PT TO MAKE THE BOARD".
         defaults.set("notlisted", forKey: SpotterHandle.storageKey)
+        defaults.set("notlisted", forKey: SpotterHandle.confirmedKey)
         snapshot(board([.week: week(MyStanding(rank: 0, points: 0))],
                        selected: .week, container: container),
                  as: "racegap_week_makeboard", height: tall)
+
+        // Same, but the handle never synced (stranded) → no promise.
+        defaults.removeObject(forKey: SpotterHandle.confirmedKey)
+        snapshot(board([.week: week(MyStanding(rank: 0, points: 0))],
+                       selected: .week, container: container),
+                 as: "racegap_week_stranded", height: tall)
 
         // No handle → no gap line; the "claim a handle" hint stands alone.
         defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)

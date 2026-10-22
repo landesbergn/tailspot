@@ -36,6 +36,9 @@ import SwiftData
 
 struct LeaderboardScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var localHandle: String = SpotterHandle.defaultPlaceholder
+    /// The handle the server has acknowledged (HandleSyncer's marker) — the
+    /// race gap's make-the-board goal is hidden for a stranded handle.
+    @AppStorage(SpotterHandle.confirmedKey) private var confirmedHandle: String?
 
     // Fetch total local points so we can show them in the "me" row
     // when the backend hasn't replied yet, or when not registered.
@@ -55,6 +58,17 @@ struct LeaderboardScreen: View {
     /// (show tabs); false = old backend (fail-soft: hide tabs, the board is
     /// the all-time board).
     @State private var windowsSupported: Bool? = nil
+    /// Week-tab race gap per window, computed once per load (and when the
+    /// local handle changes) rather than on every render. Only `.week` is
+    /// ever non-nil — `RaceGap.compute` hides the line elsewhere.
+    @State private var raceGaps: [LeaderboardWindow: RaceGap] = [:]
+    /// `RaceGap.reportKey`s already reported as `leaderboard_gap_shown` this
+    /// screen visit. Cleared when the screen disappears.
+    @State private var reportedGapKeys: Set<String> = []
+    /// True while the week page's race-gap row is on screen (List row
+    /// onAppear/onDisappear). The paged TabView can lay out the week page
+    /// while another tab is showing, so the report also requires `.week`.
+    @State private var gapRowVisible = false
 
     private let client = TailspotAccountClient()
     /// True when a DEBUG init pre-seeded fixture data — network loads are
@@ -78,6 +92,22 @@ struct LeaderboardScreen: View {
         debugSeeded = true
     }
 
+    /// Fixture gaps for the debug seams: `load()` never runs there, so
+    /// compute from the seeded responses and the handle in UserDefaults
+    /// (what `@AppStorage localHandle` will read).
+    private static func debugRaceGaps(
+        _ responses: [LeaderboardWindow: LeaderboardResponse]
+    ) -> [LeaderboardWindow: RaceGap] {
+        let defaults = UserDefaults.standard
+        let handle = SpotterHandle.publicHandle(defaults.string(forKey: SpotterHandle.storageKey))
+        let confirmed = SpotterHandle.isConfirmed(
+            handle, confirmed: defaults.string(forKey: SpotterHandle.confirmedKey))
+        return responses.reduce(into: [:]) { gaps, pair in
+            gaps[pair.key] = RaceGap.compute(response: pair.value, window: pair.key,
+                                             myHandle: handle, handleConfirmed: confirmed)
+        }
+    }
+
     /// Windowed snapshot seam: seed any subset of window responses and pick
     /// the selected tab. `windowsSupported` derives from the selected
     /// window's response (so an old-payload fixture exercises fail-soft).
@@ -86,6 +116,7 @@ struct LeaderboardScreen: View {
         _responses = State(initialValue: responses)
         _selectedWindow = State(initialValue: selected)
         _windowsSupported = State(initialValue: responses[selected]?.supportsWindows ?? true)
+        _raceGaps = State(initialValue: Self.debugRaceGaps(responses))
         debugSeeded = true
     }
     #endif
@@ -138,6 +169,7 @@ struct LeaderboardScreen: View {
             Analytics.capture("leaderboard_window_switched", [
                 "window": .string(newValue.rawValue),
             ])
+            reportGapShownIfVisible()
         }
         .onAppear {
             // leaderboard_viewed fires each time the screen becomes visible.
@@ -151,6 +183,11 @@ struct LeaderboardScreen: View {
                 "window":      .string(selectedWindow.rawValue),
             ])
         }
+        // A new visit may report each goal once more.
+        .onDisappear { reportedGapKeys.removeAll() }
+        // A handle claimed/changed elsewhere moves "me" on the cached boards.
+        .onChange(of: localHandle) { _, _ in recomputeRaceGaps() }
+        .onChange(of: confirmedHandle) { _, _ in recomputeRaceGaps() }
     }
 
     // MARK: - Load
@@ -169,21 +206,11 @@ struct LeaderboardScreen: View {
             if let me = response.me {
                 LeaderboardStandingCache().update(from: me)
             }
-            // Fired here, not on leaderboard_viewed: that event fires on
-            // appear, before any data has loaded, so a gap is never known
-            // there. One event per successful week load that shows a line.
-            if let gap = RaceGap.compute(response: response, window: window, myHandle: myHandle) {
-                let target: String
-                switch gap.target {
-                case .pass:      target = "pass"
-                case .makeBoard: target = "make_board"
-                }
-                Analytics.capture("leaderboard_gap_shown", [
-                    "gap_pts":       .int(gap.points),
-                    "catches_equiv": .int(gap.catchesEquivalent),
-                    "target":        .string(target),
-                ])
-            }
+            // `leaderboard_gap_shown` is NOT fired here: a load isn't a
+            // view (tab flips and pull-to-refresh reload). The row's
+            // onAppear reports it — see `reportGapShownIfVisible`.
+            raceGaps[window] = raceGap(for: response, window: window)
+            reportGapShownIfVisible()  // a refresh can change the goal under a visible row
         } catch {
             // Keep stale data when we have it — a failed silent refresh must
             // not blank a board the user is looking at. The stored message
@@ -226,8 +253,7 @@ struct LeaderboardScreen: View {
                     }
                     rankSection(entries: entries, additionalCatchers: response.additionalCatchers)
                     meHintSection(me: response.me,
-                                  raceGap: RaceGap.compute(response: response, window: window,
-                                                           myHandle: myHandle),
+                                  raceGap: raceGaps[window],
                                   resetsAt: response.resetsAtDate)
                 }
             } else if let msg = errors[window] {
@@ -530,7 +556,7 @@ struct LeaderboardScreen: View {
 
     /// True when this entry is for the current user's handle.
     private func isMeEntry(_ entry: LeaderboardEntry) -> Bool {
-        entry.handle.lowercased() == localHandle.lowercased()
+        entry.isHandle(localHandle)
     }
 
     /// Section header naming which race the standing is in — "you're #2
@@ -552,8 +578,7 @@ struct LeaderboardScreen: View {
                                resetsAt: Date? = nil) -> some View {
         let myLocalPoints = ProfileStats(catches: catches).totalPoints
         let hasHandle = myHandle != nil
-        let gapDetail = raceGap?.detail(
-            resetWeekday: resetsAt.map { LeaderboardCountdown.resetWeekday(resetsAt: $0) })
+        let resetWeekday = resetsAt.map { LeaderboardCountdown.resetWeekday(resetsAt: $0) }
 
         if let meStanding = me {
             // Server confirmed our standing — show it. Rank 0 = UNRANKED
@@ -592,8 +617,8 @@ struct LeaderboardScreen: View {
                     + (meStanding.rank >= 1 ? "rank \(meStanding.rank)" : "not ranked yet")
                     + ", \(meStanding.points) points"
                 )
-                if let raceGap, let gapDetail {
-                    raceGapRow(raceGap, detail: gapDetail)
+                if let raceGap {
+                    raceGapRow(raceGap, resetWeekday: resetWeekday)
                 }
                 if !hasHandle {
                     Text("Claim a handle in Profile → Settings to appear in the list above.")
@@ -629,15 +654,37 @@ struct LeaderboardScreen: View {
 
     /// The local handle, or nil while the device still has the placeholder
     /// (or nothing) — the "has a handle" test the whole screen uses.
-    private var myHandle: String? {
-        localHandle.isEmpty || localHandle == SpotterHandle.defaultPlaceholder ? nil : localHandle
+    private var myHandle: String? { SpotterHandle.publicHandle(localHandle) }
+
+    private func raceGap(for response: LeaderboardResponse, window: LeaderboardWindow) -> RaceGap? {
+        RaceGap.compute(response: response, window: window, myHandle: myHandle,
+                        handleConfirmed: SpotterHandle.isConfirmed(myHandle, confirmed: confirmedHandle))
+    }
+
+    private func recomputeRaceGaps() {
+        for (window, response) in responses {
+            raceGaps[window] = raceGap(for: response, window: window)
+        }
+    }
+
+    /// One `leaderboard_gap_shown` per goal per screen visit, fired when
+    /// the row is actually on screen on the week tab — not per load (tab
+    /// flips and pull-to-refresh reload without the user seeing anything new).
+    private func reportGapShownIfVisible() {
+        guard gapRowVisible, selectedWindow == .week, let gap = raceGaps[.week],
+              reportedGapKeys.insert(gap.reportKey).inserted else { return }
+        Analytics.capture("leaderboard_gap_shown", [
+            "gap_pts":       .int(gap.points),
+            "catches_equiv": .int(gap.catchesEquivalent),
+            "target":        .string(gap.analyticsTarget),
+        ])
     }
 
     /// Week-tab goal under the standing row: "51 PTS TO PASS @x", an
     /// optional "101 PTS TO THE TOP 10", then "≈ 6 COMMON CATCHES · RESETS
     /// SUNDAY". Mono readout voice; wraps rather than truncates at large
     /// type sizes (`fixedSize(vertical:)` lets a List row grow to fit).
-    private func raceGapRow(_ gap: RaceGap, detail: String) -> some View {
+    private func raceGapRow(_ gap: RaceGap, resetWeekday: String?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(gap.headline)
                 .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
@@ -651,7 +698,7 @@ struct LeaderboardScreen: View {
                     .foregroundStyle(Brand.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(detail)
+            Text(gap.detail(resetWeekday: resetWeekday))
                 .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                 .tracking(0.6)
                 .foregroundStyle(Brand.Color.textTertiary)
@@ -661,22 +708,12 @@ struct LeaderboardScreen: View {
         .listRowBackground(Brand.Color.bgElevated)
         // VoiceOver gets prose instead of "≈" and "PTS".
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(raceGapSpoken(gap))
-    }
-
-    private func raceGapSpoken(_ gap: RaceGap) -> String {
-        let goal: String
-        switch gap.target {
-        case .pass(let handle): goal = "to pass \(handle)"
-        case .makeBoard:        goal = "to make the board"
+        .accessibilityLabel(gap.spoken(resetWeekday: resetWeekday))
+        .onAppear {
+            gapRowVisible = true
+            reportGapShownIfVisible()
         }
-        let n = gap.catchesEquivalent
-        var text = "\(gap.points) point\(gap.points == 1 ? "" : "s") \(goal), "
-            + "about \(n) common catch\(n == 1 ? "" : "es")"
-        if let top = gap.topTenPoints {
-            text += ". \(top) point\(top == 1 ? "" : "s") to the top 10"
-        }
-        return text
+        .onDisappear { gapRowVisible = false }
     }
 
     /// Mono ALL-CAPS section header — the app-wide style (SettingsScreen's
