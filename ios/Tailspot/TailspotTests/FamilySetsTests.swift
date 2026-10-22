@@ -296,7 +296,6 @@ struct FamilySetsTests {
         ("IA63", "fam-vintage", "fv-t6"),
         ("B77L", "fam-777", "f777-200"),
         ("B350", "fam-beech", "fbe20"),
-        ("BE30", "fam-beech", "fbe20"),
         ("BCS1", "fam-a220", "fa220-300"),
         ("C207", "fam-cessna", "fc185"),
         ("CRJX", "fam-crj", "fcrj100"),

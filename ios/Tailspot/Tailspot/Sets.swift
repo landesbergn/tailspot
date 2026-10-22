@@ -922,8 +922,9 @@ nonisolated enum CardSets {
                   modelTokens: ["king air 200", "super king air", "be20", "b200"], summary: "The ubiquitous business turboprop.",
                   representativeTypecode: "BE20",
                   // The King Air 350 is a "Super King Air" too; B350 has its own slot.
-                  // BE30 ("300 Super King Air") is a different airframe with no slot.
-                  excludedTypecodes: ["B350", "BE30"]),
+                  // BE30 (the 300, a 200 derivative) deliberately stays here:
+                  // it has no slot of its own and SetsCoverageTests requires one.
+                  excludedTypecodes: ["B350"]),
             .init(id: "fb350", canonicalName: "King Air 350", rarity: .uncommon,
                   modelTokens: ["king air 350", "b350"], summary: "Stretched King Air.",
                   representativeTypecode: "B350"),
