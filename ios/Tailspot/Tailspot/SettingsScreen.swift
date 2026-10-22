@@ -44,6 +44,9 @@ struct SettingsScreen: View {
     /// at `.notDetermined` flashed "Turn on reminders" for a frame on every
     /// open, even for people who granted permission long ago.
     @State private var notifStatus: UNAuthorizationStatus? = nil
+    /// True while the "Turn on reminders" permission request is in flight, so
+    /// a double tap can't ask twice (and double-count the permission funnel).
+    @State private var requestingReminders = false
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     /// Optional: Settings renders in snapshot harnesses and previews with no
@@ -293,8 +296,16 @@ struct SettingsScreen: View {
     /// re-plan both reminder kinds so a live streak or challenge is covered
     /// now rather than on the next foreground.
     private func turnOnReminders() {
+        guard !requestingReminders else { return }
+        requestingReminders = true
         Task { @MainActor in
-            _ = await StreakReminderCenter.shared.requestPermission()
+            defer { requestingReminders = false }
+            // The streak center's request doesn't fetch an APNs token, and
+            // without one the backend can't send challenge pushes until the
+            // next cold launch. Register here, as the challenge scheduler does.
+            if await StreakReminderCenter.shared.requestPermission() {
+                PushRegistration.registerForRemoteNotifications()
+            }
             await refreshNotifStatus()
             await StreakReminderCenter.shared.sync(context: modelContext)
             challenges?.resyncReminders()
