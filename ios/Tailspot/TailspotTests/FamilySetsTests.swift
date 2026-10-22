@@ -223,6 +223,51 @@ struct FamilySetsTests {
                 "Typecodes filling more than one family slot:\n\(offenders.joined(separator: "\n"))")
     }
 
+    /// Catalog typecodes that DELIBERATELY fill a slot whose representative
+    /// airframe has a different maker in AircraftTypes.json, keyed by
+    /// typecode → the slot id. Every line is the same airframe line under a
+    /// successor, licensee or converter name, not a look-alike.
+    private static let intendedCrossMakeFills: [String: String] = [
+        "C02T": "fc402",       // AJI Turbo Star 402: turboprop conversion of the Cessna 402
+        "C30J": "fm-c130",     // Lockheed Martin C-130J: the current Hercules
+        "CHIF": "fpa23",       // Pawnee Chief: a PA-25 Pawnee derivative
+        "DC3T": "fv-dc3",      // turbine-converted DC-3 airframes
+        "F18H": "fm-hornet",   // McDonnell Douglas F/A-18 Hornet, before Boeing
+        "H25A": "fcb-hawker",  // Hawker Siddeley HS-125, the Hawker 800's ancestor
+        "LJ28": "fcb-learjet", // Gates Learjet 28
+        "P18T": "fv-cub",      // turbine Super Cub conversion
+        "P25B": "fpa23",       // Laviasa Puelche: licence-built two-seat PA-25
+        "P28U": "fpa28",       // Aicsa: licence-built PA-28 Turbo Arrow
+        "TBM7": "ftp-tbm",     // Socata TBM 700, before Daher
+        "TBM8": "ftp-tbm",     // Socata TBM 850, before Daher
+        "TRIS": "fcp-islander", // BN-2A Mk3 Trislander: the three-engine Islander
+    ]
+
+    /// The one-slot invariant above can't see a catalog typecode that fills
+    /// exactly ONE slot, in the wrong family: a Beagle B-206 ("206") quietly
+    /// filled the Cessna 206 / 207 slot and an AH-64 ("apache") the Piper
+    /// Apache. So every slot a catalog typecode fills must share the catalog
+    /// make of that slot's representative typecode, unless
+    /// `intendedCrossMakeFills` says otherwise.
+    @Test func everyCatalogTypecodeFillsOnlyItsOwnMakersSlots() {
+        let slots = CardSets.families.flatMap { set in set.entries.map { (set.id, $0) } }
+        var offenders: [String] = []
+        for tc in AircraftNaming.table.keys.sorted() {
+            guard let make = AircraftNaming.table[tc]?.make else { continue }
+            let key = CardSets.matchKey(for: mk(typecode: tc))
+            for (familyId, slot) in slots where CardSets.matches(key: key, entry: slot) {
+                guard let rep = slot.representativeTypecode,
+                      let slotMake = AircraftNaming.table[rep]?.make,
+                      slotMake.caseInsensitiveCompare(make) != .orderedSame
+                else { continue }
+                if Self.intendedCrossMakeFills[tc] == slot.id { continue }
+                offenders.append("\(tc) (\(make)) → \(familyId)/\(slot.id) (\(slotMake))")
+            }
+        }
+        #expect(offenders.isEmpty,
+                "Typecodes filling another maker's slot:\n\(offenders.joined(separator: "\n"))")
+    }
+
     /// The leak fixes are exclusions, not token removals — the airframes
     /// each slot is FOR must still land in it.
     @Test(arguments: [
@@ -232,6 +277,13 @@ struct FamilySetsTests {
         ("B772", "fam-777", "f777-200"),
         ("BCS3", "fam-a220", "fa220-300"),
         ("B06", "fam-heli", "fh-b206"),
+        ("C402", "fam-cessna", "fc402"),
+        ("C02T", "fam-cessna", "fc402"),
+        ("GALX", "fam-gulfstream", "fg-280"),
+        ("PA25", "fam-piper", "fpa23"),
+        ("H25B", "fam-classic-biz", "fcb-hawker"),
+        ("BE40", "fam-classic-biz", "fcb-beechjet"),
+        ("H47", "fam-military", "fm-ch47"),
     ])
     func leakFixesKeepTheIntendedSlot(typecode: String, familyId: String, entryId: String) {
         #expect(CardSets.matches(catch: mk(typecode: typecode), entry: entry(familyId, entryId)))
@@ -247,6 +299,12 @@ struct FamilySetsTests {
         ("BCS1", "fam-a220", "fa220-300"),
         ("C207", "fam-cessna", "fc185"),
         ("CRJX", "fam-crj", "fcrj100"),
+        ("BASS", "fam-cessna", "fc206"),
+        ("A4", "fam-cessna", "fc172"),
+        ("H64", "fam-piper", "fpa23"),
+        ("DH60", "fam-military", "fm-uh60"),
+        ("HA4T", "fam-classic-biz", "fcb-beechjet"),
+        ("G200", "fam-gulfstream", "fg-280"),
     ])
     func knownLeaksStayOutOfTheWrongSlot(typecode: String, familyId: String, entryId: String) {
         #expect(!CardSets.matches(catch: mk(typecode: typecode), entry: entry(familyId, entryId)),

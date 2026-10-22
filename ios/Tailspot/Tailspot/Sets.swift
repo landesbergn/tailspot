@@ -593,7 +593,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "C560"),
             .init(id: "fc-xls", canonicalName: "Citation Excel / XLS", rarity: .uncommon,
                   modelTokens: ["xls", "560xl", "excel"], summary: "Best-selling midsize Citation.",
-                  representativeTypecode: "C56X"),
+                  representativeTypecode: "C56X",
+                  // "excel" also names the Inpaer Excel kitplane.
+                  excludedTypecodes: ["INEC"]),
             .init(id: "fc-sovereign", canonicalName: "Citation Sovereign / Latitude", rarity: .uncommon,
                   modelTokens: ["sovereign", "latitude", "680 citation"], summary: "Midsize, transcontinental range.",
                   representativeTypecode: "C680"),
@@ -622,13 +624,17 @@ nonisolated enum CardSets {
             // slot) — same Israeli super-midsize line, predecessor to the G280.
             .init(id: "fg-280", canonicalName: "G200 / G280", rarity: .uncommon,
                   modelTokens: ["g280", "g-280", "g200", "g-200", "galaxy g200"], summary: "Super-midsize. Israeli-built.",
-                  representativeTypecode: "G280"),
+                  representativeTypecode: "G280",
+                  // G200 is the Akrotech G-200 aerobatic kit; the Gulfstream G200 is GALX.
+                  excludedTypecodes: ["G200"]),
             .init(id: "fg-550", canonicalName: "Gulfstream G550", rarity: .uncommon,
                   modelTokens: ["g550", "g-550"], summary: "Long-range large cabin. Ubiquitous at the top.",
                   representativeTypecode: "GLF5"),
             .init(id: "fg-600", canonicalName: "G500 / G600", rarity: .rare,
                   modelTokens: ["g500", "g-500", "g600", "g-600"], summary: "New-generation large cabin. Fly-by-wire.",
-                  representativeTypecode: "GA6C"),
+                  representativeTypecode: "GA6C",
+                  // "g-600" is also in the AVIC AG-600 amphibian and the Gogetair G-600 kit.
+                  excludedTypecodes: ["AG60", "ONE"]),
             .init(id: "fg-650", canonicalName: "Gulfstream G650", rarity: .rare,
                   modelTokens: ["g650", "g-650"], summary: "Flagship ultra-long-range. The status jet.",
                   representativeTypecode: "GLF6"),
@@ -757,7 +763,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "C140"),
             .init(id: "fc152", canonicalName: "Cessna 150 / 152", rarity: .common,
                   modelTokens: ["cessna 152", "c152", "152", "cessna 150"], summary: "Two-seat trainer.",
-                  representativeTypecode: "C152"),
+                  representativeTypecode: "C152",
+                  // "152" is a substring of the Max Holste MH-1521 Broussard.
+                  excludedTypecodes: ["BROU"]),
             .init(id: "fc162", canonicalName: "Cessna 162 Skycatcher", rarity: .common,
                   modelTokens: ["cessna 162", "skycatcher"],
                   summary: "Light-sport two-seat trainer with a high wing and glass cockpit.",
@@ -768,13 +776,19 @@ nonisolated enum CardSets {
                   representativeTypecode: "C170"),
             .init(id: "fc172", canonicalName: "Cessna 172", rarity: .common,
                   modelTokens: ["cessna 172", "c172", "172", "skyhawk"], summary: "Most-built aircraft ever.",
-                  representativeTypecode: "C172"),
+                  representativeTypecode: "C172",
+                  // "skyhawk" also names the Douglas A-4 Skyhawk jet.
+                  excludedTypecodes: ["A4"]),
             .init(id: "fc177", canonicalName: "Cessna 177 Cardinal", rarity: .common,
                   modelTokens: ["cardinal", "177"], summary: "The strutless, sleeker 172 sibling.",
-                  representativeTypecode: "C77R"),
+                  representativeTypecode: "C77R",
+                  // "177" is a substring of the Aerodynos JA-177 Pingouin.
+                  excludedTypecodes: ["J177"]),
             .init(id: "fc182", canonicalName: "Cessna 182", rarity: .common,
                   modelTokens: ["cessna 182", "c182", "182", "skylane"], summary: "Higher-power four-seater.",
-                  representativeTypecode: "C182"),
+                  representativeTypecode: "C182",
+                  // "skylane" also names the Airlony Skylane microlight.
+                  excludedTypecodes: ["ALSL"]),
             .init(id: "fc185", canonicalName: "Cessna 180 / 185", rarity: .common,
                   modelTokens: ["skywagon", "cessna 180", "cessna 185"], summary: "Taildragger workhorse. Bush and floats.",
                   representativeTypecode: "C185",
@@ -788,11 +802,14 @@ nonisolated enum CardSets {
                   modelTokens: ["cessna 206", "c206", "206", "stationair", "cessna 207"], summary: "Hauler / floatplane single.",
                   representativeTypecode: "C206",
                   // The bare "206" token also matches "Bell 206 JetRanger" and the
-                  // 206LT TwinRanger, which belong in the Helicopters family.
-                  excludedTypecodes: ["B06", "B06T"]),
+                  // 206LT TwinRanger, which belong in the Helicopters family, and the
+                  // Beagle B-206 (BASS), a British light twin.
+                  excludedTypecodes: ["B06", "B06T", "BASS"]),
             .init(id: "fc208", canonicalName: "Cessna 208 Caravan", rarity: .common,
                   modelTokens: ["caravan", "c208", "208"], summary: "Single turboprop utility hauler.",
-                  representativeTypecode: "C208"),
+                  representativeTypecode: "C208",
+                  // "208" is a substring of the SIAI-Marchetti S-208.
+                  excludedTypecodes: ["S208"]),
             .init(id: "fc210", canonicalName: "Cessna 210 Centurion", rarity: .common,
                   modelTokens: ["cessna 210", "c210", "centurion"], summary: "Fast retractable-gear six-seat single.",
                   representativeTypecode: "C210"),
@@ -800,7 +817,10 @@ nonisolated enum CardSets {
             // a Cape Air 402 catch had no slot to fill).
             .init(id: "fc402", canonicalName: "Cessna 402", rarity: .common,
                   modelTokens: ["cessna 402", "c402", "402"], summary: "Twin-piston commuter. Cape Air's workhorse.",
-                  representativeTypecode: "C402"),
+                  representativeTypecode: "C402",
+                  // The bare "402" token also matches the Champion 402 Lancer and the
+                  // Falcon Air 402. (C02T, the AJI turboprop conversion of the 402, stays.)
+                  excludedTypecodes: ["CH40", "F402"]),
             // "cessna 310" (canonical-only), never bare "310" — an Airbus
             // A310's canonical name contains "310" and would bleed in.
             .init(id: "fc310", canonicalName: "Cessna 310", rarity: .common,
@@ -862,7 +882,9 @@ nonisolated enum CardSets {
             .init(id: "fpa23", canonicalName: "Apache / Aztec / Pawnee", rarity: .common,
                   modelTokens: ["pa-23", "apache", "aztec", "pa-25", "pawnee"],
                   summary: "Vintage Pipers — 50s twins and the cropduster.",
-                  representativeTypecode: "PA23"),
+                  representativeTypecode: "PA23",
+                  // "apache" also names the AH-64 attack helicopter.
+                  excludedTypecodes: ["H64"]),
             .init(id: "fpa12", canonicalName: "Piper PA-12 Super Cruiser", rarity: .common,
                   modelTokens: ["pa-12 super cruiser", "piper pa-12"],
                   summary: "Postwar cabin descendant of the Cub line.",
@@ -913,7 +935,9 @@ nonisolated enum CardSets {
             .init(id: "fbe76", canonicalName: "Travel Air / Duchess", rarity: .common,
                   modelTokens: ["travel air", "duchess"],
                   summary: "Beech's classic light twins.",
-                  representativeTypecode: "BE76"),
+                  representativeTypecode: "BE76",
+                  // "travel air" also names the 1920s Travel Air company biplanes.
+                  excludedTypecodes: ["TVL4", "TVLB"]),
             .init(id: "fbt34", canonicalName: "Beechcraft T-34 Mentor", rarity: .common,
                   modelTokens: ["t-34 mentor", "t-34c turbo mentor", "45 mentor", "beechcraft mentor"],
                   summary: "Military trainer derived from the Bonanza.",
@@ -1002,7 +1026,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "EC45"),
             .init(id: "fh-s76", canonicalName: "Sikorsky S-76", rarity: .uncommon,
                   modelTokens: ["s-76", "s76"], summary: "Executive and offshore twin.",
-                  representativeTypecode: "S76"),
+                  representativeTypecode: "S76",
+                  // "s-76" is a substring of the Morane-Saulnier MS-760 Paris jet.
+                  excludedTypecodes: ["MS76"]),
             .init(id: "fh-s92", canonicalName: "Sikorsky S-92", rarity: .uncommon,
                   modelTokens: ["sikorsky s-92", "sikorsky s92"],
                   summary: "Heavy twin-engine transport helicopter for offshore, SAR, and head-of-state missions.",
@@ -1012,7 +1038,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "A139"),
             .init(id: "fh-a109", canonicalName: "Leonardo AW109", rarity: .uncommon,
                   modelTokens: ["a109", "a-109", "aw109", "aw-109"], summary: "Sleek light twin. EMS and VIP.",
-                  representativeTypecode: "A109"),
+                  representativeTypecode: "A109",
+                  // "a-109" is also the Beagle A-109 Airedale, a 1960s light single.
+                  excludedTypecodes: ["AIRD"]),
             .init(id: "fh-a119", canonicalName: "Leonardo AW119", rarity: .uncommon,
                   modelTokens: ["agusta a-119 koala", "aw-119 koala", "aw119 koala"],
                   summary: "Light single-engine utility helicopter. Koala lineage, modern AW119 variants.",
@@ -1117,7 +1145,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "K100"),
             .init(id: "ftp-beaver", canonicalName: "DHC-2 Beaver", rarity: .common,
                   modelTokens: ["dhc-2", "beaver"], summary: "The classic bush plane. Often on floats.",
-                  representativeTypecode: "DHC2"),
+                  representativeTypecode: "DHC2",
+                  // "beaver" also names the ASAP Beaver ultralight.
+                  excludedTypecodes: ["BEVR"]),
         ]),
         .init(id: "fam-avanti", type: .ga, title: "Piaggio Avanti", entries: [
             .init(id: "fav-p180", canonicalName: "Piaggio P.180 Avanti", rarity: .rare,
@@ -1239,14 +1269,19 @@ nonisolated enum CardSets {
                   representativeTypecode: "C5M"),
             .init(id: "fm-uh60", canonicalName: "UH-60 Black Hawk", rarity: .epic,
                   modelTokens: ["uh-60", "black hawk", "s-70", "h-60"], summary: "The military utility helicopter.",
-                  representativeTypecode: "H60"),
+                  representativeTypecode: "H60",
+                  // "h-60" is a substring of the de Havilland DH-60 Moth biplane.
+                  excludedTypecodes: ["DH60"]),
             .init(id: "fm-uh1", canonicalName: "Bell UH-1 Iroquois", rarity: .epic,
                   modelTokens: ["uh-1 iroquois", "bell 204", "bell 205", "huey"],
                   summary: "The iconic Huey utility helicopter, built around the Bell 204/205 family.",
                   representativeTypecode: "UH1"),
             .init(id: "fm-ch47", canonicalName: "CH-47 Chinook", rarity: .epic,
                   modelTokens: ["ch-47", "chinook", "vertol"], summary: "Tandem-rotor heavy lifter.",
-                  representativeTypecode: "H47"),
+                  representativeTypecode: "H47",
+                  // "chinook" also names an ASAP ultralight, and "vertol" matches the
+                  // H-21 Work Horse and the CH-46 Sea Knight, which are different helicopters.
+                  excludedTypecodes: ["CHIN", "H21", "H46"]),
             .init(id: "fm-hh65", canonicalName: "HH-65 Dolphin", rarity: .uncommon,
                   modelTokens: ["hh-65", "dauphin", "dolphin"], summary: "Coast Guard orange. Fenestron tail.",
                   representativeTypecode: "AS65"),
@@ -1281,7 +1316,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "H25B"),
             .init(id: "fcb-beechjet", canonicalName: "Beechjet 400", rarity: .uncommon,
                   modelTokens: ["beechjet", "hawker 400"], summary: "Light twin jet — Mitsubishi design, Wichita badge.",
-                  representativeTypecode: "BE40"),
+                  representativeTypecode: "BE40",
+                  // "hawker 400" is a prefix of "Hawker 4000", a much larger jet.
+                  excludedTypecodes: ["HA4T"]),
         ]),
         .init(id: "fam-light-jets", type: .biz, title: "Light jets", entries: [
             .init(id: "flj-hondajet", canonicalName: "HondaJet", rarity: .uncommon,
@@ -1292,7 +1329,9 @@ nonisolated enum CardSets {
                   representativeTypecode: "PC24"),
             .init(id: "flj-eclipse", canonicalName: "Eclipse 500", rarity: .uncommon,
                   modelTokens: ["eclipse"], summary: "The very-light-jet dream, tiny and efficient.",
-                  representativeTypecode: "EA50"),
+                  representativeTypecode: "EA50",
+                  // "eclipse" also names the ELA-10 autogyro and the Aerosette MH-46.
+                  excludedTypecodes: ["EL10", "MH46"]),
             .init(id: "flj-premier", canonicalName: "Beechcraft Premier I", rarity: .uncommon,
                   modelTokens: ["hawker beechcraft 390 premier 1", "raytheon 390 premier 1"],
                   summary: "Composite-fuselage light business jet developed as the Model 390.",
@@ -1308,14 +1347,19 @@ nonisolated enum CardSets {
                   representativeTypecode: "SB91"),
             .init(id: "fv-stearman", canonicalName: "Stearman Kaydet", rarity: .common,
                   modelTokens: ["stearman", "kaydet"], summary: "Open-cockpit biplane trainer. Barnstormer look.",
-                  representativeTypecode: "ST75"),
+                  representativeTypecode: "ST75",
+                  // Stearman's pre-Kaydet C-3, Junior Speedmail and YPT-9, and the
+                  // Podesva Stearman, are not Kaydets.
+                  excludedTypecodes: ["PSTM", "ST3", "ST4", "ST6"]),
             .init(id: "fv-great-lakes", canonicalName: "Great Lakes Sport Trainer", rarity: .common,
                   modelTokens: ["great lakes 2t-1 sport", "great lakes sport trainer"],
                   summary: "Classic two-seat aerobatic biplane descended from the 1929 Sport Trainer.",
                   representativeTypecode: "G2T1"),
             .init(id: "fv-cub", canonicalName: "Piper Cub", rarity: .common,
                   modelTokens: ["super cub", "j-3 cub", "ne cub", "carbon cub"], summary: "Yellow, slow, beloved. The original trainer.",
-                  representativeTypecode: "J3"),
+                  representativeTypecode: "J3",
+                  // "super cub" also names the Light Miniature LM-5 scale replica.
+                  excludedTypecodes: ["LM5X"]),
             .init(id: "fv-luscombe8", canonicalName: "Luscombe 8 Silvaire", rarity: .common,
                   modelTokens: ["luscombe 8", "luscombe 8 silvaire"],
                   summary: "Classic light single known through the long-running Model 8 and Silvaire line.",
@@ -1327,8 +1371,9 @@ nonisolated enum CardSets {
                   modelTokens: ["texan", "harvard", "at-6"], summary: "WWII advanced trainer. The airshow growl.",
                   representativeTypecode: "T6",
                   // "at-6" is also a substring of the Air Tractor AT-602 and the
-                  // FMA IA-63 Pampa ("AT-63").
-                  excludedTypecodes: ["TEX2", "AT6T", "IA63"]),
+                  // FMA IA-63 Pampa ("AT-63"); "harvard" and "texan" also name the E-Z
+                  // Harvard replica kit and the Fly Synthesis Texan microlight.
+                  excludedTypecodes: ["TEX2", "AT6T", "IA63", "EZHV", "TEXA"]),
             .init(id: "fv-cj6", canonicalName: "Nanchang CJ-6", rarity: .rare,
                   modelTokens: ["nanchang cj-6", "hongdu cj-6", "hongdu bt-6"],
                   summary: "Chinese military trainer now commonly flown as a warbird.",
@@ -1341,7 +1386,10 @@ nonisolated enum CardSets {
             // bleed into this slot (and vice versa; see fc-mustang).
             .init(id: "fv-p51", canonicalName: "P-51 Mustang", rarity: .rare,
                   modelTokens: ["p-51", "tf-51"], summary: "The WWII fighter. Merlin sound included.",
-                  representativeTypecode: "P51"),
+                  representativeTypecode: "P51",
+                  // "p-51" also matches scale replicas and a P-51-shaped Cameron hot-air
+                  // balloon. They are not Mustangs.
+                  excludedTypecodes: ["FE51", "FS51", "GR51", "MJ7"]),
             // The Avenger's home now that the Daher TBM slot excludes it
             // (FAA raw models read "TBM-3E" and used to fill that slot).
             .init(id: "fv-tbm", canonicalName: "Grumman TBM Avenger", rarity: .rare,
@@ -1433,7 +1481,9 @@ nonisolated enum CardSets {
             .init(id: "fsc-commander112", canonicalName: "Commander 112 / 114", rarity: .common,
                   modelTokens: ["rockwell 112 commander", "commander 112", "commander 114", "commander 115"],
                   summary: "Four-seat high-performance touring single from the Rockwell Commander line.",
-                  representativeTypecode: "AC11"),
+                  representativeTypecode: "AC11",
+                  // "commander 112" is a prefix of the "1121 Jet Commander" business jet.
+                  excludedTypecodes: ["JCOM"]),
             .init(id: "fsc-ercoupe", canonicalName: "ERCO 415 Ercoupe", rarity: .common,
                   modelTokens: ["erco 415 ercoupe", "415 ercoupe", "f-1 aircoupe", "a-2 aircoupe"],
                   summary: "Postwar light classic designed around simple, coordinated controls.",
@@ -1475,10 +1525,14 @@ nonisolated enum CardSets {
                   representativeTypecode: "TL30"),
             .init(id: "fsc-sierra", canonicalName: "Musketeer / Sierra", rarity: .common,
                   modelTokens: ["musketeer", "sierra", "sundowner"], summary: "Beech's friendly low-wing singles.",
-                  representativeTypecode: "BE24"),
+                  representativeTypecode: "BE24",
+                  // "sierra" also names the Scaled Composites 401.
+                  excludedTypecodes: ["S401"]),
             .init(id: "fsc-rv", canonicalName: "Van's RV", rarity: .common,
                   modelTokens: ["van's", "rv-"], summary: "The homebuilt that outsold the factories.",
-                  representativeTypecode: "RV8"),
+                  representativeTypecode: "RV8",
+                  // "rv-" is a substring of the unrelated ARV-1 Super 2.
+                  excludedTypecodes: ["ARV1"]),
             .init(id: "fsc-pitts-s2", canonicalName: "Pitts S-2 Special", rarity: .common,
                   modelTokens: ["aerotek pitts s-2 special", "aviat pitts s-2", "pitts s-2 special"],
                   summary: "Two-seat aerobatic biplane from the Pitts Special lineage.",
@@ -1594,7 +1648,9 @@ nonisolated enum CardSets {
             .init(id: "fsc-evolution", canonicalName: "Evolution Turbine", rarity: .common,
                   modelTokens: ["evolution evot-550", "evolution turbine"],
                   summary: "Pressurized composite kit aircraft powered by a PT6 turboprop.",
-                  representativeTypecode: "EVOT"),
+                  representativeTypecode: "EVOT",
+                  // "evolution turbine" also names the JMB VL-3 microlight.
+                  excludedTypecodes: ["VL3T"]),
             .init(id: "fsc-airvan", canonicalName: "GippsAero GA8 Airvan", rarity: .common,
                   modelTokens: ["gippsaero ga-8 airvan", "gippsland ga-8 airvan"],
                   summary: "Eight-seat piston utility aircraft designed for short-field operations.",
