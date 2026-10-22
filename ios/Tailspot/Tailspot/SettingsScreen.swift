@@ -9,7 +9,8 @@
 //                file's history for the inventory).
 //    REMINDERS — the streak-protection mute toggle (StreakReminders.swift),
 //                with an honest permission-denied state that routes to iOS
-//                Settings and heals on return.
+//                Settings and heals on return, and a never-asked state
+//                (RemindersRowState) that offers "Turn on reminders".
 //    UNITS     — altitude (ft / m), speed (kt / mph / km/h) and distance
 //                (km / mi) pickers bound to UnitPreferences; every card
 //                re-formats live.
@@ -54,6 +55,14 @@ struct SettingsScreen: View {
     #endif
 
     private var notifDenied: Bool { notifStatus == .denied }
+
+    /// What the REMINDERS section shows. See `RemindersRowState`.
+    private var remindersState: RemindersRowState {
+        RemindersRowState.resolve(
+            authorization: notifStatus,
+            anyToggleOn: streakRemindersEnabled || challengeRemindersEnabled
+        )
+    }
 
     private var isHandleClaimed: Bool {
         AnalyticsIdentity.isClaimedHandle(handle, placeholder: SpotterHandle.defaultPlaceholder)
@@ -102,46 +111,20 @@ struct SettingsScreen: View {
             // MARK: REMINDERS
 
             Section {
-                Toggle(isOn: $streakRemindersEnabled) {
-                    Text("Streak protection")
-                        .foregroundStyle(notifDenied
-                                         ? Brand.Color.textTertiary
-                                         : Brand.Color.textPrimary)
-                }
-                .tint(Brand.Color.cyan)
-                // Denied → the toggle alone goes inert (`.disabled` on the
-                // whole row would also kill the recovery path below).
-                .disabled(notifDenied)
-                // Challenge reminders (2026-09-15): starts, ending soon,
-                // finished — local notifications planned by
-                // ChallengeReminderScheduler. Shares the streak toggle's
-                // authorization state; its own on/off key.
-                Toggle(isOn: $challengeRemindersEnabled) {
-                    Text("Challenges")
-                        .foregroundStyle(notifDenied
-                                         ? Brand.Color.textTertiary
-                                         : Brand.Color.textPrimary)
-                }
-                .tint(Brand.Color.cyan)
-                .disabled(notifDenied)
-                if notifDenied {
-                    Button {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            UIApplication.shared.open(url)
-                        }
-                    } label: {
-                        HStack {
-                            Text("Open Settings")
-                                .foregroundStyle(Brand.Color.textPrimary)
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Brand.Color.textTertiary)
-                                .accessibilityHidden(true)
-                        }
+                if remindersState == .needsPermission {
+                    // iOS has never asked (the user tapped "Not now" on the
+                    // in-camera pre-prompt), so ON toggles would be a lie:
+                    // nothing can fire. Show one honest action instead.
+                    Button { turnOnReminders() } label: {
+                        Text("Turn on reminders")
+                            .foregroundStyle(Brand.Color.cyan)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint("Opens the Settings app")
+                    .accessibilityHint("Asks iOS for permission to send notifications")
+                } else {
+                    reminderToggles
                 }
             } header: {
                 Text("REMINDERS")
@@ -150,9 +133,7 @@ struct SettingsScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .textCase(nil)
             } footer: {
-                Text(notifDenied
-                     ? "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges and challenge reminders."
-                     : "Get notified if your streak is at risk, and when a challenge starts, is about to end, or finishes.")
+                Text(remindersState.footer)
             }
             .listRowBackground(Brand.Color.bgElevated)
 
@@ -252,6 +233,67 @@ struct SettingsScreen: View {
                 // reminder immediately.
                 challenges?.resyncReminders()
             }
+        }
+    }
+
+    /// The two toggles plus, when denied, the Open Settings escape hatch.
+    /// Pulled out of `body` so the REMINDERS section reads as one branch.
+    @ViewBuilder
+    private var reminderToggles: some View {
+        Toggle(isOn: $streakRemindersEnabled) {
+            Text("Streak protection")
+                .foregroundStyle(notifDenied
+                                 ? Brand.Color.textTertiary
+                                 : Brand.Color.textPrimary)
+        }
+        .tint(Brand.Color.cyan)
+        // Denied → the toggle alone goes inert (`.disabled` on the
+        // whole row would also kill the recovery path below).
+        .disabled(notifDenied)
+        // Challenge reminders (2026-09-15): starts, ending soon,
+        // finished — local notifications planned by
+        // ChallengeReminderScheduler. Shares the streak toggle's
+        // authorization state; its own on/off key.
+        Toggle(isOn: $challengeRemindersEnabled) {
+            Text("Challenges")
+                .foregroundStyle(notifDenied
+                                 ? Brand.Color.textTertiary
+                                 : Brand.Color.textPrimary)
+        }
+        .tint(Brand.Color.cyan)
+        .disabled(notifDenied)
+        if notifDenied {
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                HStack {
+                    Text("Open Settings")
+                        .foregroundStyle(Brand.Color.textPrimary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Brand.Color.textTertiary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the Settings app")
+        }
+    }
+
+    /// "Turn on reminders": fire the system prompt (the same call the
+    /// toggles make), re-read the status so the section flips to the
+    /// toggles (granted) or to the Open Settings state (denied), then
+    /// re-plan both reminder kinds so a live streak or challenge is covered
+    /// now rather than on the next foreground.
+    private func turnOnReminders() {
+        Task { @MainActor in
+            _ = await StreakReminderCenter.shared.requestPermission()
+            await refreshNotifStatus()
+            await StreakReminderCenter.shared.sync(context: modelContext)
+            challenges?.resyncReminders()
         }
     }
 
@@ -362,6 +404,47 @@ struct SettingsScreen: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Reminders row state
+
+/// What Settings → REMINDERS shows, from the OS notification permission and
+/// whether either reminder toggle is on. Pure, so it is unit-tested without
+/// touching UNUserNotificationCenter.
+///
+/// `nonisolated` opts the type out of the target's MainActor default, so
+/// tests and any background caller can use it without hopping actors.
+nonisolated enum RemindersRowState: Equatable, Sendable {
+    /// iOS has never shown its prompt and a toggle is ON: nothing can be
+    /// delivered, so show "Turn on reminders" instead of the toggles.
+    case needsPermission
+    /// The user said no in iOS: dimmed toggles + Open Settings.
+    case denied
+    /// The toggles mean what they say: permission is granted, or both
+    /// toggles are OFF (an OFF toggle is honest, and switching it on still
+    /// fires the system prompt).
+    case toggles
+
+    static func resolve(authorization: UNAuthorizationStatus, anyToggleOn: Bool) -> RemindersRowState {
+        switch authorization {
+        case .notDetermined: anyToggleOn ? .needsPermission : .toggles
+        case .denied: .denied
+        // .authorized, .provisional, .ephemeral and any future case keep
+        // today's ON state.
+        default: .toggles
+        }
+    }
+
+    var footer: String {
+        switch self {
+        case .needsPermission:
+            "Reminders are off until you allow notifications."
+        case .denied:
+            "Notifications are off for Tailspot in iOS Settings. Allow them there to get streak nudges and challenge reminders."
+        case .toggles:
+            "Get notified if your streak is at risk, and when a challenge starts, is about to end, or finishes."
+        }
     }
 }
 
