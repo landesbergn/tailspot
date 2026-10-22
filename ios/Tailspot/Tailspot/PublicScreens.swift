@@ -8,7 +8,9 @@
 //     windowed (dynamic-leaderboards PR2): WEEK (default) / MONTH / ALL TIME
 //     tabs, reset countdowns, and previous-period champion banners on the week
 //     and month tabs. Shows rank/handle/points/catches, highlights "me" row (works
-//     even handle-less, with a "claim a handle to appear" hint).
+//     even handle-less, with a "claim a handle to appear" hint). On the week
+//     tab the standing gets a goal line ("51 PTS TO PASS @x") — see RaceGap
+//     in LeaderboardWindows.swift.
 //     Loading / error / empty states follow Brand patterns.
 //     Pull-to-refresh supported.
 //
@@ -167,6 +169,21 @@ struct LeaderboardScreen: View {
             if let me = response.me {
                 LeaderboardStandingCache().update(from: me)
             }
+            // Fired here, not on leaderboard_viewed: that event fires on
+            // appear, before any data has loaded, so a gap is never known
+            // there. One event per successful week load that shows a line.
+            if let gap = RaceGap.compute(response: response, window: window, myHandle: myHandle) {
+                let target: String
+                switch gap.target {
+                case .pass:      target = "pass"
+                case .makeBoard: target = "make_board"
+                }
+                Analytics.capture("leaderboard_gap_shown", [
+                    "gap_pts":       .int(gap.points),
+                    "catches_equiv": .int(gap.catchesEquivalent),
+                    "target":        .string(target),
+                ])
+            }
         } catch {
             // Keep stale data when we have it — a failed silent refresh must
             // not blank a board the user is looking at. The stored message
@@ -208,7 +225,10 @@ struct LeaderboardScreen: View {
                         }
                     }
                     rankSection(entries: entries, additionalCatchers: response.additionalCatchers)
-                    meHintSection(me: response.me)
+                    meHintSection(me: response.me,
+                                  raceGap: RaceGap.compute(response: response, window: window,
+                                                           myHandle: myHandle),
+                                  resetsAt: response.resetsAtDate)
                 }
             } else if let msg = errors[window] {
                 errorSection(msg)
@@ -527,9 +547,13 @@ struct LeaderboardScreen: View {
     /// "Me" section shown below the ranked list: either the me row from the
     /// API (when the device has a handle), or a prompt to claim one.
     @ViewBuilder
-    private func meHintSection(me: MyStanding?) -> some View {
+    private func meHintSection(me: MyStanding?,
+                               raceGap: RaceGap? = nil,
+                               resetsAt: Date? = nil) -> some View {
         let myLocalPoints = ProfileStats(catches: catches).totalPoints
-        let hasHandle = !localHandle.isEmpty && localHandle != SpotterHandle.defaultPlaceholder
+        let hasHandle = myHandle != nil
+        let gapDetail = raceGap?.detail(
+            resetWeekday: resetsAt.map { LeaderboardCountdown.resetWeekday(resetsAt: $0) })
 
         if let meStanding = me {
             // Server confirmed our standing — show it. Rank 0 = UNRANKED
@@ -568,6 +592,9 @@ struct LeaderboardScreen: View {
                     + (meStanding.rank >= 1 ? "rank \(meStanding.rank)" : "not ranked yet")
                     + ", \(meStanding.points) points"
                 )
+                if let raceGap, let gapDetail {
+                    raceGapRow(raceGap, detail: gapDetail)
+                }
                 if !hasHandle {
                     Text("Claim a handle in Profile → Settings to appear in the list above.")
                         .font(Brand.Font.caption)
@@ -598,6 +625,58 @@ struct LeaderboardScreen: View {
                 sectionHeader(standingHeaderTitle)
             }
         }
+    }
+
+    /// The local handle, or nil while the device still has the placeholder
+    /// (or nothing) — the "has a handle" test the whole screen uses.
+    private var myHandle: String? {
+        localHandle.isEmpty || localHandle == SpotterHandle.defaultPlaceholder ? nil : localHandle
+    }
+
+    /// Week-tab goal under the standing row: "51 PTS TO PASS @x", an
+    /// optional "101 PTS TO THE TOP 10", then "≈ 6 COMMON CATCHES · RESETS
+    /// SUNDAY". Mono readout voice; wraps rather than truncates at large
+    /// type sizes (`fixedSize(vertical:)` lets a List row grow to fit).
+    private func raceGapRow(_ gap: RaceGap, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(gap.headline)
+                .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
+                .tracking(0.6)
+                .foregroundStyle(Brand.Color.cyan)
+                .fixedSize(horizontal: false, vertical: true)
+            if let topTen = gap.topTenLine {
+                Text(topTen)
+                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption))
+                    .tracking(0.6)
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(detail)
+                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
+                .tracking(0.6)
+                .foregroundStyle(Brand.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 2)
+        .listRowBackground(Brand.Color.bgElevated)
+        // VoiceOver gets prose instead of "≈" and "PTS".
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(raceGapSpoken(gap))
+    }
+
+    private func raceGapSpoken(_ gap: RaceGap) -> String {
+        let goal: String
+        switch gap.target {
+        case .pass(let handle): goal = "to pass \(handle)"
+        case .makeBoard:        goal = "to make the board"
+        }
+        let n = gap.catchesEquivalent
+        var text = "\(gap.points) point\(gap.points == 1 ? "" : "s") \(goal), "
+            + "about \(n) common catch\(n == 1 ? "" : "es")"
+        if let top = gap.topTenPoints {
+            text += ". \(top) point\(top == 1 ? "" : "s") to the top 10"
+        }
+        return text
     }
 
     /// Mono ALL-CAPS section header — the app-wide style (SettingsScreen's
