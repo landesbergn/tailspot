@@ -33,6 +33,7 @@
 
 import SwiftUI
 import UIKit
+import Accessibility  // AttributedString's announcement-priority attribute
 
 // MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
 
@@ -65,6 +66,28 @@ nonisolated func revealSettleDeadline(
     ].compactMap { $0 }.max()
 }
 
+/// VoiceOver copy for the in-card bonus round (a11y pass, 2026-10-22).
+/// Before this, the round was silent: the chips popped in with no
+/// announcement and the verdict was never spoken. Pure strings, so the
+/// copy is pinned by `BonusRoundAnnouncementTests` without a view tree.
+nonisolated enum BonusRoundAnnouncement {
+    /// Spoken when the chips pop in, queued behind the settle line.
+    /// The prompts end in "?", so a full stop is added only when missing.
+    static func popped(prompt: String, choiceCount: Int) -> String {
+        let p = prompt.trimmingCharacters(in: .whitespaces)
+        let ended = p.last.map { ".?!".contains($0) } ?? true
+        return "Bonus round. \(p)\(ended ? "" : ".") \(choiceCount) choices."
+    }
+
+    /// Spoken when the round resolves. `answered == false` is a SKIP.
+    /// `correctDisplay` is the right chip's on-screen text.
+    static func resolved(correct: Bool, answered: Bool, bonus: Int, correctDisplay: String) -> String {
+        if correct { return "Correct, plus \(bonus) points." }
+        if !answered { return "Skipped. It was \(correctDisplay)." }
+        return "Not quite. It was \(correctDisplay)."
+    }
+}
+
 /// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
 let flapPool = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789-")
 
@@ -79,7 +102,13 @@ enum RP {
     static let bg = Color(hex: 0x08090C)
     static let ink = Color(hex: 0xE7EEF5)
     static let muted = Color(hex: 0x8DA0B2)
-    static let faint = Color(hex: 0x5F7284)
+    /// The quietest ink: ALT/SPD/ROUTE labels, ENTRY #, "tap to continue",
+    /// the bonus round's SKIP. Lifted from 0x5F7284 (4.01:1 on `bg`, 3.88:1
+    /// on the share card's bgPrimary) to clear the WCAG AA 4.5:1 bar for
+    /// small text, same hue (a11y pass, 2026-10-22): 4.74:1 on `bg`, 4.58:1
+    /// on bgPrimary, still clearly a step below `muted` (7.4:1).
+    /// BrandTests pins both ratios.
+    static let faint = Color(hex: 0x6A7E90)
     static let rule = Color(hex: 0x232C38)
     static let gold = Brand.Color.ledgerGold
     static let flapFace = Color(hex: 0x131720)
@@ -595,6 +624,13 @@ struct CatchRevealView: View {
     private var reduceMotion: Bool { systemReduceMotion }
     #endif
 
+    /// True while VoiceOver is running. The bonus round's chips normally
+    /// collapse on a ~1 s timer after the answer; under VoiceOver that
+    /// yanked focus off the chip the user just tapped, so they stay up
+    /// (resolved and disabled) until the user continues. Read only inside
+    /// `scheduleCollapse`, never in the card's modifier chain.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+
     /// Animation clock anchor. nil until `onAppear`; `t` is 0 until set.
     @State private var start: Date?
     /// Photos-style zoom transition for the composed catch photo — pinch
@@ -1049,11 +1085,39 @@ struct CatchRevealView: View {
                                        : .spring(response: 0.42, dampingFraction: 0.72)) {
                 chipsPhase = .shown
             }
+            if let q = liveGuess {
+                // LOW priority queues this behind the settle announcement
+                // posted 0.2 s earlier (model, tier, points) instead of
+                // cutting it off mid-sentence.
+                announce(BonusRoundAnnouncement.popped(prompt: q.prompt,
+                                                       choiceCount: q.options.count),
+                         priority: .low)
+            }
             if !guessShownFired {
                 guessShownFired = true
                 onGuessShown?()
             }
         }
+    }
+
+    /// Posts a VoiceOver announcement at a speech priority. An
+    /// `AttributedString` carries the priority as an accessibility
+    /// attribute: `.low` waits for current speech to finish, `.default`
+    /// interrupts it. A no-op when VoiceOver is off.
+    private func announce(
+        _ text: String,
+        priority: AttributeScopes.AccessibilityAttributes.AnnouncementPriorityAttribute.AnnouncementPriority = .default
+    ) {
+        var message = AttributedString(text)
+        message.accessibilitySpeechAnnouncementPriority = priority
+        AccessibilityNotification.Announcement(message).post()
+    }
+
+    /// Speaks the verdict once the round resolves (tap or SKIP).
+    private func announceResolution(_ q: GuessRoundQuestion, answered: Bool, correct: Bool) {
+        let display = q.options.first { $0.value == q.correctValue }?.display ?? q.correctValue
+        announce(BonusRoundAnnouncement.resolved(correct: correct, answered: answered,
+                                                 bonus: routeBonus, correctDisplay: display))
     }
 
     /// Tap on a chip — lock the set, flash the verdict, crossfade to the real
@@ -1068,25 +1132,35 @@ struct CatchRevealView: View {
         }
         if correct { bonusStart = Date(); successBeat += 1 } else { missBeat += 1 }
         onGuessResolved?(option.value, correct)
+        announceResolution(q, answered: true, correct: correct)
         scheduleCollapse(correct: correct)
     }
 
     /// Quiet SKIP — resolve with no answer (no flash, no bonus line), then the
     /// route reveals and the chips collapse like a wrong-minus-flash.
     private func skipBonusRound() {
-        guard liveGuess != nil, !guessResolved else { return }
+        guard let q = liveGuess, !guessResolved else { return }
         guessResolved = true
         withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .easeOut(duration: 0.3)) {
             resolution = GuessResolution(answeredValue: nil, correct: false)
         }
         onGuessResolved?(nil, false)
+        announceResolution(q, answered: false, correct: false)
         scheduleCollapse(correct: false)
     }
 
     /// After the verdict registers (a miss lingers a touch less than a correct
     /// call's count-up), collapse the chips away — the settled card with the full
     /// route (+ bonus line if earned) is what remains.
+    ///
+    /// Not under VoiceOver: there the chips stay up, resolved and disabled,
+    /// with the verdict marks on them, until the user continues (the CTA and
+    /// margin taps still dismiss). Collapsing them pulled focus off the chip
+    /// the user had just tapped. This is a decision about WHEN to change
+    /// `chipsPhase`, so the card's `.contain`/`.ignore` modifier chain is
+    /// untouched (see the warning in `layout`).
     private func scheduleCollapse(correct: Bool) {
+        guard !voiceOverEnabled else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(correct ? 1.15 : 0.95))
             withAnimation(reduceMotion ? .easeOut(duration: 0.25)
