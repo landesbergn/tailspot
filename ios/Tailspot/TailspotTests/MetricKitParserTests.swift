@@ -342,4 +342,15 @@ struct MetricKitParserTests {
         #expect(props["exit_bg_normal"] == nil)
         #expect(props.count == 6)
     }
+
+    @Test func backgroundOnlyExitReasonsAreEmittedForBackground() {
+        let bg = MetricKitParser.ExitCounts(normal: 5, memoryPressure: 7, suspendedWithLockedFile: 2,
+                                            backgroundTaskAssertionTimeout: 1, cpuResourceLimit: 0)
+        let props = MetricKitParser.exitProperties(foreground: nil, background: bg)
+        #expect(int(props["exit_bg_memory_pressure"]) == 7)
+        #expect(int(props["exit_bg_locked_file"]) == 2)
+        #expect(int(props["exit_bg_task_timeout"]) == 1)
+        #expect(int(props["exit_bg_cpu_limit"]) == 0)
+        #expect(props.count == 10)
+    }
 }

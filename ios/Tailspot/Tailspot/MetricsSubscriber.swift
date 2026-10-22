@@ -159,7 +159,11 @@ final class MetricsSubscriber: NSObject, MXMetricManagerSubscriber {
                 appWatchdog: e.backgroundExitData.cumulativeAppWatchdogExitCount,
                 abnormal: e.backgroundExitData.cumulativeAbnormalExitCount,
                 badAccess: e.backgroundExitData.cumulativeBadAccessExitCount,
-                illegalInstruction: e.backgroundExitData.cumulativeIllegalInstructionExitCount)
+                illegalInstruction: e.backgroundExitData.cumulativeIllegalInstructionExitCount,
+                memoryPressure: e.backgroundExitData.cumulativeMemoryPressureExitCount,
+                suspendedWithLockedFile: e.backgroundExitData.cumulativeSuspendedWithLockedFileExitCount,
+                backgroundTaskAssertionTimeout: e.backgroundExitData.cumulativeBackgroundTaskAssertionTimeoutExitCount,
+                cpuResourceLimit: e.backgroundExitData.cumulativeCPUResourceLimitExitCount)
         }
 
         // ── Log summary ────────────────────────────────────────────────

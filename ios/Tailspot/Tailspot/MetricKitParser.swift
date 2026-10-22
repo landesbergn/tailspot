@@ -344,6 +344,15 @@ nonisolated enum MetricKitParser {
         var abnormal = 0
         var badAccess = 0
         var illegalInstruction = 0
+        // Background-only reasons (MXBackgroundExitData has them, the
+        // foreground data doesn't); nil for foreground counts so no field is
+        // emitted. Background jetsam lands in memoryPressure, and 0xdead10cc
+        // (killed while suspended holding the SwiftData/sqlite lock) in
+        // suspendedWithLockedFile.
+        var memoryPressure: Int? = nil
+        var suspendedWithLockedFile: Int? = nil
+        var backgroundTaskAssertionTimeout: Int? = nil
+        var cpuResourceLimit: Int? = nil
     }
 
     static func exitProperties(foreground: ExitCounts?, background: ExitCounts?) -> [String: AnalyticsValue] {
@@ -356,6 +365,10 @@ nonisolated enum MetricKitParser {
             props[prefix + "abnormal"] = .int(counts.abnormal)
             props[prefix + "bad_access"] = .int(counts.badAccess)
             props[prefix + "illegal_instruction"] = .int(counts.illegalInstruction)
+            if let n = counts.memoryPressure { props[prefix + "memory_pressure"] = .int(n) }
+            if let n = counts.suspendedWithLockedFile { props[prefix + "locked_file"] = .int(n) }
+            if let n = counts.backgroundTaskAssertionTimeout { props[prefix + "task_timeout"] = .int(n) }
+            if let n = counts.cpuResourceLimit { props[prefix + "cpu_limit"] = .int(n) }
         }
         return props
     }
