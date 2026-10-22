@@ -220,7 +220,7 @@ struct TailCard: View {
             let dest = c.displayDest
             if showPoints, origin != nil || dest != nil {
                 HStack(spacing: 6) {
-                    routeLine(origin: origin, dest: dest, tint: row.rarity.tint)
+                    routeLine(origin: origin, dest: dest, tint: row.rarity.textTint)
                     separator
                     Text(c.caughtAt.formatted(.dateTime.month().day())).fixedSize()
                         .font(.footnote)
