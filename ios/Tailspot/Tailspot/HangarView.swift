@@ -5,8 +5,8 @@
 //  The collection view ("Hangar") — every catch the user has logged.
 //  Presented as a sheet from ContentView. Hosts the 3-segment shell
 //  (Sets / Recent / Trophies); each segment owns its own body and,
-//  where applicable, its own delete state. See `HangarRecentView`,
-//  `HangarSetsView`, `HangarTrophiesView`.
+//  where applicable, its own delete state. See `SetsBrowser`
+//  (SetsScreen.swift), `HangarRecentView`, `HangarTrophiesView`.
 //
 
 import SwiftUI
@@ -36,8 +36,7 @@ struct HangarView: View {
     }
 
     /// One shared namespace for every zoom transition inside this stack
-    /// (set cell → set detail, model cell → model detail, tail row →
-    /// catch detail). Published through the environment so source cells
+    /// (tail row → catch detail). Published through the environment so source cells
     /// and the `navigationDestination` destinations — which live in
     /// different views — can match by the route's stable id. See
     /// `HangarZoomNamespace.swift`.
@@ -84,32 +83,6 @@ struct HangarView: View {
                 // standalone Profile path keeps its own copy in SetsBrowser.
                 .navigationDestination(for: CardSet.self) { set in
                     SetDetailScreen(set: set)
-                }
-                .navigationDestination(for: SetDetailRoute.self) { route in
-                    // Task 16 — real `SetDetailView` (model-slot grid)
-                    // lives in `SetDetailView.swift`. If a set id ever
-                    // fails to resolve (e.g., we deleted an entry from
-                    // CardSets.all but a stale nav value lingered),
-                    // fall through to an empty view rather than crash.
-                    if let set = CardSets.all.first(where: { $0.id == route.setId }) {
-                        SetDetailView(set: set)
-                    }
-                }
-                .navigationDestination(for: ModelSlotRoute.self) { route in
-                    // Resolve the set, then rebuild the model group on
-                    // demand from current catches — the route only
-                    // carries stable strings (set id + model name).
-                    // The model layer is derived dynamically per the
-                    // 2026-05-26 Sets revamp, so a model that has been
-                    // un-caught since the navigation pushed degrades
-                    // to "no tails" gracefully rather than crashing.
-                    if let set = CardSets.all.first(where: { $0.id == route.setId }) {
-                        ModelGroupBridge(set: set, modelName: route.model)
-                            // Grow the model-slot card out of the tapped
-                            // SetDetailView model cell (same `route` id on
-                            // both ends of the match).
-                            .zoomTransition(id: route, in: zoomNamespace)
-                    }
                 }
         }
     }
@@ -207,6 +180,11 @@ struct HangarView: View {
     /// The first-launch empty state — explains the catch loop and
     /// previews the sets the user has to fill. Matches the design
     /// canvas's "Go outside." treatment.
+    ///
+    /// Most people who never catch a plane only ever see THIS collection
+    /// screen, so the preview must be the same families the Sets tab
+    /// shows after the first catch (`CardSets.families`), counted the
+    /// same way ("0 of N variants").
     private var emptyState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -255,16 +233,13 @@ struct HangarView: View {
     }
 
     private var setsPreview: some View {
-        let previewSets: [CardSet] = CardSets.all.filter {
-            [.narrow, .wide, .regional, .heritage].contains($0.type)
-        }
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("SETS TO COLLECT")
                 .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
                 .tracking(1.2)
                 .foregroundStyle(Brand.Color.textTertiary)
             VStack(spacing: 8) {
-                ForEach(previewSets) { set in
+                ForEach(Self.previewFamilies) { set in
                     setPreviewRow(set)
                 }
             }
@@ -281,34 +256,47 @@ struct HangarView: View {
             }
             .frame(width: 30, height: 36)
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
+            // Title over count, the same stack the Sets tab's
+            // SetCompletionCard uses. A trailing count column squeezed the
+            // title into a narrow wrap at large Dynamic Type sizes.
+            VStack(alignment: .leading, spacing: 2) {
                 Text(set.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
-                Text(set.type.summary)
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .lineLimit(1)
+                Text("0 of \(set.entries.count) variants")
+                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .monospacedDigit()
             }
             Spacer(minLength: 4)
-            Text("0 / \(set.entries.count)")
-                .font(Brand.Font.mono(size: 12, weight: .bold, relativeTo: .caption))
-                .foregroundStyle(Brand.Color.textTertiary)
-                .monospacedDigit()
         }
         .padding(12)
         .background(Brand.Color.bgElevated, in: .rect(cornerRadius: Brand.Radius.row))
         // One coherent VoiceOver element per row — otherwise the glyph
-        // character and the split "0 / N" read as disconnected fragments.
+        // character, title and count read as disconnected fragments.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(set.title), 0 of \(set.entries.count) caught")
+        .accessibilityLabel("\(set.title), 0 of \(set.entries.count) variants")
+    }
+
+    /// Ids of the families the empty state previews: three airliner
+    /// families a first-timer is most likely to see overhead, plus
+    /// helicopters for the low-and-slow crowd.
+    nonisolated static let previewFamilyIDs = ["fam-737", "fam-a320", "fam-787", "fam-heli"]
+
+    /// The previewed families, resolved from the live `CardSets.families`
+    /// catalog in `previewFamilyIDs` order. `compactMap` silently skips an
+    /// id that no longer exists, so FamilySetsTests pins all four.
+    /// `nonisolated` because it only reads the Sendable catalog — it
+    /// doesn't need the MainActor that the rest of this View runs on.
+    nonisolated static var previewFamilies: [CardSet] {
+        previewFamilyIDs.compactMap { id in CardSets.families.first { $0.id == id } }
     }
 }
 
-// All three Hangar segment views now live in their own files:
-//   - HangarRecentView   → HangarRecentView.swift   (Task 13)
-//   - HangarTrophiesView → HangarTrophiesView.swift (Task 14)
-//   - HangarSetsView     → HangarSetsView.swift     (Task 15)
+// All three Hangar segment views live in their own files:
+//   - SetsBrowser        → SetsScreen.swift
+//   - HangarRecentView   → HangarRecentView.swift
+//   - HangarTrophiesView → HangarTrophiesView.swift
 
 #Preview {
     HangarView()

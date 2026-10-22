@@ -267,6 +267,21 @@ struct FamilySetsTests {
         #expect(CardSets.families.count >= 10, "expected a meaningful roster of families")
     }
 
+    /// The empty Hangar previews real families (the same ones the Sets tab
+    /// shows after the first catch), never the legacy type sets — which
+    /// included a Heritage set whose retired aircraft can't be caught.
+    @Test func emptyHangarPreviewsRealFamilies() {
+        let preview = HangarView.previewFamilies
+        #expect(preview.map(\.id) == HangarView.previewFamilyIDs,
+                "every previewed family id must resolve in CardSets.families")
+        let familyIDs = Set(CardSets.families.map(\.id))
+        for set in preview {
+            #expect(familyIDs.contains(set.id))
+            #expect(!set.entries.isEmpty)
+        }
+        #expect(!preview.contains { $0.type == .heritage })
+    }
+
     @Test func allSetIDsAreUnique() {
         // Navigation/identity rely on stable, unique set ids across both lenses.
         let ids = (CardSets.all + CardSets.families).map(\.id)
