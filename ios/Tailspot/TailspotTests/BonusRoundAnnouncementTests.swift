@@ -51,6 +51,13 @@ struct BonusRoundAnnouncementTests {
                 == "Not quite. It was HKG.")
     }
 
+    @Test func resolvedSpeaksTheChipSeparatorAsAPause() {
+        // Chips read "HKG · Hong Kong"; the dot would be spoken aloud.
+        #expect(BonusRoundAnnouncement.resolved(correct: false, answered: true,
+                                                bonus: 13, correctDisplay: "HKG · Hong Kong")
+                == "Not quite. It was HKG, Hong Kong.")
+    }
+
     @Test func resolvedSkipNamesTheRightAnswer() {
         #expect(BonusRoundAnnouncement.resolved(correct: false, answered: false,
                                                 bonus: 13, correctDisplay: "HKG")

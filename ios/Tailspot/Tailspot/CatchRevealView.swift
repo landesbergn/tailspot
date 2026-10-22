@@ -80,11 +80,14 @@ nonisolated enum BonusRoundAnnouncement {
     }
 
     /// Spoken when the round resolves. `answered == false` is a SKIP.
-    /// `correctDisplay` is the right chip's on-screen text.
+    /// `correctDisplay` is the right chip's on-screen text ("HKG · Hong
+    /// Kong"); its middle dot becomes a comma so VoiceOver pauses instead
+    /// of reading the separator.
     static func resolved(correct: Bool, answered: Bool, bonus: Int, correctDisplay: String) -> String {
         if correct { return "Correct, plus \(bonus) points." }
-        if !answered { return "Skipped. It was \(correctDisplay)." }
-        return "Not quite. It was \(correctDisplay)."
+        let answer = correctDisplay.replacingOccurrences(of: " · ", with: ", ")
+        if !answered { return "Skipped. It was \(answer)." }
+        return "Not quite. It was \(answer)."
     }
 }
 
