@@ -290,6 +290,9 @@ struct SetsCoverageTests {
         ("LA4", "Lake", "LA-4"),
         ("S92", "Sikorsky", "S-92"),
         ("U2", "Lockheed", "U-2"),
+        // Public catalog coverage additions validated 2026-10-22.
+        ("PA30", "Piper", "PA-30 Twin Comanche"),
+        ("S64", "Sikorsky", "CH-54 Tarhe"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -440,6 +443,8 @@ struct SetsCoverageTests {
             (("LA4", "Lake", "LA-4"), "fam-sport-classics", "fsc-lake-la4"),
             (("S92", "Sikorsky", "S-92"), "fam-heli", "fh-s92"),
             (("U2", "Lockheed", "U-2"), "fam-military", "fm-u2"),
+            (("PA30", "Piper", "PA-30 Twin Comanche"), "fam-piper", "fpa30"),
+            (("S64", "Sikorsky", "CH-54 Tarhe"), "fam-heli", "fh-s64"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -658,6 +663,17 @@ struct SetsCoverageTests {
         let twinComanche = mk(("PA30", "Piper", "PA-30 Twin Comanche"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: twinComanche), entry: comancheEntry),
                 "A PA-30 Twin Comanche must not fill the PA-24 Comanche slot")
+        let twinComancheEntry = CardSets.families.first { $0.id == "fam-piper" }!
+            .entries.first { $0.id == "fpa30" }!
+        let singleComanche = mk(("PA24", "Piper", "PA-24 Comanche"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: singleComanche), entry: twinComancheEntry),
+                "A PA-24 Comanche must not fill the PA-30 Twin Comanche slot")
+
+        let skycraneEntry = CardSets.families.first { $0.id == "fam-heli" }!
+            .entries.first { $0.id == "fh-s64" }!
+        let sikorskyS76 = mk(("S76", "Sikorsky", "S-76"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: sikorskyS76), entry: skycraneEntry),
+                "A Sikorsky S-76 must not fill the S-64 / CH-54 Skycrane slot")
 
         // Legacy and Texan names are shared across unrelated aircraft lines.
         let lancairLegacyEntry = sportSet.entries.first { $0.id == "fsc-lancair-legacy" }!
