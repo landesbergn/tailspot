@@ -137,8 +137,14 @@ export const devices = pgTable(
      * resolve to nothing (see `DrizzleIdentityStore.findByTokenHash`) — every
      * bearer route answers 401, the leaderboard answers "no me" — and hides it
      * from live leaderboard entries, while every row it ever wrote stays exactly
-     * where it is. It is fully REVERSIBLE (set back to null) precisely because
-     * an anonymous user has no way to appeal a mistake.
+     * where it is. While disabled it also can't win anything new: the weekly
+     * and monthly crown decides and the all-time topper ledger skip it.
+     *
+     * It is REVERSIBLE (set back to null) precisely because an anonymous user
+     * has no way to appeal a mistake: re-enabling restores the token, the
+     * catches and the live board standing. The one thing it does NOT restore is
+     * a crown or all-time-#1 sighting decided while the device was disabled —
+     * those went to someone else and are frozen, like every other crown.
      *
      * Set/cleared by the operator script `src/tools/disable-device.ts`
      * (`npm run device:disable`). Nothing in the request path ever writes it.

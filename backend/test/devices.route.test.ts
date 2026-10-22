@@ -278,6 +278,11 @@ describe("devices routes", () => {
       const honestView = leaderboardOf(await leaderboard(honest.deviceToken));
       expect(honestView.me).not.toBeNull();
       expect(honestView.handles).toEqual(["Honest"]);
+      // Honest is the visible all-time #1 now, so the topper ledger records
+      // them (Chart Topper). Before the disable, Cheater held #1 on the
+      // registration-order tie-break; a disabled device must not keep that
+      // slot and lock the visible leader out of the flag.
+      expect((honestView.me as { everToppedAllTime: boolean }).everToppedAllTime).toBe(true);
       const honestList = await app.inject({
         method: "GET",
         url: "/v1/catches",

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
@@ -108,6 +109,14 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
       aircraftPositionTimestamp: null,
       validation: null,
     });
+  }
+
+  /** Flip the operator kill switch, as `npm run device:disable` would. */
+  async function disable(deviceId: string) {
+    await db
+      .update(devices)
+      .set({ disabledAt: utc(2026, 7, 10) })
+      .where(eq(devices.id, deviceId));
   }
 
   async function get(url: string, token?: string) {
@@ -517,5 +526,84 @@ describe("GET /v1/leaderboard windows + weekly/monthly champions", () => {
     // (Sanity: the ledger row is Alice's device.)
     const deviceRows = await db.select({ id: devices.id }).from(devices);
     expect(deviceRows.map((d) => d.id)).toContain(ledger[0].deviceId);
+  });
+
+  // ── Disabled devices (the operator kill switch) ──────────────────────────
+
+  it("a disabled device with the top week and month total is not crowned; the next device is", async () => {
+    const mallory = await register();
+    const alice = await register();
+    const bob = await register();
+    await claim(mallory.token, "Mallory");
+    await claim(alice.token, "Alice");
+    await claim(bob.token, "Bob");
+    // June (last closed month) and the week of Jun 29 (last closed week):
+    // Mallory leads both by a mile, Alice is the best enabled player.
+    await seedCatch(mallory.deviceId, 500, utc(2026, 6, 10));
+    await seedCatch(alice.deviceId, 50, utc(2026, 6, 12));
+    await seedCatch(bob.deviceId, 20, utc(2026, 6, 13));
+    await seedCatch(mallory.deviceId, 500, utc(2026, 6, 30));
+    await seedCatch(alice.deviceId, 40, utc(2026, 7, 1));
+    await seedCatch(bob.deviceId, 30, utc(2026, 7, 2));
+    await disable(mallory.deviceId);
+
+    const week = await get("/v1/leaderboard?window=week", alice.token);
+    expect(week.champions).toEqual([{ handle: "Alice", points: 40, weekStart: "2026-06-29" }]);
+    // Two weekly crowns: the backfill also decided the week of Jun 8, which
+    // Mallory's 500 would have won too.
+    expect(week.me.weeklyWins).toBe(2);
+
+    const month = await get("/v1/leaderboard?window=month", alice.token);
+    expect(month.monthlyChampions).toEqual([
+      { handle: "Alice", points: 50, monthStart: "2026-06-01" },
+    ]);
+    expect(month.me.monthlyWins).toBe(1);
+
+    // Every crown that exists is Alice's; the disabled device holds none.
+    const weekRows = await db.select().from(weeklyChampions);
+    expect(weekRows.map((r) => [r.weekStart, r.deviceId]).sort()).toEqual([
+      ["2026-06-08", alice.deviceId],
+      ["2026-06-29", alice.deviceId],
+    ]);
+    const monthRows = await db.select().from(monthlyChampions);
+    expect(monthRows.map((r) => r.deviceId)).toEqual([alice.deviceId]);
+  });
+
+  it("a week and month whose only catches are a disabled device's get no champion, every read", async () => {
+    const mallory = await register();
+    const alice = await register();
+    await claim(mallory.token, "Mallory");
+    await claim(alice.token, "Alice");
+    await seedCatch(mallory.deviceId, 500, utc(2026, 6, 30)); // last week + June: only Mallory
+    await seedCatch(alice.deviceId, 10, utc(2026, 7, 9)); // this week, July
+    await disable(mallory.deviceId);
+
+    for (let i = 0; i < 3; i++) {
+      const week = await get("/v1/leaderboard?window=week", alice.token);
+      expect(week.champions).toEqual([]);
+      const month = await get("/v1/leaderboard?window=month", alice.token);
+      expect(month.monthlyChampions).toEqual([]);
+    }
+    expect(await db.select().from(weeklyChampions)).toHaveLength(0);
+    expect(await db.select().from(monthlyChampions)).toHaveLength(0);
+    // Treated like an empty week: no decide happened, so the decide pass
+    // never ran its topper side-observation either.
+    expect(await db.select().from(alltimeToppers)).toHaveLength(0);
+  });
+
+  it("the all-time topper ledger skips a disabled #1 and records the visible #1", async () => {
+    const mallory = await register();
+    const alice = await register();
+    await claim(mallory.token, "Mallory");
+    await claim(alice.token, "Alice");
+    await seedCatch(mallory.deviceId, 9000, utc(2026, 7, 8));
+    await seedCatch(alice.deviceId, 100, utc(2026, 7, 9));
+    await disable(mallory.deviceId);
+
+    const all = await get("/v1/leaderboard", alice.token);
+    expect(all.entries[0]).toMatchObject({ rank: 1, handle: "Alice" });
+    expect(all.me.everToppedAllTime).toBe(true);
+    const ledger = await db.select().from(alltimeToppers);
+    expect(ledger.map((r) => r.deviceId)).toEqual([alice.deviceId]);
   });
 });

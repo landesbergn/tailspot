@@ -15,9 +15,16 @@
  * resolve to nothing (`DrizzleIdentityStore.findByTokenHash` filters on it), so
  * every bearer route answers 401 and the leaderboard answers "no me", and drops
  * the device from live leaderboard entries — while every row it ever wrote stays
- * exactly where it is. It is fully reversible (`--enable`), which matters
- * because an anonymous user has no way to appeal a mistake: if you disable the
- * wrong device, re-enabling it restores them completely.
+ * exactly where it is. While disabled, the device also can't be crowned weekly
+ * or monthly champion or recorded as all-time #1 (those decides skip it).
+ *
+ * It is reversible (`--enable`), which matters because an anonymous user has
+ * no way to appeal a mistake: re-enabling restores the token, the catches and
+ * the live board standing. It does NOT restore crowns or all-time-#1 sightings
+ * decided while the device was disabled — those went to the best enabled
+ * player and are frozen. So disable promptly and re-enable promptly if you got
+ * the wrong device; a mistake left across a week or month boundary costs that
+ * player the crown.
  *
  * The device is addressed by its uuid OR by its handle (handles are matched
  * case-insensitively, the same way the unique index treats them) — in practice

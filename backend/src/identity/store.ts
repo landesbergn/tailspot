@@ -486,7 +486,9 @@ export interface CatchStore {
    * since the earliest catch has its champion(s) frozen in `weekly_champions`.
    * Called on every `window=week` request; the fast path (most recent closed
    * week already decided) is a single point-read. When it does decide, ties
-   * share the crown (one row per tied device), a zero-catch week gets no rows,
+   * share the crown (one row per tied device), DISABLED devices can't be
+   * crowned (a week whose only catches are theirs counts as zero-catch), a
+   * zero-catch week gets no rows,
    * and each week's insert is one atomic INSERT…SELECT with ON CONFLICT DO
    * NOTHING — concurrent requests double-deciding is harmless. Also records
    * the current all-time #1 into the topper ledger (a decide is a natural
@@ -498,7 +500,10 @@ export interface CatchStore {
   champions(weekStart: string): Promise<ChampionEntry[]>;
   /** Total weekly crowns this device has ever won (all weeks, shared crowns count). */
   weeklyWins(deviceId: string): Promise<number>;
-  /** Freeze every closed calendar month's champion(s), backfilling history. */
+  /**
+   * Freeze every closed calendar month's champion(s), backfilling history.
+   * Same rules as the weekly decide, including skipping disabled devices.
+   */
   ensureMonthsDecided(now: Date): Promise<number>;
   /** The champion(s) of the month starting `monthStart` ("YYYY-MM-DD"). */
   monthlyChampions(monthStart: string): Promise<MonthlyChampionEntry[]>;
@@ -507,8 +512,8 @@ export interface CatchStore {
   /** Whether this device has EVER held all-time #1 (per the topper ledger). */
   everToppedAllTime(deviceId: string): Promise<boolean>;
   /**
-   * Observe the CURRENT all-time #1 and upsert it into the topper ledger
-   * (first observation wins; ON CONFLICT DO NOTHING). Called by every
+   * Observe the CURRENT all-time #1 among enabled devices and upsert it into
+   * the topper ledger (first observation wins; ON CONFLICT DO NOTHING). Called by every
    * `window=all` leaderboard request and by the week-decide pass. No-op while
    * no device has a catch.
    */
@@ -806,11 +811,14 @@ export class DrizzleCatchStore implements CatchStore {
         // Disabled devices are dropped from the PUBLIC board entirely. The
         // usual reason to disable somebody is that they're cheating their way
         // up this very list, so leaving the row visible would defeat the point
-        // of the switch. This is a DISPLAY filter only: their catches are still
-        // in the DB, their frozen `weekly_champions` / `monthly_champions` rows
-        // still stand (history is not rewritten — a past crown they actually
-        // won stays won), and re-enabling them puts them straight back on the
-        // board at their real standing. Ranks are 1-based row positions, so
+        // of the switch. Their catches are still in the DB, their frozen
+        // `weekly_champions` / `monthly_champions` rows still stand (history is
+        // not rewritten — a crown frozen BEFORE the disable stays won), and
+        // re-enabling them puts them straight back on the live board at their
+        // real standing. What re-enabling does NOT give back: crowns and
+        // all-time-topper sightings decided WHILE they were disabled — the
+        // decide passes and `recordAlltimeTopper` skip disabled devices, and
+        // those results are frozen. Ranks are 1-based row positions, so
         // removing an entry closes the gap rather than leaving a hole.
         .where(and(isNotNull(devices.handle), isNull(devices.disabledAt)))
         .groupBy(devices.id, devices.handle, devices.createdAt)
@@ -952,12 +960,19 @@ export class DrizzleCatchStore implements CatchStore {
 
       // A zero-catch week has NO champion (the one champion-less case — there
       // is otherwise no winner floor). Checked explicitly so `decidedCount`
-      // means "weeks that got champions".
+      // means "weeks that got champions". Only ENABLED devices' catches count
+      // here, matching the crown query below: a week whose only catches came
+      // from a disabled device is treated exactly like an empty week (skipped,
+      // no rows), rather than "deciding" into zero rows, bumping
+      // `decidedCount`, and re-running the topper pass on every read.
       const anyCatch = await withDbRetry(() =>
         this.db
           .select({ id: catches.id })
           .from(catches)
-          .where(and(gte(catches.caughtAt, ws), lt(catches.caughtAt, we)))
+          .innerJoin(devices, eq(devices.id, catches.deviceId))
+          .where(
+            and(gte(catches.caughtAt, ws), lt(catches.caughtAt, we), isNull(devices.disabledAt)),
+          )
           .limit(1),
       );
       if (anyCatch.length === 0) continue;
@@ -967,6 +982,14 @@ export class DrizzleCatchStore implements CatchStore {
       // points only — no display tie-break here). ON CONFLICT DO NOTHING makes
       // a concurrent double-decide of the same week a no-op, so no explicit
       // transaction/locking is needed.
+      //
+      // DISABLED devices can't be crowned: both the outer GROUP BY and the
+      // max() subquery join `devices` and keep only `disabled_at IS NULL`. The
+      // filter has to be in BOTH places — if only the outer query had it, a
+      // disabled device holding the week's max would set a target no enabled
+      // device's sum equals, and the week would get no champion at all.
+      // Whether a device is disabled is read at decide time; crowns already
+      // frozen are never revisited (disable/re-enable doesn't rewrite them).
       //
       // Params are ISO STRINGS with explicit casts, not Date objects: in a
       // raw sql`` execute the postgres.js driver has no column type info and
@@ -982,16 +1005,18 @@ export class DrizzleCatchStore implements CatchStore {
       await withDbRetry(() =>
         this.db.execute(sql`
         insert into weekly_champions (week_start, device_id, points, catches, decided_at)
-        select ${iso}::date, device_id, sum(points)::int, count(*)::int, ${now.toISOString()}::timestamptz
-        from catches
-        where caught_at >= ${wsIso}::timestamptz and caught_at < ${weIso}::timestamptz
-        group by device_id
-        having sum(points) = (
+        select ${iso}::date, c.device_id, sum(c.points)::int, count(*)::int, ${now.toISOString()}::timestamptz
+        from catches c
+        join devices d on d.id = c.device_id and d.disabled_at is null
+        where c.caught_at >= ${wsIso}::timestamptz and c.caught_at < ${weIso}::timestamptz
+        group by c.device_id
+        having sum(c.points) = (
           select max(total) from (
-            select sum(points) as total
-            from catches
-            where caught_at >= ${wsIso}::timestamptz and caught_at < ${weIso}::timestamptz
-            group by device_id
+            select sum(c2.points) as total
+            from catches c2
+            join devices d2 on d2.id = c2.device_id and d2.disabled_at is null
+            where c2.caught_at >= ${wsIso}::timestamptz and c2.caught_at < ${weIso}::timestamptz
+            group by c2.device_id
           ) as week_totals
         )
         on conflict (week_start, device_id) do nothing
@@ -1069,11 +1094,17 @@ export class DrizzleCatchStore implements CatchStore {
       if (decided.has(iso)) continue;
       const me = nextMonthStartUtc(ms);
 
+      // Same rules as the weekly decide: only enabled devices' catches make a
+      // month decidable, and only enabled devices can be crowned (filter in
+      // both the outer query and the max() subquery).
       const anyCatch = await withDbRetry(() =>
         this.db
           .select({ id: catches.id })
           .from(catches)
-          .where(and(gte(catches.caughtAt, ms), lt(catches.caughtAt, me)))
+          .innerJoin(devices, eq(devices.id, catches.deviceId))
+          .where(
+            and(gte(catches.caughtAt, ms), lt(catches.caughtAt, me), isNull(devices.disabledAt)),
+          )
           .limit(1),
       );
       if (anyCatch.length === 0) continue;
@@ -1083,16 +1114,18 @@ export class DrizzleCatchStore implements CatchStore {
       await withDbRetry(() =>
         this.db.execute(sql`
         insert into monthly_champions (month_start, device_id, points, catches, decided_at)
-        select ${iso}::date, device_id, sum(points)::int, count(*)::int, ${now.toISOString()}::timestamptz
-        from catches
-        where caught_at >= ${msIso}::timestamptz and caught_at < ${meIso}::timestamptz
-        group by device_id
-        having sum(points) = (
+        select ${iso}::date, c.device_id, sum(c.points)::int, count(*)::int, ${now.toISOString()}::timestamptz
+        from catches c
+        join devices d on d.id = c.device_id and d.disabled_at is null
+        where c.caught_at >= ${msIso}::timestamptz and c.caught_at < ${meIso}::timestamptz
+        group by c.device_id
+        having sum(c.points) = (
           select max(total) from (
-            select sum(points) as total
-            from catches
-            where caught_at >= ${msIso}::timestamptz and caught_at < ${meIso}::timestamptz
-            group by device_id
+            select sum(c2.points) as total
+            from catches c2
+            join devices d2 on d2.id = c2.device_id and d2.disabled_at is null
+            where c2.caught_at >= ${msIso}::timestamptz and c2.caught_at < ${meIso}::timestamptz
+            group by c2.device_id
           ) as month_totals
         )
         on conflict (month_start, device_id) do nothing
@@ -1147,9 +1180,15 @@ export class DrizzleCatchStore implements CatchStore {
 
   async recordAlltimeTopper(now: Date): Promise<void> {
     // The current all-time #1 under the board's total order (points DESC,
-    // createdAt ASC, id ASC), over ALL devices — an anonymous device can top.
-    // INNER join = at least one catch; with zero catches anywhere there is no
-    // #1 to record.
+    // createdAt ASC, id ASC), over every ENABLED device — an anonymous device
+    // can top. INNER join = at least one catch; with zero catches anywhere
+    // there is no #1 to record.
+    //
+    // Disabled devices are skipped, matching the public board: otherwise a
+    // disabled cheater sitting on the most points would stay "#1" here forever,
+    // and the player everyone SEES at the top of the board could never earn the
+    // flag (Chart Topper). A disabled device's earlier sightings stay in the
+    // ledger; one re-enabled later is observed again from then on.
     const rows = await withDbRetry(() =>
       this.db
         .select({
@@ -1158,6 +1197,7 @@ export class DrizzleCatchStore implements CatchStore {
         })
         .from(devices)
         .innerJoin(catches, eq(catches.deviceId, devices.id))
+        .where(isNull(devices.disabledAt))
         .groupBy(devices.id, devices.createdAt)
         .orderBy(desc(sql`points`), devices.createdAt, devices.id)
         .limit(1),
