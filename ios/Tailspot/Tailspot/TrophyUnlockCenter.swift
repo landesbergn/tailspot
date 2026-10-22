@@ -152,6 +152,17 @@ final class TrophyUnlockCenter: ObservableObject {
     /// bounded date pass is skipped — it already ran for these exact inputs,
     /// and anything it parked is still parked. The ledger diff itself always
     /// runs (it's cheap), so acknowledgments made since the last call count.
+    ///
+    /// Trade-off: the token is hashed on EVERY call, including the two that
+    /// are certain to miss after a catch (the count task, then the
+    /// post-geocode re-diff, which only fires when the geocoder stamped
+    /// something). So the catch path pays two hashing passes on top of the
+    /// full passes it already ran (LargeHangarBudgetTests logs the split).
+    /// Skipping the hash on a count change was considered and rejected: the
+    /// memo would then hold no token, and the next sheet close would pay a
+    /// full pass instead of a hit — a launch diff followed by one sheet close
+    /// would be two full passes every session. A save-notification or
+    /// generation counter would remove the hash entirely; not built yet.
     func enqueueNewUnlocks(from catches: [Catch]) {
         let token = TrophyInputsToken.of(catches, events: events, standing: standing)
         let inputs: TrophyProgressInputs

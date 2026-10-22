@@ -234,7 +234,9 @@ struct LargeHangarBudgetTests {
         let caught = [newCatch()] + rows              // the catch-count task
         center.enqueueNewUnlocks(from: caught)
         #expect(center.fullInputsPasses == before + 1)
-        // The post-geocode re-diff when the geocoder had nothing new to stamp.
+        // A re-diff of the same rows (a sheet close after the catch). The
+        // post-geocode re-diff only fires after a stamp, so it always misses;
+        // lateStampOnTheNewCatchDoesOneMorePass covers that.
         center.enqueueNewUnlocks(from: caught)
         #expect(center.fullInputsPasses == before + 1)
     }
@@ -320,6 +322,18 @@ struct LargeHangarBudgetTests {
         let full = fastest { Self.sink &+= Trophies.inputs(from: rows).totalCatches }
         print("[LargeHangarBudget] re-diff @10k: memo hit \(Int(hit * 1000)) ms vs full inputs \(Int(full * 1000)) ms")
         #expect(hit < full)
+    }
+
+    /// Not a budget: logs what the token costs on the catch path, where both
+    /// re-diffs (count task, post-geocode) miss and pay the hash ON TOP of a
+    /// full pass. Asserts only the ordering: the token stays well under a
+    /// full pass, or memoizing stops paying for itself.
+    @Test func catchPathTokenOverheadIsLogged() {
+        let rows = Self.hangar10k
+        let token = fastest { Self.sink &+= TrophyInputsToken.of(rows) }
+        let full = fastest { Self.sink &+= Trophies.inputs(from: rows).totalCatches }
+        print("[LargeHangarBudget] catch path @10k: token \(Int(token * 1000)) ms per diff (x2 per catch) on top of full inputs \(Int(full * 1000)) ms per diff")
+        #expect(token < full)
     }
 
     // MARK: - 3. Growth (10k → 20k under 3x)
