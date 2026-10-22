@@ -24,7 +24,11 @@
  * decided while the device was disabled — those went to the best enabled
  * player and are frozen. So disable promptly and re-enable promptly if you got
  * the wrong device; a mistake left across a week or month boundary costs that
- * player the crown.
+ * player the crown. One exception: a week or month whose ONLY catches came from
+ * the disabled device has no enabled winner, so it stays undecided (no rows).
+ * If the device is re-enabled, the next decide after a later boundary crowns
+ * it for that period. That is deliberate: re-enabling means the disable was a
+ * mistake, and nobody else was in the running.
  *
  * The device is addressed by its uuid OR by its handle (handles are matched
  * case-insensitively, the same way the unique index treats them) — in practice

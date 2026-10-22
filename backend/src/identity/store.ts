@@ -923,8 +923,11 @@ export class DrizzleCatchStore implements CatchStore {
     // FAST PATH (the every-request cost): the last closed week already has
     // champion rows → the backfill invariant ("deciding always decides every
     // older undecided week too") guarantees nothing older is pending either.
-    // (A zero-catch last week never gets rows, so it re-enters the slow path
-    // each request — harmless: the loop below just finds nothing to insert.)
+    // (A last week with no ENABLED catches never gets rows, so it re-enters the
+    // slow path each request; the loop below finds nothing to insert. A week
+    // whose only catches are a disabled device's stays undecided, so if that
+    // device is re-enabled it is crowned at the next decide — see
+    // tools/disable-device.ts.)
     const already = await withDbRetry(() =>
       this.db
         .select({ weekStart: weeklyChampions.weekStart })

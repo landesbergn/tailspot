@@ -145,6 +145,8 @@ export const devices = pgTable(
      * catches and the live board standing. The one thing it does NOT restore is
      * a crown or all-time-#1 sighting decided while the device was disabled —
      * those went to someone else and are frozen, like every other crown.
+     * (A period whose only catches were this device's has no other winner and
+     * stays undecided, so a re-enabled device is crowned for it later.)
      *
      * Set/cleared by the operator script `src/tools/disable-device.ts`
      * (`npm run device:disable`). Nothing in the request path ever writes it.
