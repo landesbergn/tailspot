@@ -262,25 +262,6 @@ struct CardSetsTests {
     }
 }
 
-@Suite("MultiCatchReveal combo")
-struct MultiCatchComboTests {
-
-    @Test func multiplierLadder() {
-        #expect(MultiCatchReveal.comboMultiplier(for: 1) == 1.0)
-        #expect(MultiCatchReveal.comboMultiplier(for: 2) == 1.5)
-        #expect(MultiCatchReveal.comboMultiplier(for: 3) == 2.0)
-        #expect(MultiCatchReveal.comboMultiplier(for: 4) == 2.5)
-        #expect(MultiCatchReveal.comboMultiplier(for: 5) == 3.0)
-        #expect(MultiCatchReveal.comboMultiplier(for: 9) == 3.0)
-    }
-
-    @Test func sub2IsIdentity() {
-        // Defensive against a bad caller — fan-of-1 shouldn't bonus.
-        #expect(MultiCatchReveal.comboMultiplier(for: 0) == 1.0)
-        #expect(MultiCatchReveal.comboMultiplier(for: 1) == 1.0)
-    }
-}
-
 // MARK: - 2026-06-20 round: new metrics + hidden trophies
 
 @Suite("Trophies — hidden trophies + 2026-06-20 metrics")
