@@ -332,23 +332,26 @@ nonisolated enum Trophies {
     /// when the ledger is (re)seeded. When a stored stamp is behind this
     /// value, the roster grew since that device last seeded — the unlock
     /// center then RESEEDS (silently acknowledging any newly-added trophies
-    /// the user already qualifies for, instead of flooding them with unlock
-    /// moments) and presents the one-time "trophy case" recap sheet.
+    /// the user already qualifies for) and queues one ordinary "NEW TROPHY"
+    /// card per newly-acknowledged trophy, the same card a live unlock gets.
+    /// (The one-time "trophy case" recap sheet is only for the first-ever
+    /// seed of an unseeded ledger, which can cover a whole Hangar.)
     ///
     /// History: 0 = never stamped (any ledger written before this existed),
     /// 1 = reserved for the original 2026-06-20 binary roster, 2 = the
     /// 2026-07-10 expansion (points milestones + guess trophies), 3 = the
     /// 2026-07-11 leaderboard-winner trophies (Top Flight / Dynasty / Chart
     /// Topper — a device whose server facts already carry wins, e.g. the
-    /// historical crown backfill, absorbs them into ONE recap), 4 = the
-    /// 2026-10-21 wiring fix that made Constellation, Heritage, Living
-    /// History and Full Deck earnable (multi-catch shipped and vintage
-    /// catches now count as heritage). A roster-bump reseed recaps ONLY the
-    /// trophies it newly acknowledges, so the ~20 users who now qualify for
-    /// one of the four get one recap with just those (and `trophy_unlocked`
-    /// with `via: "reseed"`); everyone else sees nothing. Bump this
-    /// whenever a roster change should be absorbed-and-recapped rather than
-    /// celebrated one toast at a time.
+    /// historical crown backfill, absorbed them into one recap on the build
+    /// that shipped them), 4 = the 2026-10-21 wiring fix that made
+    /// Constellation, Heritage, Living History and Full Deck earnable
+    /// (multi-catch shipped and vintage catches now count as heritage).
+    /// Since roster 4 a roster-bump reseed queues an unlock card for ONLY
+    /// the trophies it newly acknowledges, so the ~20 users who now qualify
+    /// for one of the four see a "NEW TROPHY" card per trophy (and
+    /// `trophy_unlocked` with `via: "reseed"`); everyone else sees nothing.
+    /// Bump this whenever a roster change should grant already-qualified
+    /// users their new trophies on next launch.
     static let rosterVersion = 4
 
     /// Full achievement roster. Every achievement is BINARY — earned or not,

@@ -807,7 +807,7 @@ struct TrophyRosterExpansionTests {
 
     @Test func rosterVersionIsStampedAtFour() {
         // The 2026-10-21 unearnable-trophies fix. Bumping this constant is
-        // what triggers the reseed + recap on devices stamped behind it —
+        // what triggers the reseed + unlock cards on devices stamped behind it —
         // pin it so an accidental edit is loud.
         #expect(Trophies.rosterVersion == 4)
     }
@@ -1116,9 +1116,9 @@ struct TrophiesUnearnableFixTests {
         #expect(ach("fulldeck").isEarned(inputs: inputs))
     }
 
-    // MARK: Roster bump → one recap
+    // MARK: Roster bump → one unlock card per new trophy
 
-    @Test func rosterBumpQueuesSingleRecapNotUnlockFlood() {
+    @Test func rosterBumpQueuesAnUnlockCardPerNewTrophy() {
         let ledger = UserDefaultsTrophyLedger(defaults: UserDefaults(suiteName: "test.unearnable.\(UUID().uuidString)")!)
         let suite = UserDefaults(suiteName: "test.unearnable.facts.\(UUID().uuidString)")!
         let events = TrophyEventStore(defaults: suite)
@@ -1134,20 +1134,19 @@ struct TrophiesUnearnableFixTests {
         let old = TrophyUnlockCenter(ledger: ledger, roster: oldRoster, events: events,
                                      standing: standing, rosterVersion: 3)
         old.enqueueNewUnlocks(from: hangar)
-        old.dismissRecap()
         #expect(ledger.rosterVersion == 3)
 
         let new = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
         new.enqueueNewUnlocks(from: hangar)
-        #expect(new.pendingEvents.isEmpty, "the bump must absorb, not toast each trophy")
-        // The recap carries ONLY what the reseed newly acknowledged — not
-        // First Catch & co., which the old ledger already had.
-        let recapIDs = Set(new.pendingRecap?.achievements.map(\.id) ?? [])
-        #expect(recapIDs == Set(newlyEarnable))
+        #expect(new.pendingRecap == nil, "a roster bump gets unlock cards, not the recap sheet")
+        // One card per trophy the reseed newly acknowledged — not First
+        // Catch & co., which the old ledger already had.
+        #expect(Set(new.pendingEvents.map(\.achievementID)) == Set(newlyEarnable))
+        #expect(new.pendingEvents.count == newlyEarnable.count)
         #expect(ledger.rosterVersion == 4)
 
-        // Once dismissed, a re-diff stays quiet.
-        new.dismissRecap()
+        // Once seen, a re-diff stays quiet.
+        while let head = new.head { new.markShown(head); new.advance() }
         new.enqueueNewUnlocks(from: hangar)
         #expect(new.pendingRecap == nil)
         #expect(new.pendingEvents.isEmpty)

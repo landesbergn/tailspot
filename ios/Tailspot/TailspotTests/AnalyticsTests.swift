@@ -470,8 +470,13 @@ struct AnalyticsFacadeTests {
         withSink { sink in
             TrophyUnlockCenter(ledger: ledger, roster: [old], events: events, standing: standing,
                                rosterVersion: 1).enqueueNewUnlocks(from: hangar)
-            TrophyUnlockCenter(ledger: ledger, roster: [old, added], events: events, standing: standing,
-                               rosterVersion: 2).enqueueNewUnlocks(from: hangar)
+            let new = TrophyUnlockCenter(ledger: ledger, roster: [old, added], events: events,
+                                         standing: standing, rosterVersion: 2)
+            new.enqueueNewUnlocks(from: hangar)
+            // The reseed queues the grant as a normal card; presenting it must
+            // NOT fire a second `trophy_unlocked` (the tier is already acknowledged).
+            #expect(new.pendingEvents.map(\.achievementID) == ["\(tag)-new"])
+            new.markShown(new.head!)
             let mine = sink.captured.filter {
                 $0.event == "trophy_unlocked"
                     && ($0.properties["achievement"]?.jsonValue as? String)?.hasPrefix(tag) == true
