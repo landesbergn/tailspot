@@ -436,10 +436,10 @@ struct RaceGapTests {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 12, points: 45)),
             window: .week, myHandle: "s12", handleConfirmed: true))
-        #expect(gap.target == .pass(handle: "s11"))
+        #expect(gap.target == .pass(handle: "s11", rank: 11))
         #expect(gap.points == 51)            // 95 − 45 + 1
         #expect(gap.catchesEquivalent == 6)  // ⌈51 / 10⌉ (telemetry)
-        #expect(gap.headline == "51 PTS TO PASS @s11")
+        #expect(gap.headline == "51 PTS TO PASS #11 @s11")
     }
 
     /// The trap the scope warns about: `me.rank` counts handle-less and
@@ -450,10 +450,11 @@ struct RaceGapTests {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 14, points: 95)),
             window: .week, myHandle: "s11", handleConfirmed: true))
-        #expect(gap.target == .pass(handle: "s10"))
+        #expect(gap.target == .pass(handle: "s10", rank: 10))
         #expect(gap.points == 51)
-        #expect(!gap.headline.contains("#"))
-        #expect(!gap.headline.contains("14"))
+        // The place printed is the target ROW's rank, never me.rank − 1.
+        #expect(gap.headline == "51 PTS TO PASS #10 @s10")
+        #expect(!gap.headline.contains("13"))
     }
 
     /// Ties break by registration time, so a tied spotter above me needs
@@ -463,17 +464,17 @@ struct RaceGapTests {
         let gap = try #require(RaceGap.compute(
             response: week(entries, me: MyStanding(rank: 3, points: 200)),
             window: .week, myHandle: "s3", handleConfirmed: true))
-        #expect(gap.target == .pass(handle: "s2"))
+        #expect(gap.target == .pass(handle: "s2", rank: 2))
         #expect(gap.points == 1)
         #expect(gap.catchesEquivalent == 1)
-        #expect(gap.headline == "1 PT TO PASS @s2")
+        #expect(gap.headline == "1 PT TO PASS #2 @s2")
     }
 
     @Test func handleMatchIsCaseInsensitive() throws {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 11, points: 95)),
             window: .week, myHandle: "S11", handleConfirmed: true))
-        #expect(gap.target == .pass(handle: "s10"))
+        #expect(gap.target == .pass(handle: "s10", rank: 10))
     }
 
     @Test func iAmFirst_hidden() {
@@ -486,7 +487,7 @@ struct RaceGapTests {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 8, points: 215)),
             window: .week, myHandle: "s8", handleConfirmed: true))
-        #expect(gap.target == .pass(handle: "s7"))
+        #expect(gap.target == .pass(handle: "s7", rank: 7))
         #expect(gap.points == 6)
     }
 
@@ -496,10 +497,10 @@ struct RaceGapTests {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 2, points: 1360)),
             window: .week, myHandle: "s2", handleConfirmed: true))
-        #expect(gap.target == .pass(handle: "s1"))
+        #expect(gap.target == .pass(handle: "s1", rank: 1))
         #expect(gap.points == 2346)
-        #expect(gap.headline == "2,346 PTS TO PASS @s1")
-        #expect(gap.spoken == "2,346 points to pass s1")
+        #expect(gap.headline == "2,346 PTS TO PASS #1 @s1")
+        #expect(gap.spoken == "2,346 points to pass s1, at number 1")
     }
 
     /// No handle and nothing caught this week: one point earns a row.
@@ -569,7 +570,7 @@ struct RaceGapTests {
                                         resetsAt: "2026-11-01T00:00:00.000Z")
         let monthGap = try #require(RaceGap.compute(
             response: month, window: .month, myHandle: "s11", handleConfirmed: true))
-        #expect(monthGap.target == .pass(handle: "s10"))
+        #expect(monthGap.target == .pass(handle: "s10", rank: 10))
         #expect(monthGap.points == 51)
 
         let allPoints = [48_210, 31_900, 12_400, 9_050]
@@ -578,7 +579,7 @@ struct RaceGapTests {
         let allGap = try #require(RaceGap.compute(
             response: all, window: .all, myHandle: "s2", handleConfirmed: true))
         #expect(allGap.points == 16_311)  // 48,210 − 31,900 + 1
-        #expect(allGap.headline == "16,311 PTS TO PASS @s1")
+        #expect(allGap.headline == "16,311 PTS TO PASS #1 @s1")
     }
 
     /// Each window reads only its own response: a week payload filed under
@@ -656,7 +657,7 @@ struct RaceGapTests {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 12, points: 45)),
             window: .week, myHandle: "s12", handleConfirmed: false))
-        #expect(gap.target == .pass(handle: "s11"))
+        #expect(gap.target == .pass(handle: "s11", rank: 11))
     }
 
     /// A strand the marker missed: points but no row on a board with room
@@ -692,7 +693,7 @@ struct RaceGapTests {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 12, points: 45)),
             window: .week, myHandle: "s12", handleConfirmed: true))
-        #expect(gap.spoken == "51 points to pass s11")
+        #expect(gap.spoken == "51 points to pass s11, at number 11")
     }
 
     /// Telemetry dedup: one key per goal per window, handle case folded.
@@ -715,5 +716,178 @@ struct RaceGapTests {
     @Test func oldBackendWithoutWindowKey_hidden() {
         let old = LeaderboardResponse(entries: board(), me: MyStanding(rank: 11, points: 95))
         #expect(RaceGap.compute(response: old, window: .week, myHandle: "s11", handleConfirmed: true) == nil)
+    }
+}
+
+// MARK: - Your standing card
+
+@Suite("Standing card")
+struct StandingCardTests {
+
+    private static let livePoints = [3705, 1360, 985, 460, 405, 230, 220, 215, 165, 145, 95, 45]
+
+    private func board(_ points: [Int] = livePoints) -> [LeaderboardEntry] {
+        points.enumerated().map { i, p in
+            LeaderboardEntry(rank: i + 1, handle: "s\(i + 1)", points: p, catches: 1)
+        }
+    }
+
+    private func week(_ entries: [LeaderboardEntry], me: MyStanding?,
+                      totalCatchers: Int? = nil) -> LeaderboardResponse {
+        LeaderboardResponse(entries: entries, me: me, window: "week",
+                            resetsAt: "2026-10-26T00:00:00.000Z", champions: nil,
+                            totalCatchers: totalCatchers)
+    }
+
+    /// Mid-pack: my row's rank and points; the goal names the row above
+    /// by its printed rank and handle.
+    @Test func midPack_rowRankAndTargetRowRank() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board(), me: MyStanding(rank: 11, points: 95)),
+            window: .week, myHandle: "s11", handleConfirmed: true))
+        #expect(card.rank == 11)
+        #expect(card.rankText == "11")
+        #expect(card.handle == "s11")
+        #expect(card.points == 95)
+        #expect(card.goalText == "51 PTS TO PASS #10 @s10")
+        #expect(card.raceGap?.target == .pass(handle: "s10", rank: 10))
+        #expect(card.spoken == "Your standing: rank 11, 95 points. 51 points to pass s10, at number 10.")
+    }
+
+    /// `me.rank` counts hidden devices and runs ahead of my row (14 vs
+    /// row 11). The card prints the ROW's rank so it matches the list.
+    @Test func meRankInflated_cardShowsRowRank() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board(), me: MyStanding(rank: 14, points: 95)),
+            window: .week, myHandle: "s11", handleConfirmed: true))
+        #expect(card.rank == 11)
+        #expect(card.goalText == "51 PTS TO PASS #10 @s10")
+    }
+
+    /// Ranks printed on the board aren't always 1…n in this fixture sense
+    /// (the server numbers rows); the card must echo the printed numbers.
+    @Test func usesPrintedRowRanks_notIndexes() throws {
+        let entries = [
+            LeaderboardEntry(rank: 16, handle: "a", points: 300, catches: 1),
+            LeaderboardEntry(rank: 17, handle: "randy98", points: 110, catches: 1),
+            LeaderboardEntry(rank: 18, handle: "noah", points: 100, catches: 1),
+        ]
+        let card = try #require(StandingCard.compute(
+            response: week(entries, me: MyStanding(rank: 21, points: 100)),
+            window: .week, myHandle: "noah", handleConfirmed: true))
+        #expect(card.rank == 18)
+        #expect(card.goalText == "11 PTS TO PASS #17 @randy98")
+    }
+
+    /// The row's points win over a stale `me.points`.
+    @Test func onBoard_usesRowPoints() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board(), me: MyStanding(rank: 12, points: 75)),
+            window: .week, myHandle: "s12", handleConfirmed: true))
+        #expect(card.points == 45)
+        #expect(card.goalText == "51 PTS TO PASS #11 @s11")
+    }
+
+    /// Tied with the row above: one point passes (registration tiebreak).
+    @Test func tieWithRowAbove_onePoint() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board([300, 200, 200, 100]), me: MyStanding(rank: 3, points: 200)),
+            window: .week, myHandle: "s3", handleConfirmed: true))
+        #expect(card.goalText == "1 PT TO PASS #2 @s2")
+    }
+
+    /// #1: a positive line about the row below, not a gap.
+    @Test func first_leadsRowBelow() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board(), me: MyStanding(rank: 1, points: 3705)),
+            window: .week, myHandle: "s1", handleConfirmed: true))
+        #expect(card.rank == 1)
+        #expect(card.goal == .leading(handle: "s2", points: 2345))
+        #expect(card.goalText == "LEADING @s2 BY 2,345 PTS")
+        #expect(card.raceGap == nil)   // a lead isn't reported as a gap
+        #expect(card.spoken == "Your standing: rank 1, 3,705 points. Leading s2 by 2,345 points.")
+    }
+
+    /// #1 on the tiebreak: level on points, ahead by registration time.
+    @Test func first_tiedOnPoints_tiebreakLine() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board([200, 200, 100]), me: MyStanding(rank: 1, points: 200)),
+            window: .week, myHandle: "s1", handleConfirmed: true))
+        #expect(card.goalText == "AHEAD OF @s2 ON THE TIEBREAK")
+    }
+
+    @Test func first_aloneOnBoard_noGoal() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board([50]), me: MyStanding(rank: 1, points: 50)),
+            window: .week, myHandle: "s1", handleConfirmed: true))
+        #expect(card.rank == 1)
+        #expect(card.goal == nil)
+    }
+
+    /// Not on the board: `me.rank` (there's no row to disagree with) and
+    /// the make-the-board goal, which never prints a place number.
+    @Test func notOnBoard_meRankAndMakeTheBoard() throws {
+        let full = board((0..<LeaderboardResponse.displayLimit).map { 600 - $0 * 10 })  // last = 110
+        let card = try #require(StandingCard.compute(
+            response: week(full, me: MyStanding(rank: 63, points: 95)),
+            window: .week, myHandle: "notlisted", handleConfirmed: true))
+        #expect(card.rank == 63)
+        #expect(card.points == 95)
+        #expect(card.goalText == "16 PTS TO MAKE THE BOARD")
+        #expect(card.goalText?.contains("#") == false)
+    }
+
+    @Test func notOnBoard_unranked_dash() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board(), me: MyStanding(rank: 0, points: 0)),
+            window: .week, myHandle: "notlisted", handleConfirmed: true))
+        #expect(card.rankText == "—")
+        #expect(card.goalText == "1 PT TO MAKE THE BOARD")
+        #expect(card.spoken == "Your standing: not ranked yet, 0 points. 1 point to make the board.")
+    }
+
+    /// Handle-less: "(you)" (nil handle), `me`'s numbers, no goal — the
+    /// view puts the claim-a-handle hint in the card instead.
+    @Test func handleless_noGoal() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board(), me: MyStanding(rank: 9, points: 160)),
+            window: .week, myHandle: nil, handleConfirmed: false))
+        #expect(card.handle == nil)
+        #expect(card.rank == 9)
+        #expect(card.points == 160)
+        #expect(card.goal == nil)
+    }
+
+    /// Stranded handle (server never confirmed it): the card shows, but no
+    /// make-the-board promise.
+    @Test func stranded_cardWithoutGoal() throws {
+        let card = try #require(StandingCard.compute(
+            response: week(board(), me: MyStanding(rank: 0, points: 0)),
+            window: .week, myHandle: "notlisted", handleConfirmed: false))
+        #expect(card.handle == "notlisted")
+        #expect(card.goal == nil)
+    }
+
+    @Test func notRegistered_noCard() {
+        #expect(StandingCard.compute(response: week(board(), me: nil), window: .week,
+                                     myHandle: "s11", handleConfirmed: true) == nil)
+    }
+
+    /// Old backend (no `window` key): the card shows from the row, but no
+    /// goal line — its board is all-time even when filed under `.week`.
+    @Test func oldBackend_cardWithoutGoal() throws {
+        let old = LeaderboardResponse(entries: board(), me: MyStanding(rank: 14, points: 95))
+        let card = try #require(StandingCard.compute(response: old, window: .week,
+                                                     myHandle: "s11", handleConfirmed: true))
+        #expect(card.rank == 11)
+        #expect(card.goal == nil)
+    }
+
+    @Test func emptyBoard_cardWithoutGoal() throws {
+        let card = try #require(StandingCard.compute(
+            response: week([], me: MyStanding(rank: 0, points: 0)),
+            window: .week, myHandle: "noah", handleConfirmed: true))
+        #expect(card.rankText == "—")
+        #expect(card.goal == nil)
     }
 }

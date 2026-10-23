@@ -8,9 +8,11 @@
 //     windowed (dynamic-leaderboards PR2): WEEK (default) / MONTH / ALL TIME
 //     tabs, reset countdowns, and previous-period champion banners on the week
 //     and month tabs. Shows rank/handle/points/catches, highlights "me" row (works
-//     even handle-less, with a "claim a handle to appear" hint). The fixed
-//     header carries a race-gap line for the selected tab, under the reset
-//     countdown ("51 PTS TO PASS @x") — see RaceGap in LeaderboardWindows.swift.
+//     in the list). The fixed header carries a YOUR STANDING card for the
+//     selected tab under the reset countdown: rank, handle, points, and a
+//     goal line ("51 PTS TO PASS #10 @x") — see StandingCard in
+//     LeaderboardWindows.swift. A handle-less device's card carries the
+//     "claim a handle to appear" hint instead of a goal.
 //     Loading / error / empty states follow Brand patterns.
 //     Pull-to-refresh supported.
 //
@@ -37,12 +39,8 @@ import SwiftData
 struct LeaderboardScreen: View {
     @AppStorage(SpotterHandle.storageKey) private var localHandle: String = SpotterHandle.defaultPlaceholder
     /// The handle the server has acknowledged (HandleSyncer's marker) — the
-    /// race gap's make-the-board goal is hidden for a stranded handle.
+    /// standing card's make-the-board goal is hidden for a stranded handle.
     @AppStorage(SpotterHandle.confirmedKey) private var confirmedHandle: String?
-
-    // Fetch total local points so we can show them in the "me" row
-    // when the backend hasn't replied yet, or when not registered.
-    @Query private var catches: [Catch]
 
     // MARK: State
 
@@ -58,10 +56,10 @@ struct LeaderboardScreen: View {
     /// (show tabs); false = old backend (fail-soft: hide tabs, the board is
     /// the all-time board).
     @State private var windowsSupported: Bool? = nil
-    /// Race gap per window, computed once per load (and when the local
-    /// handle changes) rather than on every render. The header shows the
-    /// selected window's entry.
-    @State private var raceGaps: [LeaderboardWindow: RaceGap] = [:]
+    /// YOUR STANDING card per window, computed once per load (and when the
+    /// local handle changes) rather than on every render. The header shows
+    /// the selected window's card.
+    @State private var standingCards: [LeaderboardWindow: StandingCard] = [:]
     /// `RaceGap.reportKey(window:)`s already reported as
     /// `leaderboard_gap_shown` this screen visit. Cleared when the screen
     /// disappears.
@@ -84,24 +82,27 @@ struct LeaderboardScreen: View {
     /// pre-windows snapshots. DEBUG-only; production always goes through
     /// the no-arg init + `load()`.
     init(_debugEntries entries: [LeaderboardEntry], me: MyStanding?) {
-        _responses = State(initialValue: [.week: LeaderboardResponse(entries: entries, me: me)])
+        let responses: [LeaderboardWindow: LeaderboardResponse] =
+            [.week: LeaderboardResponse(entries: entries, me: me)]
+        _responses = State(initialValue: responses)
         _windowsSupported = State(initialValue: false)
+        _standingCards = State(initialValue: Self.debugStandingCards(responses))
         debugSeeded = true
     }
 
-    /// Fixture gaps for the debug seams: `load()` never runs there, so
+    /// Fixture cards for the debug seams: `load()` never runs there, so
     /// compute from the seeded responses and the handle in UserDefaults
     /// (what `@AppStorage localHandle` will read).
-    private static func debugRaceGaps(
+    private static func debugStandingCards(
         _ responses: [LeaderboardWindow: LeaderboardResponse]
-    ) -> [LeaderboardWindow: RaceGap] {
+    ) -> [LeaderboardWindow: StandingCard] {
         let defaults = UserDefaults.standard
         let handle = SpotterHandle.publicHandle(defaults.string(forKey: SpotterHandle.storageKey))
         let confirmed = SpotterHandle.isConfirmed(
             handle, confirmed: defaults.string(forKey: SpotterHandle.confirmedKey))
-        return responses.reduce(into: [:]) { gaps, pair in
-            gaps[pair.key] = RaceGap.compute(response: pair.value, window: pair.key,
-                                             myHandle: handle, handleConfirmed: confirmed)
+        return responses.reduce(into: [:]) { cards, pair in
+            cards[pair.key] = StandingCard.compute(response: pair.value, window: pair.key,
+                                                   myHandle: handle, handleConfirmed: confirmed)
         }
     }
 
@@ -113,7 +114,7 @@ struct LeaderboardScreen: View {
         _responses = State(initialValue: responses)
         _selectedWindow = State(initialValue: selected)
         _windowsSupported = State(initialValue: responses[selected]?.supportsWindows ?? true)
-        _raceGaps = State(initialValue: Self.debugRaceGaps(responses))
+        _standingCards = State(initialValue: Self.debugStandingCards(responses))
         debugSeeded = true
     }
     #endif
@@ -142,7 +143,16 @@ struct LeaderboardScreen: View {
                     .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             } else {
-                windowList(selectedWindow)
+                // Old backend: no switcher, but the standing card still
+                // sits above the board (no goal line — see StandingCard).
+                VStack(spacing: 0) {
+                    if let card = standingCards[selectedWindow] {
+                        standingCardView(card)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                    }
+                    windowList(selectedWindow)
+                }
             }
         }
         .background(Brand.Color.bgPrimary.ignoresSafeArea())
@@ -182,8 +192,8 @@ struct LeaderboardScreen: View {
         // A new visit may report each goal once more.
         .onDisappear { reportedGapKeys.removeAll() }
         // A handle claimed/changed elsewhere moves "me" on the cached boards.
-        .onChange(of: localHandle) { _, _ in recomputeRaceGaps() }
-        .onChange(of: confirmedHandle) { _, _ in recomputeRaceGaps() }
+        .onChange(of: localHandle) { _, _ in recomputeStandingCards() }
+        .onChange(of: confirmedHandle) { _, _ in recomputeStandingCards() }
     }
 
     // MARK: - Load
@@ -203,9 +213,9 @@ struct LeaderboardScreen: View {
                 LeaderboardStandingCache().update(from: me)
             }
             // `leaderboard_gap_shown` is NOT fired here: a load isn't a
-            // view (the pager loads neighbouring tabs too). The header line
+            // view (the pager loads neighbouring tabs too). The header card
             // reports it — see `reportGapShown`.
-            raceGaps[window] = raceGap(for: response, window: window)
+            standingCards[window] = standingCard(for: response, window: window)
         } catch {
             // Keep stale data when we have it — a failed silent refresh must
             // not blank a board the user is looking at. The stored message
@@ -247,7 +257,6 @@ struct LeaderboardScreen: View {
                         }
                     }
                     rankSection(entries: entries, additionalCatchers: response.additionalCatchers)
-                    meHintSection(me: response.me)
                 }
             } else if let msg = errors[window] {
                 errorSection(msg)
@@ -265,9 +274,10 @@ struct LeaderboardScreen: View {
 
     // MARK: - Window switcher + countdown
 
-    /// The slider + countdown + race gap as a fixed header ABOVE the pager
-    /// (Noah, 2026-10-22: the gap line belongs where it's seen without
-    /// scrolling; it used to sit under YOUR STANDING). (No longer
+    /// The slider + countdown + YOUR STANDING card as a fixed header ABOVE
+    /// the pager (Noah, 2026-10-22: your standing and the gap to the place
+    /// above belong where they're seen without scrolling; the card used to
+    /// be the last section of the List). (No longer
     /// a List Section — the slider shouldn't scroll away with the board,
     /// and outside the List its drag gesture no longer competes with the
     /// List's scroll pan). Horizontal padding matches the inset-grouped
@@ -284,8 +294,8 @@ struct LeaderboardScreen: View {
                     .foregroundStyle(Brand.Color.textTertiary)
                     .padding(.bottom, 2)
             }
-            if let gap = raceGaps[selectedWindow] {
-                raceGapLine(gap)
+            if let card = standingCards[selectedWindow] {
+                standingCardView(card)
             }
         }
         .padding(.horizontal, 20)
@@ -557,110 +567,24 @@ struct LeaderboardScreen: View {
         entry.isHandle(localHandle)
     }
 
-    /// Section header naming which race the standing is in — "you're #2
-    /// THIS WEEK" is the whole point of the week tab.
-    private var standingHeaderTitle: String {
-        guard windowsSupported == true else { return "YOUR STANDING" }
-        switch selectedWindow {
-        case .week:  return "YOUR STANDING · THIS WEEK"
-        case .month: return "YOUR STANDING · THIS MONTH"
-        case .all:   return "YOUR STANDING · ALL TIME"
-        }
-    }
-
-    /// "Me" section shown below the ranked list: either the me row from the
-    /// API (when the device has a handle), or a prompt to claim one.
-    @ViewBuilder
-    private func meHintSection(me: MyStanding?) -> some View {
-        let myLocalPoints = ProfileStats(catches: catches).totalPoints
-        let hasHandle = myHandle != nil
-
-        if let meStanding = me {
-            // Server confirmed our standing — show it. Rank 0 = UNRANKED
-            // (zero in-window points — the server no longer hands zero-point
-            // devices a census-sized rank; same sentinel ProfileScreen's
-            // hero treats as "—").
-            Section {
-                HStack(spacing: 12) {
-                    Text(meStanding.rank >= 1 ? "\(meStanding.rank)" : "—")
-                        .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .monospacedDigit()
-                        .frame(width: 30, alignment: .leading)
-                    Text(hasHandle ? "@\(localHandle)" : "(you)")
-                        .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
-                        .foregroundStyle(Brand.Color.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Spacer()
-                    Text("\(meStanding.points.formatted(.number))")
-                        .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .monospacedDigit()
-                        .layoutPriority(1)
-                    Text("YOU")
-                        .font(Brand.Font.mono(size: 9, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.85))
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Brand.Color.cyan, in: .capsule)
-                }
-                .padding(.vertical, 2)
-                .listRowBackground(Brand.Color.cyan.opacity(0.12))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(
-                    "Your standing: "
-                    + (meStanding.rank >= 1 ? "rank \(meStanding.rank)" : "not ranked yet")
-                    + ", \(meStanding.points) points"
-                )
-                if !hasHandle {
-                    Text("Claim a handle in Profile → Settings to appear in the list above.")
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                        .listRowBackground(Brand.Color.bgElevated)
-                }
-            } header: {
-                sectionHeader(standingHeaderTitle)
-            }
-        } else if !hasHandle {
-            // Not registered yet or no handle — hint. The local-points line
-            // is an ALL-TIME number, so it only renders where it's honest
-            // (the all-time tab / the old backend's single board).
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    if windowsSupported != true || selectedWindow == .all {
-                        Text("You have \(myLocalPoints.formatted(.number)) points locally")
-                            .font(Brand.Font.body.weight(.semibold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                    }
-                    Text("Claim a handle in Profile → Settings to appear on the leaderboard.")
-                        .font(Brand.Font.caption)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                }
-                .padding(.vertical, 4)
-                .listRowBackground(Brand.Color.bgElevated)
-            } header: {
-                sectionHeader(standingHeaderTitle)
-            }
-        }
-    }
-
     /// The local handle, or nil while the device still has the placeholder
     /// (or nothing) — the "has a handle" test the whole screen uses.
     private var myHandle: String? { SpotterHandle.publicHandle(localHandle) }
 
-    private func raceGap(for response: LeaderboardResponse, window: LeaderboardWindow) -> RaceGap? {
-        RaceGap.compute(response: response, window: window, myHandle: myHandle,
-                        handleConfirmed: SpotterHandle.isConfirmed(myHandle, confirmed: confirmedHandle))
+    private func standingCard(for response: LeaderboardResponse,
+                              window: LeaderboardWindow) -> StandingCard? {
+        StandingCard.compute(response: response, window: window, myHandle: myHandle,
+                             handleConfirmed: SpotterHandle.isConfirmed(myHandle, confirmed: confirmedHandle))
     }
 
-    private func recomputeRaceGaps() {
+    private func recomputeStandingCards() {
         for (window, response) in responses {
-            raceGaps[window] = raceGap(for: response, window: window)
+            standingCards[window] = standingCard(for: response, window: window)
         }
     }
 
     /// One `leaderboard_gap_shown` per goal per window per screen visit,
-    /// fired when the header line is showing for the selected tab — not per
+    /// fired when the header card shows a gap for the selected tab — not per
     /// load (the pager loads neighbouring tabs the user isn't looking at).
     private func reportGapShown(_ gap: RaceGap, window: LeaderboardWindow) {
         guard reportedGapKeys.insert(gap.reportKey(window: window)).inserted else { return }
@@ -672,35 +596,75 @@ struct LeaderboardScreen: View {
         ])
     }
 
-    /// The selected tab's goal in the fixed header: "51 PTS TO PASS @x".
-    /// Mono readout voice in cyan; wraps rather than truncates at large
-    /// type sizes (`fixedSize(vertical:)` lets the header grow to fit).
-    private func raceGapLine(_ gap: RaceGap) -> some View {
+    /// YOUR STANDING in the fixed header — the board's cyan "me" row
+    /// (rank, handle, points, YOU) as one compact card, with the goal as a
+    /// second line ("11 PTS TO PASS #17 @randy98"). A handle-less device
+    /// gets "(you)" and the claim-a-handle hint instead of a goal. Text
+    /// wraps rather than truncates at large type (`fixedSize(vertical:)`
+    /// lets the header grow to fit).
+    private func standingCardView(_ card: StandingCard) -> some View {
         let window = selectedWindow
-        return Text(gap.headline)
-            .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
-            .tracking(0.6)
-            .foregroundStyle(Brand.Color.cyan)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.bottom, 2)
-            // VoiceOver gets prose instead of "PTS" and "@".
-            .accessibilityLabel(gap.spoken)
-            // Re-runs when the tab or the goal changes; the key set
-            // dedups repeat views within one visit.
-            .task(id: gap.reportKey(window: window)) {
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                Text(card.rankText)
+                    .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
+                    .foregroundStyle(Brand.Color.cyan)
+                    .monospacedDigit()
+                    .fixedSize()
+                    .frame(minWidth: 30, alignment: .leading)
+                Text(card.handle.map { "@\($0)" } ?? "(you)")
+                    .font(Brand.Font.mono(size: 14, weight: .bold, relativeTo: .subheadline))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Text("\(card.points.formatted(.number))")
+                    .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
+                    .foregroundStyle(Brand.Color.cyan)
+                    .monospacedDigit()
+                    .fixedSize()
+                    .layoutPriority(1)
+                Text("YOU")
+                    .font(Brand.Font.mono(size: 9, weight: .bold))
+                    .foregroundStyle(.black.opacity(0.85))
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Brand.Color.cyan, in: .capsule)
+                    .fixedSize()
+            }
+            if let goal = card.goalText {
+                Text(goal)
+                    .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
+                    .tracking(0.4)
+                    .foregroundStyle(Brand.Color.cyan)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if card.handle == nil {
+                Text("Claim a handle in Profile → Settings to appear on the leaderboard.")
+                    .font(Brand.Font.caption)
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Brand.Color.cyan.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: Brand.Radius.row))
+        .padding(.bottom, 6)
+        // One element: the fragments ("18", "@noah", "PTS", "#17"…) mean
+        // nothing read separately. The hint stays readable as written.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(card.spoken
+            + (card.handle == nil
+               ? " Claim a handle in Profile, Settings, to appear on the leaderboard."
+               : ""))
+        // Re-runs when the tab or the goal changes; the key set dedups
+        // repeat views within one visit. Only gaps (pass / make the board)
+        // are reported — a lead isn't a goal.
+        .task(id: card.raceGap?.reportKey(window: window)) {
+            if let gap = card.raceGap {
                 reportGapShown(gap, window: window)
             }
-    }
-
-    /// Mono ALL-CAPS section header — the app-wide style (SettingsScreen's
-    /// SPOTTER/ABOUT headers), replacing the default system header look.
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
-            .tracking(1.2)
-            .foregroundStyle(Brand.Color.textTertiary)
-            .textCase(nil)
+        }
     }
 }
 

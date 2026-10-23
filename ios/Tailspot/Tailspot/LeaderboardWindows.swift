@@ -4,7 +4,8 @@
 //
 //  Pure display helpers for the windowed leaderboard (dynamic-leaderboards
 //  PR2): the reset-countdown lines, the champion-banner copy, and the
-//  race-gap line ("N PTS TO PASS @x", every window). Kept out of
+//  YOUR STANDING card with its goal line ("N PTS TO PASS #17 @x", every
+//  window). Kept out of
 //  the view so the string/date math is unit-testable with injected
 //  locale/timezone/now — the views call these with the device defaults.
 //
@@ -109,22 +110,24 @@ nonisolated enum ChampionBanner {
 
 // MARK: - Race gap
 
-/// The "how far to the next spotter" line in the leaderboard's fixed header,
-/// under the reset countdown: "51 PTS TO PASS @planespotter". One per window
-/// (WEEK, MONTH, ALL TIME), each built from that window's own board — no
-/// extra request.
+/// The "how far to the next spotter" goal on the YOUR STANDING card in the
+/// leaderboard's fixed header: "51 PTS TO PASS #10 @planespotter". One per
+/// window (WEEK, MONTH, ALL TIME), each built from that window's own board —
+/// no extra request.
 ///
 /// Computed by POINTS and ROW POSITION, never by `me.rank`. The two ranks
 /// mean different things: `me.rank` counts every device with points in the
 /// window (handle-less and disabled ones included), while `entries[].rank`
 /// is the row position among visible, handled spotters. Indexing
 /// `entries[me.rank - 2]` would point at the wrong person whenever a hidden
-/// device has points — so the copy names a handle, never a rank number.
+/// device has points — so the target is the row above MY ROW, and the "#N"
+/// printed is that row's own printed rank (see `StandingCard`).
 nonisolated struct RaceGap: Equatable, Sendable {
 
     enum Target: Equatable, Sendable {
-        /// Overtake this spotter (the row directly above mine).
-        case pass(handle: String)
+        /// Overtake this spotter (the row directly above mine), printed on
+        /// the board at `rank`.
+        case pass(handle: String, rank: Int)
         /// Has a handle but no row on the visible board yet (nothing caught
         /// in this window, or below the last row of a full board): points
         /// needed to earn a row. Never used for handle-less devices — the
@@ -189,7 +192,7 @@ nonisolated struct RaceGap: Equatable, Sendable {
             // enough — it takes one point more than them.
             guard myIndex > 0 else { return nil }  // I'm #1
             let above = entries[myIndex - 1]
-            target = .pass(handle: above.handle)
+            target = .pass(handle: above.handle, rank: above.rank)
             gap = above.points - myPoints + 1
         } else {
             // Handle-less devices never get a row (the backend lists only
@@ -224,23 +227,26 @@ nonisolated struct RaceGap: Equatable, Sendable {
         return RaceGap(target: target, points: gap)
     }
 
-    /// The whole line: "51 PTS TO PASS @planespotter" / "1 PT TO MAKE THE
-    /// BOARD". Fits one line at default type; wraps at large Dynamic Type.
+    /// The whole line: "51 PTS TO PASS #10 @planespotter" / "1 PT TO MAKE
+    /// THE BOARD". "To pass" (not "behind") because the number already
+    /// includes the +1 a tie needs. Names both the place and the person.
+    /// Fits one line at default type; wraps at large Dynamic Type.
     var headline: String {
         let goal: String
         switch target {
-        case .pass(let handle): goal = "TO PASS @\(handle)"
-        case .makeBoard:        goal = "TO MAKE THE BOARD"
+        case .pass(let handle, let rank): goal = "TO PASS #\(rank) @\(handle)"
+        case .makeBoard:                  goal = "TO MAKE THE BOARD"
         }
         return "\(Self.pts(points)) \(goal)"
     }
 
-    /// VoiceOver prose for `headline`: "51 points to pass planespotter".
+    /// VoiceOver prose for `headline`: "51 points to pass planespotter, at
+    /// number 10".
     var spoken: String {
         let goal: String
         switch target {
-        case .pass(let handle): goal = "to pass \(handle)"
-        case .makeBoard:        goal = "to make the board"
+        case .pass(let handle, let rank): goal = "to pass \(handle), at number \(rank)"
+        case .makeBoard:                  goal = "to make the board"
         }
         return "\(Self.spokenPoints(points)) \(goal)"
     }
@@ -257,17 +263,128 @@ nonisolated struct RaceGap: Equatable, Sendable {
     /// per screen visit, however often the user flips back to the tab.
     func reportKey(window: LeaderboardWindow) -> String {
         switch target {
-        case .pass(let handle): return "\(window.rawValue):pass:\(handle.lowercased())"
-        case .makeBoard:        return "\(window.rawValue):make_board"
+        case .pass(let handle, _): return "\(window.rawValue):pass:\(handle.lowercased())"
+        case .makeBoard:           return "\(window.rawValue):make_board"
         }
     }
 
-    private static func spokenPoints(_ value: Int) -> String {
+    static func spokenPoints(_ value: Int) -> String {
         "\(value.formatted(.number)) point\(value == 1 ? "" : "s")"
     }
 
-    private static func pts(_ value: Int) -> String {
+    static func pts(_ value: Int) -> String {
         value == 1 ? "1 PT" : "\(value.formatted(.number)) PTS"
+    }
+}
+
+// MARK: - Your standing card
+
+/// The YOUR STANDING card in the leaderboard's fixed header (Noah,
+/// 2026-10-22: "it should include your standing … and the number of points
+/// to the person / place in the standing above you"):
+///
+///     18  @noah                         100  YOU
+///     11 PTS TO PASS #17 @randy98
+///
+/// RANK CONSISTENCY: when I'm a row on the board, the card prints MY ROW's
+/// rank and points, and the goal names the row above by ITS printed rank —
+/// so every number on the card matches a number in the list. `me.rank`
+/// (which also counts hidden handle-less/disabled devices; see `RaceGap`)
+/// is used only when I'm not a row, where there is no row to disagree with.
+nonisolated struct StandingCard: Equatable, Sendable {
+
+    enum GoalLine: Equatable, Sendable {
+        /// Points to the row above (or to make the board).
+        case gap(RaceGap)
+        /// I'm first: my lead over the row below. `points` is 0 when I
+        /// hold #1 on the registration-time tiebreak.
+        case leading(handle: String, points: Int)
+    }
+
+    /// Rank to print; 0 = unranked ("—").
+    let rank: Int
+    /// My handle as the card prints it, nil for a handle-less device
+    /// ("(you)" plus the claim-a-handle hint, no goal line).
+    let handle: String?
+    let points: Int
+    let goal: GoalLine?
+
+    /// The card for this window's response, or nil when there's no `me`
+    /// (not registered, or a disabled device).
+    ///
+    /// The goal line is left out on the pre-windows backend (its board is
+    /// all-time even when filed under `.week`), for a handle-less device,
+    /// and wherever `RaceGap.compute` hides (stranded handle, empty board…).
+    static func compute(response: LeaderboardResponse,
+                        window: LeaderboardWindow,
+                        myHandle: String?,
+                        handleConfirmed: Bool) -> StandingCard? {
+        guard let me = response.me else { return nil }
+        let entries = response.displayedEntries
+        let myIndex = myHandle.flatMap { handle in
+            entries.firstIndex { $0.isHandle(handle) }
+        }
+
+        let rank = myIndex.map { entries[$0].rank } ?? me.rank
+        let points = myIndex.map { entries[$0].points } ?? me.points
+
+        let goal: GoalLine?
+        if myHandle == nil || response.window != window.rawValue {
+            goal = nil
+        } else if myIndex == 0 {
+            // First on the board: a positive line about the row below.
+            // Alone on the board → nothing to lead (the "1" says it).
+            goal = entries.count > 1
+                ? .leading(handle: entries[1].handle, points: max(0, points - entries[1].points))
+                : nil
+        } else {
+            goal = RaceGap.compute(response: response, window: window,
+                                   myHandle: myHandle, handleConfirmed: handleConfirmed)
+                .map(GoalLine.gap)
+        }
+        return StandingCard(rank: rank, handle: myHandle, points: points, goal: goal)
+    }
+
+    /// The race gap, when the goal line is one (telemetry reports these).
+    var raceGap: RaceGap? {
+        if case .gap(let gap) = goal { return gap }
+        return nil
+    }
+
+    /// "18" or "—" (unranked).
+    var rankText: String { rank >= 1 ? "\(rank)" : "—" }
+
+    /// The second line of the card, or nil.
+    var goalText: String? {
+        switch goal {
+        case .gap(let gap)?:
+            return gap.headline
+        case .leading(let handle, let lead)?:
+            return lead == 0
+                ? "AHEAD OF @\(handle) ON THE TIEBREAK"
+                : "LEADING @\(handle) BY \(RaceGap.pts(lead))"
+        case nil:
+            return nil
+        }
+    }
+
+    /// VoiceOver for the whole card: "Your standing: rank 18, 100 points.
+    /// 11 points to pass randy98, at number 17."
+    var spoken: String {
+        var text = "Your standing: "
+            + (rank >= 1 ? "rank \(rank)" : "not ranked yet")
+            + ", \(RaceGap.spokenPoints(points))."
+        switch goal {
+        case .gap(let gap)?:
+            text += " \(gap.spoken.prefix(1).uppercased())\(gap.spoken.dropFirst())."
+        case .leading(let handle, let lead)?:
+            text += lead == 0
+                ? " Ahead of \(handle) on the tiebreak."
+                : " Leading \(handle) by \(RaceGap.spokenPoints(lead))."
+        case nil:
+            break
+        }
+        return text
     }
 }
 
