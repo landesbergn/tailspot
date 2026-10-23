@@ -306,6 +306,13 @@ struct LeaderboardCountdownTests {
                 == "resets in 1 day, 1 hour")
     }
 
+    /// Whole days: no "0h" tail.
+    @Test func week_wholeDays_noZeroHours() {
+        let now = secondsBeforeReset(days: 2, hours: 0, minutes: 20)
+        #expect(LeaderboardCountdown.weekProse(resetsAt: mondayResetUTC, now: now) == "resets in 2d")
+        #expect(LeaderboardCountdown.weekSpoken(resetsAt: mondayResetUTC, now: now) == "resets in 2 days")
+    }
+
     @Test func week_underOneDay() {
         let now = secondsBeforeReset(hours: 14, minutes: 1)
         #expect(LeaderboardCountdown.weekProse(resetsAt: mondayResetUTC, now: now) == "resets in 14h")
@@ -599,14 +606,14 @@ struct RaceGapTests {
     /// The server says more spotters qualify than the 50-row limit, even
     /// though this response is short: the board is full, so a 0-pt spotter
     /// must beat the last row, not "1 PT TO MAKE THE BOARD".
-    @Test func shortResponse_serverCountSaysFull_beatTheLastRow() throws {
+    @Test func shortResponse_serverCountSaysFull_noOnePointPromise() {
         let response = LeaderboardResponse(
             entries: board(), me: MyStanding(rank: 0, points: 0), window: "week",
             resetsAt: "2026-10-26T00:00:00.000Z", champions: nil, totalCatchers: 64)
-        let gap = try #require(RaceGap.compute(
-            response: response, window: .week, myHandle: "notlisted", handleConfirmed: true))
-        #expect(gap.target == .makeBoard(full: true))
-        #expect(gap.points == 46)  // last visible row 45 − 0 + 1
+        // Never "1 point to get on the board"; with only 12 of the 50 rows
+        // there's no measurable gap either, so the goal hides.
+        #expect(RaceGap.compute(response: response, window: .week,
+                                myHandle: "notlisted", handleConfirmed: true) == nil)
     }
 
     /// Exactly 50 qualifying spotters: `additionalCatchers` is 0 but the
@@ -641,13 +648,30 @@ struct RaceGapTests {
             window: .week, myHandle: "notlisted", handleConfirmed: false) == nil)
     }
 
-    /// Being a row proves the server has the handle, so an unconfirmed
-    /// marker doesn't hide the pass goal.
-    @Test func unconfirmedMarker_onBoard_stillShowsPass() throws {
-        let gap = try #require(RaceGap.compute(
-            response: week(board(), me: MyStanding(rank: 12, points: 45)),
-            window: .week, myHandle: "s12", handleConfirmed: false))
-        #expect(gap.target == .pass(handle: "s11", rank: 11))
+    /// A stranded handle can match SOMEONE ELSE's row: the 409 means
+    /// another device holds it. An unconfirmed handle never claims a row,
+    /// so no goal is computed from their place.
+    @Test func unconfirmedHandle_matchingARow_isNotMe() {
+        #expect(RaceGap.compute(
+            response: week(board(), me: MyStanding(rank: 0, points: 0)),
+            window: .week, myHandle: "s12", handleConfirmed: false) == nil)
+    }
+
+    /// Full only by the server count, but fewer rows came back: the last
+    /// row isn't #50, so there's no honest number to show.
+    @Test func shortResponse_fullByCount_partialRows_hidden() {
+        let response = LeaderboardResponse(
+            entries: board(), me: MyStanding(rank: 0, points: 0), window: "week",
+            resetsAt: "2026-10-26T00:00:00.000Z", champions: nil, totalCatchers: 64)
+        #expect(RaceGap.compute(response: response, window: .week,
+                                myHandle: "notlisted", handleConfirmed: true) == nil)
+    }
+
+    @Test func isMe_needsAConfirmedHandle() {
+        let row = LeaderboardEntry(rank: 3, handle: "Blue_Hour", points: 10, catches: 1)
+        #expect(LeaderboardEntry.isMe(row, myHandle: "blue_hour", handleConfirmed: true))
+        #expect(!LeaderboardEntry.isMe(row, myHandle: "blue_hour", handleConfirmed: false))
+        #expect(!LeaderboardEntry.isMe(row, myHandle: nil, handleConfirmed: true))
     }
 
     /// A strand the marker missed: points but no row on a board with room
@@ -864,6 +888,23 @@ struct StandingLineTests {
         let l = try line(board(), me: MyStanding(rank: 0, points: 0), handle: "notlisted", confirmed: false)
         #expect(l.heading == "You're not on the board yet")
         #expect(l.detail == nil)
+    }
+
+    /// Stranded on someone else's row: never their rank in my heading.
+    @Test func stranded_onAnotherSpottersRow_notMyRank() throws {
+        let l = try line(board(), me: MyStanding(rank: 0, points: 0), handle: "s5", confirmed: false)
+        #expect(!l.isOnBoard)
+        #expect(l.heading == "You're not on the board yet")
+        #expect(l.goal == nil)
+    }
+
+    /// Unregistered AND handle-less: the claim hint still shows (it was the
+    /// old screen's only call to action for a new user).
+    @Test func notRegistered_handleless_claimHint() throws {
+        let l = try #require(StandingLine.compute(response: response(board(), me: nil), window: .week,
+                                                  myHandle: nil, handleConfirmed: false))
+        #expect(l.heading == "You're not on the board yet")
+        #expect(l.detail == StandingLine.claimHint)
     }
 
     /// Not registered: no line, but the reset still shows on its own.

@@ -61,8 +61,9 @@ struct LeaderboardScreen: View {
     /// the selected window's line.
     @State private var standingLines: [LeaderboardWindow: StandingLine] = [:]
     /// `RaceGap.reportKey(window:)`s already reported as
-    /// `leaderboard_gap_shown` this screen visit. Cleared when the screen
-    /// disappears.
+    /// `leaderboard_gap_shown` this screen visit. Not cleared on disappear:
+    /// that also fires when Challenges is pushed over the board, and coming
+    /// back isn't a new visit. A new visit is a new view, so fresh state.
     @State private var reportedGapKeys: Set<String> = []
 
     private let client = TailspotAccountClient()
@@ -182,15 +183,12 @@ struct LeaderboardScreen: View {
             // entry_count is 0 until load() completes — this is intentional:
             // we want to know how many times the user opens the screen, not just
             // after data arrives. has_handle distinguishes identified vs. anonymous.
-            let hasHandle = localHandle != SpotterHandle.defaultPlaceholder && !localHandle.isEmpty
             Analytics.capture("leaderboard_viewed", [
                 "entry_count": .int(responses[selectedWindow]?.entries.count ?? 0),
-                "has_handle":  .bool(hasHandle),
+                "has_handle":  .bool(myHandle != nil),
                 "window":      .string(selectedWindow.rawValue),
             ])
         }
-        // A new visit may report each goal once more.
-        .onDisappear { reportedGapKeys.removeAll() }
         // A handle claimed/changed elsewhere moves "me" on the cached boards.
         .onChange(of: localHandle) { _, _ in recomputeStandingLines() }
         .onChange(of: confirmedHandle) { _, _ in recomputeStandingLines() }
@@ -571,7 +569,8 @@ struct LeaderboardScreen: View {
 
     /// True when this entry is for the current user's handle.
     private func isMeEntry(_ entry: LeaderboardEntry) -> Bool {
-        entry.isHandle(localHandle)
+        LeaderboardEntry.isMe(entry, myHandle: myHandle,
+                              handleConfirmed: SpotterHandle.isConfirmed(myHandle, confirmed: confirmedHandle))
     }
 
     /// The local handle, or nil while the device still has the placeholder

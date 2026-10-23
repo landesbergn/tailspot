@@ -33,7 +33,7 @@ nonisolated enum LeaderboardCountdown {
     /// Week tab: "resets in 2d 14h" / "resets in 14h" / "resets in under 1h".
     static func weekProse(resetsAt: Date, now: Date) -> String {
         let (days, hours) = remaining(resetsAt: resetsAt, now: now)
-        if days > 0 { return "resets in \(days)d \(hours)h" }
+        if days > 0 { return hours > 0 ? "resets in \(days)d \(hours)h" : "resets in \(days)d" }
         if hours > 0 { return "resets in \(hours)h" }
         return "resets in under 1h"
     }
@@ -42,7 +42,10 @@ nonisolated enum LeaderboardCountdown {
     static func weekSpoken(resetsAt: Date, now: Date) -> String {
         let (days, hours) = remaining(resetsAt: resetsAt, now: now)
         func unit(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
-        if days > 0 { return "resets in \(unit(days, "day")), \(unit(hours, "hour"))" }
+        if days > 0 {
+            return hours > 0 ? "resets in \(unit(days, "day")), \(unit(hours, "hour"))"
+                             : "resets in \(unit(days, "day"))"
+        }
         if hours > 0 { return "resets in \(unit(hours, "hour"))" }
         return "resets in under an hour"
     }
@@ -167,9 +170,8 @@ nonisolated struct RaceGap: Equatable, Sendable {
         let entries = response.displayedEntries
         guard !entries.isEmpty else { return nil }
 
-        let myIndex = myHandle.flatMap { handle in
-            entries.firstIndex { $0.isHandle(handle) }
-        }
+        let myIndex = LeaderboardEntry.myIndex(in: entries, myHandle: myHandle,
+                                               handleConfirmed: handleConfirmed)
         // `me` comes from a separate server query (myStanding) than the
         // rows; a catch uploading between the two leaves them out of step.
         // When I'm a row, measure from MY ROW's points so the line always
@@ -193,8 +195,8 @@ nonisolated struct RaceGap: Equatable, Sendable {
             // handle" hint is their whole story.
             guard myHandle != nil else { return nil }
             // Stranded: the server doesn't hold this handle, so no number
-            // of points earns a row. Being ON the board (the branch above)
-            // already proves the server has it, so only this path checks.
+            // of points earns a row. (A stranded handle never matches a row
+            // either — see `LeaderboardEntry.myIndex`.)
             guard handleConfirmed else { return nil }
             // Handled but not a row on the board. With room left, any
             // point earns a row; a full board means beating the last row.
@@ -210,6 +212,10 @@ nonisolated struct RaceGap: Equatable, Sendable {
                 || (response.totalCatchers ?? 0) >= LeaderboardResponse.displayLimit
             target = .makeBoard(full: boardFull)
             if boardFull {
+                // Full by `totalCatchers` but fewer rows came back: the last
+                // row isn't the 50th, so any number measured from it would
+                // overstate the gap. Say nothing rather than guess.
+                guard entries.count >= LeaderboardResponse.displayLimit else { return nil }
                 gap = entries[entries.count - 1].points - myPoints + 1
             } else {
                 gap = 1 - myPoints
@@ -300,8 +306,9 @@ nonisolated struct StandingLine: Equatable, Sendable {
     let windowPhrase: String?
 
     /// The line for this window's response, or nil when there's no `me`
-    /// (not registered, or a disabled device) — the view then shows the
-    /// reset alone.
+    /// (not registered, or a disabled device) and the device has a handle —
+    /// the view then shows the reset alone. A handle-less device with no
+    /// `me` still gets the claim-a-handle line.
     ///
     /// The goal is left out on the pre-windows backend (its board is
     /// all-time even when filed under `.week`), for a handle-less device,
@@ -310,12 +317,18 @@ nonisolated struct StandingLine: Equatable, Sendable {
                         window: LeaderboardWindow,
                         myHandle: String?,
                         handleConfirmed: Bool) -> StandingLine? {
-        guard response.me != nil else { return nil }
-        let entries = response.displayedEntries
-        let myIndex = myHandle.flatMap { handle in
-            entries.firstIndex { $0.isHandle(handle) }
-        }
         let windowMatches = response.window == window.rawValue
+        guard response.me != nil else {
+            // Unregistered and handle-less: the claim-a-handle hint is the
+            // one way onto the board, so it still shows. Unregistered with
+            // a handle → nil (the view shows the reset alone).
+            guard myHandle == nil else { return nil }
+            return StandingLine(rank: 0, handle: nil, goal: nil,
+                                windowPhrase: windowMatches ? window.standingPhrase : nil)
+        }
+        let entries = response.displayedEntries
+        let myIndex = LeaderboardEntry.myIndex(in: entries, myHandle: myHandle,
+                                               handleConfirmed: handleConfirmed)
 
         let goal: GoalLine?
         if myHandle == nil || !windowMatches {
@@ -436,15 +449,31 @@ nonisolated enum Ordinal {
         case (_, 3):       suffix = "rd"
         default:           suffix = "th"
         }
-        return n.formatted(.number) + suffix
+        // English digits and grouping too ("1,001st"), not the device's.
+        return n.formatted(.number.locale(Locale(identifier: "en_US"))) + suffix
     }
 }
 
 extension LeaderboardEntry {
-    /// Case-insensitive handle match — the one "is this row me?" rule shared
-    /// by the board's highlight and `RaceGap`.
+    /// Case-insensitive handle match.
     nonisolated func isHandle(_ handle: String) -> Bool {
         self.handle.lowercased() == handle.lowercased()
+    }
+
+    /// The one "is this row me?" rule, shared by the board's highlight, the
+    /// standing line and `RaceGap`: my public handle, and only once the
+    /// server has confirmed it. A stranded handle (claim 409'd because
+    /// someone else holds it) would otherwise match THEIR row and describe
+    /// their rank and points as mine.
+    nonisolated static func isMe(_ entry: LeaderboardEntry, myHandle: String?,
+                                 handleConfirmed: Bool) -> Bool {
+        guard handleConfirmed, let myHandle else { return false }
+        return entry.isHandle(myHandle)
+    }
+
+    nonisolated static func myIndex(in entries: [LeaderboardEntry], myHandle: String?,
+                                    handleConfirmed: Bool) -> Int? {
+        entries.firstIndex { isMe($0, myHandle: myHandle, handleConfirmed: handleConfirmed) }
     }
 }
 

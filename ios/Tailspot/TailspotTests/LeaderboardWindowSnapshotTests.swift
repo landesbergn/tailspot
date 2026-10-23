@@ -241,6 +241,7 @@ struct LeaderboardWindowSnapshotTests {
 
         // All time, #2 behind a whale: a big gap still shows (no cap).
         defaults.set("flydelta", forKey: SpotterHandle.storageKey)
+        defaults.set("flydelta", forKey: SpotterHandle.confirmedKey)
         let all = LeaderboardResponse(entries: pack(scale: 6), me: MyStanding(rank: 2, points: 8160),
                                       window: "all", totalCatchers: handles.count)
         shoot(board([.all: all], selected: .all, container: container),
@@ -248,6 +249,7 @@ struct LeaderboardWindowSnapshotTests {
 
         // #1 → "2,345 points ahead of @flydelta".
         defaults.set("chemtrails", forKey: SpotterHandle.storageKey)
+        defaults.set("chemtrails", forKey: SpotterHandle.confirmedKey)
         shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
                     selected: .week, container: container),
               "standing_week_leading")
@@ -330,11 +332,13 @@ struct LeaderboardWindowSnapshotTests {
         shoot(midpack, "week_a11y3", size: .accessibility3)
 
         defaults.set("flydelta", forKey: SpotterHandle.storageKey)
+        defaults.set("flydelta", forKey: SpotterHandle.confirmedKey)
         let all = LeaderboardResponse(entries: pack(scale: 6), me: MyStanding(rank: 2, points: 8160),
                                       window: "all", totalCatchers: handles.count)
         shoot(board([.all: all], selected: .all, container: container), "alltime")
 
         defaults.set("chemtrails", forKey: SpotterHandle.storageKey)
+        defaults.set("chemtrails", forKey: SpotterHandle.confirmedKey)
         shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
                     selected: .week, container: container), "first")
 
