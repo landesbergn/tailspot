@@ -56,24 +56,25 @@ struct HangarTrophiesView: View {
     /// kept-alive page's body) render from cache — see HangarDerivedCache.
     @State private var cache = DerivedCacheBox<(inputs: TrophyProgressInputs, items: [Achievement])>()
 
-    /// Trophy inputs also read the two UserDefaults-backed stores (grounded
-    /// easter-egg events, leaderboard standing), so fold their scalars into
-    /// the token — they're a handful of cached-defaults reads, still cheap
-    /// per body eval.
-    private var token: Int {
-        var hasher = Hasher()
-        hasher.combine(CatchFingerprint.of(catches))
-        let events = TrophyEventStore()
-        for event in TrophyEventStore.Event.allCases {
-            hasher.combine(events.count(of: event))
-        }
-        let standing = LeaderboardStandingCache()
-        hasher.combine(standing.weeklyWins)
-        hasher.combine(standing.everToppedAllTime)
-        return hasher.finalize()
+    /// The memo key: `TrophyInputsToken`, the same key TrophyUnlockCenter
+    /// and ProfileScreen use. It covers every input `Trophies.inputs` reads
+    /// (rows incl. the late `guessCorrect` stamp and `caughtDayKey`, the time
+    /// zone, the event and standing stores), so this tab and Profile can't
+    /// disagree. It used to hash only `CatchFingerprint` + event counts +
+    /// standing, which left Sharp Eye / Hot Streak progress here stale after
+    /// a bonus-round verdict or a time-zone change while Profile updated.
+    static func memoKey(
+        _ catches: [Catch],
+        events: TrophyEventStore = TrophyEventStore(),
+        standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        timeZone: TimeZone = .current
+    ) -> Int {
+        TrophyInputsToken.of(catches, events: events, standing: standing, timeZone: timeZone)
     }
 
     var body: some View {
+        // One hashing pass per body eval, shared by the memo and the task id.
+        let token = Self.memoKey(catches)
         let derived = cache.value(for: token) {
             let inputs = Trophies.inputs(from: catches)
             return (inputs: inputs, items: TrophyBoard.visible(inputs: inputs))

@@ -3,9 +3,11 @@
 //  Tailspot
 //
 //  The one-time "trophy case" recap — a full-screen celebratory sheet shown
-//  on first launch after a trophy-roster expansion, presenting everything
-//  the user has ALREADY earned under the new roster as one moment (instead
-//  of a per-trophy unlock flood; see TrophyUnlockCenter's reseed path).
+//  the first time the unlock machinery seeds an existing Hangar, presenting
+//  everything the user has ALREADY earned as one moment (instead of a
+//  per-trophy unlock flood; see TrophyUnlockCenter's first-seed path). A
+//  later roster expansion does not use it: those few new grants get the
+//  ordinary unlock card.
 //
 //  House style follows the catch reveal (CatchRevealView): the dark RP
 //  palette, monospaced type, gold accents, and a count-up. Like the reveal,
