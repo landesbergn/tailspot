@@ -149,6 +149,11 @@ struct SetDetailScreen: View {
     let set: CardSet
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
+    /// The header's "N of M collected" line: 18 pt at the default text
+    /// size (no built-in style is exactly 18), scaling with Dynamic Type
+    /// like the prose around it. A bare `.system(size: 18)` never scaled.
+    @ScaledMetric(relativeTo: .headline) private var headerCountSize: CGFloat = 18
+
     var body: some View {
         VStack(spacing: 0) {
             HangarChildBar(title: set.title)
@@ -195,7 +200,7 @@ struct SetDetailScreen: View {
             CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 7, diameter: 64)
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(p.caught) of \(p.total) collected")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: headerCountSize, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(complete ? "Set complete" : "Catch \(p.total - p.caught) more to finish.")
                     .font(Brand.Font.caption)
@@ -218,7 +223,10 @@ struct SetDetailScreen: View {
                         // scales with Dynamic Type (a bare size: 16 doesn't).
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(caught ? Brand.Color.textPrimary : Brand.Color.textTertiary)
-                        .lineLimit(1)
+                        // Two lines, so the few long curated names ("de
+                        // Havilland DH.82 Tiger Moth / Queen Bee") wrap
+                        // instead of clipping, most of all at large text.
+                        .lineLimit(2)
                         // The sparkle below is hidden from VoiceOver (it
                         // reads as the junk word "sparkles"), so the rarity
                         // it signals rides on the name instead.
@@ -299,6 +307,9 @@ struct ModelDetailScreen: View {
             Image(systemName: "binoculars")
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Brand.Color.textTertiary)
+                // Decorative: the headline below says it all, and
+                // VoiceOver would otherwise read the symbol's name.
+                .accessibilityHidden(true)
             Text("No \(entry.canonicalName) yet")
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)
