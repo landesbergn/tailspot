@@ -4,12 +4,13 @@
 //
 //  The share artboard — rendered to an Image via ImageRenderer and handed
 //  to ShareLink, so a friend receives a clean card instead of a manual
-//  screenshot. Surfaced from CatchDetailView (the share pill) and the
-//  post-catch reveal.
+//  screenshot. Surfaced from CatchDetailView (the share pill) and, since
+//  2026-10-23, the catch reveal's Share CTA (single and multi-catch).
 //
 //  Since Direction B (2026-07-05) the artboard IS the settled reveal card
 //  — `SettledCatchCard`, the same view the Hangar detail frames — wrapped
-//  in minimal brand chrome (wordmark above, "CAUGHT ON TAILSPOT" below).
+//  in minimal brand chrome (wordmark above, "CAUGHT ON TAILSPOT ·
+//  tailspot.app" below).
 //  One card design across catch, Hangar, and share.
 //
 //  ImageRenderer is synchronous and can't wait on AsyncImage, so only the
@@ -66,7 +67,7 @@ struct CatchShareCard: View {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(Brand.Color.cyan)
-                Text("CAUGHT ON TAILSPOT")
+                Text(CatchShare.footerText)
                     .font(Brand.Font.mono(size: 10, weight: .semibold))
                     .tracking(1.5)
                     // Tertiary grey disappears on a bright sky backdrop.
@@ -98,6 +99,42 @@ enum CatchShare {
     /// image alone gives the recipient no path to install. Campaign form
     /// and attribution rationale: AppStoreListing.swift.
     static let storeURL = AppStoreListing.url(campaign: "Tailspot Catch Share")
+
+    /// The footer printed on every rendered share image. Story, Post, Copy
+    /// and Save send the image with no text, so without the address in the
+    /// pixels a catch seen on Instagram (or a re-posted save) has no way
+    /// back to the app. Lowercase because that's how people type a URL.
+    static let footerText = "CAUGHT ON TAILSPOT · tailspot.app"
+
+    /// Share-sheet preview title ("Caught UAL2476 · Boeing 737-900 on
+    /// Tailspot"), also the first line of `shareMessage`. Shared by the
+    /// detail pill and the reveal so both send the same words. `callsign`
+    /// is whatever identifies the plane (callsign, else hex id); with
+    /// neither a callsign nor a model it still reads as a sentence.
+    static func shareText(callsign: String?, model: String?) -> String {
+        func clean(_ s: String?) -> String? {
+            guard let t = s?.trimmingCharacters(in: .whitespaces), !t.isEmpty else { return nil }
+            return t
+        }
+        let cs = clean(callsign)
+        let md = clean(model)
+        switch (cs, md) {
+        case let (c?, m?): return "Caught \(c) · \(m) on Tailspot"
+        case let (c?, nil): return "Caught \(c) on Tailspot"
+        case let (nil, m?): return "Caught \(m) on Tailspot"
+        case (nil, nil): return "Caught a plane on Tailspot"
+        }
+    }
+
+    /// Text that accompanies the shared card image. The link sits
+    /// MID-SENTENCE deliberately: Messages inflates a URL that stands alone
+    /// (or ends the message) into a full rich-preview bubble, and stacked
+    /// under the card image that crowded the whole canvas (Noah's device
+    /// pass, 2026-08-25). Words on BOTH sides keep it a plain tappable link
+    /// in one short text bubble: card + one line, no preview card.
+    static func shareMessage(shareText: String) -> String {
+        "\(shareText) — get the app at \(storeURL.absoluteString) and start spotting."
+    }
 
     /// The full share card at its natural height (the split-flap name can
     /// wrap to a second line) — the "More" destination's image. MainActor
@@ -226,7 +263,7 @@ struct CatchShareCompactCard: View {
 
     private var points: Int {
         let base = plane.rarity.basePoints
-        let bonus = plane.isFirstOfType ? Int((Double(base) * 0.5).rounded()) : 0
+        let bonus = plane.isFirstOfType ? ScoringBonuses.firstOfTypeBonus(base: base) : 0
         return base + bonus
     }
 
@@ -309,7 +346,7 @@ struct CatchShareCompactCard: View {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 10))
                 .foregroundStyle(Brand.Color.cyan)
-            Text("CAUGHT ON TAILSPOT")
+            Text(CatchShare.footerText)
                 .font(Brand.Font.mono(size: 9, weight: .semibold))
                 .tracking(1.5)
                 .foregroundStyle(Brand.Color.textTertiary)

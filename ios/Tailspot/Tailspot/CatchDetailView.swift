@@ -118,7 +118,8 @@ struct CatchDetailView: View {
             CatchShareSheet(plane: detailPlane,
                             shareText: shareText,
                             shareMessage: shareMessage,
-                            hasCatchPhoto: hasCatchPhoto)
+                            hasCatchPhoto: hasCatchPhoto,
+                            source: .detail)
         }
         .alert(deleteTitle, isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { performDelete() }
@@ -293,7 +294,8 @@ struct CatchDetailView: View {
             // This tap is the top of the share funnel; the sheet reports the
             // rest (CatchShareAnalytics).
             Button {
-                CatchShareAnalytics(plane: detailPlane, hasCatchPhoto: hasCatchPhoto).sheetOpened()
+                CatchShareAnalytics(plane: detailPlane, hasCatchPhoto: hasCatchPhoto, source: .detail)
+                    .sheetOpened()
                 showShareSheet = true
             } label: {
                 chromePillBody(icon: "square.and.arrow.up")
@@ -323,24 +325,13 @@ struct CatchDetailView: View {
             .contentShape(Rectangle().inset(by: -4))
     }
 
-    /// Preview title for the share sheet ("Caught UAL2476 · Boeing 737-900
-    /// on Tailspot") — also the first line of `shareMessage`.
+    /// Share copy, built by `CatchShare` so the reveal's Share says the same.
     private var shareText: String {
-        let cs = first.callsign?.trimmedNonEmpty ?? first.icao24.uppercased()
-        let model = first.model?.trimmedNonEmpty
-        let modelPart = model.map { " · \($0)" } ?? ""
-        return "Caught \(cs)\(modelPart) on Tailspot"
+        CatchShare.shareText(callsign: first.callsign?.trimmedNonEmpty ?? first.icao24.uppercased(),
+                             model: first.model)
     }
 
-    /// Text that accompanies the shared card image. The link sits
-    /// MID-SENTENCE deliberately: Messages inflates a URL that stands alone
-    /// (or ends the message) into a full rich-preview bubble, and stacked
-    /// under the card image that crowded the whole canvas (Noah's device
-    /// pass, 2026-08-25). Words on BOTH sides keep it a plain tappable link
-    /// in one short text bubble: card + one line, no preview card.
-    private var shareMessage: String {
-        "\(shareText) — get the app at \(CatchShare.storeURL.absoluteString) and start spotting."
-    }
+    private var shareMessage: String { CatchShare.shareMessage(shareText: shareText) }
 
     // MARK: - Attribution
 

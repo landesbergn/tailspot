@@ -411,7 +411,7 @@ struct AnalyticsFacadeTests {
         withSink { sink in
             let plane = CardPlane(callsign: "RCH4521", model: "KC-10A", carrier: "USAF",
                                   rarity: .legendary, type: .mil)
-            let a = CatchShareAnalytics(plane: plane, hasCatchPhoto: true)
+            let a = CatchShareAnalytics(plane: plane, hasCatchPhoto: true, source: .reveal)
             a.sheetOpened()
             a.formatSelected(.square, via: "swipe")
             a.backdropSelected(.glow)
@@ -446,6 +446,25 @@ struct AnalyticsFacadeTests {
             #expect(props("catch_share_closed")?["shared"] as? Bool == true)
             #expect(props("catch_share_closed")?["formats_viewed"] as? Int == 2)
             #expect(props("catch_share_closed")?["last_format"] as? String == "square")
+            // Every step names the screen that opened the sheet.
+            #expect(mine.allSatisfy { $0.properties["source"]?.jsonValue as? String == "reveal" })
+        }
+    }
+
+    /// The three entry points report distinct `source` values.
+    @Test func catchShareOpenedCarriesItsSource() {
+        withSink { sink in
+            let plane = CardPlane(callsign: "RCH4522", model: "KC-46A", carrier: "USAF",
+                                  rarity: .legendary, type: .mil)
+            for source in [CatchShareAnalytics.Source.detail, .reveal, .multiReveal] {
+                CatchShareAnalytics(plane: plane, hasCatchPhoto: false, source: source).sheetOpened()
+            }
+            let sources = sink.captured
+                .filter { $0.event == "catch_share_opened"
+                    && $0.properties["rarity"]?.jsonValue as? String == Rarity.legendary.label
+                    && $0.properties["has_photo"]?.jsonValue as? Bool == false }
+                .compactMap { $0.properties["source"]?.jsonValue as? String }
+            #expect(sources == ["detail", "reveal", "multi_reveal"])
         }
     }
 

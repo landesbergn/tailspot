@@ -1086,7 +1086,7 @@ struct ContentView: View {
             .presentationBackground(.clear)
         }
         // Multi-catch reveal — N≥2 catch cards staggered in with a
-        // chime+haptic per fresh card, combo banner climbing across
+        // chime+haptic per fresh card, MULTI-CATCH banner climbing across
         // the reveal, ALREADY CAUGHT stamps inline on duplicates.
         // T11 routes every (fresh+dup) total ≥ 2 through here from
         // `presentReveal`.
@@ -1493,7 +1493,7 @@ struct ContentView: View {
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
     /// preserve both fresh + duplicate icaos so the reveal can render
     /// the ALREADY CAUGHT stamp inline (T11). The dedupe + dedup-
-    /// counted combo math live in the view itself.
+    /// counted points math live in the view itself.
     struct PendingMultiReveal: Identifiable, Equatable {
         let id = UUID()
         let entries: [MultiCatchReveal.Entry]
@@ -2955,7 +2955,7 @@ struct ContentView: View {
     ///   `pendingMultiReveal`. Fresh and dup entries are interleaved
     ///   in the same order they were captured; the reveal renders
     ///   ALREADY CAUGHT stamps inline on dups and only credits fresh
-    ///   tails toward the combo + points (T11).
+    ///   tails toward the count + points (T11).
     ///
     /// Duplicate-only case (single dup): synthesizes a `CardPlane`
     /// from the already-stored row + (when available) the current

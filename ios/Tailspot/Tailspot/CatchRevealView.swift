@@ -91,6 +91,27 @@ nonisolated enum BonusRoundAnnouncement {
     }
 }
 
+/// When the reveal's Share CTA is live (share-on-reveal, 2026-10-23). Pure,
+/// so the gate is pinned by `RevealShareGateTests` without a view tree.
+nonisolated enum RevealShareGate {
+    /// - settled: the reveal has played out (or was tapped through).
+    /// - pipelineFinished: the catch pipeline is done, so the composed
+    ///   photo the share image draws exists. Always true off the
+    ///   early-shell path (no loader).
+    /// - hasBonusRound: this reveal carries a route/type guess.
+    /// - chipsCollapsed: the guess chips have gone away after the answer.
+    /// - bonusResolved / voiceOver: under VoiceOver the chips stay up,
+    ///   resolved, until the user continues (they never collapse), so a
+    ///   resolved round counts as finished there.
+    static func isAvailable(settled: Bool, pipelineFinished: Bool,
+                            hasBonusRound: Bool, chipsCollapsed: Bool,
+                            bonusResolved: Bool, voiceOver: Bool) -> Bool {
+        guard settled, pipelineFinished else { return false }
+        guard hasBonusRound else { return true }
+        return chipsCollapsed || (bonusResolved && voiceOver)
+    }
+}
+
 /// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
 let flapPool = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789-")
 
@@ -679,6 +700,8 @@ struct CatchRevealView: View {
     @State private var guessResolved = false
     /// Once-only guard so `onGuessShown` fires a single time.
     @State private var guessShownFired = false
+    /// The share sheet opened from the CTA row's Share.
+    @State private var showShareSheet = false
     /// Sensory-feedback triggers — counters so repeats can't collapse.
     @State private var successBeat = 0
     @State private var missBeat = 0
@@ -831,7 +854,44 @@ struct CatchRevealView: View {
             }
             .sensoryFeedback(.success, trigger: successBeat)
             .sensoryFeedback(.error, trigger: missBeat)
+            // The same sheet the Hangar detail's share pill opens. Presented
+            // from inside this full-screen cover, so it slides up over the
+            // reveal and dismissing it lands back on the settled card.
+            .sheet(isPresented: $showShareSheet) {
+                CatchShareSheet(plane: livePlane,
+                                shareText: shareText,
+                                shareMessage: CatchShare.shareMessage(shareText: shareText),
+                                hasCatchPhoto: hasCatchPhoto,
+                                source: .reveal)
+            }
         }
+    }
+
+    // MARK: - Share
+
+    /// Only the user's own composed photo renders into a share image.
+    private var hasCatchPhoto: Bool { zoomablePhotoURL != nil }
+
+    private var shareText: String {
+        CatchShare.shareText(callsign: livePlane.callsign, model: livePlane.model)
+    }
+
+    /// Settled, photo in, and no bonus round on screen.
+    private var shareAvailable: Bool {
+        RevealShareGate.isAvailable(
+            settled: settled,
+            pipelineFinished: loader?.pipelineFinished ?? true,
+            hasBonusRound: liveGuess != nil,
+            chipsCollapsed: chipsPhase == .collapsed,
+            bonusResolved: guessResolved,
+            voiceOver: voiceOverEnabled)
+    }
+
+    private func openShare() {
+        guard shareAvailable else { return }
+        CatchShareAnalytics(plane: livePlane, hasCatchPhoto: hasCatchPhoto, source: .reveal)
+            .sheetOpened()
+        showShareSheet = true
     }
 
     /// Card stacked ABOVE the CTA so the "tap to continue / View in Hangar"
@@ -888,7 +948,7 @@ struct CatchRevealView: View {
             // on tall cards (the spacers collapse) and packed against the CTA.
             // With the strip below the card down to just the CTA, give that
             // row real minimum air on both sides.
-            ctaRow
+            ctaRow(shareVisible: shareAvailable)
                 .opacity(settled ? 1 : 0)
                 .allowsHitTesting(settled)
         })
@@ -1199,8 +1259,9 @@ struct CatchRevealView: View {
         }, cta: {
             // Settled-state chrome, mirrored from `layout` (which gates it
             // on the live `settled` flag this static render never flips).
-            // The streak renders inside the card's entry-stamp row.
-            ctaRow
+            // The streak renders inside the card's entry-stamp row. Share
+            // hides while the bonus-round chips are up, as on device.
+            ctaRow(shareVisible: guessState?.render.chipsInLayout != true)
         })
         .frame(width: size.width, height: size.height)
         .background(RP.bg)
@@ -1490,7 +1551,10 @@ struct CatchRevealView: View {
         }
     }
 
-    private var ctaRow: some View {
+    /// "tap to continue · Share · View in Hangar ›". Share keeps its slot
+    /// while it's unavailable (transparent, not removed) so the other two
+    /// don't jump sideways when it appears after the bonus round.
+    private func ctaRow(shareVisible: Bool) -> some View {
         HStack(spacing: 18) {
             // A real Button (not a bare tap gesture) so VoiceOver/Switch
             // Control get a dismiss control; the inset contentShape grows the
@@ -1503,6 +1567,18 @@ struct CatchRevealView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Continue")
+            Button(action: openShare) {
+                Text("Share")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(0.5).foregroundColor(RP.ink)
+                    .contentShape(Rectangle().inset(by: -16))
+            }
+            .buttonStyle(.plain)
+            .opacity(shareVisible ? 1 : 0)
+            .allowsHitTesting(shareVisible)
+            .accessibilityHidden(!shareVisible)
+            .accessibilityLabel("Share catch")
+            .animation(.easeOut(duration: 0.25), value: shareVisible)
             Button(action: { resolveAsSkipIfNeeded(); onViewInHangar() }) {
                 Text("View in Hangar ›")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
