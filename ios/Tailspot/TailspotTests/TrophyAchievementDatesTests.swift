@@ -30,6 +30,35 @@ struct TrophyAchievementDatesTests {
         #expect(center.pendingEvents.isEmpty)
     }
 
+    /// `finishAchievementDates` takes the parked work, and a cancelled run
+    /// (its view went away) stops early. The center's inputs memo skips the
+    /// bounded date pass on a hit, so without a resume the next re-diff of
+    /// the same Hangar would never re-park the rest and those trophies would
+    /// keep showing no date.
+    @Test func interruptedBackfillIsResumedOnAMemoHit() async {
+        let suiteName = "test.dates.\(UUID())"
+        let suite = UserDefaults(suiteName: suiteName)!
+        defer { suite.removePersistentDomain(forName: suiteName) }
+        let ledger = UserDefaultsTrophyLedger(defaults: suite)
+        let rows = catches(7)
+        let center = TrophyUnlockCenter(ledger: ledger,
+                                       events: TrophyEventStore(defaults: suite),
+                                       standing: LeaderboardStandingCache(defaults: suite))
+        center.enqueueNewUnlocks(from: rows.reversed())
+        #expect(ledger.achievedDates["spotter"] == nil, "precondition: the budget left work parked")
+        // The .task is cancelled before its backfill gets a probe in.
+        let interrupted = Task { await center.finishAchievementDates() }
+        interrupted.cancel()
+        await interrupted.value
+        #expect(ledger.achievedDates["spotter"] == nil, "precondition: the run stopped early")
+        let passes = center.fullInputsPasses
+        center.enqueueNewUnlocks(from: rows.reversed())        // memo hit
+        #expect(center.fullInputsPasses == passes, "still a memo hit")
+        await center.finishAchievementDates()
+        #expect(ledger.achievedDates["firstcatch"] == rows[0].caughtAt)
+        #expect(ledger.achievedDates["spotter"] == rows[4].caughtAt)
+    }
+
     @Test func newUnlockRecordsDateBeforeCelebrationAndPreservesItAfterDeletion() {
         let suite = UserDefaults(suiteName: "test.dates.\(UUID())")!
         let ledger = UserDefaultsTrophyLedger(defaults: suite)
