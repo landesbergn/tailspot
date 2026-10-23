@@ -14,7 +14,9 @@
 //    UNITS     — altitude (ft / m), speed (kt / mph / km/h) and distance
 //                (km / mi) pickers bound to UnitPreferences; every card
 //                re-formats live.
-//    ABOUT     — legal links (Privacy Policy, Terms, Attributions —
+//    ABOUT     — Rate Tailspot (the App Store write-review page) and Send
+//                feedback (FeedbackMail.swift), then legal links
+//                (Privacy Policy, Terms, Attributions —
 //                ODbL attribution for adsb.lol data is a licence
 //                obligation), data-source credits, plus the tap-to-copy
 //                version footer.
@@ -47,6 +49,10 @@ struct SettingsScreen: View {
     /// True while the "Turn on reminders" permission request is in flight, so
     /// a double tap can't ask twice (and double-count the permission funnel).
     @State private var requestingReminders = false
+    /// "Send feedback" route 1: the in-app Mail draft.
+    @State private var showMailCompose = false
+    /// "Send feedback" route 3: the copied-address toast (nil = hidden).
+    @State private var feedbackToast: String? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     /// Optional: Settings renders in snapshot harnesses and previews with no
@@ -162,6 +168,17 @@ struct SettingsScreen: View {
             // MARK: ABOUT
 
             Section {
+                // User-initiated rating: the App Store's write-review page.
+                // Unlike the in-app sheet (ReviewPrompt.swift), Apple
+                // doesn't throttle this, so it's always there.
+                linkRow(label: "Rate Tailspot", hint: "Opens the App Store") {
+                    settingsRowTapped("rate_tailspot")
+                    UIApplication.shared.open(AppStoreListing.writeReviewURL)
+                }
+                linkRow(label: "Send feedback", hint: "Writes an email to Tailspot support") {
+                    sendFeedback()
+                }
+
                 // Legal links — open URLs in Safari.
                 // Attributions row is REQUIRED to satisfy the ODbL licence
                 // obligation for adsb.lol data; do not remove.
@@ -198,6 +215,26 @@ struct SettingsScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showHandleSheet) {
             HandleEditSheet(source: "settings")
+        }
+        .sheet(isPresented: $showMailCompose) {
+            MailComposeSheet(versionLine: Bundle.main.tailspotVersionLine)
+                .ignoresSafeArea()
+        }
+        .overlay(alignment: .bottom) {
+            if let feedbackToast {
+                // Same capsule as the camera's top toast.
+                Text(feedbackToast)
+                    .font(Brand.Font.mono(size: 12, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(Brand.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
+                    .overlay(Capsule().strokeBorder(Brand.Color.textTertiary, lineWidth: 1))
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .task { await refreshNotifStatus() }
         // Heal-on-return: the user goes to iOS Settings from the denied
@@ -365,13 +402,62 @@ struct SettingsScreen: View {
         }
     }
 
-    // MARK: - Legal link row
+    // MARK: - Feedback
+
+    /// Mail draft if Mail is set up, else a `mailto:` for whatever mail
+    /// app the user has, else copy the address and say so.
+    private func sendFeedback() {
+        if MailComposeSheet.isAvailable {
+            settingsRowTapped("send_feedback", route: .mailCompose)
+            showMailCompose = true
+            return
+        }
+        guard let url = FeedbackMail.mailtoURL(versionLine: Bundle.main.tailspotVersionLine) else {
+            copyFeedbackAddress()
+            return
+        }
+        // `open`'s completion reports false when no app handles mailto:
+        // (checking first with canOpenURL would need an Info.plist entry).
+        UIApplication.shared.open(url) { opened in
+            if opened {
+                settingsRowTapped("send_feedback", route: .mailto)
+            } else {
+                copyFeedbackAddress()
+            }
+        }
+    }
+
+    private func copyFeedbackAddress() {
+        settingsRowTapped("send_feedback", route: .copiedAddress)
+        UIPasteboard.general.string = FeedbackMail.address
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        withAnimation(.easeInOut(duration: 0.2)) { feedbackToast = FeedbackMail.copiedToast }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation(.easeInOut(duration: 0.3)) { feedbackToast = nil }
+        }
+    }
+
+    /// `settings_row_tapped` for the ABOUT action rows.
+    private func settingsRowTapped(_ row: String, route: FeedbackMail.Route? = nil) {
+        Analytics.capture(SettingsTelemetry.rowTappedEvent,
+                          SettingsTelemetry.rowTappedProperties(row: row, route: route))
+    }
+
+    // MARK: - Link rows
 
     @ViewBuilder
     private func legalLink(label: String, url: URL) -> some View {
-        Button {
+        linkRow(label: label, hint: "Opens in browser") {
             UIApplication.shared.open(url)
-        } label: {
+        }
+    }
+
+    /// A row that leaves the app (browser, App Store, Mail): label plus the
+    /// trailing arrow glyph.
+    @ViewBuilder
+    private func linkRow(label: String, hint: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack {
                 // Brand token, not Color.primary — the row background is the
                 // fixed dark palette, so a semantic system color could render
@@ -388,7 +474,7 @@ struct SettingsScreen: View {
         .buttonStyle(.plain)
         // The glyph is hidden above, so the "leaves the app" cue it carries
         // visually comes through here instead.
-        .accessibilityHint("Opens in browser")
+        .accessibilityHint(hint)
     }
 
     // MARK: - Version footer
@@ -467,9 +553,22 @@ nonisolated enum RemindersRowState: Equatable, Sendable {
     }
 }
 
+// MARK: - Telemetry
+
+/// Settings' row-tap analytics. Pure property builder, tested directly.
+nonisolated enum SettingsTelemetry {
+    static let rowTappedEvent = "settings_row_tapped"
+
+    static func rowTappedProperties(row: String, route: FeedbackMail.Route?) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = ["row": .string(row)]
+        if let route { props["route"] = .string(route.rawValue) }
+        return props
+    }
+}
+
 // MARK: - Bundle version helpers
 
-private extension Bundle {
+extension Bundle {
     var shortVersion: String {
         (object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
     }
