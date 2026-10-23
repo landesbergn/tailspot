@@ -3,10 +3,9 @@
 //  Tailspot
 //
 //  Pure display helpers for the windowed leaderboard (dynamic-leaderboards
-//  PR2): the reset-countdown lines, the champion-banner copy, and the
-//  YOUR STANDING card with its goal line ("N PTS TO PASS #17 @x", every
-//  window). Kept out of
-//  the view so the string/date math is unit-testable with injected
+//  PR2): the reset countdown, the champion-banner copy, and the standing
+//  line under the switcher ("You're 18th this week" / "10 points behind
+//  @randy98 · resets in 2d 9h", every window). Kept out of the view so the string/date math is unit-testable with injected
 //  locale/timezone/now — the views call these with the device defaults.
 //
 //  Wire types (`LeaderboardWindow`, `LeaderboardChampion`, `resetsAt`) live
@@ -17,60 +16,48 @@ import Foundation
 
 // MARK: - Reset countdown
 
-/// Formats the "RESETS …" caption under the window switcher. All output is
-/// computed in the CALLER'S timezone/locale (defaults: the device) — the
-/// backend speaks UTC instants but the user never sees "UTC". No live
-/// ticking: the label is recomputed per render, which is plenty for a
-/// days/hours readout.
+/// The reset countdown, folded into the standing line's subtitle
+/// ("10 points behind @randy98 · resets in 2d 9h"). All output is computed
+/// in the CALLER'S timezone/locale (defaults: the device) — the backend
+/// speaks UTC instants but the user never sees "UTC". No live ticking: the
+/// text is recomputed per render, which is plenty for a days/hours readout.
 nonisolated enum LeaderboardCountdown {
 
-    /// Week tab: "RESETS MONDAY · 2D 14H LEFT". The weekday is the LOCAL
-    /// weekday of the reset instant (a Monday-00:00-UTC reset is still
-    /// Sunday evening in California — that's the honest local answer).
-    static func weekLabel(resetsAt: Date,
-                          now: Date,
-                          locale: Locale = .current,
-                          timeZone: TimeZone = .current) -> String {
-        let weekday = resetWeekday(resetsAt: resetsAt, locale: locale, timeZone: timeZone)
-
-        let remaining = max(0, resetsAt.timeIntervalSince(now))
-        let totalHours = Int(remaining / 3600)
-        let days = totalHours / 24
-        let hours = totalHours % 24
-        let left: String
-        if days > 0 {
-            left = "\(days)D \(hours)H LEFT"
-        } else if hours > 0 {
-            left = "\(hours)H LEFT"
-        } else {
-            left = "UNDER 1H LEFT"
-        }
-        return "RESETS \(weekday) · \(left)"
+    /// Whole days and hours left, floored; a reset already passed (stale
+    /// cached response) clamps to zero rather than going negative.
+    static func remaining(resetsAt: Date, now: Date) -> (days: Int, hours: Int) {
+        let totalHours = Int(max(0, resetsAt.timeIntervalSince(now)) / 3600)
+        return (totalHours / 24, totalHours % 24)
     }
 
-    /// "MONDAY" — the LOCAL weekday of the reset instant, uppercased, as
-    /// `weekLabel` prints it.
-    static func resetWeekday(resetsAt: Date,
-                             locale: Locale = .current,
-                             timeZone: TimeZone = .current) -> String {
-        let fmt = DateFormatter()
-        fmt.locale = locale
-        fmt.timeZone = timeZone
-        fmt.dateFormat = "EEEE"
-        return fmt.string(from: resetsAt).uppercased(with: locale)
+    /// Week tab: "resets in 2d 14h" / "resets in 14h" / "resets in under 1h".
+    static func weekProse(resetsAt: Date, now: Date) -> String {
+        let (days, hours) = remaining(resetsAt: resetsAt, now: now)
+        if days > 0 { return "resets in \(days)d \(hours)h" }
+        if hours > 0 { return "resets in \(hours)h" }
+        return "resets in under 1h"
     }
 
-    /// Month tab: "RESETS AUG 1". Localized month-day order via the
-    /// "MMMd" template (en_GB renders "RESETS 1 AUG"); wraps cleanly
-    /// across year boundaries ("RESETS JAN 1").
-    static func monthLabel(resetsAt: Date,
+    /// VoiceOver for `weekProse`: "resets in 2 days, 14 hours".
+    static func weekSpoken(resetsAt: Date, now: Date) -> String {
+        let (days, hours) = remaining(resetsAt: resetsAt, now: now)
+        func unit(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
+        if days > 0 { return "resets in \(unit(days, "day")), \(unit(hours, "hour"))" }
+        if hours > 0 { return "resets in \(unit(hours, "hour"))" }
+        return "resets in under an hour"
+    }
+
+    /// Month tab: "resets Aug 1". Localized month-day order via the "MMMd"
+    /// template (en_GB renders "resets 1 Aug"); the LOCAL date of the reset
+    /// instant, so an Aug-1-UTC reset reads "Jul 31" in California.
+    static func monthProse(resetsAt: Date,
                            locale: Locale = .current,
                            timeZone: TimeZone = .current) -> String {
         let fmt = DateFormatter()
         fmt.locale = locale
         fmt.timeZone = timeZone
         fmt.setLocalizedDateFormatFromTemplate("MMMd")
-        return "RESETS " + fmt.string(from: resetsAt).uppercased(with: locale)
+        return "resets " + fmt.string(from: resetsAt)
     }
 }
 
@@ -110,8 +97,8 @@ nonisolated enum ChampionBanner {
 
 // MARK: - Race gap
 
-/// The "how far to the next spotter" goal on the YOUR STANDING card in the
-/// leaderboard's fixed header: "51 PTS TO PASS #10 @planespotter". One per
+/// The "how far to the next spotter" goal on the standing line under the
+/// leaderboard switcher: "50 points behind @planespotter". One per
 /// window (WEEK, MONTH, ALL TIME), each built from that window's own board —
 /// no extra request.
 ///
@@ -121,7 +108,7 @@ nonisolated enum ChampionBanner {
 /// is the row position among visible, handled spotters. Indexing
 /// `entries[me.rank - 2]` would point at the wrong person whenever a hidden
 /// device has points — so the target is the row above MY ROW, and the "#N"
-/// printed is that row's own printed rank (see `StandingCard`).
+/// kept is that row's own printed rank (see `StandingLine`).
 nonisolated struct RaceGap: Equatable, Sendable {
 
     enum Target: Equatable, Sendable {
@@ -133,7 +120,12 @@ nonisolated struct RaceGap: Equatable, Sendable {
         /// needed to earn a row. Never used for handle-less devices — the
         /// backend lists only handled devices, so no number of points
         /// earns them a row.
-        case makeBoard
+        ///
+        /// `full`: the board already has its 50 rows, so the goal is
+        /// beating the last one ("31 points to make the top 50"); with
+        /// room left, any point earns a row ("1 point to get on the
+        /// board").
+        case makeBoard(full: Bool)
     }
 
     let target: Target
@@ -214,9 +206,9 @@ nonisolated struct RaceGap: Equatable, Sendable {
             // Belt and braces for a strand the marker missed: a device
             // with points that still isn't a row on a board with room can't
             // be listed, and the gap below comes out ≤ 0 and hides.
-            target = .makeBoard
             let boardFull = entries.count >= LeaderboardResponse.displayLimit
                 || (response.totalCatchers ?? 0) >= LeaderboardResponse.displayLimit
+            target = .makeBoard(full: boardFull)
             if boardFull {
                 gap = entries[entries.count - 1].points - myPoints + 1
             } else {
@@ -227,28 +219,26 @@ nonisolated struct RaceGap: Equatable, Sendable {
         return RaceGap(target: target, points: gap)
     }
 
-    /// The whole line: "51 PTS TO PASS #10 @planespotter" / "1 PT TO MAKE
-    /// THE BOARD". "To pass" (not "behind") because the number already
-    /// includes the +1 a tie needs. Names both the place and the person.
-    /// Fits one line at default type; wraps at large Dynamic Type.
-    var headline: String {
-        let goal: String
+    /// The goal in prose, for the standing line's subtitle.
+    ///
+    /// - pass: "10 points behind @randy98" — the honest distance, i.e.
+    ///   `points - 1`, since `points` includes the extra point a tie needs
+    ///   (ties break by registration time). Level on points reads "1 point
+    ///   to pass @randy98", because "0 points behind" would be no goal.
+    /// - make the board: "31 points to make the top 50" on a full board,
+    ///   "1 point to get on the board" with room left.
+    var prose: String {
         switch target {
-        case .pass(let handle, let rank): goal = "TO PASS #\(rank) @\(handle)"
-        case .makeBoard:                  goal = "TO MAKE THE BOARD"
+        case .pass(let handle, _):
+            let behind = points - 1
+            return behind == 0
+                ? "1 point to pass @\(handle)"
+                : "\(Self.pointsText(behind)) behind @\(handle)"
+        case .makeBoard(let full):
+            return full
+                ? "\(Self.pointsText(points)) to make the top \(LeaderboardResponse.displayLimit)"
+                : "\(Self.pointsText(points)) to get on the board"
         }
-        return "\(Self.pts(points)) \(goal)"
-    }
-
-    /// VoiceOver prose for `headline`: "51 points to pass planespotter, at
-    /// number 10".
-    var spoken: String {
-        let goal: String
-        switch target {
-        case .pass(let handle, let rank): goal = "to pass \(handle), at number \(rank)"
-        case .makeBoard:                  goal = "to make the board"
-        }
-        return "\(Self.spokenPoints(points)) \(goal)"
     }
 
     /// Analytics `target` value for `leaderboard_gap_shown`.
@@ -268,30 +258,28 @@ nonisolated struct RaceGap: Equatable, Sendable {
         }
     }
 
-    static func spokenPoints(_ value: Int) -> String {
+    static func pointsText(_ value: Int) -> String {
         "\(value.formatted(.number)) point\(value == 1 ? "" : "s")"
-    }
-
-    static func pts(_ value: Int) -> String {
-        value == 1 ? "1 PT" : "\(value.formatted(.number)) PTS"
     }
 }
 
-// MARK: - Your standing card
+// MARK: - Standing line
 
-/// The YOUR STANDING card in the leaderboard's fixed header (Noah,
-/// 2026-10-22: "it should include your standing … and the number of points
-/// to the person / place in the standing above you"):
+/// The standing line under the WEEK / MONTH / ALL TIME switcher (Noah's
+/// option "D · One sentence", 2026-10-23), centred:
 ///
-///     18  @noah                         100  YOU
-///     11 PTS TO PASS #17 @randy98
+///         You're 18th this week
+///   10 points behind @randy98 · resets in 2d 9h
 ///
-/// RANK CONSISTENCY: when I'm a row on the board, the card prints MY ROW's
-/// rank and points, and the goal names the row above by ITS printed rank —
-/// so every number on the card matches a number in the list. `me.rank`
-/// (which also counts hidden handle-less/disabled devices; see `RaceGap`)
-/// is used only when I'm not a row, where there is no row to disagree with.
-nonisolated struct StandingCard: Equatable, Sendable {
+/// It replaced the YOUR STANDING card (rank, handle, points, YOU pill and a
+/// goal line), which read as busy. The ordinal is the only number in the
+/// heading; the subtitle holds the gap and, on week and month, the reset.
+///
+/// RANK CONSISTENCY: the ordinal is MY ROW's printed rank, so it always
+/// matches the list. `me.rank` (which also counts hidden handle-less and
+/// disabled devices; see `RaceGap`) is never printed: when I'm not a row
+/// the heading says "You're not on the board yet".
+nonisolated struct StandingLine: Equatable, Sendable {
 
     enum GoalLine: Equatable, Sendable {
         /// Points to the row above (or to make the board).
@@ -301,90 +289,154 @@ nonisolated struct StandingCard: Equatable, Sendable {
         case leading(handle: String, points: Int)
     }
 
-    /// Rank to print; 0 = unranked ("—").
+    /// My row's printed rank; 0 when I'm not a row on the board.
     let rank: Int
-    /// My handle as the card prints it, nil for a handle-less device
-    /// ("(you)" plus the claim-a-handle hint, no goal line).
+    /// My handle, nil for a handle-less device (claim-a-handle hint, no
+    /// goal).
     let handle: String?
-    let points: Int
     let goal: GoalLine?
+    /// "this week" / "this month" / "all time"; nil on the pre-windows
+    /// backend, whose single board isn't any one window's.
+    let windowPhrase: String?
 
-    /// The card for this window's response, or nil when there's no `me`
-    /// (not registered, or a disabled device).
+    /// The line for this window's response, or nil when there's no `me`
+    /// (not registered, or a disabled device) — the view then shows the
+    /// reset alone.
     ///
-    /// The goal line is left out on the pre-windows backend (its board is
+    /// The goal is left out on the pre-windows backend (its board is
     /// all-time even when filed under `.week`), for a handle-less device,
     /// and wherever `RaceGap.compute` hides (stranded handle, empty board…).
     static func compute(response: LeaderboardResponse,
                         window: LeaderboardWindow,
                         myHandle: String?,
-                        handleConfirmed: Bool) -> StandingCard? {
-        guard let me = response.me else { return nil }
+                        handleConfirmed: Bool) -> StandingLine? {
+        guard response.me != nil else { return nil }
         let entries = response.displayedEntries
         let myIndex = myHandle.flatMap { handle in
             entries.firstIndex { $0.isHandle(handle) }
         }
-
-        let rank = myIndex.map { entries[$0].rank } ?? me.rank
-        let points = myIndex.map { entries[$0].points } ?? me.points
+        let windowMatches = response.window == window.rawValue
 
         let goal: GoalLine?
-        if myHandle == nil || response.window != window.rawValue {
+        if myHandle == nil || !windowMatches {
             goal = nil
         } else if myIndex == 0 {
             // First on the board: a positive line about the row below.
-            // Alone on the board → nothing to lead (the "1" says it).
+            // Alone on the board → nothing to lead (the "1st" says it).
             goal = entries.count > 1
-                ? .leading(handle: entries[1].handle, points: max(0, points - entries[1].points))
+                ? .leading(handle: entries[1].handle,
+                           points: max(0, entries[0].points - entries[1].points))
                 : nil
         } else {
             goal = RaceGap.compute(response: response, window: window,
                                    myHandle: myHandle, handleConfirmed: handleConfirmed)
                 .map(GoalLine.gap)
         }
-        return StandingCard(rank: rank, handle: myHandle, points: points, goal: goal)
+        return StandingLine(rank: myIndex.map { entries[$0].rank } ?? 0,
+                            handle: myHandle,
+                            goal: goal,
+                            windowPhrase: windowMatches ? window.standingPhrase : nil)
     }
 
-    /// The race gap, when the goal line is one (telemetry reports these).
+    /// The race gap, when the goal is one (telemetry reports these).
     var raceGap: RaceGap? {
         if case .gap(let gap) = goal { return gap }
         return nil
     }
 
-    /// "18" or "—" (unranked).
-    var rankText: String { rank >= 1 ? "\(rank)" : "—" }
+    var isOnBoard: Bool { rank >= 1 }
 
-    /// The second line of the card, or nil.
-    var goalText: String? {
+    /// "18th", drawn in Brand cyan inside the heading; nil off the board.
+    var ordinal: String? { isOnBoard ? Ordinal.english(rank) : nil }
+
+    /// What follows the ordinal: " this week", or "" on the old backend.
+    var headingSuffix: String { windowPhrase.map { " \($0)" } ?? "" }
+
+    /// "You're 18th this week" / "You're not on the board yet".
+    var heading: String {
+        ordinal.map { "You're \($0)\(headingSuffix)" } ?? "You're not on the board yet"
+    }
+
+    /// The goal (or the claim-a-handle hint), without the reset.
+    var detail: String? {
         switch goal {
         case .gap(let gap)?:
-            return gap.headline
+            return gap.prose
         case .leading(let handle, let lead)?:
             return lead == 0
-                ? "AHEAD OF @\(handle) ON THE TIEBREAK"
-                : "LEADING @\(handle) BY \(RaceGap.pts(lead))"
+                ? "Tied with @\(handle), ahead on the tiebreak"
+                : "\(RaceGap.pointsText(lead)) ahead of @\(handle)"
         case nil:
-            return nil
+            return handle == nil ? Self.claimHint : nil
         }
     }
 
-    /// VoiceOver for the whole card: "Your standing: rank 18, 100 points.
-    /// 11 points to pass randy98, at number 17."
-    var spoken: String {
-        var text = "Your standing: "
-            + (rank >= 1 ? "rank \(rank)" : "not ranked yet")
-            + ", \(RaceGap.spokenPoints(points))."
-        switch goal {
-        case .gap(let gap)?:
-            text += " \(gap.spoken.prefix(1).uppercased())\(gap.spoken.dropFirst())."
-        case .leading(let handle, let lead)?:
-            text += lead == 0
-                ? " Ahead of \(handle) on the tiebreak."
-                : " Leading \(handle) by \(RaceGap.spokenPoints(lead))."
-        case nil:
-            break
+    static let claimHint = "Claim a handle in Profile → Settings to join"
+
+    /// The second line: detail and reset joined by " · ", first letter
+    /// capitalised ("Resets in 2d 9h" when the reset stands alone). Nil when
+    /// both are missing. Static so the view can show the reset with no
+    /// standing at all (unregistered device).
+    ///
+    /// The reset phrase and the "·" before it use no-break spaces, so a
+    /// narrow screen wraps between the two halves ("… @flydelta ·" /
+    /// "resets in 2d 14h") instead of orphaning "2d 14h" on its own line.
+    static func subtitle(detail: String?, reset: String?) -> String? {
+        let nbsp = "\u{00A0}"
+        let keptReset = reset.map { $0.replacingOccurrences(of: " ", with: nbsp) }
+        let parts = [detail, keptReset].compactMap { $0 }.filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        let joined = parts.joined(separator: "\(nbsp)· ")
+        return joined.prefix(1).uppercased() + joined.dropFirst()
+    }
+
+    /// VoiceOver for the whole line: "You're 18th this week. 10 points
+    /// behind randy98. Resets in 2 days, 9 hours." `spokenReset` is the
+    /// countdown's spoken form ("resets in 2 days, 9 hours").
+    static func spoken(_ line: StandingLine?, spokenReset: String?) -> String {
+        var sentences: [String] = []
+        if let line {
+            sentences.append(line.heading)
+            if let detail = line.detail {
+                sentences.append(detail
+                    .replacingOccurrences(of: "@", with: "")
+                    .replacingOccurrences(of: " → ", with: ", "))
+            }
         }
-        return text
+        if let spokenReset { sentences.append(spokenReset) }
+        return sentences
+            .map { ($0.prefix(1).uppercased() + $0.dropFirst()) + "." }
+            .joined(separator: " ")
+    }
+}
+
+extension LeaderboardWindow {
+    /// The window as the standing heading says it: "this week" /
+    /// "this month" / "all time".
+    nonisolated var standingPhrase: String {
+        switch self {
+        case .week:  return "this week"
+        case .month: return "this month"
+        case .all:   return "all time"
+        }
+    }
+}
+
+/// English ordinals: 1st 2nd 3rd 4th 11th 12th 13th 21st 22nd 101st 111th.
+/// Hand-rolled rather than `NumberFormatter(.ordinal)` because the
+/// sentence around it is English; a device in French would otherwise read
+/// "You're 18e this week".
+nonisolated enum Ordinal {
+    static func english(_ n: Int) -> String {
+        let suffix: String
+        switch (n % 100, n % 10) {
+        case (11...13, _): suffix = "th"
+        case (_, 1):       suffix = "st"
+        case (_, 2):       suffix = "nd"
+        case (_, 3):       suffix = "rd"
+        default:           suffix = "th"
+        }
+        return n.formatted(.number) + suffix
     }
 }
 
