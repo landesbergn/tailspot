@@ -177,7 +177,16 @@ struct OnboardingFlow: View {
                   status != .notDetermined else { return }
             locationOutcomeReported = true
             let granted = status == .authorizedWhenInUse || status == .authorizedAlways
-            ActivationTelemetry.firePermissionOutcome(permission: "location", granted: granted)
+            // Precise vs approximate (the "Precise Location" switch in the
+            // iOS prompt). It's an app-wide setting, so a fresh
+            // CLLocationManager reads the same value without touching
+            // LocationManager. Only meaningful when location was granted.
+            let accuracy = granted
+                ? ActivationTelemetry.locationAccuracyName(CLLocationManager().accuracyAuthorization)
+                : nil
+            ActivationTelemetry.firePermissionOutcome(
+                permission: "location", granted: granted, locationAccuracy: accuracy
+            )
         }
     }
 
@@ -358,7 +367,9 @@ struct OnboardingFlow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    // A semantic text style (not a fixed point size) so
+                    // the row title scales with Dynamic Type like its body.
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(body)
                     .font(Brand.Font.caption)
