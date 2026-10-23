@@ -159,3 +159,22 @@ export function guessBonus(base: number, kind: GuessKind, caughtAt: Date): numbe
       : GUESS_BONUS_FRACTIONS[kind];
   return Math.round(base * fraction);
 }
+
+/**
+ * The guess re-credit cutover (POST /v1/catches/:catchUuid/guess). From 1.1.0
+ * through 1.2.2 the app uploaded a catch before its bonus-round guess resolved,
+ * so those rows reached the server with no guess. 1.2.3 (#355) holds the upload
+ * until the guess resolves and adds a one-time sweep that sends the old guesses.
+ *
+ * Only catches the server INSERTED (`created_at`) before this instant can be
+ * re-credited, because a re-credited ROUTE guess trusts the phone's own frozen
+ * verdict (the server keeps only the callsign, and re-checking an old flight
+ * number against today's route data was rejected as wrong). The bound keeps
+ * that trust a one-time backfill instead of a standing way to claim a bonus.
+ *
+ * Chosen as 2026-11-16T00:00:00Z: comfortably after 1.2.3 is expected to reach
+ * the App Store, so catches made on 1.2.2 in the weeks before people update are
+ * still covered. Move it if 1.2.3 ships later than that; after it passes the
+ * endpoint answers every call with 409 and the sweep stops trying.
+ */
+export const GUESS_RECREDIT_CUTOVER = new Date("2026-11-16T00:00:00Z");

@@ -20,6 +20,22 @@
  *       401 bad/absent token
  *       422 malformed body
  *
+ *   POST /v1/catches/:catchUuid/guess   (auth required; one-time backfill)
+ *     body { kind: "route"|"type", value: string, localCorrect: boolean }
+ *     → 200 { applied, points, guessKind, guessCorrect }
+ *         applied:true  — the guess was stored and the catch re-scored
+ *         applied:false — the catch already had a guess; nothing changed
+ *       404 { code: "catch_not_found" }  not this device's catch
+ *       409 { code: "after_cutover" }    inserted after GUESS_RECREDIT_CUTOVER
+ *       401 / 422 / 429 as above
+ *     Clients 1.1.0 to 1.2.2 uploaded each catch before its bonus-round guess
+ *     resolved, so ~1,950 correct guesses never earned their bonus. The 1.2.3
+ *     client sends each stored guess here once. TYPE guesses are verified on
+ *     the server; ROUTE guesses trust `localCorrect` (see points.ts,
+ *     GUESS_RECREDIT_CUTOVER). The `code` field lets the client tell this
+ *     route's 404 apart from the framework 404 an older server returns for an
+ *     unknown route.
+ *
  * Server-side resolution: the icao24 is looked up in the metadata store →
  * typecode → rarity → points. The client sends NO points/rarity (deliberately);
  * we never trust client scoring.
@@ -42,7 +58,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { type GuessKind, isGuessKind } from "../catches/points.js";
+import { GUESS_RECREDIT_CUTOVER, type GuessKind, isGuessKind } from "../catches/points.js";
 import {
   type AircraftPosition,
   type ObserverPose,
@@ -66,6 +82,14 @@ export interface CatchesRouteOptions {
   deleteLimiter?: RateLimiter;
   /** Per-device write limiter for catches. */
   catchLimiter: RateLimiter;
+  /**
+   * Per-device limiter for the one-time guess re-credit. Its own bucket: the
+   * sweep can send a few hundred calls for a heavy user, and that must not
+   * spend the budget a fresh catch upload needs. Defaults to `catchLimiter`.
+   */
+  guessRecreditLimiter?: RateLimiter;
+  /** Override for GUESS_RECREDIT_CUTOVER (tests). */
+  guessRecreditCutover?: Date;
   /**
    * Per-device read limiter for GET /v1/catches. The honest client reads this
    * endpoint a handful of times per launch (one probe, then 500-row pages), so
@@ -245,6 +269,71 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
       });
     }
     return reply.code(204).send();
+  });
+
+  // ── POST /v1/catches/:catchUuid/guess — one-time late-guess re-credit ──
+  // Scoped by the bearer token like every catches route: a device can only
+  // re-credit its own catch. Metered per-IP before auth, per-device after.
+  // Deliberately does NOT fire `onCatchIngested`: a sweep re-crediting dozens
+  // of old catches must not set off a burst of "someone passed you" pushes.
+  // Live challenge placements catch up at the next real catch.
+  const recreditCutover = opts.guessRecreditCutover ?? GUESS_RECREDIT_CUTOVER;
+  app.post("/v1/catches/:catchUuid/guess", async (request, reply) => {
+    if (ipLimited(request, reply)) return reply;
+
+    const device = await resolveDevice(identityStore, request.headers.authorization);
+    if (!device) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
+    const rl = (opts.guessRecreditLimiter ?? catchLimiter).take(`device:${device.id}`);
+    if (!rl.allowed) {
+      reply.header("Retry-After", String(rl.retryAfterSeconds));
+      return reply.code(429).send({ error: "rate limited" });
+    }
+
+    const { catchUuid } = request.params as { catchUuid: string };
+    if (!UUID_RE.test(catchUuid)) {
+      return reply.code(422).send({ error: "catchUuid must be a uuid" });
+    }
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (!isGuessKind(body.kind)) {
+      return reply.code(422).send({ error: 'kind must be "route" or "type"' });
+    }
+    // Same normalization and bound as the upload route's guess block.
+    const value = typeof body.value === "string" ? body.value.trim().toUpperCase() : "";
+    if (value === "" || value.length > GUESS_VALUE_MAX_LENGTH) {
+      return reply.code(422).send({ error: "value must be a short non-empty string" });
+    }
+    if (typeof body.localCorrect !== "boolean") {
+      return reply.code(422).send({ error: "localCorrect must be a boolean" });
+    }
+
+    const result = await catchStore.recreditGuess(
+      device.id,
+      catchUuid,
+      { kind: body.kind, value, localCorrect: body.localCorrect },
+      recreditCutover,
+    );
+    request.log.info(
+      { deviceId: device.id, kind: body.kind, status: result.status },
+      "guess re-credit",
+    );
+    switch (result.status) {
+      case "not_found":
+        return reply.code(404).send({ error: "catch not found", code: "catch_not_found" });
+      case "after_cutover":
+        return reply
+          .code(409)
+          .send({ error: "catch is newer than the re-credit cutover", code: "after_cutover" });
+      default:
+        return reply.code(200).send({
+          applied: result.status === "applied",
+          points: result.state.points,
+          guessKind: result.state.guessKind,
+          guessCorrect: result.state.guessCorrect,
+        });
+    }
   });
 
   // (device, reason) pairs already logged at warn. A stuck catch is retried on

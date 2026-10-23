@@ -384,6 +384,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const catchLimiter = new RateLimiter({ capacity: 60, windowMs: 60_000 }, rlNow); // 60/min per device
   // Hangar deletes: their own bucket so a bulk delete can't starve uploads.
   const catchDeleteLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per device
+  // The one-time guess re-credit sweep: its own bucket so a few hundred
+  // back-to-back calls can't starve uploads. The client paces itself under it.
+  const guessRecreditLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow); // 120/min per device
   const suggestLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow); // 30/min per IP
   // 120/min per IP on the position poll. The client polls every 10 s normally
   // and every 2 s when data-starved (30/min worst case per phone), so this is
@@ -400,7 +403,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // 120/min per IP across ALL bearer routes, taken BEFORE the token lookup so
   // unauthenticated probing is metered — previously a bad token cost the
   // attacker one request and cost us a database round-trip, unbounded. Shared
-  // by PUT /v1/devices/me/handle, GET /v1/catches and POST /v1/catches; the
+  // by PUT /v1/devices/me/handle and every /v1/catches route; the
   // per-device limiters still apply after auth.
   const bearerIpLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
   // Challenges (spec §10.3). Per-device limits are abuse ceilings, not product
@@ -690,6 +693,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     scoreCatch: (icao, opts) => getCatchStore().scoreCatch(icao, opts),
     isFirstOfType: (deviceId, typecode) => getCatchStore().isFirstOfType(deviceId, typecode),
     insertOrGet: (c) => getCatchStore().insertOrGet(c),
+    recreditGuess: (id, uuid, g, cutover) => getCatchStore().recreditGuess(id, uuid, g, cutover),
     listCatches: (id, limit, offset) => getCatchStore().listCatches(id, limit, offset),
     deleteCatch: (id, catchUuid) => getCatchStore().deleteCatch(id, catchUuid),
     leaderboard: (n, since) => getCatchStore().leaderboard(n, since),
@@ -728,6 +732,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     catchStore: catchesStore,
     catchLimiter,
     deleteLimiter: catchDeleteLimiter,
+    guessRecreditLimiter,
     listLimiter: catchesListLimiter,
     bearerIpLimiter,
     // Route-guess verification shares the /v1/routes resolver (same cache).
