@@ -1081,12 +1081,13 @@ struct ContentView: View {
                     releaseGuessHold(for: reveal)
                 },
                 streakDays: reveal.streakDays,
+                isSimulated: reveal.isSimulated,
                 loader: reveal.loader
             )
             .presentationBackground(.clear)
         }
         // Multi-catch reveal — N≥2 catch cards staggered in with a
-        // chime+haptic per fresh card, combo banner climbing across
+        // chime+haptic per fresh card, MULTI-CATCH banner climbing across
         // the reveal, ALREADY CAUGHT stamps inline on duplicates.
         // T11 routes every (fresh+dup) total ≥ 2 through here from
         // `presentReveal`.
@@ -1493,7 +1494,7 @@ struct ContentView: View {
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
     /// preserve both fresh + duplicate icaos so the reveal can render
     /// the ALREADY CAUGHT stamp inline (T11). The dedupe + dedup-
-    /// counted combo math live in the view itself.
+    /// counted points math live in the view itself.
     struct PendingMultiReveal: Identifiable, Equatable {
         let id = UUID()
         let entries: [MultiCatchReveal.Entry]
@@ -2955,7 +2956,7 @@ struct ContentView: View {
     ///   `pendingMultiReveal`. Fresh and dup entries are interleaved
     ///   in the same order they were captured; the reveal renders
     ///   ALREADY CAUGHT stamps inline on dups and only credits fresh
-    ///   tails toward the combo + points (T11).
+    ///   tails toward the count + points (T11).
     ///
     /// Duplicate-only case (single dup): synthesizes a `CardPlane`
     /// from the already-stored row + (when available) the current
@@ -3154,9 +3155,16 @@ struct ContentView: View {
         // than dropping the whole reveal.
         if totalCount >= 2 {
             var entries: [MultiCatchReveal.Entry] = []
-            for c in newCatches {
+            // First-of-type per the server's rule: one bonus per typecode the
+            // Hangar didn't already hold, even when the run has two of it.
+            let heldTypecodes = Set(catches
+                .filter { row in !newCatches.contains { $0 === row } }
+                .compactMap(\.typecode))
+            let firstOfType = MultiCatchReveal.runFirstOfType(
+                typecodes: newCatches.map(\.typecode), heldTypecodes: heldTypecodes)
+            for (c, isFirst) in zip(newCatches, firstOfType) {
                 let observed = visibleByIcao[c.icao24]
-                let plane = cardPlane(from: c, observed: observed)
+                let plane = cardPlane(from: c, observed: observed, firstOfType: isFirst)
                 entries.append(.init(plane: plane, isDuplicate: false))
             }
             for dupIcao in duplicates {
@@ -3230,7 +3238,12 @@ struct ContentView: View {
     /// borrowing live alt/speed values from `observed` when the
     /// catch is still in view. Used by both the new-catch and
     /// duplicate paths so the reveal renders consistently.
-    private func cardPlane(from row: Catch, observed: ObservedAircraft?) -> CardPlane {
+    ///
+    /// `firstOfType` overrides the Hangar scan below. The multi-catch path
+    /// passes it because the scan can't tell a run's own rows apart (see
+    /// `MultiCatchReveal.runFirstOfType`).
+    private func cardPlane(from row: Catch, observed: ObservedAircraft?,
+                           firstOfType: Bool? = nil) -> CardPlane {
         let canonical = AircraftNaming.canonical(
             typecode: row.typecode,
             manufacturer: row.manufacturer,
@@ -3247,7 +3260,7 @@ struct ContentView: View {
             ?? row.displayDest
         // First-of-type: no *other* Hangar row shares this typecode. Display
         // only — the reveal ledger mirrors what the backend awards.
-        let isFirstOfType = row.typecode.map { tc in
+        let isFirstOfType = firstOfType ?? row.typecode.map { tc in
             !catches.contains { $0 !== row && $0.typecode == tc }
         } ?? false
         // Guess bonus (game-layer PR3; route-only per Noah 2026-07-09): a
@@ -3287,7 +3300,8 @@ struct ContentView: View {
             destName: observed?.aircraft.destName ?? row.destName,
             isFirstOfType: isFirstOfType,
             guessKind: guessKind,
-            guessBonusPoints: guessBonusPoints
+            guessBonusPoints: guessBonusPoints,
+            icao24: row.icao24
         )
     }
 
@@ -3348,7 +3362,8 @@ struct ContentView: View {
             altText: CardPlane.altText(fromMeters: aircraft.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
             distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
-            isFirstOfType: isFirstOfType
+            isFirstOfType: isFirstOfType,
+            icao24: aircraft.icao24
         )
     }
 
