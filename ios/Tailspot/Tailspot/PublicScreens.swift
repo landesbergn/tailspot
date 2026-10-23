@@ -270,10 +270,9 @@ struct LeaderboardScreen: View {
         // Vertical density (Noah, 2026-10-23): inset-grouped's default
         // section gaps (~35 pt) and its 44 pt row floor spread the board
         // out. Compact section spacing, a small top margin under the fixed
-        // header, and a lower row floor fit roughly two more rows on screen.
+        // header, and slimmer row insets (in leaderRow) fit more rows on screen.
         .listSectionSpacing(.compact)
         .contentMargins(.top, 4, for: .scrollContent)
-        .environment(\.defaultMinListRowHeight, 36)
         .refreshable { await load(window) }
     }
 
@@ -532,7 +531,17 @@ struct LeaderboardScreen: View {
                 .foregroundStyle(Brand.Color.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Spacer()
+            // YOU sits right after the name (Noah, 2026-10-23): at the far
+            // end it crowded the points column and read as part of it.
+            if isMe {
+                Text("YOU")
+                    .font(Brand.Font.mono(size: 9, weight: .bold))
+                    .foregroundStyle(.black.opacity(0.85))
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Brand.Color.cyan, in: .capsule)
+                    .fixedSize()
+            }
+            Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(entry.points.formatted(.number))")
                     .font(Brand.Font.mono(size: 13, weight: .bold, relativeTo: .footnote))
@@ -545,15 +554,8 @@ struct LeaderboardScreen: View {
             // The points column never yields to a long handle — the handle
             // shrinks/truncates instead (its minimumScaleFactor above).
             .layoutPriority(1)
-            if isMe {
-                Text("YOU")
-                    .font(Brand.Font.mono(size: 9, weight: .bold))
-                    .foregroundStyle(.black.opacity(0.85))
-                    .padding(.horizontal, 5).padding(.vertical, 1)
-                    .background(Brand.Color.cyan, in: .capsule)
-            }
         }
-        .listRowInsets(.vertical, 6)
+        .listRowInsets(.vertical, 10)
         .listRowBackground(isMe
             ? Brand.Color.cyan.opacity(0.12)
             : Color.clear)
