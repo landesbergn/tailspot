@@ -46,6 +46,25 @@ struct NotificationReofferTests {
         #expect(reoffer(enabled: false) == nil)
     }
 
+    /// "Not now" isn't re-asked the same day: a new spotter can decline on
+    /// their first catch, open the Week board and catch again within
+    /// minutes, which would otherwise earn the weekly-board re-offer.
+    @Test func neverOnTheDayOfTheDecline() {
+        #expect(StreakReminders.reoffer(
+            currentStreak: 1, placedOnWeeklyBoard: true, enabled: true,
+            declined: true, reofferUsed: false, authStatus: .notDetermined,
+            declinedToday: true) == nil)
+        #expect(StreakReminders.reoffer(
+            currentStreak: 3, placedOnWeeklyBoard: false, enabled: true,
+            declined: true, reofferUsed: false, authStatus: .denied,
+            declinedToday: true) == nil)
+        // The next day the same placement earns it.
+        #expect(StreakReminders.reoffer(
+            currentStreak: 1, placedOnWeeklyBoard: true, enabled: true,
+            declined: true, reofferUsed: false, authStatus: .notDetermined,
+            declinedToday: false)?.trigger == .weeklyBoard)
+    }
+
     @Test func iosDenialRoutesToSettings() {
         #expect(reoffer(status: .denied) == .init(trigger: .streak, routesToSettings: true))
     }

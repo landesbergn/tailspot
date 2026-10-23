@@ -63,6 +63,12 @@ nonisolated enum StreakReminders {
     /// re-offer; `permissionAskedKey` stays set, so the FIRST ask never
     /// fires again.
     static let permissionDeclinedKey = "tailspot.streak.permissionDeclined"
+    /// The `Streaks.dayKey` of that "Not now" tap. The re-offer never lands
+    /// on the same day as the decline: a new spotter's first catch, a look
+    /// at the (default) Week board and a second catch can all happen within
+    /// minutes, and "Not now" shouldn't be re-asked that fast. Absent for
+    /// migrated earlier decliners, who declined on some earlier build.
+    static let permissionDeclinedDayKey = "tailspot.streak.permissionDeclinedDay"
     /// The one re-offer has been shown. Latched at presentation, never
     /// cleared (outside the wrench Reset), so it can't repeat.
     static let reofferUsedKey = "tailspot.streak.reofferUsed"
@@ -194,8 +200,9 @@ nonisolated enum StreakReminders {
     }
 
     /// Re-offer eligibility, pure. Only for people who said "Not now" on
-    /// the pre-prompt, at most once ever, never while reminders are muted,
-    /// and only when there's something to offer (iOS hasn't granted).
+    /// the pre-prompt, at most once ever, never on the day they said it,
+    /// never while reminders are muted, and only when there's something to
+    /// offer (iOS hasn't granted).
     /// Trigger is whichever came first: a weekly-board placement is latched
     /// when the leaderboard reports it, so if it's already set it predates
     /// this catch; otherwise a 3-day streak.
@@ -205,9 +212,10 @@ nonisolated enum StreakReminders {
         enabled: Bool,
         declined: Bool,
         reofferUsed: Bool,
-        authStatus: UNAuthorizationStatus
+        authStatus: UNAuthorizationStatus,
+        declinedToday: Bool = false
     ) -> Reoffer? {
-        guard enabled, declined, !reofferUsed else { return nil }
+        guard enabled, declined, !reofferUsed, !declinedToday else { return nil }
         let routesToSettings: Bool
         switch authStatus {
         case .notDetermined: routesToSettings = false

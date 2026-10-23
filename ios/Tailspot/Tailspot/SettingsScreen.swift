@@ -217,8 +217,10 @@ struct SettingsScreen: View {
             HandleEditSheet(source: "settings")
         }
         .sheet(isPresented: $showMailCompose) {
-            MailComposeSheet(versionLine: Bundle.main.tailspotVersionLine)
-                .ignoresSafeArea()
+            MailComposeSheet(versionLine: Bundle.main.tailspotVersionLine) {
+                showMailCompose = false
+            }
+            .ignoresSafeArea()
         }
         .overlay(alignment: .bottom) {
             if let feedbackToast {

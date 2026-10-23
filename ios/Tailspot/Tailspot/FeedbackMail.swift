@@ -58,10 +58,15 @@ nonisolated enum FeedbackMail {
 /// The in-app Mail draft (route 1).
 struct MailComposeSheet: UIViewControllerRepresentable {
     let versionLine: String
+    /// Called when the user sends, saves or cancels. The presenter closes
+    /// the sheet by flipping its own `isPresented` state, so SwiftUI's
+    /// binding and the screen agree (a UIKit-side `dismiss` can leave the
+    /// binding stuck at true, and the next tap then does nothing).
+    var onFinish: () -> Void = {}
 
     static var isAvailable: Bool { MFMailComposeViewController.canSendMail() }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
 
     func makeUIViewController(context: Context) -> MFMailComposeViewController {
         let controller = MFMailComposeViewController()
@@ -75,10 +80,16 @@ struct MailComposeSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: MFMailComposeViewController, context: Context) {}
 
     final class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+        let onFinish: () -> Void
+
+        init(onFinish: @escaping () -> Void) {
+            self.onFinish = onFinish
+        }
+
         func mailComposeController(_ controller: MFMailComposeViewController,
                                    didFinishWith result: MFMailComposeResult,
                                    error: Error?) {
-            controller.dismiss(animated: true)
+            onFinish()
         }
     }
 }

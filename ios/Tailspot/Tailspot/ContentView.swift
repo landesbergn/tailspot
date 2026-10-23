@@ -1766,6 +1766,8 @@ struct ContentView: View {
                 StreakTelemetry.fireAskResponse(accepted: accepted, streakDays: offer.days)
                 if !accepted {
                     UserDefaults.standard.set(true, forKey: StreakReminders.permissionDeclinedKey)
+                    UserDefaults.standard.set(Streaks.dayKey(for: Date()),
+                                              forKey: StreakReminders.permissionDeclinedDayKey)
                 }
             }
         }
@@ -2741,7 +2743,9 @@ struct ContentView: View {
                         enabled: center.remindersEnabled,
                         declined: defaults.bool(forKey: StreakReminders.permissionDeclinedKey),
                         reofferUsed: defaults.bool(forKey: StreakReminders.reofferUsedKey),
-                        authStatus: status
+                        authStatus: status,
+                        declinedToday: defaults.string(
+                            forKey: StreakReminders.permissionDeclinedDayKey) == Streaks.dayKey(for: now)
                     ) {
                         pendingStreakAsk = StreakReminders.Offer(days: current, reoffer: reoffer)
                     }
@@ -3019,6 +3023,7 @@ struct ContentView: View {
                     StreakDebug.clear()
                     for key in [StreakReminders.permissionAskedKey,
                                 StreakReminders.permissionDeclinedKey,
+                                StreakReminders.permissionDeclinedDayKey,
                                 StreakReminders.reofferUsedKey,
                                 StreakReminders.reofferShownAtKey] {
                         UserDefaults.standard.removeObject(forKey: key)
