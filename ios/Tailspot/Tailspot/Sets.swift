@@ -757,6 +757,12 @@ nonisolated enum CardSets {
                   summary: "Thirty-seat regional jet built around the Dornier 328.",
                   representativeTypecode: "J328"),
         ]),
+        .init(id: "fam-avro-rj", type: .regional, title: "BAe 146 / Avro RJ", entries: [
+            .init(id: "farj85", canonicalName: "Avro RJ85", rarity: .rare,
+                  modelTokens: ["avro rj-85 avroliner", "british aerospace rj-85"],
+                  summary: "Four-engine regional jet developed from the BAe 146-200.",
+                  representativeTypecode: "RJ85"),
+        ]),
     ]
 
     private static let familiesGapB: [CardSet] = [
@@ -926,6 +932,10 @@ nonisolated enum CardSets {
             .init(id: "fbe58", canonicalName: "Beechcraft Baron", rarity: .common,
                   modelTokens: ["baron", "be58", "be-58"], summary: "Cabin-class light twin.",
                   representativeTypecode: "BE58"),
+            .init(id: "fbe60", canonicalName: "Beechcraft 60 Duke", rarity: .common,
+                  modelTokens: ["beechcraft 60 duke", "hawker beechcraft 60 duke"],
+                  summary: "Pressurized high-performance piston twin from the Beechcraft line.",
+                  representativeTypecode: "BE60"),
             .init(id: "fbe20", canonicalName: "King Air 200", rarity: .uncommon,
                   modelTokens: ["king air 200", "super king air", "be20", "b200"], summary: "The ubiquitous business turboprop.",
                   representativeTypecode: "BE20",
