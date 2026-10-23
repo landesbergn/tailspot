@@ -661,7 +661,7 @@ What pages Noah, and why each exists (all verified firing or configured
 | **New error** | Sentry issue rule 3591520 "Send a notification for high priority issues" → email | The first event of any new high-priority issue | This is ALL that fired during the outage: one email on 2026-09-25, then 38 silent repeats. |
 | **Ongoing error** | Sentry issue rule "Ongoing error: hourly reminder…" → email, at most hourly per issue | Any error-level issue older than 30 min that keeps producing events | The fix for the row above: a repeat is a page, not a footnote. |
 | **Users see the error pill** | PostHog alert on the `adsb_fetch_error_shown` insight, unique users per hour, checked hourly → email | The client-side view: phones showing "Tailspot unreachable", whatever the cause | Independent of the backend's own opinion; also catches an app-side break. |
-| **iOS crashes** | PostHog alert on `metrickit_crash` (insight qVoxt9uL) | Crashes delivered by MetricKit | Unchanged. |
+| **iOS crashes** | PostHog alert on `metrickit_crash` (insight qVoxt9uL) | Crashes delivered by MetricKit | From 1.2.3 the event fires once per crash (it was once per payload with `crash_count`), so event-count series step up at that version. |
 | **Dead app** | PostHog zero-DAU canary (daily) | A full day with no `Application Opened` | Unchanged. |
 
 **The 2026-10 root cause is not fixed by any of this.** The Fly machine egresses
