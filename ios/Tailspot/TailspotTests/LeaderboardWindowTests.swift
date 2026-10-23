@@ -407,9 +407,9 @@ struct ChampionBannerCopyTests {
     }
 }
 
-// MARK: - Weekly race gap
+// MARK: - Race gap
 
-@Suite("Weekly race gap")
+@Suite("Race gap")
 struct RaceGapTests {
 
     /// The live 2026-10-21 week board shape: two whales, then a tight pack.
@@ -431,32 +431,15 @@ struct RaceGapTests {
         #expect(RaceGap.commonCatchPoints == 10)
     }
 
-    /// Outside the visible Top 10: pass the row directly above, plus the
-    /// separate Top 10 clause.
-    @Test func midPack_passesRowAbove_andReportsTopTen() throws {
+    /// Mid-pack: pass the row directly above.
+    @Test func midPack_passesRowAbove() throws {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 12, points: 45)),
             window: .week, myHandle: "s12", handleConfirmed: true))
         #expect(gap.target == .pass(handle: "s11"))
         #expect(gap.points == 51)            // 95 − 45 + 1
-        #expect(gap.catchesEquivalent == 6)  // ⌈51 / 10⌉
-        #expect(gap.topTenPoints == 101)     // 145 − 45 + 1
+        #expect(gap.catchesEquivalent == 6)  // ⌈51 / 10⌉ (telemetry)
         #expect(gap.headline == "51 PTS TO PASS @s11")
-        #expect(gap.topTenLine == "101 PTS TO THE TOP 10")
-        #expect(gap.detail(resetWeekday: "SUNDAY") == "≈ 6 COMMON CATCHES · RESETS SUNDAY")
-        #expect(gap.detail(resetWeekday: nil) == "≈ 6 COMMON CATCHES")
-    }
-
-    /// Directly below the tenth: the Top 10 IS the pass target, so the
-    /// clause is not repeated.
-    @Test func eleventh_topTenClauseNotRepeated() throws {
-        let gap = try #require(RaceGap.compute(
-            response: week(board(), me: MyStanding(rank: 11, points: 95)),
-            window: .week, myHandle: "s11", handleConfirmed: true))
-        #expect(gap.target == .pass(handle: "s10"))
-        #expect(gap.points == 51)
-        #expect(gap.topTenPoints == nil)
-        #expect(gap.topTenLine == nil)
     }
 
     /// The trap the scope warns about: `me.rank` counts handle-less and
@@ -484,7 +467,6 @@ struct RaceGapTests {
         #expect(gap.points == 1)
         #expect(gap.catchesEquivalent == 1)
         #expect(gap.headline == "1 PT TO PASS @s2")
-        #expect(gap.detail(resetWeekday: nil) == "≈ 1 COMMON CATCH")
     }
 
     @Test func handleMatchIsCaseInsensitive() throws {
@@ -500,44 +482,24 @@ struct RaceGapTests {
             window: .week, myHandle: "s1", handleConfirmed: true) == nil)
     }
 
-    /// Inside the Top 10: pass the row above, no Top 10 clause.
-    @Test func insideTopTen_noTopTenClause() throws {
+    @Test func insideTopTen_passesRowAbove() throws {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 8, points: 215)),
             window: .week, myHandle: "s8", handleConfirmed: true))
         #expect(gap.target == .pass(handle: "s7"))
         #expect(gap.points == 6)
-        #expect(gap.topTenPoints == nil)
     }
 
-    /// #2 trails the whale by 2,345 pts: far past 20 common catches, so the
-    /// line hides instead of showing a hopeless goal.
-    @Test func hugeGap_hidden() {
-        #expect(RaceGap.compute(
-            response: week(board(), me: MyStanding(rank: 2, points: 1360)),
-            window: .week, myHandle: "s2", handleConfirmed: true) == nil)
-    }
-
-    @Test func gapCeilingBoundary() throws {
-        // 200 pts = exactly 20 common catches → shown; 201 → hidden.
-        let shown = try #require(RaceGap.compute(
-            response: week(board([300, 101]), me: MyStanding(rank: 2, points: 101)),
-            window: .week, myHandle: "s2", handleConfirmed: true))
-        #expect(shown.points == 200)
-        #expect(RaceGap.compute(
-            response: week(board([300, 100]), me: MyStanding(rank: 2, points: 100)),
-            window: .week, myHandle: "s2", handleConfirmed: true) == nil)
-    }
-
-    /// The Top 10 clause has its own ceiling: hidden when out of reach even
-    /// though the row-above goal is shown.
-    @Test func topTenClauseHiddenPastCeiling() throws {
-        let points = [900, 800, 700, 600, 500, 450, 420, 400, 390, 380, 60, 50]
+    /// #2 trails the whale by 2,345 pts. Big gaps are no longer hidden:
+    /// Noah wants to see who is ahead and by how much (2026-10-22).
+    @Test func hugeGap_shown() throws {
         let gap = try #require(RaceGap.compute(
-            response: week(board(points), me: MyStanding(rank: 12, points: 50)),
-            window: .week, myHandle: "s12", handleConfirmed: true))
-        #expect(gap.points == 11)
-        #expect(gap.topTenPoints == nil)  // 331 pts away
+            response: week(board(), me: MyStanding(rank: 2, points: 1360)),
+            window: .week, myHandle: "s2", handleConfirmed: true))
+        #expect(gap.target == .pass(handle: "s1"))
+        #expect(gap.points == 2346)
+        #expect(gap.headline == "2,346 PTS TO PASS @s1")
+        #expect(gap.spoken == "2,346 points to pass s1")
     }
 
     /// No handle and nothing caught this week: one point earns a row.
@@ -547,8 +509,8 @@ struct RaceGapTests {
             window: .week, myHandle: "notlisted", handleConfirmed: true))
         #expect(gap.target == .makeBoard)
         #expect(gap.points == 1)
-        #expect(gap.topTenPoints == nil)
         #expect(gap.headline == "1 PT TO MAKE THE BOARD")
+        #expect(gap.spoken == "1 point to make the board")
     }
 
     /// No handle, nothing caught: hidden. The backend lists only handled
@@ -599,13 +561,35 @@ struct RaceGapTests {
                                 window: .week, myHandle: "s11", handleConfirmed: true) == nil)
     }
 
-    @Test func monthAndAllTime_hidden() {
+    /// Month and all-time boards each get their own gap, from their own
+    /// response — all-time gaps are large and that's fine.
+    @Test func monthAndAllTime_shown() throws {
         let me = MyStanding(rank: 11, points: 95)
         let month = LeaderboardResponse(entries: board(), me: me, window: "month",
                                         resetsAt: "2026-11-01T00:00:00.000Z")
-        let all = LeaderboardResponse(entries: board(), me: me, window: "all")
-        #expect(RaceGap.compute(response: month, window: .month, myHandle: "s11", handleConfirmed: true) == nil)
-        #expect(RaceGap.compute(response: all, window: .all, myHandle: "s11", handleConfirmed: true) == nil)
+        let monthGap = try #require(RaceGap.compute(
+            response: month, window: .month, myHandle: "s11", handleConfirmed: true))
+        #expect(monthGap.target == .pass(handle: "s10"))
+        #expect(monthGap.points == 51)
+
+        let allPoints = [48_210, 31_900, 12_400, 9_050]
+        let all = LeaderboardResponse(entries: board(allPoints), me: MyStanding(rank: 2, points: 31_900),
+                                      window: "all")
+        let allGap = try #require(RaceGap.compute(
+            response: all, window: .all, myHandle: "s2", handleConfirmed: true))
+        #expect(allGap.points == 16_311)  // 48,210 − 31,900 + 1
+        #expect(allGap.headline == "16,311 PTS TO PASS @s1")
+    }
+
+    /// Each window reads only its own response: a week payload filed under
+    /// the month tab (or vice versa) is not that window's board.
+    @Test func responseFromAnotherWindow_hidden() {
+        let me = MyStanding(rank: 11, points: 95)
+        #expect(RaceGap.compute(response: week(board(), me: me), window: .month,
+                                myHandle: "s11", handleConfirmed: true) == nil)
+        let month = LeaderboardResponse(entries: board(), me: me, window: "month")
+        #expect(RaceGap.compute(response: month, window: .all,
+                                myHandle: "s11", handleConfirmed: true) == nil)
     }
 
     // MARK: Review fixes (2026-10-22)
@@ -619,7 +603,6 @@ struct RaceGapTests {
             response: week(board(), me: MyStanding(rank: 12, points: 75)),
             window: .week, myHandle: "s12", handleConfirmed: true))
         #expect(gap.points == 51)         // 95 − 45 + 1, from the visible row
-        #expect(gap.topTenPoints == 101)  // 145 − 45 + 1
     }
 
     /// The server says more spotters qualify than the 50-row limit, even
@@ -704,28 +687,26 @@ struct RaceGapTests {
         #expect(!entry.isHandle("planespotte"))
     }
 
-    /// VoiceOver reads everything the row shows, reset day included.
-    @Test func spoken_includesTopTenAndResetDay() throws {
+    /// VoiceOver reads the same single fact as prose.
+    @Test func spoken_isTheHeadlineAsProse() throws {
         let gap = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 12, points: 45)),
             window: .week, myHandle: "s12", handleConfirmed: true))
-        #expect(gap.spoken(resetWeekday: "SATURDAY")
-                == "51 points to pass s11, about 6 common catches. 101 points to the top 10. Resets Saturday")
-        #expect(gap.spoken(resetWeekday: nil)
-                == "51 points to pass s11, about 6 common catches. 101 points to the top 10")
+        #expect(gap.spoken == "51 points to pass s11")
     }
 
-    /// Telemetry dedup: one key per goal, handle case folded.
+    /// Telemetry dedup: one key per goal per window, handle case folded.
     @Test func reportKey_andAnalyticsTarget() throws {
         let pass = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 11, points: 95)),
             window: .week, myHandle: "s11", handleConfirmed: true))
-        #expect(pass.reportKey == "pass:s10")
+        #expect(pass.reportKey(window: .week) == "week:pass:s10")
+        #expect(pass.reportKey(window: .all) == "all:pass:s10")
         #expect(pass.analyticsTarget == "pass")
         let make = try #require(RaceGap.compute(
             response: week(board(), me: MyStanding(rank: 0, points: 0)),
             window: .week, myHandle: "notlisted", handleConfirmed: true))
-        #expect(make.reportKey == "make_board")
+        #expect(make.reportKey(window: .month) == "month:make_board")
         #expect(make.analyticsTarget == "make_board")
     }
 

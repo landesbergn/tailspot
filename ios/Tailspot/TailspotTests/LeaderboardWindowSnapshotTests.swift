@@ -27,9 +27,7 @@ struct LeaderboardWindowSnapshotTests {
     private static let snapDir = FileManager.default.temporaryDirectory
         .appendingPathComponent("tailspot_snaps", isDirectory: true)
 
-    /// `height` defaults to an iPhone 17 screen; the race-gap renders pass a
-    /// taller canvas so the YOUR STANDING row below a 12-row board is in
-    /// frame without scrolling the List.
+    /// `height` defaults to an iPhone 17 screen.
     private func snapshot<V: View>(_ view: V, as name: String, height: CGFloat = 852) {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
         let bounds = CGRect(x: 0, y: 0, width: 393, height: height)
@@ -176,10 +174,12 @@ struct LeaderboardWindowSnapshotTests {
         #expect(true)
     }
 
-    /// Weekly race-gap line under YOUR STANDING ("N PTS TO PASS @X …").
-    /// The board mirrors the live 2026-10-21 week shape (two whales, then a
-    /// tight pack), and `me.rank` is deliberately inflated past the row
-    /// position to stand in for hidden handle-less/disabled devices.
+    /// Race-gap line in the fixed header, under the countdown ("N PTS TO
+    /// PASS @X"), on every window. Rendered at phone height: the line must
+    /// be visible without scrolling. The board mirrors the live 2026-10-21
+    /// week shape (two whales, then a tight pack), and `me.rank` is
+    /// deliberately inflated past the row position to stand in for hidden
+    /// handle-less/disabled devices.
     @Test func renderRaceGapBoards() throws {
         let defaults = UserDefaults.standard
         let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
@@ -193,43 +193,41 @@ struct LeaderboardWindowSnapshotTests {
         let points = [3705, 1360, 985, 460, 405, 230, 220, 215, 165, 145, 95, 45]
         let handles = ["chemtrails", "flydelta", "maia", "ellabella", "skykid", "contrail",
                        "heavywatcher", "dotbali", "jordan", "planespotter", "noah", "rookie"]
-        let pack: [LeaderboardEntry] = zip(handles, points).enumerated().map { i, pair in
-            .init(rank: i + 1, handle: pair.0, points: pair.1, catches: max(1, pair.1 / 30))
+        func pack(scale: Int) -> [LeaderboardEntry] {
+            zip(handles, points).enumerated().map { i, pair in
+                .init(rank: i + 1, handle: pair.0, points: pair.1 * scale,
+                      catches: max(1, pair.1 * scale / 30))
+            }
         }
         func week(_ me: MyStanding?) -> LeaderboardResponse {
-            LeaderboardResponse(entries: pack, me: me, window: "week",
+            LeaderboardResponse(entries: pack(scale: 1), me: me, window: "week",
                                 resetsAt: weekResetsAt, champions: nil,
-                                totalCatchers: pack.count)
+                                totalCatchers: handles.count)
         }
-        let tall: CGFloat = 1500
 
-        // Mid-pack, outside the named Top 10: pass @planespotter (51 pts).
+        // Week, mid-pack: pass @planespotter (51 pts).
         defaults.set("noah", forKey: SpotterHandle.storageKey)
         snapshot(board([.week: week(MyStanding(rank: 13, points: 95))],
                        selected: .week, container: container),
-                 as: "racegap_week_midpack", height: tall)
+                 as: "racegap_week_midpack")
         snapshot(board([.week: week(MyStanding(rank: 13, points: 95))],
                        selected: .week, container: container)
                     .dynamicTypeSize(.accessibility2),
-                 as: "racegap_week_midpack_a11y2", height: 2400)
+                 as: "racegap_week_midpack_a11y2")
 
-        // Last row: pass @noah AND a separate Top 10 goal.
-        defaults.set("rookie", forKey: SpotterHandle.storageKey)
-        snapshot(board([.week: week(MyStanding(rank: 14, points: 45))],
-                       selected: .week, container: container),
-                 as: "racegap_week_topten_line", height: tall)
+        // Month, mid-pack: its own board (twice the week's points).
+        let month = LeaderboardResponse(entries: pack(scale: 2), me: MyStanding(rank: 13, points: 190),
+                                        window: "month", resetsAt: monthResetsAt,
+                                        totalCatchers: handles.count)
+        snapshot(board([.month: month], selected: .month, container: container),
+                 as: "racegap_month_midpack")
 
-        // Inside the Top 10: pass @heavywatcher (6 pts).
-        defaults.set("dotbali", forKey: SpotterHandle.storageKey)
-        snapshot(board([.week: week(MyStanding(rank: 8, points: 215))],
-                       selected: .week, container: container),
-                 as: "racegap_week_top10", height: tall)
-
-        // #2 whale: 2,346 pts behind → over the ceiling, line hidden.
+        // All time, #2 behind a whale: a big gap still shows (no cap).
         defaults.set("flydelta", forKey: SpotterHandle.storageKey)
-        snapshot(board([.week: week(MyStanding(rank: 2, points: 1360))],
-                       selected: .week, container: container),
-                 as: "racegap_week_whale_hidden", height: tall)
+        let all = LeaderboardResponse(entries: pack(scale: 6), me: MyStanding(rank: 2, points: 8160),
+                                      window: "all", totalCatchers: handles.count)
+        snapshot(board([.all: all], selected: .all, container: container),
+                 as: "racegap_all_bigGap")
 
         // Handled (server-confirmed), nothing caught this week →
         // "1 PT TO MAKE THE BOARD".
@@ -237,19 +235,13 @@ struct LeaderboardWindowSnapshotTests {
         defaults.set("notlisted", forKey: SpotterHandle.confirmedKey)
         snapshot(board([.week: week(MyStanding(rank: 0, points: 0))],
                        selected: .week, container: container),
-                 as: "racegap_week_makeboard", height: tall)
-
-        // Same, but the handle never synced (stranded) → no promise.
-        defaults.removeObject(forKey: SpotterHandle.confirmedKey)
-        snapshot(board([.week: week(MyStanding(rank: 0, points: 0))],
-                       selected: .week, container: container),
-                 as: "racegap_week_stranded", height: tall)
+                 as: "racegap_week_makeboard")
 
         // No handle → no gap line; the "claim a handle" hint stands alone.
         defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
         snapshot(board([.week: week(MyStanding(rank: 0, points: 0))],
                        selected: .week, container: container),
-                 as: "racegap_week_nohandle", height: tall)
+                 as: "racegap_week_nohandle")
         #expect(true)
     }
 

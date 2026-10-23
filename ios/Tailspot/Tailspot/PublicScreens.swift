@@ -8,9 +8,9 @@
 //     windowed (dynamic-leaderboards PR2): WEEK (default) / MONTH / ALL TIME
 //     tabs, reset countdowns, and previous-period champion banners on the week
 //     and month tabs. Shows rank/handle/points/catches, highlights "me" row (works
-//     even handle-less, with a "claim a handle to appear" hint). On the week
-//     tab the standing gets a goal line ("51 PTS TO PASS @x") — see RaceGap
-//     in LeaderboardWindows.swift.
+//     even handle-less, with a "claim a handle to appear" hint). The fixed
+//     header carries a race-gap line for the selected tab, under the reset
+//     countdown ("51 PTS TO PASS @x") — see RaceGap in LeaderboardWindows.swift.
 //     Loading / error / empty states follow Brand patterns.
 //     Pull-to-refresh supported.
 //
@@ -58,17 +58,14 @@ struct LeaderboardScreen: View {
     /// (show tabs); false = old backend (fail-soft: hide tabs, the board is
     /// the all-time board).
     @State private var windowsSupported: Bool? = nil
-    /// Week-tab race gap per window, computed once per load (and when the
-    /// local handle changes) rather than on every render. Only `.week` is
-    /// ever non-nil — `RaceGap.compute` hides the line elsewhere.
+    /// Race gap per window, computed once per load (and when the local
+    /// handle changes) rather than on every render. The header shows the
+    /// selected window's entry.
     @State private var raceGaps: [LeaderboardWindow: RaceGap] = [:]
-    /// `RaceGap.reportKey`s already reported as `leaderboard_gap_shown` this
-    /// screen visit. Cleared when the screen disappears.
+    /// `RaceGap.reportKey(window:)`s already reported as
+    /// `leaderboard_gap_shown` this screen visit. Cleared when the screen
+    /// disappears.
     @State private var reportedGapKeys: Set<String> = []
-    /// True while the week page's race-gap row is on screen (List row
-    /// onAppear/onDisappear). The paged TabView can lay out the week page
-    /// while another tab is showing, so the report also requires `.week`.
-    @State private var gapRowVisible = false
 
     private let client = TailspotAccountClient()
     /// True when a DEBUG init pre-seeded fixture data — network loads are
@@ -169,7 +166,6 @@ struct LeaderboardScreen: View {
             Analytics.capture("leaderboard_window_switched", [
                 "window": .string(newValue.rawValue),
             ])
-            reportGapShownIfVisible()
         }
         .onAppear {
             // leaderboard_viewed fires each time the screen becomes visible.
@@ -207,10 +203,9 @@ struct LeaderboardScreen: View {
                 LeaderboardStandingCache().update(from: me)
             }
             // `leaderboard_gap_shown` is NOT fired here: a load isn't a
-            // view (tab flips and pull-to-refresh reload). The row's
-            // onAppear reports it — see `reportGapShownIfVisible`.
+            // view (the pager loads neighbouring tabs too). The header line
+            // reports it — see `reportGapShown`.
             raceGaps[window] = raceGap(for: response, window: window)
-            reportGapShownIfVisible()  // a refresh can change the goal under a visible row
         } catch {
             // Keep stale data when we have it — a failed silent refresh must
             // not blank a board the user is looking at. The stored message
@@ -252,9 +247,7 @@ struct LeaderboardScreen: View {
                         }
                     }
                     rankSection(entries: entries, additionalCatchers: response.additionalCatchers)
-                    meHintSection(me: response.me,
-                                  raceGap: raceGaps[window],
-                                  resetsAt: response.resetsAtDate)
+                    meHintSection(me: response.me)
                 }
             } else if let msg = errors[window] {
                 errorSection(msg)
@@ -272,7 +265,9 @@ struct LeaderboardScreen: View {
 
     // MARK: - Window switcher + countdown
 
-    /// The slider + countdown as a fixed header ABOVE the pager (no longer
+    /// The slider + countdown + race gap as a fixed header ABOVE the pager
+    /// (Noah, 2026-10-22: the gap line belongs where it's seen without
+    /// scrolling; it used to sit under YOUR STANDING). (No longer
     /// a List Section — the slider shouldn't scroll away with the board,
     /// and outside the List its drag gesture no longer competes with the
     /// List's scroll pan). Horizontal padding matches the inset-grouped
@@ -288,6 +283,9 @@ struct LeaderboardScreen: View {
                     .tracking(1.2)
                     .foregroundStyle(Brand.Color.textTertiary)
                     .padding(.bottom, 2)
+            }
+            if let gap = raceGaps[selectedWindow] {
+                raceGapLine(gap)
             }
         }
         .padding(.horizontal, 20)
@@ -573,12 +571,9 @@ struct LeaderboardScreen: View {
     /// "Me" section shown below the ranked list: either the me row from the
     /// API (when the device has a handle), or a prompt to claim one.
     @ViewBuilder
-    private func meHintSection(me: MyStanding?,
-                               raceGap: RaceGap? = nil,
-                               resetsAt: Date? = nil) -> some View {
+    private func meHintSection(me: MyStanding?) -> some View {
         let myLocalPoints = ProfileStats(catches: catches).totalPoints
         let hasHandle = myHandle != nil
-        let resetWeekday = resetsAt.map { LeaderboardCountdown.resetWeekday(resetsAt: $0) }
 
         if let meStanding = me {
             // Server confirmed our standing — show it. Rank 0 = UNRANKED
@@ -617,9 +612,6 @@ struct LeaderboardScreen: View {
                     + (meStanding.rank >= 1 ? "rank \(meStanding.rank)" : "not ranked yet")
                     + ", \(meStanding.points) points"
                 )
-                if let raceGap {
-                    raceGapRow(raceGap, resetWeekday: resetWeekday)
-                }
                 if !hasHandle {
                     Text("Claim a handle in Profile → Settings to appear in the list above.")
                         .font(Brand.Font.caption)
@@ -667,53 +659,38 @@ struct LeaderboardScreen: View {
         }
     }
 
-    /// One `leaderboard_gap_shown` per goal per screen visit, fired when
-    /// the row is actually on screen on the week tab — not per load (tab
-    /// flips and pull-to-refresh reload without the user seeing anything new).
-    private func reportGapShownIfVisible() {
-        guard gapRowVisible, selectedWindow == .week, let gap = raceGaps[.week],
-              reportedGapKeys.insert(gap.reportKey).inserted else { return }
+    /// One `leaderboard_gap_shown` per goal per window per screen visit,
+    /// fired when the header line is showing for the selected tab — not per
+    /// load (the pager loads neighbouring tabs the user isn't looking at).
+    private func reportGapShown(_ gap: RaceGap, window: LeaderboardWindow) {
+        guard reportedGapKeys.insert(gap.reportKey(window: window)).inserted else { return }
         Analytics.capture("leaderboard_gap_shown", [
             "gap_pts":       .int(gap.points),
             "catches_equiv": .int(gap.catchesEquivalent),
             "target":        .string(gap.analyticsTarget),
+            "window":        .string(window.rawValue),
         ])
     }
 
-    /// Week-tab goal under the standing row: "51 PTS TO PASS @x", an
-    /// optional "101 PTS TO THE TOP 10", then "≈ 6 COMMON CATCHES · RESETS
-    /// SUNDAY". Mono readout voice; wraps rather than truncates at large
-    /// type sizes (`fixedSize(vertical:)` lets a List row grow to fit).
-    private func raceGapRow(_ gap: RaceGap, resetWeekday: String?) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(gap.headline)
-                .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
-                .tracking(0.6)
-                .foregroundStyle(Brand.Color.cyan)
-                .fixedSize(horizontal: false, vertical: true)
-            if let topTen = gap.topTenLine {
-                Text(topTen)
-                    .font(Brand.Font.mono(size: 11, weight: .semibold, relativeTo: .caption))
-                    .tracking(0.6)
-                    .foregroundStyle(Brand.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    /// The selected tab's goal in the fixed header: "51 PTS TO PASS @x".
+    /// Mono readout voice in cyan; wraps rather than truncates at large
+    /// type sizes (`fixedSize(vertical:)` lets the header grow to fit).
+    private func raceGapLine(_ gap: RaceGap) -> some View {
+        let window = selectedWindow
+        return Text(gap.headline)
+            .font(Brand.Font.mono(size: 11, weight: .bold, relativeTo: .caption))
+            .tracking(0.6)
+            .foregroundStyle(Brand.Color.cyan)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, 2)
+            // VoiceOver gets prose instead of "PTS" and "@".
+            .accessibilityLabel(gap.spoken)
+            // Re-runs when the tab or the goal changes; the key set
+            // dedups repeat views within one visit.
+            .task(id: gap.reportKey(window: window)) {
+                reportGapShown(gap, window: window)
             }
-            Text(gap.detail(resetWeekday: resetWeekday))
-                .font(Brand.Font.mono(size: 10, weight: .semibold, relativeTo: .caption2))
-                .tracking(0.6)
-                .foregroundStyle(Brand.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 2)
-        .listRowBackground(Brand.Color.bgElevated)
-        // VoiceOver gets prose instead of "≈" and "PTS".
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(gap.spoken(resetWeekday: resetWeekday))
-        .onAppear {
-            gapRowVisible = true
-            reportGapShownIfVisible()
-        }
-        .onDisappear { gapRowVisible = false }
     }
 
     /// Mono ALL-CAPS section header — the app-wide style (SettingsScreen's
