@@ -269,6 +269,13 @@ struct LeaderboardScreen: View {
         // List renders system grouped chrome instead of the fixed dark
         // Brand palette.
         .scrollContentBackground(.hidden)
+        // Vertical density (Noah, 2026-10-23): inset-grouped's default
+        // section gaps (~35 pt) and its 44 pt row floor spread the board
+        // out. Compact section spacing, a small top margin under the fixed
+        // header, and a lower row floor fit roughly two more rows on screen.
+        .listSectionSpacing(.compact)
+        .contentMargins(.top, 4, for: .scrollContent)
+        .environment(\.defaultMinListRowHeight, 36)
         .refreshable { await load(window) }
     }
 
@@ -447,12 +454,12 @@ struct LeaderboardScreen: View {
     /// Top-3 podium block.
     private func podium(entries: [LeaderboardEntry]) -> some View {
         HStack(alignment: .bottom, spacing: 8) {
-            podiumColumn(entry: entries.first(where: { $0.rank == 2 }), height: 90,  rank: 2)
-            podiumColumn(entry: entries.first(where: { $0.rank == 1 }), height: 130, rank: 1)
-            podiumColumn(entry: entries.first(where: { $0.rank == 3 }), height: 70,  rank: 3)
+            podiumColumn(entry: entries.first(where: { $0.rank == 2 }), height: 60, rank: 2)
+            podiumColumn(entry: entries.first(where: { $0.rank == 1 }), height: 84, rank: 1)
+            podiumColumn(entry: entries.first(where: { $0.rank == 3 }), height: 44, rank: 3)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 18)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
         .background(Brand.Color.bgElevated)
     }
@@ -466,7 +473,7 @@ struct LeaderboardScreen: View {
             default: return Brand.Color.textTertiary
             }
         }()
-        return VStack(spacing: 6) {
+        return VStack(spacing: 4) {
             if let entry {
                 Text("@\(entry.handle)")
                     .font(Brand.Font.mono(size: 10, weight: .bold, relativeTo: .caption2))
@@ -484,9 +491,9 @@ struct LeaderboardScreen: View {
                 // fixed-height podium block, and the rank is already spoken
                 // via the combined label below.
                 Text("\(rank)")
-                    .font(Brand.Font.mono(size: 28, weight: .heavy))
+                    .font(Brand.Font.mono(size: 22, weight: .heavy))
                     .foregroundStyle(tint)
-                    .padding(.top, 8)
+                    .padding(.top, 6)
             }
             .frame(height: height)
         }
@@ -548,7 +555,7 @@ struct LeaderboardScreen: View {
                     .background(Brand.Color.cyan, in: .capsule)
             }
         }
-        .padding(.vertical, 2)
+        .listRowInsets(.vertical, 6)
         .listRowBackground(isMe
             ? Brand.Color.cyan.opacity(0.12)
             : Color.clear)
