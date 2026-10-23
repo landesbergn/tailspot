@@ -401,13 +401,20 @@ struct TrophiesHiddenAndMetricsTests {
         #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<5).map { _ in mk(slantKm: 26) })))
     }
 
-    @Test func constellationAndQuintetAreSecretAndDormant() {
+    @Test func constellationAndQuintetAreSecretAndPressGated() {
+        // Ten catches seconds apart: plenty of planes, but never two in one
+        // press, so neither multi-catch trophy can unlock.
+        let apart = (0..<10).map { mk(at: date(hour: 12).addingTimeInterval(Double($0) * 5)) }
         for id in ["multi", "quintet"] {
             let trophy = ach(id)
             #expect(trophy.secret)
-            // bestMultiCatchCount is hardcoded 0 → still locked under any catches.
-            #expect(trophy.isEarned(inputs: Trophies.inputs(from: (0..<10).map { _ in mk() })) == false)
+            #expect(trophy.isEarned(inputs: Trophies.inputs(from: apart)) == false)
         }
+        // Two distinct airframes in ONE press (shared caughtAt) earn
+        // Constellation; Quintet still needs five.
+        let pair = [mk(at: date(hour: 12)), mk(at: date(hour: 12))]
+        #expect(ach("multi").isEarned(inputs: Trophies.inputs(from: pair)))
+        #expect(ach("quintet").isEarned(inputs: Trophies.inputs(from: pair)) == false)
     }
 
     @Test func allSecretAchievementsAreFlaggedSecretAndBinary() {
@@ -798,11 +805,11 @@ struct TrophyRosterExpansionTests {
 
     // MARK: Roster generation
 
-    @Test func rosterVersionIsStampedAtThree() {
-        // The 2026-07-11 leaderboard-winner generation. Bumping this constant
-        // is what triggers the reseed + recap on devices stamped behind it —
+    @Test func rosterVersionIsStampedAtFour() {
+        // The 2026-10-21 unearnable-trophies fix. Bumping this constant is
+        // what triggers the reseed + unlock cards on devices stamped behind it —
         // pin it so an accidental edit is loud.
-        #expect(Trophies.rosterVersion == 3)
+        #expect(Trophies.rosterVersion == 4)
     }
 
     @Test func newIdsPresentExactlyOnce() {
@@ -939,5 +946,209 @@ struct TrophiesWinnerTests {
         #expect(cache.monthlyWins == 1)
         // …but the monotonic "ever topped" flag never un-latches.
         #expect(cache.everToppedAllTime)
+    }
+}
+
+// MARK: - Unearnable-trophies fix (2026-10-21)
+
+/// Constellation / Quintet read `bestMultiCatchCount` (was hard-coded 0) and
+/// Heritage / Living History / Full Deck read heritage catches (no typecode
+/// resolves to `.heritage`, so they were 0 for everyone). Both now derive
+/// from the Hangar; these pin the new derivations.
+@Suite("Trophies — multi-catch + heritage wiring")
+@MainActor
+struct TrophiesUnearnableFixTests {
+
+    private let press = Date(timeIntervalSince1970: 1_716_000_000)
+
+    private func mk(icao: String = String(UUID().uuidString.prefix(6)).lowercased(),
+                    typecode: String? = nil, model: String? = nil, manufacturer: String? = nil,
+                    at: Date = Date(timeIntervalSince1970: 1_716_000_000)) -> Catch {
+        Catch(icao24: icao, callsign: nil, model: model, manufacturer: manufacturer,
+              caughtAt: at, observerLat: 0, observerLon: 0,
+              slantDistanceMeters: 1000, typecode: typecode)
+    }
+
+    private func ach(_ id: String) -> Achievement { Trophies.roster.first { $0.id == id }! }
+
+    // MARK: Multi-catch
+
+    @Test func threeAirframesInOnePressCountThree() {
+        let catches = [mk(icao: "aaa001", at: press), mk(icao: "aaa002", at: press),
+                       mk(icao: "aaa003", at: press),
+                       mk(icao: "aaa004", at: press.addingTimeInterval(60))]
+        #expect(Trophies.inputs(from: catches).bestMultiCatchCount == 3)
+    }
+
+    @Test func sameAirframeTwiceInOnePressCountsOnce() {
+        // A restored duplicate row (same icao24, same caughtAt) must not turn
+        // a single catch into a "multi-catch".
+        let catches = [mk(icao: "abc123", at: press), mk(icao: "abc123", at: press)]
+        let inputs = Trophies.inputs(from: catches)
+        #expect(inputs.bestMultiCatchCount == 1)
+        #expect(ach("multi").isEarned(inputs: inputs) == false)
+    }
+
+    @Test func separatePressesDoNotMerge() {
+        // One millisecond apart is two presses — only identical timestamps group.
+        let catches = [mk(at: press), mk(at: press.addingTimeInterval(0.001))]
+        #expect(Trophies.inputs(from: catches).bestMultiCatchCount == 1)
+    }
+
+    @Test func constellationAtTwoQuintetStillLockedAtThree() {
+        let three = (0..<3).map { _ in mk(at: press) }
+        let inputs = Trophies.inputs(from: three)
+        #expect(ach("multi").isEarned(inputs: inputs))
+        #expect(ach("quintet").isEarned(inputs: inputs) == false)
+        let five = (0..<5).map { _ in mk(at: press) }
+        #expect(ach("quintet").isEarned(inputs: Trophies.inputs(from: five)))
+    }
+
+    // MARK: Heritage
+
+    @Test func vintageCatchEarnsHeritage() {
+        // DC3 resolves to .ga in the typecode table — the bug: it never
+        // counted as heritage. It fills the fam-vintage DC-3 slot.
+        let dc3 = mk(typecode: "DC3", model: "DC-3")
+        #expect(dc3.resolvedType != .heritage)
+        let inputs = Trophies.inputs(from: [dc3])
+        #expect(inputs.heritageCatches == 1)
+        #expect(ach("heritage").isEarned(inputs: inputs))
+        #expect(ach("heritage2").isEarned(inputs: inputs) == false)
+    }
+
+    @Test func modernCatchesAreNotHeritage() {
+        let inputs = Trophies.inputs(from: [mk(typecode: "B738"), mk(typecode: "C172")])
+        #expect(inputs.heritageCatches == 0)
+        #expect(ach("heritage").isEarned(inputs: inputs) == false)
+    }
+
+    @Test func fiveVintageCatchesEarnLivingHistory() {
+        // Living History counts distinct AIRFRAMES, not distinct models:
+        // three different DC-3 airframes plus two Stearmans is five.
+        let catches = [mk(typecode: "DC3"), mk(typecode: "DC3"), mk(typecode: "DC3"),
+                       mk(typecode: "ST75"), mk(typecode: "ST75", model: "75 Kaydet")]
+        let inputs = Trophies.inputs(from: catches)
+        #expect(inputs.heritageCatches == 5)
+        #expect(ach("heritage2").isEarned(inputs: inputs))
+        #expect(ach("heritage2").isEarned(inputs: Trophies.inputs(from: Array(catches.prefix(4)))) == false)
+    }
+
+    @Test func sixTypesPlusVintageEarnFullDeck() {
+        let six = [mk(typecode: "B738"), mk(typecode: "B789"), mk(typecode: "E75L"),
+                   mk(typecode: "GLF6"), mk(typecode: "C17"), mk(typecode: "C172")]
+        let without = Trophies.inputs(from: six)
+        #expect(without.distinctTypes == 6)
+        #expect(ach("fulldeck").isEarned(inputs: without) == false)
+        let with = Trophies.inputs(from: six + [mk(typecode: "DC3")])
+        #expect(with.distinctTypes == 6)   // the DC-3 is GA in the table
+        #expect(with.fullDeckTypes == 7)
+        #expect(ach("fulldeck").isEarned(inputs: with))
+    }
+
+    @Test func heritageCountMatchesPerCatchScan() {
+        // The per-distinct-key count must equal the naive per-catch scan it
+        // replaces (mixed repeats, case variants, non-vintage noise).
+        let catches = [mk(typecode: "DC3"), mk(typecode: "dc3"), mk(typecode: "PA18", model: "PA-18 Super Cub"),
+                       mk(typecode: "PA18", model: "PA-18 Super Cub"), mk(typecode: "B738"),
+                       mk(typecode: nil, model: "Stearman"), mk(typecode: "C172")]
+        let vintage = CardSets.families.first { $0.id == Trophies.heritageFamilyID }!
+        let naive = catches.filter { c in vintage.entries.contains { CardSets.matches(catch: c, entry: $0) } }.count
+        #expect(naive == 5)
+        #expect(Trophies.inputs(from: catches).heritageCatches == naive)
+    }
+
+    @Test func oneResidentAirframeCaughtRepeatedlyIsOneHeritage() {
+        // The local Cub caught on five different days is ONE heritage
+        // aircraft — Living History needs five airframes, not five rows.
+        let day: Double = 86_400
+        let cub = (0..<5).map { i in
+            mk(icao: "a1cub1", typecode: "PA18", model: "PA-18 Super Cub",
+               at: press.addingTimeInterval(Double(i) * day))
+        }
+        let inputs = Trophies.inputs(from: cub)
+        #expect(inputs.heritageCatches == 1)
+        #expect(ach("heritage").isEarned(inputs: inputs))
+        #expect(ach("heritage2").isEarned(inputs: inputs) == false)
+    }
+
+    @Test func modernLookalikesAreNotHeritage() {
+        // Names that hit a vintage token but are modern airframes.
+        let modern = [
+            mk(typecode: "CC11", model: "CC11-160 Carbon Cub SS"),         // CubCrafters, by typecode
+            mk(typecode: nil, model: "Carbon Cub EX-3"),                   // CubCrafters, by token
+            mk(typecode: "TEX2", model: "T-6A Texan II"),                  // Beechcraft, by typecode
+            mk(typecode: nil, model: "T-6A Texan II"),                     // no typecode, by token
+            mk(typecode: nil, model: "T-6A Texan", manufacturer: "RAYTHEON AIRCRAFT CO"),  // by builder
+            mk(typecode: nil, model: "AT-6B Wolverine", manufacturer: "TEXTRON AVIATION"),
+            mk(typecode: "TEXA", model: "Texan"),                          // Fly Synthesis microlight
+        ]
+        #expect(Trophies.inputs(from: modern).heritageCatches == 0)
+        // The real warbird with the same "T-6A Texan" model string still counts.
+        let warbird = mk(typecode: nil, model: "T-6A Texan", manufacturer: "NORTH AMERICAN")
+        #expect(Trophies.inputs(from: modern + [warbird]).heritageCatches == 1)
+        #expect(Trophies.inputs(from: [mk(typecode: "T6", model: "T-6G Texan")]).heritageCatches == 1)
+    }
+
+    @Test func superCubStillCountsAsHeritage() {
+        // Open taste call (Noah): until decided, the PA-18 keeps its credit.
+        #expect(Trophies.inputs(from: [mk(typecode: "PA18", model: "PA-18 Super Cub")]).heritageCatches == 1)
+    }
+
+    @Test func vintageCatchDoesNotInflateVarietyPack() {
+        // Four table types, one of them GA via a DC-3. The heritage stand-in
+        // is Full Deck's alone: Variety Pack (and the Hangar chips) see 4.
+        let four = [mk(typecode: "B738"), mk(typecode: "B789"), mk(typecode: "E75L"), mk(typecode: "DC3")]
+        let inputs = Trophies.inputs(from: four)
+        #expect(inputs.distinctTypes == 4)
+        #expect(inputs.fullDeckTypes == 5)
+        #expect(ach("varietypack").isEarned(inputs: inputs) == false)
+    }
+
+    @Test func memberwiseInputsDefaultFullDeckToDistinctTypes() {
+        // Call sites that only set distinctTypes keep Full Deck's old reading.
+        let inputs = TrophyProgressInputs(
+            totalCatches: 0, uniqueAirframes: 0, wideBodyCatches: 0, regionalCatches: 0,
+            heritageCatches: 0, rareTierCatches: 0, epicTierCatches: 0, legendaryTierCatches: 0,
+            rarePlusUnique: 0, longestSlantKm: 0, bestMultiCatchCount: 0, nightCatches: 0,
+            distinctTypes: 7)
+        #expect(inputs.fullDeckTypes == 7)
+        #expect(ach("fulldeck").isEarned(inputs: inputs))
+    }
+
+    // MARK: Roster bump → one unlock card per new trophy
+
+    @Test func rosterBumpQueuesAnUnlockCardPerNewTrophy() {
+        let ledger = UserDefaultsTrophyLedger(defaults: UserDefaults(suiteName: "test.unearnable.\(UUID().uuidString)")!)
+        let suite = UserDefaults(suiteName: "test.unearnable.facts.\(UUID().uuidString)")!
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        // A Hangar that qualifies for all four newly-earnable trophies once
+        // the wiring is fixed: a two-plane press + five vintage catches.
+        let hangar = [mk(at: press), mk(at: press)]
+            + (0..<5).map { i in mk(typecode: "DC3", at: press.addingTimeInterval(Double(i + 1) * 3600)) }
+        let newlyEarnable = ["multi", "heritage", "heritage2"]
+        // Yesterday's build (roster 3) could never earn these, so its seed
+        // never acknowledged them — model that by leaving them out.
+        let oldRoster = Trophies.roster.filter { !newlyEarnable.contains($0.id) }
+        let old = TrophyUnlockCenter(ledger: ledger, roster: oldRoster, events: events,
+                                     standing: standing, rosterVersion: 3)
+        old.enqueueNewUnlocks(from: hangar)
+        #expect(ledger.rosterVersion == 3)
+
+        let new = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
+        new.enqueueNewUnlocks(from: hangar)
+        #expect(new.pendingRecap == nil, "a roster bump gets unlock cards, not the recap sheet")
+        // One card per trophy the reseed newly acknowledged — not First
+        // Catch & co., which the old ledger already had.
+        #expect(Set(new.pendingEvents.map(\.achievementID)) == Set(newlyEarnable))
+        #expect(new.pendingEvents.count == newlyEarnable.count)
+        #expect(ledger.rosterVersion == 4)
+
+        // Once seen, a re-diff stays quiet.
+        while let head = new.head { new.markShown(head); new.advance() }
+        new.enqueueNewUnlocks(from: hangar)
+        #expect(new.pendingRecap == nil)
+        #expect(new.pendingEvents.isEmpty)
     }
 }

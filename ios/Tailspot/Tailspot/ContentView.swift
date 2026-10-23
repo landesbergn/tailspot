@@ -286,6 +286,19 @@ struct ContentView: View {
     /// itself is once-per-install (persisted), but this short-circuits the
     /// per-tick filter work in `.onReceive(adsb.$observed)` after it's latched.
     @State private var firstPlaneSeenLatched = false
+    /// Session latch for `first_label_on_screen` (a label actually drawn in
+    /// frame). Like `firstPlaneSeenLatched`, it only saves the 1 Hz projection
+    /// work once the install-wide latch is set; see `activationFunnelTick`.
+    @State private var firstLabelOnScreenLatched = false
+    /// `empty_sky_state_shown` session: its start ("stuck scanning" is
+    /// measured from here) and the variants already reported (once per
+    /// variant per session). Reset when the app goes to the background, in
+    /// the `.onChange(of: scenePhase)` handler.
+    @State private var emptySkySession = ActivationTelemetry.EmptySkySession()
+    /// Whether the permission recovery card was showing on the last 1 Hz
+    /// tick, so `permission_recovery_shown` fires once per hidden-to-shown
+    /// transition (see `permissionRecoveryFunnelTick`).
+    @State private var permissionRecoveryWasShowing = false
     /// Cached most-recent replay recording for the debug `analyzeRow`, so that
     /// row doesn't do a FileManager directory scan on every body eval. Refreshed
     /// when the debug panel opens and after a recording is toggled off.
@@ -941,6 +954,10 @@ struct ContentView: View {
                 motion.stop()
                 adsb.stop()
                 visualConfirm.updateTarget(nil)
+                // A trip to the background ends the empty-sky session, so
+                // the return starts fresh variants and a fresh clock.
+                // (.inactive alone, e.g. pulling down Control Center, doesn't.)
+                if phase == .background { emptySkySession.reset() }
             @unknown default:
                 break
             }
@@ -1015,12 +1032,14 @@ struct ContentView: View {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
+                    releaseGuessHold(for: reveal)
                     presentPostRevealMomentIfNeeded()
                 },
                 onViewInHangar: {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
+                    releaseGuessHold(for: reveal)
                     primarySheet = .hangar
                     presentPostRevealMomentIfNeeded()
                 },
@@ -1059,6 +1078,7 @@ struct ContentView: View {
                     } else if !reveal.isSimulated {
                         CatchTelemetry.fireGuessRoundSkipped(kind: .route, elapsedMs: elapsedMs)
                     }
+                    releaseGuessHold(for: reveal)
                 },
                 streakDays: reveal.streakDays,
                 loader: reveal.loader
@@ -1124,10 +1144,17 @@ struct ContentView: View {
             // `observed` publish) instead of in `body` on every 30 Hz frame.
             // Must run before the latch's early-return below, or the signature
             // would freeze once the activation telemetry latches.
-            visibleIcaoSignature = interactiveVisible(observed)
+            let interactive = interactiveVisible(observed)
+            visibleIcaoSignature = interactive
                 .map(\.aircraft.icao24)
                 .sorted()
                 .joined(separator: ",")
+
+            // first_label_on_screen. Runs here at ~1 Hz, never in the 30 Hz
+            // render pass, and before the first_plane_seen early-return
+            // below. (empty_sky_state_shown runs from the 1 Hz `.task` loop
+            // instead; see `emptySkyFunnelTick`.)
+            activationFunnelTick(interactive: interactive)
 
             // Activation funnel: fire once when the first plane is actually
             // visible (post-filter). The fire is once-per-install (persisted);
@@ -1153,6 +1180,8 @@ struct ContentView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 labelSuppressionTick()
+                emptySkyFunnelTick()
+                permissionRecoveryFunnelTick()
             }
         }
         .sheet(isPresented: replaySheetPresented) {
@@ -1192,6 +1221,125 @@ struct ContentView: View {
             $0.isLikelyVisibleToObserver
                 || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
         }
+    }
+
+    // MARK: - Activation funnel (label milestones + empty sky)
+
+    /// How many of `planes` project inside the camera frame for the current
+    /// pose and zoom: the same inputs the 30 Hz label loop uses, so it
+    /// counts the labels actually drawn. nil until the compass has a real
+    /// heading (the renderer's `heading ?? 0` fallback would otherwise make
+    /// this count against a made-up direction).
+    private func onScreenLabelCount(_ planes: [ObservedAircraft]) -> Int? {
+        ActivationTelemetry.onScreenCount(
+            targets: planes.map { (bearingDeg: $0.bearingDeg, elevationDeg: $0.elevationDeg) },
+            headingDeg: location.heading,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: Geo.rollDeg(
+                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+            ),
+            hfovDeg: Self.baseHfovDeg / zoom,
+            vfovDeg: Self.baseVfovDeg / zoom
+        )
+    }
+
+    /// Only count what the user could see: no opaque sheet over the AR
+    /// view, app in the foreground, a live camera (authorized, not just
+    /// "not denied": while the prompt is pending there's no picture), and
+    /// no permission recovery card standing in for the sky view.
+    private var activationFunnelCanCount: Bool {
+        !arOccluded && scenePhase == .active && cameraAuthorized && !locationDenied
+    }
+
+    /// `first_label_on_screen`, called from the `.onReceive(adsb.$observed)`
+    /// hook (never from `body`). `interactive` comes from the value being
+    /// published, which `adsb.observed` doesn't hold yet.
+    private func activationFunnelTick(interactive: [ObservedAircraft]) {
+        guard activationFunnelCanCount, !firstLabelOnScreenLatched else { return }
+        // `interactive` is already empty while labels are suppressed, so a
+        // suppressed frame can't fire it.
+        if ActivationTelemetry.firstLabelOnScreenFired() {
+            firstLabelOnScreenLatched = true
+        } else if !interactive.isEmpty, let onScreen = onScreenLabelCount(interactive) {
+            ActivationTelemetry.fireFirstLabelOnScreenOnce(
+                headingAccuracyDeg: location.headingAccuracy,
+                visibleCount: interactive.count,
+                onScreenCount: onScreen
+            )
+            firstLabelOnScreenLatched = ActivationTelemetry.firstLabelOnScreenFired()
+        }
+    }
+
+    /// `empty_sky_state_shown`, called once a second from the `.task` loop
+    /// in `body` (next to `labelSuppressionTick`). It deliberately does NOT
+    /// hang off `adsb.$observed`: without a GPS fix ADSBManager never
+    /// publishes, so an observed-driven check would go quiet in exactly the
+    /// "stuck on SCANNING SKY" case it exists to catch.
+    private func emptySkyFunnelTick() {
+        // Nothing left to report this session.
+        guard !emptySkySession.isComplete else { return }
+        // Start the session clock only while in the foreground, so a tick
+        // that lands just after a background reset can't start it early.
+        guard scenePhase == .active else { return }
+        let now = Date()
+        let secondsInSession = emptySkySession.secondsInSession(now: now)
+        guard activationFunnelCanCount else { return }
+
+        // The same counts the empty-sky pill uses (grounded planes are
+        // parked, not "nearby" traffic).
+        let observed = adsb.observed
+        let interactive = interactiveVisible(observed)
+        let airborne = observed.filter { !$0.grounded }
+        guard let variant = ActivationTelemetry.emptySkyVariant(
+            visibleCount: interactive.count,
+            rawCount: airborne.count,
+            hasError: adsb.lastError != nil || adsb.lastErrorUserMessage != nil,
+            neverFetched: adsb.lastFetched == nil,
+            isReconnecting: adsb.isReconnecting,
+            labelsSuppressed: suppressAmbientLabels
+        ) else { return }
+        guard emptySkySession.claim(variant, now: now) else { return }
+        ActivationTelemetry.fireEmptySkyStateShown(
+            variant: variant,
+            rawCount: airborne.count,
+            nearestSlantMeters: airborne.map(\.slantDistanceMeters).min(),
+            secondsInSession: secondsInSession,
+            hasLocation: location.latitude != nil && location.longitude != nil
+        )
+    }
+
+    /// `permission_recovery_shown`, called once a second from the `.task`
+    /// loop in `body`. Fires on each hidden-to-shown transition of the
+    /// recovery card (the same `cameraDenied || locationDenied` condition
+    /// `body` uses to show it). Driven from this state rather than the
+    /// card's `.onAppear`, which remounts and snapshot harnesses re-run.
+    /// Foreground only, so the card counts when the user could see it.
+    private func permissionRecoveryFunnelTick() {
+        guard scenePhase == .active else { return }
+        let showing = cameraDenied || locationDenied
+        defer { permissionRecoveryWasShowing = showing }
+        guard ActivationTelemetry.recoveryCardBecameVisible(
+            wasShowing: permissionRecoveryWasShowing, isShowing: showing
+        ) else { return }
+        ActivationTelemetry.firePermissionRecoveryShown(
+            cameraDenied: cameraDenied, locationDenied: locationDenied
+        )
+    }
+
+    /// `first_label_tap`, called at each label pin site. Taps happen at human
+    /// speed, so the projection here costs nothing; the install latch inside
+    /// the fire makes every tap after the first a no-op.
+    private func fireFirstLabelTap(via: String) {
+        guard !UserDefaults.standard.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey) else { return }
+        let interactive = interactiveVisible(adsb.observed)
+        // recordLabelTap fires first_label_on_screen first if the 1 Hz
+        // sampler hasn't yet, so a quick tap can't land before it.
+        ActivationTelemetry.recordLabelTap(
+            via: via,
+            headingAccuracyDeg: location.headingAccuracy,
+            visibleCount: interactive.count,
+            onScreenCount: onScreenLabelCount(interactive)
+        )
     }
 
     /// True when an OPAQUE modal fully covers the camera / AR view — the
@@ -2506,15 +2654,9 @@ struct ContentView: View {
                 // reveal carries the multiplicity message.
                 catchHaptic &+= 1
                 Log.adsb.notice("Caught \(newCatches.count, privacy: .public) plane(s); \(duplicates.count, privacy: .public) duplicate(s)")
-                // Per-catch immediate upload (2026-08-24): push the fresh
-                // row(s) to the backend NOW instead of waiting
-                // for the next foreground transition — a first-time user
-                // otherwise opened Profile/Leaderboard with 0 server-side
-                // points and no rank. Fire-and-forget; uploadPending is
-                // idempotent and serverUuid-deduped, so overlapping the
-                // scene-activation sweep is safe, and a failure just defers
-                // to that sweep.
-                Task { await CatchUploader().uploadPending(context: modelContext) }
+                // The per-catch immediate upload kick lives below the bonus
+                // round decision (see "Per-catch immediate upload"), so a
+                // catch hosting a route guess can be held until it resolves.
                 // Reverse-geocode the observer position ONCE for the
                 // batch (every row shares it) and stamp the new rows.
                 // Post-save and fire-and-forget: a catch never waits
@@ -2664,6 +2806,35 @@ struct ContentView: View {
                 }
             }
 
+            // Per-catch immediate upload (2026-08-24): push the fresh row(s)
+            // to the backend NOW instead of waiting for the next foreground
+            // transition — a first-time user otherwise opened Profile/
+            // Leaderboard with 0 server-side points and no rank. Fire-and-
+            // forget; uploadPending is idempotent and serverUuid-deduped, so
+            // overlapping the scene-activation sweep is safe, and a failure
+            // just defers to that sweep.
+            //
+            // A catch hosting a route-guess round is HELD first (2026-10-21):
+            // a row is POSTed once, so uploading before the answer meant the
+            // server never saw the guess and never awarded its bonus. The
+            // reveal's resolve/dismiss callbacks release the hold and upload.
+            // No hold when this catch's early shell is no longer the reveal
+            // on screen (closed, or replaced by another catch's reveal), see
+            // `CatchUploadHolds.shouldHold`. This must stay in the same MainActor
+            // run as the save above (no `await` in between), so no sweep can
+            // slip the row out before the hold lands. The guess round never
+            // fires on a first catch, so the first-catch rank upload is
+            // still immediate.
+            if !newCatches.isEmpty {
+                if let payload = guessPayload,
+                   CatchUploadHolds.shouldHold(hasGuess: true,
+                                               earlyShell: earlyLoader,
+                                               shellOnScreen: pendingReveal?.loader) {
+                    CatchUploader.holdForGuess(payload.row, context: modelContext)
+                }
+                Task { await CatchUploader().uploadPending(context: modelContext) }
+            }
+
             let presentMs: Int
             let revealMode: String
             if let loader = earlyLoader {
@@ -2704,6 +2875,18 @@ struct ContentView: View {
                 totalMs: Int(Date().timeIntervalSince(tapAt) * 1000)
             )
         }
+    }
+
+    /// Release the reveal's route-guess upload hold, if it placed one, and
+    /// upload the row now (with the frozen guess, when one was answered).
+    /// Called from every path that ends the bonus round: answer, skip, and
+    /// both reveal-close buttons. Lives outside `body` because body is at
+    /// the compiler's type-check budget. The shell path's row arrives via the
+    /// loader, so read it from there first. A no-op for un-held rows and for
+    /// the ✦ Catch simulation's transient row (never held).
+    private func releaseGuessHold(for reveal: PendingReveal) {
+        CatchUploader.releaseGuessHold(for: reveal.loader?.row ?? reveal.row,
+                                       context: modelContext)
     }
 
     /// Build the route guess question off a fresh catch row, or nil when no
@@ -3946,6 +4129,7 @@ struct ContentView: View {
             pinnedIcao = icao
             revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
+            fireFirstLabelTap(via: "voiceover")
             lockOn.forceLock(targetIcao24: icao, now: now)
         }
     }
@@ -4051,6 +4235,7 @@ struct ContentView: View {
                 pinnedIcao = icao
                 revealedIcao = nil   // a normal pin is a visible plane, not a reveal
                 recorder.recordTapPin(icao24: icao, at: now, tapPoint: point)
+                fireFirstLabelTap(via: "direct")
                 // forceLock is the only way into .locked — the user
                 // just pointed at this plane, so the engine jumps
                 // straight to a locked state.
@@ -4085,6 +4270,7 @@ struct ContentView: View {
             pinnedIcao = icao
             revealedIcao = nil   // a normal pin is a visible plane, not a reveal
             recorder.recordTapPin(icao24: icao, at: now)
+            fireFirstLabelTap(via: "widened")
             lockOn.forceLock(targetIcao24: icao, now: now)
             return
         }

@@ -61,6 +61,8 @@ struct TailCard: View {
     @ScaledMetric(relativeTo: .title3) private var pointsFontSize: CGFloat = 20
     @ScaledMetric(relativeTo: .caption2) private var ptsCaptionSize: CGFloat = 9
     @ScaledMetric(relativeTo: .caption2) private var breakdownFontSize: CGFloat = 10
+    /// Switches the rich card to its stacked layout at accessibility sizes.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The reveal's route row, list-sized: mono ICAO codes in secondary ink
     /// with the arrow in the rarity tint (CatchRevealView's `routeCell`
@@ -121,6 +123,10 @@ struct TailCard: View {
         let a11yLabel: String = {
             var parts = [tailNumber, airline]
             if showPoints, let model { parts.append(model) }
+            // On screen the tier is only a color (score column + route
+            // arrow), so say it. Recent feed only: in the compact Sets
+            // variant every row shares the set's tier.
+            if showPoints { parts.append(row.rarity.label.capitalized) }
             if showPoints, c.displayOrigin != nil || c.displayDest != nil {
                 switch (c.displayOrigin, c.displayDest) {
                 case let (o?, d?): parts.append("route \(o) to \(d)")
@@ -143,89 +149,95 @@ struct TailCard: View {
             return parts.joined(separator: ", ")
         }()
 
-        return HStack(spacing: 12) {
-            // Crop toward the plane (Catch.photoFocus), same as the big card —
-            // not a plain center-crop that hides an edge-of-frame plane. Decoded
-            // at thumbnail size off the main actor (FocusThumbnail).
-            FocusThumbnail(url: photoURL, focus: c.photoFocus, side: 76)
-                .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
+        // Crop toward the plane (Catch.photoFocus), same as the big card —
+        // not a plain center-crop that hides an edge-of-frame plane. Decoded
+        // at thumbnail size off the main actor (FocusThumbnail).
+        let thumbnail = FocusThumbnail(url: photoURL, focus: c.photoFocus, side: 76)
+            .clipShape(RoundedRectangle(cornerRadius: Brand.Radius.row))
 
-            VStack(alignment: .leading, spacing: 5) {
-                // Line 1 — cyan callsign · airline. The callsign is the lead
-                // identifier (never truncated); a long airline tail-truncates.
-                HStack(spacing: 6) {
-                    Text(tailNumber)
-                        .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
-                        .foregroundStyle(Brand.Color.cyan)
-                        .fixedSize()
-                        .layoutPriority(1)
-                    separator
-                    Text(airline)
-                        .font(.footnote)
-                        .foregroundStyle(Brand.Color.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                // Line 2 — make/model as the card's HERO line (the reveal
-                // makes the name the payoff; the feed card echoes it in
-                // primary ink). Recent feed only, and only when a name
-                // resolves.
-                if showPoints, let model {
-                    HStack(spacing: 7) {
-                        Text(model)
-                            .font(.system(size: modelFontSize, weight: .semibold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        // First-of-type sparkle — the collection milestone
-                        // sits on the model it commemorates (C+ mock round,
-                        // 2026-08-24). Ledger gold means "first" and nothing
-                        // else on this card; the score column stays in the
-                        // rarity tint.
-                        if isFirstOfType {
-                            Image(systemName: "sparkle")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(Brand.Color.ledgerGold)
-                                .frame(width: 15, height: 15)
-                                .background(Brand.Color.ledgerGold.opacity(0.13), in: Circle())
-                                .overlay(
-                                    Circle().strokeBorder(
-                                        Brand.Color.ledgerGold.opacity(0.35), lineWidth: 1
-                                    )
-                                )
-                        }
-                    }
-                }
-
-                // Line 3 — the reveal's ROUTE vocabulary when the catch
-                // carries one (mono airport codes — IATA preferred, ICAO
-                // fallback — rarity-tinted arrow, short date), else the
-                // quiet date · location. Reveal rule: a one-sided route
-                // never dangles an arrow at "—".
-                let origin = c.displayOrigin
-                let dest = c.displayDest
-                if showPoints, origin != nil || dest != nil {
-                    HStack(spacing: 6) {
-                        routeLine(origin: origin, dest: dest, tint: row.rarity.tint)
-                        separator
-                        Text(c.caughtAt.formatted(.dateTime.month().day())).fixedSize()
-                            .font(.footnote)
-                            .foregroundStyle(Brand.Color.textTertiary)
-                    }
-                } else {
-                    HStack(spacing: 6) {
-                        Text(c.caughtAt.formatted(.dateTime.month().day().year())).fixedSize()
-                        separator
-                        Text(place ?? "Location unknown").lineLimit(1).truncationMode(.tail)
-                    }
+        let info = VStack(alignment: .leading, spacing: 5) {
+            // Line 1 — cyan callsign · airline. The callsign is the lead
+            // identifier (never truncated); a long airline tail-truncates.
+            HStack(spacing: 6) {
+                Text(tailNumber)
+                    .font(Brand.Font.mono(size: 15, weight: .bold, relativeTo: .subheadline))
+                    .foregroundStyle(Brand.Color.cyan)
+                    .fixedSize()
+                    .layoutPriority(1)
+                separator
+                Text(airline)
                     .font(.footnote)
-                    .foregroundStyle(Brand.Color.textTertiary)
+                    .foregroundStyle(Brand.Color.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            // Line 2 — make/model as the card's HERO line (the reveal
+            // makes the name the payoff; the feed card echoes it in
+            // primary ink). Recent feed only, and only when a name
+            // resolves.
+            if showPoints, let model {
+                HStack(spacing: 7) {
+                    // Up to two lines, with a touch of shrink before
+                    // the ellipsis: about 8% of catches have names past
+                    // one line ("Bombardier BD-100 Challenger 350",
+                    // "Lockheed Martin C-130J Super Hercules"), which
+                    // used to clip on every iPhone width. The points
+                    // column stays `fixedSize`, so the name wraps
+                    // instead of squeezing the score.
+                    Text(model)
+                        .font(.system(size: modelFontSize, weight: .semibold))
+                        .foregroundStyle(Brand.Color.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.9)
+                        .truncationMode(.tail)
+                    // First-of-type sparkle — the collection milestone
+                    // sits on the model it commemorates (C+ mock round,
+                    // 2026-08-24). Ledger gold means "first" and nothing
+                    // else on this card; the score column stays in the
+                    // rarity tint.
+                    if isFirstOfType {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Brand.Color.ledgerGold)
+                            .frame(width: 15, height: 15)
+                            .background(Brand.Color.ledgerGold.opacity(0.13), in: Circle())
+                            .overlay(
+                                Circle().strokeBorder(
+                                    Brand.Color.ledgerGold.opacity(0.35), lineWidth: 1
+                                )
+                            )
+                    }
                 }
             }
 
-            Spacer(minLength: 8)
+            // Line 3 — the reveal's ROUTE vocabulary when the catch
+            // carries one (mono airport codes — IATA preferred, ICAO
+            // fallback — rarity-tinted arrow, short date), else the
+            // quiet date · location. Reveal rule: a one-sided route
+            // never dangles an arrow at "—".
+            let origin = c.displayOrigin
+            let dest = c.displayDest
+            if showPoints, origin != nil || dest != nil {
+                HStack(spacing: 6) {
+                    routeLine(origin: origin, dest: dest, tint: row.rarity.textTint)
+                    separator
+                    Text(c.caughtAt.formatted(.dateTime.month().day())).fixedSize()
+                        .font(.footnote)
+                        .foregroundStyle(Brand.Color.textTertiary)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Text(c.caughtAt.formatted(.dateTime.month().day().year())).fixedSize()
+                    separator
+                    Text(place ?? "Location unknown").lineLimit(1).truncationMode(.tail)
+                }
+                .font(.footnote)
+                .foregroundStyle(Brand.Color.textTertiary)
+            }
+        }
 
+        let score = Group {
             if showPoints {
                 // Trailing score readout — the FULL display total over a
                 // "base +bonus" micro-ledger, BOTH in the rarity tint (one
@@ -242,9 +254,13 @@ struct TailCard: View {
                         .foregroundStyle(row.rarity.tint)
                         .monospacedDigit()
                     if points.bonus > 0 {
+                        // 10 pt text, so it takes the small-text shade
+                        // (`textTint`: epic's frame violet is under 4.5:1
+                        // on this card). The 20 pt total above is large
+                        // text and keeps the frame `tint`.
                         Text("\(base) +\(points.bonus)")
                             .font(Brand.Font.mono(size: breakdownFontSize, weight: .semibold))
-                            .foregroundStyle(row.rarity.tint)
+                            .foregroundStyle(row.rarity.textTint)
                             .monospacedDigit()
                     } else {
                         Text("PTS")
@@ -258,6 +274,32 @@ struct TailCard: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Brand.Color.textTertiary.opacity(0.6))
+            }
+        }
+
+        // At the accessibility text sizes the one-row layout can't fit: the
+        // callsign, route codes, and score are fixed-width readouts, and
+        // together they ran past the card's edge (the model name was squeezed
+        // to nothing). There the score moves up beside the thumbnail and the
+        // text gets the card's full width below. The `let` views above are
+        // plain values, so both layouts reuse them.
+        return Group {
+            if showPoints, dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 12) {
+                        thumbnail
+                        Spacer(minLength: 8)
+                        score
+                    }
+                    info
+                }
+            } else {
+                HStack(spacing: 12) {
+                    thumbnail
+                    info
+                    Spacer(minLength: 8)
+                    score
+                }
             }
         }
         .padding(12)

@@ -71,7 +71,7 @@
       </tr>
       <tr>
         <td><strong>Crash and performance data</strong></td>
-        <td>Crash counts, hang rate, peak memory (Apple's on-device MetricKit, summarized).</td>
+        <td>Crash type and code location, hang duration and location, app-exit counts, launch time, peak memory (Apple's on-device MetricKit, summarized; no file paths or personal data).</td>
         <td>PostHog.</td>
       </tr>
     </tbody>
@@ -135,7 +135,7 @@
   <ul>
     <li><strong>Product events</strong> — things like "app opened," "catch uploaded," "trophy unlocked." Catch events include the aircraft's identity (a public fact) and a coarse place name like "Berkeley, US" — never your GPS coordinates.</li>
     <li><strong>Session replay</strong> — periodic screenshots of the app's interface while you use it, replayed as a recording. This shows what any user of the app sees: aircraft labels, your collection, your handle. <strong>The live camera view is excluded from recordings, and your catch photos are masked</strong> — screens that display one of your photos show a blank box in its place. We use replays to find broken flows; they are visible only to the developer and PostHog as processor.</li>
-    <li><strong>Diagnostics</strong> — crash counts, hang rate, and memory summaries from Apple's on-device MetricKit.</li>
+    <li><strong>Diagnostics</strong> — crash type and code location (the exception, and where in the app's code it happened), hang duration and location, app-exit counts, launch time, and memory summaries from Apple's on-device MetricKit.</li>
   </ul>
 
   <p>Separately, <strong>Apple's own opt-in crash reporting</strong> (part of iOS, governed by Apple's privacy policy) may reach us via App Store Connect if you've opted in on your device.</p>
