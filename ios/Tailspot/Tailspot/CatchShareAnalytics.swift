@@ -3,10 +3,12 @@
 //  Tailspot
 //
 //  The catch-share funnel in one place (2026-10-08), so every step is named
-//  the same way and carries the same context (`rarity`, `has_photo`):
+//  the same way and carries the same context (`rarity`, `has_photo`, and
+//  since 2026-10-23 `source`: which screen opened the sheet, see `Source`):
 //
-//    catch_share_opened             share pill tapped (the pre-sheet meaning,
-//                                   so the series stays comparable)
+//    catch_share_opened             a Share control tapped (the pre-sheet
+//                                   meaning, so the series stays comparable):
+//                                   the detail pill, or the reveal's Share
 //    catch_share_format_selected    preview moved to a shape: format + via
 //                                   (swipe / chip / destination)
 //    catch_share_backdrop_selected  story background changed
@@ -28,12 +30,29 @@ import Foundation
 import MessageUI
 
 struct CatchShareAnalytics {
+    /// Where the share sheet was opened from. Rides on every funnel event so
+    /// the reveal's Share can be measured against the detail pill.
+    nonisolated enum Source: String, Sendable {
+        /// The share pill on the Hangar catch detail screen.
+        case detail
+        /// The single-catch reveal's Share CTA.
+        case reveal
+        /// The multi-catch reveal's Share button (shares one card of the run).
+        case multiReveal = "multi_reveal"
+    }
+
     let rarity: String
     let hasPhoto: Bool
+    let source: Source
+    /// true sends nothing: the DEBUG ✦ Catch simulated reveal can still
+    /// open the share sheet, but it's documented as no telemetry.
+    let muted: Bool
 
-    init(plane: CardPlane, hasCatchPhoto: Bool) {
+    init(plane: CardPlane, hasCatchPhoto: Bool, source: Source, muted: Bool = false) {
         self.rarity = plane.rarity.label
         self.hasPhoto = hasCatchPhoto
+        self.source = source
+        self.muted = muted
     }
 
     /// How a Messages composer ended, in funnel terms.
@@ -95,9 +114,11 @@ struct CatchShareAnalytics {
     }
 
     private func send(_ event: String, _ props: [String: AnalyticsValue] = [:]) {
+        guard !muted else { return }
         var all = props
         all["rarity"] = .string(rarity)
         all["has_photo"] = .bool(hasPhoto)
+        all["source"] = .string(source.rawValue)
         Analytics.capture(event, all)
     }
 }
