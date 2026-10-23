@@ -427,8 +427,11 @@ struct MultiCatchReveal: View {
     private var buttons: some View {
         VStack(spacing: 10) {
             Button(action: onViewInHangar) {
+                // Built-in text styles (.subheadline = 15 pt, .callout =
+                // 16 pt at the default size) so both buttons scale with
+                // Dynamic Type; the old bare sizes stayed fixed.
                 Text("View in Hangar")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -438,7 +441,7 @@ struct MultiCatchReveal: View {
 
             Button(action: onDismiss) {
                 Text("Keep spotting")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.callout.weight(.bold))
                     .foregroundStyle(.black.opacity(0.85))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
