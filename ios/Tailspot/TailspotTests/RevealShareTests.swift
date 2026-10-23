@@ -4,6 +4,7 @@
 //
 //  Share-on-reveal + honest multi-catch points (2026-10-23):
 //   - `RevealShareGate`: when the single reveal's Share CTA is live.
+//   - `RevealShareButtonMetrics`: the callsign-line button's ≥44 pt target.
 //   - `MultiCatchReveal.tally`: the points a multi-catch shows are what the
 //     server awards (base + first-of-type), with no combo multiplier.
 //   - `MultiCatchReveal.shareSubject`: which card the multi reveal shares.
@@ -168,5 +169,25 @@ import Testing
     @Test func footerPrintsTheAddress() {
         #expect(CatchShare.footerText.contains("tailspot.app"))
         #expect(CatchShare.footerText.hasPrefix("CAUGHT ON TAILSPOT"))
+    }
+}
+
+/// The callsign-line Share button: a small disc, but always a ≥44 pt tap.
+@Suite struct RevealShareButtonMetricsTests {
+    /// Card scales the reveal actually uses: card width = min(screen − 28,
+    /// 420) over the 300 pt reference, from the 375 pt SE/mini up to the cap.
+    static let scales: [CGFloat] = [1.0, 347.0 / 300, 365.0 / 300, 374.0 / 300, 412.0 / 300, 420.0 / 300]
+
+    @Test(arguments: scales)
+    func hitTargetIsAtLeast44(scale: CGFloat) {
+        #expect(RevealShareButtonMetrics.hitSide(scale: scale) >= 44)
+        #expect(RevealShareButtonMetrics.hitSide(scale: scale) >= RevealShareButtonMetrics.disc(scale: scale))
+    }
+
+    @Test func discScalesWithTheCard() {
+        #expect(RevealShareButtonMetrics.disc(scale: 1) == 30)
+        #expect(RevealShareButtonMetrics.disc(scale: 1.2) == 36)
+        // A disc bigger than 44 is its own hit target.
+        #expect(RevealShareButtonMetrics.hitSide(scale: 2) == 60)
     }
 }
