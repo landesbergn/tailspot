@@ -74,6 +74,10 @@ struct CatchShareSheet: View {
     let shareMessage: String
     /// Whether the catch has the user's own photo (analytics only).
     let hasCatchPhoto: Bool
+    /// Which screen opened the sheet (analytics only).
+    let source: CatchShareAnalytics.Source
+    /// Send no funnel events (the DEBUG simulated reveal; analytics only).
+    let analyticsMuted: Bool
 
     @Environment(\.dismiss) private var dismiss
 
@@ -81,11 +85,14 @@ struct CatchShareSheet: View {
     @State private var page: SharePage
 
     init(plane: CardPlane, shareText: String, shareMessage: String,
-         hasCatchPhoto: Bool, startPage: SharePage = .post) {
+         hasCatchPhoto: Bool, source: CatchShareAnalytics.Source,
+         analyticsMuted: Bool = false, startPage: SharePage = .post) {
         self.plane = plane
         self.shareText = shareText
         self.shareMessage = shareMessage
         self.hasCatchPhoto = hasCatchPhoto
+        self.source = source
+        self.analyticsMuted = analyticsMuted
         _page = State(initialValue: startPage)
     }
     @State private var images: [SharePage: UIImage] = [:]
@@ -122,7 +129,8 @@ struct CatchShareSheet: View {
     private var current: UIImage? { images[page] }
 
     private var analytics: CatchShareAnalytics {
-        CatchShareAnalytics(plane: plane, hasCatchPhoto: hasCatchPhoto)
+        CatchShareAnalytics(plane: plane, hasCatchPhoto: hasCatchPhoto, source: source,
+                            muted: analyticsMuted)
     }
 
     var body: some View {
