@@ -817,6 +817,14 @@ struct SetsCoverageTests {
         // ...and never the Bell 407 slot next door.
         let b407 = heliSet.entries.first { $0.id == "fh-b407" }!
         #expect(!CardSets.matches(key: key, entry: b407))
+        // ...nor the Cessna 206 / 207 slot, whose bare "206" token used to
+        // match the canonical name "Bell 206 JetRanger / LongRanger".
+        let cessnaSet = CardSets.families.first { $0.id == "fam-cessna" }!
+        let fc206 = cessnaSet.entries.first { $0.id == "fc206" }!
+        #expect(!CardSets.matches(key: key, entry: fc206),
+                "A Bell 206 must not fill the Cessna 206 / 207 slot")
+        let jetRanger = CardSets.matchKey(for: mk(("B06", "Bell", "206B JetRanger III")))
+        #expect(!CardSets.matches(key: jetRanger, entry: fc206))
 
         // Bell's 505 Jet Ranger X is its own type and must not collapse into
         // the older 206 JetRanger slot merely because the names are similar.
