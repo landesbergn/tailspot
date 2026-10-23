@@ -95,6 +95,8 @@ export interface BuildAppOptions {
   catchStore?: CatchStore;
   /** Injectable clock (unix seconds) for deterministic catch-validation tests. */
   nowSeconds?: () => number;
+  /** Override for GUESS_RECREDIT_CLOSES (tests). */
+  guessRecreditCloses?: Date;
   /** Challenge store override (tests inject a PGlite-backed store). Lazily built over Postgres in prod. */
   challengeStore?: ChallengeStore;
   /**
@@ -744,6 +746,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     onCatchIngested: scheduleOvertaken,
     scheduleAfterReply: options.scheduleAfterReply,
     nowSeconds: options.nowSeconds,
+    guessRecreditCloses: options.guessRecreditCloses,
   });
   // The leaderboard's window math shares the catch-validation clock
   // (`nowSeconds`, unix seconds) so window tests are deterministic; production

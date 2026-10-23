@@ -184,3 +184,13 @@ export function guessBonus(base: number, kind: GuessKind, caughtAt: Date): numbe
  * it does not close on a date. To close the endpoint outright, delete it.
  */
 export const GUESS_RECREDIT_CUTOVER = new Date("2026-11-16T00:00:00Z");
+
+/**
+ * When the re-credit endpoint itself stops accepting calls, whatever the
+ * catch's age. The cutover above bounds WHICH catches qualify; this bounds
+ * WHEN anyone can ask, so a hand-made client can't claim route bonuses on
+ * old guess-less catches indefinitely. Late enough for 1.2.3's rollout and
+ * stragglers to run their one sweep; after it every call answers 409
+ * `after_cutover`, which the client already treats as final.
+ */
+export const GUESS_RECREDIT_CLOSES = new Date("2027-01-31T00:00:00Z");

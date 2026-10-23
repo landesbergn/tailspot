@@ -245,6 +245,31 @@ describe("POST /v1/catches/:catchUuid/guess", () => {
     });
   });
 
+  it("refuses every call once the re-credit window has closed (409 after_cutover)", async () => {
+    await uploadOld(U1);
+    // Same database and tokens, but the endpoint's close date has passed.
+    const closed = await buildApp({
+      identityStore: new DrizzleIdentityStore(db),
+      catchStore: new DrizzleCatchStore(db),
+      nowSeconds: () => NOW,
+      rateLimitNow: () => 0,
+      guessRecreditCloses: new Date(NOW * 1000),
+    });
+    try {
+      const res = await closed.inject({
+        method: "POST",
+        url: `/v1/catches/${U1}/guess`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { kind: "route", value: "KSFO", localCorrect: true },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe("after_cutover");
+      expect((await storedRow(U1)).guessKind).toBeNull();
+    } finally {
+      await closed.close();
+    }
+  });
+
   it("rejects a catch the server inserted after the cutover (409 after_cutover)", async () => {
     await uploadOld(U1, { createdAt: AFTER_CUTOVER });
     const res = await recredit(U1, { kind: "route", value: "KSFO", localCorrect: true });

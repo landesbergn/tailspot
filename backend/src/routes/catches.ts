@@ -58,7 +58,12 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { GUESS_RECREDIT_CUTOVER, type GuessKind, isGuessKind } from "../catches/points.js";
+import {
+  GUESS_RECREDIT_CLOSES,
+  GUESS_RECREDIT_CUTOVER,
+  type GuessKind,
+  isGuessKind,
+} from "../catches/points.js";
 import {
   type AircraftPosition,
   type ObserverPose,
@@ -90,6 +95,8 @@ export interface CatchesRouteOptions {
   guessRecreditLimiter?: RateLimiter;
   /** Override for GUESS_RECREDIT_CUTOVER (tests). */
   guessRecreditCutover?: Date;
+  /** Override for GUESS_RECREDIT_CLOSES (tests). */
+  guessRecreditCloses?: Date;
   /**
    * Per-device read limiter for GET /v1/catches. The honest client reads this
    * endpoint a handful of times per launch (one probe, then 500-row pages), so
@@ -278,6 +285,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
   // of old catches must not set off a burst of "someone passed you" pushes.
   // Live challenge placements catch up at the next real catch.
   const recreditCutover = opts.guessRecreditCutover ?? GUESS_RECREDIT_CUTOVER;
+  const recreditCloses = opts.guessRecreditCloses ?? GUESS_RECREDIT_CLOSES;
   app.post("/v1/catches/:catchUuid/guess", async (request, reply) => {
     if (ipLimited(request, reply)) return reply;
 
@@ -307,6 +315,14 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     }
     if (typeof body.localCorrect !== "boolean") {
       return reply.code(422).send({ error: "localCorrect must be a boolean" });
+    }
+
+    // The backfill window is over: answer like a too-new catch so the client
+    // marks the row done and stops asking.
+    if (nowSeconds() * 1000 >= recreditCloses.getTime()) {
+      return reply
+        .code(409)
+        .send({ error: "the guess re-credit window has closed", code: "after_cutover" });
     }
 
     const result = await catchStore.recreditGuess(
