@@ -174,7 +174,13 @@ export function guessBonus(base: number, kind: GuessKind, caughtAt: Date): numbe
  *
  * Chosen as 2026-11-16T00:00:00Z: comfortably after 1.2.3 is expected to reach
  * the App Store, so catches made on 1.2.2 in the weeks before people update are
- * still covered. Move it if 1.2.3 ships later than that; after it passes the
- * endpoint answers every call with 409 and the sweep stops trying.
+ * still covered. Move it if 1.2.3 ships later than that.
+ *
+ * The bound is on WHICH ROWS qualify, not on when the call is made: the check
+ * is the row's `created_at` against this instant. After the date passes, a
+ * catch inserted later gets 409, but a guess-less catch inserted before it
+ * can still be re-credited, at any later time (a late updater's sweep still
+ * works). So the exposure is fixed at once per pre-cutover guess-less catch;
+ * it does not close on a date. To close the endpoint outright, delete it.
  */
 export const GUESS_RECREDIT_CUTOVER = new Date("2026-11-16T00:00:00Z");
