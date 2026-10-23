@@ -222,7 +222,7 @@ struct MultiCatchReveal: View {
         .sheet(isPresented: $showShareSheet) {
             if let subject = Self.shareSubject(entries) {
                 let plane = subject.plane
-                let text = CatchShare.shareText(callsign: plane.callsign, model: plane.model)
+                let text = CatchShare.shareText(for: plane)
                 CatchShareSheet(plane: plane,
                                 shareText: text,
                                 shareMessage: CatchShare.shareMessage(shareText: text),
@@ -506,11 +506,10 @@ struct MultiCatchReveal: View {
 
     /// "Share UAL248": names the card that goes out, since the fan has
     /// several.
+    /// Callsign, else hex id (`CatchShare.identifier`, the share copy's rule).
     static func shareTitle(for plane: CardPlane) -> String {
-        guard let cs = plane.callsign?.trimmingCharacters(in: .whitespaces), !cs.isEmpty else {
-            return "Share"
-        }
-        return "Share \(cs)"
+        guard let id = CatchShare.identifier(for: plane) else { return "Share" }
+        return "Share \(id)"
     }
 
     /// VoiceOver label: the visible title first, so Voice Control's "tap

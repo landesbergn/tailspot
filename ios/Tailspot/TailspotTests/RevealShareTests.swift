@@ -11,6 +11,7 @@
 //   - `CatchShare` copy + footer shared by the reveal and the detail pill.
 //
 
+import CoreGraphics
 import Foundation
 import Testing
 @testable import Tailspot
@@ -18,10 +19,11 @@ import Testing
 @Suite struct RevealShareGateTests {
 
     private func gate(settled: Bool = true, pipelineFinished: Bool = true,
+                      catchSaved: Bool = true,
                       hasBonusRound: Bool = false, chipsCollapsed: Bool = false,
                       bonusResolved: Bool = false, voiceOver: Bool = false) -> Bool {
         RevealShareGate.isAvailable(settled: settled, pipelineFinished: pipelineFinished,
-                                    hasBonusRound: hasBonusRound, chipsCollapsed: chipsCollapsed,
+                                    catchSaved: catchSaved, hasBonusRound: hasBonusRound, chipsCollapsed: chipsCollapsed,
                                     bonusResolved: bonusResolved, voiceOver: voiceOver)
     }
 
@@ -35,6 +37,12 @@ import Testing
 
     @Test func notWhileThePhotoIsStillComposing() {
         #expect(!gate(pipelineFinished: false))
+    }
+
+    @Test func notForACatchThatFailedToSave() {
+        // The pipeline "finishes" on an error exit too; with no saved row
+        // there's nothing to share.
+        #expect(!gate(pipelineFinished: true, catchSaved: false))
     }
 
     @Test func hiddenWhileTheBonusRoundIsOnScreen() {
@@ -159,6 +167,28 @@ import Testing
         #expect(CatchShare.shareText(callsign: nil, model: nil) == "Caught a plane on Tailspot")
     }
 
+    @Test func trimsNewlinesLikeTheDetailScreen() {
+        #expect(CatchShare.shareText(callsign: "UAL1\n", model: " Boeing 737\n")
+                == "Caught UAL1 · Boeing 737 on Tailspot")
+        #expect(CatchShare.shareText(callsign: "\n", model: nil) == "Caught a plane on Tailspot")
+    }
+
+    /// A callsign-less catch is named by its hex id on every path: the
+    /// detail screen, the single reveal and the multi-catch reveal all build
+    /// their copy from `CatchShare.shareText(for:)` / `identifier(for:)`.
+    @Test func callsignlessCatchFallsBackToTheHexId() {
+        let plane = CardPlane(callsign: " ", model: "Cessna 172", carrier: nil,
+                              rarity: .common, type: .ga, icao24: "a1b2c3")
+        #expect(CatchShare.identifier(for: plane) == "A1B2C3")
+        #expect(CatchShare.shareText(for: plane) == "Caught A1B2C3 · Cessna 172 on Tailspot")
+        #expect(MultiCatchReveal.shareTitle(for: plane) == "Share A1B2C3")
+        let named = CardPlane(callsign: "N172SP", model: nil, carrier: nil,
+                              rarity: .common, type: .ga, icao24: "a1b2c3")
+        #expect(CatchShare.identifier(for: named) == "N172SP")
+        let bare = CardPlane(callsign: nil, model: nil, carrier: nil, rarity: .common, type: .ga)
+        #expect(CatchShare.identifier(for: bare) == nil)
+    }
+
     @Test func shareMessageCarriesTheStoreLinkMidSentence() {
         let m = CatchShare.shareMessage(shareText: "Caught X on Tailspot")
         #expect(m.hasPrefix("Caught X on Tailspot — get the app at "))
@@ -172,6 +202,26 @@ import Testing
     }
 }
 
+/// The card takes hits only with a live control on it, and a body tap that
+/// no control claims still continues (except while the chips are up).
+@Suite struct RevealCardTapsTests {
+    @Test func tapThroughUntilAControlIsLive() {
+        #expect(!RevealCardTaps.cardTakesHits(chipsShown: false, settled: false,
+                                              hasZoomablePhoto: true, shareAvailable: false))
+        #expect(!RevealCardTaps.cardTakesHits(chipsShown: false, settled: true,
+                                              hasZoomablePhoto: false, shareAvailable: false))
+        #expect(RevealCardTaps.cardTakesHits(chipsShown: false, settled: true,
+                                             hasZoomablePhoto: false, shareAvailable: true))
+        #expect(RevealCardTaps.cardTakesHits(chipsShown: true, settled: true,
+                                             hasZoomablePhoto: false, shareAvailable: false))
+    }
+
+    @Test func bodyTapContinuesUnlessTheChipsAreUp() {
+        #expect(RevealCardTaps.bodyTapDismisses(chipsShown: false))
+        #expect(!RevealCardTaps.bodyTapDismisses(chipsShown: true))
+    }
+}
+
 /// The callsign-line Share button: a small disc, but always a ≥44 pt tap.
 @Suite struct RevealShareButtonMetricsTests {
     /// Card scales the reveal actually uses: card width = min(screen − 28,
@@ -182,6 +232,19 @@ import Testing
     func hitTargetIsAtLeast44(scale: CGFloat) {
         #expect(RevealShareButtonMetrics.hitSide(scale: scale) >= 44)
         #expect(RevealShareButtonMetrics.hitSide(scale: scale) >= RevealShareButtonMetrics.disc(scale: scale))
+    }
+
+    /// The tap rect is exactly the hit side square (not wider: it used to be
+    /// ~58 × 44 and reached into the name text), centred on the disc.
+    @Test(arguments: scales + [2.0])
+    func hitRectIsExactlyTheHitSquare(scale: CGFloat) {
+        let r = RevealShareButtonMetrics.hitRect(scale: scale)
+        let hit = RevealShareButtonMetrics.hitSide(scale: scale)
+        let disc = RevealShareButtonMetrics.disc(scale: scale)
+        #expect(r.width == hit)
+        #expect(r.height == hit)
+        #expect(r.minX == 0)
+        #expect(abs(r.midY - disc / 2) < 0.0001)
     }
 
     @Test func discScalesWithTheCard() {

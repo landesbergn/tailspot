@@ -112,10 +112,6 @@ enum CatchShare {
     /// is whatever identifies the plane (callsign, else hex id); with
     /// neither a callsign nor a model it still reads as a sentence.
     static func shareText(callsign: String?, model: String?) -> String {
-        func clean(_ s: String?) -> String? {
-            guard let t = s?.trimmingCharacters(in: .whitespaces), !t.isEmpty else { return nil }
-            return t
-        }
         let cs = clean(callsign)
         let md = clean(model)
         switch (cs, md) {
@@ -124,6 +120,26 @@ enum CatchShare {
         case let (nil, m?): return "Caught \(m) on Tailspot"
         case (nil, nil): return "Caught a plane on Tailspot"
         }
+    }
+
+    /// How the share copy names a plane: its callsign, else its hex id
+    /// (uppercased, as the Hangar detail shows it), else nil. One rule for
+    /// every share path, so a callsign-less catch says the same words from
+    /// the reveal, the multi-catch reveal, and the detail screen.
+    static func identifier(for plane: CardPlane) -> String? {
+        clean(plane.callsign) ?? clean(plane.icao24)?.uppercased()
+    }
+
+    /// `shareText(callsign:model:)` for a card, naming it via `identifier`.
+    static func shareText(for plane: CardPlane) -> String {
+        shareText(callsign: identifier(for: plane), model: plane.model)
+    }
+
+    /// Trims spaces AND newlines (the detail screen's `trimmedNonEmpty`
+    /// rule); nil when nothing is left.
+    private static func clean(_ s: String?) -> String? {
+        guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        return t
     }
 
     /// Text that accompanies the shared card image. The link sits

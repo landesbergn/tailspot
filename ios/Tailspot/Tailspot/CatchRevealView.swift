@@ -98,15 +98,20 @@ nonisolated enum RevealShareGate {
     /// - pipelineFinished: the catch pipeline is done, so the composed
     ///   photo the share image draws exists. Always true off the
     ///   early-shell path (no loader).
+    /// - catchSaved: the catch is in the Hangar. The pipeline also
+    ///   "finishes" when it errors out, leaving a shell for a catch that
+    ///   was never saved, which must not be shared. Always true off the
+    ///   early-shell path and for a duplicate (the existing row is saved).
     /// - hasBonusRound: this reveal carries a route/type guess.
     /// - chipsCollapsed: the guess chips have gone away after the answer.
     /// - bonusResolved / voiceOver: under VoiceOver the chips stay up,
     ///   resolved, until the user continues (they never collapse), so a
-    ///   resolved round counts as finished there.
-    static func isAvailable(settled: Bool, pipelineFinished: Bool,
+    ///   resolved round counts as finished there. (If VoiceOver is turned
+    ///   off after that, the view collapses the chips then.)
+    static func isAvailable(settled: Bool, pipelineFinished: Bool, catchSaved: Bool,
                             hasBonusRound: Bool, chipsCollapsed: Bool,
                             bonusResolved: Bool, voiceOver: Bool) -> Bool {
-        guard settled, pipelineFinished else { return false }
+        guard settled, pipelineFinished, catchSaved else { return false }
         guard hasBonusRound else { return true }
         return chipsCollapsed || (bonusResolved && voiceOver)
     }
@@ -124,6 +129,28 @@ nonisolated enum RevealShareButtonMetrics {
 
     /// The tappable side: the disc, grown to at least 44 pt.
     static func hitSide(scale: CGFloat) -> CGFloat { max(minHitTarget, disc(scale: scale)) }
+
+    /// The tap rect, in the coordinates of the button's layout frame
+    /// (`hitSide` wide, `disc` tall, so the row doesn't grow): exactly
+    /// `hitSide` square, reaching equally above and below the disc.
+    static func hitRect(scale: CGFloat) -> CGRect {
+        let hit = hitSide(scale: scale)
+        return CGRect(x: 0, y: -(hit - disc(scale: scale)) / 2, width: hit, height: hit)
+    }
+}
+
+/// Which taps the reveal card takes itself. Pure so `RevealShareTests`
+/// pins it. The card is tap-through (taps reach the dismiss catcher
+/// behind) until it holds a live control; then it takes hits, and a tap on
+/// its body that no control claims still advances/dismisses, except while
+/// the bonus-round chips are up (body taps there do nothing, as before).
+nonisolated enum RevealCardTaps {
+    static func cardTakesHits(chipsShown: Bool, settled: Bool,
+                              hasZoomablePhoto: Bool, shareAvailable: Bool) -> Bool {
+        chipsShown || (settled && hasZoomablePhoto) || shareAvailable
+    }
+
+    static func bodyTapDismisses(chipsShown: Bool) -> Bool { !chipsShown }
 }
 
 /// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
@@ -632,6 +659,10 @@ struct CatchRevealView: View {
     /// earns no points but still keeps the streak alive, and the stamp says so.
     var streakDays: Int? = nil
 
+    /// The DEBUG ✦ Catch simulated reveal (`PendingReveal.isSimulated`):
+    /// Share still works, but sends no share analytics.
+    var isSimulated: Bool = false
+
     /// Early-shell conduit (capture-lag work, 2026-08-13). Non-nil when the
     /// reveal presented as a loading shell at tap time: the pipeline swaps
     /// in the finished `plane` snapshot (photo, healed route), the persisted
@@ -876,7 +907,16 @@ struct CatchRevealView: View {
                                 shareText: shareText,
                                 shareMessage: CatchShare.shareMessage(shareText: shareText),
                                 hasCatchPhoto: hasCatchPhoto,
-                                source: .reveal)
+                                source: .reveal,
+                                analyticsMuted: isSimulated)
+            }
+            // Under VoiceOver a resolved round's chips stay up (see
+            // `scheduleCollapse`). If VoiceOver is then turned off, collapse
+            // them now, or they'd stay up and Share would never appear.
+            .onChange(of: voiceOverEnabled) { _, isOn in
+                if !isOn, guessResolved, chipsPhase == .shown {
+                    scheduleCollapse(correct: resolution?.correct ?? false)
+                }
             }
         }
     }
@@ -886,21 +926,16 @@ struct CatchRevealView: View {
     /// Only the user's own composed photo renders into a share image.
     private var hasCatchPhoto: Bool { zoomablePhotoURL != nil }
 
-    /// Same words as the Hangar detail's share: callsign, else the hex id
-    /// (from the saved row, once the pipeline hands it over), plus the
-    /// card's model name.
-    private var shareText: String {
-        let callsign = livePlane.callsign?.trimmingCharacters(in: .whitespaces)
-        return CatchShare.shareText(callsign: callsign?.isEmpty == false
-                                        ? callsign : loader?.row?.icao24.uppercased(),
-                                    model: livePlane.model)
-    }
+    /// Same words as the Hangar detail's share: callsign, else the hex id,
+    /// plus the card's model name.
+    private var shareText: String { CatchShare.shareText(for: livePlane) }
 
     /// Settled, photo in, and no bonus round on screen.
     private var shareAvailable: Bool {
         RevealShareGate.isAvailable(
             settled: settled,
             pipelineFinished: loader?.pipelineFinished ?? true,
+            catchSaved: loader.map { $0.row != nil || isDuplicate } ?? true,
             hasBonusRound: liveGuess != nil,
             chipsCollapsed: chipsPhase == .collapsed,
             bonusResolved: guessResolved,
@@ -909,7 +944,8 @@ struct CatchRevealView: View {
 
     private func openShare() {
         guard shareAvailable else { return }
-        CatchShareAnalytics(plane: livePlane, hasCatchPhoto: hasCatchPhoto, source: .reveal)
+        CatchShareAnalytics(plane: livePlane, hasCatchPhoto: hasCatchPhoto, source: .reveal,
+                            muted: isSimulated)
             .sheetOpened()
         showShareSheet = true
     }
@@ -949,6 +985,16 @@ struct CatchRevealView: View {
             // identities and SwiftUI would rebuild the card subtree when the
             // chips pop, resetting the ledger count-up mid-ceremony.
             card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable)
+                // Once the card takes hits (below), a tap on its body that no
+                // control claims (Share, photo zoom, chips) would otherwise
+                // be swallowed, so it does what the catcher behind would:
+                // continue. Child controls win over this parent gesture.
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if RevealCardTaps.bodyTapDismisses(chipsShown: chipsPhase == .shown) {
+                        advanceOrDismiss()
+                    }
+                }
                 .accessibilityElement(children: render?.chipsInLayout == true
                                                 ? .contain : .ignore)
                 .accessibilityLabel(render?.chipsInLayout == true
@@ -961,9 +1007,11 @@ struct CatchRevealView: View {
                 // needs hits too. Either way only ATTACHED gestures capture —
                 // margin/chrome taps still fall through to the catcher and
                 // dismiss (or skip-then-dismiss).
-                // The callsign-line Share button needs hits once it's live too.
-                .allowsHitTesting(chipsPhase == .shown || (settled && zoomablePhotoURL != nil)
-                                  || shareAvailable)
+                // The callsign-line Share button needs hits once it's live too;
+                // the body-tap gesture above keeps tap-to-continue working.
+                .allowsHitTesting(RevealCardTaps.cardTakesHits(
+                    chipsShown: chipsPhase == .shown, settled: settled,
+                    hasZoomablePhoto: zoomablePhotoURL != nil, shareAvailable: shareAvailable))
                 // At rest the card is ONE VoiceOver element (`.ignore` above),
                 // which hides the Share button inside it, so Share is offered
                 // as a named action on that element while it's live.
@@ -1643,7 +1691,7 @@ struct CatchRevealView: View {
                 .background(Circle().fill(Brand.Color.bgElevated))
                 .overlay(Circle().strokeBorder(RP.rule, lineWidth: 1))
                 .frame(width: hit, height: disc)
-                .contentShape(Rectangle().inset(by: -(hit - disc) / 2))
+                .contentShape(Path(RevealShareButtonMetrics.hitRect(scale: scale)))
         }
         .buttonStyle(.plain)
         .opacity(visible ? 1 : 0)

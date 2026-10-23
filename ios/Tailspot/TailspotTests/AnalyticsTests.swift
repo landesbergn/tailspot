@@ -451,6 +451,22 @@ struct AnalyticsFacadeTests {
         }
     }
 
+    /// The DEBUG simulated reveal's share funnel is muted: nothing captured.
+    @Test func mutedCatchShareSendsNothing() {
+        withSink { sink in
+            let plane = CardPlane(callsign: "SIM0001", model: "Sim", carrier: nil,
+                                  rarity: .epic, type: .mil)
+            let a = CatchShareAnalytics(plane: plane, hasCatchPhoto: false, source: .reveal, muted: true)
+            a.sheetOpened()
+            a.formatSelected(.square, via: "swipe")
+            a.sheetClosed(shared: false, formatsViewed: 1, lastFormat: .square)
+            #expect(!sink.captured.contains {
+                $0.event.hasPrefix("catch_share_")
+                    && $0.properties["rarity"]?.jsonValue as? String == Rarity.epic.label
+            })
+        }
+    }
+
     /// The three entry points report distinct `source` values.
     @Test func catchShareOpenedCarriesItsSource() {
         withSink { sink in

@@ -179,7 +179,8 @@ struct CatchDetailView: View {
             destIcao: first.displayDest,
             originName: first.originName,
             destName: first.destName,
-            isFirstOfType: wasFirstOfType
+            isFirstOfType: wasFirstOfType,
+            icao24: first.icao24
         )
     }
 
@@ -329,8 +330,7 @@ struct CatchDetailView: View {
     /// The model is the card's (canonical) name, as on the reveal, so the
     /// words match the card in the image.
     private var shareText: String {
-        CatchShare.shareText(callsign: first.callsign?.trimmedNonEmpty ?? first.icao24.uppercased(),
-                             model: detailPlane.model)
+        CatchShare.shareText(for: detailPlane)
     }
 
     private var shareMessage: String { CatchShare.shareMessage(shareText: shareText) }

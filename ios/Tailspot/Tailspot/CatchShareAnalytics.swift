@@ -44,11 +44,15 @@ struct CatchShareAnalytics {
     let rarity: String
     let hasPhoto: Bool
     let source: Source
+    /// true sends nothing: the DEBUG ✦ Catch simulated reveal can still
+    /// open the share sheet, but it's documented as no telemetry.
+    let muted: Bool
 
-    init(plane: CardPlane, hasCatchPhoto: Bool, source: Source) {
+    init(plane: CardPlane, hasCatchPhoto: Bool, source: Source, muted: Bool = false) {
         self.rarity = plane.rarity.label
         self.hasPhoto = hasCatchPhoto
         self.source = source
+        self.muted = muted
     }
 
     /// How a Messages composer ended, in funnel terms.
@@ -110,6 +114,7 @@ struct CatchShareAnalytics {
     }
 
     private func send(_ event: String, _ props: [String: AnalyticsValue] = [:]) {
+        guard !muted else { return }
         var all = props
         all["rarity"] = .string(rarity)
         all["has_photo"] = .bool(hasPhoto)

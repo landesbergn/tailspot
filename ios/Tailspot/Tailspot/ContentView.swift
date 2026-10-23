@@ -1081,6 +1081,7 @@ struct ContentView: View {
                     releaseGuessHold(for: reveal)
                 },
                 streakDays: reveal.streakDays,
+                isSimulated: reveal.isSimulated,
                 loader: reveal.loader
             )
             .presentationBackground(.clear)
@@ -3299,7 +3300,8 @@ struct ContentView: View {
             destName: observed?.aircraft.destName ?? row.destName,
             isFirstOfType: isFirstOfType,
             guessKind: guessKind,
-            guessBonusPoints: guessBonusPoints
+            guessBonusPoints: guessBonusPoints,
+            icao24: row.icao24
         )
     }
 
@@ -3360,7 +3362,8 @@ struct ContentView: View {
             altText: CardPlane.altText(fromMeters: aircraft.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
             distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
-            isFirstOfType: isFirstOfType
+            isFirstOfType: isFirstOfType,
+            icao24: aircraft.icao24
         )
     }
 
