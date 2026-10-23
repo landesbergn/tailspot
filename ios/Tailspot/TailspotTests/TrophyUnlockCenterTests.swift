@@ -156,33 +156,88 @@ struct TrophyUnlockCenterTests {
     // MARK: - Roster-version reseed (the 2026-07-10 expansion path)
 
     /// An EXISTING tester: seeded ledger, but stamped behind the current
-    /// roster generation. The next enqueue must RESEED — silently
-    /// acknowledging trophies the new roster hands them — and present ONE
-    /// recap instead of an unlock flood.
-    @Test func staleRosterStampReseedsAndRecapsWithoutFlood() {
+    /// roster generation. The next enqueue must RESEED — acknowledging the
+    /// trophies the new roster hands them — and queue an ordinary unlock
+    /// card for just those (no recap sheet).
+    @Test func staleRosterStampReseedsAndQueuesUnlockCards() {
         let ledger = freshLedger()
-        // Yesterday's build: seeded under roster version 1 (a center pinned
-        // to version 1 over the SAME ledger + roster).
-        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
-        old.enqueueNewUnlocks(from: catches(3, legendary: 1))   // seeds; medal gold + badge earned
+        // Yesterday's build: roster version 1 WITHOUT the badge (a center
+        // pinned to version 1 over the SAME ledger), so its seed acknowledged
+        // only the medal.
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster.filter { $0.id != "b" }, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(3, legendary: 1))   // seeds; medal gold earned
         #expect(ledger.rosterVersion == 1)
 
-        // Today's build (version 2). Same Hangar → reseed + recap, NO events.
+        // Today's build (version 2) adds the badge, already qualified for →
+        // reseed + ONE unlock card for the badge (the medal was already
+        // acknowledged), no recap.
         let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
         new.enqueueNewUnlocks(from: catches(3, legendary: 1))
-        #expect(new.pendingEvents.isEmpty, "version bump must absorb, not flood")
-        #expect(new.pendingRecap?.earned == 2)
+        #expect(new.pendingRecap == nil, "a roster bump gets unlock cards, not the recap sheet")
+        #expect(new.pendingEvents.map(\.achievementID) == ["b"])
+        #expect(new.head?.kind == .badgeEarned)
         #expect(ledger.rosterVersion == 2)
+        #expect(ledger.acknowledgedOrdinal(for: "b") == TrophyTier.silver.ordinal)
 
-        // After the stamp, normal diffing resumes (no recap re-queues).
-        new.dismissRecap()
+        // After the card is seen, normal diffing resumes and nothing re-queues.
+        new.markShown(new.head!)
+        new.advance()
         new.enqueueNewUnlocks(from: catches(3, legendary: 1))
         #expect(new.pendingRecap == nil)
         #expect(new.pendingEvents.isEmpty)
     }
 
+    /// A roster bump that hands this user NOTHING new (everything earned was
+    /// already in the ledger) restamps silently: no cards, no recap.
+    @Test func staleStampWithNothingNewQueuesNothing() {
+        let ledger = freshLedger()
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(3, legendary: 1))   // medal gold + badge
+        let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
+        new.enqueueNewUnlocks(from: catches(3, legendary: 1))
+        #expect(new.pendingRecap == nil)
+        #expect(new.pendingEvents.isEmpty)
+        #expect(ledger.rosterVersion == 2)
+    }
+
+    /// A medal that climbed a tier while the stamp was stale (e.g. tiers
+    /// earned on a build that hadn't diffed yet) is part of what the reseed
+    /// newly acknowledges, so it gets a card too.
+    @Test func staleStampQueuesATierClimbTheLedgerHadNotSeen() {
+        let ledger = freshLedger()
+        let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
+        old.enqueueNewUnlocks(from: catches(1))   // seed at bronze
+        let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
+        new.enqueueNewUnlocks(from: catches(2))   // silver, never acknowledged
+        #expect(new.pendingRecap == nil)
+        #expect(new.pendingEvents.map(\.achievementID) == ["m"])
+        #expect(new.head?.newTier == .silver)
+    }
+
+    /// The first-ever seed (unseeded ledger) still recaps the WHOLE earned
+    /// set — that is the "you have a trophy case" introduction.
+    @Test func firstSeedStillRecapsEverythingEarned() {
+        let center = TrophyUnlockCenter(ledger: freshLedger(), roster: roster)
+        center.enqueueNewUnlocks(from: catches(3, legendary: 1))
+        #expect(center.pendingRecap?.achievements.map(\.id) == ["m", "b"])
+        #expect(center.pendingEvents.isEmpty, "the first seed recaps, it never floods cards")
+    }
+
+    /// `trophy_unlocked` shape: a live toast keeps its historical keys (no
+    /// `via`); a reseed grant is marked `via: "reseed"`.
+    @Test func unlockPropertiesMarkReseedGrants() {
+        let event = TrophyUnlockEvent(achievement: roster[1], newTier: .silver, kind: .badgeEarned)
+        let live = TrophyUnlockCenter.unlockProperties(event)
+        #expect(live["via"] == nil)
+        #expect(live["achievement"]?.jsonValue as? String == "b")
+        #expect(live["kind"]?.jsonValue as? String == "badge")
+        let reseed = TrophyUnlockCenter.unlockProperties(event, via: "reseed")
+        #expect(reseed["via"]?.jsonValue as? String == "reseed")
+        #expect(Set(reseed.keys) == Set(live.keys).union(["via"]))
+    }
+
     /// A seeded-but-stale ledger with NOTHING earned (installed, never
-    /// caught) gets the stamp but never the recap.
+    /// caught) gets the stamp but no cards and no recap.
     @Test func staleStampWithZeroEarnedStampsSilently() {
         let ledger = freshLedger()
         let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
@@ -190,6 +245,7 @@ struct TrophyUnlockCenterTests {
         let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
         new.enqueueNewUnlocks(from: [])
         #expect(new.pendingRecap == nil)
+        #expect(new.pendingEvents.isEmpty)
         #expect(ledger.rosterVersion == 2)
     }
 
@@ -200,8 +256,8 @@ struct TrophyUnlockCenterTests {
         let old = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 1)
         old.enqueueNewUnlocks(from: catches(1))   // seed at bronze
         let new = TrophyUnlockCenter(ledger: ledger, roster: roster, rosterVersion: 2)
-        new.enqueueNewUnlocks(from: catches(1))   // reseed + recap (bronze earned)
-        new.dismissRecap()
+        new.enqueueNewUnlocks(from: catches(1))   // reseed (bronze already acknowledged)
+        #expect(new.pendingEvents.isEmpty)
         new.enqueueNewUnlocks(from: catches(2))   // silver crossing — a real event
         #expect(new.pendingEvents.count == 1)
         #expect(new.head?.newTier == .silver)
@@ -217,8 +273,8 @@ struct TrophyUnlockCenterTests {
 
     /// The rosterVersion 2→3 upgrade on a device whose server facts already
     /// carry wins (e.g. Noah's historical crown backfill): the reseed must
-    /// silently absorb Top Flight + Dynasty + Chart Topper into the ONE
-    /// recap — never a per-trophy toast flood.
+    /// grant Top Flight + Dynasty + Chart Topper as three unlock cards (the
+    /// overlay offers SKIP ALL), not the recap sheet.
     @Test func versionBumpAbsorbsServerEarnedWinnerTrophies() {
         let ledger = freshLedger()
         let suite = isolatedSuite()
@@ -240,13 +296,16 @@ struct TrophyUnlockCenterTests {
         // Today's build: full roster, version 3, wins already banked server-side.
         let new = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
         new.enqueueNewUnlocks(from: [])
-        #expect(new.pendingEvents.isEmpty, "reseed must absorb pre-earned server trophies, not flood")
-        #expect(new.pendingRecap?.achievements.map(\.id).sorted()
+        #expect(new.pendingRecap == nil)
+        #expect(new.pendingEvents.map(\.achievementID).sorted()
                 == ["charttopper", "dynasty", "topflight"])
         #expect(ledger.rosterVersion == Trophies.rosterVersion)
 
-        // And after the recap, re-diffing the same facts stays quiet.
-        new.dismissRecap()
+        // Re-diffing while the cards are still queued doesn't duplicate them;
+        // after SKIP ALL it stays quiet.
+        new.enqueueNewUnlocks(from: [])
+        #expect(new.pendingEvents.count == 3)
+        new.skipAll()
         new.enqueueNewUnlocks(from: [])
         #expect(new.pendingEvents.isEmpty)
         #expect(new.pendingRecap == nil)

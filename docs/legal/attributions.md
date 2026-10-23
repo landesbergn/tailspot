@@ -20,6 +20,24 @@ Live aircraft positions are provided by **adsb.lol**, a community ADS-B aggregat
 
 ---
 
+## Backup aircraft position data — adsb.fi
+
+When adsb.lol is unreachable, live aircraft positions come from **adsb.fi**, a community ADS-B aggregation network based in Finland, used for personal, non-commercial purposes under adsb.fi's open data terms.
+
+**Source:** https://adsb.fi
+**Terms:** https://github.com/adsbfi/opendata
+
+---
+
+## Flight routes — adsb.lol route database
+
+Origin and destination airports are looked up by callsign through adsb.lol's route API, which serves the community-maintained **Virtual Radar Server standing data**.
+
+**License:** CC0 1.0 (public domain dedication)
+**Source:** https://github.com/vradarserver/standing-data (served via https://github.com/adsblol/api)
+
+---
+
 ## Aircraft registry data — FAA Releasable Aircraft Database
 
 Aircraft registration and identity data for US-registered aircraft (N-numbers) is sourced from the **FAA Releasable Aircraft Database**.
@@ -27,6 +45,16 @@ Aircraft registration and identity data for US-registered aircraft (N-numbers) i
 **License:** Public domain
 **Source:** https://www.faa.gov/licenses_certificates/aircraft_certification/aircraft_registry/releasable_aircraft_download
 **Credit note:** Per the FAA: "All digital products published by the FAA are in the public domain… a written release or credit is not required." This credit is provided as a courtesy.
+
+---
+
+## Worldwide aircraft registry data — ADS-B Exchange
+
+Registrations and type designators for non-US aircraft come from the **ADS-B Exchange** basic aircraft database (`basic-ac-db`), which draws on government registries and community contributions. Registry details are also filled in from the live position feeds as aircraft are seen.
+
+**Source:** https://www.adsbexchange.com
+
+> REVIEW: ADS-B Exchange publishes no explicit license for `basic-ac-db`, and its site states that commercial use requires written authorization. Confirm Tailspot's use (imported into the backend registry, served to the App Store app) is permitted, or get written OK, before relying on further imports.
 
 ---
 
@@ -76,4 +104,19 @@ The OFL permits use, distribution, and modification of the font, provided the fo
 
 ---
 
-*Last updated: 2026-06-26*
+## Open-source software
+
+The iOS app includes the **PostHog iOS SDK** for product analytics.
+
+**License:** MIT License — Copyright © 2023 PostHog
+**Source:** https://github.com/PostHog/posthog-ios
+
+---
+
+## Apple trademarks
+
+Apple, the Apple logo, and iPhone are trademarks of Apple Inc., registered in the U.S. and other countries and regions. App Store is a service mark of Apple Inc. Tailspot is not affiliated with, sponsored by, or endorsed by Apple Inc.
+
+---
+
+*Last updated: 2026-10-21*
