@@ -326,9 +326,11 @@ struct CatchDetailView: View {
     }
 
     /// Share copy, built by `CatchShare` so the reveal's Share says the same.
+    /// The model is the card's (canonical) name, as on the reveal, so the
+    /// words match the card in the image.
     private var shareText: String {
         CatchShare.shareText(callsign: first.callsign?.trimmedNonEmpty ?? first.icao24.uppercased(),
-                             model: first.model)
+                             model: detailPlane.model)
     }
 
     private var shareMessage: String { CatchShare.shareMessage(shareText: shareText) }

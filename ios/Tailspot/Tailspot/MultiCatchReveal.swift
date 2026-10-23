@@ -100,6 +100,23 @@ struct MultiCatchReveal: View {
         return t
     }
 
+    /// First-of-type flags for a run's fresh catches, in order. The server
+    /// pays the bonus once per typecode the device didn't already hold
+    /// (`isFirstOfType` checks its history before each insert), so when a run
+    /// has two catches of a new type only the first earns it. The per-row
+    /// Hangar scan in `ContentView.cardPlane` can't see that: it gave both
+    /// rows the same answer, so the receipt showed two bonuses or none.
+    /// Both catches share a typecode and so a base, so which one carries
+    /// the bonus doesn't change the total. A nil typecode never qualifies.
+    nonisolated static func runFirstOfType(typecodes: [String?],
+                                           heldTypecodes: Set<String>) -> [Bool] {
+        var seen = heldTypecodes
+        return typecodes.map { tc in
+            guard let tc else { return false }
+            return seen.insert(tc).inserted
+        }
+    }
+
     /// The card the Share button sends: the rarest fresh catch of the run
     /// (the first one on a tie), else the rarest card overall when every
     /// card was already caught. The fan has no single "current" card, so
@@ -466,10 +483,10 @@ struct MultiCatchReveal: View {
                             .sheetOpened()
                         showShareSheet = true
                     } label: {
-                        secondaryLabel(shareTitle(for: subject.plane))
+                        secondaryLabel(Self.shareTitle(for: subject.plane))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Share \(subject.plane.model ?? subject.plane.callsign ?? "best catch")")
+                    .accessibilityLabel(Self.shareAccessibilityLabel(for: subject.plane))
                 }
             }
 
@@ -489,11 +506,21 @@ struct MultiCatchReveal: View {
 
     /// "Share UAL248": names the card that goes out, since the fan has
     /// several.
-    private func shareTitle(for plane: CardPlane) -> String {
+    static func shareTitle(for plane: CardPlane) -> String {
         guard let cs = plane.callsign?.trimmingCharacters(in: .whitespaces), !cs.isEmpty else {
             return "Share"
         }
         return "Share \(cs)"
+    }
+
+    /// VoiceOver label: the visible title first, so Voice Control's "tap
+    /// Share UAL248" still matches, then the model for context.
+    static func shareAccessibilityLabel(for plane: CardPlane) -> String {
+        let title = shareTitle(for: plane)
+        guard let model = plane.model?.trimmingCharacters(in: .whitespaces), !model.isEmpty else {
+            return title == "Share" ? "Share best catch" : title
+        }
+        return "\(title), \(model)"
     }
 
     /// Built-in text styles (.subheadline = 15 pt at the default size) so

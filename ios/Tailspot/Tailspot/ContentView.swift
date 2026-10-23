@@ -3154,9 +3154,16 @@ struct ContentView: View {
         // than dropping the whole reveal.
         if totalCount >= 2 {
             var entries: [MultiCatchReveal.Entry] = []
-            for c in newCatches {
+            // First-of-type per the server's rule: one bonus per typecode the
+            // Hangar didn't already hold, even when the run has two of it.
+            let heldTypecodes = Set(catches
+                .filter { row in !newCatches.contains { $0 === row } }
+                .compactMap(\.typecode))
+            let firstOfType = MultiCatchReveal.runFirstOfType(
+                typecodes: newCatches.map(\.typecode), heldTypecodes: heldTypecodes)
+            for (c, isFirst) in zip(newCatches, firstOfType) {
                 let observed = visibleByIcao[c.icao24]
-                let plane = cardPlane(from: c, observed: observed)
+                let plane = cardPlane(from: c, observed: observed, firstOfType: isFirst)
                 entries.append(.init(plane: plane, isDuplicate: false))
             }
             for dupIcao in duplicates {
@@ -3230,7 +3237,12 @@ struct ContentView: View {
     /// borrowing live alt/speed values from `observed` when the
     /// catch is still in view. Used by both the new-catch and
     /// duplicate paths so the reveal renders consistently.
-    private func cardPlane(from row: Catch, observed: ObservedAircraft?) -> CardPlane {
+    ///
+    /// `firstOfType` overrides the Hangar scan below. The multi-catch path
+    /// passes it because the scan can't tell a run's own rows apart (see
+    /// `MultiCatchReveal.runFirstOfType`).
+    private func cardPlane(from row: Catch, observed: ObservedAircraft?,
+                           firstOfType: Bool? = nil) -> CardPlane {
         let canonical = AircraftNaming.canonical(
             typecode: row.typecode,
             manufacturer: row.manufacturer,
@@ -3247,7 +3259,7 @@ struct ContentView: View {
             ?? row.displayDest
         // First-of-type: no *other* Hangar row shares this typecode. Display
         // only — the reveal ledger mirrors what the backend awards.
-        let isFirstOfType = row.typecode.map { tc in
+        let isFirstOfType = firstOfType ?? row.typecode.map { tc in
             !catches.contains { $0 !== row && $0.typecode == tc }
         } ?? false
         // Guess bonus (game-layer PR3; route-only per Noah 2026-07-09): a

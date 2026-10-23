@@ -111,6 +111,35 @@ import Testing
         #expect(MultiCatchReveal.shareSubject(entries)?.plane.callsign == "B")
     }
 
+    @Test func twoOfANewTypeEarnOneFirstOfTypeBonus() {
+        // The server checks its history before each insert, so the second
+        // B738 of the run is no longer first of its type.
+        let flags = MultiCatchReveal.runFirstOfType(typecodes: ["B738", "B738", "A320"],
+                                                    heldTypecodes: [])
+        #expect(flags == [true, false, true])
+        let t = MultiCatchReveal.tally([entry(.common, firstOfType: flags[0]),
+                                        entry(.common, firstOfType: flags[1]),
+                                        entry(.common, firstOfType: flags[2])])
+        #expect(t.firstOfTypePoints == 2 * ScoringBonuses.firstOfTypeBonus(base: 10))
+    }
+
+    @Test func aTypeAlreadyInTheHangarIsNeverFirst() {
+        let flags = MultiCatchReveal.runFirstOfType(typecodes: ["B738", nil, "E75L"],
+                                                    heldTypecodes: ["B738"])
+        // nil typecode has no type identity on the server either.
+        #expect(flags == [false, false, true])
+    }
+
+    @Test func shareButtonLabelStartsWithTheVisibleTitle() {
+        let named = CardPlane(callsign: "UAL248", model: "Boeing 737-900", carrier: nil,
+                              rarity: .common, type: .narrow)
+        #expect(MultiCatchReveal.shareTitle(for: named) == "Share UAL248")
+        #expect(MultiCatchReveal.shareAccessibilityLabel(for: named) == "Share UAL248, Boeing 737-900")
+        let bare = CardPlane(callsign: nil, model: nil, carrier: nil, rarity: .common, type: .narrow)
+        #expect(MultiCatchReveal.shareTitle(for: bare) == "Share")
+        #expect(MultiCatchReveal.shareAccessibilityLabel(for: bare).hasPrefix("Share"))
+    }
+
     @Test func allDuplicatesStillShareTheRarest() {
         let entries = [entry(.common, dup: true, callsign: "A"), entry(.rare, dup: true, callsign: "B")]
         #expect(MultiCatchReveal.shareSubject(entries)?.plane.callsign == "B")

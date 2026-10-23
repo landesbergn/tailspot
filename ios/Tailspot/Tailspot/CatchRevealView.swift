@@ -872,8 +872,14 @@ struct CatchRevealView: View {
     /// Only the user's own composed photo renders into a share image.
     private var hasCatchPhoto: Bool { zoomablePhotoURL != nil }
 
+    /// Same words as the Hangar detail's share: callsign, else the hex id
+    /// (from the saved row, once the pipeline hands it over), plus the
+    /// card's model name.
     private var shareText: String {
-        CatchShare.shareText(callsign: livePlane.callsign, model: livePlane.model)
+        let callsign = livePlane.callsign?.trimmingCharacters(in: .whitespaces)
+        return CatchShare.shareText(callsign: callsign?.isEmpty == false
+                                        ? callsign : loader?.row?.icao24.uppercased(),
+                                    model: livePlane.model)
     }
 
     /// Settled, photo in, and no bonus round on screen.
