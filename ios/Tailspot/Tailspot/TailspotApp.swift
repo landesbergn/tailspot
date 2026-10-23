@@ -185,6 +185,15 @@ struct TailspotApp: App {
                     // without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
+                    // One-time re-credit of bonus-round guesses that older
+                    // builds never uploaded (see GuessRecreditSweep). After
+                    // the upload above, because it only sends rows the
+                    // server already has. Its own Task at background
+                    // priority, so it never holds up the steps below. A
+                    // no-op once it has finished.
+                    Task(priority: .background) {
+                        await GuessRecreditSweep().runIfNeeded(container: container)
+                    }
                     // Retry any Hangar deletes that didn't reach the server —
                     // in its own Task, so a slow network can't hold up the
                     // reminder re-plan and challenge refresh below.
