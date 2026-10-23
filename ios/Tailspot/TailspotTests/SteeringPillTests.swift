@@ -79,6 +79,35 @@ struct SteeringPillTests {
         #expect(!SteeringPill.isEligible(catchCount: 0, retired: true))
     }
 
+    @Test func debugOverrideMakesAVeteranEligible() {
+        // The wrench override: a phone with a real Hangar, already retired,
+        // still gets the pill so Noah can field-test it.
+        #expect(SteeringPill.isEligible(catchCount: 40, retired: true, debugForced: true))
+        #expect(SteeringPill.isEligible(catchCount: 0, retired: false, debugForced: true))
+        // Off is exactly the production rule.
+        #expect(!SteeringPill.isEligible(catchCount: 40, retired: true, debugForced: false))
+        #expect(SteeringPill.isEligible(catchCount: 0, retired: false, debugForced: false))
+        // Distinct from the retired key, so flipping it never touches the latch.
+        #expect(SteeringPill.debugForceKey != SteeringPill.retiredKey)
+    }
+
+    @Test func caughtNeedsACatchDatedAfterTheShow() {
+        let shown = Date(timeIntervalSince1970: 1_000_000)
+        // A real first catch after the pill showed.
+        #expect(SteeringPill.shouldFireCaught(
+            shownAt: shown, catchDates: [shown.addingTimeInterval(42)]))
+        // A Hangar restore into a zero-catch reinstall: old catches only.
+        #expect(!SteeringPill.shouldFireCaught(
+            shownAt: shown,
+            catchDates: [shown.addingTimeInterval(-86_400), shown.addingTimeInterval(-60)]))
+        // Restore plus a fresh catch still counts.
+        #expect(SteeringPill.shouldFireCaught(
+            shownAt: shown,
+            catchDates: [shown.addingTimeInterval(-86_400), shown.addingTimeInterval(5)]))
+        // Pill never showed this session.
+        #expect(!SteeringPill.shouldFireCaught(shownAt: nil, catchDates: [shown]))
+    }
+
     @Test func retiredKeyIsStable() {
         // Renaming the key would re-arm the pill for every veteran.
         #expect(SteeringPill.retiredKey == "tailspot.steering.retired")

@@ -300,6 +300,12 @@ struct ContentView: View {
     /// view when it changes; it latches true the first time the Hangar is
     /// non-empty and never clears, so the pill is gone for good.
     @AppStorage(SteeringPill.retiredKey) private var steeringRetired = false
+    #if DEBUG
+    /// Wrench override: show the steering pill as if this device had zero
+    /// catches and had never retired it. DEBUG-only; read through
+    /// `steeringEligible`, and keeps the pill out of telemetry.
+    @AppStorage(SteeringPill.debugForceKey) private var steeringDebugForce = false
+    #endif
     /// The plane the pill points at, carried across ticks for hysteresis.
     /// Written only by the 1 Hz `steeringPillTick`, never from `body`.
     @State private var steeringTargetIcao: String?
@@ -855,7 +861,8 @@ struct ContentView: View {
             // First catch: retire the steering pill for good, and close the
             // shown -> caught funnel if it showed this session.
             if !catches.isEmpty && !steeringRetired {
-                if let shownAt = steeringShownAt {
+                if let shownAt = steeringShownAt,
+                   SteeringPill.shouldFireCaught(shownAt: shownAt, catchDates: catches.lazy.map(\.caughtAt)) {
                     SteeringPill.fireCaught(secondsSinceShown: Date().timeIntervalSince(shownAt))
                 }
                 steeringRetired = true
@@ -3622,9 +3629,7 @@ struct ContentView: View {
         hfovDeg: Double,
         vfovDeg: Double
     ) -> SteeringHint? {
-        guard SteeringPill.isEligible(catchCount: catches.count, retired: steeringRetired) else {
-            return nil
-        }
+        guard steeringEligible else { return nil }
         return SteeringPill.hint(
             eligible: true,
             hasFeedError: adsb.lastError != nil || adsb.lastErrorUserMessage != nil,
@@ -3650,11 +3655,27 @@ struct ContentView: View {
         )
     }
 
+    /// The ONE steering eligibility funnel, read by both the render and the
+    /// 1 Hz tick: zero catches and not retired, or the DEBUG wrench override.
+    private var steeringEligible: Bool {
+        SteeringPill.isEligible(
+            catchCount: catches.count, retired: steeringRetired, debugForced: steeringDebugForced
+        )
+    }
+
+    /// The wrench override's value; always false in release builds.
+    private var steeringDebugForced: Bool {
+        #if DEBUG
+        steeringDebugForce
+        #else
+        false
+        #endif
+    }
+
     /// `steering_pill_shown` (once per session) and the hysteresis target,
     /// from the 1 Hz `.task` loop in `body` (never from the render pass).
     private func steeringPillTick() {
-        guard SteeringPill.isEligible(catchCount: catches.count, retired: steeringRetired),
-              let heading = location.heading else {
+        guard steeringEligible, let heading = location.heading else {
             if steeringTargetIcao != nil { steeringTargetIcao = nil }
             return
         }
@@ -3669,7 +3690,10 @@ struct ContentView: View {
             vfovDeg: Self.baseVfovDeg / zoom
         )
         if steeringTargetIcao != hint?.icao24 { steeringTargetIcao = hint?.icao24 }
-        guard let hint, steeringShownAt == nil, activationFunnelCanCount else { return }
+        // A wrench-forced pill is a debug lie, so it never reaches telemetry
+        // (and with `steeringShownAt` left nil, no caught event either).
+        guard let hint, steeringShownAt == nil, activationFunnelCanCount,
+              !steeringDebugForced else { return }
         steeringShownAt = Date()
         SteeringPill.fireShown(hint, headingAccuracyDeg: location.headingAccuracy)
     }
@@ -3789,6 +3813,9 @@ struct ContentView: View {
                 gateDebugRow
                 localGateRow
                 detectorGateRow
+                #if DEBUG
+                steeringDebugRow
+                #endif
             }
             .font(Brand.Font.mono(size: 12))
             .foregroundStyle(Brand.Color.textPrimary)
@@ -4074,6 +4101,42 @@ struct ContentView: View {
             Spacer()
         }
     }
+
+    #if DEBUG
+    /// Wrench row: lets Noah see the first-catch steering pill on a phone
+    /// with a real Hangar. Applied at `steeringEligible`, kept out of
+    /// telemetry by `steeringPillTick`.
+    private var steeringDebugRow: some View {
+        debugFlagRow(
+            title: "Act like a first-timer",
+            detail: "On: the camera treats this phone as if it had never caught a plane, so the \"turn left / behind you\" pill shows. Off: normal behavior, where the pill only shows for someone with no catches yet.",
+            isOn: $steeringDebugForce
+        )
+    }
+
+    /// One feature-flag row for the wrench panel (Noah, 2026-09-05: plain
+    /// language, consistent on/off, "think of them like feature flags").
+    /// A real switch with the title and a one-sentence "On: … Off: …"
+    /// description under it. Same shape as the helper on
+    /// feat/frame-is-the-catch (#229); keep one copy when they meet.
+    private func debugFlagRow(
+        title: String,
+        detail: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(detail)
+                    .font(Brand.Font.mono(size: 10))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .tint(Brand.Color.cyan)
+        .padding(.vertical, 4)
+    }
+    #endif
 
     /// Tap-to-toggle row for the L2 localized sky gate (debug). SHADOW
     /// (telemetry only, ships this way) ↔ ENFORCE (blocks a bracket aimed at
@@ -5049,17 +5112,12 @@ struct CornerBracket: Shape {
 
 // MARK: - Empty-sky pulse
 
-/// Slow 0.4 → 1.0 opacity breathe at ~1 Hz. Used on the empty-sky
-/// status dot so it telegraphs "actively scanning" without being
-/// a radar sweep. Disabled (`active: false`) when the pill is
-/// surfacing an error string — at that point we don't want the
-/// liveness signal contradicting the message. Reduce Motion: a
-/// steady full-opacity dot, no TimelineView ticking.
 /// The AR HUD's low status pill: pulsing dot + mono ALL-CAPS readout on a
 /// translucent capsule. One view for the empty-sky / error states and the
 /// first-catch steering pill, so they can't drift apart, and so the
-/// snapshot harness renders the shipping pill rather than a copy. Fixed
-/// type size by choice (AR HUD readouts don't scale; see ios/CLAUDE.md).
+/// snapshot harness renders the shipping pill rather than a copy. The mono
+/// face is `Font.custom(_:size:)`, which scales with Dynamic Type relative
+/// to body, so at accessibility sizes the pill can wrap (centred, below).
 struct HUDStatusPill: View {
     let text: String
     let tint: Color
@@ -5075,8 +5133,8 @@ struct HUDStatusPill: View {
                 .font(Brand.Font.mono(size: 10, weight: .bold))
                 .tracking(1.2)
                 .foregroundStyle(tint)
-                // Mono scales with Dynamic Type; at the accessibility
-                // sizes the longer pills wrap, so keep both lines centred.
+                // At the accessibility sizes the longer pills wrap, so
+                // keep both lines centred.
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 12)
@@ -5085,6 +5143,12 @@ struct HUDStatusPill: View {
     }
 }
 
+/// Slow 0.4 → 1.0 opacity breathe at ~1 Hz. Used on the empty-sky
+/// status dot so it telegraphs "actively scanning" without being
+/// a radar sweep. Disabled (`active: false`) when the pill is
+/// surfacing an error string — at that point we don't want the
+/// liveness signal contradicting the message. Reduce Motion: a
+/// steady full-opacity dot, no TimelineView ticking.
 private struct EmptyPulse: ViewModifier {
     let active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

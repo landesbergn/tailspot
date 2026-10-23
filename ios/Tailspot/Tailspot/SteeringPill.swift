@@ -74,8 +74,25 @@ nonisolated enum SteeringPill {
     /// Hangar, which is right (a fresh install is a fresh first catch).
     static let retiredKey = "tailspot.steering.retired"
 
-    static func isEligible(catchCount: Int, retired: Bool) -> Bool {
-        catchCount == 0 && !retired
+    /// DEBUG-only wrench override: treat this device as zero-catch and not
+    /// retired, so the pill can be field-tested on a phone with a real
+    /// Hangar (a fresh install would wipe it). Only ContentView's DEBUG
+    /// `@AppStorage` reads this key; release builds never do.
+    static let debugForceKey = "tailspot.debug.steering.forceFirstCatch"
+
+    /// The one eligibility rule. `debugForced` is the wrench override and is
+    /// always false in release builds.
+    static func isEligible(catchCount: Int, retired: Bool, debugForced: Bool = false) -> Bool {
+        debugForced || (catchCount == 0 && !retired)
+    }
+
+    /// Whether the first catch closes the shown -> caught funnel: the pill
+    /// showed this session and some catch is dated at or after that. The
+    /// date check keeps a Hangar restore (old catches landing in a
+    /// zero-catch reinstall) from counting as a steered catch.
+    static func shouldFireCaught(shownAt: Date?, catchDates: some Sequence<Date>) -> Bool {
+        guard let shownAt else { return false }
+        return catchDates.contains { $0 >= shownAt }
     }
 
     // MARK: - Compass gate
