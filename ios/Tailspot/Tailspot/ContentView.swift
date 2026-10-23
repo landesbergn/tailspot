@@ -295,6 +295,17 @@ struct ContentView: View {
     /// variant per session). Reset when the app goes to the background, in
     /// the `.onChange(of: scenePhase)` handler.
     @State private var emptySkySession = ActivationTelemetry.EmptySkySession()
+    /// First-catch steering pill (`SteeringPill`). `@AppStorage` is a
+    /// property wrapper over one UserDefaults key that also re-renders the
+    /// view when it changes; it latches true the first time the Hangar is
+    /// non-empty and never clears, so the pill is gone for good.
+    @AppStorage(SteeringPill.retiredKey) private var steeringRetired = false
+    /// The plane the pill points at, carried across ticks for hysteresis.
+    /// Written only by the 1 Hz `steeringPillTick`, never from `body`.
+    @State private var steeringTargetIcao: String?
+    /// When `steering_pill_shown` fired this session (nil = not yet).
+    /// Reset on background, like `emptySkySession`.
+    @State private var steeringShownAt: Date?
     /// Whether the permission recovery card was showing on the last 1 Hz
     /// tick, so `permission_recovery_shown` fires once per hidden-to-shown
     /// transition (see `permissionRecoveryFunnelTick`).
@@ -527,35 +538,33 @@ struct ContentView: View {
                                 }
                             }
 
-                            if visible.isEmpty || adsb.lastError != nil {
-                                // Empty-sky overlay. Shown when nothing
-                                // is in view — OR whenever the feed is
-                                // erroring, even with planes still on
-                                // screen (error-copy pass, 2026-08-14):
-                                // extrapolated labels keep gliding on
-                                // stale data during an outage, and
-                                // catching against 90-second-old
-                                // positions with no warning undercuts
-                                // "is the catch real?". The pill's
-                                // error variant wins its text switch,
-                                // so this never shows "NO AIRCRAFT"
-                                // over visible planes.
-                                // Quiet center reticle +
-                                // a status pill anchored low so it
-                                // doesn't compete with the top-center
-                                // compass / zoom affordances.
-                                // Grounded planes are excluded from the "N
-                                // NEARBY" count — they're not below-horizon
-                                // or too-far traffic, they're parked.
-                                emptySkyOverlay(
-                                    // count(where:) tallies without allocating
-                                    // the intermediate filtered array (hot path,
-                                    // every empty-sky frame).
-                                    rawCount: adsb.observed.count(where: { !$0.grounded })
-                                )
-                                    .frame(width: geo.size.width, height: geo.size.height)
-                                    .allowsHitTesting(false)
-                            }
+                            // Empty-sky overlay. Shown when nothing
+                            // is in view — OR whenever the feed is
+                            // erroring, even with planes still on
+                            // screen (error-copy pass, 2026-08-14):
+                            // extrapolated labels keep gliding on
+                            // stale data during an outage, and
+                            // catching against 90-second-old
+                            // positions with no warning undercuts
+                            // "is the catch real?". The pill's
+                            // error variant wins its text switch,
+                            // so this never shows "NO AIRCRAFT"
+                            // over visible planes. Otherwise, for a
+                            // zero-catch user with planes in range
+                            // but none on screen, the same pill
+                            // steers toward the nearest one. One
+                            // call so the body's expression stays
+                            // inside the type-check budget.
+                            hudStatusOverlay(
+                                visible: visible,
+                                headingDeg: heading,
+                                cameraElevationDeg: camEl,
+                                rollDeg: roll,
+                                hfovDeg: effectiveHfov,
+                                vfovDeg: effectiveVfov
+                            )
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .allowsHitTesting(false)
 
                             // Empty-tap ripple. Shown when a tap lands
                             // on truly empty sky (no plane within the
@@ -843,6 +852,14 @@ struct ContentView: View {
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
         .task(id: catches.count) {
+            // First catch: retire the steering pill for good, and close the
+            // shown -> caught funnel if it showed this session.
+            if !catches.isEmpty && !steeringRetired {
+                if let shownAt = steeringShownAt {
+                    SteeringPill.fireCaught(secondsSinceShown: Date().timeIntervalSince(shownAt))
+                }
+                steeringRetired = true
+            }
             unlockCenter.enqueueNewUnlocks(from: catches)
             // Upgrade/restore date backfill, off the first frame (1.2.0
             // shipped it synchronously here and hung big Hangars at launch).
@@ -957,7 +974,10 @@ struct ContentView: View {
                 // A trip to the background ends the empty-sky session, so
                 // the return starts fresh variants and a fresh clock.
                 // (.inactive alone, e.g. pulling down Control Center, doesn't.)
-                if phase == .background { emptySkySession.reset() }
+                if phase == .background {
+                    emptySkySession.reset()
+                    steeringShownAt = nil
+                }
             @unknown default:
                 break
             }
@@ -1181,6 +1201,7 @@ struct ContentView: View {
                 try? await Task.sleep(for: .seconds(1))
                 labelSuppressionTick()
                 emptySkyFunnelTick()
+                steeringPillTick()
                 permissionRecoveryFunnelTick()
             }
         }
@@ -3552,6 +3573,107 @@ struct ContentView: View {
 
     // MARK: - Empty-sky state
 
+    /// The low status pill's one slot: the empty-sky / error pill when
+    /// nothing is in view or the feed is erroring, else the first-catch
+    /// steering pill when it applies, else nothing. Pulled out of the 30 Hz
+    /// body so the branch adds no expression weight there.
+    @ViewBuilder
+    private func hudStatusOverlay(
+        visible: [ObservedAircraft],
+        headingDeg: Double,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double
+    ) -> some View {
+        if visible.isEmpty || adsb.lastError != nil {
+            // Grounded planes are excluded from the "N NEARBY" count:
+            // they're not below-horizon or too-far traffic, they're parked.
+            // count(where:) tallies without allocating the intermediate
+            // filtered array (hot path, every empty-sky frame).
+            emptySkyOverlay(rawCount: adsb.observed.count(where: { !$0.grounded }))
+        } else if let hint = steeringHint(
+            visible: visible,
+            headingDeg: headingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
+        ) {
+            statusPillOverlay(
+                HUDStatusPill(
+                    text: SteeringPill.text(hint, unit: UnitPreferences.shared.distance),
+                    tint: Brand.Color.cyan,
+                    pulsing: true
+                )
+            )
+        }
+    }
+
+    /// The steering decision for the current pose. Shared by the render
+    /// (`hudStatusOverlay`) and the 1 Hz telemetry tick, so the event
+    /// reports what the pill actually showed. The eligibility check runs
+    /// first and is two reads, so veterans pay nothing per frame.
+    private func steeringHint(
+        visible: [ObservedAircraft],
+        headingDeg: Double,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double
+    ) -> SteeringHint? {
+        guard SteeringPill.isEligible(catchCount: catches.count, retired: steeringRetired) else {
+            return nil
+        }
+        return SteeringPill.hint(
+            eligible: true,
+            hasFeedError: adsb.lastError != nil || adsb.lastErrorUserMessage != nil,
+            compassReliable: SteeringPill.isCompassReliable(
+                headingDeg: location.heading,
+                headingAccuracyDeg: location.headingAccuracy,
+                cautionLatched: showCompassWarning
+            ),
+            candidates: visible.map {
+                SteeringTarget(
+                    icao24: $0.aircraft.icao24,
+                    bearingDeg: $0.bearingDeg,
+                    elevationDeg: $0.elevationDeg,
+                    slantDistanceMeters: $0.slantDistanceMeters
+                )
+            },
+            currentTargetIcao24: steeringTargetIcao,
+            headingDeg: headingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
+        )
+    }
+
+    /// `steering_pill_shown` (once per session) and the hysteresis target,
+    /// from the 1 Hz `.task` loop in `body` (never from the render pass).
+    private func steeringPillTick() {
+        guard SteeringPill.isEligible(catchCount: catches.count, retired: steeringRetired),
+              let heading = location.heading else {
+            if steeringTargetIcao != nil { steeringTargetIcao = nil }
+            return
+        }
+        let hint = steeringHint(
+            visible: interactiveVisible(adsb.observed),
+            headingDeg: heading,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: Geo.rollDeg(
+                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+            ),
+            hfovDeg: Self.baseHfovDeg / zoom,
+            vfovDeg: Self.baseVfovDeg / zoom
+        )
+        if steeringTargetIcao != hint?.icao24 { steeringTargetIcao = hint?.icao24 }
+        guard let hint, steeringShownAt == nil, activationFunnelCanCount else { return }
+        steeringShownAt = Date()
+        SteeringPill.fireShown(hint, headingAccuracyDeg: location.headingAccuracy)
+    }
+
     /// Overlay shown when no aircraft are above the horizon + within
     /// the visibility cap. Restraint-first per the field feedback
     /// (the chat-canvas "scanning screen" with radar pings was
@@ -3588,7 +3710,14 @@ struct ContentView: View {
         let pillTint: Color = lastErr != nil
             ? Brand.Color.alertCaution
             : Brand.Color.textSecondary
-        return GeometryReader { geo in
+        return statusPillOverlay(
+            HUDStatusPill(text: pillText, tint: pillTint, pulsing: lastErr == nil)
+        )
+    }
+
+    /// Places a status pill low and centred over the AR view.
+    private func statusPillOverlay(_ pill: HUDStatusPill) -> some View {
+        GeometryReader { geo in
             ZStack {
                 // No centered reticle box here by design: the camera
                 // opens clean and a reticle only appears once a plane
@@ -3606,20 +3735,11 @@ struct ContentView: View {
                 // pill. Declaring our own width stops that recurring.
                 VStack {
                     Spacer()
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(pillTint)
-                            .frame(width: 6, height: 6)
-                            .modifier(EmptyPulse(active: lastErr == nil))
-                        Text(pillText)
-                            .font(Brand.Font.mono(size: 10, weight: .bold))
-                            .tracking(1.2)
-                            .foregroundStyle(pillTint)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
-                    .padding(.bottom, geo.size.height * 0.18)
+                    pill
+                        // 16 pt gutter so a wrapped pill (accessibility
+                        // type sizes) never runs edge to edge.
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, geo.size.height * 0.18)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -4935,6 +5055,36 @@ struct CornerBracket: Shape {
 /// surfacing an error string — at that point we don't want the
 /// liveness signal contradicting the message. Reduce Motion: a
 /// steady full-opacity dot, no TimelineView ticking.
+/// The AR HUD's low status pill: pulsing dot + mono ALL-CAPS readout on a
+/// translucent capsule. One view for the empty-sky / error states and the
+/// first-catch steering pill, so they can't drift apart, and so the
+/// snapshot harness renders the shipping pill rather than a copy. Fixed
+/// type size by choice (AR HUD readouts don't scale; see ios/CLAUDE.md).
+struct HUDStatusPill: View {
+    let text: String
+    let tint: Color
+    let pulsing: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+                .modifier(EmptyPulse(active: pulsing))
+            Text(text)
+                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(tint)
+                // Mono scales with Dynamic Type; at the accessibility
+                // sizes the longer pills wrap, so keep both lines centred.
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+    }
+}
+
 private struct EmptyPulse: ViewModifier {
     let active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
