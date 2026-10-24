@@ -140,6 +140,28 @@ export class BudgetExhaustedError extends Error {
 }
 
 /** Thrown when upstream failed AND no acceptably-fresh cache exists → 503. */
+/**
+ * The caller's per-IP upstream-fetch allowance (`GetOptions.mayFetch`) is spent
+ * and there is nothing cached to serve instead. The route answers 429.
+ */
+export class FetchRateLimitedError extends Error {
+  constructor() {
+    super("per-client upstream fetch limit reached");
+    this.name = "FetchRateLimitedError";
+  }
+}
+
+export interface GetOptions {
+  /**
+   * Charged only when this request would spend upstream budget (a refresh or
+   * a cold tile) — never on a cache hit or a shared in-flight fetch. Returning
+   * false serves the cache if it is within STALE_MAX, else throws
+   * FetchRateLimitedError. Without it, one client walking cold tiles at the
+   * hit limit could hold the process-wide budget and starve every other phone.
+   */
+  mayFetch?: () => boolean;
+}
+
 export class NoFreshDataError extends Error {
   constructor(
     message: string,
@@ -252,7 +274,7 @@ export class TileCache {
    * new upstream fetch. On upstream failure, fall back to last-good if it's
    * within STALE_MAX; otherwise throw NoFreshDataError.
    */
-  async get(bbox: Bbox): Promise<TileResult> {
+  async get(bbox: Bbox, opts: GetOptions = {}): Promise<TileResult> {
     const key = this.tileKey(bbox);
     const nowSec = Math.floor(this.now() / 1000);
 
@@ -271,6 +293,14 @@ export class TileCache {
       } catch (err) {
         return this.fallbackOrThrow(key, nowSec, err);
       }
+    }
+
+    // 2b. Per-client fetch allowance: past here this request spends upstream.
+    if (opts.mayFetch && !opts.mayFetch()) {
+      if (cached && nowSec - cached.storedAt < this.config.staleMaxSeconds) {
+        return { snapshot: cached.snapshot, stale: true };
+      }
+      throw new FetchRateLimitedError();
     }
 
     // 3. Budget check (when configured). A refresh with a recent-enough cache

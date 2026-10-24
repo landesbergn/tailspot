@@ -5,6 +5,7 @@ import type { RouteEnricher } from "../providers/adsblolRoutes.js";
 import { validateBbox } from "../providers/geo.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/types.js";
 import {
+  FetchRateLimitedError,
   NoFreshDataError,
   TileCache,
   type TileCacheConfig,
@@ -63,6 +64,13 @@ export interface AircraftRouteOptions {
    * always supplies one.
    */
   ipLimiter?: RateLimiter;
+  /**
+   * Per-IP limiter on requests that would SPEND upstream budget (a cold or
+   * expired tile), separate from `ipLimiter`, which every request pays. The
+   * hit limit (2 rps) is above the whole process's upstream budget (0.8 rps),
+   * so without this one IP walking cold tiles could starve everyone.
+   */
+  fetchLimiter?: RateLimiter;
   /** Upstream request cap (see providers/upstreamBudget.ts). Omitted → none. */
   throttle?: TileCacheThrottle;
 }
@@ -115,7 +123,16 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
     }
 
     try {
-      const { snapshot } = await cache.get(bbox as Bbox);
+      const fetchLimiter = opts.fetchLimiter;
+      const { snapshot } = await cache.get(bbox as Bbox, {
+        mayFetch: fetchLimiter
+          ? () => {
+              const r = fetchLimiter.take(ipKey(request));
+              if (!r.allowed) reply.header("Retry-After", String(r.retryAfterSeconds));
+              return r.allowed;
+            }
+          : undefined,
+      });
       // Attach known routes from the cache (sync, never blocking) and kick a
       // background lookup for the rest. Mutates the snapshot's aircraft in place
       // so a tile-cache hit also carries routes once the route cache is warm.
@@ -131,6 +148,9 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
         ...(snapshot.provider !== undefined ? { provider: snapshot.provider } : {}),
       });
     } catch (err) {
+      if (err instanceof FetchRateLimitedError) {
+        return reply.code(429).send({ error: "rate limited" });
+      }
       if (err instanceof NoFreshDataError) {
         request.log.warn({ err }, "no fresh position data for bbox");
         return reply.code(503).send({ error: "upstream unavailable" });

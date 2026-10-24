@@ -10,6 +10,7 @@ import { PrivatePointsScorer } from "./challenges/scorer.js";
 import { type ChallengeStore, DrizzleChallengeStore } from "./challenges/store.js";
 import { registerCompression } from "./compression.js";
 import { getDb } from "./db/client.js";
+import { installErrorHandler } from "./errorHandler.js";
 import { RateLimiter } from "./identity/rateLimiter.js";
 import {
   type CatchStore,
@@ -225,6 +226,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // via URLSession). The aircraft list is the main beneficiary.
   registerCompression(app);
 
+  // 5xx bodies never carry err.message (drizzle puts SQL + params in it).
+  installErrorHandler(app);
+
   // Alert when 5xx answers pile up, whatever produced them: most of ours are
   // deliberate 503 replies that Sentry's error handler never sees. /readyz and
   // /healthz are excluded: the uptime monitor already pages on those.
@@ -400,6 +404,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // headroom for ~4 simultaneously-starved phones on one IP — and a hard stop
   // on a runaway loop, which is what actually threatens the upstream quota.
   const aircraftLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
+  // 20/min per IP on polls that would spend UPSTREAM budget (cold/expired
+  // tile). A phone on one tile triggers ≤6/min (10 s TTL), so this covers ~3
+  // independently-moving phones behind one IP (carrier NAT); past it a refresh
+  // serves the cache. 0.33 rps keeps one IP well under the 0.8 rps budget.
+  const aircraftFetchLimiter = new RateLimiter({ capacity: 20, windowMs: 60_000 }, rlNow);
   // 300/min per IP on metadata. Sized off the real burst: the ambient prefetch
   // can fire 40–60 lookups in a few seconds on a first launch near SFO, and the
   // app renders a 429 as an error pill, so being stingy here is a visible bug.
@@ -537,6 +546,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }
       : undefined,
     ipLimiter: aircraftLimiter,
+    fetchLimiter: aircraftFetchLimiter,
     cacheConfig,
     now: options.now,
     onFreshSnapshot,
