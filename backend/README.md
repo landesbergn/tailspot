@@ -381,7 +381,8 @@ stub session.
 
 | Var | Default | Meaning |
 |---|---|---|
-| `POSITION_PROVIDER` | — (composite) | Unset: **adsb.fi primary with adsb.lol failover** (swapped 2026-10-20: adsb.lol caps a client at 500 requests/day; see *Upstream quotas*). `adsblol`, `adsbfi` or `airplaneslive`: that provider only (airplanes.live 403s Fly's network pending an access request). Read once at startup. |
+| `POSITION_PROVIDER` | — (composite) | Unset: **adsb.fi primary with adsb.lol failover** (swapped 2026-10-20: adsb.lol caps a client at 500 requests/day; see *Upstream quotas*). `adsblol`, `adsbfi`, `adsblolreapi` (needs the key) or `airplaneslive`: that provider only (airplanes.live 403s Fly's network pending an access request). Read once at startup. |
+| `ADSBLOL_REAPI_KEY` | — | Fly secret. When set, the default pair's failover becomes the keyed adsb.lol re-api (`https://re-api.adsb.lol/?circle=lat,lon,nm`, key in the `x-api-key` header) instead of the public 500/day api.adsb.lol. Blank counts as unset. Route lookups stay on api.adsb.lol either way. |
 | `CACHE_TTL_SECONDS` | `10` | Fresh-cache window. |
 | `STALE_MAX_SECONDS` | `60` | Max age of a last-good snapshot served on upstream failure. |
 | `CACHE_TILE_SIZE_DEG` | `0.25` | Grid size for bbox→tile quantization. |
@@ -423,7 +424,9 @@ different host and path): adsb.lol now enforces a 500-requests-per-day cap per
 client, which one polling phone exhausts in about 80 minutes. airplanes.live
 was the failover until 2026-10-19, when it turned out to refuse Fly's network
 outright (HTTP 403, "email us for access"); its adapter stays in the tree behind
-`POSITION_PROVIDER=airplaneslive`. Route lookups (`/v1/routes`, the catch-time
+`POSITION_PROVIDER=airplaneslive`. Since 2026-10-24, setting `ADSBLOL_REAPI_KEY`
+swaps the failover to adsb.lol's keyed re-api, readsb's own query interface: same
+rows, but under `aircraft` with `now` in seconds (`adsblolReapi.ts`). Route lookups (`/v1/routes`, the catch-time
 route guess, the `route` field on `/v1/aircraft`) stay on adsb.lol, the only
 aggregator with a route DB, and draw on that same daily quota.
 
@@ -433,6 +436,7 @@ aggregator with a route DB, and draw on that same daily quota.
 |---|---|---|
 | adsb.lol | `x-ratelimit-limit: 4, 4;w=1, 60;w=60, 500;w=86400` — 4/s, 60/min, **500/day** per client IP | Fallback only, plus per-callsign route lookups (30 min positive / 10 min negative cache). A 429 from any bucket is logged with the headers (`rateLimitSummary`). |
 | adsb.fi | 1 req/s per IP; 4xx responses count toward a temporary IP restriction; personal, non-commercial; cite with a link | Primary. The tile cache allows one fetch per 0.25° tile per 10 s, and the upstream budget caps the whole process at 0.8/s however many tiles are active; a 429 or 403 opens adsb.fi's circuit breaker so we stop asking. The canary answers from organic traffic when a phone fetched within 120 s. |
+| adsb.lol re-api (keyed) | Per-key counters over 1 h and 1 month, shared by every adsb.lol endpoint the key is sent to; the request page shows only % used, and success responses carry no `x-ratelimit` headers. Every 429 carries `Retry-After`, and **repeated 429s can revoke the key**. A bad key is HTTP 401 `invalid api key`. | Failover when `ADSBLOL_REAPI_KEY` is set. The circuit breaker opens at once on 429 or 401 and honours `Retry-After`. Probed from the Fly machine 2026-10-24: re-api answers 200 there with or without a key, although the docs say feeder IPs only. Don't rely on unkeyed access. |
 | airplanes.live | Access by email approval; Fly's network gets 403 | Not in the default chain. |
 
 **Why the readiness canary matters here.** The uptime monitor probes `/readyz`

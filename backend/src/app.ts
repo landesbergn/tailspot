@@ -28,7 +28,12 @@ import {
 } from "./providers/adsblolRoutes.js";
 import { CircuitOpenError } from "./providers/circuitBreaker.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
-import { type Bbox, type PositionProvider, selectProvider } from "./providers/index.js";
+import {
+  type Bbox,
+  type PositionProvider,
+  chainIncludesAdsbLol,
+  selectProvider,
+} from "./providers/index.js";
 import { UpstreamBudget } from "./providers/upstreamBudget.js";
 import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
@@ -465,14 +470,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // position response (see AdsbLolRouteService). Enabled whenever adsb.lol is
   // anywhere in the provider chain — the composite's name is the members
   // joined by "+", and since 2026-10-20 adsb.lol is the FALLBACK half of the
-  // default "adsbfi+adsblol" — and outside tests (so the route suite never
+  // default "adsbfi+adsblol" ("adsbfi+adsblolreapi" with the re-api key, so
+  // the match is on the "adsblol" prefix) — and outside tests (so the route suite never
   // hits the network); an injected override (tests) always wins. Route
   // lookups stay adsb.lol-direct whichever feed serves positions: routes are
   // cached per callsign, non-blocking metadata, and adsb.lol is the only
   // aggregator with a route DB. They do draw on adsb.lol's 500/day quota.
   const routeEnricher =
     options.routeEnricher ??
-    (process.env.NODE_ENV !== "test" && provider.name.split("+").includes("adsblol")
+    (process.env.NODE_ENV !== "test" && chainIncludesAdsbLol(provider.name)
       ? new AdsbLolRouteService({
           onError: (err) => app.log.warn({ err }, "route lookup failed"),
         })
