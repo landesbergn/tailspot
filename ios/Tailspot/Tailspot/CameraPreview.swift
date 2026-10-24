@@ -187,6 +187,12 @@ final class PreviewView: UIView {
 
             session.commitConfiguration()
 
+            // CameraFOV assumes a 9:16 preview format for wider-than-video
+            // screens (iPhone Duo); log the real one so a device run can
+            // confirm it. Dimensions are sensor-landscape (e.g. 1920×1080).
+            let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+            Log.ui.notice("CameraPreview: active format \(dims.width, privacy: .public)x\(dims.height, privacy: .public) fov \(device.activeFormat.videoFieldOfView, privacy: .public)°")
+
             // Capture the device for later zoom updates. Read once on
             // the session queue; writes also go through that queue.
             DispatchQueue.main.async { self.device = device }
