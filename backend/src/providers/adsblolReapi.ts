@@ -26,32 +26,22 @@ import { AdsbLolProvider, type AdsbLolProviderOptions } from "./adsblol.js";
  */
 
 const DEFAULT_BASE_URL = "https://re-api.adsb.lol";
-const DEFAULT_STALL_RETRY_AFTER_MS = 3000;
 
 export interface AdsbLolReApiProviderOptions extends AdsbLolProviderOptions {
   apiKey: string;
-  /** First-attempt limit before the stall retry (default 3000 ms). */
-  stallRetryAfterMs?: number;
 }
 
 export class AdsbLolReApiProvider extends AdsbLolProvider {
   override readonly name: string = "adsblolreapi";
   protected override readonly nowIsSeconds = true;
   protected override readonly requiresAircraftArray = true;
-  // A healthy answer takes ~0.6 s cold and 0.2–0.5 s warm from Fly. On
-  // 2026-10-24 one call in ~30 stalled for 8.9 s (cause unknown; a retry on
-  // a fresh connection went straight through), so give up on an attempt at
-  // 3 s and retry once inside the 8 s budget. Cheap here: the quota is per
-  // key, not adsb.lol's 500/day per IP.
-  protected override readonly stallRetryAfterMs: number;
 
-  constructor({ apiKey, stallRetryAfterMs, ...opts }: AdsbLolReApiProviderOptions) {
+  constructor({ apiKey, ...opts }: AdsbLolReApiProviderOptions) {
     super({
       baseUrl: DEFAULT_BASE_URL,
       ...opts,
       headers: { ...opts.headers, "x-api-key": apiKey },
     });
-    this.stallRetryAfterMs = stallRetryAfterMs ?? DEFAULT_STALL_RETRY_AFTER_MS;
   }
 
   protected override pointUrl(lat: number, lon: number, radiusNm: number): string {

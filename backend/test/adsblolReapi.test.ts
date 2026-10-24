@@ -30,15 +30,6 @@ function recordingFetch(body: unknown, status = 200) {
   return { fetchFn, seen };
 }
 
-/** A fetch that never answers; it rejects the way Node's does when aborted. */
-function hangUntilAborted(init: RequestInit): Promise<Response> {
-  return new Promise((_resolve, reject) => {
-    init.signal?.addEventListener("abort", () =>
-      reject(new DOMException("This operation was aborted", "AbortError")),
-    );
-  });
-}
-
 describe("AdsbLolReApiProvider.aircraftInBbox", () => {
   it("queries ?circle= at the bbox center and sends the key as x-api-key", async () => {
     const { fetchFn, seen } = recordingFetch(FIXTURE);
@@ -86,56 +77,6 @@ describe("AdsbLolReApiProvider.aircraftInBbox", () => {
   it("keeps the key out of a serialized provider", () => {
     const provider = new AdsbLolReApiProvider({ apiKey: "secret-key-123" });
     expect(JSON.stringify(provider)).not.toContain("secret-key-123");
-  });
-
-  it("retries once on a fresh attempt when the first one stalls", async () => {
-    let calls = 0;
-    const fetchFn = ((_url: string, init: RequestInit) => {
-      calls++;
-      if (calls === 1) return hangUntilAborted(init);
-      return Promise.resolve(new Response(JSON.stringify(FIXTURE), { status: 200 }));
-    }) as unknown as typeof fetch;
-    const provider = new AdsbLolReApiProvider({
-      apiKey: "k",
-      fetchFn,
-      timeoutMs: 1000,
-      stallRetryAfterMs: 20,
-    });
-    const started = Date.now();
-    const snapshot = await provider.aircraftInBbox(SF_BBOX);
-    expect(calls).toBe(2);
-    expect(snapshot.aircraft.length).toBe(3);
-    // Abandoned at the stall limit, not the full deadline.
-    expect(Date.now() - started).toBeLessThan(500);
-  });
-
-  it("gives up when the retry stalls too, within the one deadline", async () => {
-    let calls = 0;
-    const fetchFn = ((_url: string, init: RequestInit) => {
-      calls++;
-      return hangUntilAborted(init);
-    }) as unknown as typeof fetch;
-    const provider = new AdsbLolReApiProvider({
-      apiKey: "k",
-      fetchFn,
-      timeoutMs: 80,
-      stallRetryAfterMs: 20,
-    });
-    const started = Date.now();
-    await expect(provider.aircraftInBbox(SF_BBOX)).rejects.toThrow(/request failed/);
-    expect(calls).toBe(2);
-    expect(Date.now() - started).toBeLessThan(500);
-  });
-
-  it("does not retry an HTTP answer", async () => {
-    let calls = 0;
-    const fetchFn = (async () => {
-      calls++;
-      return new Response("slow down", { status: 429 });
-    }) as unknown as typeof fetch;
-    const provider = new AdsbLolReApiProvider({ apiKey: "k", fetchFn, stallRetryAfterMs: 20 });
-    await expect(provider.aircraftInBbox(SF_BBOX)).rejects.toThrow(/HTTP 429/);
-    expect(calls).toBe(1);
   });
 
   it("throws UpstreamError on a rejected key, without the key in the message", async () => {
