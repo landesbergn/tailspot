@@ -1675,6 +1675,10 @@ nonisolated enum CardSets {
                   representativeTypecode: "EVOT",
                   // "evolution turbine" also names the JMB VL-3 microlight.
                   excludedTypecodes: ["VL3T"]),
+            .init(id: "fsc-evolution-piston", canonicalName: "Lancair Evolution Piston", rarity: .common,
+                  modelTokens: ["lancair evolution piston"],
+                  summary: "Pressurized four-seat composite kit aircraft with Lycoming piston power.",
+                  representativeTypecode: "EVOP"),
             .init(id: "fsc-airvan", canonicalName: "GippsAero GA8 Airvan", rarity: .common,
                   modelTokens: ["gippsaero ga-8 airvan", "gippsland ga-8 airvan"],
                   summary: "Eight-seat piston utility aircraft designed for short-field operations.",
