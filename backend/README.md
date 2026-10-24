@@ -428,7 +428,9 @@ outright (HTTP 403, "email us for access"); its adapter stays in the tree behind
 swaps the failover to adsb.lol's keyed re-api, readsb's own query interface: same
 rows, but under `aircraft` with `now` in seconds (`adsblolReapi.ts`). Route lookups (`/v1/routes`, the catch-time
 route guess, the `route` field on `/v1/aircraft`) stay on adsb.lol, the only
-aggregator with a route DB, and draw on that same daily quota.
+aggregator with a route DB. They read static per-callsign files from
+`vrs-standing-data.adsb.lol` and touch api.adsb.lol (and its daily quota) only
+when that host fails to connect.
 
 ### Upstream quotas (observed from response headers, 2026-10-20)
 

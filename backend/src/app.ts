@@ -475,7 +475,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // hits the network); an injected override (tests) always wins. Route
   // lookups stay adsb.lol-direct whichever feed serves positions: routes are
   // cached per callsign, non-blocking metadata, and adsb.lol is the only
-  // aggregator with a route DB. They do draw on adsb.lol's 500/day quota.
+  // aggregator with a route DB. They read vrs-standing-data.adsb.lol first and
+  // reach api.adsb.lol (and its 500/day quota) only on a transport error.
   const routeEnricher =
     options.routeEnricher ??
     (process.env.NODE_ENV !== "test" && chainIncludesAdsbLol(provider.name)

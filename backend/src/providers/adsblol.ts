@@ -263,6 +263,13 @@ export class AdsbLolProvider implements PositionProvider {
    * turn a quiet coverage desert into a fallback.
    */
   protected readonly requiresAircraftArray: boolean = false;
+  /**
+   * When set, the first attempt gets only this many ms of the `timeoutMs`
+   * budget; if it stalls, the request is retried once on a fresh connection
+   * with what's left. Off for the /v2 feeds (a retried timeout would spend
+   * adsb.lol's daily quota twice); re-api sets it (see adsblolReapi.ts).
+   */
+  protected readonly stallRetryAfterMs: number | undefined = undefined;
 
   constructor(opts: AdsbLolProviderOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -311,18 +318,29 @@ export class AdsbLolProvider implements PositionProvider {
    * friends) before an answer arrives. On 2026-10-17 adsb.lol was resetting
    * connections under load, and a second attempt often got through. Both
    * attempts share one `timeoutMs` deadline, so a retry never makes the
-   * caller wait longer than before. HTTP errors (403, 429, 5xx) and timeouts
-   * are NOT retried: those are answers, not dropped connections — and a
-   * retried 429 would spend adsb.lol's daily quota twice for nothing.
+   * caller wait longer than before. HTTP errors (403, 429, 5xx) are NOT
+   * retried: those are answers, not dropped connections — and a retried 429
+   * would spend adsb.lol's daily quota twice for nothing. Timeouts are not
+   * retried either, unless the provider sets `stallRetryAfterMs`: then a first
+   * attempt that stalls past it is abandoned and retried within the same
+   * deadline.
    */
   private async fetchJson(url: string): Promise<AdsbLolResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const firstAttempt =
+      this.stallRetryAfterMs === undefined
+        ? undefined
+        : AbortSignal.timeout(this.stallRetryAfterMs);
     try {
       try {
-        return await this.fetchOnce(url, controller.signal);
+        return await this.fetchOnce(
+          url,
+          firstAttempt ? AbortSignal.any([controller.signal, firstAttempt]) : controller.signal,
+        );
       } catch (err) {
-        if (!isDroppedConnection(err) || controller.signal.aborted) throw err;
+        if (controller.signal.aborted) throw err;
+        if (!isDroppedConnection(err) && !firstAttempt?.aborted) throw err;
         return await this.fetchOnce(url, controller.signal);
       }
     } catch (err) {
