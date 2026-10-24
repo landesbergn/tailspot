@@ -71,6 +71,9 @@ struct TailspotApp: App {
         // Register MetricKit subscriber once at launch. The subscriber
         // lives as a singleton so MetricKit retains the weak reference correctly.
         MetricsSubscriber.shared.register()
+        // Decode the bundled reference tables off-main now, so their first
+        // touch isn't a main-thread stall later (see BundledDataPrewarm).
+        BundledDataPrewarm.start()
         // Configure the PostHog SDK (session replay + the single analytics
         // pipeline — see Analytics.swift). No-op without a key. Skipped under
         // unit tests for the same reason as the register above.

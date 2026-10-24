@@ -2,8 +2,8 @@
 //  MotionManager.swift
 //  Tailspot
 //
-//  Wraps CMMotionManager and exposes device attitude (pitch / roll / yaw)
-//  as @Published properties so SwiftUI views auto-refresh.
+//  Wraps CMMotionManager and exposes device attitude (pitch / roll / yaw).
+//  Not published: ContentView's 30 Hz TimelineView samples it (see `sample`).
 //
 //  Reference frame: .xArbitraryZVertical — gravity-aligned vertical axis,
 //  arbitrary horizontal axis. We don't need true-north alignment from this
@@ -45,10 +45,18 @@ final class MotionManager: ObservableObject {
         return q
     }()
 
-    /// The latest coalesced sample — the ONE `@Published` this manager now
-    /// mutates per CoreMotion tick (see `MotionSample`). `private(set)` so
+    /// The latest coalesced sample (see `MotionSample`). `private(set)` so
     /// only the CoreMotion callback writes it.
-    @Published private(set) var sample = MotionSample()
+    ///
+    /// Deliberately NOT `@Published` (2026-10 perf audit). Every reader is
+    /// either inside ContentView's 30 Hz `TimelineView` — which re-samples
+    /// this on its own schedule — or a one-shot read (the shutter-press
+    /// snapshot, the 1 Hz steering/telemetry ticks, replay ticks). Publishing
+    /// it fired `objectWillChange` 30×/s, which re-evaluated ContentView's
+    /// ENTIRE body on top of the TimelineView's own ticks, roughly doubling
+    /// the AR render work for no visible gain. The class stays an
+    /// `ObservableObject` only so it can keep living in a `@StateObject`.
+    private(set) var sample = MotionSample()
 
     // Forwarding accessors so every existing call site (`motion.pitch`,
     // `motion.gravityX`, …) keeps compiling unchanged — they now read the
@@ -75,10 +83,8 @@ final class MotionManager: ObservableObject {
         manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { [weak self] motion, error in
             guard let self, let motion else { return }
             // CMMotionManager fires on our background queue. Build the
-            // Sendable sample here, then publish it in a SINGLE assignment on
-            // main — one `objectWillChange` per sample instead of six (see
-            // `MotionSample`). @Published mutations must hop back to main for
-            // SwiftUI to consume them safely.
+            // Sendable sample here, then store it in a SINGLE assignment on
+            // main, where every reader lives (MainActor-isolated class).
             let next = MotionSample(
                 pitch: motion.attitude.pitch,
                 roll: motion.attitude.roll,

@@ -195,6 +195,18 @@ nonisolated struct TailspotBackendClient: ADSBSource {
         guard let url = comps?.url else { throw ADSBSourceError.badURL }
 
         let data = try await get(url)
+        return try await Self.decodeAircraft(data)
+    }
+
+    /// Decode + map a `/v1/aircraft` body OFF the caller's actor.
+    ///
+    /// Why `@concurrent`: the target builds with Approachable Concurrency, so
+    /// a plain `nonisolated async` func runs on its CALLER's actor — here
+    /// ADSBManager's MainActor. A few hundred aircraft decoded every 10 s on
+    /// main was a periodic frame drop in the AR view. `@concurrent` always
+    /// hops to the global executor; the result (`[Aircraft]`) is Sendable.
+    @concurrent
+    private static func decodeAircraft(_ data: Data) async throws -> [Aircraft] {
         do {
             let decoded = try JSONDecoder().decode(BackendAircraftResponse.self, from: data)
             return decoded.aircraft.map { $0.asAircraft() }

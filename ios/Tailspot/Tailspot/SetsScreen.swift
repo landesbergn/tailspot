@@ -154,6 +154,38 @@ struct SetDetailScreen: View {
     /// like the prose around it. A bare `.system(size: 18)` never scaled.
     @ScaledMetric(relativeTo: .headline) private var headerCountSize: CGFloat = 18
 
+    /// Per-entry tail count + most recent catch, keyed by entry id.
+    struct EntryStat { let tailCount: Int; let mostRecent: Date? }
+
+    /// Memoized per data change (see HangarDerivedCache). The rows used to
+    /// re-filter ALL catches per entry on every body eval — rebuilding each
+    /// catch's match strings once per entry (~10 entries × 10k catches for
+    /// the 737 family) — plus a third pass for the header.
+    @State private var cache = DerivedCacheBox<[String: EntryStat]>()
+
+    private var entryStats: [String: EntryStat] {
+        cache.value(for: CatchFingerprint.of(catches)) {
+            Self.computeEntryStats(set: set, catches: catches)
+        }
+    }
+
+    /// Internal (not private) for `SetDetailStatsTests`.
+    static func computeEntryStats(set: CardSet, catches: [Catch]) -> [String: EntryStat] {
+        let keys = CardSets.matchKeys(for: catches)
+        var stats: [String: EntryStat] = [:]
+        for entry in set.entries {
+            var tails = Set<String>()
+            var mostRecent: Date?
+            for key in keys where CardSets.matches(key: key, entry: entry) {
+                tails.insert(key.source.icao24)
+                let at = key.source.caughtAt
+                if mostRecent.map({ at > $0 }) ?? true { mostRecent = at }
+            }
+            stats[entry.id] = EntryStat(tailCount: tails.count, mostRecent: mostRecent)
+        }
+        return stats
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HangarChildBar(title: set.title)
@@ -165,14 +197,13 @@ struct SetDetailScreen: View {
                         .listRowSeparator(.hidden)
                 }
                 Section {
+                    let stats = entryStats
                     ForEach(set.entries) { entry in
-                        let matching = catches.filter { CardSets.matches(catch: $0, entry: entry) }
-                        let tailCount = Set(matching.map(\.icao24)).count
-                        let mostRecent = matching.map(\.caughtAt).max()
+                        let stat = stats[entry.id]
                         NavigationLink {
                             ModelDetailScreen(entry: entry)
                         } label: {
-                            modelRow(entry: entry, tailCount: tailCount, mostRecent: mostRecent)
+                            modelRow(entry: entry, tailCount: stat?.tailCount ?? 0, mostRecent: stat?.mostRecent)
                         }
                         .listRowBackground(Brand.Color.bgElevated)
                     }
@@ -193,7 +224,11 @@ struct SetDetailScreen: View {
     }
 
     private var header: some View {
-        let p = CardSets.progress(of: set, against: catches)
+        // An entry is "caught" iff some catch matches it — i.e. tailCount > 0
+        // — which is exactly `CardSets.progress`'s first-match-wins count.
+        let stats = entryStats
+        let p = (caught: set.entries.filter { (stats[$0.id]?.tailCount ?? 0) > 0 }.count,
+                 total: set.entries.count)
         let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
         let complete = p.total > 0 && p.caught == p.total
         return HStack(spacing: 16) {
@@ -275,7 +310,10 @@ struct ModelDetailScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // Computed ONCE per body: `rows` is a whole-Hangar filter + grouping,
+        // and it used to run twice (isEmpty, then ForEach).
+        let rows = self.rows
+        return VStack(spacing: 0) {
             HangarChildBar(title: entry.canonicalName)
             ScrollView {
                 if rows.isEmpty {

@@ -951,9 +951,12 @@ struct ContentView: View {
                 motion.stop()
                 adsb.pauseReAnnotation()
                 visualConfirm.updateTarget(nil)
+                // The compass sheet is occluding but needs a live heading.
+                if !showCompassSheet { location.pauseHeading() }
             } else {
                 motion.start()
                 adsb.resumeReAnnotation()
+                location.resumeHeading()
             }
         }
         // Lifecycle teardown: when the app resigns active nobody's looking, so
@@ -1618,6 +1621,7 @@ struct ContentView: View {
         if isHeadingAccuracyBad {
             Button {
                 showCompassSheet = true
+                location.resumeHeading() // belt-and-braces: the sheet needs live heading
                 ActivationTelemetry.fireCompassSheetOpened(
                     headingAccuracyDeg: location.headingAccuracy
                 )
