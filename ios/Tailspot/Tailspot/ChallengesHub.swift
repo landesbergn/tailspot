@@ -199,7 +199,8 @@ struct ChallengesHub: View {
         case .updateRequired:
             notice(title: "Update Tailspot to keep using Challenges",
                    body: "This version of the app is too old for the current challenge rules.")
-            if let raw = model.config?.appStoreURL, let url = URL(string: raw) {
+            // https only: this URL is server-supplied and opened on tap.
+            if let raw = model.config?.appStoreURL, let url = URL(string: raw), url.scheme?.lowercased() == "https" {
                 Link(destination: url) {
                     primaryButtonLabel("Open the App Store")
                 }

@@ -16,6 +16,7 @@ import SwiftUI
 import SwiftData
 import MapKit
 import CoreLocation
+import PostHog
 
 struct MapScreen: View {
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
@@ -50,6 +51,10 @@ struct MapScreen: View {
             .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
             .mapControlVisibility(.hidden)
             .ignoresSafeArea(edges: .horizontal)
+            // Every pin sits where the USER stood for that catch, so the map
+            // is effectively a home/work heat map. Scoped to the Map (not the
+            // screen) so the filter strip + summary panel still record.
+            .postHogMask()
 
             VStack {
                 filterStrip

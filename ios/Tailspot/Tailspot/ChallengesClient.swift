@@ -76,14 +76,16 @@ nonisolated struct ChallengesClient: ChallengesService {
     }
 
     func detail(id: String) async throws -> ChallengeDetail {
-        let request = try await makeRequest(path: "v1/challenges/\(id)", method: "GET", authorized: true)
+        let segment = try Self.pathID(id)
+        let request = try await makeRequest(path: "v1/challenges/\(segment)", method: "GET", authorized: true)
         let (data, status) = try await send(request)
         guard status == 200 else { throw mapError(status: status, data: data) }
         return try decode(ChallengeDetail.self, from: data)
     }
 
     func catchLog(id: String, handle: String) async throws -> ChallengeCatchLog {
-        let path = "v1/challenges/\(id)/log/\(Self.percentEncodedHandle(handle))"
+        let segment = try Self.pathID(id)
+        let path = "v1/challenges/\(segment)/log/\(Self.percentEncodedHandle(handle))"
         let request = try await makeRequest(path: path, method: "GET", authorized: true)
         let (data, status) = try await send(request)
         guard status == 200 else { throw mapError(status: status, data: data) }
@@ -118,13 +120,15 @@ nonisolated struct ChallengesClient: ChallengesService {
     }
 
     func leave(id: String) async throws {
-        let request = try await makeRequest(path: "v1/challenges/\(id)/leave", method: "POST", authorized: true)
+        let segment = try Self.pathID(id)
+        let request = try await makeRequest(path: "v1/challenges/\(segment)/leave", method: "POST", authorized: true)
         let (data, status) = try await send(request)
         guard status == 204 || status == 200 else { throw mapError(status: status, data: data) }
     }
 
     func cancel(id: String) async throws {
-        let request = try await makeRequest(path: "v1/challenges/\(id)/cancel", method: "POST", authorized: true)
+        let segment = try Self.pathID(id)
+        let request = try await makeRequest(path: "v1/challenges/\(segment)/cancel", method: "POST", authorized: true)
         let (data, status) = try await send(request)
         guard status == 204 || status == 200 else { throw mapError(status: status, data: data) }
     }
@@ -174,6 +178,13 @@ nonisolated struct ChallengesClient: ChallengesService {
 
     private static func percentEncodedHandle(_ handle: String) -> String {
         handle.addingPercentEncoding(withAllowedCharacters: handlePathAllowed) ?? handle
+    }
+
+    /// Challenge ids come from server JSON and push payloads; refuse anything
+    /// that could re-target the authorized path (see PathSegment.swift).
+    static func pathID(_ id: String) throws -> String {
+        guard PathSegment.isSafeID(id) else { throw ChallengesError.network("bad challenge id") }
+        return id
     }
 
     // MARK: - Transport

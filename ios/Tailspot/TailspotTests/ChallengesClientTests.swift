@@ -138,6 +138,27 @@ struct ChallengesClientTests {
         #expect(lastRequest?.httpMethod == "GET")
     }
 
+    /// A traversal-shaped id (from a tampered push payload or server JSON)
+    /// must never become a request: URL resolution would normalize "../" and
+    /// aim the bearer token at a different route.
+    @Test func pathTraversalIdNeverBuildsARequest() async throws {
+        let before = ChallengesStubProtocol.recorded.count
+        for bad in ["../../devices/me", "..", "c-1/../../x", "c-1?x=1", "c-1#f", ""] {
+            await #expect(throws: ChallengesError.network("bad challenge id")) {
+                _ = try await makeClient().detail(id: bad)
+            }
+        }
+        #expect(ChallengesStubProtocol.recorded.count == before, "a bad id reached the network")
+        await #expect(throws: ChallengesError.network("bad challenge id")) {
+            try await makeClient().leave(id: "../devices/me")
+        }
+    }
+
+    @Test func uuidIdsPassTheGate() throws {
+        let id = UUID().uuidString.lowercased()
+        #expect(try ChallengesClient.pathID(id) == id)
+    }
+
     @Test func catchLogPercentEncodesTheHandle() async throws {
         ChallengesStubProtocol.queue = [.init(status: 200, json: """
         {"handle": "a b", "catches": []}
