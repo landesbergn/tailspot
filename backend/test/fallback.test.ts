@@ -259,6 +259,21 @@ describe("selectProvider", () => {
     expect(selectProvider({ POSITION_PROVIDER: "airplaneslive" }).name).toBe("airplaneslive");
   });
 
+  it("swaps the fallback to the keyed adsb.lol re-api when the key is set", () => {
+    expect(selectProvider({ ADSBLOL_REAPI_KEY: "k" }).name).toBe("adsbfi+adsblolreapi");
+    // A blank secret is no key: keep the public adsb.lol fallback.
+    expect(selectProvider({ ADSBLOL_REAPI_KEY: "  " }).name).toBe("adsbfi+adsblol");
+  });
+
+  it("selects re-api alone only with a key", () => {
+    expect(selectProvider({ POSITION_PROVIDER: "adsblolreapi", ADSBLOL_REAPI_KEY: "k" }).name).toBe(
+      "adsblolreapi",
+    );
+    expect(() => selectProvider({ POSITION_PROVIDER: "adsblolreapi" })).toThrow(
+      /needs ADSBLOL_REAPI_KEY/,
+    );
+  });
+
   it("throws on an unknown provider instead of silently degrading", () => {
     expect(() => selectProvider({ POSITION_PROVIDER: "opensky" })).toThrow(
       /Unknown POSITION_PROVIDER "opensky"/,
