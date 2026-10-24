@@ -148,3 +148,8 @@ pulled-replays*/
 # tier (FieldReplays/) is what runs in public CI.
 ios/Tailspot/TailspotTests/local-*.jsonl
 ios/Tailspot/TailspotTests/local-*.log
+
+# Signing / API keys: never commit (backstop; the ASC key workflow handles .p8s)
+*.p8
+*.p12
+*.pem

@@ -78,7 +78,7 @@ jobs:
           printf 'User-agent: *\nDisallow: /\n' > web/public/robots.txt
           echo "wrote preview robots.txt"
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # 1.5
 
       - name: Deploy preview
         working-directory: web
@@ -133,7 +133,7 @@ jobs:
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # 1.5
 
       - name: Take the preview down
         # Never fail a PR close over housekeeping — but say so loudly rather
