@@ -614,7 +614,7 @@ describe("multi-leg through-flights + stale filings (SFO arrival field reports, 
 });
 
 describe("AdsbLolRouteService cache bound", () => {
-  it("evicts expired entries first, then oldest, so the cache never exceeds its cap", async () => {
+  it("evicts expired entries first, then least-recently-used, never exceeding its cap", async () => {
     let now = 1_000_000;
     const fetchFn = vi.fn(async () => new Response("", { status: 404 }));
     const svc = new AdsbLolRouteService({
@@ -628,13 +628,19 @@ describe("AdsbLolRouteService cache bound", () => {
     await svc.prefetch(["AAA1", "BBB2", "CCC3"].map((callsign) => ({ callsign, lat: 0, lng: 0 })));
     expect(svc.cacheSize).toBe(3);
 
-    // Full and nothing expired → the oldest (AAA1) is evicted.
+    // A hit on AAA1 makes it most-recent, so BBB2 is now the LRU entry.
+    fetchFn.mockClear();
+    await svc.resolve("AAA1");
+    expect(fetchFn).not.toHaveBeenCalled();
+
+    // Full and nothing expired → evict LRU down to the low-water mark (2 of 3)
+    // → BBB2 goes, then DDD4 is inserted.
     await svc.prefetch([{ callsign: "DDD4", lat: 0, lng: 0 }]);
     expect(svc.cacheSize).toBe(3);
-    fetchFn.mockClear();
-    await svc.resolve("BBB2"); // still cached → no fetch
+    fetchFn.mockClear(); // DDD4's own lookup
+    await svc.resolve("AAA1"); // recently used → kept, no fetch
     expect(fetchFn).not.toHaveBeenCalled();
-    await svc.resolve("AAA1"); // evicted → refetched
+    await svc.resolve("BBB2"); // LRU → evicted → refetched
     expect(fetchFn).toHaveBeenCalledTimes(1);
 
     // Everything expires → the sweep clears it before inserting.

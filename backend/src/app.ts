@@ -402,10 +402,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // 30/min per DEVICE on the Hangar restore read (one probe + 500-row pages per
   // launch in the honest client).
   const catchesListLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow);
-  // 120/min per IP on the (unauthenticated) leaderboard. The honest client
-  // reads it on Profile/Leaderboard opens — a handful per minute at most — so
-  // this only stops a loop from turning full-table aggregations into DB load.
-  const leaderboardLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
+  // 300/min per IP on the (unauthenticated) leaderboard. The honest client
+  // reads it on Profile/Leaderboard opens — a handful per minute at most —
+  // and shipped clients show a 429 as an error, so the ceiling is sized for
+  // many phones behind one CGNAT / venue Wi-Fi IP; it only stops a loop from
+  // turning full-table aggregations into DB load.
+  const leaderboardLimiter = new RateLimiter({ capacity: 300, windowMs: 60_000 }, rlNow);
   // 120/min per IP across ALL bearer routes, taken BEFORE the token lookup so
   // unauthenticated probing is metered — previously a bad token cost the
   // attacker one request and cost us a database round-trip, unbounded. Shared

@@ -960,7 +960,7 @@ export class DrizzleCatchStore implements CatchStore {
         .from(devices)
         .leftJoin(catches, joinOn)
         .where(eq(devices.id, deviceId))
-        .groupBy(devices.id, devices.createdAt)
+        .groupBy(devices.id)
         .limit(1),
     );
     if (mine.length === 0) return null; // unknown device
@@ -992,17 +992,21 @@ export class DrizzleCatchStore implements CatchStore {
     // it shifts the rank of every user — a wider blast radius than the kill
     // switch needs. Revisit if a disabled device is ever ranked high enough for
     // the off-by-one to be visible to real players.
+    //
     // Counted in SQL (one scalar back) rather than shipping every device row
-    // ever registered to Node and looping — that grew with installs, not players.
-    // `me.created_at` is compared at full timestamp precision via the subquery.
+    // ever registered to Node and looping — that grew with installs, not
+    // players. INNER join: myPoints > 0 here, so a device with no (in-window)
+    // catches can never outrank me — skipping the drive-by-install rows
+    // changes no count. `me.created_at` is compared at full timestamp
+    // precision via the subquery.
     const agg = this.db
       .select({
         deviceId: devices.id,
         createdAt: devices.createdAt,
-        points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("p"),
+        points: sql<number>`sum(${catches.points})`.as("p"),
       })
       .from(devices)
-      .leftJoin(catches, joinOn)
+      .innerJoin(catches, joinOn)
       .groupBy(devices.id, devices.createdAt)
       .as("agg");
     const myCreated = sql`(select ${devices.createdAt} from ${devices} where ${devices.id} = ${deviceId})`;

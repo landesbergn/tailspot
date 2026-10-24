@@ -139,9 +139,9 @@ describe("per-IP and per-device limits on the previously-unmetered routes", () =
     expect(anon.statusCode).toBe(401);
   });
 
-  it("GET /v1/leaderboard is capped at 120/min per IP", async () => {
+  it("GET /v1/leaderboard is capped at 300/min per IP", async () => {
     const a = await build();
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 300; i++) {
       const res = await a.inject({ method: "GET", url: "/v1/leaderboard" });
       expect(res.statusCode).toBe(200);
     }

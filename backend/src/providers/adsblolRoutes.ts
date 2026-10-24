@@ -388,14 +388,17 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
   /** Insert into the cache, keeping it bounded. Expired entries were only ever
    *  dropped when the SAME callsign was looked up again, so every distinct
    *  callsign seen since boot stayed resident. At the cap: sweep expired
-   *  entries, then evict oldest-inserted (Map iteration order) if still full. */
+   *  entries, then evict least-recently-used (Map iteration order — hits
+   *  re-insert, see `lookupCache`) down to a 90% low-water mark, so the O(n)
+   *  pass runs once per ~10% of inserts rather than on every insert. */
   private store(callsign: string, entry: CacheEntry): void {
     this.cache.delete(callsign); // re-insert at the young end
     if (this.cache.size >= this.maxCacheEntries) {
       const now = this.now();
       for (const [k, e] of this.cache) if (e.expiresAt <= now) this.cache.delete(k);
+      const lowWater = Math.floor(this.maxCacheEntries * 0.9);
       for (const k of this.cache.keys()) {
-        if (this.cache.size < this.maxCacheEntries) break;
+        if (this.cache.size <= lowWater) break;
         this.cache.delete(k);
       }
     }
@@ -416,6 +419,10 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
       this.cache.delete(callsign);
       return undefined;
     }
+    // Refresh recency (Map order = LRU order for `store`'s eviction), so a
+    // live flight polled every few seconds isn't evicted before one-offs.
+    this.cache.delete(callsign);
+    this.cache.set(callsign, e);
     return e.parsed;
   }
 }

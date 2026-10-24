@@ -34,21 +34,22 @@ describe("registryRowsFromSnapshot", () => {
         ac({ icao24: "3c6444", typecode: "a346", registration: " D-AIHK " }),
       ]),
     );
+    // Rows come back in icao24 order (deadlock-safe batch; see the source).
     expect(rows).toEqual([
-      {
-        icao24: "76cdb5",
-        registration: "9V-SMH",
-        manufacturerRaw: null,
-        modelRaw: null,
-        typecode: "A359",
-        source: "adsblol",
-      },
       {
         icao24: "3c6444",
         registration: "D-AIHK", // trimmed
         manufacturerRaw: null,
         modelRaw: null,
         typecode: "A346", // upper-cased
+        source: "adsblol",
+      },
+      {
+        icao24: "76cdb5",
+        registration: "9V-SMH",
+        manufacturerRaw: null,
+        modelRaw: null,
+        typecode: "A359",
         source: "adsblol",
       },
     ]);
@@ -187,11 +188,24 @@ describe("fill-missing upsert write volume", () => {
     const db = await makeTestDb();
     const rows = registryRowsFromSnapshot(
       snapshot([
-        ac({ icao24: "76cdb5", typecode: "A359", registration: "9V-SMH" }),
+        // MLAT copy with no registration first, ADS-B copy with one second.
+        ac({ icao24: "76cdb5", typecode: "A359", registration: null }),
         ac({ icao24: "76cdb5", typecode: "A359", registration: "9V-SMH" }),
       ]),
     );
     expect(rows).toHaveLength(1);
+    expect(rows[0].registration).toBe("9V-SMH"); // merged, not first-wins
     await expect(upsertRegistryFillMissing(db, rows)).resolves.toBe(1);
+  });
+
+  it("emits rows in icao24 order so concurrent batches lock in one order", () => {
+    const rows = registryRowsFromSnapshot(
+      snapshot([
+        ac({ icao24: "c0ffee", typecode: "B738" }),
+        ac({ icao24: "0abc12", typecode: "A320" }),
+        ac({ icao24: "76cdb5", typecode: "A359" }),
+      ]),
+    );
+    expect(rows.map((r) => r.icao24)).toEqual(["0abc12", "76cdb5", "c0ffee"]);
   });
 });

@@ -11,6 +11,7 @@
  *         champions: [{ handle, points, weekStart }…] | null (week window only),
  *         monthlyChampions: [{ handle, points, monthStart }…] | null (month window only)
  *       }
+ *     → 429 { error: "rate limited" }   // per-IP flood control (+ Retry-After)
  *
  * Windows are CALENDAR windows in UTC (locked design, Noah 2026-07-09): week =
  * Monday 00:00 UTC, month = 1st 00:00 UTC. `window` absent or unrecognized →
