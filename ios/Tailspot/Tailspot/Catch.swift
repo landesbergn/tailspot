@@ -185,6 +185,13 @@ final class Catch {
     /// not exposed on the init. Added 2026-07-13 — optional + nil-default for
     /// SwiftData lightweight migration; old rows simply have nil.
     var captureDiagnosticsJSON: String?
+    /// When the one-time guess re-credit sweep finished with this row
+    /// (`GuessRecreditSweep`): the server re-credited the guess, already
+    /// had one, or said it never will. nil = not sent yet. Clients 1.1.0 to
+    /// 1.2.2 uploaded each catch before its bonus-round guess resolved, so
+    /// the server never saw the guess; the sweep sends it once. Added
+    /// 2026-10 — optional + nil-default for lightweight migration.
+    var guessRecreditedAt: Date?
 
     init(
         icao24: String,

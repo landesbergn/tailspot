@@ -227,6 +227,12 @@ nonisolated enum StreakTelemetry {
     /// off to the system dialog (whose result is `permission_outcome`);
     /// false = "Not now". Either way the one-shot ask is spent.
     static let askResponseEvent = "streak_ask_response"
+    /// The one re-offer to a "Not now" decliner presented. Carries the
+    /// `trigger` (streak_3_day / weekly_board) and the `route` its primary
+    /// button takes (system_prompt, or ios_settings when iOS denied).
+    static let reofferShownEvent = "streak_reoffer_shown"
+    /// The re-offer's resolution: `accepted` true = the primary button.
+    static let reofferResponseEvent = "streak_reoffer_response"
     /// Fired when the scheduler arms a reminder for a NEW (day, stake)
     /// pair. `sync` runs on every catch and foreground, so the fire is
     /// deduped through `scheduledStamp` — re-arming the same evening at
@@ -259,6 +265,27 @@ nonisolated enum StreakTelemetry {
     static func fireAskResponse(accepted: Bool, streakDays: Int) {
         Analytics.capture(askResponseEvent,
                           askResponseProperties(accepted: accepted, streakDays: streakDays))
+    }
+
+    static func reofferProperties(
+        _ reoffer: StreakReminders.Reoffer, streakDays: Int, accepted: Bool? = nil
+    ) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
+            "trigger": .string(reoffer.trigger.rawValue),
+            "route": .string(reoffer.routesToSettings ? "ios_settings" : "system_prompt"),
+            "streak_days": .int(streakDays),
+        ]
+        if let accepted { props["accepted"] = .bool(accepted) }
+        return props
+    }
+
+    static func fireReofferShown(_ reoffer: StreakReminders.Reoffer, streakDays: Int) {
+        Analytics.capture(reofferShownEvent, reofferProperties(reoffer, streakDays: streakDays))
+    }
+
+    static func fireReofferResponse(_ reoffer: StreakReminders.Reoffer, streakDays: Int, accepted: Bool) {
+        Analytics.capture(reofferResponseEvent,
+                          reofferProperties(reoffer, streakDays: streakDays, accepted: accepted))
     }
 
     /// The dedupe identity for a scheduled reminder: fire the telemetry

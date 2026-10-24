@@ -159,3 +159,38 @@ export function guessBonus(base: number, kind: GuessKind, caughtAt: Date): numbe
       : GUESS_BONUS_FRACTIONS[kind];
   return Math.round(base * fraction);
 }
+
+/**
+ * The guess re-credit cutover (POST /v1/catches/:catchUuid/guess). From 1.1.0
+ * through 1.2.2 the app uploaded a catch before its bonus-round guess resolved,
+ * so those rows reached the server with no guess. 1.2.3 (#355) holds the upload
+ * until the guess resolves and adds a one-time sweep that sends the old guesses.
+ *
+ * Only catches the server INSERTED (`created_at`) before this instant can be
+ * re-credited, because a re-credited ROUTE guess trusts the phone's own frozen
+ * verdict (the server keeps only the callsign, and re-checking an old flight
+ * number against today's route data was rejected as wrong). The bound keeps
+ * that trust a one-time backfill instead of a standing way to claim a bonus.
+ *
+ * Chosen as 2026-11-16T00:00:00Z: comfortably after 1.2.3 is expected to reach
+ * the App Store, so catches made on 1.2.2 in the weeks before people update are
+ * still covered. Move it if 1.2.3 ships later than that.
+ *
+ * The bound is on WHICH ROWS qualify, not on when the call is made: the check
+ * is the row's `created_at` against this instant. After the date passes, a
+ * catch inserted later gets 409, but a guess-less catch inserted before it
+ * can still be re-credited, at any later time (a late updater's sweep still
+ * works). So the exposure is fixed at once per pre-cutover guess-less catch;
+ * it does not close on a date. To close the endpoint outright, delete it.
+ */
+export const GUESS_RECREDIT_CUTOVER = new Date("2026-11-16T00:00:00Z");
+
+/**
+ * When the re-credit endpoint itself stops accepting calls, whatever the
+ * catch's age. The cutover above bounds WHICH catches qualify; this bounds
+ * WHEN anyone can ask, so a hand-made client can't claim route bonuses on
+ * old guess-less catches indefinitely. Late enough for 1.2.3's rollout and
+ * stragglers to run their one sweep; after it every call answers 409
+ * `after_cutover`, which the client already treats as final.
+ */
+export const GUESS_RECREDIT_CLOSES = new Date("2027-01-31T00:00:00Z");
