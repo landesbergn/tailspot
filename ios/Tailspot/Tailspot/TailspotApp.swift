@@ -194,6 +194,9 @@ struct TailspotApp: App {
                     // permission changed in iOS Settings, a force-kill raced
                     // the post-catch sync). Cheap — one Hangar fetch + a pure
                     // decision — and idempotent like the two steps above.
+                    // One-time: earlier "Not now" decliners become eligible
+                    // for the single re-offer (a no-op after the first run).
+                    await StreakReminderCenter.shared.migrateDeclinersIfNeeded()
                     await StreakReminderCenter.shared.sync(context: ctx)
                     // Challenges: config first (kill switch, min build),
                     // then my open + finished challenges, which also
