@@ -249,16 +249,26 @@ export class AdsbLolProvider implements PositionProvider {
   protected readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
-  private readonly headers: Record<string, string>;
+  // An ES private field, not TS `private`: it holds re-api's key, and a `#`
+  // field is invisible to JSON.stringify and pino if the provider is logged.
+  readonly #headers: Record<string, string>;
   /** True when the upstream's `now` is unix seconds (readsb re-api) rather
    *  than the /v2/point milliseconds. Overridden by AdsbLolReApiProvider. */
   protected readonly nowIsSeconds: boolean = false;
+  /**
+   * When true, a 200 body without an `aircraft` array is an UpstreamError
+   * rather than an empty sky. readsb's re-api always sends the array (empty
+   * when no planes), so its absence means an error body. Off for the /v2
+   * feeds, whose empty-area shape isn't pinned down; an error there would
+   * turn a quiet coverage desert into a fallback.
+   */
+  protected readonly requiresAircraftArray: boolean = false;
 
   constructor(opts: AdsbLolProviderOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchFn = opts.fetchFn ?? fetch;
-    this.headers = opts.headers ?? {};
+    this.#headers = opts.headers ?? {};
   }
 
   async aircraftInBbox(bbox: Bbox): Promise<ProviderSnapshot> {
@@ -270,6 +280,9 @@ export class AdsbLolProvider implements PositionProvider {
     const url = this.pointUrl(center.lat, center.lon, radiusNm);
 
     const resp = await this.fetchJson(url);
+    if (this.requiresAircraftArray && !Array.isArray(resp.aircraft)) {
+      throw new UpstreamError(`${this.name} returned no aircraft array`);
+    }
     // /v2/point `now` is milliseconds, re-api's is seconds; the contract is
     // unix seconds.
     const fetchedAt =
@@ -323,7 +336,7 @@ export class AdsbLolProvider implements PositionProvider {
   private async fetchOnce(url: string, signal: AbortSignal): Promise<AdsbLolResponse> {
     const res = await this.fetchFn(url, {
       method: "GET",
-      headers: { accept: "application/json", "user-agent": "tailspot-backend", ...this.headers },
+      headers: { accept: "application/json", "user-agent": "tailspot-backend", ...this.#headers },
       signal,
     });
     if (!res.ok) {

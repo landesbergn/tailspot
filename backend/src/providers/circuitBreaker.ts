@@ -143,7 +143,9 @@ export class CircuitBreakerProvider implements PositionProvider {
   private recordFailure(err: unknown, trial: boolean): void {
     this.lastError = err;
     const status = err instanceof UpstreamError ? err.status : undefined;
-    const rejected = status === 429 || status === 403;
+    // 401 joins 429/403 for the keyed adsb.lol re-api: a bad or revoked key
+    // is a refusal to stop asking about, and it should page, not count down.
+    const rejected = status === 429 || status === 403 || status === 401;
     this.consecutiveFailures++;
     if (!trial && !rejected && this.consecutiveFailures < this.failureThreshold) return;
 

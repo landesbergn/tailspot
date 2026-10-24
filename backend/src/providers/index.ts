@@ -24,6 +24,15 @@ export {
 } from "./geo.js";
 
 /**
+ * True when an adsb.lol feed is anywhere in the chain, which turns on route
+ * enrichment. A composite's name is its members joined by "+", and adsb.lol
+ * runs as "adsblol" (public) or "adsblolreapi" (keyed), hence the prefix.
+ */
+export function chainIncludesAdsbLol(providerName: string): boolean {
+  return providerName.split("+").some((member) => member.startsWith("adsblol"));
+}
+
+/**
  * Select the active position provider from config. Read ONCE at app build time
  * (the result is captured in buildApp's closure), so flipping the env mid-run
  * has no effect — restart to change providers.

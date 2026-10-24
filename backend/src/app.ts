@@ -28,7 +28,12 @@ import {
 } from "./providers/adsblolRoutes.js";
 import { CircuitOpenError } from "./providers/circuitBreaker.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
-import { type Bbox, type PositionProvider, selectProvider } from "./providers/index.js";
+import {
+  type Bbox,
+  type PositionProvider,
+  chainIncludesAdsbLol,
+  selectProvider,
+} from "./providers/index.js";
 import { UpstreamBudget } from "./providers/upstreamBudget.js";
 import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
@@ -473,8 +478,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // aggregator with a route DB. They do draw on adsb.lol's 500/day quota.
   const routeEnricher =
     options.routeEnricher ??
-    (process.env.NODE_ENV !== "test" &&
-    provider.name.split("+").some((member) => member.startsWith("adsblol"))
+    (process.env.NODE_ENV !== "test" && chainIncludesAdsbLol(provider.name)
       ? new AdsbLolRouteService({
           onError: (err) => app.log.warn({ err }, "route lookup failed"),
         })

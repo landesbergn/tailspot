@@ -62,6 +62,23 @@ describe("AdsbLolReApiProvider.aircraftInBbox", () => {
     expect(byf.positionTimestamp).toBe(Math.round(1792881555 - 0.073));
   });
 
+  it("treats a 200 without an aircraft array as an error, not an empty sky", async () => {
+    const { fetchFn } = recordingFetch({ error: "quota exceeded" });
+    const provider = new AdsbLolReApiProvider({ apiKey: "k", fetchFn });
+    await expect(provider.aircraftInBbox(SF_BBOX)).rejects.toThrow(/no aircraft array/);
+  });
+
+  it("keeps an empty aircraft array as a real empty sky", async () => {
+    const { fetchFn } = recordingFetch({ now: 1792881555.296, aircraft: [] });
+    const provider = new AdsbLolReApiProvider({ apiKey: "k", fetchFn });
+    expect((await provider.aircraftInBbox(SF_BBOX)).aircraft).toEqual([]);
+  });
+
+  it("keeps the key out of a serialized provider", () => {
+    const provider = new AdsbLolReApiProvider({ apiKey: "secret-key-123" });
+    expect(JSON.stringify(provider)).not.toContain("secret-key-123");
+  });
+
   it("throws UpstreamError on a rejected key, without the key in the message", async () => {
     const { fetchFn } = recordingFetch({ error: "bad key" }, 401);
     const provider = new AdsbLolReApiProvider({ apiKey: "secret-key-123", fetchFn });

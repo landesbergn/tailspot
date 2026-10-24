@@ -34,6 +34,7 @@ export interface AdsbLolReApiProviderOptions extends AdsbLolProviderOptions {
 export class AdsbLolReApiProvider extends AdsbLolProvider {
   override readonly name: string = "adsblolreapi";
   protected override readonly nowIsSeconds = true;
+  protected override readonly requiresAircraftArray = true;
 
   constructor({ apiKey, ...opts }: AdsbLolReApiProviderOptions) {
     super({
