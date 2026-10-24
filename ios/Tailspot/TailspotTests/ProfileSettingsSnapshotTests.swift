@@ -18,6 +18,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import os
+import UserNotifications
 @testable import Tailspot
 
 @MainActor
@@ -196,6 +197,35 @@ struct ProfileSettingsSnapshotTests {
         #expect(true)
     }
 
+    /// REMINDERS in each OS permission state, through the
+    /// `_notifStatusOverride` seam. `.notDetermined` is the state a user is
+    /// left in after tapping "Not now" on the in-camera pre-prompt: the
+    /// section must offer a way to turn reminders on, not show ON toggles
+    /// that never fire. Both toggles are forced ON (the default) so the
+    /// render matches what those users actually see.
+    @Test func renderReminderPermissionStates() throws {
+        let defaults = UserDefaults.standard
+        let keys = [SpotterHandle.storageKey, StreakReminders.enabledKey,
+                    ChallengeReminderScheduler.enabledKey]
+        let saved = keys.map { defaults.object(forKey: $0) }
+        defaults.set("noah", forKey: SpotterHandle.storageKey)
+        defaults.set(true, forKey: StreakReminders.enabledKey)
+        defaults.set(true, forKey: ChallengeReminderScheduler.enabledKey)
+        defer { for (key, value) in zip(keys, saved) { defaults.set(value, forKey: key) } }
+
+        let states: [(UNAuthorizationStatus, String)] = [
+            (.notDetermined, "not_determined"),
+            (.denied, "denied"),
+            (.authorized, "authorized"),
+        ]
+        for (status, name) in states {
+            var screen = SettingsScreen()
+            screen._notifStatusOverride = status
+            snapshot(NavigationStack { screen }, as: "settings_reminders_\(name)")
+        }
+        #expect(true)
+    }
+
     /// Empty-Hangar "Go outside." hero + a model-detail empty state — the
     /// two empty-state heads converted to Brand.Font.display (D3).
     @Test func renderEmptyStates() throws {
@@ -257,6 +287,52 @@ struct ProfileSettingsSnapshotTests {
             as: "leaderboard_nohandle"
         )
         #expect(true)
+    }
+}
+
+/// Settings → REMINDERS row-state mapper. The bug it guards: a user who
+/// tapped "Not now" on the pre-prompt stays `.notDetermined` in iOS, and
+/// Settings used to show them ON toggles that could never deliver anything.
+@Suite("Reminders row state")
+struct RemindersRowStateTests {
+
+    @Test func notDeterminedWithAToggleOnNeedsPermission() {
+        #expect(RemindersRowState.resolve(authorization: .notDetermined, anyToggleOn: true) == .needsPermission)
+    }
+
+    /// Both toggles OFF: the user muted reminders. OFF toggles are honest,
+    /// and flipping one on already fires the system prompt, so no button.
+    @Test func notDeterminedWithTogglesOffKeepsToggles() {
+        #expect(RemindersRowState.resolve(authorization: .notDetermined, anyToggleOn: false) == .toggles)
+    }
+
+    /// nil = the async permission read hasn't returned yet (first frame of
+    /// every Settings open). Must show the toggles, not flash "Turn on
+    /// reminders" at someone who granted permission long ago.
+    @Test func unreadStatusShowsToggles() {
+        #expect(RemindersRowState.resolve(authorization: nil, anyToggleOn: true) == .toggles)
+        #expect(RemindersRowState.resolve(authorization: nil, anyToggleOn: false) == .toggles)
+    }
+
+    @Test func deniedIsDeniedWhateverTheToggles() {
+        #expect(RemindersRowState.resolve(authorization: .denied, anyToggleOn: true) == .denied)
+        #expect(RemindersRowState.resolve(authorization: .denied, anyToggleOn: false) == .denied)
+    }
+
+    @Test(arguments: [UNAuthorizationStatus.authorized, .provisional, .ephemeral])
+    func grantedStatusesKeepToggles(status: UNAuthorizationStatus) {
+        #expect(RemindersRowState.resolve(authorization: status, anyToggleOn: true) == .toggles)
+        #expect(RemindersRowState.resolve(authorization: status, anyToggleOn: false) == .toggles)
+    }
+
+    /// The never-asked footer must not promise notifications ("Get
+    /// notified…") that can't arrive.
+    @Test func needsPermissionFooterIsHonest() {
+        let footer = RemindersRowState.needsPermission.footer
+        #expect(footer == "Reminders are off until you allow notifications.")
+        #expect(!footer.contains("Get notified"))
+        #expect(RemindersRowState.toggles.footer.hasPrefix("Get notified"))
+        #expect(RemindersRowState.denied.footer.contains("iOS Settings"))
     }
 }
 #endif

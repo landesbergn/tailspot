@@ -27,9 +27,12 @@ struct LeaderboardWindowSnapshotTests {
     private static let snapDir = FileManager.default.temporaryDirectory
         .appendingPathComponent("tailspot_snaps", isDirectory: true)
 
-    private func snapshot<V: View>(_ view: V, as name: String) {
+    /// Defaults to the legacy 393 × 852 canvas; the standing-line passes
+    /// pass device sizes.
+    private func snapshot<V: View>(_ view: V, as name: String,
+                                   width: CGFloat = 393, height: CGFloat = 852) {
         try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
-        let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
         let host = UIHostingController(rootView: view)
         let window = UIWindow(frame: bounds)
         window.rootViewController = host
@@ -170,6 +173,183 @@ struct LeaderboardWindowSnapshotTests {
         let old = LeaderboardResponse(entries: entries, me: MyStanding(rank: 2, points: 315))
         snapshot(board([.week: old], selected: .week, container: container),
                  as: "leaderboard_failsoft_oldbackend")
+        #expect(true)
+    }
+
+    /// The standing line in the fixed header, under the switcher ("You're
+    /// 11th this week" / "50 points behind @planespotter · resets in 2d 14h").
+    /// Rendered at iPhone 17 size with the status bar and tab bar simulated
+    /// (62 pt top, 83 pt bottom) so "visible without scrolling" and "the
+    /// podium starts on the first screen" can be judged from the PNG. The
+    /// board mirrors the live 2026-10-21 week shape (two whales, then a
+    /// tight pack), and `me.rank` is deliberately inflated past the row
+    /// position to stand in for hidden handle-less/disabled devices — the
+    /// heading must still print the ROW's rank.
+    @Test func renderStandingLineBoards() throws {
+        let defaults = UserDefaults.standard
+        let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
+        let savedConfirmed = defaults.object(forKey: SpotterHandle.confirmedKey)
+        defer {
+            defaults.set(savedHandle, forKey: SpotterHandle.storageKey)
+            defaults.set(savedConfirmed, forKey: SpotterHandle.confirmedKey)
+        }
+        let container = try emptyContainer()
+
+        let points = [3705, 1360, 985, 460, 405, 230, 220, 215, 165, 145, 95, 45]
+        let handles = ["chemtrails", "flydelta", "maia", "ellabella", "skykid", "contrail",
+                       "heavywatcher", "dotbali", "jordan", "planespotter", "noah", "rookie"]
+        func pack(scale: Int) -> [LeaderboardEntry] {
+            zip(handles, points).enumerated().map { i, pair in
+                .init(rank: i + 1, handle: pair.0, points: pair.1 * scale,
+                      catches: max(1, pair.1 * scale / 30))
+            }
+        }
+        func week(_ me: MyStanding?) -> LeaderboardResponse {
+            LeaderboardResponse(entries: pack(scale: 1), me: me, window: "week",
+                                resetsAt: weekResetsAt, champions: nil,
+                                totalCatchers: handles.count)
+        }
+        /// iPhone 17 with the status bar and tab bar blocked out.
+        func phone<V: View>(_ view: V) -> some View {
+            VStack(spacing: 0) {
+                Color.black.frame(height: 62)
+                view
+                Color(white: 0.12).frame(height: 83)
+            }
+            .ignoresSafeArea()
+        }
+        func shoot<V: View>(_ view: V, _ name: String) {
+            snapshot(phone(view), as: name, width: 402, height: 874)
+        }
+
+        // Week, mid-pack: row 11 (me.rank 13), 50 points behind #10.
+        defaults.set("noah", forKey: SpotterHandle.storageKey)
+        shoot(board([.week: week(MyStanding(rank: 13, points: 95))],
+                    selected: .week, container: container),
+              "standing_week_midpack")
+        shoot(board([.week: week(MyStanding(rank: 13, points: 95))],
+                    selected: .week, container: container)
+                .dynamicTypeSize(.accessibility2),
+              "standing_week_midpack_a11y2")
+
+        // Month, mid-pack: its own board (twice the week's points).
+        let month = LeaderboardResponse(entries: pack(scale: 2), me: MyStanding(rank: 13, points: 190),
+                                        window: "month", resetsAt: monthResetsAt,
+                                        totalCatchers: handles.count)
+        shoot(board([.month: month], selected: .month, container: container),
+              "standing_month_midpack")
+
+        // All time, #2 behind a whale: a big gap still shows (no cap).
+        defaults.set("flydelta", forKey: SpotterHandle.storageKey)
+        defaults.set("flydelta", forKey: SpotterHandle.confirmedKey)
+        let all = LeaderboardResponse(entries: pack(scale: 6), me: MyStanding(rank: 2, points: 8160),
+                                      window: "all", totalCatchers: handles.count)
+        shoot(board([.all: all], selected: .all, container: container),
+              "standing_all_bigGap")
+
+        // #1 → "2,345 points ahead of @flydelta".
+        defaults.set("chemtrails", forKey: SpotterHandle.storageKey)
+        defaults.set("chemtrails", forKey: SpotterHandle.confirmedKey)
+        shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
+                    selected: .week, container: container),
+              "standing_week_leading")
+
+        // Handled (server-confirmed), nothing caught this week →
+        // "You're not on the board yet" / "1 point to get on the board".
+        defaults.set("notlisted", forKey: SpotterHandle.storageKey)
+        defaults.set("notlisted", forKey: SpotterHandle.confirmedKey)
+        shoot(board([.week: week(MyStanding(rank: 0, points: 0))],
+                    selected: .week, container: container),
+              "standing_week_makeboard")
+
+        // No handle → "not on the board yet" with the claim-a-handle hint.
+        defaults.set(SpotterHandle.defaultPlaceholder, forKey: SpotterHandle.storageKey)
+        shoot(board([.week: week(MyStanding(rank: 14, points: 160))],
+                    selected: .week, container: container),
+              "standing_week_nohandle")
+        shoot(board([.week: week(MyStanding(rank: 14, points: 160))],
+                    selected: .week, container: container)
+                .dynamicTypeSize(.accessibility2),
+              "standing_week_nohandle_a11y2")
+
+        // Old backend (no window key): "You're 11th" above the board, no goal.
+        defaults.set("noah", forKey: SpotterHandle.storageKey)
+        shoot(NavigationStack {
+                  LeaderboardScreen(_debugEntries: pack(scale: 6), me: MyStanding(rank: 13, points: 570))
+              }.modelContainer(container),
+              "standing_oldBackend")
+        #expect(true)
+    }
+
+    /// The standing line on the two widths that matter: iPhone SE (375 ×
+    /// 667, 20 pt status bar, 49 pt tab bar) and iPhone 16 (393 × 852,
+    /// 59 / 83). Four states: week mid-pack, all time, #1, and handled but
+    /// off the board. SE also gets accessibility3, where the prose must wrap,
+    /// never truncate.
+    @Test func renderStandingDeviceMatrix() throws {
+        let defaults = UserDefaults.standard
+        let savedHandle = defaults.object(forKey: SpotterHandle.storageKey)
+        let savedConfirmed = defaults.object(forKey: SpotterHandle.confirmedKey)
+        defer {
+            defaults.set(savedHandle, forKey: SpotterHandle.storageKey)
+            defaults.set(savedConfirmed, forKey: SpotterHandle.confirmedKey)
+        }
+        let container = try emptyContainer()
+
+        let points = [3705, 1360, 985, 460, 405, 230, 220, 215, 165, 145, 95, 45]
+        let handles = ["chemtrails", "flydelta", "maia", "ellabella", "skykid", "contrail",
+                       "heavywatcher", "dotbali", "jordan", "randy98", "noah", "rookie"]
+        func pack(scale: Int) -> [LeaderboardEntry] {
+            zip(handles, points).enumerated().map { i, pair in
+                .init(rank: i + 1, handle: pair.0, points: pair.1 * scale,
+                      catches: max(1, pair.1 * scale / 30))
+            }
+        }
+        let week = { (me: MyStanding) in
+            LeaderboardResponse(entries: pack(scale: 1), me: me, window: "week",
+                                resetsAt: self.weekResetsAt, champions: nil,
+                                totalCatchers: handles.count)
+        }
+        struct Device { let name: String; let w: CGFloat; let h: CGFloat; let top: CGFloat; let bottom: CGFloat }
+        let devices = [Device(name: "se", w: 375, h: 667, top: 20, bottom: 49),
+                       Device(name: "16", w: 393, h: 852, top: 59, bottom: 83)]
+        func shoot<V: View>(_ view: V, _ name: String, size: DynamicTypeSize = .large) {
+            for d in devices {
+                snapshot(VStack(spacing: 0) {
+                             Color.black.frame(height: d.top)
+                             view.dynamicTypeSize(size)
+                             Color(white: 0.12).frame(height: d.bottom)
+                         }.ignoresSafeArea(),
+                         as: "standingD_\(name)_\(d.name)", width: d.w, height: d.h)
+            }
+        }
+
+        defaults.set("noah", forKey: SpotterHandle.storageKey)
+        defaults.set("noah", forKey: SpotterHandle.confirmedKey)
+        let midpack = board([.week: week(MyStanding(rank: 13, points: 95))],
+                            selected: .week, container: container)
+        shoot(midpack, "week")
+        shoot(midpack, "week_a11y3", size: .accessibility3)
+
+        defaults.set("flydelta", forKey: SpotterHandle.storageKey)
+        defaults.set("flydelta", forKey: SpotterHandle.confirmedKey)
+        let all = LeaderboardResponse(entries: pack(scale: 6), me: MyStanding(rank: 2, points: 8160),
+                                      window: "all", totalCatchers: handles.count)
+        shoot(board([.all: all], selected: .all, container: container), "alltime")
+
+        defaults.set("chemtrails", forKey: SpotterHandle.storageKey)
+        defaults.set("chemtrails", forKey: SpotterHandle.confirmedKey)
+        shoot(board([.week: week(MyStanding(rank: 1, points: 3705))],
+                    selected: .week, container: container), "first")
+
+        // A full 50-row board I'm under: points to make it.
+        defaults.set("notlisted", forKey: SpotterHandle.storageKey)
+        defaults.set("notlisted", forKey: SpotterHandle.confirmedKey)
+        let full = (1...50).map { LeaderboardEntry(rank: $0, handle: "s\($0)", points: 400 - $0 * 5, catches: 3) }
+        let offBoard = LeaderboardResponse(entries: full, me: MyStanding(rank: 63, points: 120),
+                                           window: "week", resetsAt: weekResetsAt, champions: nil,
+                                           totalCatchers: 70)
+        shoot(board([.week: offBoard], selected: .week, container: container), "offboard")
         #expect(true)
     }
 

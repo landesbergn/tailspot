@@ -110,6 +110,24 @@ struct FamilySetsTests {
         #expect(!CardSets.matches(catch: trainer, entry: entry("fam-commuter-props", "fcp-p2012")))
     }
 
+    @Test func recentPublicTypecodesStayInTheirNarrowFamilySlots() {
+        let flightDesign = entry("fam-sport-classics", "fsc-flight-design-ct")
+        #expect(CardSets.matches(catch: mk(typecode: "FDCT"), entry: flightDesign))
+        #expect(!CardSets.matches(catch: mk(typecode: "FD2E"), entry: flightDesign))
+
+        let skyleader = entry("fam-sport-classics", "fsc-skyleader600")
+        #expect(CardSets.matches(catch: mk(typecode: "J600"), entry: skyleader))
+        #expect(!CardSets.matches(catch: mk(typecode: "J400"), entry: skyleader))
+
+        let metro = entry("fam-commuter-props", "fcp-metro")
+        #expect(CardSets.matches(catch: mk(typecode: "SW4"), entry: metro))
+        #expect(!CardSets.matches(catch: mk(typecode: "SW3"), entry: metro))
+
+        let tampico = entry("fam-sport-classics", "fsc-tampico")
+        #expect(CardSets.matches(catch: mk(typecode: "TAMP"), entry: tampico))
+        #expect(!CardSets.matches(catch: mk(typecode: "TBM7"), entry: tampico))
+    }
+
     @Test func citationXNameDoesNotBleedIntoXLS() {
         let topCitation = entry("fam-citation", "fc-longitude")
         #expect(CardSets.matches(catch: mk(typecode: "C750"), entry: topCitation))
@@ -131,6 +149,18 @@ struct FamilySetsTests {
         let sailplane = entry("fam-sport-classics", "fsc-glider")
         #expect(CardSets.matches(catch: mk(typecode: "GLID", model: "DG 300"), entry: sailplane))
         #expect(!CardSets.matches(catch: mk(typecode: "GLIM", model: "DG 300"), entry: sailplane))
+    }
+
+    @Test func genericUltralightDesignatorMatchesExactly() {
+        let ultralight = entry("fam-sport-classics", "fsc-ultralight")
+        #expect(CardSets.matches(catch: mk(typecode: "ULAC"), entry: ultralight))
+        #expect(!CardSets.matches(catch: mk(typecode: "UHEL"), entry: ultralight))
+    }
+
+    @Test func sharedT18DesignatorUsesS18ModelIdentity() {
+        let s18 = entry("fam-sport-classics", "fsc-s18")
+        #expect(CardSets.matches(catch: mk(typecode: "T18", model: "S-18"), entry: s18))
+        #expect(!CardSets.matches(catch: mk(typecode: "T18", model: "T-18 Tiger"), entry: s18))
     }
 
     @Test func douglasFamilyTree() {
@@ -162,6 +192,125 @@ struct FamilySetsTests {
                 "A 777-300ER must NOT fill the 777-300 slot")
     }
 
+    // MARK: (b2) Catalog-wide one-slot invariant
+
+    /// Typecodes that are DELIBERATELY allowed to fill more than one family
+    /// slot, keyed by typecode → the exact slot ids it may fill. Keep this
+    /// tiny and justify every line: each extra slot is progress the user
+    /// earns twice from one catch.
+    private static let intendedMultiSlot: [String: Set<String>] = [:]
+
+    /// Every typecode in the bundled catalog (AircraftTypes.json) fills AT
+    /// MOST ONE slot across ALL families, unless `intendedMultiSlot` says
+    /// otherwise. A substring token like "206", "at-6" or "a220" happily
+    /// matches a different airframe's canonical name, and that bleed is
+    /// silent: one catch quietly fills two slots, so a family can read
+    /// "complete" before the user has caught every variant (and the derived
+    /// Set Collector / Set Master trophies follow it). This simulates a
+    /// typecode-only catch of every catalog aircraft against every slot.
+    @Test func everyCatalogTypecodeFillsAtMostOneSlot() {
+        let slots = CardSets.families.flatMap { set in set.entries.map { (set.id, $0) } }
+        var offenders: [String] = []
+        for tc in AircraftNaming.table.keys.sorted() {
+            let key = CardSets.matchKey(for: mk(typecode: tc))
+            let hits = slots.filter { CardSets.matches(key: key, entry: $0.1) }
+            guard hits.count > 1 else { continue }
+            let hitIds = Set(hits.map(\.1.id))
+            if let allowed = Self.intendedMultiSlot[tc], hitIds.isSubset(of: allowed) { continue }
+            offenders.append("\(tc) → " + hits.map { "\($0.0)/\($0.1.id)" }.joined(separator: ", "))
+        }
+        #expect(offenders.isEmpty,
+                "Typecodes filling more than one family slot:\n\(offenders.joined(separator: "\n"))")
+    }
+
+    /// Catalog typecodes that DELIBERATELY fill a slot whose representative
+    /// airframe has a different maker in AircraftTypes.json, keyed by
+    /// typecode → the slot id. Every line is the same airframe line under a
+    /// successor, licensee or converter name, not a look-alike.
+    private static let intendedCrossMakeFills: [String: String] = [
+        "C02T": "fc402",       // AJI Turbo Star 402: turboprop conversion of the Cessna 402
+        "C30J": "fm-c130",     // Lockheed Martin C-130J: the current Hercules
+        "CHIF": "fpa23",       // Pawnee Chief: a PA-25 Pawnee derivative
+        "DC3T": "fv-dc3",      // turbine-converted DC-3 airframes
+        "F18H": "fm-hornet",   // McDonnell Douglas F/A-18 Hornet, before Boeing
+        "H25A": "fcb-hawker",  // Hawker Siddeley HS-125, the Hawker 800's ancestor
+        "LJ28": "fcb-learjet", // Gates Learjet 28
+        "P18T": "fv-cub",      // turbine Super Cub conversion
+        "P25B": "fpa23",       // Laviasa Puelche: licence-built two-seat PA-25
+        "P28U": "fpa28",       // Aicsa: licence-built PA-28 Turbo Arrow
+        "TBM7": "ftp-tbm",     // Socata TBM 700, before Daher
+        "TBM8": "ftp-tbm",     // Socata TBM 850, before Daher
+        "TRIS": "fcp-islander", // BN-2A Mk3 Trislander: the three-engine Islander
+    ]
+
+    /// The one-slot invariant above can't see a catalog typecode that fills
+    /// exactly ONE slot, in the wrong family: a Beagle B-206 ("206") quietly
+    /// filled the Cessna 206 / 207 slot and an AH-64 ("apache") the Piper
+    /// Apache. So every slot a catalog typecode fills must share the catalog
+    /// make of that slot's representative typecode, unless
+    /// `intendedCrossMakeFills` says otherwise.
+    @Test func everyCatalogTypecodeFillsOnlyItsOwnMakersSlots() {
+        let slots = CardSets.families.flatMap { set in set.entries.map { (set.id, $0) } }
+        var offenders: [String] = []
+        for tc in AircraftNaming.table.keys.sorted() {
+            guard let make = AircraftNaming.table[tc]?.make else { continue }
+            let key = CardSets.matchKey(for: mk(typecode: tc))
+            for (familyId, slot) in slots where CardSets.matches(key: key, entry: slot) {
+                guard let rep = slot.representativeTypecode,
+                      let slotMake = AircraftNaming.table[rep]?.make,
+                      slotMake.caseInsensitiveCompare(make) != .orderedSame
+                else { continue }
+                if Self.intendedCrossMakeFills[tc] == slot.id { continue }
+                offenders.append("\(tc) (\(make)) → \(familyId)/\(slot.id) (\(slotMake))")
+            }
+        }
+        #expect(offenders.isEmpty,
+                "Typecodes filling another maker's slot:\n\(offenders.joined(separator: "\n"))")
+    }
+
+    /// The leak fixes are exclusions, not token removals — the airframes
+    /// each slot is FOR must still land in it.
+    @Test(arguments: [
+        ("C206", "fam-cessna", "fc206"),
+        ("T206", "fam-cessna", "fc206"),
+        ("C207", "fam-cessna", "fc206"),
+        ("B772", "fam-777", "f777-200"),
+        ("BCS3", "fam-a220", "fa220-300"),
+        ("B06", "fam-heli", "fh-b206"),
+        ("C402", "fam-cessna", "fc402"),
+        ("C02T", "fam-cessna", "fc402"),
+        ("GALX", "fam-gulfstream", "fg-280"),
+        ("PA25", "fam-piper", "fpa23"),
+        ("H25B", "fam-classic-biz", "fcb-hawker"),
+        ("BE40", "fam-classic-biz", "fcb-beechjet"),
+        ("H47", "fam-military", "fm-ch47"),
+    ])
+    func leakFixesKeepTheIntendedSlot(typecode: String, familyId: String, entryId: String) {
+        #expect(CardSets.matches(catch: mk(typecode: typecode), entry: entry(familyId, entryId)))
+    }
+
+    @Test(arguments: [
+        ("B06", "fam-cessna", "fc206"),
+        ("B06T", "fam-cessna", "fc206"),
+        ("AT6T", "fam-vintage", "fv-t6"),
+        ("IA63", "fam-vintage", "fv-t6"),
+        ("B77L", "fam-777", "f777-200"),
+        ("B350", "fam-beech", "fbe20"),
+        ("BCS1", "fam-a220", "fa220-300"),
+        ("C207", "fam-cessna", "fc185"),
+        ("CRJX", "fam-crj", "fcrj100"),
+        ("BASS", "fam-cessna", "fc206"),
+        ("A4", "fam-cessna", "fc172"),
+        ("H64", "fam-piper", "fpa23"),
+        ("DH60", "fam-military", "fm-uh60"),
+        ("HA4T", "fam-classic-biz", "fcb-beechjet"),
+        ("G200", "fam-gulfstream", "fg-280"),
+    ])
+    func knownLeaksStayOutOfTheWrongSlot(typecode: String, familyId: String, entryId: String) {
+        #expect(!CardSets.matches(catch: mk(typecode: typecode), entry: entry(familyId, entryId)),
+                "\(typecode) must not fill \(familyId)/\(entryId)")
+    }
+
     @Test func familyProgressCountsDistinctVariants() {
         let a320 = family("fam-a320")
         let caught = [mk(typecode: "A320"), mk(typecode: "A21N"), mk(typecode: "A20N")]
@@ -172,10 +321,23 @@ struct FamilySetsTests {
 
     // MARK: (c) Lens + identity invariants
 
-    @Test func lensMapsToTheRightArrays() {
-        #expect(CardSets.sets(for: .type).map(\.id) == CardSets.all.map(\.id))
-        #expect(CardSets.sets(for: .family).map(\.id) == CardSets.families.map(\.id))
+    @Test func familyRosterIsMeaningful() {
         #expect(CardSets.families.count >= 10, "expected a meaningful roster of families")
+    }
+
+    /// The empty Hangar previews real families (the same ones the Sets tab
+    /// shows after the first catch), never the legacy type sets — which
+    /// included a Heritage set whose retired aircraft can't be caught.
+    @Test func emptyHangarPreviewsRealFamilies() {
+        let preview = HangarView.previewFamilies
+        #expect(preview.map(\.id) == HangarView.previewFamilyIDs,
+                "every previewed family id must resolve in CardSets.families")
+        let familyIDs = Set(CardSets.families.map(\.id))
+        for set in preview {
+            #expect(familyIDs.contains(set.id))
+            #expect(!set.entries.isEmpty)
+        }
+        #expect(!preview.contains { $0.type == .heritage })
     }
 
     @Test func allSetIDsAreUnique() {

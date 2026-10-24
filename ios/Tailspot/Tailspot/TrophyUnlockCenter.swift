@@ -18,16 +18,64 @@
 import Foundation
 import Combine
 
-/// The one-time "trophy case" recap shown on first launch after a roster
-/// expansion (or the very first seed), so existing testers get one
-/// celebratory moment instead of a per-trophy celebration flood. Carries
-/// the full earned set so the recap sheet can render the actual trophies,
-/// not just a count.
+/// The one-time "trophy case" recap shown on the very first seed (every
+/// earned trophy, e.g. an older install meeting the unlock machinery), so
+/// that user gets one celebratory moment instead of a per-trophy flood. A
+/// roster-bump reseed does NOT use it: its few new grants get ordinary
+/// unlock cards (see `enqueueNewUnlocks`). Carries the trophies
+/// themselves so the recap sheet can render them, not just a count.
 nonisolated struct TrophyRecap: Equatable, Sendable {
-    /// Every achievement earned under the CURRENT roster, in roster order
-    /// (earned secrets included — earning reveals them, house rule).
+    /// The recapped achievements, in roster order (earned secrets included
+    /// — earning reveals them, house rule).
     let achievements: [Achievement]
     var earned: Int { achievements.count }
+}
+
+/// Content token for everything `Trophies.inputs` reads, so a caller can
+/// memoize the inputs and skip the full-Hangar pass when nothing changed.
+///
+/// `CatchFingerprint` covers the row fields the Hangar views read, but
+/// `Trophies.inputs` reads three more things it doesn't hash:
+///  • `guessCorrect` — the bonus round sets it AFTER the row is saved, and
+///    it drives Sharp Eye / Hot Streak;
+///  • `caughtDayKey` — the frozen streak day (nil on legacy rows, which
+///    then bucket in the CURRENT time zone);
+///  • the current time zone itself — the hour-of-day trophies (night,
+///    red-eye, dawn, weekend) read `caughtAt` through a calendar in the
+///    phone's zone, so flying home can change them without a row edit.
+/// Plus the two UserDefaults-backed stores (whether each easter-egg event
+/// has occurred, cached leaderboard standing). Missing any of these would
+/// serve stale inputs, and a stale input is a missed (or late) celebration.
+///
+/// Cost: two cheap hashing passes over the rows — a few field reads each,
+/// far less than one `inputs` pass (no rarity/type lookups, no set
+/// matching, no calendar math).
+enum TrophyInputsToken {
+    static func of(
+        _ catches: [Catch],
+        events: TrophyEventStore = TrophyEventStore(),
+        standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        timeZone: TimeZone = .current
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(CatchFingerprint.of(catches))
+        for c in catches {
+            hasher.combine(c.guessCorrect)
+            hasher.combine(c.caughtDayKey)
+        }
+        hasher.combine(timeZone.identifier)
+        // `hasOccurred`, not `count(of:)`: the inputs only read whether an
+        // event ever happened, and `record` bumps the counter on EVERY call.
+        // Hashing the count made each grounded tap a guaranteed memo miss
+        // (a hashing pass plus a full pass); hashing the flag makes only the
+        // first tap — the one that can earn Ground Stop — miss.
+        for event in TrophyEventStore.Event.allCases {
+            hasher.combine(events.hasOccurred(event))
+        }
+        hasher.combine(standing.weeklyWins)
+        hasher.combine(standing.everToppedAllTime)
+        return hasher.finalize()
+    }
 }
 
 @MainActor
@@ -46,11 +94,34 @@ final class TrophyUnlockCenter: ObservableObject {
     /// from leaderboard fetches) — injectable for the same suite isolation.
     private let standing: LeaderboardStandingCache
     /// The roster generation this build ships (injectable for tests). See
-    /// `Trophies.rosterVersion` for the stamp/reseed/recap contract.
+    /// `Trophies.rosterVersion` for the stamp/reseed contract.
     private let rosterVersion: Int
     /// Achievement dates the last synchronous pass ran out of budget for —
     /// drained by `finishAchievementDates()` off the launch path.
     private var pendingDateBackfill: (catches: [Catch], inputs: TrophyProgressInputs)?
+    /// The last inputs this center computed, keyed by `TrophyInputsToken`.
+    /// Most re-diffs see an unchanged Hangar — every sheet close, every
+    /// grounded tap after the first — and on a big Hangar each full
+    /// `Trophies.inputs` pass is hundreds of ms on the main thread (0.42 s
+    /// at 4,600 catches). A token match reuses these
+    /// inputs, so those re-diffs cost a hashing pass instead.
+    private var memo: (token: Int, inputs: TrophyProgressInputs)?
+    /// Whether the last bounded date pass for the memoized inputs found
+    /// nothing left to date. A memo hit skips that pass, which is only safe
+    /// when the dates are done or the remainder is still parked: a
+    /// `finishAchievementDates` run takes the parked work and may stop early
+    /// (cancelled with its view, or a row deleted mid-run), and without this
+    /// flag no later hit would re-park it, so those trophies would never get
+    /// a date until some unrelated row change busted the memo.
+    private var memoDatesDone = false
+
+    #if DEBUG
+    /// How many full-Hangar `Trophies.inputs` passes this center has run
+    /// (memo misses). Test-only instrumentation: LargeHangarBudgetTests pins
+    /// "an unchanged diff does 0 passes, one new catch does exactly 1" so
+    /// the next per-catch cost slip fails a test instead of a big Hangar.
+    private(set) var fullInputsPasses = 0
+    #endif
 
     init(
         ledger: UserDefaultsTrophyLedger = UserDefaultsTrophyLedger(),
@@ -78,19 +149,74 @@ final class TrophyUnlockCenter: ObservableObject {
     ///  • a STALE ROSTER STAMP (`ledger.rosterVersion < rosterVersion`): the
     ///    roster grew since this device last seeded, so newly-added trophies
     ///    the user already qualifies for (e.g. Four Figures on an existing
-    ///    2,000-point Hangar) are acknowledged silently and recapped as ONE
-    ///    "trophy case" moment instead of a toast flood.
-    /// Both stamp the current roster version and queue the recap only when
-    /// something is actually earned — a fresh install never sees it.
+    ///    2,000-point Hangar) are acknowledged in the ledger and each one is
+    ///    queued as an ordinary "NEW TROPHY" card, the same card a live
+    ///    unlock gets (with "SKIP ALL" when several are pending). Only what
+    ///    the reseed newly acknowledged (earned now, not in the previous
+    ///    ledger) is queued — a user with nothing new sees nothing — and
+    ///    each fires `trophy_unlocked` with `via: "reseed"` here (the card's
+    ///    `markShown` then stays silent because the tier is already
+    ///    acknowledged), so the bump's effect is visible in analytics.
+    /// Both stamp the current roster version. Only the first-ever seed queues
+    /// the one-time "trophy case" recap (it can cover a whole Hangar, where
+    /// per-trophy cards would flood), and only when something is earned — a
+    /// fresh install never sees it.
     /// Callers should fire this once at app launch so the seed lands before
     /// the user's first crossing.
+    ///
+    /// Memoized: when the Hangar (and the event/standing stores) haven't
+    /// changed since the last call, the previous inputs are reused and the
+    /// bounded date pass is skipped — it already ran for these exact inputs
+    /// — unless it left work that is no longer parked (a backfill that was
+    /// interrupted), in which case it runs again to re-park the rest. The
+    /// ledger diff itself always
+    /// runs (it's cheap), so acknowledgments made since the last call count.
+    ///
+    /// Trade-off: the token is hashed on EVERY call, including the two that
+    /// are certain to miss after a catch (the count task, then the
+    /// post-geocode re-diff, which only fires when the geocoder stamped
+    /// something). So the catch path pays two hashing passes on top of the
+    /// full passes it already ran (LargeHangarBudgetTests logs the split).
+    /// Skipping the hash on a count change was considered and rejected: the
+    /// memo would then hold no token, and the next sheet close would pay a
+    /// full pass instead of a hit — a launch diff followed by one sheet close
+    /// would be two full passes every session. A save-notification or
+    /// generation counter would remove the hash entirely; not built yet.
     func enqueueNewUnlocks(from catches: [Catch]) {
-        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
-        recordDatesWithinBudget(catches: catches, inputs: inputs)
-        guard ledger.isSeeded, ledger.rosterVersion >= rosterVersion else {
+        let token = TrophyInputsToken.of(catches, events: events, standing: standing)
+        let inputs: TrophyProgressInputs
+        if let memo, memo.token == token {
+            inputs = memo.inputs
+            // Resume an interrupted backfill (see `memoDatesDone`). Once the
+            // dates are done this is skipped; until then each hit costs at
+            // most one bounded probe, same as a miss.
+            if !memoDatesDone, pendingDateBackfill == nil {
+                recordDatesWithinBudget(catches: catches, inputs: inputs)
+            }
+        } else {
+            inputs = computeInputs(catches, token: token)
+            recordDatesWithinBudget(catches: catches, inputs: inputs)
+        }
+        guard ledger.isSeeded else {
             TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
             ledger.markRosterVersion(rosterVersion)
-            queueRecapIfNeeded(inputs: inputs)
+            queueRecap(roster.filter { $0.isEarned(inputs: inputs) })
+            return
+        }
+        guard ledger.rosterVersion >= rosterVersion else {
+            // Diff BEFORE the seed overwrites the ledger: these are the
+            // trophies this reseed is about to acknowledge for the first time.
+            let newlyAcknowledged = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
+            TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
+            ledger.markRosterVersion(rosterVersion)
+            // Present each grant as a normal "NEW TROPHY" card. The seed above
+            // already acknowledged them, so `markShown` treats the card as a
+            // re-presentation and fires nothing — the reseed event below is
+            // the one `trophy_unlocked` per grant.
+            for event in newlyAcknowledged where !pendingEvents.contains(event) {
+                Analytics.capture("trophy_unlocked", Self.unlockProperties(event, via: "reseed"))
+                pendingEvents.append(event)
+            }
             return
         }
         let fresh = TrophyUnlock.pending(inputs: inputs, roster: roster, ledger: ledger)
@@ -107,12 +233,24 @@ final class TrophyUnlockCenter: ObservableObject {
     /// and must not re-toast one by one. Deliberately NO recap either: the
     /// restore success screen is the moment; a second overlay would pile on.
     func reseedAfterRestore(from catches: [Catch]) {
-        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
+        let token = TrophyInputsToken.of(catches, events: events, standing: standing)
+        let inputs = computeInputs(catches, token: token)
         recordDatesWithinBudget(catches: catches, inputs: inputs)
         TrophyUnlock.seed(inputs: inputs, roster: roster, into: ledger)
         // A restore only ever runs on an empty Hangar, so anything pending
         // predates it and is now stale relative to the seeded state.
         pendingEvents.removeAll()
+    }
+
+    /// The one place this center runs a full-Hangar `Trophies.inputs` pass;
+    /// stores the result as the memo for `token`.
+    private func computeInputs(_ catches: [Catch], token: Int) -> TrophyProgressInputs {
+        let inputs = Trophies.inputs(from: catches, events: events, standing: standing)
+        memo = (token, inputs)
+        #if DEBUG
+        fullInputsPasses += 1
+        #endif
+        return inputs
     }
 
     /// Date what one prefix pass can — the newest-catch fast path, which
@@ -124,6 +262,7 @@ final class TrophyUnlockCenter: ObservableObject {
             from: catches, inputs: inputs, roster: roster, ledger: ledger,
             events: events, maxEvaluations: 1)
         pendingDateBackfill = done ? nil : (catches, inputs)
+        memoDatesDone = done
     }
 
     /// Finish the dates the last `enqueueNewUnlocks`/`reseedAfterRestore`
@@ -148,13 +287,23 @@ final class TrophyUnlockCenter: ObservableObject {
         let alreadyShown = ledger.acknowledgedOrdinal(for: event.achievementID) >= event.newTier.ordinal
         ledger.setAcknowledged(event.newTier.ordinal, for: event.achievementID)
         guard !alreadyShown else { return }
-        Analytics.capture("trophy_unlocked", [
+        Analytics.capture("trophy_unlocked", Self.unlockProperties(event))
+    }
+
+    /// `trophy_unlocked` properties. `via` is set only for unlocks a
+    /// roster-bump reseed granted (`"reseed"`, fired at reseed time; the
+    /// card shown for it later stays silent); a live unlock carries no
+    /// `via`, the shape it has always had.
+    static func unlockProperties(_ event: TrophyUnlockEvent, via: String? = nil) -> [String: AnalyticsValue] {
+        var props: [String: AnalyticsValue] = [
             "achievement": .string(event.achievementID),
             "title": .string(event.achievement.title),
             "tier": .string(event.newTier.rawValue),
             "kind": .string(event.kind == .badgeEarned ? "badge" : "tier_up"),
             "secret": .bool(event.achievement.secret),
-        ])
+        ]
+        if let via { props["via"] = .string(via) }
+        return props
     }
 
     /// Pop the head after it's been seen (tap-to-dismiss advances the queue).
@@ -170,8 +319,8 @@ final class TrophyUnlockCenter: ObservableObject {
         pendingEvents.removeAll()
     }
 
-    /// Dismiss the one-time recap. One-time-ness lives in the roster-version
-    /// stamp (written at reseed time, before presentation) — a crash mid-recap
+    /// Dismiss the one-time recap. One-time-ness lives in the seeded flag +
+    /// roster-version stamp (written at seed time, before presentation) — a crash mid-recap
     /// loses the moment rather than ever re-flooding, the same trade the
     /// seeding path has always made.
     func dismissRecap() {
@@ -184,12 +333,11 @@ final class TrophyUnlockCenter: ObservableObject {
         pendingRecap = nil
     }
 
-    private func queueRecapIfNeeded(inputs: TrophyProgressInputs) {
-        let earned = roster.filter { $0.isEarned(inputs: inputs) }
-        // Nothing earned (fresh install, or an install that never caught) →
-        // no recap; the version stamp is already written, so no re-check.
-        guard !earned.isEmpty else { return }
-        pendingRecap = TrophyRecap(achievements: earned)
+    private func queueRecap(_ achievements: [Achievement]) {
+        // Nothing to show (fresh install, or an install that never caught)
+        // → no recap; the version stamp is already written, so no re-check.
+        guard !achievements.isEmpty else { return }
+        pendingRecap = TrophyRecap(achievements: achievements)
     }
 
     #if DEBUG

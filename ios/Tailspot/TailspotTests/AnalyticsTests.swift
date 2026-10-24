@@ -411,7 +411,7 @@ struct AnalyticsFacadeTests {
         withSink { sink in
             let plane = CardPlane(callsign: "RCH4521", model: "KC-10A", carrier: "USAF",
                                   rarity: .legendary, type: .mil)
-            let a = CatchShareAnalytics(plane: plane, hasCatchPhoto: true)
+            let a = CatchShareAnalytics(plane: plane, hasCatchPhoto: true, source: .reveal)
             a.sheetOpened()
             a.formatSelected(.square, via: "swipe")
             a.backdropSelected(.glow)
@@ -446,6 +446,78 @@ struct AnalyticsFacadeTests {
             #expect(props("catch_share_closed")?["shared"] as? Bool == true)
             #expect(props("catch_share_closed")?["formats_viewed"] as? Int == 2)
             #expect(props("catch_share_closed")?["last_format"] as? String == "square")
+            // Every step names the screen that opened the sheet.
+            #expect(mine.allSatisfy { $0.properties["source"]?.jsonValue as? String == "reveal" })
+        }
+    }
+
+    /// The DEBUG simulated reveal's share funnel is muted: nothing captured.
+    @Test func mutedCatchShareSendsNothing() {
+        withSink { sink in
+            let plane = CardPlane(callsign: "SIM0001", model: "Sim", carrier: nil,
+                                  rarity: .epic, type: .mil)
+            let a = CatchShareAnalytics(plane: plane, hasCatchPhoto: false, source: .reveal, muted: true)
+            a.sheetOpened()
+            a.formatSelected(.square, via: "swipe")
+            a.sheetClosed(shared: false, formatsViewed: 1, lastFormat: .square)
+            #expect(!sink.captured.contains {
+                $0.event.hasPrefix("catch_share_")
+                    && $0.properties["rarity"]?.jsonValue as? String == Rarity.epic.label
+            })
+        }
+    }
+
+    /// The three entry points report distinct `source` values.
+    @Test func catchShareOpenedCarriesItsSource() {
+        withSink { sink in
+            let plane = CardPlane(callsign: "RCH4522", model: "KC-46A", carrier: "USAF",
+                                  rarity: .legendary, type: .mil)
+            for source in [CatchShareAnalytics.Source.detail, .reveal, .multiReveal] {
+                CatchShareAnalytics(plane: plane, hasCatchPhoto: false, source: source).sheetOpened()
+            }
+            let sources = sink.captured
+                .filter { $0.event == "catch_share_opened"
+                    && $0.properties["rarity"]?.jsonValue as? String == Rarity.legendary.label
+                    && $0.properties["has_photo"]?.jsonValue as? Bool == false }
+                .compactMap { $0.properties["source"]?.jsonValue as? String }
+            #expect(sources == ["detail", "reveal", "multi_reveal"])
+        }
+    }
+
+    /// A roster-bump reseed fires `trophy_unlocked` (via "reseed") for each
+    /// trophy it newly acknowledges, and only those — so the fix landing is
+    /// visible in analytics even though no toast is shown. The achievement
+    /// ids are unique to this test (the sink is global).
+    @MainActor
+    @Test func rosterReseedFiresTrophyUnlockedViaReseed() {
+        let tag = "reseed-\(UUID().uuidString.prefix(8))"
+        let old = Achievement(id: "\(tag)-old", title: "Old", summary: "", iconName: "catcher",
+                              tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
+        let added = Achievement(id: "\(tag)-new", title: "New", summary: "", iconName: "catcher",
+                                tiers: [.init(tier: .gold, at: 1)], progress: { $0.totalCatches })
+        let ledger = UserDefaultsTrophyLedger(defaults: UserDefaults(suiteName: "test.\(tag)")!)
+        let suite = UserDefaults(suiteName: "test.\(tag).facts")!
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let hangar = [Catch(icao24: "abc123", callsign: nil, model: nil, manufacturer: nil,
+                            caughtAt: Date(timeIntervalSince1970: 1_716_000_000),
+                            observerLat: 0, observerLon: 0, slantDistanceMeters: 0)]
+        withSink { sink in
+            TrophyUnlockCenter(ledger: ledger, roster: [old], events: events, standing: standing,
+                               rosterVersion: 1).enqueueNewUnlocks(from: hangar)
+            let new = TrophyUnlockCenter(ledger: ledger, roster: [old, added], events: events,
+                                         standing: standing, rosterVersion: 2)
+            new.enqueueNewUnlocks(from: hangar)
+            // The reseed queues the grant as a normal card; presenting it must
+            // NOT fire a second `trophy_unlocked` (the tier is already acknowledged).
+            #expect(new.pendingEvents.map(\.achievementID) == ["\(tag)-new"])
+            new.markShown(new.head!)
+            let mine = sink.captured.filter {
+                $0.event == "trophy_unlocked"
+                    && ($0.properties["achievement"]?.jsonValue as? String)?.hasPrefix(tag) == true
+            }
+            #expect(mine.map { $0.properties["achievement"]?.jsonValue as? String } == ["\(tag)-new"])
+            #expect(mine.first?.properties["via"]?.jsonValue as? String == "reseed")
         }
     }
 

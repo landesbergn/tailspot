@@ -196,6 +196,38 @@ export function rateLimitSummary(headers: Headers): string | null {
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
+/**
+ * How long an error response asks us to wait, in seconds: `Retry-After`
+ * (delta-seconds or an HTTP date), else the RateLimit reset header. adsb.lol
+ * sends one reset per window ("1, 60, 41000"); without knowing which window
+ * tripped, the longest is the safe reading. Undefined when absent or garbled.
+ * Exported for tests.
+ */
+export function retryAfterSeconds(
+  headers: Headers,
+  nowMs: number = Date.now(),
+): number | undefined {
+  const retryAfter = headers.get("retry-after")?.trim();
+  if (retryAfter) {
+    if (/^\d+$/.test(retryAfter)) return Number(retryAfter);
+    const at = Date.parse(retryAfter);
+    if (Number.isFinite(at)) return Math.max(0, Math.ceil((at - nowMs) / 1000));
+  }
+  const reset = headers.get("x-ratelimit-reset") ?? headers.get("ratelimit-reset");
+  if (reset) {
+    const values = reset
+      .split(",")
+      .map((v) => Number.parseFloat(v.split(";")[0] ?? ""))
+      .filter((v) => Number.isFinite(v) && v >= 0);
+    if (values.length > 0) {
+      const v = Math.max(...values);
+      // Some servers send an epoch timestamp instead of a delta.
+      return v > 1e9 ? Math.max(0, Math.ceil(v - nowMs / 1000)) : Math.ceil(v);
+    }
+  }
+  return undefined;
+}
+
 export interface AdsbLolProviderOptions {
   baseUrl?: string;
   timeoutMs?: number;
@@ -291,6 +323,8 @@ export class AdsbLolProvider implements PositionProvider {
       const quota = rateLimitSummary(res.headers);
       throw new UpstreamError(
         `${this.name} returned HTTP ${res.status}${quota ? ` (${quota})` : ""}`,
+        undefined,
+        { status: res.status, retryAfterSeconds: retryAfterSeconds(res.headers) },
       );
     }
     return (await res.json()) as AdsbLolResponse;

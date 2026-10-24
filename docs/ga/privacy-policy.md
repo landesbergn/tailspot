@@ -40,7 +40,7 @@ around.
 | **Catch records** | Each catch stores: the aircraft's ICAO 24-bit address (a public radio identifier), callsign, timestamp, your GPS coordinates at the moment of the catch, and — if you played the bonus round — the answer you picked. | Our backend, for catch validation, the leaderboard, and so we can restore your collection if you reinstall (see §5). |
 | **Your approximate area, while the app is open** | The app asks our server "what aircraft are near this bounding box?" every ~10 seconds so the sky view stays live. The box is derived from your location. It is used to answer the query, not to build a movement history. | Our backend. |
 | **Usage analytics + session replay** | Anonymous product events (e.g. "app opened", "catch uploaded" — with the aircraft's identity and a coarse place name, never your coordinates) and **recordings of the app's screens** as you use them, so we can find and fix problems. See §3. | PostHog (our analytics processor), keyed to the anonymous device ID. |
-| **Crash and performance data** | Crash counts, hang rate, peak memory (Apple's on-device MetricKit, summarized). | PostHog. |
+| **Crash and performance data** | Crash type and code location, hang duration and location, app-exit counts, launch time, peak memory (Apple's on-device MetricKit, summarized; no file paths or personal data). | PostHog. |
 
 ### What the app does NOT collect
 
@@ -78,8 +78,9 @@ It collects, keyed to the anonymous device ID:
   photos, that photo appears in the recording of that screen. The live camera
   view is excluded from recordings. We use replays to find broken flows; they
   are visible only to the developer and PostHog as processor.
-- **Diagnostics** — crash counts, hang rate, and memory summaries from Apple's
-  on-device MetricKit.
+- **Diagnostics** — crash type and code location (the exception, and where in
+  the app's code it happened), hang duration and location, app-exit counts,
+  launch time, and memory summaries from Apple's on-device MetricKit.
 
 Separately, **Apple's own opt-in crash reporting** (part of iOS, governed by
 Apple's privacy policy) may reach us via App Store Connect if you've opted in on

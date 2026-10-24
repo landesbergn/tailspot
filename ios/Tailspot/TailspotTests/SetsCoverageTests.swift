@@ -255,6 +255,32 @@ struct SetsCoverageTests {
         ("C425", "Cessna", "425 Corsair"),
         ("PA22", "Piper", "PA-22 Colt"),
         ("SBR1", "Rockwell", "Sabre 40"),
+        // Public catalog coverage additions validated 2026-10-16.
+        ("FDCT", "Flight Design", "CT"),
+        ("J600", "Jihlavan", "JA-600 Rapid 600"),
+        ("SW4", "Fairchild", "SA-227 Metro"),
+        ("TAMP", "Socata", "TB-9 Tampico"),
+        // Public catalog coverage additions validated 2026-10-15.
+        ("B779", "Boeing", "777-9"),
+        ("FK9", "B & F Technik", "FK-9"),
+        ("RISN", "Porto", "Risen"),
+        ("WT9", "Aerospool", "WT-9 Dynamic"),
+        // Public catalog coverage additions validated 2026-10-14.
+        ("A342", "Airbus", "A340-200"),
+        ("G3", "Remos", "G-3 Mirage"),
+        ("PNR3", "Alpi", "Pioneer 300"),
+        ("T18", "Classic Sport", "S-18"),
+        ("TL30", "Tl Ultralight", "TL-3000 Sirius"),
+        // Public catalog coverage additions validated 2026-10-12.
+        ("A210", "Aquila", "A-210"),
+        ("CH2T", "Amd", "CH-2000 Alarus"),
+        ("DV20", "Diamond", "DA-20 Falcon"),
+        ("MT", "Autogyro", "MT-03"),
+        ("P8", "Boeing", "P-8 Poseidon"),
+        ("SF25", "Scheibe", "SF-25 Falke"),
+        ("T33", "Lockheed", "T-33 Shooting Star"),
+        // Public catalog coverage addition validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
         // Public catalog coverage additions validated 2026-10-11.
         ("A337", "Airbus", "A330-700 Beluga XL"),
         ("A400", "Airbus", "A400M Atlas"),
@@ -385,6 +411,27 @@ struct SetsCoverageTests {
             (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
             (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
             (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
+            (("FDCT", "Flight Design", "CT"), "fam-sport-classics", "fsc-flight-design-ct"),
+            (("J600", "Jihlavan", "JA-600 Rapid 600"), "fam-sport-classics", "fsc-skyleader600"),
+            (("SW4", "Fairchild", "SA-227 Metro"), "fam-commuter-props", "fcp-metro"),
+            (("TAMP", "Socata", "TB-9 Tampico"), "fam-sport-classics", "fsc-tampico"),
+            (("B779", "Boeing", "777-9"), "fam-777", "f777-9"),
+            (("FK9", "B & F Technik", "FK-9"), "fam-sport-classics", "fsc-fk9"),
+            (("RISN", "Porto", "Risen"), "fam-sport-classics", "fsc-risen"),
+            (("WT9", "Aerospool", "WT-9 Dynamic"), "fam-sport-classics", "fsc-wt9"),
+            (("A342", "Airbus", "A340-200"), "fam-a340", "fa340-200"),
+            (("G3", "Remos", "G-3 Mirage"), "fam-sport-classics", "fsc-remos-g3"),
+            (("PNR3", "Alpi", "Pioneer 300"), "fam-sport-classics", "fsc-pioneer300"),
+            (("T18", "Classic Sport", "S-18"), "fam-sport-classics", "fsc-s18"),
+            (("TL30", "Tl Ultralight", "TL-3000 Sirius"), "fam-sport-classics", "fsc-sirius"),
+            (("A210", "Aquila", "A-210"), "fam-sport-classics", "fsc-aquila-a210"),
+            (("CH2T", "Amd", "CH-2000 Alarus"), "fam-sport-classics", "fsc-alarus"),
+            (("DV20", "Diamond", "DA-20 Falcon"), "fam-diamond", "fda20"),
+            (("MT", "Autogyro", "MT-03"), "fam-sport-classics", "fsc-mt03"),
+            (("P8", "Boeing", "P-8 Poseidon"), "fam-military", "fm-p8"),
+            (("SF25", "Scheibe", "SF-25 Falke"), "fam-sport-classics", "fsc-sf25"),
+            (("T33", "Lockheed", "T-33 Shooting Star"), "fam-military", "fm-t33"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
             (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
             (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
             (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
@@ -740,6 +787,22 @@ struct SetsCoverageTests {
         let falcon50 = mk(("FA50", "Dassault", "Falcon 50"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: falcon50), entry: faetaEntry),
                 "A Dassault Falcon 50 must not fill the ATEC Faeta slot")
+
+        // Adjacent public designators and qualified tokens stay separate from
+        // the new 777-9 and light-sport slots.
+        let b777xEntry = CardSets.families.first { $0.id == "fam-777" }!
+            .entries.first { $0.id == "f777-9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("B789", "Boeing", "787-9 Dreamliner"))),
+                                    entry: b777xEntry),
+                "A 787-9 must not fill the 777-9 slot")
+        let fk9Entry = sportSet.entries.first { $0.id == "fsc-fk9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("F9F", "Grumman", "F9F Panther"))),
+                                    entry: fk9Entry),
+                "An F9F Panther must not fill the FK9 slot")
+        let wt9Entry = sportSet.entries.first { $0.id == "fsc-wt9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("WT10", "Aerospool", "WT-10 Advantic"))),
+                                    entry: wt9Entry),
+                "An Aerospool WT10 must not fill the WT9 slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
@@ -754,6 +817,14 @@ struct SetsCoverageTests {
         // ...and never the Bell 407 slot next door.
         let b407 = heliSet.entries.first { $0.id == "fh-b407" }!
         #expect(!CardSets.matches(key: key, entry: b407))
+        // ...nor the Cessna 206 / 207 slot, whose bare "206" token used to
+        // match the canonical name "Bell 206 JetRanger / LongRanger".
+        let cessnaSet = CardSets.families.first { $0.id == "fam-cessna" }!
+        let fc206 = cessnaSet.entries.first { $0.id == "fc206" }!
+        #expect(!CardSets.matches(key: key, entry: fc206),
+                "A Bell 206 must not fill the Cessna 206 / 207 slot")
+        let jetRanger = CardSets.matchKey(for: mk(("B06", "Bell", "206B JetRanger III")))
+        #expect(!CardSets.matches(key: jetRanger, entry: fc206))
 
         // Bell's 505 Jet Ranger X is its own type and must not collapse into
         // the older 206 JetRanger slot merely because the names are similar.
