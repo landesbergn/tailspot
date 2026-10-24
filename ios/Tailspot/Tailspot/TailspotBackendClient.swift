@@ -202,9 +202,10 @@ nonisolated struct TailspotBackendClient: ADSBSource {
     ///
     /// Why `@concurrent`: the target builds with Approachable Concurrency, so
     /// a plain `nonisolated async` func runs on its CALLER's actor — here
-    /// ADSBManager's MainActor. A few hundred aircraft decoded every 10 s on
-    /// main was a periodic frame drop in the AR view. `@concurrent` always
-    /// hops to the global executor; the result (`[Aircraft]`) is Sendable.
+    /// ADSBManager's MainActor, so a few hundred aircraft were JSON-decoded on
+    /// main every 10 s. `@concurrent` always hops to the global executor; the
+    /// result (`[Aircraft]`) is Sendable. (ADSBManager's annotation of the
+    /// result still runs on main — moving that is a separate, larger change.)
     @concurrent
     private static func decodeAircraft(_ data: Data) async throws -> [Aircraft] {
         do {

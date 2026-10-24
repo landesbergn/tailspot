@@ -951,12 +951,9 @@ struct ContentView: View {
                 motion.stop()
                 adsb.pauseReAnnotation()
                 visualConfirm.updateTarget(nil)
-                // The compass sheet is occluding but needs a live heading.
-                if !showCompassSheet { location.pauseHeading() }
             } else {
                 motion.start()
                 adsb.resumeReAnnotation()
-                location.resumeHeading()
             }
         }
         // Lifecycle teardown: when the app resigns active nobody's looking, so
@@ -1621,7 +1618,6 @@ struct ContentView: View {
         if isHeadingAccuracyBad {
             Button {
                 showCompassSheet = true
-                location.resumeHeading() // belt-and-braces: the sheet needs live heading
                 ActivationTelemetry.fireCompassSheetOpened(
                     headingAccuracyDeg: location.headingAccuracy
                 )
@@ -3807,7 +3803,11 @@ struct ContentView: View {
                 Text(formatLocation())
                 Text(formatHeading())
                     .foregroundStyle(isHeadingAccuracyBad ? Brand.Color.alertCaution : Brand.Color.textPrimary)
-                Text(formatCameraElevation())
+                // Own 10 Hz tick: MotionManager no longer publishes, so this
+                // debug line would otherwise freeze while the heading holds.
+                TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+                    Text(formatCameraElevation())
+                }
                 if !cameraAuthorized {
                     Text("camera: not authorized")
                 }

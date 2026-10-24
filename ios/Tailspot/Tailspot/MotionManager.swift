@@ -16,17 +16,17 @@ import Combine
 import CoreMotion
 import os
 
-/// One CoreMotion sample's worth of attitude + gravity, bundled so the
-/// whole sample publishes as a SINGLE value. Angles in radians.
+/// One CoreMotion sample's worth of attitude + gravity, stored as a SINGLE
+/// value so readers always see one coherent sample. Angles in radians.
 ///
-/// Coalescing rationale: the old shape wrote six separate `@Published`
-/// properties per 30 Hz sample, so each sample fired `objectWillChange`
-/// six times (~180/sec), and every one invalidated ContentView's entire
-/// body. Bundling them into one struct assigned once per sample drops
-/// that to a single invalidation signal per sample.
+/// History: this once backed six separate `@Published` properties (~180
+/// body invalidations/sec), then one published struct (30/sec); since the
+/// 2026-10 perf audit it isn't published at all — see `MotionManager.sample`.
+/// Anything that must refresh live from motion has to sit inside a
+/// TimelineView (as the AR overlay and the debug Cam-el readout do).
 ///
 /// `nonisolated` + `Sendable` so it can be built on the CoreMotion
-/// background queue and handed across to the main-thread publish hop.
+/// background queue and handed across to the main-thread store hop.
 nonisolated struct MotionSample: Sendable {
     var pitch: Double = 0      // tilt forward / back
     var roll: Double = 0       // tilt left / right
@@ -60,7 +60,7 @@ final class MotionManager: ObservableObject {
 
     // Forwarding accessors so every existing call site (`motion.pitch`,
     // `motion.gravityX`, …) keeps compiling unchanged — they now read the
-    // one coalesced sample instead of six separate stored @Published vars.
+    // one coalesced sample.
     var pitch: Double { sample.pitch }   // tilt forward / back
     var roll: Double { sample.roll }     // tilt left / right
     var yaw: Double { sample.yaw }       // rotation around vertical

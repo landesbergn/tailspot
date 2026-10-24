@@ -187,17 +187,19 @@ struct SetDetailScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // Read once per body: even a cache hit re-hashes the whole Hangar
+        // (CatchFingerprint), so the header and rows share this one read.
+        let stats = entryStats
+        return VStack(spacing: 0) {
             HangarChildBar(title: set.title)
             List {
                 Section {
-                    header
+                    header(stats: stats)
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
                 Section {
-                    let stats = entryStats
                     ForEach(set.entries) { entry in
                         let stat = stats[entry.id]
                         NavigationLink {
@@ -223,10 +225,9 @@ struct SetDetailScreen: View {
         .swipeBackEnabled()
     }
 
-    private var header: some View {
+    private func header(stats: [String: EntryStat]) -> some View {
         // An entry is "caught" iff some catch matches it — i.e. tailCount > 0
         // — which is exactly `CardSets.progress`'s first-match-wins count.
-        let stats = entryStats
         let p = (caught: set.entries.filter { (stats[$0.id]?.tailCount ?? 0) > 0 }.count,
                  total: set.entries.count)
         let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)

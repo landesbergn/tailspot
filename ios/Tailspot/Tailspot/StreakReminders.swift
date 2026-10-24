@@ -330,12 +330,7 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     /// timezone / Settings triggers). One full fetch of the Hangar — the
     /// same order of work every Profile open already does.
     func sync(context: ModelContext, now: Date = Date()) async {
-        // Partial fetch: the decision reads only the day key (Streaks.daySet),
-        // so don't materialize every column of the whole Hangar on each
-        // foreground. Any other property read would fault in on demand.
-        var descriptor = FetchDescriptor<Catch>()
-        descriptor.propertiesToFetch = [\.caughtDayKey, \.caughtAt]
-        let catches = (try? context.fetch(descriptor)) ?? []
+        let catches = (try? context.fetch(FetchDescriptor<Catch>())) ?? []
         await sync(catches: catches, now: now)
     }
 

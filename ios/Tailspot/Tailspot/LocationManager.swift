@@ -42,26 +42,6 @@ final class LocationManager: NSObject, ObservableObject {
     func requestPermissionAndStart() {
         manager.requestWhenInUseAuthorization()
     }
-
-    /// Stop compass updates while an opaque sheet (Hangar/Profile) hides the
-    /// AR view. Each heading callback publishes, and a publish re-evaluates
-    /// ContentView's whole body — even with its TimelineView paused — so a
-    /// live compass behind the Hangar re-ran the AR projection nobody could
-    /// see. GPS keeps running (the ADS-B poll's bbox still needs it).
-    func pauseHeading() {
-        manager.stopUpdatingHeading()
-    }
-
-    /// Resume compass updates when the AR view is visible again. No-op until
-    /// location is authorized (the auth callback starts heading itself).
-    func resumeHeading() {
-        switch manager.authorizationStatus {
-        case .authorizedWhenInUse, .authorizedAlways:
-            manager.startUpdatingHeading()
-        default:
-            break
-        }
-    }
 }
 
 extension LocationManager {
