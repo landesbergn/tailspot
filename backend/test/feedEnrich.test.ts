@@ -153,3 +153,45 @@ describe("registryRowsFromSnapshot source label", () => {
     expect(rows.map((r) => r.source)).toEqual(["adsblol"]);
   });
 });
+
+describe("fill-missing upsert write volume", () => {
+  const a350 = {
+    icao24: "76cdb5",
+    registration: "9V-SMH",
+    manufacturerRaw: null,
+    modelRaw: null,
+    typecode: "A359",
+    source: "adsbfi",
+  };
+
+  it("leaves an already-complete row untouched (no updated_at bump, no new tuple)", async () => {
+    const db = await makeTestDb();
+    await upsertRegistryFillMissing(db, [a350]);
+    const old = new Date("2026-01-01T00:00:00Z");
+    await db.update(registry).set({ updatedAt: old }).where(eq(registry.icao24, "76cdb5"));
+
+    // Re-sighting the same complete airframe is a no-op write…
+    await upsertRegistryFillMissing(db, [a350]);
+    let row = (await db.select().from(registry).where(eq(registry.icao24, "76cdb5")))[0];
+    expect(row?.updatedAt.getTime()).toBe(old.getTime());
+
+    // …while a row with a real gap still gets filled.
+    await db.update(registry).set({ registration: null }).where(eq(registry.icao24, "76cdb5"));
+    await upsertRegistryFillMissing(db, [a350]);
+    row = (await db.select().from(registry).where(eq(registry.icao24, "76cdb5")))[0];
+    expect(row?.registration).toBe("9V-SMH");
+    expect(row?.updatedAt.getTime()).toBeGreaterThan(old.getTime());
+  });
+
+  it("dedupes a snapshot that lists the same airframe twice (one batch, one key)", async () => {
+    const db = await makeTestDb();
+    const rows = registryRowsFromSnapshot(
+      snapshot([
+        ac({ icao24: "76cdb5", typecode: "A359", registration: "9V-SMH" }),
+        ac({ icao24: "76cdb5", typecode: "A359", registration: "9V-SMH" }),
+      ]),
+    );
+    expect(rows).toHaveLength(1);
+    await expect(upsertRegistryFillMissing(db, rows)).resolves.toBe(1);
+  });
+});

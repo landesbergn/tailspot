@@ -612,3 +612,34 @@ describe("multi-leg through-flights + stale filings (SFO arrival field reports, 
     ).toMatchObject({ originIcao: "KMAF", destIcao: "KDAL" });
   });
 });
+
+describe("AdsbLolRouteService cache bound", () => {
+  it("evicts expired entries first, then oldest, so the cache never exceeds its cap", async () => {
+    let now = 1_000_000;
+    const fetchFn = vi.fn(async () => new Response("", { status: 404 }));
+    const svc = new AdsbLolRouteService({
+      baseUrl: "https://example.test",
+      fetchFn: fetchFn as unknown as typeof fetch,
+      now: () => now,
+      negativeTtlMs: 1_000,
+      maxCacheEntries: 3,
+    });
+
+    await svc.prefetch(["AAA1", "BBB2", "CCC3"].map((callsign) => ({ callsign, lat: 0, lng: 0 })));
+    expect(svc.cacheSize).toBe(3);
+
+    // Full and nothing expired → the oldest (AAA1) is evicted.
+    await svc.prefetch([{ callsign: "DDD4", lat: 0, lng: 0 }]);
+    expect(svc.cacheSize).toBe(3);
+    fetchFn.mockClear();
+    await svc.resolve("BBB2"); // still cached → no fetch
+    expect(fetchFn).not.toHaveBeenCalled();
+    await svc.resolve("AAA1"); // evicted → refetched
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+
+    // Everything expires → the sweep clears it before inserting.
+    now += 5_000;
+    await svc.prefetch([{ callsign: "EEE5", lat: 0, lng: 0 }]);
+    expect(svc.cacheSize).toBe(1);
+  });
+});

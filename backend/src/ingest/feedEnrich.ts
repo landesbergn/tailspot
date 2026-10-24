@@ -33,9 +33,14 @@ import { upsertRegistryFillMissing } from "./registryUpsert.js";
  */
 export function registryRowsFromSnapshot(snapshot: ProviderSnapshot): RegistryInsert[] {
   const rows: RegistryInsert[] = [];
+  // One row per icao24: Postgres rejects a whole INSERT … ON CONFLICT batch
+  // that would touch the same key twice.
+  const seen = new Set<string>();
   for (const a of snapshot.aircraft) {
     const typecode = a.typecode?.trim().toUpperCase() || null;
     if (!typecode) continue; // the typecode is the thing the FAA registry lacks
+    if (seen.has(a.icao24)) continue;
+    seen.add(a.icao24);
     const registration = a.registration?.trim() || null;
     rows.push({
       icao24: a.icao24,

@@ -42,6 +42,8 @@
 
 import type { FastifyInstance } from "fastify";
 import { resolveDevice } from "../identity/auth.js";
+import { ipKey } from "../identity/clientIp.js";
+import type { RateLimiter } from "../identity/rateLimiter.js";
 import type {
   CatchStore,
   ChampionEntry,
@@ -64,6 +66,8 @@ export interface LeaderboardRouteOptions {
   catchStore: CatchStore;
   /** Injectable clock for deterministic window tests. Defaults to wall time. */
   now?: () => Date;
+  /** Per-IP flood control (429 + Retry-After). Absent → unmetered (tests). */
+  ipLimiter?: RateLimiter;
 }
 
 const DEFAULT_LIMIT = 50;
@@ -84,6 +88,13 @@ export function registerLeaderboardRoute(
   const clock = opts.now ?? (() => new Date());
 
   app.get("/v1/leaderboard", async (request, reply) => {
+    // Meter before any DB work: an all-time read is several full-table
+    // aggregations, and this route is unauthenticated.
+    const rl = opts.ipLimiter?.take(ipKey(request));
+    if (rl && !rl.allowed) {
+      reply.header("Retry-After", String(rl.retryAfterSeconds));
+      return reply.code(429).send({ error: "rate limited" });
+    }
     const q = request.query as Record<string, unknown>;
     const limit = parseLimit(q.limit);
     const window = parseWindow(q.window);
@@ -140,12 +151,18 @@ export function registerLeaderboardRoute(
     if (device) {
       const standing = await catchStore.myStanding(device.id, since);
       if (standing) {
+        // Three independent point reads — issued together, not serially.
+        const [weeklyWins, monthlyWins, everToppedAllTime] = await Promise.all([
+          catchStore.weeklyWins(device.id),
+          catchStore.monthlyWins(device.id),
+          catchStore.everToppedAllTime(device.id),
+        ]);
         me = {
           rank: standing.rank,
           points: standing.points,
-          weeklyWins: await catchStore.weeklyWins(device.id),
-          monthlyWins: await catchStore.monthlyWins(device.id),
-          everToppedAllTime: await catchStore.everToppedAllTime(device.id),
+          weeklyWins,
+          monthlyWins,
+          everToppedAllTime,
         };
       }
     }
