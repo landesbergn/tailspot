@@ -8,9 +8,9 @@ Git history + PLAN.md §9 remain the authoritative record.
 ## 2026-10-24 — Upgrade-launch budget test (branch `test/big-hangar-launch-budget`)
 
 - `LargeHangarBudgetTests` now covers the first launch after a trophy
-  roster bump (1.2.2 → 1.2.3 went 3 → 4) on a 10,000-catch Hangar: one
-  inputs pass and at most one synchronous date pass, under a wall-clock
-  ceiling. A DEBUG-only counter (`TrophyAchievementDates.synchronousEvaluations`)
+  roster bump (1.2.2 → 1.2.3 went 3 → 4) on a 10,000-catch Hangar with an
+  undated ledger: four trophies granted, one inputs pass and at most one
+  date pass, under a wall-clock ceiling. A DEBUG-only counter (`TrophyAchievementDates.prefixEvaluations`)
   makes the date-pass check exact; the clock alone let a 20-pass launch
   through. About 2 s of CI.
 
