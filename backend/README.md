@@ -180,6 +180,30 @@ Postgres at most once a minute.
 { "catches": 5812, "asOf": "2026-09-05T23:41:07.000Z" }
 ```
 
+### `POST /v1/catches/:catchUuid/guess` (one-time guess re-credit)
+
+Clients 1.1.0 through 1.2.2 uploaded each catch before its bonus-round guess
+resolved, and a replayed upload keeps the original row, so about 1,950 correct
+guesses never earned their bonus. The 1.2.3 client sends each guess it still
+has on the phone here, once, with `{ kind, value, localCorrect }`. Bearer auth,
+the calling device's own catch only, metered per IP and per device (120/min).
+
+The guess is applied only when the stored row has no guess and was inserted
+(`created_at`) before `GUESS_RECREDIT_CUTOVER` in `src/catches/points.ts`.
+Type guesses are checked against the server's resolved typecode. Route guesses
+trust `localCorrect`, because the server keeps only the callsign and today's
+route data can't judge an old flight number; the cutover keeps that trust to a
+one-time backfill. Points are recomputed by the canonical scorer (era-aware, so
+a route guess before 2026-08-13 earns +10%) with the row's frozen first-of-type
+flag, and the row is stamped with the current scoring version, so a later
+`npm run rescore` keeps the bonus. Decided weekly and monthly crowns are not
+touched, and no "someone passed you" push is sent.
+
+`200 { applied, points, guessKind, guessCorrect }` (`applied:false` means the
+row already had a guess and nothing changed), `404 { code: "catch_not_found" }`,
+`409 { code: "after_cutover" }`, `422` malformed body. The `code` field lets
+the client tell this 404 from the framework 404 an older server returns.
+
 ### Challenges v1 (`/v1/challenges`, `/v1/invites`)
 
 Head-to-head and small-group races over a shared time window, scored with the
