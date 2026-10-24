@@ -267,6 +267,34 @@ export interface ScoredCatch {
   guessCorrect: boolean;
 }
 
+/**
+ * The one-time guess re-credit (POST /v1/catches/:catchUuid/guess). From 1.1.0
+ * through 1.2.2 the app uploaded each catch BEFORE its bonus-round guess
+ * resolved, and a replayed POST keeps the original row, so the server never
+ * saw those guesses. The phone still has each guess frozen at answer time; the
+ * 1.2.3+ client sends them once through this path.
+ */
+export interface GuessRecredit {
+  kind: GuessKind;
+  /** Normalized (trimmed, uppercased) guess value, as on the upload path. */
+  value: string;
+  /** The phone's own verdict, frozen at answer time. Trusted for ROUTE guesses
+   *  only (see `recreditGuess`); TYPE guesses are re-verified on the server. */
+  localCorrect: boolean;
+}
+
+/** What `recreditGuess` did. `state` is the row as stored AFTER the call. */
+export type GuessRecreditResult =
+  | { status: "not_found" }
+  | { status: "after_cutover" }
+  | { status: "applied" | "already_has_guess"; state: GuessRecreditState };
+
+export interface GuessRecreditState {
+  points: number;
+  guessKind: string | null;
+  guessCorrect: boolean;
+}
+
 /** The fields the route hands the store to persist a new catch. */
 export interface NewCatch {
   catchUuid: string;
@@ -447,6 +475,21 @@ export interface CatchStore {
    * same uuid is a normal, independent insert (security-review fix).
    */
   insertOrGet(c: NewCatch): Promise<{ result: StoredCatchResult; duplicate: boolean }>;
+  /**
+   * Attach a late bonus-round guess to `deviceId`'s own catch `catchUuid` and
+   * re-score it with the canonical scorer. Applies ONLY when the stored row has
+   * no guess yet (`guess_kind IS NULL`) and was inserted before `cutover`;
+   * otherwise it changes nothing. Idempotent: a second call reports
+   * `already_has_guess` with the current state. Another device's catch is
+   * `not_found`. Crowns already decided stay frozen (nothing here touches the
+   * champion tables).
+   */
+  recreditGuess(
+    deviceId: string,
+    catchUuid: string,
+    guess: GuessRecredit,
+    cutover: Date,
+  ): Promise<GuessRecreditResult>;
   /**
    * One page of `deviceId`'s catches (oldest first, deterministic order:
    * caughtAt ASC then id ASC), with the airframe joins the client needs to
@@ -672,6 +715,96 @@ export class DrizzleCatchStore implements CatchStore {
       },
       duplicate: true,
     };
+  }
+
+  async recreditGuess(
+    deviceId: string,
+    catchUuid: string,
+    guess: GuessRecredit,
+    cutover: Date,
+  ): Promise<GuessRecreditResult> {
+    const readRow = async () => {
+      const rows = await withDbRetry(() =>
+        this.db
+          .select({
+            id: catches.id,
+            icao24: catches.icao24,
+            points: catches.points,
+            firstOfType: catches.firstOfType,
+            guessKind: catches.guessKind,
+            guessCorrect: catches.guessCorrect,
+            caughtAt: catches.caughtAt,
+            createdAt: catches.createdAt,
+          })
+          .from(catches)
+          .where(and(eq(catches.deviceId, deviceId), eq(catches.catchUuid, catchUuid)))
+          .limit(1),
+      );
+      return rows[0];
+    };
+    const stateOf = (r: { points: number; guessKind: string | null; guessCorrect: boolean }) => ({
+      points: r.points,
+      guessKind: r.guessKind,
+      guessCorrect: r.guessCorrect,
+    });
+
+    const row = await readRow();
+    if (!row) return { status: "not_found" };
+    // A row that already carries a guess (uploaded by a fixed client, or
+    // re-credited before) is left alone: the call is a no-op that reports
+    // the current state, so a retried sweep is harmless.
+    if (row.guessKind !== null) return { status: "already_has_guess", state: stateOf(row) };
+    // `created_at` is the server's insert time, not the client's `caughtAt`,
+    // so a client can't move a catch to the trusted side of the cutover.
+    if (row.createdAt >= cutover) return { status: "after_cutover" };
+
+    // The verdict. TYPE: re-verified against the server's own resolved
+    // typecode, the same rule as the upload route. ROUTE: the server stores
+    // only the callsign, and checking today's route data for an old flight
+    // number would wrongly reject guesses whose flight number has since been
+    // reused, so the phone's frozen verdict is trusted. That trust is a
+    // one-time backfill, bounded by the cutover: only catches inserted before
+    // the fixed client shipped can take this path.
+    const { typecode: resolvedTypecode } = await this.resolveRarity(row.icao24);
+    const correct =
+      guess.kind === "type"
+        ? resolvedTypecode !== null && guess.value === resolvedTypecode.toUpperCase()
+        : guess.localCorrect;
+
+    // The ONE canonical scorer, fed the row's FROZEN first-of-type flag and its
+    // own caughtAt (so a pre-2026-08-13 route guess keeps the legacy +10%).
+    // Stamps CURRENT_SCORING_VERSION, like a rescore of the row would.
+    const scored = await this.scoreCatch(row.icao24, {
+      firstOfType: row.firstOfType,
+      guess: { kind: guess.kind, correct },
+      caughtAt: row.caughtAt,
+    });
+
+    // Conditional on `guess_kind IS NULL`: two concurrent calls can both get
+    // this far, but only one write lands.
+    const updated = await withDbRetry(() =>
+      this.db
+        .update(catches)
+        .set({
+          guessKind: guess.kind,
+          guessValue: guess.value,
+          guessCorrect: correct,
+          typecode: scored.typecode,
+          rarity: scored.rarity,
+          points: scored.points,
+          scoringVersion: scored.scoringVersion,
+        })
+        .where(and(eq(catches.id, row.id), isNull(catches.guessKind)))
+        .returning({
+          points: catches.points,
+          guessKind: catches.guessKind,
+          guessCorrect: catches.guessCorrect,
+        }),
+    );
+    if (updated.length > 0) return { status: "applied", state: stateOf(updated[0]) };
+    const after = await readRow();
+    if (!after) return { status: "not_found" };
+    return { status: "already_has_guess", state: stateOf(after) };
   }
 
   async deleteCatch(deviceId: string, catchUuid: string): Promise<boolean> {
