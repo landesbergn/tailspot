@@ -260,6 +260,42 @@ struct LargeHangarBudgetTests {
         #expect(center.fullInputsPasses == before + 1)
     }
 
+    /// The first launch after an App Store update that bumps
+    /// `Trophies.rosterVersion` (1.2.2 → 1.2.3 went 3 → 4): the ledger is
+    /// already seeded, so the launch diff takes the reseed branch. That
+    /// synchronous half is what a watchdog kill measures, so it must stay one
+    /// inputs pass plus the bounded date probe, with the rest parked for
+    /// `finishAchievementDates`. Worst case on purpose: the previous build's
+    /// date backfill never ran, so every date is still missing. The counts
+    /// are the guard; the clock only catches a slip in what one pass costs
+    /// (20 passes at this size still came in under the ceiling).
+    @Test func rosterBumpUpgradeLaunchIsOnePassAndBounded() {
+        let (suiteName, suite) = makeSuite("test.budget.upgrade")
+        defer { drop(suiteName) }
+        let rows = Self.hangar10k
+        let ledger = UserDefaultsTrophyLedger(defaults: suite)
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let previous = Trophies.rosterVersion - 1
+        TrophyUnlockCenter(ledger: ledger, events: events, standing: standing,
+                           rosterVersion: previous).enqueueNewUnlocks(from: rows)
+        #expect(ledger.rosterVersion == previous, "precondition: seeded by the previous build")
+
+        let center = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
+        // Read before and after in one synchronous stretch on the main actor,
+        // so no other suite's search can land in between.
+        let evaluationsBefore = TrophyAchievementDates.synchronousEvaluations
+        let t = ContinuousClock().measure { center.enqueueNewUnlocks(from: rows) }
+        let evaluations = TrophyAchievementDates.synchronousEvaluations - evaluationsBefore
+        let seconds = Double(t.components.seconds) + Double(t.components.attoseconds) / 1e18
+        print("[LargeHangarBudget] roster-bump upgrade launch @10k: \(Int(seconds * 1000)) ms")
+        #expect(ledger.rosterVersion == Trophies.rosterVersion)
+        #expect(center.fullInputsPasses == 1)
+        #expect(evaluations <= 1, "the upgrade launch ran \(evaluations) date passes synchronously; the rest belong in finishAchievementDates")
+        #expect(seconds < Budget.upgradeLaunch10k,
+                "the upgrade launch diff took \(seconds) s at 10k rows, over a ~10x-headroom ceiling of \(Budget.upgradeLaunch10k) s: one launch pass got an order of magnitude more expensive")
+    }
+
     @Test func lateStampOnTheNewCatchDoesOneMorePass() {
         let (suiteName, suite) = makeSuite()
         defer { drop(suiteName) }
@@ -387,12 +423,18 @@ struct LargeHangarBudgetTests {
     /// at 10k rows (min of 3, 2026-10-22, with five other builders' test runs
     /// sharing the Mac): inputs 0.60-0.95 s, grouping 0.11-0.20 s, match
     /// keys 0.03-0.06 s (floored at 1 s — too short to bound tightly without
-    /// flaps). Deliberately generous: these gate the required CI check on a
+    /// flaps). The roster-bump upgrade launch (one inputs pass, the seed, and
+    /// the one-probe date pass; a single run, not min of 3, because a second
+    /// run would find the ledger already stamped) measured 1.84 s on
+    /// 2026-10-24 with a simulator build running alongside; its ceiling is
+    /// ~8x, and the full date search it must not run is tens of passes.
+    /// Deliberately generous: these gate the required CI check on a
     /// shared runner. If one ever trips on noise, raise it; the pass-count
     /// tests above are the precise guard.
     private enum Budget {
         static let inputs10k = 10.0
         static let grouping10k = 2.0
         static let matchKeys10k = 1.0
+        static let upgradeLaunch10k = 15.0
     }
 }
