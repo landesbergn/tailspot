@@ -58,7 +58,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { isPlausibleCaughtAt } from "../catches/caughtAtBounds.js";
+import { isBeforeFloor, storedCaughtAt } from "../catches/caughtAtBounds.js";
 import {
   GUESS_RECREDIT_CLOSES,
   GUESS_RECREDIT_CUTOVER,
@@ -430,7 +430,9 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     if (caughtAt === null) {
       return reject("caughtAt must be a unix-seconds number");
     }
-    if (!isPlausibleCaughtAt(caughtAt, nowSeconds())) {
+    // Pre-launch is impossible → 422. Far-future is a fast phone clock →
+    // stored/scored at server time below (see caughtAtBounds.ts).
+    if (isBeforeFloor(caughtAt)) {
       return reject("caughtAt out of range");
     }
 
@@ -558,7 +560,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     // The catch's own moment picks the guess-bonus era (the 2026-08-13 route
     // re-balance is going-forward only) — never the scoring moment, so a
     // delayed offline upload of an old catch still earns its era's fraction.
-    const caughtAtDate = new Date(caughtAt * 1000);
+    const caughtAtDate = new Date(storedCaughtAt(caughtAt, nowSeconds()) * 1000);
     const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24, {
       firstOfType,
       guess: guess ? { kind: guess.kind, correct: guessCorrect } : undefined,

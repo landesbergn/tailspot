@@ -11,12 +11,16 @@
  *
  * 4xx errors are deliberate, client-facing (validation, body too large, bad
  * JSON) and safe, so they fall through to Fastify's default handler unchanged.
- * 5xx keep the same JSON keys clients already parse, with a generic message;
- * the real error is logged server-side, and Sentry's onError hook (which runs
- * before any error handler) still captures it.
+ * 5xx answer `{ statusCode, error, message }` with a generic message; the
+ * default's `code` is dropped (it can name internals, and no client reads it).
+ * The error is logged server-side with drizzle's bound params stripped (the
+ * same scrub Sentry gets — Fly logs must not hold coordinates either), and
+ * Sentry's onError hook (which runs before any error handler) still captures
+ * it.
  */
 
 import type { FastifyError, FastifyInstance } from "fastify";
+import { stripSqlParams } from "./monitoring/sqlParams.js";
 
 export function installErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -26,7 +30,14 @@ export function installErrorHandler(app: FastifyInstance): void {
       // handler: same status, headers, body and log line as before.
       return reply.send(error);
     }
-    request.log.error({ err: error }, error.message);
+    // Not `{ err: error }`: pino's serializer would write message + stack,
+    // and the stack's first line repeats the message, params and all.
+    const message = stripSqlParams(error.message);
+    const frames = (error.stack ?? "")
+      .split("\n")
+      .filter((line) => line.trimStart().startsWith("at "))
+      .join("\n");
+    request.log.error({ err: { type: error.name, message, stack: frames } }, message);
     return reply.code(status).send({
       statusCode: status,
       error: "Internal Server Error",

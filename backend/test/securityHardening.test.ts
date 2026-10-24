@@ -6,15 +6,18 @@ import {
   CAUGHT_AT_FLOOR,
   CAUGHT_AT_MAX_FUTURE_SECONDS,
   clampToFloor,
-  isPlausibleCaughtAt,
+  isBeforeFloor,
+  storedCaughtAt,
 } from "../src/catches/caughtAtBounds.js";
 import type { Database } from "../src/db/client.js";
 import { catches, devices } from "../src/db/schema.js";
 import { installErrorHandler } from "../src/errorHandler.js";
 import { rateLimitPrefix } from "../src/identity/clientIp.js";
 import { DrizzleCatchStore, DrizzleIdentityStore } from "../src/identity/store.js";
-import { scrubEvent, stripSqlParams } from "../src/instrument.js";
+import { scrubEvent } from "../src/instrument.js";
+import { stripSqlParams } from "../src/monitoring/sqlParams.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../src/providers/types.js";
+import { UpstreamBudget } from "../src/providers/upstreamBudget.js";
 import { FetchRateLimitedError, TileCache } from "../src/routes/tileCache.js";
 import { makeTestDb } from "./helpers/pgliteDb.js";
 
@@ -63,6 +66,23 @@ describe("5xx responses never carry the error message", () => {
     const res = await app.inject({ method: "GET", url: "/bad-request" });
     expect(res.statusCode).toBe(400);
     expect(res.json().message).toBe("limit must be a number");
+  });
+
+  it("the 5xx log line carries the query but not the bound params", async () => {
+    const lines: string[] = [];
+    const logged = Fastify({
+      logger: { level: "error", stream: { write: (l: string) => lines.push(l) } },
+    });
+    installErrorHandler(logged);
+    logged.get("/db-fail", async () => {
+      throw new Error(DRIZZLE_MESSAGE);
+    });
+    await logged.inject({ method: "GET", url: "/db-fail" });
+    await logged.close();
+    const all = lines.join("\n");
+    expect(all).toContain('insert into \\"catches\\"');
+    expect(all).not.toContain("37.8012");
+    expect(all).not.toContain("-122.2711");
   });
 
   it("Fastify's own 4xx (malformed JSON) keeps its default body", async () => {
@@ -139,17 +159,20 @@ describe("caughtAt bounds", () => {
   const now = 1_790_000_000;
   const floorSec = CAUGHT_AT_FLOOR.getTime() / 1000;
 
-  it("accepts now, the floor itself, and a day of clock skew", () => {
-    expect(isPlausibleCaughtAt(now, now)).toBe(true);
-    expect(isPlausibleCaughtAt(floorSec, now)).toBe(true);
-    expect(isPlausibleCaughtAt(now + CAUGHT_AT_MAX_FUTURE_SECONDS, now)).toBe(true);
+  it("only pre-launch times are before the floor", () => {
+    expect(isBeforeFloor(floorSec)).toBe(false);
+    expect(isBeforeFloor(now)).toBe(false);
+    expect(isBeforeFloor(floorSec - 1)).toBe(true);
+    expect(isBeforeFloor(-6e10)).toBe(true);
   });
 
-  it("rejects pre-launch, ancient, far-future and out-of-Date-range values", () => {
-    expect(isPlausibleCaughtAt(floorSec - 1, now)).toBe(false);
-    expect(isPlausibleCaughtAt(-6e10, now)).toBe(false);
-    expect(isPlausibleCaughtAt(now + CAUGHT_AT_MAX_FUTURE_SECONDS + 1, now)).toBe(false);
-    expect(isPlausibleCaughtAt(9e12, now)).toBe(false);
+  it("stores the reported time up to a day ahead, server time past that", () => {
+    expect(storedCaughtAt(now - 3_600, now)).toBe(now - 3_600);
+    expect(storedCaughtAt(now + CAUGHT_AT_MAX_FUTURE_SECONDS, now)).toBe(
+      now + CAUGHT_AT_MAX_FUTURE_SECONDS,
+    );
+    expect(storedCaughtAt(now + CAUGHT_AT_MAX_FUTURE_SECONDS + 1, now)).toBe(now);
+    expect(storedCaughtAt(9e12, now)).toBe(now); // past JS Date's range
   });
 
   it("clampToFloor bounds the decide-on-read backfill start", () => {
@@ -207,13 +230,32 @@ describe("POST /v1/catches input bounds", () => {
     });
   }
 
-  it("rejects a backdated or far-future caughtAt with 422", async () => {
-    for (const caughtAt of [-6e10, CAUGHT_AT_FLOOR.getTime() / 1000 - 60, NOW + 2 * 86_400, 9e12]) {
+  it("rejects a pre-launch caughtAt with 422", async () => {
+    for (const caughtAt of [-6e10, CAUGHT_AT_FLOOR.getTime() / 1000 - 60]) {
       const res = await post(body({ caughtAt }));
       expect(res.statusCode, `caughtAt=${caughtAt}`).toBe(422);
       expect(res.json()).toEqual({ error: "caughtAt out of range" });
     }
     expect(await db.select().from(catches)).toHaveLength(0);
+  });
+
+  it("accepts a fast-clock catch but stores it at server time, flagged", async () => {
+    const uuids = ["22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333"];
+    for (const [i, caughtAt] of [NOW + 3 * 86_400, 9e12].entries()) {
+      // An aircraft fix, so the validator runs its checks (a null aircraft
+      // short-circuits to "unverifiable" before the clock-skew check).
+      const aircraft = { lat: 37.9, lon: -122.27, altitudeMeters: 3000, positionTimestamp: NOW };
+      const res = await post(body({ catchUuid: uuids[i], caughtAt, aircraft }));
+      expect(res.statusCode, `caughtAt=${caughtAt}`).toBe(201);
+    }
+    const rows = await db
+      .select({ caughtAt: catches.caughtAt, reasons: catches.validation })
+      .from(catches);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.caughtAt.getTime()).toBe(NOW * 1000);
+      expect(JSON.stringify(row.reasons)).toContain("caughtAt off by");
+    }
   });
 
   it("truncates an oversized callsign instead of storing it whole", async () => {
@@ -239,9 +281,20 @@ describe("TileCache per-client fetch gate", () => {
     return { provider, calls: () => n };
   }
 
-  it("a cold tile with the allowance spent throws FetchRateLimitedError, no upstream call", async () => {
+  it("over the allowance, a cold tile still fetches on an idle budget slot", async () => {
     const { provider, calls } = countingProvider();
-    const cache = new TileCache(provider, {}, () => 0);
+    const budget = new UpstreamBudget({ now: () => 0 });
+    const cache = new TileCache(provider, {}, () => 0, undefined, undefined, { budget });
+    const res = await cache.get(bbox, { mayFetch: () => false });
+    expect(res.stale).toBe(false);
+    expect(calls()).toBe(1);
+  });
+
+  it("over the allowance with the budget busy and nothing cached: 429, no upstream call", async () => {
+    const { provider, calls } = countingProvider();
+    const budget = new UpstreamBudget({ now: () => 0 });
+    expect(budget.tryTake()).toBe(true); // someone else holds the only slot
+    const cache = new TileCache(provider, {}, () => 0, undefined, undefined, { budget });
     await expect(cache.get(bbox, { mayFetch: () => false })).rejects.toBeInstanceOf(
       FetchRateLimitedError,
     );

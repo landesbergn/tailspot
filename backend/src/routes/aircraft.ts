@@ -122,13 +122,16 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
       return reply.code(400).send({ error: invalid.reason });
     }
 
+    // Retry-After for the 429 below. Most refused fetches are served from
+    // cache as a 200, which must not carry it.
+    let fetchRetryAfter: number | undefined;
     try {
       const fetchLimiter = opts.fetchLimiter;
       const { snapshot } = await cache.get(bbox as Bbox, {
         mayFetch: fetchLimiter
           ? () => {
               const r = fetchLimiter.take(ipKey(request));
-              if (!r.allowed) reply.header("Retry-After", String(r.retryAfterSeconds));
+              if (!r.allowed) fetchRetryAfter = r.retryAfterSeconds;
               return r.allowed;
             }
           : undefined,
@@ -149,6 +152,7 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
       });
     } catch (err) {
       if (err instanceof FetchRateLimitedError) {
+        if (fetchRetryAfter !== undefined) reply.header("Retry-After", String(fetchRetryAfter));
         return reply.code(429).send({ error: "rate limited" });
       }
       if (err instanceof NoFreshDataError) {

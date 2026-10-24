@@ -139,10 +139,10 @@ export class BudgetExhaustedError extends Error {
   }
 }
 
-/** Thrown when upstream failed AND no acceptably-fresh cache exists → 503. */
 /**
- * The caller's per-IP upstream-fetch allowance (`GetOptions.mayFetch`) is spent
- * and there is nothing cached to serve instead. The route answers 429.
+ * The caller is over its per-IP upstream-fetch allowance (`GetOptions.mayFetch`),
+ * nothing is cached, and the budget has no idle slot right now. The route
+ * answers 429.
  */
 export class FetchRateLimitedError extends Error {
   constructor() {
@@ -154,14 +154,19 @@ export class FetchRateLimitedError extends Error {
 export interface GetOptions {
   /**
    * Charged only when this request would spend upstream budget (a refresh or
-   * a cold tile) — never on a cache hit or a shared in-flight fetch. Returning
-   * false serves the cache if it is within STALE_MAX, else throws
-   * FetchRateLimitedError. Without it, one client walking cold tiles at the
-   * hit limit could hold the process-wide budget and starve every other phone.
+   * a cold tile) — never on a cache hit or a shared in-flight fetch. A caller
+   * it refuses is DEMOTED, not refused: a refresh serves the cache, and a
+   * cold tile may still fetch, but only on an idle budget slot (`tryTake`),
+   * never by queueing (`take`). So an IP walking cold tiles at the hit limit
+   * can't hold the process-wide budget ahead of other phones, while phones
+   * sharing a carrier-NAT IP still get planes whenever the feed is quiet.
+   * Only "over allowance + nothing cached + budget busy" throws
+   * FetchRateLimitedError.
    */
   mayFetch?: () => boolean;
 }
 
+/** Thrown when upstream failed AND no acceptably-fresh cache exists → 503. */
 export class NoFreshDataError extends Error {
   constructor(
     message: string,
@@ -296,11 +301,15 @@ export class TileCache {
     }
 
     // 2b. Per-client fetch allowance: past here this request spends upstream.
+    // Over the allowance → demoted (see GetOptions.mayFetch): serve the cache
+    // if servable, else fetch only on an idle slot, never by queueing.
     if (opts.mayFetch && !opts.mayFetch()) {
       if (cached && nowSec - cached.storedAt < this.config.staleMaxSeconds) {
         return { snapshot: cached.snapshot, stale: true };
       }
-      throw new FetchRateLimitedError();
+      if (!this.throttle?.budget.tryTake()) throw new FetchRateLimitedError();
+      this.notifyGranted();
+      return this.fetchAndStore(key, bbox, nowSec, false);
     }
 
     // 3. Budget check (when configured). A refresh with a recent-enough cache
@@ -325,9 +334,21 @@ export class TileCache {
       }
     }
 
-    // 4. Start a new upstream fetch; stash it so concurrent callers share it.
-    // Fetch the EXPANDED tile (not the raw request) so the cached snapshot is
-    // valid for every bbox that maps to this key — see tileBbox() doc.
+    return this.fetchAndStore(key, bbox, nowSec, waitForSlot);
+  }
+
+  /**
+   * 4. Start a new upstream fetch; stash it so concurrent callers share it.
+   * Fetch the EXPANDED tile (not the raw request) so the cached snapshot is
+   * valid for every bbox that maps to this key — see tileBbox() doc.
+   * `waitForSlot`: queue on the budget first (the caller holds no slot yet).
+   */
+  private async fetchAndStore(
+    key: string,
+    bbox: Bbox,
+    nowSec: number,
+    waitForSlot: boolean,
+  ): Promise<TileResult> {
     const fetchPromise = (async () => {
       if (waitForSlot && this.throttle) {
         const ok = await this.throttle.budget.take(

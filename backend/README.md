@@ -96,10 +96,12 @@ degrees and returns a normalized, SI-unit snapshot of aircraft inside it:
 Errors: `400 { "error": "..." }` for a missing / non-numeric / out-of-range /
 inverted / oversized (> 4 sq deg) bbox; `503 { "error": "upstream unavailable" }`
 when the upstream is down **and** no acceptably-fresh cache exists;
-`429 { "error": "rate limited" }` past 120/min per IP, or past 20/min per IP
-of polls that would start an upstream fetch for a tile with nothing cached
-(a refresh past that limit is served from cache instead). IPv6 clients are
-limited per /64.
+`429 { "error": "rate limited" }` past 120/min per IP. Separately, past
+20/min per IP of polls that would spend upstream budget, the IP is demoted
+rather than refused: a refresh is served from cache, and a cold tile fetches
+only on an idle budget slot (never by queueing ahead of other phones); it is
+a 429 only when there is nothing cached and the budget is busy. IPv6 clients
+are limited per /64.
 
 Behind the route:
 

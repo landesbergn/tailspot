@@ -10,6 +10,7 @@
 // so the Fly logs always say which mode we're in.
 import * as Sentry from "@sentry/node";
 import type { ErrorEvent } from "@sentry/node";
+import { stripSqlParams } from "./monitoring/sqlParams.js";
 
 const dsn = process.env.SENTRY_DSN;
 
@@ -59,12 +60,6 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   }
   if (typeof event.message === "string") event.message = stripSqlParams(event.message);
   return event;
-}
-
-const SQL_PARAMS_RE = /\nparams: [\s\S]*$/;
-
-export function stripSqlParams(text: string): string {
-  return text.replace(SQL_PARAMS_RE, "\nparams: [redacted]");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

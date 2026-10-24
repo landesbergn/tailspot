@@ -10,22 +10,25 @@
  *   - future-date it so it counts in every live board forever;
  *   - send a value past JS Date's range, which 500s on serialization.
  *
- * FLOOR is the day this repo was created: no real catch can predate it.
- * The ceiling allows a generous day of phone clock skew. A rejected upload is
- * a 422, which the iOS uploader leaves pending until the next launch (no hot
- * retry loop).
+ * Before FLOOR (the day this repo was created) no real catch can exist, so
+ * those are a 422. Too far in the FUTURE is what a real phone with a fast
+ * clock sends, and shipped clients retry a 422 on every launch forever — so
+ * those are stored at server time instead ("gates flag, never block"); the
+ * validator still sees the reported time and records the skew.
  */
 
 export const CAUGHT_AT_FLOOR = new Date("2026-05-01T00:00:00Z");
 
-/** Max seconds `caughtAt` may run ahead of the server clock. */
+/** Max seconds `caughtAt` may run ahead of the server clock before clamping. */
 export const CAUGHT_AT_MAX_FUTURE_SECONDS = 86_400;
 
-export function isPlausibleCaughtAt(caughtAtSeconds: number, nowSeconds: number): boolean {
-  return (
-    caughtAtSeconds >= CAUGHT_AT_FLOOR.getTime() / 1000 &&
-    caughtAtSeconds <= nowSeconds + CAUGHT_AT_MAX_FUTURE_SECONDS
-  );
+export function isBeforeFloor(caughtAtSeconds: number): boolean {
+  return caughtAtSeconds < CAUGHT_AT_FLOOR.getTime() / 1000;
+}
+
+/** The time to store and score by: the reported time, or `now` if it's too far ahead. */
+export function storedCaughtAt(caughtAtSeconds: number, nowSeconds: number): number {
+  return caughtAtSeconds > nowSeconds + CAUGHT_AT_MAX_FUTURE_SECONDS ? nowSeconds : caughtAtSeconds;
 }
 
 /** Backfill start for the decide-on-read walkers: never before the floor. */
