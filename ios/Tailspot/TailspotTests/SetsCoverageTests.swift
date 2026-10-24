@@ -208,6 +208,8 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-27.
         ("BL17", "Bellanca", "17 Viking"),
         ("EVOT", "Evolution", "EVOT-550 Evolution"),
+        // Public catalog coverage addition validated 2026-10-24.
+        ("EVOP", "Lancair", "Evolution Piston"),
         // Public catalog coverage additions validated 2026-09-28.
         ("GA8", "Gippsaero", "GA-8 Airvan"),
         ("HROC", "Harmon", "Rocket"),
@@ -383,6 +385,7 @@ struct SetsCoverageTests {
             (("SREY", "Progressive Aerodyne", "SeaRey"), "fam-sport-classics", "fsc-searey"),
             (("BL17", "Bellanca", "17 Viking"), "fam-sport-classics", "fsc-viking"),
             (("EVOT", "Evolution", "EVOT-550 Evolution"), "fam-sport-classics", "fsc-evolution"),
+            (("EVOP", "Lancair", "Evolution Piston"), "fam-sport-classics", "fsc-evolution-piston"),
             (("GA8", "Gippsaero", "GA-8 Airvan"), "fam-sport-classics", "fsc-airvan"),
             (("HROC", "Harmon", "Rocket"), "fam-sport-classics", "fsc-harmon-rocket"),
             (("PA24", "Piper", "PA-24 Comanche"), "fam-piper", "fpa24"),
@@ -647,14 +650,21 @@ struct SetsCoverageTests {
                 "A GLAS Glasair must not fill the GLST GlaStar slot")
 
         // Bellanca's 19 Skyrocket and Evektor's SportStar are distinct from
-        // the Bellanca 17 Viking and Evolution Turbine families.
+        // the Bellanca 17 Viking and Evolution families.
         let sportSet = CardSets.families.first { $0.id == "fam-sport-classics" }!
         let vikingEntry = sportSet.entries.first { $0.id == "fsc-viking" }!
         let evolutionEntry = sportSet.entries.first { $0.id == "fsc-evolution" }!
+        let evolutionPistonEntry = sportSet.entries.first { $0.id == "fsc-evolution-piston" }!
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("BL19", "Aviabellanca", "19 Skyrocket"))), entry: vikingEntry),
                 "A Bellanca 19 Skyrocket must not fill the Bellanca 17 Viking slot")
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("EVSS", "Evektor", "SportStar"))), entry: evolutionEntry),
                 "An Evektor SportStar must not fill the Evolution Turbine slot")
+        let evolutionPiston = mk(("EVOP", "Lancair", "Evolution Piston"))
+        let evolutionTurbine = mk(("EVOT", "Evolution", "EVOT-550 Evolution"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: evolutionPiston), entry: evolutionEntry),
+                "The piston Evolution must not fill the Evolution Turbine slot")
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: evolutionTurbine), entry: evolutionPistonEntry),
+                "The turbine Evolution must not fill the Evolution Piston slot")
 
         // Manufacturer-qualified tokens keep similarly named or coded public
         // aircraft out of the Airvan, Harmon Rocket, and Comanche slots.
