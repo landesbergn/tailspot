@@ -415,6 +415,10 @@ nonisolated enum CardSets {
                   modelTokens: ["max 9", "737 max 9", "737-9 max"],
                   summary: "Stretched MAX. United and Alaska fly the most.",
                   representativeTypecode: "B39M"),
+            .init(id: "f737-max10", canonicalName: "737 MAX 10", rarity: .common,
+                  modelTokens: ["max 10", "737 max 10", "737-10 max"],
+                  summary: "The longest 737 MAX. Built for high-capacity routes.",
+                  representativeTypecode: "B3XM"),
         ]),
         .init(id: "fam-a320", type: .narrow, title: "Airbus A320", entries: [
             // Classic ceo variants are TYPECODE-ONLY (empty tokens): the neo
@@ -753,6 +757,12 @@ nonisolated enum CardSets {
                   summary: "Thirty-seat regional jet built around the Dornier 328.",
                   representativeTypecode: "J328"),
         ]),
+        .init(id: "fam-avro-rj", type: .regional, title: "BAe 146 / Avro RJ", entries: [
+            .init(id: "farj85", canonicalName: "Avro RJ85", rarity: .rare,
+                  modelTokens: ["avro rj-85 avroliner", "british aerospace rj-85"],
+                  summary: "Four-engine regional jet developed from the BAe 146-200.",
+                  representativeTypecode: "RJ85"),
+        ]),
     ]
 
     private static let familiesGapB: [CardSet] = [
@@ -906,6 +916,10 @@ nonisolated enum CardSets {
                   modelTokens: ["pa-31t-620 cheyenne", "cheyenne 2", "cheyenne ii"],
                   summary: "Twin-turboprop development of the PA-31 family.",
                   representativeTypecode: "PAY2"),
+            .init(id: "fpa30", canonicalName: "Piper PA-30 Twin Comanche", rarity: .common,
+                  modelTokens: ["piper pa-30 twin comanche", "pa-30 twin comanche", "pa-39 twin comanche"],
+                  summary: "Twin-engine development of Piper's Comanche touring aircraft.",
+                  representativeTypecode: "PA30"),
             .init(id: "fpa24", canonicalName: "Piper PA-24 Comanche", rarity: .common,
                   modelTokens: ["piper pa-24 comanche", "pa-24 comanche"],
                   summary: "Retractable-gear touring single that anchored Piper's late-1950s lineup.",
@@ -918,6 +932,10 @@ nonisolated enum CardSets {
             .init(id: "fbe58", canonicalName: "Beechcraft Baron", rarity: .common,
                   modelTokens: ["baron", "be58", "be-58"], summary: "Cabin-class light twin.",
                   representativeTypecode: "BE58"),
+            .init(id: "fbe60", canonicalName: "Beechcraft 60 Duke", rarity: .common,
+                  modelTokens: ["beechcraft 60 duke", "hawker beechcraft 60 duke"],
+                  summary: "Pressurized high-performance piston twin from the Beechcraft line.",
+                  representativeTypecode: "BE60"),
             .init(id: "fbe20", canonicalName: "King Air 200", rarity: .uncommon,
                   modelTokens: ["king air 200", "super king air", "be20", "b200"], summary: "The ubiquitous business turboprop.",
                   representativeTypecode: "BE20",
@@ -1031,6 +1049,10 @@ nonisolated enum CardSets {
                   representativeTypecode: "S76",
                   // "s-76" is a substring of the Morane-Saulnier MS-760 Paris jet.
                   excludedTypecodes: ["MS76"]),
+            .init(id: "fh-s64", canonicalName: "Sikorsky S-64 / CH-54", rarity: .uncommon,
+                  modelTokens: ["sikorsky s-64", "s-64 skycrane", "ch-54 tarhe"],
+                  summary: "Heavy-lift flying crane built for oversized external loads.",
+                  representativeTypecode: "S64"),
             .init(id: "fh-s92", canonicalName: "Sikorsky S-92", rarity: .uncommon,
                   modelTokens: ["sikorsky s-92", "sikorsky s92"],
                   summary: "Heavy twin-engine transport helicopter for offshore, SAR, and head-of-state missions.",
