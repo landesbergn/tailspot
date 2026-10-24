@@ -181,11 +181,13 @@ struct ContentView: View {
     /// just-landed catch made the streak worth protecting (eligibility in
     /// `StreakReminders.shouldOfferAsk`) and promoted at reveal dismiss.
     /// The value is the current streak the card quotes.
-    @State private var pendingStreakAsk: Int? = nil
+    /// Carries the re-offer details when this is the one second chance for
+    /// a "Not now" decliner (`StreakReminders.reoffer`).
+    @State private var pendingStreakAsk: StreakReminders.Offer? = nil
     /// The presented pre-prompt card (nil = hidden). One-shot: presenting
-    /// latches `StreakReminders.permissionAskedKey` immediately, so a kill
-    /// mid-card still counts as asked.
-    @State private var streakAsk: Int? = nil
+    /// latches `StreakReminders.permissionAskedKey` (or, for the re-offer,
+    /// `reofferUsedKey`) immediately, so a kill mid-card still counts.
+    @State private var streakAsk: StreakReminders.Offer? = nil
     /// True while the visible card was forced by the wrench's 🔔 Ask —
     /// keeps the ask-shown/response events real-promotions-only (the
     /// debug-seam rule: debug paths stay out of telemetry).
@@ -1734,102 +1736,58 @@ struct ContentView: View {
         }
     }
 
-    /// Streak notification pre-prompt: a bottom card, presented once ever
-    /// (see `presentPostRevealMomentIfNeeded`), asking to protect the streak
-    /// with the evening nudge. Accepting fires the SYSTEM permission prompt
-    /// — the pre-prompt exists so that prompt lands with context instead of
-    /// ambushing at cold launch. Solid card, not `.glassEffect` (bare glass
-    /// siblings swallow taps on views below — the Profile bug, PR #127).
-    ///
-    /// All prose, no mono (Noah, 2026-08-19). Copy is his: the question
-    /// leads, the mechanism explains itself in one line, and neither
-    /// mentions the reminder hour or a day threshold — numbers in the copy go stale
-    /// the moment a constant moves.
+    /// Streak notification pre-prompt: a bottom card, presented once
+    /// (plus at most one re-offer to a "Not now" decliner; see
+    /// `presentPostRevealMomentIfNeeded`), asking to protect the streak with
+    /// the evening nudge. Accepting fires the SYSTEM permission prompt — the
+    /// pre-prompt exists so that prompt lands with context instead of
+    /// ambushing at cold launch. The card itself is `StreakAskCard`.
     @ViewBuilder
     private var streakAskOverlay: some View {
-        if let days = streakAsk {
-            VStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Brand.Color.alertCaution)
-                            // flame.fill's ink sits high in its layout box, so plain
-                            // centring leaves it ~1 pt above the text. Same nudge as
-                            // the Profile card's flame, scaled to this glyph size.
-                            .offset(y: 1)
-                            .accessibilityHidden(true)
-                        HStack(spacing: 5) {
-                            Text("\(days)")
-                                .font(.system(.subheadline, weight: .bold))
-                                .monospacedDigit()
-                                .foregroundStyle(Brand.Color.textPrimary)
-                            Text("day streak")
-                                .font(.system(.subheadline, weight: .medium))
-                                .foregroundStyle(Brand.Color.textSecondary)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(days) day streak")
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Protect your streak?")
-                            .font(.system(.title3, weight: .bold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                        Text("Turn on notifications to help keep your streak going.")
-                            .font(.subheadline)
-                            .foregroundStyle(Brand.Color.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    HStack(spacing: 12) {
-                        Button {
-                            if !streakAskFromDebug {
-                                StreakTelemetry.fireAskResponse(accepted: true, streakDays: days)
-                            }
-                            withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
-                            Task { @MainActor in
-                                _ = await StreakReminderCenter.shared.requestPermission()
-                                await StreakReminderCenter.shared.sync(context: modelContext)
-                            }
-                        } label: {
-                            Text("Notify me")
-                                .font(Brand.Font.button)
-                                .foregroundStyle(Brand.Color.bgPrimary)
-                                .padding(.vertical, 13)
-                                .frame(maxWidth: .infinity)
-                                .background(Brand.Color.cyan,
-                                            in: .rect(cornerRadius: Brand.Radius.row))
-                        }
-                        .buttonStyle(.plain)
-                        Button {
-                            if !streakAskFromDebug {
-                                StreakTelemetry.fireAskResponse(accepted: false, streakDays: days)
-                            }
-                            withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
-                        } label: {
-                            Text("Not now")
-                                // Same size as the primary, one weight
-                                // down: declining stays easy to hit and
-                                // easy to read, without competing.
-                                .font(.system(.callout, weight: .medium))
-                                .foregroundStyle(Brand.Color.textSecondary)
-                                .padding(.vertical, 13)
-                                .padding(.horizontal, 20)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.top, 2)
-                }
-                .padding(20)
-                .background(Brand.Color.bgElevated,
-                            in: .rect(cornerRadius: Brand.Radius.card))
-                .padding(.horizontal, 16)
-                // Clear the capture bar (its buttons sit ~100 pt tall with
-                // the home indicator inset).
-                .padding(.bottom, 110)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if let offer = streakAsk {
+            StreakAskCard(
+                days: offer.days,
+                acceptLabel: offer.reoffer?.routesToSettings == true ? "Open Settings" : "Notify me",
+                onAccept: { resolveStreakAsk(offer, accepted: true) },
+                onDecline: { resolveStreakAsk(offer, accepted: false) }
+            )
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// The card's two buttons. Accept fires the system dialog, or, for a
+    /// re-offer to someone iOS already denied, opens iOS Settings (the
+    /// dialog can't be shown twice). "Not now" on the FIRST ask records the
+    /// decline that makes the one re-offer possible.
+    private func resolveStreakAsk(_ offer: StreakReminders.Offer, accepted: Bool) {
+        if !streakAskFromDebug {
+            if let reoffer = offer.reoffer {
+                StreakTelemetry.fireReofferResponse(reoffer, streakDays: offer.days, accepted: accepted)
+            } else {
+                StreakTelemetry.fireAskResponse(accepted: accepted, streakDays: offer.days)
+                if !accepted {
+                    UserDefaults.standard.set(true, forKey: StreakReminders.permissionDeclinedKey)
+                    UserDefaults.standard.set(Streaks.dayKey(for: Date()),
+                                              forKey: StreakReminders.permissionDeclinedDayKey)
+                }
+            }
+        }
+        withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
+        guard accepted else { return }
+        if offer.reoffer?.routesToSettings == true {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
+        Task { @MainActor in
+            let granted = await StreakReminderCenter.shared.requestPermission()
+            // The re-offer mirrors Settings' "Turn on reminders": fetch an
+            // APNs token now so challenge pushes work before a relaunch.
+            if granted, offer.reoffer != nil {
+                PushRegistration.registerForRemoteNotifications()
+            }
+            await StreakReminderCenter.shared.sync(context: modelContext)
         }
     }
 
@@ -1893,13 +1851,26 @@ struct ContentView: View {
         // dismissal promotes it: a jump to the Hangar wins the moment and the
         // ask is dropped, not queued. Presenting latches the asked bit
         // immediately, so it can never fire twice.
-        if let askDays = pendingStreakAsk {
+        //
+        // The re-offer additionally keeps 20 s clear of the review ask
+        // (either order); too close → dropped, and since the used-latch
+        // isn't set it re-stages on the next catch.
+        if let offer = pendingStreakAsk {
             pendingStreakAsk = nil
-            if primarySheet == nil, pendingReveal == nil, pendingMultiReveal == nil {
-                UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
+            let defaults = UserDefaults.standard
+            let clearOfReview = offer.reoffer == nil || StreakReminders.isSeparated(
+                now: Date(), from: ReviewPrompter.shared.lastRequestedAt)
+            if primarySheet == nil, pendingReveal == nil, pendingMultiReveal == nil, clearOfReview {
+                if let reoffer = offer.reoffer {
+                    defaults.set(true, forKey: StreakReminders.reofferUsedKey)
+                    defaults.set(Date(), forKey: StreakReminders.reofferShownAtKey)
+                    StreakTelemetry.fireReofferShown(reoffer, streakDays: offer.days)
+                } else {
+                    defaults.set(true, forKey: StreakReminders.permissionAskedKey)
+                    StreakTelemetry.fireAskShown(streakDays: offer.days)
+                }
                 streakAskFromDebug = false
-                StreakTelemetry.fireAskShown(streakDays: askDays)
-                withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
+                withAnimation(.easeOut(duration: 0.25)) { streakAsk = offer }
                 momentClaimed = true
             }
         }
@@ -1922,7 +1893,12 @@ struct ContentView: View {
     private func maybeRequestReview(momentClaimed: Bool) {
         guard !momentClaimed, streakAsk == nil, primarySheet == nil,
               pendingReveal == nil, pendingMultiReveal == nil,
-              !unlockCenter.hasPending else { return }
+              !unlockCenter.hasPending,
+              // 20 s clear of the notification re-offer, either order.
+              StreakReminders.isSeparated(
+                now: Date(),
+                from: UserDefaults.standard.object(forKey: StreakReminders.reofferShownAtKey) as? Date)
+        else { return }
         ReviewPrompter.shared.catchMomentEnded(
             totalCatches: catches.count,
             // Day buckets via Streaks.dayKey — the frozen insert-time label
@@ -2752,15 +2728,27 @@ struct ContentView: View {
                 // dismisses (its ceremony runs ≥1.7 s).
                 Task { @MainActor in
                     let center = StreakReminderCenter.shared
+                    let defaults = UserDefaults.standard
+                    let status = await center.authorizationStatus()
                     if StreakReminders.shouldOfferAsk(
                         currentStreak: current,
                         enabled: center.remindersEnabled,
-                        alreadyAsked: UserDefaults.standard.bool(
+                        alreadyAsked: defaults.bool(
                             forKey: StreakReminders.permissionAskedKey),
-                        authStatusIsNotDetermined:
-                            await center.authorizationStatus() == .notDetermined
+                        authStatusIsNotDetermined: status == .notDetermined
                     ) {
-                        pendingStreakAsk = current
+                        pendingStreakAsk = StreakReminders.Offer(days: current)
+                    } else if let reoffer = StreakReminders.reoffer(
+                        currentStreak: current,
+                        placedOnWeeklyBoard: LeaderboardStandingCache().everPlacedWeekly,
+                        enabled: center.remindersEnabled,
+                        declined: defaults.bool(forKey: StreakReminders.permissionDeclinedKey),
+                        reofferUsed: defaults.bool(forKey: StreakReminders.reofferUsedKey),
+                        authStatus: status,
+                        declinedToday: defaults.string(
+                            forKey: StreakReminders.permissionDeclinedDayKey) == Streaks.dayKey(for: now)
+                    ) {
+                        pendingStreakAsk = StreakReminders.Offer(days: current, reoffer: reoffer)
                     }
                     await center.sync(context: modelContext)
                 }
@@ -3026,14 +3014,21 @@ struct ContentView: View {
                 Button("🔔 Ask") {
                     streakAskFromDebug = true
                     withAnimation(.easeOut(duration: 0.25)) {
-                        streakAsk = max(streakSummaryNow.current, StreakReminders.minimumStreak)
+                        streakAsk = StreakReminders.Offer(
+                            days: max(streakSummaryNow.current, StreakReminders.minimumStreak))
                     }
                 }
                 // Clear the override AND the asked latch, then re-plan from
                 // the real Hangar — back to a truthful device.
                 Button("↺ Reset") {
                     StreakDebug.clear()
-                    UserDefaults.standard.removeObject(forKey: StreakReminders.permissionAskedKey)
+                    for key in [StreakReminders.permissionAskedKey,
+                                StreakReminders.permissionDeclinedKey,
+                                StreakReminders.permissionDeclinedDayKey,
+                                StreakReminders.reofferUsedKey,
+                                StreakReminders.reofferShownAtKey] {
+                        UserDefaults.standard.removeObject(forKey: key)
+                    }
                     // The debug fire has its own slot, so `sync` below won't
                     // clear it — Reset has to.
                     UNUserNotificationCenter.current().removePendingNotificationRequests(

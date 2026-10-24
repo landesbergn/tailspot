@@ -208,7 +208,11 @@ struct LeaderboardScreen: View {
             // fetch that runs (the Profile laurel + the Top Flight/Dynasty/
             // Chart Topper trophies all read this cache).
             if let me = response.me {
-                LeaderboardStandingCache().update(from: me)
+                let cache = LeaderboardStandingCache()
+                cache.update(from: me)
+                // First week-board placement: one of the two moments that
+                // earns a notification decliner the re-offer.
+                cache.notePlacement(window: response.window, me: me)
             }
             // `leaderboard_gap_shown` is NOT fired here: a load isn't a
             // view (the pager loads neighbouring tabs too). The header line
