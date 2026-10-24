@@ -47,6 +47,14 @@ extension View {
     func catchPhotoReplayMask(_ isUserPhoto: Bool = true) -> some View {
         modifier(CatchPhotoReplayMask(isUserPhoto: isUserPhoto))
     }
+
+    /// The same scoped mask for the USER'S OWN LOCATION (the catch map, a
+    /// raw-coordinate fallback). Same off-switch for offscreen renders, and
+    /// `isPrivate: false` applies no modifier at all — `postHogMask(false)`
+    /// would still inject the tag views ImageRenderer draws as placeholders.
+    func locationReplayMask(_ isPrivate: Bool = true) -> some View {
+        modifier(CatchPhotoReplayMask(isUserPhoto: isPrivate))
+    }
 }
 
 private struct CatchPhotoReplayMask: ViewModifier {

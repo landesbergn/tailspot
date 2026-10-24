@@ -21,7 +21,6 @@
 import SwiftUI
 import SwiftData
 import os
-import PostHog
 
 struct CatchDetailView: View {
     let row: HangarRow
@@ -246,7 +245,7 @@ struct CatchDetailView: View {
                     .minimumScaleFactor(0.7)
                     // No place name → this line shows the observer's own
                     // ~11 m coordinates; keep them out of session replay.
-                    .postHogMask(first.placeName == nil)
+                    .locationReplayMask(first.placeName == nil)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
