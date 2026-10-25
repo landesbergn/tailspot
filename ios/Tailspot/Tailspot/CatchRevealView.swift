@@ -1713,22 +1713,27 @@ struct CatchRevealView: View {
                         .padding(.top, 2 * scale)
                     }
 
-                    // Turn the card over (2026-10-25). Always in the layout
-                    // and only faded in once Share is live, like the Share
-                    // button, so the card doesn't grow at settle. At rest
-                    // the card is one VoiceOver element, so the same action is
-                    // also offered via `accessibilityActions` in `layout`.
+                }
+                .padding(.horizontal, hPad)
+                .padding(.bottom, 22 * scale)
+                // Turn the card over (2026-10-25). An overlay centred in the
+                // card's bottom padding, so it adds no height: the card must
+                // not grow at settle, and a 6.1" phone has no room for
+                // another row (`RevealShortScreenTests`). Faded in once
+                // Share is live, like the Share button. At rest the card is
+                // one VoiceOver element, so the same action is also offered
+                // via `accessibilityActions` in `layout`.
+                .overlay(alignment: .bottom) {
                     CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
                         cardFlipped = true
                     }
-                    .padding(.bottom, -14 * scale)
+                    // The 44 pt hit row's centre sits mid-padding.
+                    .offset(y: 22 - 11 * scale)
                     .opacity(turnOverVisible ? 1 : 0)
                     .allowsHitTesting(turnOverVisible)
                     .accessibilityHidden(!turnOverVisible)
                     .animation(.easeOut(duration: 0.25), value: turnOverVisible)
                 }
-                .padding(.horizontal, hPad)
-                .padding(.bottom, 22 * scale)
             }
             .frame(width: width)
             .modifier(CatchRarityFrame(rarity: livePlane.rarity, scale: scale))
