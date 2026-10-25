@@ -186,7 +186,7 @@ describe("devices routes", () => {
    * switch is per-device, not a global outage).
    */
   describe("disabled devices (the revocation lever)", () => {
-    const NOW_SECONDS = 1_700_000_000;
+    const NOW_SECONDS = 1_780_000_000; // after CAUGHT_AT_FLOOR
 
     /** A minimal valid catch body; points land on the unknown floor (10). */
     function catchBody(catchUuid: string) {

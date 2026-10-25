@@ -17,7 +17,7 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * 37.90/-122.27, 3000 m → bearing 0°, elevation ~15.05°).
  */
 
-const NOW = 1_700_000_000; // fixed server "now" (unix seconds)
+const NOW = 1_786_536_000; // 2026-08-12T12:00Z: after CAUGHT_AT_FLOOR, 12 h before the route re-balance (so a catch AT the cutover is within the 1-day clock-skew allowance)
 const OBS = { lat: 37.8, lon: -122.27 };
 const AC = { lat: 37.9, lon: -122.27, altitudeMeters: 3000 };
 

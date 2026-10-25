@@ -13,7 +13,7 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * what a restoring client will receive in production.
  */
 
-const NOW = 1_700_000_000; // fixed server "now" (unix seconds)
+const NOW = 1_780_000_000; // 2026-05-28, after CAUGHT_AT_FLOOR (earlier catches are rejected)
 const OBS = { lat: 37.8, lon: -122.27 };
 
 /** A valid catch body. caughtAt is offset per-catch so ordering is testable. */

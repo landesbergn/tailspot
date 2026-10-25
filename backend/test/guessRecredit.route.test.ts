@@ -17,7 +17,7 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * wall clock's distance from GUESS_RECREDIT_CUTOVER.
  */
 
-const NOW = 1_755_000_000; // 2025-08-12 (a fixed server "now", unix seconds)
+const NOW = 1_786_752_000; // 2026-08-15: after the route re-balance (POST_REBALANCE catches are not future-dated), before the recredit cutover
 const BEFORE_CUTOVER = new Date(GUESS_RECREDIT_CUTOVER.getTime() - 86_400_000);
 const AFTER_CUTOVER = new Date(GUESS_RECREDIT_CUTOVER.getTime() + 1_000);
 // caughtAt on either side of the 2026-08-13 route re-balance (+10% → +25%).

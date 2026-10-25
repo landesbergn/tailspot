@@ -23,6 +23,7 @@
  */
 
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { clampToFloor } from "../catches/caughtAtBounds.js";
 import {
   CURRENT_SCORING_VERSION,
   type GuessKind,
@@ -31,6 +32,7 @@ import {
   pointsForRarity,
 } from "../catches/points.js";
 import type { Database } from "../db/client.js";
+import { isUniqueViolation } from "../db/errors.js";
 import { withDbRetry } from "../db/retry.js";
 import {
   alltimeToppers,
@@ -178,8 +180,15 @@ export class DrizzleIdentityStore implements IdentityStore {
       return { ok: false, reason: "taken" };
     }
     // The UPDATE is deliberately NOT retried here — a dropped connection would
-    // reopen the taken-check race; the route's own error path is the safety net.
-    await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
+    // reopen the taken-check race. Two devices racing for the same handle both
+    // pass the read above; the lower(handle) unique index rejects the loser,
+    // which is the same answer as the check — "taken", not a 500.
+    try {
+      await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
+    } catch (err) {
+      if (isUniqueViolation(err)) return { ok: false, reason: "taken" };
+      throw err;
+    }
     return { ok: true, handle };
   }
 
@@ -1060,7 +1069,7 @@ export class DrizzleCatchStore implements CatchStore {
 
     let decidedCount = 0;
     for (
-      let ws = weekStartUtc(new Date(earliest));
+      let ws = weekStartUtc(clampToFloor(new Date(earliest)));
       ws.getTime() <= lastClosed.getTime();
       ws = addDaysUtc(ws, 7)
     ) {
@@ -1179,7 +1188,7 @@ export class DrizzleCatchStore implements CatchStore {
 
     let decidedCount = 0;
     for (
-      let ms = monthStartUtc(new Date(earliest));
+      let ms = monthStartUtc(clampToFloor(new Date(earliest)));
       ms.getTime() <= lastClosed.getTime();
       ms = nextMonthStartUtc(ms)
     ) {

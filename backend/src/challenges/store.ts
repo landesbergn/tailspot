@@ -28,6 +28,7 @@
 import { and, asc, desc, eq, gt, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client.js";
+import { isUniqueViolation } from "../db/errors.js";
 import { withDbRetry } from "../db/retry.js";
 import {
   catches,
@@ -858,11 +859,4 @@ export function aircraftName(
   const parts = [manufacturer, model].filter((s): s is string => !!s && s.trim() !== "");
   if (parts.length > 0) return parts.join(" ");
   return typecode ?? "Unknown aircraft";
-}
-
-/** Postgres unique_violation, as surfaced by postgres-js and PGlite. */
-function isUniqueViolation(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const e = err as { code?: unknown; cause?: { code?: unknown } };
-  return e.code === "23505" || e.cause?.code === "23505";
 }

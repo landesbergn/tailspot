@@ -72,6 +72,21 @@ struct PlanespottersClientTests {
         #expect(PlanePhoto(wire) == nil)
     }
 
+    /// `link` is opened on tap; third-party JSON must not be able to swap in
+    /// a non-web scheme (tel:, sms:, another app's custom scheme).
+    @Test func planePhotoRejectsNonHTTPSLinks() {
+        for link in ["tel:+15555550100", "sms:+15555550100", "otherapp://x", "http://www.planespotters.net/photo/42"] {
+            let wire = PlanespottersPhoto(
+                id: "42",
+                thumbnail: PhotoVariant(src: "https://example.com/t.jpg"),
+                thumbnail_large: PhotoVariant(src: "https://example.com/280.jpg"),
+                link: link,
+                photographer: "X"
+            )
+            #expect(PlanePhoto(wire) == nil, "accepted \(link)")
+        }
+    }
+
     @Test func cacheDistinguishesNotFetchedFromMiss() async {
         let cache = PlanespottersCache()
         if case .notFetched = await cache.get(key: "abc") {} else {

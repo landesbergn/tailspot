@@ -50,6 +50,15 @@ struct MapScreen: View {
             .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
             .mapControlVisibility(.hidden)
             .ignoresSafeArea(edges: .horizontal)
+            // Every pin sits where the USER stood for that catch, so the map
+            // is effectively a home/work heat map. PostHog redacts by painting
+            // the masked view's rect over the flat screenshot, and this Map
+            // fills the screen, so the filter strip and summary panel drawn on
+            // top record black too: this screen replays as one black rect.
+            // Accepted trade-off. Masking only the pins would still show a
+            // black square at each spot. Only this screen is affected, unlike
+            // a full-window mask (the camera-view all-black-replay bug).
+            .locationReplayMask()
 
             VStack {
                 filterStrip

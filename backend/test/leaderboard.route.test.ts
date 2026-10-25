@@ -12,7 +12,7 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * handles for some, posts catches, and asserts ordering / hiding / `me`.
  */
 
-const NOW = 1_700_000_000;
+const NOW = 1_780_000_000; // 2026-05-28, after CAUGHT_AT_FLOOR (earlier catches are rejected)
 const OBS = { lat: 37.8, lon: -122.27 };
 const AC = { lat: 37.9, lon: -122.27, altitudeMeters: 3000 };
 

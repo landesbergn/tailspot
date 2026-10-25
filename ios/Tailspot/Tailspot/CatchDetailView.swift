@@ -243,6 +243,9 @@ struct CatchDetailView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                    // No place name → this line shows the observer's own
+                    // ~11 m coordinates; keep them out of session replay.
+                    .locationReplayMask(first.placeName == nil)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

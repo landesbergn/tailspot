@@ -10,6 +10,7 @@ import { PrivatePointsScorer } from "./challenges/scorer.js";
 import { type ChallengeStore, DrizzleChallengeStore } from "./challenges/store.js";
 import { registerCompression } from "./compression.js";
 import { getDb } from "./db/client.js";
+import { installErrorHandler } from "./errorHandler.js";
 import { RateLimiter } from "./identity/rateLimiter.js";
 import {
   type CatchStore,
@@ -224,6 +225,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Gzip JSON bodies over 1 KB for clients that accept it (all iOS builds do,
   // via URLSession). The aircraft list is the main beneficiary.
   registerCompression(app);
+
+  // 5xx bodies never carry err.message (drizzle puts SQL + params in it).
+  installErrorHandler(app);
 
   // Alert when 5xx answers pile up, whatever produced them: most of ours are
   // deliberate 503 replies that Sentry's error handler never sees. /readyz and
