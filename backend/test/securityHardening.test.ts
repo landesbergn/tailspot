@@ -88,7 +88,9 @@ describe("5xx responses never carry the error message", () => {
   it("Fastify's own 4xx (malformed JSON) keeps its default body", async () => {
     app = Fastify({ logger: false });
     installErrorHandler(app);
-    app.post("/echo", async (req) => req.body);
+    // Never reached: the body fails to parse first. Returns a constant, not
+    // req.body, so the fixture isn't itself a reflection sink.
+    app.post("/echo", async () => ({ ok: true }));
     const res = await app.inject({
       method: "POST",
       url: "/echo",
