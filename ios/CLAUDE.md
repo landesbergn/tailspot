@@ -101,9 +101,11 @@ the source + each one's focused test file — they're not restated here.
   override (`tailspot.debug.catchMode`; **Release never reads it**) beats the
   PostHog value; flag off / not loaded / keyless analytics → `.legacy`.
   `CatchModeFlag` applies the PostHog value at session boundaries only
-  (cold launch + each foreground, cached value first, then a fresh fetch) —
-  never mid-aim; `reconcileCatchMode` (1 Hz tick + wrench flip) clears the
-  outgoing mode's pins/assertions. Debug builds badge NEW CATCH RULE under
+  (cold launch + each return from the BACKGROUND — not inactive→active,
+  which a Control Center pull triggers mid-aim; cached value first, then a
+  fresh fetch); `reconcileCatchMode` (`.onChange(of: catchMode)`) clears the
+  outgoing mode's pins/assertions, and `runCatch` snapshots the mode at the
+  press so one catch never mixes rules. Debug builds badge NEW CATCH RULE under
   the zoom pill while `.frame` is live. Keep the flag key stable — renaming
   it silently turns the new rule off for every targeted person.
   **Wrench-panel toggles are feature flags in plain language** (Noah,

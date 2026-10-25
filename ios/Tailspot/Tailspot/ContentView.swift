@@ -890,12 +890,14 @@ struct ContentView: View {
         // `.active`, and onChange fires only on CHANGES) so the two don't
         // double-start. LocationManager is intentionally left untouched here
         // (GPS lifecycle is out of scope).
-        .onChange(of: scenePhase) { _, phase in
+        .onChange(of: scenePhase) { oldPhase, phase in
             switch phase {
             case .active:
                 // Session boundary: the one moment the catch-rule flag may
-                // change (applied by the 1 Hz `reconcileCatchMode`).
-                catchModeFlag.refreshForNewSession()
+                // change. Only a return from the BACKGROUND counts — a
+                // Control Center pull or a system alert goes inactive →
+                // active while the user is still aiming.
+                if oldPhase == .background { catchModeFlag.refreshForNewSession() }
                 adsb.start { location.cllocation }
                 if arOccluded {
                     adsb.pauseReAnnotation()
@@ -940,6 +942,9 @@ struct ContentView: View {
         // once so the next empty-sky tap isn't spent un-pinning a plane the
         // engine already let go. A revealed plane is only visible *because*
         // it's pinned, so the reveal drops with the pin.
+        // Clear the outgoing rule's pins/assertions the moment the rule
+        // changes (flag landed, or a wrench flip), before the next frame.
+        .onChange(of: catchMode) { _, _ in reconcileCatchMode() }
         .onChange(of: lockOn.state.targetIcao24) { _, newIcao in
             if let pin = pinnedIcao, newIcao != pin {
                 pinnedIcao = nil
@@ -2184,7 +2189,8 @@ struct ContentView: View {
         cameraElevationDeg: Double,
         rollDeg: Double,
         zoom: CGFloat,
-        wasTapped: Bool
+        wasTapped: Bool,
+        catchMode: CatchMode
     ) -> String? {
         func r1(_ x: Double) -> Double { (x * 10).rounded() / 10 }
         // Coordinates need more precision than the 0.1° the angles get:
@@ -2434,6 +2440,11 @@ struct ContentView: View {
         // -21.7° elevation / 41.5°-off-target catch of a plane the user had
         // dead-centered, and the fallback bracket landed on empty sky.
         let pressObserved = adsb.observed
+        // Catch rule + tap state at the press, for the same reason: the
+        // flag can land a second after a foreground, and the 1 Hz prune can
+        // drop an assertion during a slow shutter. One catch, one rule.
+        let pressCatchMode = catchMode
+        let pressTapped = Set(assertedPlanes.keys).union(lockOn.state.targetIcao24.map { [$0] } ?? [])
         let pressHeading = location.heading
         let pressHeadingAccuracy = location.headingAccuracy
         let pressElevationDeg = motion.cameraElevationDeg
@@ -2606,7 +2617,7 @@ struct ContentView: View {
             // multi-catch there is a zone cluster, and per-target searches
             // (each up to ~19 CoreML passes, sequential) would slow the
             // reveal for every flag-off user.
-            let snapsThisCatch = catchMode == .frame || icaos.count == 1
+            let snapsThisCatch = pressCatchMode == .frame || icaos.count == 1
             if let data = photoData, !icaos.isEmpty, snapsThisCatch {
                 let predictions: [(icao: String, predicted: CGPoint)] = icaos.compactMap { icao in
                     let predicted = pressScreenPosition(
@@ -2728,7 +2739,7 @@ struct ContentView: View {
             )
             // Frame mode: every on-frame plane (the frame is the zone).
             // Legacy mode: the 100 pt central catch zone, as shipped.
-            let diagCandidates: [CatchCandidate] = catchMode == .legacy
+            let diagCandidates: [CatchCandidate] = pressCatchMode == .legacy
                 ? catchCandidates(
                     in: pressObserved, phoneHeadingDeg: pressHeading ?? 0,
                     cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg,
@@ -2897,8 +2908,8 @@ struct ContentView: View {
                     rollDeg: pressRollDeg,
                     zoom: pressZoom,
                     // Frame mode: a user assertion; legacy mode: the pin.
-                    wasTapped: assertedPlanes[icao] != nil
-                        || icao == lockOn.state.targetIcao24
+                    wasTapped: pressTapped.contains(icao),
+                    catchMode: pressCatchMode
                 )
                 modelContext.insert(row)
                 newCatches.append(row)
@@ -2959,7 +2970,7 @@ struct ContentView: View {
                     // Only ever non-nil for a single-target catch, so it can't
                     // mislabel a multi-catch row.
                     detectorVerdict: detectorVerdict,
-                    catchMode: catchMode,
+                    catchMode: pressCatchMode,
                     skyVerdict: skyVerdict
                 )
             }
@@ -3150,7 +3161,7 @@ struct ContentView: View {
                 composeMs: composeMs,
                 presentMs: presentMs,
                 totalMs: Int(Date().timeIntervalSince(tapAt) * 1000),
-                catchMode: catchMode
+                catchMode: pressCatchMode
             )
         }
     }
@@ -4098,6 +4109,7 @@ struct ContentView: View {
                 recordingRow
                 localGateRow
                 detectorGateRow
+                liveTrackingRow
                 #if DEBUG
                 catchModeRow
                 steeringDebugRow
@@ -4343,10 +4355,25 @@ struct ContentView: View {
     private var localGateRow: some View {
         debugFlagRow(
             title: "Building/tree check",
-            detail: "On: when the camera says a bracket sits on a building or tree, the plane drops out of the press and the catch gets the Keep/Discard question. Off: the check only logs.",
+            detail: "On: when the camera says a bracket sits on a building or tree, the catch is quietly marked suspect, and with the new catch rule the plane also drops out of the press. Off: the check only logs.",
             isOn: Binding(
                 get: { visualConfirm.localGateEnforcing },
                 set: { visualConfirm.localGateEnforcing = $0 }
+            )
+        )
+    }
+
+    /// Feature flag: visual confirmation's live pre-press tracking (ships
+    /// ON). Only the old catch rule tracks before the press; the catch-time
+    /// photo snap runs either way. Back since the flag made the old rule
+    /// the default again (a stored OFF otherwise had no way back).
+    private var liveTrackingRow: some View {
+        debugFlagRow(
+            title: "Live plane tracking",
+            detail: "On: with the old catch rule, the pinned plane's bracket follows the camera's detection of it. Off: the bracket stays at the predicted position.",
+            isOn: Binding(
+                get: { visualConfirm.enabled },
+                set: { visualConfirm.enabled = $0 }
             )
         )
     }
@@ -4358,7 +4385,7 @@ struct ContentView: View {
     private var detectorGateRow: some View {
         debugFlagRow(
             title: "Plane-in-photo check",
-            detail: "On: a single catch whose photo shows no detectable plane gets the Keep/Discard question. Off: the check only logs.",
+            detail: "On: a single catch whose photo shows no detectable plane is quietly marked suspect. Off: the check only logs.",
             isOn: Binding(
                 get: { visualConfirm.detectorGateEnforcing },
                 set: { visualConfirm.detectorGateEnforcing = $0 }
@@ -4569,10 +4596,9 @@ struct ContentView: View {
 
     /// Clears the state the outgoing mode owns whenever the effective mode
     /// changes, so nothing leaks across: legacy's pin / reveal / engine
-    /// lock / live detector target, frame's assertions. Called right after
-    /// a wrench flip, and from the 1 Hz tick for PostHog-driven changes
-    /// (which land at a session start; see `CatchModeFlag`). The first call
-    /// only records the launch mode.
+    /// lock / live detector target, frame's assertions. Called from
+    /// `.onChange(of: catchMode)` (flag landed or wrench flip) and the 1 Hz
+    /// tick, whose first run records the launch mode.
     private func reconcileCatchMode() {
         let mode = catchMode
         guard mode != appliedCatchMode else { return }

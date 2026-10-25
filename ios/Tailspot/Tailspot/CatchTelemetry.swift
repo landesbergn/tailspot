@@ -219,8 +219,9 @@ nonisolated enum CatchTelemetry {
         // Catch-mode A/B (2026-09-02): which interaction produced this catch
         // — "frame" (frame-is-the-catch, PR #229) or "legacy" (the shipped
         // zones-and-pins model), so the two streams split in HogQL. Omitted
-        // when the caller didn't say (older call sites / tests) — absent
-        // means "frame" on any build that can't run legacy (Release).
+        // when the caller didn't say (older call sites / tests). Absent on
+        // every build before the flag (2026-10-25) means the SHIPPED rule —
+        // all pre-flag App Store traffic is legacy, never "frame".
         if let catchMode { props["catch_mode"] = .string(catchMode.rawValue) }
         return props
     }
