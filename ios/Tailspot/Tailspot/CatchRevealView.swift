@@ -801,6 +801,9 @@ struct CatchRevealView: View {
     /// Which face of the card is up. FlipCard toggles it on a swipe too, so
     /// side effects hang off `onChange(of: cardFlipped)`.
     @State private var cardFlipped = false
+    /// A turn to the back reported once its closeup resolves
+    /// (`CardTurnAnalytics.sendsImmediately`).
+    @State private var pendingTurnReport = false
     /// Latches on the first turn-over: NOTHING on the back is looked up or
     /// fetched before then (Noah: don't delay the catch moment).
     @State private var didLoadBack = false
@@ -953,10 +956,15 @@ struct CatchRevealView: View {
             .onDisappear { settleTask?.cancel() }
             .onChange(of: cardFlipped) { _, flipped in
                 if flipped { loadBackIfNeeded() }
-                CardTurnAnalytics.capture(source: .reveal, flipped: flipped,
-                                          closeup: backModel.closeup,
-                                          hasTypeInfo: backTypeInfo != nil,
-                                          muted: isSimulated)
+                if pendingTurnReport { sendTurnReport(flipped: true) }
+                if CardTurnAnalytics.sendsImmediately(flipped: flipped, closeup: backModel.closeup) {
+                    sendTurnReport(flipped: flipped)
+                } else {
+                    pendingTurnReport = true
+                }
+            }
+            .onChange(of: backModel.closeup) { _, closeup in
+                if pendingTurnReport, closeup != .loading { sendTurnReport(flipped: true) }
             }
             .sensoryFeedback(.success, trigger: settled)
             .onAppear {
@@ -1090,6 +1098,14 @@ struct CatchRevealView: View {
                 }
             }
         }
+    }
+
+    private func sendTurnReport(flipped: Bool) {
+        pendingTurnReport = false
+        CardTurnAnalytics.capture(source: .reveal, flipped: flipped,
+                                  closeup: backModel.closeup,
+                                  hasTypeInfo: backTypeInfo != nil,
+                                  muted: isSimulated)
     }
 
     private func newestCatch(icao24: String) -> Catch? {
@@ -1697,18 +1713,19 @@ struct CatchRevealView: View {
                         .padding(.top, 2 * scale)
                     }
 
-                    // Turn the card over (2026-10-25). Joins the card only
-                    // once Share is live — inside the VStack like the chips,
-                    // so the card's own modifier chain never branches. At rest
+                    // Turn the card over (2026-10-25). Always in the layout
+                    // and only faded in once Share is live, like the Share
+                    // button, so the card doesn't grow at settle. At rest
                     // the card is one VoiceOver element, so the same action is
                     // also offered via `accessibilityActions` in `layout`.
-                    if turnOverVisible {
-                        CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
-                            cardFlipped = true
-                        }
-                        .padding(.bottom, -14 * scale)
-                        .transition(.opacity)
+                    CardTurnOverButton(title: "ABOUT THIS PLANE", scale: scale) {
+                        cardFlipped = true
                     }
+                    .padding(.bottom, -14 * scale)
+                    .opacity(turnOverVisible ? 1 : 0)
+                    .allowsHitTesting(turnOverVisible)
+                    .accessibilityHidden(!turnOverVisible)
+                    .animation(.easeOut(duration: 0.25), value: turnOverVisible)
                 }
                 .padding(.horizontal, hPad)
                 .padding(.bottom, 22 * scale)

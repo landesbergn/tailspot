@@ -84,6 +84,15 @@ enum CardTurnAnalytics {
         ]
     }
 
+    /// Whether a turn can be reported right away. A turn to the back while
+    /// the closeup is still `.loading` waits for the lookup, so `closeup`
+    /// says which photo the user actually got (on the reveal nothing is
+    /// fetched until the first turn, so it would otherwise always read
+    /// "loading").
+    nonisolated static func sendsImmediately(flipped: Bool, closeup: CardBackCloseup) -> Bool {
+        !(flipped && closeup == .loading)
+    }
+
     /// Sends the event unless `muted` (the DEBUG simulated reveal).
     static func capture(source: Source, flipped: Bool, closeup: CardBackCloseup,
                         hasTypeInfo: Bool, muted: Bool = false) {

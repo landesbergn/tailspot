@@ -64,6 +64,14 @@ nonisolated private enum Fx {
                                "closeup": "loading", "has_type_info": "false"])
     }
 
+    @Test func aTurnToTheBackWaitsForTheCloseup() {
+        #expect(!CardTurnAnalytics.sendsImmediately(flipped: true, closeup: .loading))
+        #expect(CardTurnAnalytics.sendsImmediately(flipped: true, closeup: .none))
+        #expect(CardTurnAnalytics.sendsImmediately(flipped: true, closeup: .commons(Fx.commons)))
+        // Turning back to the front never waits.
+        #expect(CardTurnAnalytics.sendsImmediately(flipped: false, closeup: .loading))
+    }
+
     @Test func everyCloseupHasAName() {
         #expect(CardBackCloseup.planespotters(Fx.spotter).analyticsValue == "planespotters")
         #expect(CardBackCloseup.commons(Fx.commons).analyticsValue == "commons")

@@ -63,6 +63,9 @@ struct CatchDetailView: View {
     /// Which face of the card is up. FlipCard also toggles it on a swipe,
     /// so side effects hang off `onChange(of: isFlipped)`, not the buttons.
     @State private var isFlipped = false
+    /// A turn to the back made before the Planespotters lookup answered;
+    /// reported once the closeup resolves (`CardTurnAnalytics.sendsImmediately`).
+    @State private var pendingTurnReport = false
     /// Bundled type facts + "you and this type", computed once on appear
     /// (after the backfill, which can fill a missing typecode) rather than
     /// in `body` — TypeHistory walks the whole Hangar.
@@ -169,8 +172,11 @@ struct CatchDetailView: View {
             // fills the back straight away, the second catches a typecode
             // the backfill just recovered.
             computeTypeFacts()
+            // Only when the backfill filled a field the type facts read.
+            let factsKey = { [first.typecode, first.manufacturer, first.model, first.operatorName] }
+            let before = factsKey()
             await backfillIfNeeded()
-            computeTypeFacts()
+            if factsKey() != before { computeTypeFacts() }
             if isFlipped { fetchSummaryIfNeeded() }
             // Fetched for every catch: the front hero only uses it when
             // there's no catch photo (`detailPlane`), but the back's
@@ -184,10 +190,16 @@ struct CatchDetailView: View {
             }
         }
         .onChange(of: isFlipped) { _, flipped in
-            CardTurnAnalytics.capture(source: .detail, flipped: flipped,
-                                      closeup: backModel.closeup,
-                                      hasTypeInfo: typeInfo != nil)
+            if pendingTurnReport { sendTurnReport(flipped: true) }
+            if CardTurnAnalytics.sendsImmediately(flipped: flipped, closeup: backModel.closeup) {
+                sendTurnReport(flipped: flipped)
+            } else {
+                pendingTurnReport = true
+            }
             if flipped { fetchSummaryIfNeeded() }
+        }
+        .onChange(of: backModel.closeup) { _, closeup in
+            if pendingTurnReport, closeup != .loading { sendTurnReport(flipped: true) }
         }
     }
 
@@ -207,6 +219,13 @@ struct CatchDetailView: View {
             summary: summary,
             summaryLoading: summaryLoading
         )
+    }
+
+    private func sendTurnReport(flipped: Bool) {
+        pendingTurnReport = false
+        CardTurnAnalytics.capture(source: .detail, flipped: flipped,
+                                  closeup: backModel.closeup,
+                                  hasTypeInfo: typeInfo != nil)
     }
 
     private func computeTypeFacts() {
