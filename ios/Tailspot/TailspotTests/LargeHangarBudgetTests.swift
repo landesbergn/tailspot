@@ -243,6 +243,90 @@ struct LargeHangarBudgetTests {
         #expect(center.fullInputsPasses == afterLaunch + 1)
     }
 
+    /// The screens fetch in different orders (the app root and the Trophies
+    /// tab unsorted, Profile newest-first), so the token must not care, or
+    /// the shared memo would miss on every screen switch.
+    @Test func trophyTokenIgnoresRowOrder() {
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let rows = Self.hangar10k
+        let base = TrophyInputsToken.of(rows, events: events, standing: standing)
+        #expect(TrophyInputsToken.of(rows.reversed(), events: events, standing: standing) == base)
+        var rng = SeededRNG(state: 42)
+        #expect(TrophyInputsToken.of(rows.shuffled(using: &rng), events: events, standing: standing) == base)
+        // Still content-sensitive: dropping a row or adding one changes it.
+        #expect(TrophyInputsToken.of(Array(rows.dropFirst()), events: events, standing: standing) != base)
+        #expect(TrophyInputsToken.of([newCatch()] + rows, events: events, standing: standing) != base)
+    }
+
+    /// The token's order independence is only sound if the inputs are too.
+    /// Multi-catch rows share one `caughtAt`, so the timeline helpers must
+    /// break ties themselves rather than keep the caller's fetch order.
+    @Test func timelineTrophiesIgnoreFetchOrderOnTies() {
+        let t = Date(timeIntervalSince1970: 1_760_000_000)
+        let later = t.addingTimeInterval(600)
+        // One press caught a Delta and a United; the next catch is a Delta.
+        let a: [(Date, String)] = [(t, "Delta"), (t, "United"), (later, "Delta")]
+        let b: [(Date, String)] = [(t, "United"), (t, "Delta"), (later, "Delta")]
+        #expect(Trophies.hasConsecutiveSameOperator(a) == Trophies.hasConsecutiveSameOperator(b))
+        let g1: [(Date, Bool)] = [(t, true), (t, false), (later, true)]
+        let g2: [(Date, Bool)] = [(t, false), (t, true), (later, true)]
+        #expect(Trophies.bestGuessStreak(g1) == Trophies.bestGuessStreak(g2))
+    }
+
+    /// The Hangar-open fix: the app-root center's launch diff fills the
+    /// shared memo, so the Trophies tab / Profile opening afterwards (with
+    /// their own fetch order) finds the inputs without a second full pass.
+    @Test func screensReuseTheCentersInputs() {
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let memo = TrophyInputsMemo()
+        let center = TrophyUnlockCenter(
+            ledger: UserDefaultsTrophyLedger(defaults: suite),
+            events: events, standing: standing, inputsMemo: memo)
+        let rows = Self.hangar10k
+        center.enqueueNewUnlocks(from: Array(rows.reversed()))   // unsorted-ish app-root fetch
+        #expect(center.fullInputsPasses == 1)
+        let screenToken = TrophyInputsToken.of(rows, events: events, standing: standing)
+        var screenPasses = 0
+        let inputs = memo.inputs(for: screenToken) {
+            screenPasses += 1
+            return Trophies.inputs(from: rows, events: events, standing: standing)
+        }
+        #expect(screenPasses == 0, "a Hangar/Profile open after the launch diff must be a memo hit")
+        #expect(inputs.totalCatches == rows.count)
+    }
+
+    /// The other direction: a screen filled the memo (e.g. the Hangar was
+    /// opened before the center's re-diff ran). The center reuses the
+    /// inputs, but still runs its bounded date probe for them, since no date
+    /// pass has run for this token yet.
+    @Test func centerReusesAScreensInputsButStillDates() {
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let ledger = UserDefaultsTrophyLedger(defaults: suite)
+        let memo = TrophyInputsMemo()
+        // Two catches, so the one bounded probe finishes the date search and
+        // writes into THIS test's ledger. (Counting probes via the global
+        // `TrophyAchievementDates.prefixEvaluations` would race other suites,
+        // which Swift Testing runs in parallel.)
+        let rows = [newCatch(icao: "f00d01"), newCatch(icao: "f00d02")]
+        let token = TrophyInputsToken.of(rows, events: events, standing: standing)
+        memo.store(Trophies.inputs(from: rows, events: events, standing: standing), for: token)
+        let center = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing, inputsMemo: memo)
+        center.enqueueNewUnlocks(from: rows)
+        #expect(center.fullInputsPasses == 0)
+        #expect(ledger.isSeeded)
+        #expect(!ledger.achievedDates.isEmpty,
+                "the bounded date probe must still run for the screen-filled inputs")
+    }
+
     @Test func oneNewCatchDoesExactlyOneInputsPass() {
         let (suiteName, suite) = makeSuite()
         defer { drop(suiteName) }

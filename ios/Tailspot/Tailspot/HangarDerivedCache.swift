@@ -39,28 +39,33 @@ enum CatchFingerprint {
     static func of(_ catches: [Catch]) -> Int {
         var hasher = Hasher()
         hasher.combine(catches.count)
-        for c in catches {
-            hasher.combine(c.icao24)
-            hasher.combine(c.callsign)
-            hasher.combine(c.model)
-            hasher.combine(c.manufacturer)
-            hasher.combine(c.operatorName)
-            hasher.combine(c.caughtAt)
-            hasher.combine(c.slantDistanceMeters)
-            hasher.combine(c.rarity)
-            hasher.combine(c.aircraftType)
-            hasher.combine(c.registration)
-            hasher.combine(c.typecode)
-            hasher.combine(c.category)
-            hasher.combine(c.altitudeMeters)
-            hasher.combine(c.velocityMps)
-            hasher.combine(c.originIcao)
-            hasher.combine(c.destIcao)
-            hasher.combine(c.placeName)
-            hasher.combine(c.country)
-            hasher.combine(c.suspectReason)
-        }
+        for c in catches { combine(c, into: &hasher) }
         return hasher.finalize()
+    }
+
+    /// The per-row field list, shared with `TrophyInputsToken` (which hashes
+    /// rows one at a time to stay order-independent) so the two can't drift.
+    /// `inout Hasher`: the caller's hasher is mutated in place, not copied.
+    static func combine(_ c: Catch, into hasher: inout Hasher) {
+        hasher.combine(c.icao24)
+        hasher.combine(c.callsign)
+        hasher.combine(c.model)
+        hasher.combine(c.manufacturer)
+        hasher.combine(c.operatorName)
+        hasher.combine(c.caughtAt)
+        hasher.combine(c.slantDistanceMeters)
+        hasher.combine(c.rarity)
+        hasher.combine(c.aircraftType)
+        hasher.combine(c.registration)
+        hasher.combine(c.typecode)
+        hasher.combine(c.category)
+        hasher.combine(c.altitudeMeters)
+        hasher.combine(c.velocityMps)
+        hasher.combine(c.originIcao)
+        hasher.combine(c.destIcao)
+        hasher.combine(c.placeName)
+        hasher.combine(c.country)
+        hasher.combine(c.suspectReason)
     }
 }
 
