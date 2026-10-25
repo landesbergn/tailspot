@@ -5,6 +5,17 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
+
+- Four parallel reviews (backend auth, backend catches/challenges, web + CI,
+  iOS), each finding re-verified against the code before fixing. No authn
+  bypass, IDOR, SSRF or injection.
+- Backend: generic 5xx bodies, Sentry param scrub, `caughtAt` range,
+  callsign bounds, IPv6 /64 keys,
+  handle race → 409, dependency bumps. Web: headers on every response, HSTS,
+  pinned flyctl action. iOS: replay masks for the map and coordinates,
+  https-only external links, path-safe ids. Open items in PLAN §9.
+
 ## 2026-10-24 — Upgrade-launch budget test (branch `test/big-hangar-launch-budget`)
 
 - `LargeHangarBudgetTests` now covers the first launch after a trophy
