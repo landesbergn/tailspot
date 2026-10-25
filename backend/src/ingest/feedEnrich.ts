@@ -32,12 +32,21 @@ import { upsertRegistryFillMissing } from "./registryUpsert.js";
  * snapshot, which was every row until 2026-10-20 regardless of the real feed.
  */
 export function registryRowsFromSnapshot(snapshot: ProviderSnapshot): RegistryInsert[] {
-  const rows: RegistryInsert[] = [];
+  // One row per icao24: Postgres rejects a whole INSERT … ON CONFLICT batch
+  // that would touch the same key twice. A repeated airframe (e.g. an MLAT
+  // copy without a registration plus an ADS-B copy with one) merges, so the
+  // first non-null registration wins rather than whichever row came first.
+  const byIcao = new Map<string, RegistryInsert>();
   for (const a of snapshot.aircraft) {
     const typecode = a.typecode?.trim().toUpperCase() || null;
     if (!typecode) continue; // the typecode is the thing the FAA registry lacks
     const registration = a.registration?.trim() || null;
-    rows.push({
+    const prior = byIcao.get(a.icao24);
+    if (prior) {
+      prior.registration ??= registration;
+      continue;
+    }
+    byIcao.set(a.icao24, {
       icao24: a.icao24,
       registration,
       manufacturerRaw: null,
@@ -46,7 +55,12 @@ export function registryRowsFromSnapshot(snapshot: ProviderSnapshot): RegistryIn
       source: snapshot.provider ?? "adsblol",
     });
   }
-  return rows;
+  // Key order: two overlapping fire-and-forget upserts (concurrent tile
+  // fetches share airframes) then lock rows in the same order and can't
+  // deadlock each other.
+  return [...byIcao.values()].sort((x, y) =>
+    x.icao24 < y.icao24 ? -1 : x.icao24 > y.icao24 ? 1 : 0,
+  );
 }
 
 /**
