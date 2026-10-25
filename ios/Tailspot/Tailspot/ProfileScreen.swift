@@ -59,7 +59,11 @@ struct ProfileScreen: View {
     /// "Handle changed to @x" confirmation, cleared after a few seconds.
     @State private var handleToast: String?
     /// Memo for the whole-Hangar derivations (see `ProfileDerived`). Held in
-    /// `@State` so the same box survives body re-evaluations.
+    /// `@State` so the same box survives body re-evaluations. Deliberately
+    /// not process-wide: `ProfileDerived.bestCatch` is a SwiftData model,
+    /// and a box that outlived its container could hand back a row from a
+    /// torn-down store. The expensive part, the trophy inputs, comes from
+    /// the process-wide `TrophyInputsMemo`, which holds only values.
     @State private var derivedCache = DerivedCacheBox<ProfileDerived>()
 
     var body: some View {
@@ -80,8 +84,13 @@ struct ProfileScreen: View {
         // costs hundreds of ms of main thread (2026-10). The derivations are
         // memoized by a content token, the HangarTrophiesView pattern, so a
         // re-render with unchanged data is one hashing pass.
-        let derived = derivedCache.value(for: ProfileDerived.token(catches: catches)) {
-            ProfileDerived(catches: catches)
+        // The trophy inputs come from the shared memo, usually already filled
+        // by the app-root unlock center's launch/catch diff.
+        let trophyToken = TrophyInputsToken.of(catches)
+        let derived = derivedCache.value(for: ProfileDerived.token(trophyToken: trophyToken)) {
+            ProfileDerived(catches: catches, inputs: TrophyInputsMemo.shared.inputs(for: trophyToken) {
+                Trophies.inputs(from: catches)
+            })
         }
         let stats = derived.stats
         let inputs = derived.inputs
@@ -954,10 +963,11 @@ struct ProfileDerived {
         catches: [Catch],
         events: TrophyEventStore = TrophyEventStore(),
         standing: LeaderboardStandingCache = LeaderboardStandingCache(),
-        now: Date = Date()
+        now: Date = Date(),
+        inputs: TrophyProgressInputs? = nil
     ) {
         stats = ProfileStats(catches: catches)
-        inputs = Trophies.inputs(from: catches, events: events, standing: standing)
+        self.inputs = inputs ?? Trophies.inputs(from: catches, events: events, standing: standing)
         streak = Streaks.summary(catches: catches, asOf: now)
         bestCatch = catches.max(by: {
             ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
@@ -987,8 +997,19 @@ struct ProfileDerived {
         now: Date = Date(),
         streakOverride: Streaks.Summary? = debugStreakOverride
     ) -> Int {
+        token(trophyToken: TrophyInputsToken.of(catches, events: events, standing: standing),
+              now: now, streakOverride: streakOverride)
+    }
+
+    /// Same key from an already-computed `TrophyInputsToken`, so the screen
+    /// hashes the rows once and reuses that token for the shared memo.
+    static func token(
+        trophyToken: Int,
+        now: Date = Date(),
+        streakOverride: Streaks.Summary? = debugStreakOverride
+    ) -> Int {
         var hasher = Hasher()
-        hasher.combine(TrophyInputsToken.of(catches, events: events, standing: standing))
+        hasher.combine(trophyToken)
         hasher.combine(Streaks.dayKey(for: now))
         hasher.combine(streakOverride?.current)
         hasher.combine(streakOverride?.longest)
