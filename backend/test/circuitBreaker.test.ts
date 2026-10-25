@@ -89,6 +89,14 @@ describe("CircuitBreakerProvider", () => {
     expect(opened[0]?.cooldownMs).toBe(30_000);
   });
 
+  it("treats a 401 (bad or revoked re-api key) as a rejection", async () => {
+    const inner = new ScriptedProvider("adsblolreapi", [http(401)]);
+    const { breaker, opened } = harness(inner);
+    await expect(breaker.aircraftInBbox(BBOX)).rejects.toThrow("HTTP 401");
+    // Opens on the first answer, flagged so the feed-rejected alert pages.
+    expect(opened[0]?.rejected).toBe(true);
+  });
+
   it("clamps a day-long Retry-After to the 10 minute ceiling", async () => {
     const inner = new ScriptedProvider("adsblol", [http(429, 40_000)]);
     const { breaker, opened } = harness(inner);
