@@ -73,6 +73,10 @@ struct ContentView: View {
     /// The mode whose state (pins, assertions) is currently live — lags
     /// `catchMode` until `reconcileCatchMode` clears the old mode's state.
     @State private var appliedCatchMode: CatchMode?
+    /// Set when the app reaches `.background`; the next `.active` consumes
+    /// it to start a new catch-rule session. (The return goes background →
+    /// INACTIVE → active, so `oldPhase` alone never reads `.background`.)
+    @State private var catchModeSessionEnded = false
     /// LEGACY catch mode: metadata for the engine's current target, fetched
     /// the moment it changes (the ambient prefetch re-keys only when
     /// `observed` republishes, ~1 Hz). Always nil in frame mode, where the
@@ -890,14 +894,17 @@ struct ContentView: View {
         // `.active`, and onChange fires only on CHANGES) so the two don't
         // double-start. LocationManager is intentionally left untouched here
         // (GPS lifecycle is out of scope).
-        .onChange(of: scenePhase) { oldPhase, phase in
+        .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
                 // Session boundary: the one moment the catch-rule flag may
                 // change. Only a return from the BACKGROUND counts — a
                 // Control Center pull or a system alert goes inactive →
                 // active while the user is still aiming.
-                if oldPhase == .background { catchModeFlag.refreshForNewSession() }
+                if catchModeSessionEnded {
+                    catchModeSessionEnded = false
+                    catchModeFlag.refreshForNewSession()
+                }
                 adsb.start { location.cllocation }
                 if arOccluded {
                     adsb.pauseReAnnotation()
@@ -912,6 +919,7 @@ struct ContentView: View {
                 // the return starts fresh variants and a fresh clock.
                 // (.inactive alone, e.g. pulling down Control Center, doesn't.)
                 if phase == .background {
+                    catchModeSessionEnded = true
                     emptySkySession.reset()
                     steeringShownAt = nil
                 }
