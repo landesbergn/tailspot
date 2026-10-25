@@ -26,9 +26,10 @@ struct FocusThumbnailLoaderTests {
     }
 
     /// Write `cg` to a temp JPEG with an explicit EXIF orientation tag.
-    private func tempJPEG(_ cg: CGImage, orientation: CGImagePropertyOrientation) -> URL {
+    private func tempJPEG(_ cg: CGImage, orientation: CGImagePropertyOrientation,
+                          name: String? = nil) -> URL {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("thumb-\(orientation.rawValue)-\(cg.width)x\(cg.height).jpg")
+            .appendingPathComponent(name ?? "thumb-\(orientation.rawValue)-\(cg.width)x\(cg.height).jpg")
         let data = NSMutableData()
         let dest = CGImageDestinationCreateWithData(
             data, UTType.jpeg.identifier as CFString, 1, nil)!
@@ -47,6 +48,100 @@ struct FocusThumbnailLoaderTests {
         let s = img?.size ?? .zero
         #expect(max(s.width, s.height) <= 201)          // downsampled to the cap
         #expect(abs(s.width / s.height - 0.6) < 0.02)    // aspect preserved (portrait)
+    }
+
+    // MARK: - Disk cache + cancellation (the 6k-catch Recent-list report)
+
+    /// A uniquely named temp JPEG, so parallel tests and old runs' cached
+    /// thumbnails never collide.
+    private func uniqueJPEG(_ color: UIColor) -> URL {
+        tempJPEG(solid(CGSize(width: 600, height: 1000), color), orientation: .up,
+                 name: "thumbtest-\(UUID().uuidString).jpg")
+    }
+
+    /// The centre pixel's dominant channel: "r", "g" or "b".
+    private func dominant(_ image: UIImage?) -> String? {
+        guard let cg = image?.cgImage else { return nil }
+        var px = [UInt8](repeating: 0, count: 4)
+        let ctx = CGContext(data: &px, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                            space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.draw(cg, in: CGRect(x: -CGFloat(cg.width) / 2, y: -CGFloat(cg.height) / 2,
+                                width: CGFloat(cg.width), height: CGFloat(cg.height)))
+        let (r, g, b) = (px[0], px[1], px[2])
+        return r > g && r > b ? "r" : (g > b ? "g" : "b")
+    }
+
+    @Test func writesAndReusesTheDiskThumbnail() throws {
+        let url = uniqueJPEG(.blue)
+        let thumb = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 228))
+        defer { try? FileManager.default.removeItem(at: url); try? FileManager.default.removeItem(at: thumb) }
+        #expect(dominant(PhotoThumbnailLoader.load(url: url, maxPixel: 228)) == "b")
+        #expect(FileManager.default.fileExists(atPath: thumb.path), "first load writes the disk thumbnail")
+        // Swap the cached thumbnail for a red one: a reload that shows red
+        // came from disk, not from re-decoding the (blue) photo.
+        let red = tempJPEG(solid(CGSize(width: 100, height: 160), .red), orientation: .up,
+                           name: "thumbtest-red-\(UUID().uuidString).jpg")
+        try FileManager.default.removeItem(at: thumb)
+        try FileManager.default.moveItem(at: red, to: thumb)
+        PhotoThumbnailLoader.clearMemoryCache()
+        #expect(dominant(PhotoThumbnailLoader.load(url: url, maxPixel: 228)) == "r")
+    }
+
+    @Test func aNewerPhotoReplacesAStaleThumbnail() throws {
+        let url = uniqueJPEG(.blue)
+        let thumb = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 228))
+        defer { try? FileManager.default.removeItem(at: url); try? FileManager.default.removeItem(at: thumb) }
+        _ = PhotoThumbnailLoader.load(url: url, maxPixel: 228)
+        // Rewrite the photo green, stamped newer than the thumbnail.
+        let green = tempJPEG(solid(CGSize(width: 600, height: 1000), .green), orientation: .up,
+                             name: "thumbtest-green-\(UUID().uuidString).jpg")
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.moveItem(at: green, to: url)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(60)],
+                                              ofItemAtPath: url.path)
+        PhotoThumbnailLoader.clearMemoryCache()
+        #expect(dominant(PhotoThumbnailLoader.load(url: url, maxPixel: 228)) == "g")
+    }
+
+    @Test func aMissingPhotoIsNilEvenWithACachedThumbnail() throws {
+        let url = uniqueJPEG(.blue)
+        let thumb = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 228))
+        defer { try? FileManager.default.removeItem(at: thumb) }
+        _ = PhotoThumbnailLoader.load(url: url, maxPixel: 228)
+        try FileManager.default.removeItem(at: url)
+        PhotoThumbnailLoader.clearMemoryCache()
+        #expect(PhotoThumbnailLoader.load(url: url, maxPixel: 228) == nil)
+    }
+
+    /// A row scrolled away cancels its `.task`; the load must then skip the
+    /// decode entirely (no image, no thumbnail written).
+    @Test func aCancelledLoadSkipsTheDecode() async throws {
+        let url = uniqueJPEG(.blue)
+        let thumb = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 228))
+        defer { try? FileManager.default.removeItem(at: url); try? FileManager.default.removeItem(at: thumb) }
+        let task = Task { () -> UIImage? in
+            withUnsafeCurrentTask { $0?.cancel() }      // cancelled before the load starts
+            return await PhotoThumbnailLoader.loadAsync(url: url, maxPixel: 228)
+        }
+        #expect(await task.value == nil)
+        #expect(!FileManager.default.fileExists(atPath: thumb.path))
+    }
+
+    @Test func deletingACatchRemovesItsThumbnail() throws {
+        let url = uniqueJPEG(.blue)
+        let thumb = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 228))
+        defer { try? FileManager.default.removeItem(at: url) }
+        _ = PhotoThumbnailLoader.load(url: url, maxPixel: 228)
+        #expect(FileManager.default.fileExists(atPath: thumb.path))
+        PhotoThumbnailLoader.removeDiskThumbnails(forFilename: url.lastPathComponent)
+        #expect(!FileManager.default.fileExists(atPath: thumb.path))
+    }
+
+    @Test func fileURLSkipsTheExistenceCheck() {
+        let url = CatchPhotoStore.fileURL(forFilename: "nope_0.jpg")
+        #expect(url?.lastPathComponent == "nope_0.jpg")
+        #expect(CatchPhotoStore.url(forFilename: "nope_0.jpg") == nil)
     }
 
     @Test func bakesEXIFOrientationUpright() {
