@@ -204,7 +204,11 @@ nonisolated struct UploadCatchRequest: Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(catchUuid, forKey: .catchUuid)
         try container.encode(icao24, forKey: .icao24)
-        try container.encodeIfPresent(callsign, forKey: .callsign)
+        // Explicit null, never an absent key: backends before 2026-10-10 422'd
+        // a missing callsign, which stranded every catch of a plane with no
+        // flight id (military MLAT, much GA) on the phone, retrying forever.
+        if let callsign { try container.encode(callsign, forKey: .callsign) }
+        else { try container.encodeNil(forKey: .callsign) }
         try container.encode(caughtAt, forKey: .caughtAt)
         try container.encode(observer, forKey: .observer)
         // Present → the object; absent → explicit JSON null (the backend

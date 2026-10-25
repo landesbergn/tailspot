@@ -76,7 +76,11 @@ export interface AdsbLolAircraft {
 /** Top-level /v2/point response wrapper. */
 export interface AdsbLolResponse {
   ac?: AdsbLolAircraft[] | null;
-  /** snapshot generation time, milliseconds since unix epoch. */
+  /** The same rows under readsb's own key: re-api (and adsb.fi's deprecated
+   *  v2) answer `aircraft` instead of the ADSBExchange-style `ac`. */
+  aircraft?: AdsbLolAircraft[] | null;
+  /** Snapshot generation time: milliseconds since unix epoch on /v2/point,
+   *  SECONDS on re-api (see `nowIsSeconds`). */
   now?: number;
   total?: number;
 }
@@ -94,7 +98,7 @@ export function normalizeAdsbLol(
   fetchedAt: number,
   bbox: Bbox | null,
 ): NormalizedAircraft[] {
-  const rows = resp.ac ?? [];
+  const rows = resp.ac ?? resp.aircraft ?? [];
   const out: NormalizedAircraft[] = [];
   for (const a of rows) {
     const normalized = normalizeOne(a, fetchedAt);
@@ -179,11 +183,62 @@ function trimField(v: string | null | undefined): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
+/**
+ * Render the IETF RateLimit headers (and Retry-After) a readsb aggregator
+ * sends, for log/alert text. Null when none are present. Exported for tests.
+ */
+export function rateLimitSummary(headers: Headers): string | null {
+  const parts: string[] = [];
+  const limit = headers.get("x-ratelimit-limit") ?? headers.get("ratelimit-limit");
+  const remaining = headers.get("x-ratelimit-remaining") ?? headers.get("ratelimit-remaining");
+  const reset = headers.get("x-ratelimit-reset") ?? headers.get("ratelimit-reset");
+  const retryAfter = headers.get("retry-after");
+  if (limit) parts.push(`ratelimit-limit=${limit}`);
+  if (remaining) parts.push(`remaining=${remaining}`);
+  if (reset) parts.push(`reset=${reset}s`);
+  if (retryAfter) parts.push(`retry-after=${retryAfter}`);
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+/**
+ * How long an error response asks us to wait, in seconds: `Retry-After`
+ * (delta-seconds or an HTTP date), else the RateLimit reset header. adsb.lol
+ * sends one reset per window ("1, 60, 41000"); without knowing which window
+ * tripped, the longest is the safe reading. Undefined when absent or garbled.
+ * Exported for tests.
+ */
+export function retryAfterSeconds(
+  headers: Headers,
+  nowMs: number = Date.now(),
+): number | undefined {
+  const retryAfter = headers.get("retry-after")?.trim();
+  if (retryAfter) {
+    if (/^\d+$/.test(retryAfter)) return Number(retryAfter);
+    const at = Date.parse(retryAfter);
+    if (Number.isFinite(at)) return Math.max(0, Math.ceil((at - nowMs) / 1000));
+  }
+  const reset = headers.get("x-ratelimit-reset") ?? headers.get("ratelimit-reset");
+  if (reset) {
+    const values = reset
+      .split(",")
+      .map((v) => Number.parseFloat(v.split(";")[0] ?? ""))
+      .filter((v) => Number.isFinite(v) && v >= 0);
+    if (values.length > 0) {
+      const v = Math.max(...values);
+      // Some servers send an epoch timestamp instead of a delta.
+      return v > 1e9 ? Math.max(0, Math.ceil(v - nowMs / 1000)) : Math.ceil(v);
+    }
+  }
+  return undefined;
+}
+
 export interface AdsbLolProviderOptions {
   baseUrl?: string;
   timeoutMs?: number;
   /** Injectable for tests; defaults to global fetch. */
   fetchFn?: typeof fetch;
+  /** Extra request headers (re-api's `x-api-key`). Never logged. */
+  headers?: Record<string, string>;
 }
 
 export class AdsbLolProvider implements PositionProvider {
@@ -191,14 +246,29 @@ export class AdsbLolProvider implements PositionProvider {
   // thin subclass pointing the same readsb client at a different aggregator —
   // can override it.
   readonly name: string = "adsblol";
-  private readonly baseUrl: string;
+  protected readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
+  // An ES private field, not TS `private`: it holds re-api's key, and a `#`
+  // field is invisible to JSON.stringify and pino if the provider is logged.
+  readonly #headers: Record<string, string>;
+  /** True when the upstream's `now` is unix seconds (readsb re-api) rather
+   *  than the /v2/point milliseconds. Overridden by AdsbLolReApiProvider. */
+  protected readonly nowIsSeconds: boolean = false;
+  /**
+   * When true, a 200 body without an `aircraft` array is an UpstreamError
+   * rather than an empty sky. readsb's re-api always sends the array (empty
+   * when no planes), so its absence means an error body. Off for the /v2
+   * feeds, whose empty-area shape isn't pinned down; an error there would
+   * turn a quiet coverage desert into a fallback.
+   */
+  protected readonly requiresAircraftArray: boolean = false;
 
   constructor(opts: AdsbLolProviderOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchFn = opts.fetchFn ?? fetch;
+    this.#headers = opts.headers ?? {};
   }
 
   async aircraftInBbox(bbox: Bbox): Promise<ProviderSnapshot> {
@@ -207,34 +277,54 @@ export class AdsbLolProvider implements PositionProvider {
     // route already rejects bboxes > 4 sq deg, so the covering radius is small
     // in practice and the clamp is just a defensive guard.
     const radiusNm = Math.min(MAX_RADIUS_NM, Math.max(1, Math.ceil(bboxCoveringRadiusNm(bbox))));
-    const url = `${this.baseUrl}/v2/point/${center.lat}/${center.lon}/${radiusNm}`;
+    const url = this.pointUrl(center.lat, center.lon, radiusNm);
 
     const resp = await this.fetchJson(url);
-    // adsb.lol `now` is milliseconds; the contract is unix seconds.
+    if (this.requiresAircraftArray && !Array.isArray(resp.aircraft)) {
+      throw new UpstreamError(`${this.name} returned no aircraft array`);
+    }
+    // /v2/point `now` is milliseconds, re-api's is seconds; the contract is
+    // unix seconds.
     const fetchedAt =
       typeof resp.now === "number" && Number.isFinite(resp.now)
-        ? Math.floor(resp.now / 1000)
+        ? Math.floor(this.nowIsSeconds ? resp.now : resp.now / 1000)
         : Math.floor(Date.now() / 1000);
 
     return {
       fetchedAt,
       aircraft: normalizeAdsbLol(resp, fetchedAt, bbox),
+      provider: this.name,
     };
   }
 
+  /**
+   * The point+radius URL for this aggregator. adsb.lol and airplanes.live use
+   * the ADSBExchange-v2 path; adsb.fi serves the identical response from a
+   * different path, so the subclass overrides only this (see adsbfi.ts).
+   */
+  protected pointUrl(lat: number, lon: number, radiusNm: number): string {
+    return `${this.baseUrl}/v2/point/${lat}/${lon}/${radiusNm}`;
+  }
+
+  /**
+   * One request, retried ONCE if the connection is dropped (ECONNRESET and
+   * friends) before an answer arrives. On 2026-10-17 adsb.lol was resetting
+   * connections under load, and a second attempt often got through. Both
+   * attempts share one `timeoutMs` deadline, so a retry never makes the
+   * caller wait longer than before. HTTP errors (403, 429, 5xx) and timeouts
+   * are NOT retried: those are answers, not dropped connections — and a
+   * retried 429 would spend adsb.lol's daily quota twice for nothing.
+   */
   private async fetchJson(url: string): Promise<AdsbLolResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchFn(url, {
-        method: "GET",
-        headers: { accept: "application/json", "user-agent": "tailspot-backend" },
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        throw new UpstreamError(`${this.name} returned HTTP ${res.status}`);
+      try {
+        return await this.fetchOnce(url, controller.signal);
+      } catch (err) {
+        if (!isDroppedConnection(err) || controller.signal.aborted) throw err;
+        return await this.fetchOnce(url, controller.signal);
       }
-      return (await res.json()) as AdsbLolResponse;
     } catch (err) {
       if (err instanceof UpstreamError) throw err;
       throw new UpstreamError(`${this.name} request failed`, err);
@@ -242,4 +332,44 @@ export class AdsbLolProvider implements PositionProvider {
       clearTimeout(timer);
     }
   }
+
+  private async fetchOnce(url: string, signal: AbortSignal): Promise<AdsbLolResponse> {
+    const res = await this.fetchFn(url, {
+      method: "GET",
+      headers: { accept: "application/json", "user-agent": "tailspot-backend", ...this.#headers },
+      signal,
+    });
+    if (!res.ok) {
+      // Quota headers travel in the message so the Fly log and Sentry show
+      // WHICH bucket said no. adsb.lol publishes `x-ratelimit-limit: 4,
+      // 4;w=1, 60;w=60, 500;w=86400` — per second, per minute, per DAY —
+      // and on 2026-10-20 the daily one was inferred from timing because
+      // nothing had recorded it.
+      const quota = rateLimitSummary(res.headers);
+      throw new UpstreamError(
+        `${this.name} returned HTTP ${res.status}${quota ? ` (${quota})` : ""}`,
+        undefined,
+        { status: res.status, retryAfterSeconds: retryAfterSeconds(res.headers) },
+      );
+    }
+    return (await res.json()) as AdsbLolResponse;
+  }
+}
+
+/** Socket-level codes meaning "the connection died", as opposed to an answer. */
+const DROPPED_CONNECTION_CODES = new Set(["ECONNRESET", "EPIPE", "ECONNREFUSED", "UND_ERR_SOCKET"]);
+
+/**
+ * True when `err` (or a `.cause` it wraps) is a dropped connection. Node's
+ * fetch reports these as `TypeError: fetch failed` with the socket error as
+ * `.cause`, so walk the chain, depth-bounded like `isTransientConnectionError`.
+ */
+function isDroppedConnection(err: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < 5; depth++) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && DROPPED_CONNECTION_CODES.has(code)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }

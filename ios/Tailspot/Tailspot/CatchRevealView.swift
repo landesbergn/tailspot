@@ -33,6 +33,7 @@
 
 import SwiftUI
 import UIKit
+import Accessibility  // AttributedString's announcement-priority attribute
 
 // MARK: - Reveal animation math (verbatim from the RevealV3 prototype)
 
@@ -65,6 +66,93 @@ nonisolated func revealSettleDeadline(
     ].compactMap { $0 }.max()
 }
 
+/// VoiceOver copy for the in-card bonus round (a11y pass, 2026-10-22).
+/// Before this, the round was silent: the chips popped in with no
+/// announcement and the verdict was never spoken. Pure strings, so the
+/// copy is pinned by `BonusRoundAnnouncementTests` without a view tree.
+nonisolated enum BonusRoundAnnouncement {
+    /// Spoken when the chips pop in, queued behind the settle line.
+    /// The prompts end in "?", so a full stop is added only when missing.
+    static func popped(prompt: String, choiceCount: Int) -> String {
+        let p = prompt.trimmingCharacters(in: .whitespaces)
+        let ended = p.last.map { ".?!".contains($0) } ?? true
+        return "Bonus round. \(p)\(ended ? "" : ".") \(choiceCount) choices."
+    }
+
+    /// Spoken when the round resolves. `answered == false` is a SKIP.
+    /// `correctDisplay` is the right chip's on-screen text ("HKG · Hong
+    /// Kong"); its middle dot becomes a comma so VoiceOver pauses instead
+    /// of reading the separator.
+    static func resolved(correct: Bool, answered: Bool, bonus: Int, correctDisplay: String) -> String {
+        if correct { return "Correct, plus \(bonus) points." }
+        let answer = correctDisplay.replacingOccurrences(of: " · ", with: ", ")
+        if !answered { return "Skipped. It was \(answer)." }
+        return "Not quite. It was \(answer)."
+    }
+}
+
+/// When the reveal's Share CTA is live (share-on-reveal, 2026-10-23). Pure,
+/// so the gate is pinned by `RevealShareGateTests` without a view tree.
+nonisolated enum RevealShareGate {
+    /// - settled: the reveal has played out (or was tapped through).
+    /// - pipelineFinished: the catch pipeline is done, so the composed
+    ///   photo the share image draws exists. Always true off the
+    ///   early-shell path (no loader).
+    /// - catchSaved: the catch is in the Hangar. The pipeline also
+    ///   "finishes" when it errors out, leaving a shell for a catch that
+    ///   was never saved, which must not be shared. Always true off the
+    ///   early-shell path and for a duplicate (the existing row is saved).
+    /// - hasBonusRound: this reveal carries a route/type guess.
+    /// - chipsCollapsed: the guess chips have gone away after the answer.
+    /// - bonusResolved / voiceOver: under VoiceOver the chips stay up,
+    ///   resolved, until the user continues (they never collapse), so a
+    ///   resolved round counts as finished there. (If VoiceOver is turned
+    ///   off after that, the view collapses the chips then.)
+    static func isAvailable(settled: Bool, pipelineFinished: Bool, catchSaved: Bool,
+                            hasBonusRound: Bool, chipsCollapsed: Bool,
+                            bonusResolved: Bool, voiceOver: Bool) -> Bool {
+        guard settled, pipelineFinished, catchSaved else { return false }
+        guard hasBonusRound else { return true }
+        return chipsCollapsed || (bonusResolved && voiceOver)
+    }
+}
+
+/// Size of the reveal's callsign-line Share button. Pure, so
+/// `RevealShareTests` can pin the hit target without a view tree.
+nonisolated enum RevealShareButtonMetrics {
+    /// Apple's minimum tappable size.
+    static let minHitTarget: CGFloat = 44
+
+    /// The visible disc: 30 pt on the 300 pt reference card, scaled with
+    /// the card like every other reveal metric.
+    static func disc(scale: CGFloat) -> CGFloat { 30 * scale }
+
+    /// The tappable side: the disc, grown to at least 44 pt.
+    static func hitSide(scale: CGFloat) -> CGFloat { max(minHitTarget, disc(scale: scale)) }
+
+    /// The tap rect, in the coordinates of the button's layout frame
+    /// (`hitSide` wide, `disc` tall, so the row doesn't grow): exactly
+    /// `hitSide` square, reaching equally above and below the disc.
+    static func hitRect(scale: CGFloat) -> CGRect {
+        let hit = hitSide(scale: scale)
+        return CGRect(x: 0, y: -(hit - disc(scale: scale)) / 2, width: hit, height: hit)
+    }
+}
+
+/// Which taps the reveal card takes itself. Pure so `RevealShareTests`
+/// pins it. The card is tap-through (taps reach the dismiss catcher
+/// behind) until it holds a live control; then it takes hits, and a tap on
+/// its body that no control claims still advances/dismisses, except while
+/// the bonus-round chips are up (body taps there do nothing, as before).
+nonisolated enum RevealCardTaps {
+    static func cardTakesHits(chipsShown: Bool, settled: Bool,
+                              hasZoomablePhoto: Bool, shareAvailable: Bool) -> Bool {
+        chipsShown || (settled && hasZoomablePhoto) || shareAvailable
+    }
+
+    static func bodyTapDismisses(chipsShown: Bool) -> Bool { !chipsShown }
+}
+
 /// Split-flap character pool (no vowel-ambiguous I/O, plus digits + dash).
 let flapPool = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789-")
 
@@ -79,7 +167,13 @@ enum RP {
     static let bg = Color(hex: 0x08090C)
     static let ink = Color(hex: 0xE7EEF5)
     static let muted = Color(hex: 0x8DA0B2)
-    static let faint = Color(hex: 0x5F7284)
+    /// The quietest ink: ALT/SPD/ROUTE labels, ENTRY #, "tap to continue",
+    /// the bonus round's SKIP. Lifted from 0x5F7284 (4.01:1 on `bg`, 3.88:1
+    /// on the share card's bgPrimary) to clear the WCAG AA 4.5:1 bar for
+    /// small text, same hue (a11y pass, 2026-10-22): 4.74:1 on `bg`, 4.58:1
+    /// on bgPrimary, still clearly a step below `muted` (7.4:1).
+    /// BrandTests pins both ratios.
+    static let faint = Color(hex: 0x6A7E90)
     static let rule = Color(hex: 0x232C38)
     static let gold = Brand.Color.ledgerGold
     static let flapFace = Color(hex: 0x131720)
@@ -565,6 +659,10 @@ struct CatchRevealView: View {
     /// earns no points but still keeps the streak alive, and the stamp says so.
     var streakDays: Int? = nil
 
+    /// The DEBUG ✦ Catch simulated reveal (`PendingReveal.isSimulated`):
+    /// Share still works, but sends no share analytics.
+    var isSimulated: Bool = false
+
     /// Early-shell conduit (capture-lag work, 2026-08-13). Non-nil when the
     /// reveal presented as a loading shell at tap time: the pipeline swaps
     /// in the finished `plane` snapshot (photo, healed route), the persisted
@@ -594,6 +692,13 @@ struct CatchRevealView: View {
     #else
     private var reduceMotion: Bool { systemReduceMotion }
     #endif
+
+    /// True while VoiceOver is running. The bonus round's chips normally
+    /// collapse on a ~1 s timer after the answer; under VoiceOver that
+    /// yanked focus off the chip the user just tapped, so they stay up
+    /// (resolved and disabled) until the user continues. Read only inside
+    /// `scheduleCollapse`, never in the card's modifier chain.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     /// Animation clock anchor. nil until `onAppear`; `t` is 0 until set.
     @State private var start: Date?
@@ -640,6 +745,8 @@ struct CatchRevealView: View {
     @State private var guessResolved = false
     /// Once-only guard so `onGuessShown` fires a single time.
     @State private var guessShownFired = false
+    /// The share sheet opened from the callsign line's Share button.
+    @State private var showShareSheet = false
     /// Sensory-feedback triggers — counters so repeats can't collapse.
     @State private var successBeat = 0
     @State private var missBeat = 0
@@ -792,7 +899,55 @@ struct CatchRevealView: View {
             }
             .sensoryFeedback(.success, trigger: successBeat)
             .sensoryFeedback(.error, trigger: missBeat)
+            // The same sheet the Hangar detail's share pill opens. Presented
+            // from inside this full-screen cover, so it slides up over the
+            // reveal and dismissing it lands back on the settled card.
+            .sheet(isPresented: $showShareSheet) {
+                CatchShareSheet(plane: livePlane,
+                                shareText: shareText,
+                                shareMessage: CatchShare.shareMessage(shareText: shareText),
+                                hasCatchPhoto: hasCatchPhoto,
+                                source: .reveal,
+                                analyticsMuted: isSimulated)
+            }
+            // Under VoiceOver a resolved round's chips stay up (see
+            // `scheduleCollapse`). If VoiceOver is then turned off, collapse
+            // them now, or they'd stay up and Share would never appear.
+            .onChange(of: voiceOverEnabled) { _, isOn in
+                if !isOn, guessResolved, chipsPhase == .shown {
+                    scheduleCollapse(correct: resolution?.correct ?? false)
+                }
+            }
         }
+    }
+
+    // MARK: - Share
+
+    /// Only the user's own composed photo renders into a share image.
+    private var hasCatchPhoto: Bool { zoomablePhotoURL != nil }
+
+    /// Same words as the Hangar detail's share: callsign, else the hex id,
+    /// plus the card's model name.
+    private var shareText: String { CatchShare.shareText(for: livePlane) }
+
+    /// Settled, photo in, and no bonus round on screen.
+    private var shareAvailable: Bool {
+        RevealShareGate.isAvailable(
+            settled: settled,
+            pipelineFinished: loader?.pipelineFinished ?? true,
+            catchSaved: loader.map { $0.row != nil || isDuplicate } ?? true,
+            hasBonusRound: liveGuess != nil,
+            chipsCollapsed: chipsPhase == .collapsed,
+            bonusResolved: guessResolved,
+            voiceOver: voiceOverEnabled)
+    }
+
+    private func openShare() {
+        guard shareAvailable else { return }
+        CatchShareAnalytics(plane: livePlane, hasCatchPhoto: hasCatchPhoto, source: .reveal,
+                            muted: isSimulated)
+            .sheetOpened()
+        showShareSheet = true
     }
 
     /// Card stacked ABOVE the CTA so the "tap to continue / View in Hangar"
@@ -829,7 +984,17 @@ struct CatchRevealView: View {
             // branch here would give the two states different structural
             // identities and SwiftUI would rebuild the card subtree when the
             // chips pop, resetting the ledger count-up mid-ceremony.
-            card(t: t, bt: bt, width: width, render: render)
+            card(t: t, bt: bt, width: width, render: render, shareVisible: shareAvailable)
+                // Once the card takes hits (below), a tap on its body that no
+                // control claims (Share, photo zoom, chips) would otherwise
+                // be swallowed, so it does what the catcher behind would:
+                // continue. Child controls win over this parent gesture.
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if RevealCardTaps.bodyTapDismisses(chipsShown: chipsPhase == .shown) {
+                        advanceOrDismiss()
+                    }
+                }
                 .accessibilityElement(children: render?.chipsInLayout == true
                                                 ? .contain : .ignore)
                 .accessibilityLabel(render?.chipsInLayout == true
@@ -842,14 +1007,26 @@ struct CatchRevealView: View {
                 // needs hits too. Either way only ATTACHED gestures capture —
                 // margin/chrome taps still fall through to the catcher and
                 // dismiss (or skip-then-dismiss).
-                .allowsHitTesting(chipsPhase == .shown || (settled && zoomablePhotoURL != nil))
+                // The callsign-line Share button needs hits once it's live too;
+                // the body-tap gesture above keeps tap-to-continue working.
+                .allowsHitTesting(RevealCardTaps.cardTakesHits(
+                    chipsShown: chipsPhase == .shown, settled: settled,
+                    hasZoomablePhoto: zoomablePhotoURL != nil, shareAvailable: shareAvailable))
+                // At rest the card is ONE VoiceOver element (`.ignore` above),
+                // which hides the Share button inside it, so Share is offered
+                // as a named action on that element while it's live.
+                .accessibilityActions {
+                    if shareAvailable {
+                        Button("Share this catch", action: openShare)
+                    }
+                }
         }, cta: {
             // The streak lives INSIDE the card (the entry-stamp row) since
             // 2026-08-26 — as a free line here it crowded the card's outline
             // on tall cards (the spacers collapse) and packed against the CTA.
             // With the strip below the card down to just the CTA, give that
             // row real minimum air on both sides.
-            ctaRow
+            ctaRow()
                 .opacity(settled ? 1 : 0)
                 .allowsHitTesting(settled)
         })
@@ -1049,11 +1226,39 @@ struct CatchRevealView: View {
                                        : .spring(response: 0.42, dampingFraction: 0.72)) {
                 chipsPhase = .shown
             }
+            if let q = liveGuess {
+                // LOW priority queues this behind the settle announcement
+                // posted 0.2 s earlier (model, tier, points) instead of
+                // cutting it off mid-sentence.
+                announce(BonusRoundAnnouncement.popped(prompt: q.prompt,
+                                                       choiceCount: q.options.count),
+                         priority: .low)
+            }
             if !guessShownFired {
                 guessShownFired = true
                 onGuessShown?()
             }
         }
+    }
+
+    /// Posts a VoiceOver announcement at a speech priority. An
+    /// `AttributedString` carries the priority as an accessibility
+    /// attribute: `.low` waits for current speech to finish, `.default`
+    /// interrupts it. A no-op when VoiceOver is off.
+    private func announce(
+        _ text: String,
+        priority: AttributeScopes.AccessibilityAttributes.AnnouncementPriorityAttribute.AnnouncementPriority = .default
+    ) {
+        var message = AttributedString(text)
+        message.accessibilitySpeechAnnouncementPriority = priority
+        AccessibilityNotification.Announcement(message).post()
+    }
+
+    /// Speaks the verdict once the round resolves (tap or SKIP).
+    private func announceResolution(_ q: GuessRoundQuestion, answered: Bool, correct: Bool) {
+        let display = q.options.first { $0.value == q.correctValue }?.display ?? q.correctValue
+        announce(BonusRoundAnnouncement.resolved(correct: correct, answered: answered,
+                                                 bonus: routeBonus, correctDisplay: display))
     }
 
     /// Tap on a chip — lock the set, flash the verdict, crossfade to the real
@@ -1068,25 +1273,35 @@ struct CatchRevealView: View {
         }
         if correct { bonusStart = Date(); successBeat += 1 } else { missBeat += 1 }
         onGuessResolved?(option.value, correct)
+        announceResolution(q, answered: true, correct: correct)
         scheduleCollapse(correct: correct)
     }
 
     /// Quiet SKIP — resolve with no answer (no flash, no bonus line), then the
     /// route reveals and the chips collapse like a wrong-minus-flash.
     private func skipBonusRound() {
-        guard liveGuess != nil, !guessResolved else { return }
+        guard let q = liveGuess, !guessResolved else { return }
         guessResolved = true
         withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .easeOut(duration: 0.3)) {
             resolution = GuessResolution(answeredValue: nil, correct: false)
         }
         onGuessResolved?(nil, false)
+        announceResolution(q, answered: false, correct: false)
         scheduleCollapse(correct: false)
     }
 
     /// After the verdict registers (a miss lingers a touch less than a correct
     /// call's count-up), collapse the chips away — the settled card with the full
     /// route (+ bonus line if earned) is what remains.
+    ///
+    /// Not under VoiceOver: there the chips stay up, resolved and disabled,
+    /// with the verdict marks on them, until the user continues (the CTA and
+    /// margin taps still dismiss). Collapsing them pulled focus off the chip
+    /// the user had just tapped. This is a decision about WHEN to change
+    /// `chipsPhase`, so the card's `.contain`/`.ignore` modifier chain is
+    /// untouched (see the warning in `layout`).
     private func scheduleCollapse(correct: Bool) {
+        guard !voiceOverEnabled else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(correct ? 1.15 : 0.95))
             withAnimation(reduceMotion ? .easeOut(duration: 0.25)
@@ -1118,12 +1333,15 @@ struct CatchRevealView: View {
         width: CGFloat, size: CGSize, guessState: GuessSnapshotState? = nil
     ) -> some View {
         revealColumn(height: size.height, scrolls: false, card: {
-            card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render)
+            card(t: 1.0, bt: guessState?.bt ?? 0, width: width, render: guessState?.render,
+                 shareVisible: guessState?.render.chipsInLayout != true)
         }, cta: {
             // Settled-state chrome, mirrored from `layout` (which gates it
             // on the live `settled` flag this static render never flips).
-            // The streak renders inside the card's entry-stamp row.
-            ctaRow
+            // The streak renders inside the card's entry-stamp row. Share
+            // (on the card's callsign line) hides while the bonus-round
+            // chips are up, as on device.
+            ctaRow()
         })
         .frame(width: size.width, height: size.height)
         .background(RP.bg)
@@ -1140,7 +1358,8 @@ struct CatchRevealView: View {
     // The card itself, fully parameterized by the reveal clock `t`, the bonus
     // count-up clock `bt`, and the immutable bonus-round `render` (nil = plain
     // reveal). Keeping it pure of `@State` lets any beat render as a static frame.
-    private func card(t: Double, bt: Double, width: CGFloat, render: GuessRender?) -> some View {
+    private func card(t: Double, bt: Double, width: CGFloat, render: GuessRender?,
+                      shareVisible: Bool) -> some View {
         let accent = livePlane.rarity.tint
         // The prototype's absolute sizes were tuned for a 300pt-wide card.
         // Scale every metric off the real card width so it reads full-size
@@ -1236,9 +1455,20 @@ struct CatchRevealView: View {
                         }
                     }
 
-                    identityRow(callsign: livePlane.callsign, carrier: livePlane.carrier,
-                                rarity: livePlane.rarity, scale: scale, isDuplicate: isDuplicate)
-                        .opacity(ss(0.56, 0.7, t))
+                    // Share sits at the trailing end of the callsign line:
+                    // on the card, so it's in view on every phone (the SE
+                    // card scrolls, so a footer button would be below the
+                    // fold), in neutral chrome so the tier stays the
+                    // card's only colour. A long "CALLSIGN · OPERATOR"
+                    // shrinks (identityRow's minimumScaleFactor) before
+                    // it reaches the button.
+                    HStack(spacing: 8 * scale) {
+                        identityRow(callsign: livePlane.callsign, carrier: livePlane.carrier,
+                                    rarity: livePlane.rarity, scale: scale, isDuplicate: isDuplicate)
+                            .opacity(ss(0.56, 0.7, t))
+                        Spacer(minLength: 0)
+                        shareButton(scale: scale, visible: shareVisible)
+                    }
 
                     Rectangle().fill(RP.rule).frame(width: CGFloat(avail) * line, height: 1)
 
@@ -1413,7 +1643,10 @@ struct CatchRevealView: View {
         }
     }
 
-    private var ctaRow: some View {
+    /// "tap to continue · View in Hangar ›". Share lives on the card's
+    /// callsign line (`shareButton`), not here: as a third text link in this
+    /// row it was easy to miss.
+    private func ctaRow() -> some View {
         HStack(spacing: 18) {
             // A real Button (not a bare tap gesture) so VoiceOver/Switch
             // Control get a dismiss control; the inset contentShape grows the
@@ -1434,6 +1667,38 @@ struct CatchRevealView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - Share button
+
+    /// Round icon button at the end of the callsign line. Neutral card
+    /// chrome (secondary-text icon on an elevated disc with the card's rule
+    /// hairline), not the tier accent. While Share is unavailable it stays
+    /// in the layout at zero opacity, so nothing shifts when it fades in.
+    /// The disc scales with the card (30 pt on a 300 pt card); the tappable
+    /// frame is at least 44 × 44 pt regardless.
+    private func shareButton(scale: CGFloat, visible: Bool) -> some View {
+        let disc = RevealShareButtonMetrics.disc(scale: scale)
+        let hit = RevealShareButtonMetrics.hitSide(scale: scale)
+        return Button(action: openShare) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 13 * scale, weight: .semibold))
+                .foregroundStyle(Brand.Color.textSecondary)
+                // The glyph's arrow makes it sit low in its box; lift it to
+                // look centred in the disc.
+                .offset(y: -1 * scale)
+                .frame(width: disc, height: disc)
+                .background(Circle().fill(Brand.Color.bgElevated))
+                .overlay(Circle().strokeBorder(RP.rule, lineWidth: 1))
+                .frame(width: hit, height: disc)
+                .contentShape(Path(RevealShareButtonMetrics.hitRect(scale: scale)))
+        }
+        .buttonStyle(.plain)
+        .opacity(visible ? 1 : 0)
+        .allowsHitTesting(visible)
+        .accessibilityHidden(!visible)
+        .accessibilityLabel("Share this catch")
+        .animation(.easeOut(duration: 0.25), value: visible)
     }
 
     // MARK: - Bonus-round chips

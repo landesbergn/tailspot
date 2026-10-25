@@ -1,9 +1,9 @@
 /* Tailspot — dark aviation theme
    Brand tokens mirror ios/Tailspot/Tailspot/Brand.swift:
    carbon-dark base, signature cyan, magenta for "rare", B612 Mono (Airbus
-   cockpit font) for HUD/mono elements. */
-
-@import url('https://fonts.googleapis.com/css2?family=B612+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+   cockpit font) for HUD/mono elements. The B612 Mono stylesheet is linked
+   from each page's <head> (not @import-ed here) so it downloads in parallel
+   with this file instead of after it. */
 
 :root {
   --bg:          #0A0E1A;

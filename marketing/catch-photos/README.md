@@ -41,3 +41,17 @@ At App Store thumbnail scale a real plane at 10,000 ft is a few pixels.
 reads as a plane when the shot is scaled down; `bd700`'s contrail reads
 even better than an airframe would. Prefer those for anything a shopper
 sees before tapping.
+
+## Fleet Week 2026 (San Francisco, Oct 10–11)
+
+Full composed frames straight from the phone (1728×3072, brackets baked in),
+pulled from the app container on 2026-10-11. Focus = the bracket centre,
+measured from the cyan pixels. Values are the Catch rows.
+
+| File | Catch | Tier | Notes |
+|---|---|---|---|
+| `fw_c27j_golden_gate.jpg` | C2703 · C-27J Spartan | epic, first of type | 427 ft, 132 kt, 1.9 km. Golden Gate in frame. **Slide 1.** Focus 0.3370, 0.5343 |
+| `fw_e6_crowd.jpg` | (no callsign) · E-6 Mercury | legendary | 1,801 ft, 135 kt, 1.3 km. **Slide 2.** Focus 0.4119, 0.5022 |
+| `fw_l39_patriots.jpg` | PTJ1 · L-39 Albatros | rare | 200 ft, 252 kt, 0.8 km. Six-ship Patriots formation with smoke. Focus 0.4073, 0.7100 |
+| `fw_t6_texan2.jpg` | T6 · T-6 Texan 2 | epic, first of type | 476 ft, 316 kt, 1.2 km. Plane small. Focus 0.4081, 0.5460 |
+| `fw_t33_acemaker.jpg` | ACEMKR3 · T-33 Shooting Star | epic, first of type | 2,126 ft, 183 kt, 1.7 km. Plane tiny. Focus 0.3779, 0.3959 |

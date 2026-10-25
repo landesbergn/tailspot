@@ -148,6 +148,13 @@ struct CatchDeletionSync {
         var attempted = Set<String>()
         while let uuid = pending.first(where: { !attempted.contains($0) }) {
             attempted.insert(uuid)
+            // An id that isn't path-safe can never name a server row, and
+            // must never be spliced into an authorized DELETE path (see
+            // PathSegment.swift). Drop it rather than let it .stop the queue.
+            guard PathSegment.isSafeID(uuid) else {
+                remove(uuid)
+                continue
+            }
             let result: Outcome
             do {
                 result = Self.outcome(forStatus: try await send(catchUuid: uuid, token: token))
@@ -169,7 +176,8 @@ struct CatchDeletionSync {
 
     /// The bare DELETE; returns the HTTP status.
     func send(catchUuid: String, token: String) async throws -> Int {
-        guard let url = URL(string: "v1/catches/\(catchUuid)", relativeTo: baseURL)?.absoluteURL else {
+        guard PathSegment.isSafeID(catchUuid),
+              let url = URL(string: "v1/catches/\(catchUuid)", relativeTo: baseURL)?.absoluteURL else {
             throw URLError(.badURL)
         }
         var request = URLRequest(url: url, timeoutInterval: 15)

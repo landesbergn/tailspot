@@ -86,9 +86,13 @@ struct ContentView: View {
     #if DEBUG
     /// Cycles the debug "Simulate catch" preset (tier) on each tap.
     @State private var simCatchIndex = 0
+    /// Bumped to force the wrench panel's STREAK row to re-read the
+    /// override, which lives in UserDefaults where SwiftUI can't see it.
+    @State private var streakDebugRefresh = 0
+    /// Last line the STREAK row printed (permission state, what's queued,
+    /// or the result of a manual fire).
+    @State private var streakDebugStatus = "—"
     #endif
-    /// DEBUG-only: presents the trophy-icon gallery for visual review.
-    @State private var showIconGallery = false
     /// Which full-height surface is up over the AR view: the Hangar (bottom
     /// left), the Leaderboard (bottom right) or the Profile (account button,
     /// top right). nil = none. One enum instead of one Bool per sheet so a
@@ -185,11 +189,17 @@ struct ContentView: View {
     /// just-landed catch made the streak worth protecting (eligibility in
     /// `StreakReminders.shouldOfferAsk`) and promoted at reveal dismiss.
     /// The value is the current streak the card quotes.
-    @State private var pendingStreakAsk: Int? = nil
+    /// Carries the re-offer details when this is the one second chance for
+    /// a "Not now" decliner (`StreakReminders.reoffer`).
+    @State private var pendingStreakAsk: StreakReminders.Offer? = nil
     /// The presented pre-prompt card (nil = hidden). One-shot: presenting
-    /// latches `StreakReminders.permissionAskedKey` immediately, so a kill
-    /// mid-card still counts as asked.
-    @State private var streakAsk: Int? = nil
+    /// latches `StreakReminders.permissionAskedKey` (or, for the re-offer,
+    /// `reofferUsedKey`) immediately, so a kill mid-card still counts.
+    @State private var streakAsk: StreakReminders.Offer? = nil
+    /// True while the visible card was forced by the wrench's 🔔 Ask —
+    /// keeps the ask-shown/response events real-promotions-only (the
+    /// debug-seam rule: debug paths stay out of telemetry).
+    @State private var streakAskFromDebug = false
     /// Strong whole-frame not-sky evidence suppresses ambient labels after
     /// a sustained spell. There is deliberately no user-facing warning:
     /// the classifier is useful as a conservative visibility guard, not as
@@ -233,7 +243,7 @@ struct ContentView: View {
     /// existing tester is never flooded. Survives the Hangar sheet as a
     /// `@StateObject`, so a moment interrupted by backgrounding re-renders
     /// on return (the overlay is declarative, bound to `hasPending`).
-    @StateObject private var unlockCenter = TrophyUnlockCenter()
+    @StateObject private var unlockCenter = TrophyUnlockCenter(inputsMemo: .shared)
     /// Hangar restore-from-server (PLAN §9 #7, issue #58): checks once per
     /// launch whether this (Keychain-surviving) device identity holds
     /// catches on the backend while the local Hangar is empty — the
@@ -286,6 +296,37 @@ struct ContentView: View {
     /// itself is once-per-install (persisted), but this short-circuits the
     /// per-tick filter work in `.onReceive(adsb.$observed)` after it's latched.
     @State private var firstPlaneSeenLatched = false
+    /// Session latch for `first_label_on_screen` (a label actually drawn in
+    /// frame). Like `firstPlaneSeenLatched`, it only saves the 1 Hz projection
+    /// work once the install-wide latch is set; see `activationFunnelTick`.
+    @State private var firstLabelOnScreenLatched = false
+    /// `empty_sky_state_shown` session: its start ("stuck scanning" is
+    /// measured from here) and the variants already reported (once per
+    /// variant per session). Reset when the app goes to the background, in
+    /// the `.onChange(of: scenePhase)` handler.
+    @State private var emptySkySession = ActivationTelemetry.EmptySkySession()
+    /// First-catch steering pill (`SteeringPill`). `@AppStorage` is a
+    /// property wrapper over one UserDefaults key that also re-renders the
+    /// view when it changes; it latches true the first time the Hangar is
+    /// non-empty and never clears, so the pill is gone for good.
+    @AppStorage(SteeringPill.retiredKey) private var steeringRetired = false
+    #if DEBUG
+    /// Wrench override: show the steering pill as if this device had zero
+    /// catches and had never retired it. DEBUG-only; read through
+    /// `steeringEligible`, and keeps the pill out of telemetry.
+    @AppStorage(SteeringPill.debugForceKey) private var steeringDebugForce = false
+    #endif
+    /// The plane the pill points at, carried across ticks for hysteresis.
+    /// Written only by the 1 Hz `steeringPillTick`, never from `body`.
+    @State private var steeringTargetIcao: String?
+    /// When `steering_pill_shown` fired this session (nil = not yet).
+    /// Reset on background, like `emptySkySession`.
+    @State private var steeringShownAt: Date?
+    /// Whether the permission recovery card was showing on the last 1 Hz
+    /// tick, so `permission_recovery_shown` fires once per hidden-to-shown
+    /// transition (see `permissionRecoveryFunnelTick`).
+    @State private var permissionRecoveryWasShowing = false
+
 
     var body: some View {
         ZStack {
@@ -504,35 +545,33 @@ struct ContentView: View {
                                 }
                             }
 
-                            if visible.isEmpty || adsb.lastError != nil {
-                                // Empty-sky overlay. Shown when nothing
-                                // is in view — OR whenever the feed is
-                                // erroring, even with planes still on
-                                // screen (error-copy pass, 2026-08-14):
-                                // extrapolated labels keep gliding on
-                                // stale data during an outage, and
-                                // catching against 90-second-old
-                                // positions with no warning undercuts
-                                // "is the catch real?". The pill's
-                                // error variant wins its text switch,
-                                // so this never shows "NO AIRCRAFT"
-                                // over visible planes.
-                                // Quiet center reticle +
-                                // a status pill anchored low so it
-                                // doesn't compete with the top-center
-                                // compass / zoom affordances.
-                                // Grounded planes are excluded from the "N
-                                // NEARBY" count — they're not below-horizon
-                                // or too-far traffic, they're parked.
-                                emptySkyOverlay(
-                                    // count(where:) tallies without allocating
-                                    // the intermediate filtered array (hot path,
-                                    // every empty-sky frame).
-                                    rawCount: adsb.observed.count(where: { !$0.grounded })
-                                )
-                                    .frame(width: geo.size.width, height: geo.size.height)
-                                    .allowsHitTesting(false)
-                            }
+                            // Empty-sky overlay. Shown when nothing
+                            // is in view — OR whenever the feed is
+                            // erroring, even with planes still on
+                            // screen (error-copy pass, 2026-08-14):
+                            // extrapolated labels keep gliding on
+                            // stale data during an outage, and
+                            // catching against 90-second-old
+                            // positions with no warning undercuts
+                            // "is the catch real?". The pill's
+                            // error variant wins its text switch,
+                            // so this never shows "NO AIRCRAFT"
+                            // over visible planes. Otherwise, for a
+                            // zero-catch user with planes in range
+                            // but none on screen, the same pill
+                            // steers toward the nearest one. One
+                            // call so the body's expression stays
+                            // inside the type-check budget.
+                            hudStatusOverlay(
+                                visible: visible,
+                                headingDeg: heading,
+                                cameraElevationDeg: camEl,
+                                rollDeg: roll,
+                                hfovDeg: effectiveHfov,
+                                vfovDeg: effectiveVfov
+                            )
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .allowsHitTesting(false)
 
                             // Empty-tap ripple. Shown when a tap lands
                             // on truly empty sky (no plane within the
@@ -670,8 +709,10 @@ struct ContentView: View {
                         // the once-per-version review-ask stamp so the
                         // trophy → rating-sheet path can be exercised again
                         // (dev builds always show the sheet; ReviewPrompt.swift).
-                        // The trophy-unlock / icon-gallery previews and the
-                        // streak override went with their features shipping.
+                        // The trophy-unlock / icon-gallery previews went with
+                        // their features shipping. The STREAK row stayed:
+                        // main grew its 🔔 Ask re-offer tester after the
+                        // declutter (#366).
                         HStack(spacing: 8) {
                             Button("✦ Fake a catch") { simulateCatch() }
                             Button("★ Reset rating prompt") { ReviewPrompter.shared.debugClearStamp() }
@@ -680,6 +721,8 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
                         .tint(Brand.Color.cyan)
                         .padding(.horizontal, 12)
+
+                        streakDebugRow
                         #endif
 
                         Spacer(minLength: 0)
@@ -727,6 +770,15 @@ struct ContentView: View {
         // deduped). Drives the catch-flow celebration; the reveal cover
         // shows first, then this overlay once it dismisses.
         .task(id: catches.count) {
+            // First catch: retire the steering pill for good, and close the
+            // shown -> caught funnel if it showed this session.
+            if !catches.isEmpty && !steeringRetired {
+                if let shownAt = steeringShownAt,
+                   SteeringPill.shouldFireCaught(shownAt: shownAt, catchDates: catches.lazy.map(\.caughtAt)) {
+                    SteeringPill.fireCaught(secondsSinceShown: Date().timeIntervalSince(shownAt))
+                }
+                steeringRetired = true
+            }
             unlockCenter.enqueueNewUnlocks(from: catches)
             // Upgrade/restore date backfill, off the first frame (1.2.0
             // shipped it synchronously here and hung big Hangars at launch).
@@ -837,6 +889,13 @@ struct ContentView: View {
                 motion.stop()
                 adsb.stop()
                 visualConfirm.updateTarget(nil)
+                // A trip to the background ends the empty-sky session, so
+                // the return starts fresh variants and a fresh clock.
+                // (.inactive alone, e.g. pulling down Control Center, doesn't.)
+                if phase == .background {
+                    emptySkySession.reset()
+                    steeringShownAt = nil
+                }
             @unknown default:
                 break
             }
@@ -882,12 +941,14 @@ struct ContentView: View {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
+                    releaseGuessHold(for: reveal)
                     presentPostRevealMomentIfNeeded()
                 },
                 onViewInHangar: {
                     pendingReveal = nil
                     captureInFlight = false
                     guessShownAt = nil
+                    releaseGuessHold(for: reveal)
                     primarySheet = .hangar
                     presentPostRevealMomentIfNeeded()
                 },
@@ -926,14 +987,16 @@ struct ContentView: View {
                     } else if !reveal.isSimulated {
                         CatchTelemetry.fireGuessRoundSkipped(kind: .route, elapsedMs: elapsedMs)
                     }
+                    releaseGuessHold(for: reveal)
                 },
                 streakDays: reveal.streakDays,
+                isSimulated: reveal.isSimulated,
                 loader: reveal.loader
             )
             .presentationBackground(.clear)
         }
         // Multi-catch reveal — N≥2 catch cards staggered in with a
-        // chime+haptic per fresh card, combo banner climbing across
+        // chime+haptic per fresh card, MULTI-CATCH banner climbing across
         // the reveal, ALREADY CAUGHT stamps inline on duplicates.
         // T11 routes every (fresh+dup) total ≥ 2 through here from
         // `presentReveal`.
@@ -991,10 +1054,17 @@ struct ContentView: View {
             // `observed` publish) instead of in `body` on every 30 Hz frame.
             // Must run before the latch's early-return below, or the signature
             // would freeze once the activation telemetry latches.
-            visibleIcaoSignature = interactiveVisible(observed)
+            let interactive = interactiveVisible(observed)
+            visibleIcaoSignature = interactive
                 .map(\.aircraft.icao24)
                 .sorted()
                 .joined(separator: ",")
+
+            // first_label_on_screen. Runs here at ~1 Hz, never in the 30 Hz
+            // render pass, and before the first_plane_seen early-return
+            // below. (empty_sky_state_shown runs from the 1 Hz `.task` loop
+            // instead; see `emptySkyFunnelTick`.)
+            activationFunnelTick(interactive: interactive)
 
             // Activation funnel: fire once when the first plane is actually
             // visible (post-filter). The fire is once-per-install (persisted);
@@ -1022,6 +1092,9 @@ struct ContentView: View {
                 labelSuppressionTick()
                 pruneAssertedPlanes()
                 pruneLegacyPin()
+                emptySkyFunnelTick()
+                steeringPillTick()
+                permissionRecoveryFunnelTick()
             }
         }
     }
@@ -1347,6 +1420,125 @@ struct ContentView: View {
     }
     #endif
 
+    // MARK: - Activation funnel (label milestones + empty sky)
+
+    /// How many of `planes` project inside the camera frame for the current
+    /// pose and zoom: the same inputs the 30 Hz label loop uses, so it
+    /// counts the labels actually drawn. nil until the compass has a real
+    /// heading (the renderer's `heading ?? 0` fallback would otherwise make
+    /// this count against a made-up direction).
+    private func onScreenLabelCount(_ planes: [ObservedAircraft]) -> Int? {
+        ActivationTelemetry.onScreenCount(
+            targets: planes.map { (bearingDeg: $0.bearingDeg, elevationDeg: $0.elevationDeg) },
+            headingDeg: location.heading,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: Geo.rollDeg(
+                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+            ),
+            hfovDeg: Self.baseHfovDeg / zoom,
+            vfovDeg: Self.baseVfovDeg / zoom
+        )
+    }
+
+    /// Only count what the user could see: no opaque sheet over the AR
+    /// view, app in the foreground, a live camera (authorized, not just
+    /// "not denied": while the prompt is pending there's no picture), and
+    /// no permission recovery card standing in for the sky view.
+    private var activationFunnelCanCount: Bool {
+        !arOccluded && scenePhase == .active && cameraAuthorized && !locationDenied
+    }
+
+    /// `first_label_on_screen`, called from the `.onReceive(adsb.$observed)`
+    /// hook (never from `body`). `interactive` comes from the value being
+    /// published, which `adsb.observed` doesn't hold yet.
+    private func activationFunnelTick(interactive: [ObservedAircraft]) {
+        guard activationFunnelCanCount, !firstLabelOnScreenLatched else { return }
+        // `interactive` is already empty while labels are suppressed, so a
+        // suppressed frame can't fire it.
+        if ActivationTelemetry.firstLabelOnScreenFired() {
+            firstLabelOnScreenLatched = true
+        } else if !interactive.isEmpty, let onScreen = onScreenLabelCount(interactive) {
+            ActivationTelemetry.fireFirstLabelOnScreenOnce(
+                headingAccuracyDeg: location.headingAccuracy,
+                visibleCount: interactive.count,
+                onScreenCount: onScreen
+            )
+            firstLabelOnScreenLatched = ActivationTelemetry.firstLabelOnScreenFired()
+        }
+    }
+
+    /// `empty_sky_state_shown`, called once a second from the `.task` loop
+    /// in `body` (next to `labelSuppressionTick`). It deliberately does NOT
+    /// hang off `adsb.$observed`: without a GPS fix ADSBManager never
+    /// publishes, so an observed-driven check would go quiet in exactly the
+    /// "stuck on SCANNING SKY" case it exists to catch.
+    private func emptySkyFunnelTick() {
+        // Nothing left to report this session.
+        guard !emptySkySession.isComplete else { return }
+        // Start the session clock only while in the foreground, so a tick
+        // that lands just after a background reset can't start it early.
+        guard scenePhase == .active else { return }
+        let now = Date()
+        let secondsInSession = emptySkySession.secondsInSession(now: now)
+        guard activationFunnelCanCount else { return }
+
+        // The same counts the empty-sky pill uses (grounded planes are
+        // parked, not "nearby" traffic).
+        let observed = adsb.observed
+        let interactive = interactiveVisible(observed)
+        let airborne = observed.filter { !$0.grounded }
+        guard let variant = ActivationTelemetry.emptySkyVariant(
+            visibleCount: interactive.count,
+            rawCount: airborne.count,
+            hasError: adsb.lastError != nil || adsb.lastErrorUserMessage != nil,
+            neverFetched: adsb.lastFetched == nil,
+            isReconnecting: adsb.isReconnecting,
+            labelsSuppressed: suppressAmbientLabels
+        ) else { return }
+        guard emptySkySession.claim(variant, now: now) else { return }
+        ActivationTelemetry.fireEmptySkyStateShown(
+            variant: variant,
+            rawCount: airborne.count,
+            nearestSlantMeters: airborne.map(\.slantDistanceMeters).min(),
+            secondsInSession: secondsInSession,
+            hasLocation: location.latitude != nil && location.longitude != nil
+        )
+    }
+
+    /// `permission_recovery_shown`, called once a second from the `.task`
+    /// loop in `body`. Fires on each hidden-to-shown transition of the
+    /// recovery card (the same `cameraDenied || locationDenied` condition
+    /// `body` uses to show it). Driven from this state rather than the
+    /// card's `.onAppear`, which remounts and snapshot harnesses re-run.
+    /// Foreground only, so the card counts when the user could see it.
+    private func permissionRecoveryFunnelTick() {
+        guard scenePhase == .active else { return }
+        let showing = cameraDenied || locationDenied
+        defer { permissionRecoveryWasShowing = showing }
+        guard ActivationTelemetry.recoveryCardBecameVisible(
+            wasShowing: permissionRecoveryWasShowing, isShowing: showing
+        ) else { return }
+        ActivationTelemetry.firePermissionRecoveryShown(
+            cameraDenied: cameraDenied, locationDenied: locationDenied
+        )
+    }
+
+    /// `first_label_tap`, called at each label pin site. Taps happen at human
+    /// speed, so the projection here costs nothing; the install latch inside
+    /// the fire makes every tap after the first a no-op.
+    private func fireFirstLabelTap(via: String) {
+        guard !UserDefaults.standard.bool(forKey: ActivationTelemetry.firstLabelTapFiredKey) else { return }
+        let interactive = interactiveVisible(adsb.observed)
+        // recordLabelTap fires first_label_on_screen first if the 1 Hz
+        // sampler hasn't yet, so a quick tap can't land before it.
+        ActivationTelemetry.recordLabelTap(
+            via: via,
+            headingAccuracyDeg: location.headingAccuracy,
+            visibleCount: interactive.count,
+            onScreenCount: onScreenLabelCount(interactive)
+        )
+    }
+
     /// True when an OPAQUE modal fully covers the camera / AR view — the
     /// standard sheets: Hangar, Profile, and compass calibration. Hangar/Profile join this
     /// set only after their presentation animation settles: their request
@@ -1492,7 +1684,7 @@ struct ContentView: View {
     /// Snapshot of a multi-catch run for `MultiCatchReveal`. Entries
     /// preserve both fresh + duplicate icaos so the reveal can render
     /// the ALREADY CAUGHT stamp inline (T11). The dedupe + dedup-
-    /// counted combo math live in the view itself.
+    /// counted points math live in the view itself.
     struct PendingMultiReveal: Identifiable, Equatable {
         let id = UUID()
         let entries: [MultiCatchReveal.Entry]
@@ -1732,98 +1924,58 @@ struct ContentView: View {
         }
     }
 
-    /// Streak notification pre-prompt: a bottom card, presented once ever
-    /// (see `presentPostRevealMomentIfNeeded`), asking to protect the streak
-    /// with the evening nudge. Accepting fires the SYSTEM permission prompt
-    /// — the pre-prompt exists so that prompt lands with context instead of
-    /// ambushing at cold launch. Solid card, not `.glassEffect` (bare glass
-    /// siblings swallow taps on views below — the Profile bug, PR #127).
-    ///
-    /// All prose, no mono (Noah, 2026-08-19). Copy is his: the question
-    /// leads, the mechanism explains itself in one line, and neither
-    /// mentions the reminder hour or a day threshold — numbers in the copy go stale
-    /// the moment a constant moves.
+    /// Streak notification pre-prompt: a bottom card, presented once
+    /// (plus at most one re-offer to a "Not now" decliner; see
+    /// `presentPostRevealMomentIfNeeded`), asking to protect the streak with
+    /// the evening nudge. Accepting fires the SYSTEM permission prompt — the
+    /// pre-prompt exists so that prompt lands with context instead of
+    /// ambushing at cold launch. The card itself is `StreakAskCard`.
     @ViewBuilder
     private var streakAskOverlay: some View {
-        if let days = streakAsk {
-            VStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Brand.Color.alertCaution)
-                            // flame.fill's ink sits high in its layout box, so plain
-                            // centring leaves it ~1 pt above the text. Same nudge as
-                            // the Profile card's flame, scaled to this glyph size.
-                            .offset(y: 1)
-                            .accessibilityHidden(true)
-                        HStack(spacing: 5) {
-                            Text("\(days)")
-                                .font(.system(.subheadline, weight: .bold))
-                                .monospacedDigit()
-                                .foregroundStyle(Brand.Color.textPrimary)
-                            Text("day streak")
-                                .font(.system(.subheadline, weight: .medium))
-                                .foregroundStyle(Brand.Color.textSecondary)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(days) day streak")
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Protect your streak?")
-                            .font(.system(.title3, weight: .bold))
-                            .foregroundStyle(Brand.Color.textPrimary)
-                        Text("Turn on notifications to help keep your streak going.")
-                            .font(.subheadline)
-                            .foregroundStyle(Brand.Color.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    HStack(spacing: 12) {
-                        Button {
-                            StreakTelemetry.fireAskResponse(accepted: true, streakDays: days)
-                            withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
-                            Task { @MainActor in
-                                _ = await StreakReminderCenter.shared.requestPermission()
-                                await StreakReminderCenter.shared.sync(context: modelContext)
-                            }
-                        } label: {
-                            Text("Notify me")
-                                .font(Brand.Font.button)
-                                .foregroundStyle(Brand.Color.bgPrimary)
-                                .padding(.vertical, 13)
-                                .frame(maxWidth: .infinity)
-                                .background(Brand.Color.cyan,
-                                            in: .rect(cornerRadius: Brand.Radius.row))
-                        }
-                        .buttonStyle(.plain)
-                        Button {
-                            StreakTelemetry.fireAskResponse(accepted: false, streakDays: days)
-                            withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
-                        } label: {
-                            Text("Not now")
-                                // Same size as the primary, one weight
-                                // down: declining stays easy to hit and
-                                // easy to read, without competing.
-                                .font(.system(.callout, weight: .medium))
-                                .foregroundStyle(Brand.Color.textSecondary)
-                                .padding(.vertical, 13)
-                                .padding(.horizontal, 20)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.top, 2)
-                }
-                .padding(20)
-                .background(Brand.Color.bgElevated,
-                            in: .rect(cornerRadius: Brand.Radius.card))
-                .padding(.horizontal, 16)
-                // Clear the capture bar (its buttons sit ~100 pt tall with
-                // the home indicator inset).
-                .padding(.bottom, 110)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if let offer = streakAsk {
+            StreakAskCard(
+                days: offer.days,
+                acceptLabel: offer.reoffer?.routesToSettings == true ? "Open Settings" : "Notify me",
+                onAccept: { resolveStreakAsk(offer, accepted: true) },
+                onDecline: { resolveStreakAsk(offer, accepted: false) }
+            )
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// The card's two buttons. Accept fires the system dialog, or, for a
+    /// re-offer to someone iOS already denied, opens iOS Settings (the
+    /// dialog can't be shown twice). "Not now" on the FIRST ask records the
+    /// decline that makes the one re-offer possible.
+    private func resolveStreakAsk(_ offer: StreakReminders.Offer, accepted: Bool) {
+        if !streakAskFromDebug {
+            if let reoffer = offer.reoffer {
+                StreakTelemetry.fireReofferResponse(reoffer, streakDays: offer.days, accepted: accepted)
+            } else {
+                StreakTelemetry.fireAskResponse(accepted: accepted, streakDays: offer.days)
+                if !accepted {
+                    UserDefaults.standard.set(true, forKey: StreakReminders.permissionDeclinedKey)
+                    UserDefaults.standard.set(Streaks.dayKey(for: Date()),
+                                              forKey: StreakReminders.permissionDeclinedDayKey)
+                }
+            }
+        }
+        withAnimation(.easeIn(duration: 0.2)) { streakAsk = nil }
+        guard accepted else { return }
+        if offer.reoffer?.routesToSettings == true {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
+        Task { @MainActor in
+            let granted = await StreakReminderCenter.shared.requestPermission()
+            // The re-offer mirrors Settings' "Turn on reminders": fetch an
+            // APNs token now so challenge pushes work before a relaunch.
+            if granted, offer.reoffer != nil {
+                PushRegistration.registerForRemoteNotifications()
+            }
+            await StreakReminderCenter.shared.sync(context: modelContext)
         }
     }
 
@@ -1895,12 +2047,26 @@ struct ContentView: View {
         // dismissal promotes it: a jump to the Hangar wins the moment and the
         // ask is dropped, not queued. Presenting latches the asked bit
         // immediately, so it can never fire twice.
-        if let askDays = pendingStreakAsk {
+        //
+        // The re-offer additionally keeps 20 s clear of the review ask
+        // (either order); too close → dropped, and since the used-latch
+        // isn't set it re-stages on the next catch.
+        if let offer = pendingStreakAsk {
             pendingStreakAsk = nil
-            if primarySheet == nil, pendingReveal == nil, pendingMultiReveal == nil {
-                UserDefaults.standard.set(true, forKey: StreakReminders.permissionAskedKey)
-                StreakTelemetry.fireAskShown(streakDays: askDays)
-                withAnimation(.easeOut(duration: 0.25)) { streakAsk = askDays }
+            let defaults = UserDefaults.standard
+            let clearOfReview = offer.reoffer == nil || StreakReminders.isSeparated(
+                now: Date(), from: ReviewPrompter.shared.lastRequestedAt)
+            if primarySheet == nil, pendingReveal == nil, pendingMultiReveal == nil, clearOfReview {
+                if let reoffer = offer.reoffer {
+                    defaults.set(true, forKey: StreakReminders.reofferUsedKey)
+                    defaults.set(Date(), forKey: StreakReminders.reofferShownAtKey)
+                    StreakTelemetry.fireReofferShown(reoffer, streakDays: offer.days)
+                } else {
+                    defaults.set(true, forKey: StreakReminders.permissionAskedKey)
+                    StreakTelemetry.fireAskShown(streakDays: offer.days)
+                }
+                streakAskFromDebug = false
+                withAnimation(.easeOut(duration: 0.25)) { streakAsk = offer }
                 momentClaimed = true
             }
         }
@@ -1923,7 +2089,12 @@ struct ContentView: View {
     private func maybeRequestReview(momentClaimed: Bool) {
         guard !momentClaimed, streakAsk == nil, primarySheet == nil,
               pendingReveal == nil, pendingMultiReveal == nil,
-              !unlockCenter.hasPending else { return }
+              !unlockCenter.hasPending,
+              // 20 s clear of the notification re-offer, either order.
+              StreakReminders.isSeparated(
+                now: Date(),
+                from: UserDefaults.standard.object(forKey: StreakReminders.reofferShownAtKey) as? Date)
+        else { return }
         ReviewPrompter.shared.catchMomentEnded(
             totalCatches: catches.count,
             // Day buckets via Streaks.dayKey — the frozen insert-time label
@@ -2698,15 +2869,9 @@ struct ContentView: View {
                 // reveal carries the multiplicity message.
                 catchHaptic &+= 1
                 Log.adsb.notice("Caught \(newCatches.count, privacy: .public) plane(s); \(duplicates.count, privacy: .public) duplicate(s)")
-                // Per-catch immediate upload (2026-08-24): push the fresh
-                // row(s) to the backend NOW instead of waiting
-                // for the next foreground transition — a first-time user
-                // otherwise opened Profile/Leaderboard with 0 server-side
-                // points and no rank. Fire-and-forget; uploadPending is
-                // idempotent and serverUuid-deduped, so overlapping the
-                // scene-activation sweep is safe, and a failure just defers
-                // to that sweep.
-                Task { await CatchUploader().uploadPending(context: modelContext) }
+                // The per-catch immediate upload kick lives below the bonus
+                // round decision (see "Per-catch immediate upload"), so a
+                // catch hosting a route guess can be held until it resolves.
                 // Reverse-geocode the observer position ONCE for the
                 // batch (every row shares it) and stamp the new rows.
                 // Post-save and fire-and-forget: a catch never waits
@@ -2802,15 +2967,27 @@ struct ContentView: View {
                 // dismisses (its ceremony runs ≥1.7 s).
                 Task { @MainActor in
                     let center = StreakReminderCenter.shared
+                    let defaults = UserDefaults.standard
+                    let status = await center.authorizationStatus()
                     if StreakReminders.shouldOfferAsk(
                         currentStreak: current,
                         enabled: center.remindersEnabled,
-                        alreadyAsked: UserDefaults.standard.bool(
+                        alreadyAsked: defaults.bool(
                             forKey: StreakReminders.permissionAskedKey),
-                        authStatusIsNotDetermined:
-                            await center.authorizationStatus() == .notDetermined
+                        authStatusIsNotDetermined: status == .notDetermined
                     ) {
-                        pendingStreakAsk = current
+                        pendingStreakAsk = StreakReminders.Offer(days: current)
+                    } else if let reoffer = StreakReminders.reoffer(
+                        currentStreak: current,
+                        placedOnWeeklyBoard: LeaderboardStandingCache().everPlacedWeekly,
+                        enabled: center.remindersEnabled,
+                        declined: defaults.bool(forKey: StreakReminders.permissionDeclinedKey),
+                        reofferUsed: defaults.bool(forKey: StreakReminders.reofferUsedKey),
+                        authStatus: status,
+                        declinedToday: defaults.string(
+                            forKey: StreakReminders.permissionDeclinedDayKey) == Streaks.dayKey(for: now)
+                    ) {
+                        pendingStreakAsk = StreakReminders.Offer(days: current, reoffer: reoffer)
                     }
                     await center.sync(context: modelContext)
                 }
@@ -2857,6 +3034,35 @@ struct ContentView: View {
                 }
             }
 
+            // Per-catch immediate upload (2026-08-24): push the fresh row(s)
+            // to the backend NOW instead of waiting for the next foreground
+            // transition — a first-time user otherwise opened Profile/
+            // Leaderboard with 0 server-side points and no rank. Fire-and-
+            // forget; uploadPending is idempotent and serverUuid-deduped, so
+            // overlapping the scene-activation sweep is safe, and a failure
+            // just defers to that sweep.
+            //
+            // A catch hosting a route-guess round is HELD first (2026-10-21):
+            // a row is POSTed once, so uploading before the answer meant the
+            // server never saw the guess and never awarded its bonus. The
+            // reveal's resolve/dismiss callbacks release the hold and upload.
+            // No hold when this catch's early shell is no longer the reveal
+            // on screen (closed, or replaced by another catch's reveal), see
+            // `CatchUploadHolds.shouldHold`. This must stay in the same MainActor
+            // run as the save above (no `await` in between), so no sweep can
+            // slip the row out before the hold lands. The guess round never
+            // fires on a first catch, so the first-catch rank upload is
+            // still immediate.
+            if !newCatches.isEmpty {
+                if let payload = guessPayload,
+                   CatchUploadHolds.shouldHold(hasGuess: true,
+                                               earlyShell: earlyLoader,
+                                               shellOnScreen: pendingReveal?.loader) {
+                    CatchUploader.holdForGuess(payload.row, context: modelContext)
+                }
+                Task { await CatchUploader().uploadPending(context: modelContext) }
+            }
+
             let presentMs: Int
             let revealMode: String
             if let loader = earlyLoader {
@@ -2898,6 +3104,18 @@ struct ContentView: View {
                 catchMode: catchMode
             )
         }
+    }
+
+    /// Release the reveal's route-guess upload hold, if it placed one, and
+    /// upload the row now (with the frozen guess, when one was answered).
+    /// Called from every path that ends the bonus round: answer, skip, and
+    /// both reveal-close buttons. Lives outside `body` because body is at
+    /// the compiler's type-check budget. The shell path's row arrives via the
+    /// loader, so read it from there first. A no-op for un-held rows and for
+    /// the ✦ Catch simulation's transient row (never held).
+    private func releaseGuessHold(for reveal: PendingReveal) {
+        CatchUploader.releaseGuessHold(for: reveal.loader?.row ?? reveal.row,
+                                       context: modelContext)
     }
 
     /// Build the route guess question off a fresh catch row, or nil when no
@@ -2966,17 +3184,127 @@ struct ContentView: View {
     ///   `pendingMultiReveal`. Fresh and dup entries are interleaved
     ///   in the same order they were captured; the reveal renders
     ///   ALREADY CAUGHT stamps inline on dups and only credits fresh
-    ///   tails toward the combo + points (T11).
+    ///   tails toward the count + points (T11).
     ///
     /// Duplicate-only case (single dup): synthesizes a `CardPlane`
     /// from the already-stored row + (when available) the current
     /// live observation for fresh alt/speed/distance.
     #if DEBUG
+    /// STREAK row of the wrench panel. The feature's three surfaces all key
+    /// off streak LENGTH and an evening clock, so without this the only way to
+    /// see any of them is to catch planes on N consecutive days and then
+    /// wait for the evening. The override is DEBUG-only and printed back on
+    /// the line above in amber whenever it's live — a stuck override that
+    /// quietly makes the Profile lie is the mock-mode failure mode.
+    @ViewBuilder
+    private var streakDebugRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("STREAK")
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(StreakDebug.label)
+                    .foregroundStyle(StreakDebug.override == nil
+                                     ? Brand.Color.textTertiary
+                                     : Brand.Color.alertCaution)
+                Text("·")
+                    .foregroundStyle(Brand.Color.textTertiary)
+                Text(streakDebugStatus)
+                    .foregroundStyle(Brand.Color.textTertiary)
+            }
+            .font(Brand.Font.mono(size: 10, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+
+            HStack(spacing: 8) {
+                // nil → 2 → 3 → … → 12 → nil. Re-plans on every step so the
+                // pending reminder always matches what the panel claims.
+                Button("🔥 \(StreakDebug.override.map { "\($0.current)d" } ?? "Set")") {
+                    StreakDebug.cycle()
+                    streakDebugRefresh &+= 1
+                    Task { await StreakReminderCenter.shared.sync(context: modelContext) }
+                }
+                // At-risk vs safe — the branch the card's state line and the
+                // planner's "today" test both hang off.
+                Button(streakSummaryNow.caughtToday ? "🔥 Safe" : "🔥 Risk") {
+                    StreakDebug.toggleCaughtToday()
+                    streakDebugRefresh &+= 1
+                    Task { await StreakReminderCenter.shared.sync(context: modelContext) }
+                }
+                .disabled(StreakDebug.override == nil)
+                // The real notification, 10 s out: same id, same content, same
+                // delegate — only the trigger differs, plus a marker that
+                // lets it through the camera-silence rule (this button IS on
+                // the camera). Re-reads the status once it has landed so the
+                // row reports what the delegate actually did with it.
+                Button("🔔 Fire") {
+                    let streak = max(streakSummaryNow.current, StreakReminders.minimumStreak)
+                    Task {
+                        streakDebugStatus = await StreakReminderCenter.shared
+                            .debugFireReminder(streakAtStake: streak)
+                        try? await Task.sleep(for: .seconds(13))
+                        streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
+                    }
+                }
+                // The one-shot pre-prompt, unlatched so it can be re-tested.
+                Button("🔔 Ask") {
+                    streakAskFromDebug = true
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        streakAsk = StreakReminders.Offer(
+                            days: max(streakSummaryNow.current, StreakReminders.minimumStreak))
+                    }
+                }
+                // Clear the override AND the asked latch, then re-plan from
+                // the real Hangar — back to a truthful device.
+                Button("↺ Reset") {
+                    StreakDebug.clear()
+                    for key in [StreakReminders.permissionAskedKey,
+                                StreakReminders.permissionDeclinedKey,
+                                StreakReminders.permissionDeclinedDayKey,
+                                StreakReminders.reofferUsedKey,
+                                StreakReminders.reofferShownAtKey] {
+                        UserDefaults.standard.removeObject(forKey: key)
+                    }
+                    // The debug fire has its own slot, so `sync` below won't
+                    // clear it — Reset has to.
+                    UNUserNotificationCenter.current().removePendingNotificationRequests(
+                        withIdentifiers: [StreakReminders.debugNotificationId])
+                    UNUserNotificationCenter.current().removeDeliveredNotifications(
+                        withIdentifiers: [StreakReminders.debugNotificationId])
+                    StreakReminderCenter.lastForegroundDecision = nil
+                    streakDebugRefresh &+= 1
+                    Task {
+                        await StreakReminderCenter.shared.sync(context: modelContext)
+                        streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
+                    }
+                }
+            }
+            .font(Brand.Font.mono(size: 11, weight: .bold))
+            .buttonStyle(.bordered)
+            .tint(Brand.Color.cyan)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        // `streakDebugRefresh` is read here so mutating it re-evaluates the
+        // row — the override lives in UserDefaults, which SwiftUI can't
+        // observe on its own.
+        .id(streakDebugRefresh)
+        .task {
+            streakDebugStatus = await StreakReminderCenter.shared.debugStatusLine()
+        }
+    }
+
+    /// The live summary the panel reports and its buttons act on — override
+    /// included, since that is the whole point of the row.
+    private var streakSummaryNow: Streaks.Summary {
+        Streaks.summary(catches: catches)
+    }
+    #endif
+
+    #if DEBUG
     /// Debug-only: fabricate a catch at a cycling tier and fire the reveal,
     /// so the catch / reveal / economy can be eyeballed on-device without a
     /// real plane (the synthetic ADS-B source was removed). Non-persisting —
     /// shows the reveal card without writing to the Hangar.
-
     private func simulateCatch() {
         struct Sim {
             let icao, callsign, model, mfr, op, typecode: String
@@ -3062,9 +3390,16 @@ struct ContentView: View {
         // than dropping the whole reveal.
         if totalCount >= 2 {
             var entries: [MultiCatchReveal.Entry] = []
-            for c in newCatches {
+            // First-of-type per the server's rule: one bonus per typecode the
+            // Hangar didn't already hold, even when the run has two of it.
+            let heldTypecodes = Set(catches
+                .filter { row in !newCatches.contains { $0 === row } }
+                .compactMap(\.typecode))
+            let firstOfType = MultiCatchReveal.runFirstOfType(
+                typecodes: newCatches.map(\.typecode), heldTypecodes: heldTypecodes)
+            for (c, isFirst) in zip(newCatches, firstOfType) {
                 let observed = visibleByIcao[c.icao24]
-                let plane = cardPlane(from: c, observed: observed)
+                let plane = cardPlane(from: c, observed: observed, firstOfType: isFirst)
                 entries.append(.init(plane: plane, isDuplicate: false))
             }
             for dupIcao in duplicates {
@@ -3138,7 +3473,12 @@ struct ContentView: View {
     /// borrowing live alt/speed values from `observed` when the
     /// catch is still in view. Used by both the new-catch and
     /// duplicate paths so the reveal renders consistently.
-    private func cardPlane(from row: Catch, observed: ObservedAircraft?) -> CardPlane {
+    ///
+    /// `firstOfType` overrides the Hangar scan below. The multi-catch path
+    /// passes it because the scan can't tell a run's own rows apart (see
+    /// `MultiCatchReveal.runFirstOfType`).
+    private func cardPlane(from row: Catch, observed: ObservedAircraft?,
+                           firstOfType: Bool? = nil) -> CardPlane {
         let canonical = AircraftNaming.canonical(
             typecode: row.typecode,
             manufacturer: row.manufacturer,
@@ -3155,7 +3495,7 @@ struct ContentView: View {
             ?? row.displayDest
         // First-of-type: no *other* Hangar row shares this typecode. Display
         // only — the reveal ledger mirrors what the backend awards.
-        let isFirstOfType = row.typecode.map { tc in
+        let isFirstOfType = firstOfType ?? row.typecode.map { tc in
             !catches.contains { $0 !== row && $0.typecode == tc }
         } ?? false
         // Guess bonus (game-layer PR3; route-only per Noah 2026-07-09): a
@@ -3195,7 +3535,8 @@ struct ContentView: View {
             destName: observed?.aircraft.destName ?? row.destName,
             isFirstOfType: isFirstOfType,
             guessKind: guessKind,
-            guessBonusPoints: guessBonusPoints
+            guessBonusPoints: guessBonusPoints,
+            icao24: row.icao24
         )
     }
 
@@ -3256,7 +3597,8 @@ struct ContentView: View {
             altText: CardPlane.altText(fromMeters: aircraft.altitudeMeters),
             speedText: CardPlane.speedText(fromMps: aircraft.velocityMps),
             distText: CardPlane.distText(fromMeters: observed.slantDistanceMeters),
-            isFirstOfType: isFirstOfType
+            isFirstOfType: isFirstOfType,
+            icao24: aircraft.icao24
         )
     }
 
@@ -3457,6 +3799,124 @@ struct ContentView: View {
 
     // MARK: - Empty-sky state
 
+    /// The low status pill's one slot: the empty-sky / error pill when
+    /// nothing is in view or the feed is erroring, else the first-catch
+    /// steering pill when it applies, else nothing. Pulled out of the 30 Hz
+    /// body so the branch adds no expression weight there.
+    @ViewBuilder
+    private func hudStatusOverlay(
+        visible: [ObservedAircraft],
+        headingDeg: Double,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double
+    ) -> some View {
+        if visible.isEmpty || adsb.lastError != nil {
+            // Grounded planes are excluded from the "N NEARBY" count:
+            // they're not below-horizon or too-far traffic, they're parked.
+            // count(where:) tallies without allocating the intermediate
+            // filtered array (hot path, every empty-sky frame).
+            emptySkyOverlay(rawCount: adsb.observed.count(where: { !$0.grounded }))
+        } else if let hint = steeringHint(
+            visible: visible,
+            headingDeg: headingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
+        ) {
+            statusPillOverlay(
+                HUDStatusPill(
+                    text: SteeringPill.text(hint, unit: UnitPreferences.shared.distance),
+                    tint: Brand.Color.cyan,
+                    pulsing: true
+                )
+            )
+        }
+    }
+
+    /// The steering decision for the current pose. Shared by the render
+    /// (`hudStatusOverlay`) and the 1 Hz telemetry tick, so the event
+    /// reports what the pill actually showed. The eligibility check runs
+    /// first and is two reads, so veterans pay nothing per frame.
+    private func steeringHint(
+        visible: [ObservedAircraft],
+        headingDeg: Double,
+        cameraElevationDeg: Double,
+        rollDeg: Double,
+        hfovDeg: Double,
+        vfovDeg: Double
+    ) -> SteeringHint? {
+        guard steeringEligible else { return nil }
+        return SteeringPill.hint(
+            eligible: true,
+            hasFeedError: adsb.lastError != nil || adsb.lastErrorUserMessage != nil,
+            compassReliable: SteeringPill.isCompassReliable(
+                headingDeg: location.heading,
+                headingAccuracyDeg: location.headingAccuracy,
+                cautionLatched: showCompassWarning
+            ),
+            candidates: visible.map {
+                SteeringTarget(
+                    icao24: $0.aircraft.icao24,
+                    bearingDeg: $0.bearingDeg,
+                    elevationDeg: $0.elevationDeg,
+                    slantDistanceMeters: $0.slantDistanceMeters
+                )
+            },
+            currentTargetIcao24: steeringTargetIcao,
+            headingDeg: headingDeg,
+            cameraElevationDeg: cameraElevationDeg,
+            rollDeg: rollDeg,
+            hfovDeg: hfovDeg,
+            vfovDeg: vfovDeg
+        )
+    }
+
+    /// The ONE steering eligibility funnel, read by both the render and the
+    /// 1 Hz tick: zero catches and not retired, or the DEBUG wrench override.
+    private var steeringEligible: Bool {
+        SteeringPill.isEligible(
+            catchCount: catches.count, retired: steeringRetired, debugForced: steeringDebugForced
+        )
+    }
+
+    /// The wrench override's value; always false in release builds.
+    private var steeringDebugForced: Bool {
+        #if DEBUG
+        steeringDebugForce
+        #else
+        false
+        #endif
+    }
+
+    /// `steering_pill_shown` (once per session) and the hysteresis target,
+    /// from the 1 Hz `.task` loop in `body` (never from the render pass).
+    private func steeringPillTick() {
+        guard steeringEligible, let heading = location.heading else {
+            if steeringTargetIcao != nil { steeringTargetIcao = nil }
+            return
+        }
+        let hint = steeringHint(
+            visible: interactiveVisible(adsb.observed),
+            headingDeg: heading,
+            cameraElevationDeg: motion.cameraElevationDeg,
+            rollDeg: Geo.rollDeg(
+                gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
+            ),
+            hfovDeg: Self.baseHfovDeg / zoom,
+            vfovDeg: Self.baseVfovDeg / zoom
+        )
+        if steeringTargetIcao != hint?.icao24 { steeringTargetIcao = hint?.icao24 }
+        // A wrench-forced pill is a debug lie, so it never reaches telemetry
+        // (and with `steeringShownAt` left nil, no caught event either).
+        guard let hint, steeringShownAt == nil, activationFunnelCanCount,
+              !steeringDebugForced else { return }
+        steeringShownAt = Date()
+        SteeringPill.fireShown(hint, headingAccuracyDeg: location.headingAccuracy)
+    }
+
     /// Overlay shown when no aircraft are above the horizon + within
     /// the visibility cap. Restraint-first per the field feedback
     /// (the chat-canvas "scanning screen" with radar pings was
@@ -3493,7 +3953,14 @@ struct ContentView: View {
         let pillTint: Color = lastErr != nil
             ? Brand.Color.alertCaution
             : Brand.Color.textSecondary
-        return GeometryReader { geo in
+        return statusPillOverlay(
+            HUDStatusPill(text: pillText, tint: pillTint, pulsing: lastErr == nil)
+        )
+    }
+
+    /// Places a status pill low and centred over the AR view.
+    private func statusPillOverlay(_ pill: HUDStatusPill) -> some View {
+        GeometryReader { geo in
             ZStack {
                 // No centered reticle box here by design: the camera
                 // opens clean and a reticle only appears once a plane
@@ -3511,20 +3978,11 @@ struct ContentView: View {
                 // pill. Declaring our own width stops that recurring.
                 VStack {
                     Spacer()
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(pillTint)
-                            .frame(width: 6, height: 6)
-                            .modifier(EmptyPulse(active: lastErr == nil))
-                        Text(pillText)
-                            .font(Brand.Font.mono(size: 10, weight: .bold))
-                            .tracking(1.2)
-                            .foregroundStyle(pillTint)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
-                    .padding(.bottom, geo.size.height * 0.18)
+                    pill
+                        // 16 pt gutter so a wrapped pill (accessibility
+                        // type sizes) never runs edge to edge.
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, geo.size.height * 0.18)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -3555,7 +4013,11 @@ struct ContentView: View {
                 Text(formatLocation())
                 Text(formatHeading())
                     .foregroundStyle(isHeadingAccuracyBad ? Brand.Color.alertCaution : Brand.Color.textPrimary)
-                Text(formatCameraElevation())
+                // Own 10 Hz tick: MotionManager no longer publishes, so this
+                // debug line would otherwise freeze while the heading holds.
+                TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+                    Text(formatCameraElevation())
+                }
                 if !cameraAuthorized {
                     Text("camera: not authorized")
                 }
@@ -3585,6 +4047,7 @@ struct ContentView: View {
                 detectorGateRow
                 #if DEBUG
                 catchModeRow
+                steeringDebugRow
                 #endif
             }
             .font(Brand.Font.mono(size: 12))
@@ -3807,6 +4270,21 @@ struct ContentView: View {
         return "ADSB:    fetching…"
     }
 
+    #if DEBUG
+    /// Wrench row: lets Noah see the first-catch steering pill on a phone
+    /// with a real Hangar. Applied at `steeringEligible`, kept out of
+    /// telemetry by `steeringPillTick`.
+    private var steeringDebugRow: some View {
+        debugFlagRow(
+            title: "Act like a first-timer",
+            detail: "On: the camera treats this phone as if it had never caught a plane, so the \"turn left / behind you\" pill shows. Off: normal behavior, where the pill only shows for someone with no catches yet.",
+            isOn: $steeringDebugForce
+        )
+    }
+
+    #endif
+
+
     /// Feature flag: the L2 localized sky gate's enforcement (ships ON since
     /// 2026-07-04). Off = shadow: telemetry only, no flag, no demote.
     private var localGateRow: some View {
@@ -3995,10 +4473,11 @@ struct ContentView: View {
     /// plane, not a reveal). `forceLock` is the only way into `.locked` —
     /// the user just pointed at this plane, so the engine jumps straight
     /// to a locked state.
-    private func legacyPin(_ icao: String, at now: Date, tapPoint: CGPoint?) {
+    private func legacyPin(_ icao: String, at now: Date, tapPoint: CGPoint?, via: String) {
         pinnedIcao = icao
         revealedIcao = nil
         recorder.recordTapPin(icao24: icao, at: now, tapPoint: tapPoint)
+        fireFirstLabelTap(via: via)
         lockOn.forceLock(targetIcao24: icao, now: now)
     }
 
@@ -4021,7 +4500,7 @@ struct ContentView: View {
         if icao == pinnedIcao {
             legacyUnpin(at: now)
         } else {
-            legacyPin(icao, at: now, tapPoint: nil)
+            legacyPin(icao, at: now, tapPoint: nil, via: "voiceover")
         }
     }
 
@@ -4138,6 +4617,7 @@ struct ContentView: View {
         ) {
             switch catchMode {
             case .frame:
+                fireFirstLabelTap(via: "direct")
                 let obs = visible.first { $0.aircraft.icao24 == icao }
                 if let obs, obs.visibilityTier == .faint, assertedPlanes[icao] == nil {
                     assertPlane(icao, at: now, tapPoint: point, reason: "faint")
@@ -4146,7 +4626,7 @@ struct ContentView: View {
                 if icao == pinnedIcao {
                     legacyUnpin(at: now)
                 } else {
-                    legacyPin(icao, at: now, tapPoint: point)
+                    legacyPin(icao, at: now, tapPoint: point, via: "direct")
                 }
             }
             return
@@ -4172,7 +4652,7 @@ struct ContentView: View {
                 vfovDeg: vfovDeg,
                 lockZoneRadius: wideRadius
             ) {
-                legacyPin(icao, at: now, tapPoint: nil)
+                legacyPin(icao, at: now, tapPoint: nil, via: "widened")
                 return
             }
         }
@@ -4935,6 +5415,37 @@ struct CornerBracket: Shape {
 }
 
 // MARK: - Empty-sky pulse
+
+/// The AR HUD's low status pill: pulsing dot + mono ALL-CAPS readout on a
+/// translucent capsule. One view for the empty-sky / error states and the
+/// first-catch steering pill, so they can't drift apart, and so the
+/// snapshot harness renders the shipping pill rather than a copy. The mono
+/// face is `Font.custom(_:size:)`, which scales with Dynamic Type relative
+/// to body, so at accessibility sizes the pill can wrap (centred, below).
+struct HUDStatusPill: View {
+    let text: String
+    let tint: Color
+    let pulsing: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+                .modifier(EmptyPulse(active: pulsing))
+            Text(text)
+                .font(Brand.Font.mono(size: 10, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(tint)
+                // At the accessibility sizes the longer pills wrap, so
+                // keep both lines centred.
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Brand.Color.bgPrimary.opacity(0.55), in: .capsule)
+    }
+}
 
 /// Slow 0.4 → 1.0 opacity breathe at ~1 Hz. Used on the empty-sky
 /// status dot so it telegraphs "actively scanning" without being

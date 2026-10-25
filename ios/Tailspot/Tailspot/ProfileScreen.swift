@@ -58,6 +58,13 @@ struct ProfileScreen: View {
     @State private var showHandleSheet = false
     /// "Handle changed to @x" confirmation, cleared after a few seconds.
     @State private var handleToast: String?
+    /// Memo for the whole-Hangar derivations (see `ProfileDerived`). Held in
+    /// `@State` so the same box survives body re-evaluations. Deliberately
+    /// not process-wide: `ProfileDerived.bestCatch` is a SwiftData model,
+    /// and a box that outlived its container could hand back a row from a
+    /// torn-down store. The expensive part, the trophy inputs, comes from
+    /// the process-wide `TrophyInputsMemo`, which holds only values.
+    @State private var derivedCache = DerivedCacheBox<ProfileDerived>()
 
     var body: some View {
         // Aggregate the Hangar ONCE per render. `stats` and `inputs` used to be
@@ -70,11 +77,24 @@ struct ProfileScreen: View {
         // time the sheet built or tore down — the synchronous "freeze, then jump"
         // on open/close. Computing each once collapses it to a single O(n) pass,
         // then we thread the values down to the sections.
-        let stats = ProfileStats(catches: catches)
-        let inputs = Trophies.inputs(from: catches)
-        // Same compute-once rule as `stats`/`inputs` above: one O(n) pass
-        // here, threaded down — never a computed property re-run per access.
-        let streak = Streaks.summary(catches: catches)
+        //
+        // And not even once per render when nothing changed: the body
+        // re-evaluates on every @AppStorage write (`loadStanding` writes the
+        // points + rank on each open), and on a big Hangar each full pass
+        // costs hundreds of ms of main thread (2026-10). The derivations are
+        // memoized by a content token, the HangarTrophiesView pattern, so a
+        // re-render with unchanged data is one hashing pass.
+        // The trophy inputs come from the shared memo, usually already filled
+        // by the app-root unlock center's launch/catch diff.
+        let trophyToken = TrophyInputsToken.of(catches)
+        let derived = derivedCache.value(for: ProfileDerived.token(trophyToken: trophyToken)) {
+            ProfileDerived(catches: catches, inputs: TrophyInputsMemo.shared.inputs(for: trophyToken) {
+                Trophies.inputs(from: catches)
+            })
+        }
+        let stats = derived.stats
+        let inputs = derived.inputs
+        let streak = derived.streak
         return NavigationStack {
             ScrollView {
                 // GlassEffectContainer is load-bearing, not cosmetic: each
@@ -90,7 +110,7 @@ struct ProfileScreen: View {
                     VStack(spacing: 16) {
                         identityHeader(stats: stats)
                         statsAndStreak(stats: stats, inputs: inputs, streak: streak)
-                        if let best = Self.bestCatch(in: catches) {
+                        if let best = Self.bestCatch(top: derived.bestCatch) {
                             bestCatchCard(best)
                         }
                         quickLinks
@@ -254,11 +274,19 @@ struct ProfileScreen: View {
     /// Returns nil when the user has no catches yet; falls back to
     /// the omitted state.
     private var joinedDateLabel: String? {
-        guard let oldest = catches.map(\.caughtAt).min() else { return nil }
+        // `catches` is sorted newest-first, so the oldest is the last row —
+        // no whole-Hangar map + min on every body eval.
+        guard let oldest = catches.last?.caughtAt else { return nil }
+        return "joined " + Self.joinedFormatter.string(from: oldest)
+    }
+
+    /// Built once: a DateFormatter is expensive to create, and this used to
+    /// make a fresh one per body eval.
+    private static let joinedFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "MMMM yyyy"
-        return "joined " + fmt.string(from: oldest)
-    }
+        return fmt
+    }()
 
     private func identityHeader(stats: ProfileStats) -> some View {
         // Cached server standing (instant, no flash); local Hangar total / "—"
@@ -618,6 +646,22 @@ struct ProfileScreen: View {
                     Text("day streak")
                         .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(alive ? Brand.Color.textSecondary : Brand.Color.textTertiary)
+                    #if DEBUG
+                    // A forced streak says so ON the card. Reading 12 here
+                    // and 26 on the next catch reveal, with nothing to
+                    // explain it, is what made the feature look broken
+                    // (2026-08-21) — the wrench panel knew, but the screen
+                    // telling the lie didn't.
+                    if StreakDebug.override != nil {
+                        Text("DEBUG")
+                            .font(Brand.Font.mono(size: 9, weight: .bold))
+                            .tracking(0.8)
+                            .foregroundStyle(Brand.Color.bgPrimary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Brand.Color.alertCaution, in: .rect(cornerRadius: 3))
+                    }
+                    #endif
                 }
                 // Two Texts, not one string: the state half can be amber
                 // while the record half stays tertiary (or gold).
@@ -684,11 +728,10 @@ struct ProfileScreen: View {
         let rarity: Rarity
     }
 
-    private static func bestCatch(in catches: [Catch]) -> BestCatch? {
-        guard let top = catches.max(by: {
-            ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
-                < ($1.resolvedRarity.ordinal, $1.caughtAt.timeIntervalSince1970)
-        }) else { return nil }
+    /// Display data for the best catch. `ProfileDerived` picks the row (a
+    /// whole-Hangar scan, memoized); naming that one row is cheap.
+    private static func bestCatch(top: Catch?) -> BestCatch? {
+        guard let top else { return nil }
         let canonical = AircraftNaming.canonical(
             typecode: top.typecode,
             manufacturer: top.manufacturer,
@@ -901,6 +944,87 @@ struct ProfileStats {
         self.longestSlantKm = longest
         self.totalPoints = total
         self.countsByRarity = counts
+    }
+}
+
+// MARK: - Memoized derivations
+
+/// Everything ProfileScreen derives from the whole Hangar, computed together
+/// so the screen can memoize it in one `DerivedCacheBox`.
+struct ProfileDerived {
+    let stats: ProfileStats
+    let inputs: TrophyProgressInputs
+    let streak: Streaks.Summary
+    /// The collection's proudest airframe: highest rarity, most recent on
+    /// ties. Nil for an empty Hangar.
+    let bestCatch: Catch?
+
+    init(
+        catches: [Catch],
+        events: TrophyEventStore = TrophyEventStore(),
+        standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        now: Date = Date(),
+        inputs: TrophyProgressInputs? = nil
+    ) {
+        stats = ProfileStats(catches: catches)
+        self.inputs = inputs ?? Trophies.inputs(from: catches, events: events, standing: standing)
+        streak = Streaks.summary(catches: catches, asOf: now)
+        bestCatch = catches.max(by: {
+            ($0.resolvedRarity.ordinal, $0.caughtAt.timeIntervalSince1970)
+                < ($1.resolvedRarity.ordinal, $1.caughtAt.timeIntervalSince1970)
+        })
+    }
+
+    /// The memo key. `TrophyInputsToken` covers every row field, store and
+    /// time-zone input the trophy inputs read, which is a superset of what
+    /// the stats and the best catch read. The streak also depends on what
+    /// day it is, so today's key is folded in: the first render after
+    /// midnight recomputes instead of showing yesterday's streak state.
+    ///
+    /// In DEBUG builds the wrench panel's forced streak (`StreakDebug`) is
+    /// folded in too: `Streaks.summary` honours it, so toggling it must
+    /// recompute, or Profile keeps the real streak while the reveal shows
+    /// the forced one (the two-streaks bug the override's funnel exists to
+    /// prevent). Always nil in release builds.
+    ///
+    /// Deliberately NOT in the key: the server points/rank that
+    /// `loadStanding` writes on every open. They feed the headline directly,
+    /// never these derivations, so those writes re-render without a recompute.
+    static func token(
+        catches: [Catch],
+        events: TrophyEventStore = TrophyEventStore(),
+        standing: LeaderboardStandingCache = LeaderboardStandingCache(),
+        now: Date = Date(),
+        streakOverride: Streaks.Summary? = debugStreakOverride
+    ) -> Int {
+        token(trophyToken: TrophyInputsToken.of(catches, events: events, standing: standing),
+              now: now, streakOverride: streakOverride)
+    }
+
+    /// Same key from an already-computed `TrophyInputsToken`, so the screen
+    /// hashes the rows once and reuses that token for the shared memo.
+    static func token(
+        trophyToken: Int,
+        now: Date = Date(),
+        streakOverride: Streaks.Summary? = debugStreakOverride
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(trophyToken)
+        hasher.combine(Streaks.dayKey(for: now))
+        hasher.combine(streakOverride?.current)
+        hasher.combine(streakOverride?.longest)
+        hasher.combine(streakOverride?.caughtToday)
+        return hasher.finalize()
+    }
+
+    /// The wrench panel's streak override in DEBUG; nil in release, where
+    /// `StreakDebug` doesn't exist.
+    static var debugStreakOverride: Streaks.Summary? {
+        #if DEBUG
+        StreakDebug.override
+        #else
+        nil
+        #endif
     }
 }
 

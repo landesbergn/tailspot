@@ -36,6 +36,10 @@ nonisolated struct LeaderboardStandingCache {
     static let weeklyWinsKey = "tailspot.standing.weeklyWins"
     static let monthlyWinsKey = "tailspot.standing.monthlyWins"
     static let everToppedAllTimeKey = "tailspot.standing.everToppedAllTime"
+    /// Latched the first time a WEEK-window response ranks this device
+    /// (in-window points > 0). Earns a notification decliner the one
+    /// re-offer (StreakReminders.reoffer).
+    static let everPlacedWeeklyKey = "tailspot.standing.everPlacedWeekly"
 
     private let defaults: UserDefaults
 
@@ -61,6 +65,26 @@ nonisolated struct LeaderboardStandingCache {
         if me.everToppedAllTime == true {
             defaults.set(true, forKey: Self.everToppedAllTimeKey)
         }
+    }
+
+    /// A response counts as a weekly-board placement when the server echoed
+    /// the week window (the pre-windows backend ignores the param and
+    /// answers all-time) and ranked me. Rank 0 is the server's "unranked"
+    /// sentinel for zero in-window points.
+    static func isWeeklyPlacement(window: String?, rank: Int) -> Bool {
+        window == LeaderboardWindow.week.rawValue && rank >= 1
+    }
+
+    /// Latch the placement fact from a leaderboard response. Monotonic like
+    /// `everToppedAllTime`: a later unranked week doesn't un-place.
+    func notePlacement(window: String?, me: MyStanding) {
+        if Self.isWeeklyPlacement(window: window, rank: me.rank) {
+            defaults.set(true, forKey: Self.everPlacedWeeklyKey)
+        }
+    }
+
+    var everPlacedWeekly: Bool {
+        defaults.bool(forKey: Self.everPlacedWeeklyKey)
     }
 
     /// Weekly-champion crowns the server has credited this device.

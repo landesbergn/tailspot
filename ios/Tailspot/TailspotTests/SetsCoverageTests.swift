@@ -245,6 +245,59 @@ struct SetsCoverageTests {
         ("FOX", "Skyfox", "CA-25 Impala"),
         ("HUSK", "Aviat", "A-1 Husky"),
         ("P149", "Focke-Wulf", "FWP-149"),
+        // Public catalog coverage additions validated 2026-10-09.
+        ("AC90", "Gulfstream", "690 Jetprop Commander 840"),
+        ("BL8", "American Champion", "8 Scout"),
+        ("CC11", "Cub Crafters", "CC-11 Sport Cub"),
+        ("CN35", "CASA", "CN-235"),
+        ("SLG2", "Sonaca", "S-2"),
+        // Public catalog coverage additions validated 2026-10-10.
+        ("C425", "Cessna", "425 Corsair"),
+        ("PA22", "Piper", "PA-22 Colt"),
+        ("SBR1", "Rockwell", "Sabre 40"),
+        // Public catalog coverage additions validated 2026-10-16.
+        ("FDCT", "Flight Design", "CT"),
+        ("J600", "Jihlavan", "JA-600 Rapid 600"),
+        ("SW4", "Fairchild", "SA-227 Metro"),
+        ("TAMP", "Socata", "TB-9 Tampico"),
+        // Public catalog coverage additions validated 2026-10-15.
+        ("B779", "Boeing", "777-9"),
+        ("FK9", "B & F Technik", "FK-9"),
+        ("RISN", "Porto", "Risen"),
+        ("WT9", "Aerospool", "WT-9 Dynamic"),
+        // Public catalog coverage additions validated 2026-10-14.
+        ("A342", "Airbus", "A340-200"),
+        ("G3", "Remos", "G-3 Mirage"),
+        ("PNR3", "Alpi", "Pioneer 300"),
+        ("T18", "Classic Sport", "S-18"),
+        ("TL30", "Tl Ultralight", "TL-3000 Sirius"),
+        // Public catalog coverage additions validated 2026-10-12.
+        ("A210", "Aquila", "A-210"),
+        ("CH2T", "Amd", "CH-2000 Alarus"),
+        ("DV20", "Diamond", "DA-20 Falcon"),
+        ("MT", "Autogyro", "MT-03"),
+        ("P8", "Boeing", "P-8 Poseidon"),
+        ("SF25", "Scheibe", "SF-25 Falke"),
+        ("T33", "Lockheed", "T-33 Shooting Star"),
+        // Public catalog coverage addition validated 2026-10-19.
+        ("FA6X", "Dassault", "Falcon 6X"),
+        // Public catalog coverage additions validated 2026-10-11.
+        ("A337", "Airbus", "A330-700 Beluga XL"),
+        ("A400", "Airbus", "A400M Atlas"),
+        ("DH82", "De Havilland", "DH-82 Queen Bee"),
+        ("E6", "Boeing", "E-6 Mercury"),
+        ("L39", "Aero", "L-39 Albatros"),
+        ("LA4", "Lake", "LA-4"),
+        ("S92", "Sikorsky", "S-92"),
+        ("U2", "Lockheed", "U-2"),
+        // Public catalog coverage addition validated 2026-10-21.
+        ("B3XM", "Boeing", "737 MAX 10"),
+        // Public catalog coverage additions validated 2026-10-22.
+        ("PA30", "Piper", "PA-30 Twin Comanche"),
+        ("S64", "Sikorsky", "CH-54 Tarhe"),
+        // Public catalog coverage additions validated 2026-10-23.
+        ("BE60", "Beechcraft", "60 Duke"),
+        ("RJ85", "Avro", "RJ-85 Avroliner"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -358,6 +411,48 @@ struct SetsCoverageTests {
             (("FOX", "Skyfox", "CA-25 Impala"), "fam-sport-classics", "fsc-skyfox"),
             (("HUSK", "Aviat", "A-1 Husky"), "fam-sport-classics", "fsc-husky"),
             (("P149", "Focke-Wulf", "FWP-149"), "fam-vintage", "fv-p149"),
+            (("AC90", "Gulfstream", "690 Jetprop Commander 840"), "fam-twin-commander", "ftc-690"),
+            (("BL8", "American Champion", "8 Scout"), "fam-sport-classics", "fsc-scout"),
+            (("CC11", "Cub Crafters", "CC-11 Sport Cub"), "fam-sport-classics", "fsc-sport-cub"),
+            (("CN35", "CASA", "CN-235"), "fam-military", "fm-cn235"),
+            (("SLG2", "Sonaca", "S-2"), "fam-sport-classics", "fsc-sonaca200"),
+            (("C425", "Cessna", "425 Corsair"), "fam-cessna", "fc425"),
+            (("PA22", "Piper", "PA-22 Colt"), "fam-piper", "fpa22"),
+            (("SBR1", "Rockwell", "Sabre 40"), "fam-classic-biz", "fcb-sabreliner"),
+            (("FDCT", "Flight Design", "CT"), "fam-sport-classics", "fsc-flight-design-ct"),
+            (("J600", "Jihlavan", "JA-600 Rapid 600"), "fam-sport-classics", "fsc-skyleader600"),
+            (("SW4", "Fairchild", "SA-227 Metro"), "fam-commuter-props", "fcp-metro"),
+            (("TAMP", "Socata", "TB-9 Tampico"), "fam-sport-classics", "fsc-tampico"),
+            (("B779", "Boeing", "777-9"), "fam-777", "f777-9"),
+            (("FK9", "B & F Technik", "FK-9"), "fam-sport-classics", "fsc-fk9"),
+            (("RISN", "Porto", "Risen"), "fam-sport-classics", "fsc-risen"),
+            (("WT9", "Aerospool", "WT-9 Dynamic"), "fam-sport-classics", "fsc-wt9"),
+            (("A342", "Airbus", "A340-200"), "fam-a340", "fa340-200"),
+            (("G3", "Remos", "G-3 Mirage"), "fam-sport-classics", "fsc-remos-g3"),
+            (("PNR3", "Alpi", "Pioneer 300"), "fam-sport-classics", "fsc-pioneer300"),
+            (("T18", "Classic Sport", "S-18"), "fam-sport-classics", "fsc-s18"),
+            (("TL30", "Tl Ultralight", "TL-3000 Sirius"), "fam-sport-classics", "fsc-sirius"),
+            (("A210", "Aquila", "A-210"), "fam-sport-classics", "fsc-aquila-a210"),
+            (("CH2T", "Amd", "CH-2000 Alarus"), "fam-sport-classics", "fsc-alarus"),
+            (("DV20", "Diamond", "DA-20 Falcon"), "fam-diamond", "fda20"),
+            (("MT", "Autogyro", "MT-03"), "fam-sport-classics", "fsc-mt03"),
+            (("P8", "Boeing", "P-8 Poseidon"), "fam-military", "fm-p8"),
+            (("SF25", "Scheibe", "SF-25 Falke"), "fam-sport-classics", "fsc-sf25"),
+            (("T33", "Lockheed", "T-33 Shooting Star"), "fam-military", "fm-t33"),
+            (("FA6X", "Dassault", "Falcon 6X"), "fam-falcon", "ffa6x"),
+            (("A337", "Airbus", "A330-700 Beluga XL"), "fam-a330", "fa330-beluga-xl"),
+            (("A400", "Airbus", "A400M Atlas"), "fam-military", "fm-a400m"),
+            (("DH82", "De Havilland", "DH-82 Queen Bee"), "fam-vintage", "fv-dh82"),
+            (("E6", "Boeing", "E-6 Mercury"), "fam-military", "fm-e6"),
+            (("L39", "Aero", "L-39 Albatros"), "fam-military", "fm-l39"),
+            (("LA4", "Lake", "LA-4"), "fam-sport-classics", "fsc-lake-la4"),
+            (("S92", "Sikorsky", "S-92"), "fam-heli", "fh-s92"),
+            (("U2", "Lockheed", "U-2"), "fam-military", "fm-u2"),
+            (("B3XM", "Boeing", "737 MAX 10"), "fam-737", "f737-max10"),
+            (("PA30", "Piper", "PA-30 Twin Comanche"), "fam-piper", "fpa30"),
+            (("S64", "Sikorsky", "CH-54 Tarhe"), "fam-heli", "fh-s64"),
+            (("BE60", "Beechcraft", "60 Duke"), "fam-beech", "fbe60"),
+            (("RJ85", "Avro", "RJ-85 Avroliner"), "fam-avro-rj", "farj85"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -378,13 +473,20 @@ struct SetsCoverageTests {
                         model: "F 5F", manufacturer: "Northrop",
                         caughtAt: Date(), observerLat: 0, observerLon: 0,
                         slantDistanceMeters: 0, typecode: nil)
+        let boeing777F = Catch(icao24: "alias-777f", callsign: nil,
+                               model: "777F", manufacturer: "Boeing",
+                               caughtAt: Date(), observerLat: 0, observerLon: 0,
+                               slantDistanceMeters: 0, typecode: nil)
         let classics = CardSets.families.first { $0.id == "fam-sport-classics" }!
         let longEZEntry = classics.entries.first { $0.id == "fsc-longez" }!
         let military = CardSets.families.first { $0.id == "fam-military" }!
         let f5Entry = military.entries.first { $0.id == "fm-f5" }!
+        let widebody = CardSets.all.first { $0.id == "wide" }!
+        let boeing777Entry = widebody.entries.first { $0.id == "w-777" }!
 
         #expect(CardSets.matches(key: CardSets.matchKey(for: longEZ), entry: longEZEntry))
         #expect(CardSets.matches(key: CardSets.matchKey(for: f5f), entry: f5Entry))
+        #expect(CardSets.matches(key: CardSets.matchKey(for: boeing777F), entry: boeing777Entry))
 
         let legend = mk(("LGND", "Aeropilot", "L-600"))
         let shenyangF5 = mk(("MG17", "Shenyang", "F-5"))
@@ -445,6 +547,16 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: CardSets.matchKey(for: kitfox), entry: skyfox),
                 "The shared FOX designator must not make a Kitfox fill the Skyfox CA-25 slot")
 
+        let sabreliner = CardSets.families.first { $0.id == "fam-classic-biz" }!
+            .entries.first { $0.id == "fcb-sabreliner" }!
+        // Old stored model and the 2026-10-11 canonical name, both directions.
+        for sabre75 in [mk(("SBR2", "Rockwell", "Sabre 75")), mk(("SBR2", "Rockwell", "Sabre 75 / 80"))] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: sabre75), entry: sabreliner),
+                    "A Sabre 75 must not fill the Sabreliner 40 / 60 slot")
+        }
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("SBR1", "North American", "Sabreliner 40 / 60"))),
+                                 entry: sabreliner))
+
         // AS50 covers the single-engine AS350/AS550 family; AS55 is the
         // twin-engine AS355/AS555 family. Shared Fennec naming must not cross.
         let as50 = mk(("AS50", "Airbus Helicopters", "H-125 Fennec"))
@@ -452,9 +564,9 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: CardSets.matchKey(for: as50), entry: as55Entry),
                 "An AS50 single-engine Fennec must not fill the AS55 twin slot")
 
-        // A P-51 (canonical "A-36 Mustang") must not fill Citation Mustang,
+        // A P-51 (canonical "P-51 Mustang") must not fill Citation Mustang,
         // and a Citation Mustang must not fill the P-51 warbird slot.
-        let p51 = mk(("P51", "North American", "A-36 Mustang"))
+        let p51 = mk(("P51", "North American", "P-51 Mustang"))
         let p51Key = CardSets.matchKey(for: p51)
         let citationSet = CardSets.families.first { $0.id == "fam-citation" }!
         let citMustang = citationSet.entries.first { $0.id == "fc-mustang" }!
@@ -559,6 +671,31 @@ struct SetsCoverageTests {
         let twinComanche = mk(("PA30", "Piper", "PA-30 Twin Comanche"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: twinComanche), entry: comancheEntry),
                 "A PA-30 Twin Comanche must not fill the PA-24 Comanche slot")
+        let twinComancheEntry = CardSets.families.first { $0.id == "fam-piper" }!
+            .entries.first { $0.id == "fpa30" }!
+        let singleComanche = mk(("PA24", "Piper", "PA-24 Comanche"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: singleComanche), entry: twinComancheEntry),
+                "A PA-24 Comanche must not fill the PA-30 Twin Comanche slot")
+
+        let skycraneEntry = CardSets.families.first { $0.id == "fam-heli" }!
+            .entries.first { $0.id == "fh-s64" }!
+        let sikorskyS76 = mk(("S76", "Sikorsky", "S-76"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: sikorskyS76), entry: skycraneEntry),
+                "A Sikorsky S-76 must not fill the S-64 / CH-54 Skycrane slot")
+
+        let dukeEntry = CardSets.families.first { $0.id == "fam-beech" }!
+            .entries.first { $0.id == "fbe60" }!
+        let beechBaron = mk(("BE58", "Beechcraft", "58 Baron"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: beechBaron), entry: dukeEntry),
+                "A Beechcraft 58 Baron must not fill the Beechcraft 60 Duke slot")
+
+        let avroRJ85Entry = CardSets.families.first { $0.id == "fam-avro-rj" }!
+            .entries.first { $0.id == "farj85" }!
+        for adjacentAvroRJ in [mk(("RJ70", "Avro", "RJ-70 Avroliner")),
+                               mk(("RJ1H", "Avro", "RJ-100 Avroliner"))] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: adjacentAvroRJ), entry: avroRJ85Entry),
+                    "An adjacent Avro RJ variant must not fill the RJ85 slot")
+        }
 
         // Legacy and Texan names are shared across unrelated aircraft lines.
         let lancairLegacyEntry = sportSet.entries.first { $0.id == "fsc-lancair-legacy" }!
@@ -570,11 +707,44 @@ struct SetsCoverageTests {
         let originalTexan = mk(("T6", "North American", "T-6 Texan"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: originalTexan), entry: texanIIEntry),
                 "The piston T-6 Texan must not fill the turboprop Texan II slot")
-        let texanII = mk(("TEX2", "Hawker Beechcraft", "3000"))
         let originalTexanEntry = CardSets.families.first { $0.id == "fam-vintage" }!
             .entries.first { $0.id == "fv-t6" }!
-        #expect(!CardSets.matches(key: CardSets.matchKey(for: texanII), entry: originalTexanEntry),
-                "The TEX2 Texan II must not fill the vintage piston T-6 slot")
+        // Both the pre-2026-10-10 stored model ("3000") and the current one:
+        // the canonical "T-6 Texan 2" contains the slot's "texan" token, so
+        // only the TEX2 exclusion keeps it out.
+        for texanII in [mk(("TEX2", "Hawker Beechcraft", "3000")),
+                        mk(("TEX2", "Beechcraft", "T-6 Texan 2"))] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: texanII), entry: originalTexanEntry),
+                    "The TEX2 Texan II must not fill the vintage piston T-6 slot")
+            #expect(CardSets.matches(key: CardSets.matchKey(for: texanII), entry: texanIIEntry),
+                    "The TEX2 Texan II must fill its own military slot")
+        }
+        #expect(CardSets.matches(key: CardSets.matchKey(for: originalTexan), entry: originalTexanEntry),
+                "The piston T-6 Texan must still fill the vintage slot")
+
+        // The WWII "TBM Avenger" must not fill the Daher TBM turboprop slot
+        // (shared "tbm" token); a real TBM 9xx still does.
+        let daherEntry = CardSets.families.flatMap(\.entries).first { $0.id == "ftp-tbm" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("TBM", "Grumman", "TBM Avenger"))), entry: daherEntry),
+                "The Grumman TBM Avenger must not fill the Daher TBM slot")
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("TBM9", "Daher", "TBM 900"))), entry: daherEntry))
+        // ...and the Avenger still counts: it has its own vintage slot.
+        let avengerEntry = CardSets.families.first { $0.id == "fam-vintage" }!
+            .entries.first { $0.id == "fv-tbm" }!
+        #expect(CardSets.matches(key: CardSets.matchKey(for: mk(("TBM", "Grumman", "TBM-3E"))), entry: avengerEntry))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("TBM9", "Daher", "TBM 900"))), entry: avengerEntry))
+
+        // Both Hornet designators fill the Hornet slot; a DH.87 Hornet Moth does not.
+        let hornetEntry = CardSets.families.first { $0.id == "fam-military" }!
+            .entries.first { $0.id == "fm-hornet" }!
+        // Raw models without the slash: membership must come from the
+        // typecode, not from the display name happening to contain "f/a-18".
+        for hornet in [mk(("F18S", "Boeing", "FA-18E")),
+                       mk(("F18H", "McDonnell Douglas", "FA-18C"))] {
+            #expect(CardSets.matches(key: CardSets.matchKey(for: hornet), entry: hornetEntry))
+        }
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("DH87", "De Havilland", "DH-87 Hornet Moth"))),
+                                  entry: hornetEntry))
 
         // The piston PA-31 Navajo and PA-60 Aerostar slots must not absorb
         // the PA-31T Cheyenne turboprop or unrelated Aerostar-branded types.
@@ -655,6 +825,29 @@ struct SetsCoverageTests {
         let falcon50 = mk(("FA50", "Dassault", "Falcon 50"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: falcon50), entry: faetaEntry),
                 "A Dassault Falcon 50 must not fill the ATEC Faeta slot")
+
+        // Adjacent public designators and qualified tokens stay separate from
+        // the new 777-9 and light-sport slots.
+        let b777xEntry = CardSets.families.first { $0.id == "fam-777" }!
+            .entries.first { $0.id == "f777-9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("B789", "Boeing", "787-9 Dreamliner"))),
+                                    entry: b777xEntry),
+                "A 787-9 must not fill the 777-9 slot")
+        let fk9Entry = sportSet.entries.first { $0.id == "fsc-fk9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("F9F", "Grumman", "F9F Panther"))),
+                                    entry: fk9Entry),
+                "An F9F Panther must not fill the FK9 slot")
+        let wt9Entry = sportSet.entries.first { $0.id == "fsc-wt9" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("WT10", "Aerospool", "WT-10 Advantic"))),
+                                    entry: wt9Entry),
+                "An Aerospool WT10 must not fill the WT9 slot")
+
+        // Each MAX family slot remains variant-specific.
+        let max10Entry = CardSets.families.first { $0.id == "fam-737" }!
+            .entries.first { $0.id == "f737-max10" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("B38M", "Boeing", "737 MAX 8"))),
+                                    entry: max10Entry),
+                "A 737 MAX 8 must not fill the 737 MAX 10 slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
@@ -669,6 +862,14 @@ struct SetsCoverageTests {
         // ...and never the Bell 407 slot next door.
         let b407 = heliSet.entries.first { $0.id == "fh-b407" }!
         #expect(!CardSets.matches(key: key, entry: b407))
+        // ...nor the Cessna 206 / 207 slot, whose bare "206" token used to
+        // match the canonical name "Bell 206 JetRanger / LongRanger".
+        let cessnaSet = CardSets.families.first { $0.id == "fam-cessna" }!
+        let fc206 = cessnaSet.entries.first { $0.id == "fc206" }!
+        #expect(!CardSets.matches(key: key, entry: fc206),
+                "A Bell 206 must not fill the Cessna 206 / 207 slot")
+        let jetRanger = CardSets.matchKey(for: mk(("B06", "Bell", "206B JetRanger III")))
+        #expect(!CardSets.matches(key: jetRanger, entry: fc206))
 
         // Bell's 505 Jet Ranger X is its own type and must not collapse into
         // the older 206 JetRanger slot merely because the names are similar.

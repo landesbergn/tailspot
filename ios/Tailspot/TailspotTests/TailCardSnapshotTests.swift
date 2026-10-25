@@ -121,5 +121,60 @@ struct TailCardSnapshotTests {
         }
         #expect(true)
     }
+
+    /// Long-name matrix (a11y/legibility pass, 2026-10-22): the four
+    /// longest common catches by rendered width — "Bombardier BD-100
+    /// Challenger 350", "Lockheed Martin C-130J Super Hercules", "Bombardier
+    /// BD-700 Global Express", "Cessna 680A Citation Latitude" — used to end
+    /// in an ellipsis on every iPhone width. Rendered at the card widths of a
+    /// 375 pt (SE / mini) and a 402 pt (16 Pro) phone (screen minus the
+    /// feed's 16 pt side padding), at the default text size and at
+    /// accessibility2, where the @ScaledMetric model font is largest. The
+    /// C-130J row is also first-of-type, so its sparkle and "base +bonus"
+    /// micro-ledger crowd the line as much as a real row can.
+    @Test func renderLongNameMatrix() {
+        let dir = URL(fileURLWithPath: "/private/tmp/tailspot_snaps", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let fixtures: [(String, Catch, Bool)] = [
+            ("CL35", makeCatch(
+                icao: "a1b2c3", callsign: "EJA350", model: nil, manufacturer: nil,
+                operatorName: "NetJets", typecode: "CL35",
+                origin: "KOAK", dest: "KTEB"), false),
+            ("C30J", makeCatch(
+                icao: "ae1234", callsign: "RCH130", model: nil, manufacturer: nil,
+                operatorName: "U.S. Air Force", typecode: "C30J",
+                origin: "KSUU", dest: "PHIK", caughtAt: 1_787_000_000), true),
+            ("GLEX", makeCatch(
+                icao: "a7c8d9", callsign: "N700GX", model: nil, manufacturer: nil,
+                operatorName: nil, typecode: "GLEX", place: "Oakland, CA"), false),
+            ("C68A", makeCatch(
+                icao: "a3d4e5", callsign: "LXJ521", model: nil, manufacturer: nil,
+                operatorName: "Flexjet", typecode: "C68A",
+                origin: "KSJC", dest: "KLAS"), false),
+        ]
+        // Card width = phone width − 2 × 16 pt feed padding (HangarRecentView).
+        let widths: [(String, CGFloat)] = [("375", 343), ("402", 370)]
+        let sizes: [(String, DynamicTypeSize)] = [("default", .large), ("ax2", .accessibility2)]
+
+        for (code, c, first) in fixtures {
+            let row = HangarRow(icao24: c.icao24, mostRecent: c, count: 1, allCatches: [c])
+            for (wName, width) in widths {
+                for (sName, size) in sizes {
+                    let view = TailCard(row: row, showPoints: true, isFirstOfType: first)
+                        .frame(width: width)
+                        .padding(12)
+                        .background(Brand.Color.bgPrimary)
+                        .environment(\.colorScheme, .dark)
+                        .environment(\.dynamicTypeSize, size)
+                    let renderer = ImageRenderer(content: view)
+                    renderer.scale = 3
+                    guard let png = renderer.uiImage?.pngData() else { continue }
+                    try? png.write(to: dir.appendingPathComponent("card_ln_\(code)_\(wName)_\(sName).png"))
+                }
+            }
+        }
+        #expect(true)
+    }
 }
 #endif

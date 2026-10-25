@@ -71,6 +71,9 @@ struct TailspotApp: App {
         // Register MetricKit subscriber once at launch. The subscriber
         // lives as a singleton so MetricKit retains the weak reference correctly.
         MetricsSubscriber.shared.register()
+        // Decode the bundled reference tables off-main now, so their first
+        // touch isn't a main-thread stall later (see BundledDataPrewarm).
+        BundledDataPrewarm.start()
         // Configure the PostHog SDK (session replay + the single analytics
         // pipeline — see Analytics.swift). No-op without a key. Skipped under
         // unit tests for the same reason as the register above.
@@ -185,6 +188,15 @@ struct TailspotApp: App {
                     // without waiting behind a catch backlog.
                     await handleSyncer.syncIfNeeded()
                     await uploader.uploadPending(context: ctx)
+                    // One-time re-credit of bonus-round guesses that older
+                    // builds never uploaded (see GuessRecreditSweep). After
+                    // the upload above, because it only sends rows the
+                    // server already has. Its own Task at background
+                    // priority, so it never holds up the steps below. A
+                    // no-op once it has finished.
+                    Task(priority: .background) {
+                        await GuessRecreditSweep().runIfNeeded(container: container)
+                    }
                     // Retry any Hangar deletes that didn't reach the server —
                     // in its own Task, so a slow network can't hold up the
                     // reminder re-plan and challenge refresh below.
@@ -194,6 +206,9 @@ struct TailspotApp: App {
                     // permission changed in iOS Settings, a force-kill raced
                     // the post-catch sync). Cheap — one Hangar fetch + a pure
                     // decision — and idempotent like the two steps above.
+                    // One-time: earlier "Not now" decliners become eligible
+                    // for the single re-offer (a no-op after the first run).
+                    await StreakReminderCenter.shared.migrateDeclinersIfNeeded()
                     await StreakReminderCenter.shared.sync(context: ctx)
                     // Challenges: config first (kill switch, min build),
                     // then my open + finished challenges, which also

@@ -81,6 +81,10 @@ struct CardPlane: Equatable {
     /// Computed off the row's live base via `ScoringBonuses.guessBonus` so it
     /// re-tiers with the base like `firstOfType` does.
     let guessBonusPoints: Int
+    /// The airframe's hex id, when the builder knows it. The share copy's
+    /// fallback for a callsign-less catch ("Caught A1B2C3 · Cessna 172"),
+    /// so every share path names the plane the way the Hangar detail does.
+    let icao24: String?
 
     init(
         callsign: String?,
@@ -99,7 +103,8 @@ struct CardPlane: Equatable {
         destName: String? = nil,
         isFirstOfType: Bool = false,
         guessKind: GuessKind? = nil,
-        guessBonusPoints: Int = 0
+        guessBonusPoints: Int = 0,
+        icao24: String? = nil
     ) {
         self.callsign = callsign
         self.model = model
@@ -118,6 +123,7 @@ struct CardPlane: Equatable {
         self.isFirstOfType = isFirstOfType
         self.guessKind = guessKind
         self.guessBonusPoints = guessBonusPoints
+        self.icao24 = icao24
     }
 }
 
@@ -493,7 +499,8 @@ extension CardPlane {
             altText: Self.altText(fromMeters: c.altitudeMeters),
             speedText: Self.speedText(fromMps: c.velocityMps),
             distText: Self.distText(fromMeters: c.slantDistanceMeters),
-            photoURL: c.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+            photoURL: c.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) },
+            icao24: c.icao24
         )
     }
 }

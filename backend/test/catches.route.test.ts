@@ -17,7 +17,7 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * 37.90/-122.27, 3000 m → bearing 0°, elevation ~15.05°).
  */
 
-const NOW = 1_700_000_000; // fixed server "now" (unix seconds)
+const NOW = 1_786_536_000; // 2026-08-12T12:00Z: after CAUGHT_AT_FLOOR, 12 h before the route re-balance (so a catch AT the cutover is within the 1-day clock-skew allowance)
 const OBS = { lat: 37.8, lon: -122.27 };
 const AC = { lat: 37.9, lon: -122.27, altitudeMeters: 3000 };
 
@@ -48,6 +48,7 @@ describe("POST /v1/catches", () => {
   let app: FastifyInstance;
   let db: Database;
   let token: string;
+  let logLines: Array<Record<string, unknown>>;
 
   beforeEach(async () => {
     db = await makeTestDb();
@@ -87,11 +88,13 @@ describe("POST /v1/catches", () => {
       source: "faa",
     });
 
+    logLines = [];
     app = await buildApp({
       identityStore: new DrizzleIdentityStore(db),
       catchStore: new DrizzleCatchStore(db),
       nowSeconds: () => NOW,
       rateLimitNow: () => 0, // frozen — stay under the 60/min catch cap
+      logStream: { write: (line: string) => logLines.push(JSON.parse(line)) },
     });
 
     const reg = await app.inject({ method: "POST", url: "/v1/devices" });
@@ -218,12 +221,63 @@ describe("POST /v1/catches", () => {
     expect(badAuth.statusCode).toBe(401);
   });
 
+  // Shipped iOS builds encode a nil callsign with `encodeIfPresent`, so the KEY
+  // IS ABSENT (not null) for every plane broadcasting no flight id — military
+  // MLAT contacts, much GA. This was a 422 from June to 2026-10-10, and those
+  // catches sat pending on phones forever. Absent must mean null.
+  it("accepts a catch whose callsign key is absent, storing a null callsign", async () => {
+    const body: Record<string, unknown> = catchBody(
+      "aaaaaa",
+      "c0c0c0c0-0000-4000-8000-000000000001",
+    );
+    body.callsign = undefined; // JSON serialization drops it → the key is absent on the wire
+    const res = await post(body);
+    expect(res.statusCode).toBe(201);
+    const rows = await db
+      .select({ callsign: catches.callsign })
+      .from(catches)
+      .where(eq(catches.catchUuid, "c0c0c0c0-0000-4000-8000-000000000001"))
+      .limit(1);
+    expect(rows[0]).toEqual({ callsign: null });
+  });
+
+  it("accepts absent pose angles and an absent aircraft block as null", async () => {
+    const body = catchBody("aaaaaa", "c0c0c0c0-0000-4000-8000-000000000002") as Record<
+      string,
+      unknown
+    >;
+    body.observer = { lat: OBS.lat, lon: OBS.lon }; // no heading/elevation/accuracy keys
+    body.aircraft = undefined;
+    const res = await post(body);
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("logs a 422 once at warn with its reason, device and (truncated) icao24", async () => {
+    const bad = {
+      ...catchBody("aaaaaa", "c0c0c0c0-0000-4000-8000-000000000003"),
+      icao24: "x".repeat(5000),
+    };
+    const res = await post(bad);
+    expect(res.statusCode).toBe(422);
+    // The client retries a stuck catch every pass: the repeat stays below info.
+    expect((await post(bad)).statusCode).toBe(422);
+    const rejected = logLines.filter((l) => l.msg === "catch rejected (422)");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      error: "icao24 must be six hex digits",
+      icao24: "x".repeat(32),
+      deviceId: expect.any(String),
+    });
+  });
+
   describe("422 on malformed bodies", () => {
     const base = catchBody("aaaaaa", "55555555-5555-4555-8555-555555555555");
     const cases: Array<[string, unknown]> = [
       ["missing catchUuid", { ...base, catchUuid: undefined }],
       ["non-uuid catchUuid", { ...base, catchUuid: "not-a-uuid" }],
       ["bad icao24", { ...base, icao24: "xyz" }],
+      // Absent is fine (see above); a present non-string is still malformed.
+      ["callsign wrong type", { ...base, callsign: 123 }],
       ["missing caughtAt", { ...base, caughtAt: undefined }],
       ["missing observer", { ...base, observer: undefined }],
       ["observer out of range", { ...base, observer: { ...base.observer, lat: 999 } }],

@@ -153,8 +153,11 @@ nonisolated struct TrophyProgressInputs: Sendable {
     let legendaryTierCatches: Int   // strictly .legendary
     let rarePlusUnique: Int         // unique icao24 at .rare or higher
     let longestSlantKm: Double
-    /// Captured-N-planes-in-one-frame moments. v1 has no multi-catch
-    /// mechanic yet; this is 0 until that ships.
+    /// Most distinct airframes caught in ONE press (Constellation at 2,
+    /// Quintet at 5). Multi-catch writes every row of a press with the same
+    /// `caughtAt`, so this is the largest group of distinct icao24 sharing
+    /// an identical timestamp. Only NEW rows count: a same-day duplicate in
+    /// the press writes no row, matching `catch_performed.multi_n`.
     let bestMultiCatchCount: Int
     /// Caught between civil dusk and civil dawn (placeholder — v1
     /// approximates by "caughtAt local hour 20–6"; refine later with
@@ -186,6 +189,12 @@ nonisolated struct TrophyProgressInputs: Sendable {
     let lowestAltitudeM: Double     // min recorded catch altitude (m); .greatestFiniteMagnitude if none
     let maxCatchesAtOnePlace: Int   // most catches at any single place
     let distinctTypes: Int          // distinct resolved aircraft types
+    /// `distinctTypes` plus heritage when a vintage catch stands in for it
+    /// (no typecode resolves to `.heritage`, so the table can never supply
+    /// the seventh type). Full Deck ONLY — Variety Pack and the Hangar's
+    /// type chips stay on the table's own types, so one vintage GA catch
+    /// can't count twice there.
+    let fullDeckTypes: Int
     let weekendDaysHit: Int         // distinct weekend days caught on (0–2)
     let hadDawnCatch: Bool          // a catch in the 4–7 AM window
     let hadConsecutiveSameOperator: Bool  // two time-adjacent catches, same airline
@@ -252,6 +261,7 @@ nonisolated struct TrophyProgressInputs: Sendable {
         lowestAltitudeM: Double = .greatestFiniteMagnitude,
         maxCatchesAtOnePlace: Int = 0,
         distinctTypes: Int = 0,
+        fullDeckTypes: Int? = nil,
         weekendDaysHit: Int = 0,
         hadDawnCatch: Bool = false,
         hadConsecutiveSameOperator: Bool = false,
@@ -293,6 +303,7 @@ nonisolated struct TrophyProgressInputs: Sendable {
         self.lowestAltitudeM = lowestAltitudeM
         self.maxCatchesAtOnePlace = maxCatchesAtOnePlace
         self.distinctTypes = distinctTypes
+        self.fullDeckTypes = fullDeckTypes ?? distinctTypes
         self.weekendDaysHit = weekendDaysHit
         self.hadDawnCatch = hadDawnCatch
         self.hadConsecutiveSameOperator = hadConsecutiveSameOperator
@@ -321,18 +332,27 @@ nonisolated enum Trophies {
     /// when the ledger is (re)seeded. When a stored stamp is behind this
     /// value, the roster grew since that device last seeded — the unlock
     /// center then RESEEDS (silently acknowledging any newly-added trophies
-    /// the user already qualifies for, instead of flooding them with unlock
-    /// moments) and presents the one-time "trophy case" recap sheet.
+    /// the user already qualifies for) and queues one ordinary "NEW TROPHY"
+    /// card per newly-acknowledged trophy, the same card a live unlock gets.
+    /// (The one-time "trophy case" recap sheet is only for the first-ever
+    /// seed of an unseeded ledger, which can cover a whole Hangar.)
     ///
     /// History: 0 = never stamped (any ledger written before this existed),
     /// 1 = reserved for the original 2026-06-20 binary roster, 2 = the
     /// 2026-07-10 expansion (points milestones + guess trophies), 3 = the
     /// 2026-07-11 leaderboard-winner trophies (Top Flight / Dynasty / Chart
     /// Topper — a device whose server facts already carry wins, e.g. the
-    /// historical crown backfill, absorbs them into ONE recap). Bump this
-    /// whenever a roster change should be absorbed-and-recapped rather than
-    /// celebrated one toast at a time.
-    static let rosterVersion = 3
+    /// historical crown backfill, absorbed them into one recap on the build
+    /// that shipped them), 4 = the 2026-10-21 wiring fix that made
+    /// Constellation, Heritage, Living History and Full Deck earnable
+    /// (multi-catch shipped and vintage catches now count as heritage).
+    /// Since roster 4 a roster-bump reseed queues an unlock card for ONLY
+    /// the trophies it newly acknowledges, so the ~20 users who now qualify
+    /// for one of the four see a "NEW TROPHY" card per trophy (and
+    /// `trophy_unlocked` with `via: "reseed"`); everyone else sees nothing.
+    /// Bump this whenever a roster change should grant already-qualified
+    /// users their new trophies on next launch.
+    static let rosterVersion = 4
 
     /// Full achievement roster. Every achievement is BINARY — earned or not,
     /// no tier ramp (the single `.gold` tier only drives the uniform hex
@@ -512,7 +532,7 @@ nonisolated enum Trophies {
                     progress: { $0.distinctTypes }),
         Achievement(id: "fulldeck", title: "Full Deck", summary: "Catch all 7 aircraft types",
                     iconName: "grid", tiers: [.init(tier: .gold, at: 7)],
-                    prerequisite: "varietypack", progress: { $0.distinctTypes }),
+                    prerequisite: "varietypack", progress: { $0.fullDeckTypes }),
         Achievement(id: "homebody", title: "Homebody", summary: "10 catches from one spot",
                     iconName: "home", tiers: [.init(tier: .gold, at: 10)],
                     progress: { $0.maxCatchesAtOnePlace }),
@@ -651,7 +671,10 @@ nonisolated enum Trophies {
         // metrics below need.
         var days = Set<String>()
         var countries = Set<String>()
-        var wide = 0, narrow = 0, regional = 0, heritage = 0
+        var wide = 0, narrow = 0, regional = 0
+        // Heritage counts distinct AIRFRAMES (icao24, the `uniqueAirframes`
+        // rule), so one resident Cub caught on five days is one, not five.
+        var heritageAirframes = Set<String>()
         var rare = 0, epic = 0, legendary = 0
         var longest: Double = 0
         var night = 0, far = 0, redEye = 0
@@ -669,6 +692,19 @@ nonisolated enum Trophies {
         // (burst) — derived after the loop.
         var icaoDays: [String: Set<String>] = [:]
         var timestamps: [Date] = []
+        // Rows per exact catch instant. Every row from one press shares
+        // `caughtAt`; only instants with 2+ rows get a distinct-airframe set
+        // (after the loop), so a 4,000-catch Hangar of single presses
+        // allocates no per-instant sets.
+        var rowsPerInstant: [Date: Int] = [:]
+        // One match key per DISTINCT set of match strings (exactly
+        // `CardSets.distinctMatchKeys(for:)`), plus each catch's index into
+        // it. Built here, in the same pass, so the per-catch key derivation
+        // still happens exactly once.
+        var keyGroups: [CardSets.CatchMatchKey] = []
+        var keyGroupIndex: [KeyStrings: Int] = [:]
+        var groupOfCatch: [Int] = []
+        groupOfCatch.reserveCapacity(catches.count)
         var totalPoints = 0
         // (time, correct) for ANSWERED bonus rounds only — skipped/never-
         // offered rounds leave guessCorrect nil and don't participate.
@@ -693,7 +729,7 @@ nonisolated enum Trophies {
             case .narrow:   narrow += 1
             case .wide:     wide += 1
             case .regional: regional += 1
-            case .heritage: heritage += 1
+            case .heritage: heritageAirframes.insert(c.icao24)
             default: break
             }
             if let op = c.operatorName?.trimmingCharacters(in: .whitespacesAndNewlines), !op.isEmpty {
@@ -712,6 +748,17 @@ nonisolated enum Trophies {
             dayCounts[day, default: 0] += 1
             icaoDays[c.icao24, default: []].insert(day)
             timestamps.append(c.caughtAt)
+            rowsPerInstant[c.caughtAt, default: 0] += 1
+            let key = CardSets.matchKey(for: c)
+            let strings = KeyStrings(typecode: key.typecode, rawModel: key.rawModelLowercased,
+                                     canonical: key.canonicalLowercased)
+            if let existing = keyGroupIndex[strings] {
+                groupOfCatch.append(existing)
+            } else {
+                keyGroupIndex[strings] = keyGroups.count
+                groupOfCatch.append(keyGroups.count)
+                keyGroups.append(key)
+            }
             let km = c.slantDistanceMeters / 1000
             if km > longest { longest = km }
             if km >= 25 { far += 1 }
@@ -752,24 +799,65 @@ nonisolated enum Trophies {
         // `inputs()` call. `progress(of:againstKeys:)` reuses the single pass.
         // Distinct keys only (identical result): with every key, this loop
         // was nearly all of `inputs()` on a 4,600-catch Hangar (~2.7 s).
-        let catchKeys = CardSets.distinctMatchKeys(for: catches)
+        // `keyGroups` holds exactly `CardSets.distinctMatchKeys(for:)` (first
+        // key per distinct match strings, in catch order), built inside the
+        // main loop above so the heritage check below can reuse it.
         let completedSets = CardSets.families.reduce(into: 0) { acc, set in
-            let p = CardSets.progress(of: set, againstKeys: catchKeys)
+            let p = CardSets.progress(of: set, againstKeys: keyGroups)
             if p.total > 0 && p.caught == p.total { acc += 1 }
         }
+
+        // Heritage: no typecode in AircraftTypes.json resolves to the
+        // `.heritage` type (the generator never emits it), so Heritage,
+        // Living History and Full Deck were unreachable. The curated
+        // "Vintage & warbirds" family is already declared `.heritage`, so a
+        // catch that fills one of its slots counts as a heritage catch —
+        // minus the modern airframes its name tokens also match.
+        // Checked once per DISTINCT key (a dozen entries × a few hundred
+        // keys), never per catch — `inputs` was the 1.2.0 launch-hang site.
+        var vintageGroup = [Bool](repeating: false, count: keyGroups.count)
+        if let vintage = CardSets.families.first(where: { $0.id == heritageFamilyID }) {
+            for (i, key) in keyGroups.enumerated() where !isModernLookalike(key) {
+                vintageGroup[i] = vintage.entries.contains { CardSets.matches(key: key, entry: $0) }
+            }
+        }
+        // One cheap index pass, only when something needs it: collect the
+        // vintage airframes, and the distinct airframes of each multi-row
+        // instant (a restored duplicate row — same icao24, same instant —
+        // must not turn one catch into a multi-catch).
+        let anyVintage = vintageGroup.contains(true)
+        let anyMultiRow = rowsPerInstant.values.contains { $0 >= 2 }
+        var bestMultiCatch = catches.isEmpty ? 0 : 1
+        if anyVintage || anyMultiRow {
+            var pressGroups: [Date: Set<String>] = [:]
+            for (i, c) in catches.enumerated() {
+                if vintageGroup[groupOfCatch[i]], !isModernManufacturer(c.manufacturer) {
+                    heritageAirframes.insert(c.icao24)
+                }
+                if anyMultiRow, (rowsPerInstant[c.caughtAt] ?? 0) >= 2 {
+                    pressGroups[c.caughtAt, default: []].insert(c.icao24)
+                }
+            }
+            bestMultiCatch = max(bestMultiCatch, pressGroups.values.map(\.count).max() ?? 0)
+        }
+        // Full Deck only: a vintage catch stands in for the seventh type
+        // even though its card still shows its table type (GA). Variety
+        // Pack keeps `types.count`, so the same catch never counts as two.
+        let fullDeckTypes = types.count
+            + (!heritageAirframes.isEmpty && !types.contains(AircraftType.heritage.rawValue) ? 1 : 0)
 
         return TrophyProgressInputs(
             totalCatches: catches.count,
             uniqueAirframes: unique.count,
             wideBodyCatches: wide,
             regionalCatches: regional,
-            heritageCatches: heritage,
+            heritageCatches: heritageAirframes.count,
             rareTierCatches: rare,
             epicTierCatches: epic,
             legendaryTierCatches: legendary,
             rarePlusUnique: rarePlusUnique.count,
             longestSlantKm: longest,
-            bestMultiCatchCount: 0,
+            bestMultiCatchCount: bestMultiCatch,
             nightCatches: night,
             narrowBodyCatches: narrow,
             uniqueOperators: operators.count,
@@ -790,6 +878,7 @@ nonisolated enum Trophies {
             lowestAltitudeM: lowestAlt,
             maxCatchesAtOnePlace: placeCounts.values.max() ?? 0,
             distinctTypes: types.count,
+            fullDeckTypes: fullDeckTypes,
             weekendDaysHit: weekendDays.count,
             hadDawnCatch: hadDawn,
             hadConsecutiveSameOperator: consecutiveOp,
@@ -809,17 +898,64 @@ nonisolated enum Trophies {
     static func bestGuessStreak(_ timeline: [(Date, Bool)]) -> Int {
         var best = 0
         var run = 0
-        for (_, correct) in timeline.sorted(by: { $0.0 < $1.0 }) {
+        // Ties at one instant (a multi-catch press) break wrong-answer first,
+        // so the result never depends on the caller's fetch order: the
+        // shared `TrophyInputsMemo` serves screens that fetch differently.
+        for (_, correct) in timeline.sorted(by: { ($0.0, $0.1 ? 1 : 0) < ($1.0, $1.1 ? 1 : 0) }) {
             run = correct ? run + 1 : 0
             best = max(best, run)
         }
         return best
     }
 
+    /// The curated family whose slots count as heritage catches.
+    static let heritageFamilyID = "fam-vintage"
+
+    /// The three strings `CardSets.matches(key:entry:)` reads. Two catches
+    /// with equal strings match exactly the same set entries, so the set
+    /// math only needs one key per distinct value (the same rule as
+    /// `CardSets.distinctMatchKeys`). `Hashable` lets it be a dictionary key.
+    private struct KeyStrings: Hashable {
+        let typecode: String?
+        let rawModel: String
+        let canonical: String
+    }
+
+    /// Modern airframes whose names hit a "Vintage & warbirds" token: the
+    /// CubCrafters Carbon Cub / Sport Cub / XCub ("carbon cub"), the
+    /// Beechcraft T-6 Texan II and AT-6 Wolverine ("texan", "at-6"), and the
+    /// Fly Synthesis Texan microlight. Excluded from HERITAGE credit only;
+    /// set membership is unchanged. The Piper PA-18 Super Cub is NOT
+    /// excluded — whether it counts as heritage is an open taste call.
+    static let modernLookalikeTypecodes: Set<String> = ["CC11", "CC19", "TEX2", "TEXA"]
+    static let modernLookalikeTokens = ["carbon cub", "xcub", "sport cub", "cubcrafters", "cub crafters",
+                                        "texan ii", "texan 2", "wolverine"]
+
+    static func isModernLookalike(_ key: CardSets.CatchMatchKey) -> Bool {
+        if let tc = key.typecode?.uppercased(), modernLookalikeTypecodes.contains(tc) { return true }
+        return modernLookalikeTokens.contains {
+            key.rawModelLowercased.contains($0) || key.canonicalLowercased.contains($0)
+        }
+    }
+
+    /// Texan II builders (Raytheon → Hawker Beechcraft → Beechcraft →
+    /// Textron) and CubCrafters: a "T-6A Texan" row with no typecode from
+    /// one of these is the modern trainer, not the North American warbird.
+    /// Read per catch (manufacturer isn't part of the match key).
+    static func isModernManufacturer(_ manufacturer: String?) -> Bool {
+        guard let m = manufacturer?.lowercased(), !m.isEmpty else { return false }
+        return ["beech", "raytheon", "textron", "cubcrafters", "cub crafters"].contains { m.contains($0) }
+    }
+
     /// True if any two time-adjacent catches share the same operator
     /// (Doubleheader). Sorts the (time, operator) timeline and scans neighbors.
+    /// Ties at one instant (a multi-catch press) sort by operator, so the
+    /// answer doesn't depend on fetch order (the shared `TrophyInputsMemo`
+    /// serves screens that fetch differently). That also makes two
+    /// same-operator planes in one press count, as they already did whenever
+    /// the fetch happened to put them side by side.
     static func hasConsecutiveSameOperator(_ timeline: [(Date, String)]) -> Bool {
-        let sorted = timeline.sorted { $0.0 < $1.0 }
+        let sorted = timeline.sorted { ($0.0, $0.1) < ($1.0, $1.1) }
         for i in 1..<max(1, sorted.count) where i < sorted.count {
             if sorted[i].1 == sorted[i - 1].1 { return true }
         }

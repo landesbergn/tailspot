@@ -7,9 +7,9 @@
  },
  "A1": {
   "make": "Douglas",
-  "model": "AD Skyraider",
-  "rarity": "common",
-  "type": "ga"
+  "model": "A-1 Skyraider",
+  "rarity": "epic",
+  "type": "mil"
  },
  "A10": {
   "lengthFt": 53.3,
@@ -6058,17 +6058,17 @@
  "F18H": {
   "lengthFt": 56.0,
   "make": "McDonnell Douglas",
-  "model": "C-15",
-  "rarity": "common",
-  "type": "narrow",
+  "model": "F/A-18 Hornet",
+  "rarity": "legendary",
+  "type": "mil",
   "wingspanFt": 40.4
  },
  "F18S": {
   "lengthFt": 60.1,
   "make": "Boeing",
-  "model": "EA-18 Growler",
-  "rarity": "common",
-  "type": "narrow",
+  "model": "F/A-18E/F Super Hornet",
+  "rarity": "legendary",
+  "type": "mil",
   "wingspanFt": 44.7
  },
  "F1FV": {
@@ -6222,10 +6222,10 @@
   "type": "narrow"
  },
  "F86": {
-  "make": "Bombardier",
-  "model": "CL-13 Sabre",
-  "rarity": "common",
-  "type": "narrow"
+  "make": "North American",
+  "model": "F-86 Sabre",
+  "rarity": "epic",
+  "type": "mil"
  },
  "F8L": {
   "make": "Aeromere",
@@ -7716,8 +7716,8 @@
  "HUNT": {
   "make": "Hawker",
   "model": "Hunter",
-  "rarity": "common",
-  "type": "narrow"
+  "rarity": "rare",
+  "type": "mil"
  },
  "HURI": {
   "make": "Hawker",
@@ -8238,7 +8238,7 @@
  "JCOM": {
   "make": "Aero Commander",
   "model": "1121 Jet Commander",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "biz"
  },
  "JCRU": {
@@ -8906,7 +8906,7 @@
  "L29": {
   "make": "Aero",
   "model": "L-29 Delfin",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "L29A": {
@@ -8938,7 +8938,7 @@
  "L39": {
   "make": "Aero",
   "model": "L-39 Albatros",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga"
  },
  "L4": {
@@ -9185,7 +9185,7 @@
   "lengthFt": 43.3,
   "make": "Learjet",
   "model": "23",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 35.6
  },
@@ -9193,7 +9193,7 @@
   "lengthFt": 43.3,
   "make": "Learjet",
   "model": "24",
-  "rarity": "uncommon",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 35.6
  },
@@ -9984,16 +9984,16 @@
   "type": "ga"
  },
  "MG15": {
-  "make": "Pzl-Mielec",
-  "model": "LiM-1",
-  "rarity": "common",
-  "type": "ga"
+  "make": "Mikoyan",
+  "model": "MiG-15",
+  "rarity": "epic",
+  "type": "mil"
  },
  "MG17": {
-  "make": "Shenyang",
-  "model": "F-5",
-  "rarity": "common",
-  "type": "ga"
+  "make": "Mikoyan",
+  "model": "MiG-17",
+  "rarity": "epic",
+  "type": "mil"
  },
  "MG19": {
   "make": "Shenyang",
@@ -11125,9 +11125,9 @@
  },
  "P38": {
   "make": "Lockheed",
-  "model": "F-5 Lightning",
-  "rarity": "common",
-  "type": "ga"
+  "model": "P-38 Lightning",
+  "rarity": "epic",
+  "type": "mil"
  },
  "P39": {
   "make": "Bell",
@@ -11170,7 +11170,7 @@
  "P51": {
   "lengthFt": 32.3,
   "make": "North American",
-  "model": "A-36 Mustang",
+  "model": "P-51 Mustang",
   "rarity": "rare",
   "type": "ga",
   "wingspanFt": 37.0
@@ -13321,17 +13321,17 @@
  },
  "SBR1": {
   "lengthFt": 46.9,
-  "make": "Rockwell",
-  "model": "Sabre 40",
-  "rarity": "uncommon",
+  "make": "North American",
+  "model": "Sabreliner 40 / 60",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 44.7
  },
  "SBR2": {
   "lengthFt": 46.9,
   "make": "Rockwell",
-  "model": "NA-265 Sabre 75",
-  "rarity": "uncommon",
+  "model": "Sabre 75 / 80",
+  "rarity": "rare",
   "type": "biz",
   "wingspanFt": 44.7
  },
@@ -13995,7 +13995,7 @@
  },
  "SPIT": {
   "make": "Supermarine",
-  "model": "Seafire",
+  "model": "Spitfire",
   "rarity": "epic",
   "type": "ga"
  },
@@ -14579,7 +14579,7 @@
   "lengthFt": 33.0,
   "make": "North American",
   "model": "T-28 Trojan",
-  "rarity": "common",
+  "rarity": "rare",
   "type": "ga",
   "wingspanFt": 40.1
  },
@@ -14591,9 +14591,9 @@
  },
  "T33": {
   "make": "Lockheed",
-  "model": "AT-33",
-  "rarity": "common",
-  "type": "narrow"
+  "model": "T-33 Shooting Star",
+  "rarity": "epic",
+  "type": "mil"
  },
  "T334": {
   "make": "Tupolev",
@@ -14692,7 +14692,7 @@
  "T6": {
   "lengthFt": 29.0,
   "make": "North American",
-  "model": "BC-1",
+  "model": "T-6 Texan",
   "rarity": "rare",
   "type": "ga",
   "wingspanFt": 42.0
@@ -14811,8 +14811,8 @@
  },
  "TBM": {
   "make": "Grumman",
-  "model": "TBF Avenger",
-  "rarity": "common",
+  "model": "TBM Avenger",
+  "rarity": "rare",
   "type": "ga"
  },
  "TBM7": {
@@ -14901,10 +14901,10 @@
  },
  "TEX2": {
   "lengthFt": 33.2,
-  "make": "Hawker Beechcraft",
-  "model": "3000",
-  "rarity": "common",
-  "type": "ga",
+  "make": "Beechcraft",
+  "model": "T-6 Texan 2",
+  "rarity": "epic",
+  "type": "mil",
   "wingspanFt": 33.4
  },
  "TEXA": {

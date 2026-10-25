@@ -8,6 +8,9 @@
   <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta name="description" content="Open data projects, public-domain databases, and open-source contributors that Tailspot is built on.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612+Mono:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,7 +23,7 @@
 
   <h1>Attributions</h1>
   <div class="meta">
-    <p><strong>Last updated:</strong> June 26, 2026</p>
+    <p><strong>Last updated:</strong> October 21, 2026</p>
   </div>
 
   <p>Tailspot is built on the work of several open data projects, public-domain government databases, and open-source contributors. This page is the canonical credits list.</p>
@@ -44,6 +47,28 @@
 
   <hr class="rule">
 
+  <h2>Backup aircraft position data — adsb.fi</h2>
+
+  <p>When adsb.lol is unreachable, live aircraft positions come from <strong>adsb.fi</strong>, a community ADS-B aggregation network based in Finland. Tailspot uses it for personal, non-commercial purposes under adsb.fi's open data terms.</p>
+
+  <ul>
+    <li><strong>Source:</strong> <a href="https://adsb.fi" rel="noopener">adsb.fi</a></li>
+    <li><strong>Terms:</strong> <a href="https://github.com/adsbfi/opendata" rel="noopener">github.com/adsbfi/opendata</a></li>
+  </ul>
+
+  <hr class="rule">
+
+  <h2>Flight routes — adsb.lol route database</h2>
+
+  <p>Origin and destination airports for scheduled flights are looked up by callsign through <strong>adsb.lol</strong>'s route API, which serves the community-maintained <strong>Virtual Radar Server standing data</strong>.</p>
+
+  <ul>
+    <li><strong>License:</strong> CC0 1.0 (public domain dedication)</li>
+    <li><strong>Source:</strong> <a href="https://github.com/vradarserver/standing-data" rel="noopener">github.com/vradarserver/standing-data</a>, served via <a href="https://github.com/adsblol/api" rel="noopener">adsb.lol</a></li>
+  </ul>
+
+  <hr class="rule">
+
   <h2>Aircraft registry data — FAA Releasable Aircraft Database</h2>
 
   <p>Aircraft registration and identity data for US-registered aircraft (N-numbers) is sourced from the <strong>FAA Releasable Aircraft Database</strong>.</p>
@@ -52,6 +77,16 @@
     <li><strong>License:</strong> Public domain</li>
     <li><strong>Source:</strong> <a href="https://www.faa.gov/licenses_certificates/aircraft_certification/aircraft_registry/releasable_aircraft_download" rel="noopener">faa.gov — Releasable Aircraft Download</a></li>
     <li><strong>Credit note:</strong> Per the FAA: "All digital products published by the FAA are in the public domain… a written release or credit is not required." This credit is provided as a courtesy.</li>
+  </ul>
+
+  <hr class="rule">
+
+  <h2>Worldwide aircraft registry data — ADS-B Exchange</h2>
+
+  <p>Registrations and type designators for aircraft registered outside the US come from the <strong>ADS-B Exchange</strong> basic aircraft database, which draws on government registries and community contributions. Registry details are also filled in from the live position feeds above as aircraft are seen.</p>
+
+  <ul>
+    <li><strong>Source:</strong> <a href="https://www.adsbexchange.com" rel="noopener">adsbexchange.com</a></li>
   </ul>
 
   <hr class="rule">
@@ -103,6 +138,17 @@
   </ul>
 
   <p>The OFL permits use, distribution, and modification of the font, provided the font is not sold by itself and derivative fonts use a different reserved font name.</p>
+
+  <hr class="rule">
+
+  <h2>Open-source software</h2>
+
+  <p>The iOS app includes the <strong>PostHog iOS SDK</strong> for product analytics.</p>
+
+  <ul>
+    <li><strong>License:</strong> MIT License — Copyright © 2023 PostHog</li>
+    <li><strong>Source:</strong> <a href="https://github.com/PostHog/posthog-ios" rel="noopener">github.com/PostHog/posthog-ios</a></li>
+  </ul>
 
   <hr class="rule">
 

@@ -34,21 +34,22 @@ describe("registryRowsFromSnapshot", () => {
         ac({ icao24: "3c6444", typecode: "a346", registration: " D-AIHK " }),
       ]),
     );
+    // Rows come back in icao24 order (deadlock-safe batch; see the source).
     expect(rows).toEqual([
-      {
-        icao24: "76cdb5",
-        registration: "9V-SMH",
-        manufacturerRaw: null,
-        modelRaw: null,
-        typecode: "A359",
-        source: "adsblol",
-      },
       {
         icao24: "3c6444",
         registration: "D-AIHK", // trimmed
         manufacturerRaw: null,
         modelRaw: null,
         typecode: "A346", // upper-cased
+        source: "adsblol",
+      },
+      {
+        icao24: "76cdb5",
+        registration: "9V-SMH",
+        manufacturerRaw: null,
+        modelRaw: null,
+        typecode: "A359",
         source: "adsblol",
       },
     ]);
@@ -136,5 +137,75 @@ describe("feed enrichment end to end (snapshot → registry → metadata)", () =
     expect(us?.source).toBe("faa");
     expect(us?.registration).toBe("N123AB"); // existing kept, not the feed's N999XX
     expect(us?.typecode).toBe("C172"); // was null → filled
+  });
+});
+
+describe("registryRowsFromSnapshot source label", () => {
+  it("tags rows with the feed that produced the snapshot (adsb.fi since 2026-10-20)", () => {
+    const rows = registryRowsFromSnapshot({
+      ...snapshot([ac({ icao24: "76cdb5", typecode: "A359" })]),
+      provider: "adsbfi",
+    });
+    expect(rows.map((r) => r.source)).toEqual(["adsbfi"]);
+  });
+
+  it("falls back to 'adsblol' for an unstamped snapshot (every row before 2026-10-20)", () => {
+    const rows = registryRowsFromSnapshot(snapshot([ac({ icao24: "76cdb5", typecode: "A359" })]));
+    expect(rows.map((r) => r.source)).toEqual(["adsblol"]);
+  });
+});
+
+describe("fill-missing upsert write volume", () => {
+  const a350 = {
+    icao24: "76cdb5",
+    registration: "9V-SMH",
+    manufacturerRaw: null,
+    modelRaw: null,
+    typecode: "A359",
+    source: "adsbfi",
+  };
+
+  it("leaves an already-complete row untouched (no updated_at bump, no new tuple)", async () => {
+    const db = await makeTestDb();
+    await upsertRegistryFillMissing(db, [a350]);
+    const old = new Date("2026-01-01T00:00:00Z");
+    await db.update(registry).set({ updatedAt: old }).where(eq(registry.icao24, "76cdb5"));
+
+    // Re-sighting the same complete airframe is a no-op write…
+    await upsertRegistryFillMissing(db, [a350]);
+    let row = (await db.select().from(registry).where(eq(registry.icao24, "76cdb5")))[0];
+    expect(row?.updatedAt.getTime()).toBe(old.getTime());
+
+    // …while a row with a real gap still gets filled.
+    await db.update(registry).set({ registration: null }).where(eq(registry.icao24, "76cdb5"));
+    await upsertRegistryFillMissing(db, [a350]);
+    row = (await db.select().from(registry).where(eq(registry.icao24, "76cdb5")))[0];
+    expect(row?.registration).toBe("9V-SMH");
+    expect(row?.updatedAt.getTime()).toBeGreaterThan(old.getTime());
+  });
+
+  it("dedupes a snapshot that lists the same airframe twice (one batch, one key)", async () => {
+    const db = await makeTestDb();
+    const rows = registryRowsFromSnapshot(
+      snapshot([
+        // MLAT copy with no registration first, ADS-B copy with one second.
+        ac({ icao24: "76cdb5", typecode: "A359", registration: null }),
+        ac({ icao24: "76cdb5", typecode: "A359", registration: "9V-SMH" }),
+      ]),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].registration).toBe("9V-SMH"); // merged, not first-wins
+    await expect(upsertRegistryFillMissing(db, rows)).resolves.toBe(1);
+  });
+
+  it("emits rows in icao24 order so concurrent batches lock in one order", () => {
+    const rows = registryRowsFromSnapshot(
+      snapshot([
+        ac({ icao24: "c0ffee", typecode: "B738" }),
+        ac({ icao24: "0abc12", typecode: "A320" }),
+        ac({ icao24: "76cdb5", typecode: "A359" }),
+      ]),
+    );
+    expect(rows.map((r) => r.icao24)).toEqual(["0abc12", "76cdb5", "c0ffee"]);
   });
 });

@@ -136,12 +136,15 @@ nonisolated struct PhotoVariant: Decodable, Sendable {
 
 nonisolated extension PlanePhoto {
     /// Convert a wire-format photo into the app-facing value type. Returns
-    /// nil if any required URL doesn't parse.
+    /// nil if any required URL doesn't parse or isn't https: `link` is
+    /// opened on tap, and third-party JSON must not be able to hand us a
+    /// tel:/sms:/custom-scheme URL to open instead of a web page.
     init?(_ wire: PlanespottersPhoto) {
         guard
             let thumbLargeURL = URL(string: wire.thumbnail_large.src),
             let thumbURL = URL(string: wire.thumbnail.src),
-            let linkURL = URL(string: wire.link)
+            let linkURL = URL(string: wire.link),
+            [thumbLargeURL, thumbURL, linkURL].allSatisfy({ $0.scheme?.lowercased() == "https" })
         else { return nil }
         self.thumbnailLargeURL = thumbLargeURL
         self.thumbnailURL = thumbURL

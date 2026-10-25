@@ -11,7 +11,7 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * read the same table) and stops coming back on a Hangar restore.
  */
 
-const NOW = 1_700_000_000;
+const NOW = 1_780_000_000; // 2026-05-28, after CAUGHT_AT_FLOOR (earlier catches are rejected)
 
 function uuid(n: number) {
   return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;

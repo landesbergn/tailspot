@@ -5,6 +5,112 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
+
+- Four parallel reviews (backend auth, backend catches/challenges, web + CI,
+  iOS), each finding re-verified against the code before fixing. No authn
+  bypass, IDOR, SSRF or injection.
+- Backend: generic 5xx bodies, Sentry param scrub, `caughtAt` range,
+  callsign bounds, IPv6 /64 keys,
+  handle race → 409, dependency bumps. Web: headers on every response, HSTS,
+  pinned flyctl action. iOS: replay masks for the map and coordinates,
+  https-only external links, path-safe ids. Open items in PLAN §9.
+
+## 2026-10-24 — Upgrade-launch budget test (branch `test/big-hangar-launch-budget`)
+
+- `LargeHangarBudgetTests` now covers the first launch after a trophy
+  roster bump (1.2.2 → 1.2.3 went 3 → 4) on a 10,000-catch Hangar with an
+  undated ledger: four trophies granted, one inputs pass and at most one
+  date pass, under a wall-clock ceiling. A DEBUG-only counter (`TrophyAchievementDates.prefixEvaluations`)
+  makes the date-pass check exact; the clock alone let a 20-pass launch
+  through. About 2 s of CI.
+
+## 2026-10-23 — "Make the app much better", batch 1 + wave 2 (PRs #355–#363, #366–#370)
+
+- Batch 1 (integrity, measurement, polish): route-guess bonuses reach the
+  server again, activation telemetry, memoized trophies, four earnable
+  trophies, the leaderboard standing line, MetricKit, set correctness,
+  accessibility, reminders honesty.
+- Wave 2 (Noah's calls): Share on every reveal, honest multi-catch points,
+  120-day rating spacing with Rate/Feedback rows, one notification re-offer,
+  a steering pill for first-timers, and a one-time re-credit of past guesses
+  (backend deployed 2026-10-23).
+- Detail in PLAN §9.
+
+## 2026-10-20 — adsb.fi becomes the primary feed (branch `claude/adsbfi-primary`)
+
+- Second outage, caught by the new alerts within 5 minutes: adsb.lol 429'd
+  the dedicated IP. Its headers publish the real limit, 500 requests per day
+  per client, which the once-a-minute readiness canary alone exceeded.
+- Default chain is now adsb.fi primary, adsb.lol fallback (and routes).
+- The canary answers from phones' own recent successful fetches and only
+  fetches for itself without that proof. Upstream 4xx errors log the
+  rate-limit headers.
+
+## 2026-10-19 — adsb.fi becomes the fallback feed (branch `claude/adsbfi-fallback`)
+
+- airplanes.live still 403s from the dedicated egress IP; its error body asks
+  projects to email for access. A fallback that cannot be reached is none.
+- `AdsbFiProvider`: the adsb.lol client pointed at adsb.fi's v3 path (same
+  rows, same `now`). Default composite is now `adsblol+adsbfi`;
+  `POSITION_PROVIDER=airplaneslive` remains for if access is granted.
+- Attribution for adsb.fi on the site's attributions page and the Settings row.
+
+## 2026-10-19 — Feed-outage alerting (branch `claude/tailspot-monitoring-alerts-1d2fb3`)
+
+- Sixteen days of 503s from `/v1/aircraft` (adsb.lol 429 + airplanes.live 403
+  against Fly's shared egress IP) reached Noah through users, not monitoring:
+  the uptime monitor watched `/healthz`, `/readyz` checked only the DB, and the
+  Sentry rule emailed once per new issue.
+- `/readyz` now probes the position feed through the live tile cache
+  (`src/routes/feedProbe.ts`) alongside the DB; the uptime monitor points at it.
+- A second in-process alerter reports "both providers failing" as a fatal
+  Sentry message, separate from the degraded "serving the fallback" one.
+- New Sentry rule re-notifies hourly while an error-level issue keeps firing;
+  new PostHog alert on unique users seeing the error pill.
+- Root cause (shared egress IP reputation) fixed the same night: Noah OK'd a
+  static egress IP (`fly ips allocate-egress`, 209.71.113.155); adsb.lol
+  answered it within three minutes and the feed recovered.
+
+## 2026-10-11 — Classic-jet tiers (branch `fix/classic-jets-tiers`)
+
+- From Noah's Fleet Week weekend review: T-33 → epic; Sabreliner 40/60 and
+  75/80, Learjet 23/24, Jet Commander → rare; Sabreliner names fixed.
+  Scoring version 8. Build 107.
+
+## 2026-10-11 — Warbird names and tiers (branch `fix/warbird-names-tiers`)
+
+- Noah's T-33 catch read "Lockheed AT-33", Common. Fixed names for T33, P38,
+  F86, A1, TBM, T6, SPIT, MG15, MG17; re-tiered ten warbirds (rare/epic).
+- Sets: Hornet / Super Hornet slot; the Daher TBM slot excludes the TBM
+  Avenger. Scoring version 7.
+
+## 2026-10-10 — Catch uploads without a callsign (branch `fix/catch-upload-422`)
+
+- `POST /v1/catches` 422'd any catch whose `callsign` key was absent, which
+  is how iOS encodes a nil callsign (`encodeIfPresent`). Planes with no
+  flight id (military MLAT, much GA) never uploaded; the app retried them
+  forever and logged nothing. Present since June.
+- Server: absent callsign ≡ null; every 422 logged with its reason.
+- iOS: callsign encodes as an explicit null (ships in 1.2.2).
+
+## 2026-10-10 — Fleet Week catch audit (branch `claude/review-recent-plane-catches-cccd5f`)
+
+- Noah's SF Fleet Week catches: Patriots Jet Team L-39 (common, too low), USAF
+  T-6A shown as "Hawker Beechcraft 3000", P-51 shown as "A-36 Mustang", and
+  AF9E20 (a VQ-3 E-6B out of Travis, per the ADSBx db, tar1090-db, its adsb.lol
+  track and the airshow lineup) with no type at all.
+- Prod registry heal: reviewed fill-missing delta from that day's ADSBx
+  `basic-ac-db` (39,713 rows), guarded against changing any existing value,
+  backups kept; `rescore` moved 102 Unknown catches up for +1,040 points.
+- `AircraftTypes.json`: name overrides for TEX2 / P51 / F18S / F18H, military
+  category for F18H / F18S / TEX2, re-tiers (Hornets legendary, TEX2 epic, L39
+  rare), scoring version 6. Vintage T-6 set slot excludes TEX2.
+- Correction to the first-pass analysis: the "11 Unknown military catches"
+  were duplicate-catch telemetry rows, not Unknown catches. The real gap was
+  that two catches (U-2, E-6B) never uploaded, which led to the 422 finding
+  (split into its own task).
+
 ## 2026-10-05 → 10-07 — Share sheet: shapes + destinations (branch `claude/serene-feynman-x71op3`, PR #317)
 
 - The share pill on the catch detail screen opens a new `CatchShareSheet`

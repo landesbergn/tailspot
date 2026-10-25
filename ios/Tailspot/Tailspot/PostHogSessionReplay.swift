@@ -87,6 +87,10 @@ enum PostHogSessionReplay {
         //     views ImageRenderer can't draw were masking shared cards with
         //     a yellow placeholder — which loses no privacy: those pixels
         //     never appear on screen, so replay can't capture them.
+        //   - The USER'S OWN LOCATION is masked via `.locationReplayMask()`
+        //     (same helper, 2026-10-24 audit): the catch Map (every pin is
+        //     where the user stood; that screen replays as one black rect)
+        //     and CatchDetailView's raw-coordinate fallback line.
         //   - Text inputs are unmasked below (non-sensitive game data).
         config.sessionReplayConfig.screenshotMode = true
         // On iOS this flag masks ALL text (labels, not just editable fields), so

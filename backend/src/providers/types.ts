@@ -113,6 +113,15 @@ export interface NormalizedAircraft {
 export interface ProviderSnapshot {
   fetchedAt: number;
   aircraft: NormalizedAircraft[];
+  /**
+   * The adapter that produced this snapshot ("adsbfi", "adsblol"), stamped by
+   * the adapter itself and carried through the composite, the tile cache and
+   * the wire unchanged. Added 2026-10-20: during that morning's outage nothing
+   * recorded which feed had served a given response, so "are we on the
+   * fallback?" could only be inferred from the absence of warnings. Optional
+   * on the type for stubs; the tile cache fills it from the provider's name.
+   */
+  provider?: string;
 }
 
 /**
@@ -129,11 +138,22 @@ export interface PositionProvider {
 
 /** Thrown by adapters when the upstream is unreachable or returns a non-OK status. */
 export class UpstreamError extends Error {
+  /** HTTP status when the upstream answered with an error (429, 403, 5xx). */
+  readonly status?: number;
+  /**
+   * How long the upstream asked us to stay away (seconds), from Retry-After
+   * or the RateLimit reset header. The circuit breaker honours it.
+   */
+  readonly retryAfterSeconds?: number;
+
   constructor(
     message: string,
     readonly cause?: unknown,
+    details: { status?: number; retryAfterSeconds?: number } = {},
   ) {
     super(message);
     this.name = "UpstreamError";
+    this.status = details.status;
+    this.retryAfterSeconds = details.retryAfterSeconds;
   }
 }

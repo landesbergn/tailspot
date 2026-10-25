@@ -70,6 +70,9 @@ const DEFAULT_TTL_MS = 30 * 60_000;
 const DEFAULT_NEGATIVE_TTL_MS = 10 * 60_000;
 /** Max concurrent per-callsign route GETs (be polite to adsb.lol). */
 const ROUTE_CONCURRENCY = 8;
+/** Route-cache ceiling. Entries are a few hundred bytes; 20k ≈ a few MB, far
+ *  above the distinct callsigns live in one TTL window. */
+const DEFAULT_MAX_CACHE_ENTRIES = 20_000;
 
 /** Leg pick (`pickLeg`): the ground track must point within this many degrees
  *  of the chosen leg's destination for the pick to be credible. */
@@ -202,6 +205,8 @@ export interface AdsbLolRouteServiceOptions {
   ttlMs?: number;
   /** Negative-cache TTL (ms) for callsigns with no known route. */
   negativeTtlMs?: number;
+  /** Max cached callsigns before eviction (tests shrink it). */
+  maxCacheEntries?: number;
   /** Best-effort error sink; lookups never surface to the request path. */
   onError?: (err: unknown) => void;
 }
@@ -214,6 +219,7 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
   private readonly now: () => number;
   private readonly ttlMs: number;
   private readonly negativeTtlMs: number;
+  private readonly maxCacheEntries: number;
   private readonly onError: (err: unknown) => void;
   private readonly cache = new Map<string, CacheEntry>();
   /** Callsigns with a routeset POST in flight — deduped so overlapping polls
@@ -231,6 +237,7 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
     this.now = opts.now ?? Date.now;
     this.ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
     this.negativeTtlMs = opts.negativeTtlMs ?? DEFAULT_NEGATIVE_TTL_MS;
+    this.maxCacheEntries = opts.maxCacheEntries ?? DEFAULT_MAX_CACHE_ENTRIES;
     this.onError = opts.onError ?? (() => {});
   }
 
@@ -303,7 +310,7 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
           continue;
         }
         const parsed = parseRouteCandidates(row?.airport_codes, row?._airports);
-        this.cache.set(p.callsign, {
+        this.store(p.callsign, {
           parsed,
           // A `none` uses the shorter negative TTL (data may sync in); a real
           // route (fixed or round trip) is static for the flight's life.
@@ -378,6 +385,31 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
     return after !== undefined ? resolveDirection(after, plane) : null;
   }
 
+  /** Insert into the cache, keeping it bounded. Expired entries were only ever
+   *  dropped when the SAME callsign was looked up again, so every distinct
+   *  callsign seen since boot stayed resident. At the cap: sweep expired
+   *  entries, then evict least-recently-used (Map iteration order — hits
+   *  re-insert, see `lookupCache`) down to a 90% low-water mark, so the O(n)
+   *  pass runs once per ~10% of inserts rather than on every insert. */
+  private store(callsign: string, entry: CacheEntry): void {
+    this.cache.delete(callsign); // re-insert at the young end
+    if (this.cache.size >= this.maxCacheEntries) {
+      const now = this.now();
+      for (const [k, e] of this.cache) if (e.expiresAt <= now) this.cache.delete(k);
+      const lowWater = Math.floor(this.maxCacheEntries * 0.9);
+      for (const k of this.cache.keys()) {
+        if (this.cache.size <= lowWater) break;
+        this.cache.delete(k);
+      }
+    }
+    this.cache.set(callsign, entry);
+  }
+
+  /** Current entry count — visible for tests. */
+  get cacheSize(): number {
+    return this.cache.size;
+  }
+
   /** Fresh cache value: the parsed candidates (`fixed`/`roundTrip`/`none`), or
    *  `undefined` when absent/expired → needs a lookup. */
   private lookupCache(callsign: string): ParsedRoute | undefined {
@@ -387,6 +419,10 @@ export class AdsbLolRouteService implements RouteEnricher, RouteResolver {
       this.cache.delete(callsign);
       return undefined;
     }
+    // Refresh recency (Map order = LRU order for `store`'s eviction), so a
+    // live flight polled every few seconds isn't evicted before one-offs.
+    this.cache.delete(callsign);
+    this.cache.set(callsign, e);
     return e.parsed;
   }
 }

@@ -6,12 +6,13 @@ scaffold, not this pipeline).
 
 ```
 marketing/
+├─ releases/<version>/      what each App Store version uploaded — START HERE to upload
 ├─ catch-photos/            real catch photos, committed — see its README
+├─ app-store-creative/      header / search results builder (compose.py)
 └─ app-store-screenshots/   the Next.js deck editor
    ├─ app-store-screenshots.json      the deck: copy, layout, which file per slide
    ├─ public/screenshots/apple/iphone/en/   the seven source screenshots
-   ├─ export/                          current store-ready PNGs (gitignored)
-   └─ export-archive/<version>/        what actually shipped for that version
+   └─ export/                          current store-ready PNGs (gitignored)
 ```
 
 ## The seven slides
@@ -22,8 +23,8 @@ was `07.png` and `02.png` was unused. Don't go back to numbers.
 
 | Slide | File | Source | Content |
 |---|---|---|---|
-| 1 | `slide1-ar-catch.png` | **Noah's field capture** | Real sky, real plane, HUD locked on |
-| 2 | `slide2-collection-card.png` | `mkt_07_collection` | BD-700, RARE, first of type, +75 |
+| 1 | `slide1-ar-catch.png` | `mkt_01_fleet_week` | C-27J (C2703) over the Golden Gate, Fleet Week 2026: real catch photo + HUD label and capture button |
+| 2 | `slide2-collection-card.png` | `mkt_07_fleet_week_e6` | E-6 Mercury, LEGENDARY, +500 (Fleet Week 2026) |
 | 3 | `slide3-guess-round.png` | `mkt_03_guess_round` | A321neo up from Guayaquil |
 | 4 | `slide4-hangar-sets.png` | `mkt_04_hangar_sets` | Sets grid |
 | 5 | `slide5-trophies.png` | `mkt_05_trophies` | Trophy case |
@@ -36,12 +37,12 @@ edge (slide 6's two phones reach into slides 5 and 7). A slide with
 canvas inside its own clip, so nothing bleeds onto it or off it. Slide 7
 uses it; flipping it on for another slide changes only that slide's export.
 
-`mkt_02_reveal` also renders but **no slide uses it** — it's a spare if the
+`mkt_02_reveal` and `mkt_07_collection` (the old BD-700 slide 2) also render but **no slide uses them** — it's a spare if the
 deck ever wants the reveal screen. Likewise `mkt_08b_challenge_live_expanded`
 (my catch log open) and `mkt_09_challenges_hub` render as Challenges spares. `bin/marketing-collect` owns the
 shot → filename mapping so nobody has to remember the crossover.
 
-## Regenerating slides 2–7
+## Regenerating slides 1–7
 
 ```bash
 bin/marketing-stage-photos          # real catch photos → /private/tmp
@@ -95,6 +96,18 @@ Two capture paths exist, for a reason:
 
 ## Slide 1 is different
 
+**Since 2026-10-12 (Fleet Week refresh):** slide 1 is the app's own composed
+catch photo of the C-27J over the Golden Gate (`catch-photos/fw_c27j_golden_gate.jpg`,
+brackets baked in by `CatchPhotoComposer` at capture), filling the screen,
+with the HUD's pinned label and capture button drawn on top by
+`renderFleetWeekHUD` using the same styling as `PlaneLabel` / `captureButton`.
+The sky, plane and brackets are untouched. Only the pinned label and the
+capture button are added; the live HUD also shows the Hangar and profile
+buttons, which this render leaves out. Faces: the crowd is mostly backs of
+heads, but a few strangers are recognisable at full size.
+
+The previous slide 1, described below, was a real HUD screenshot.
+
 It is a **real photograph**, not a render — the simulator has no camera. The
 stylized stand-in that used to fill this slot was deleted once a real capture
 existed, deliberately: a synthetic sky must not creep back into a listing
@@ -128,9 +141,20 @@ Sizes live in `src/lib/constants.ts` (`EXPORT_SIZES`).
 ## Before a submission
 
 1. Re-capture if any UI on slides 2–7 changed since the last export.
-2. Export the bundle; upload from `export/ios/iphone/1284x2778/en/`.
-3. Once the version ships, copy the set to `export-archive/<version>/` so
-   there's a record of what each listing actually showed.
+2. Export the bundle (and run `app-store-creative/compose.py` if the
+   creative assets changed).
+3. `bin/marketing-release vX.Y.Z` packages it into `marketing/releases/vX.Y.Z/`
+   (committed): `screenshots/` in upload order plus `creative/`. Upload from
+   there, then flip the status in that folder's README and the index.
+   `marketing/releases/README.md` is the history of every listing.
+   (The old gitignored `export-archive/` sets were migrated there on 2026-10-12.)
+
+## Header and Search Results (creative assets)
+
+`app-store-creative/` builds the iOS 27 product-page **header** (21:9,
+3840×1646), **search results** (3:2, 3840×2560) and **universal** (16:9,
+5244×2950) images from the same real renders: `renderFleetWeekCardParts`
+(transparent card PNGs) plus the slide 1 HUD screen. See its README.
 
 Listing copy, privacy, and the ASC click-through checklist live in
 `docs/ga/appstore-listing.md`. Current status is PLAN §9 item 8.

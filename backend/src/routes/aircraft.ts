@@ -4,7 +4,13 @@ import type { RateLimiter } from "../identity/rateLimiter.js";
 import type { RouteEnricher } from "../providers/adsblolRoutes.js";
 import { validateBbox } from "../providers/geo.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../providers/types.js";
-import { NoFreshDataError, TileCache, type TileCacheConfig } from "./tileCache.js";
+import {
+  NoFreshDataError,
+  TileCache,
+  type TileCacheConfig,
+  type TileCacheThrottle,
+  type UpstreamFetchEvent,
+} from "./tileCache.js";
 
 /**
  * GET /v1/aircraft?lamin=&lomin=&lamax=&lomax=
@@ -13,7 +19,10 @@ import { NoFreshDataError, TileCache, type TileCacheConfig } from "./tileCache.j
  * tile cache (fresh hit / single-flight / last-good fallback). The wire
  * contract (frozen — the iOS client is built against it):
  *
- *   200 { fetchedAt, aircraft: [...] }   // fetchedAt = upstream snapshot time
+ *   200 { fetchedAt, aircraft: [...], provider }   // fetchedAt = upstream snapshot time
+ *                                        // provider = "adsbfi" | "adsblol" — the
+ *                                        // feed that produced it; additive 2026-10-20,
+ *                                        // old clients ignore the key
  *   400 { error }                        // missing/invalid/oversized/inverted bbox
  *   429 { error: "rate limited" }        // per-IP flood control (+ Retry-After)
  *   503 { error: "upstream unavailable" } // upstream down AND no fresh cache
@@ -32,6 +41,13 @@ export interface AircraftRouteOptions {
    */
   onFreshSnapshot?: (snapshot: ProviderSnapshot) => void;
   /**
+   * Fired once per genuine upstream fetch with the feed that answered, the
+   * tile, the aircraft count and the upstream latency. Production logs it, so
+   * the Fly log says which feed served when — the question nobody could answer
+   * during the 2026-10-20 outage. Omitted → silent.
+   */
+  onUpstreamFetch?: (event: UpstreamFetchEvent) => void;
+  /**
    * Opportunistic origin → destination enricher. When supplied, every served
    * snapshot is passed through it so each aircraft with a *cached* route gets a
    * `route` field on `/v1/aircraft` (additive — old clients ignore it). It never
@@ -47,6 +63,8 @@ export interface AircraftRouteOptions {
    * always supplies one.
    */
   ipLimiter?: RateLimiter;
+  /** Upstream request cap (see providers/upstreamBudget.ts). Omitted → none. */
+  throttle?: TileCacheThrottle;
 }
 
 /** Parse a query value to a finite number, or undefined if absent/non-numeric. */
@@ -59,8 +77,21 @@ function parseCoord(v: unknown): number | undefined {
   return undefined;
 }
 
-export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteOptions): void {
-  const cache = new TileCache(opts.provider, opts.cacheConfig, opts.now, opts.onFreshSnapshot);
+/**
+ * Registers GET /v1/aircraft and returns the tile cache it serves from, so the
+ * readiness canary (GET /readyz, see routes/feedProbe.ts) can ask the SAME
+ * cache the phones use — one shared fetch per tile per TTL, never a second
+ * upstream code path that could be healthy while the real one is not.
+ */
+export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteOptions): TileCache {
+  const cache = new TileCache(
+    opts.provider,
+    opts.cacheConfig,
+    opts.now,
+    opts.onFreshSnapshot,
+    opts.onUpstreamFetch,
+    opts.throttle,
+  );
 
   app.get("/v1/aircraft", async (request, reply) => {
     // Meter before parsing: a flood shouldn't get any work out of us at all.
@@ -91,9 +122,13 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
       opts.routeEnricher?.enrich(snapshot.aircraft);
       // fetchedAt is the upstream snapshot time (possibly stale on fallback) —
       // never the serve time. Clients reason about freshness from it.
+      // `provider` names the feed that produced the snapshot (stale serves
+      // keep the ORIGINAL producer's name — it is the data's origin, not the
+      // current primary). Omitted only for a provider that never stamped.
       return reply.code(200).send({
         fetchedAt: snapshot.fetchedAt,
         aircraft: snapshot.aircraft,
+        ...(snapshot.provider !== undefined ? { provider: snapshot.provider } : {}),
       });
     } catch (err) {
       if (err instanceof NoFreshDataError) {
@@ -105,4 +140,6 @@ export function registerAircraftRoute(app: FastifyInstance, opts: AircraftRouteO
       return reply.code(503).send({ error: "upstream unavailable" });
     }
   });
+
+  return cache;
 }

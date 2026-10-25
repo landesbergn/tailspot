@@ -125,7 +125,11 @@ the source + each one's focused test file — they're not restated here.
   first; `ADSBManager` uses `@MainActor` instead. A model file using
   `@Published`/`ObservableObject` without `import SwiftUI` must `import Combine`.
   Camera `AVCaptureSession` config + `startRunning` run on a dedicated serial
-  queue, never main.
+  queue, never main. **`MotionManager` does NOT publish** (2026-10 perf audit):
+  a 30 Hz `@Published` re-ran ContentView's whole body on top of the AR
+  TimelineView's own ticks. Anything that must track motion live goes inside a
+  `TimelineView` (the AR overlay, the debug Cam-el line); one-shot reads (the
+  shutter-press snapshot, 1 Hz ticks) just read it. Don't re-add `@Published`.
 - **Design system (2026-07-10 polish decisions).** The app is **locked to dark**
   (`preferredColorScheme(.dark)` at the root — keep the per-view light-mode
   compensations as belt-and-suspenders, but light mode is dead). Corner radii snap
@@ -137,7 +141,8 @@ the source + each one's focused test file — they're not restated here.
   `.system(size: 24…30)` heads. **Dynamic Type:** Brand system tokens ride the
   built-in text styles and `Brand.Font.mono(…, relativeTo:)` anchors mono in
   scrollable surfaces; AR HUD readouts + card artboards stay fixed BY CHOICE —
-  don't "fix" them, and don't add a bare `.system(size:)` to a prose surface. Chrome rule: custom chrome for game surfaces (Hangar/cards/reveals),
+  don't "fix" them (the HUD status pill, `HUDStatusPill`, is the exception: it
+  scales and wraps centred with a 16 pt gutter), and don't add a bare `.system(size:)` to a prose surface. Chrome rule: custom chrome for game surfaces (Hangar/cards/reveals),
   stock-but-branded system nav for utility screens (Settings/Map/Leaderboard).
 - **Logging through `Log.swift`, never `print(...)`.** `os.Logger` instances by
   category (`adsb`, `location`, `motion`, `ui`, `analytics`, `metrics`); subsystem
