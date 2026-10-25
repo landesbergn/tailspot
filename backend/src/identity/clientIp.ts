@@ -57,7 +57,34 @@ export function clientIp(request: FastifyRequest): string {
   return request.ip;
 }
 
-/** Prefixed key for a per-IP bucket, so IP and device keys can't ever collide. */
+/**
+ * Prefixed key for a per-IP bucket, so IP and device keys can't ever collide.
+ *
+ * IPv6 addresses are keyed by their /64 prefix, not the full address: an
+ * ordinary home or cloud allocation is a whole /64, so keying on /128 handed
+ * one client ~2^64 fresh buckets (unlimited device registration, invite-code
+ * guessing, and churn that evicts everyone else's buckets).
+ */
 export function ipKey(request: FastifyRequest): string {
-  return `ip:${clientIp(request)}`;
+  return `ip:${rateLimitPrefix(clientIp(request))}`;
+}
+
+/**
+ * IPv4 (and IPv4-mapped IPv6) pass through unchanged; IPv6 collapses to its
+ * first four hextets. Anything unparseable is returned as-is.
+ */
+export function rateLimitPrefix(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const addr = ip.split("%")[0].toLowerCase(); // drop any zone id
+  if (/^::ffff:\d+\.\d+\.\d+\.\d+$/.test(addr)) return addr.slice(7);
+  const halves = addr.split("::");
+  if (halves.length > 2) return ip;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return ip;
+  const groups = [...head, ...Array<string>(Math.max(missing, 0)).fill("0"), ...tail];
+  if (!groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return ip;
+  const prefix = groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, ""));
+  return `${prefix.join(":")}::/64`;
 }

@@ -17,6 +17,15 @@ import SwiftData
 /// `backfill`, which yields to the UI between probes.
 @MainActor
 enum TrophyAchievementDates {
+    #if DEBUG
+    /// Prefix passes run by either entry point, process-wide (counted in
+    /// `Search.evaluate`, the one funnel). Test-only instrumentation, like
+    /// `TrophyUnlockCenter.fullInputsPasses`: LargeHangarBudgetTests pins the
+    /// upgrade launch to one, so a launch that starts running the full search
+    /// fails a test, not a big Hangar.
+    static var prefixEvaluations = 0
+    #endif
+
     /// Synchronous search. With the default budget it dates everything; pass
     /// `maxEvaluations` to bound the work (each evaluation is one prefix pass).
     /// Returns `true` when nothing is left to date.
@@ -111,6 +120,9 @@ enum TrophyAchievementDates {
         }
 
         mutating func evaluate(_ count: Int) {
+            #if DEBUG
+            TrophyAchievementDates.prefixEvaluations += 1
+            #endif
             prefixes[count] = Search.catchOnly(Trophies.inputs(from: Array(sorted.prefix(count))))
         }
 

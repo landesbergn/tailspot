@@ -10,6 +10,7 @@ import { PrivatePointsScorer } from "./challenges/scorer.js";
 import { type ChallengeStore, DrizzleChallengeStore } from "./challenges/store.js";
 import { registerCompression } from "./compression.js";
 import { getDb } from "./db/client.js";
+import { installErrorHandler } from "./errorHandler.js";
 import { RateLimiter } from "./identity/rateLimiter.js";
 import {
   type CatchStore,
@@ -28,7 +29,12 @@ import {
 } from "./providers/adsblolRoutes.js";
 import { CircuitOpenError } from "./providers/circuitBreaker.js";
 import { SustainedFallbackAlerter } from "./providers/fallbackAlert.js";
-import { type Bbox, type PositionProvider, selectProvider } from "./providers/index.js";
+import {
+  type Bbox,
+  type PositionProvider,
+  chainIncludesAdsbLol,
+  selectProvider,
+} from "./providers/index.js";
 import { UpstreamBudget } from "./providers/upstreamBudget.js";
 import { type ApnsTransport, Http2ApnsTransport, createApnsTransport } from "./push/apns.js";
 import { registerAircraftRoute } from "./routes/aircraft.js";
@@ -220,6 +226,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // via URLSession). The aircraft list is the main beneficiary.
   registerCompression(app);
 
+  // 5xx bodies never carry err.message (drizzle puts SQL + params in it).
+  installErrorHandler(app);
+
   // Alert when 5xx answers pile up, whatever produced them: most of ours are
   // deliberate 503 replies that Sentry's error handler never sees. /readyz and
   // /healthz are excluded: the uptime monitor already pages on those.
@@ -402,6 +411,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // 30/min per DEVICE on the Hangar restore read (one probe + 500-row pages per
   // launch in the honest client).
   const catchesListLimiter = new RateLimiter({ capacity: 30, windowMs: 60_000 }, rlNow);
+  // 300/min per IP on the (unauthenticated) leaderboard. The honest client
+  // reads it on Profile/Leaderboard opens — a handful per minute at most —
+  // and shipped clients show a 429 as an error, so the ceiling is sized for
+  // many phones behind one CGNAT / venue Wi-Fi IP; it only stops a loop from
+  // turning full-table aggregations into DB load.
+  const leaderboardLimiter = new RateLimiter({ capacity: 300, windowMs: 60_000 }, rlNow);
   // 120/min per IP across ALL bearer routes, taken BEFORE the token lookup so
   // unauthenticated probing is metered — previously a bad token cost the
   // attacker one request and cost us a database round-trip, unbounded. Shared
@@ -465,14 +480,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // position response (see AdsbLolRouteService). Enabled whenever adsb.lol is
   // anywhere in the provider chain — the composite's name is the members
   // joined by "+", and since 2026-10-20 adsb.lol is the FALLBACK half of the
-  // default "adsbfi+adsblol" — and outside tests (so the route suite never
+  // default "adsbfi+adsblol" ("adsbfi+adsblolreapi" with the re-api key, so
+  // the match is on the "adsblol" prefix) — and outside tests (so the route suite never
   // hits the network); an injected override (tests) always wins. Route
   // lookups stay adsb.lol-direct whichever feed serves positions: routes are
   // cached per callsign, non-blocking metadata, and adsb.lol is the only
-  // aggregator with a route DB. They do draw on adsb.lol's 500/day quota.
+  // aggregator with a route DB. They read vrs-standing-data.adsb.lol first and
+  // reach api.adsb.lol (and its 500/day quota) only on a transport error.
   const routeEnricher =
     options.routeEnricher ??
-    (process.env.NODE_ENV !== "test" && provider.name.split("+").includes("adsblol")
+    (process.env.NODE_ENV !== "test" && chainIncludesAdsbLol(provider.name)
       ? new AdsbLolRouteService({
           onError: (err) => app.log.warn({ err }, "route lookup failed"),
         })
@@ -756,6 +773,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     identityStore: identity,
     catchStore: catchesStore,
     now: nowSeconds ? () => new Date(nowSeconds() * 1000) : undefined,
+    ipLimiter: leaderboardLimiter,
   });
 
   // ── Challenges v1 (spec docs/reviews/2026-09-15-challenges-v1-spec.html) ───

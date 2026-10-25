@@ -58,6 +58,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { isBeforeFloor, storedCaughtAt } from "../catches/caughtAtBounds.js";
 import {
   GUESS_RECREDIT_CLOSES,
   GUESS_RECREDIT_CUTOVER,
@@ -141,6 +142,9 @@ export interface CatchesRouteOptions {
 
 const ICAO24_RE = /^[0-9a-f]{6}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_CALLSIGN_LENGTH = 16;
+/** Mirrors CALLSIGN_PATTERN in routes.ts (GET /v1/routes). */
+const ROUTE_CALLSIGN_RE = /^[A-Za-z0-9]{2,10}$/;
 
 /** A finite number, optionally bounded to ±range. */
 function num(v: unknown, range?: number): number | null {
@@ -415,11 +419,21 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     if (callsignRaw !== undefined && callsignRaw !== null && typeof callsignRaw !== "string") {
       return reject("callsign must be a string or null");
     }
-    const callsign = typeof callsignRaw === "string" ? callsignRaw.trim() || null : null;
+    // Truncated, not rejected: real callsigns are ≤ 8 chars, and this was
+    // unbounded (up to the 64 KB body) straight into a text column.
+    const callsign =
+      typeof callsignRaw === "string"
+        ? callsignRaw.trim().slice(0, MAX_CALLSIGN_LENGTH) || null
+        : null;
 
     const caughtAt = num(body.caughtAt);
     if (caughtAt === null) {
       return reject("caughtAt must be a unix-seconds number");
+    }
+    // Pre-launch is impossible → 422. Far-future is a fast phone clock →
+    // stored/scored at server time below (see caughtAtBounds.ts).
+    if (isBeforeFloor(caughtAt)) {
+      return reject("caughtAt out of range");
     }
 
     const observerRaw = body.observer;
@@ -521,7 +535,9 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     if (guess?.kind === "type") {
       guessCorrect = resolvedTypecode !== null && guess.value === resolvedTypecode.toUpperCase();
     } else if (guess?.kind === "route") {
-      if (routeResolver && callsign !== null) {
+      // Same shape gate as GET /v1/routes: the resolver caches every callsign
+      // it sees (negative results included), so junk must never reach it.
+      if (routeResolver && callsign !== null && ROUTE_CALLSIGN_RE.test(callsign)) {
         try {
           const route = await routeResolver.resolve(callsign.toUpperCase());
           // Either-endpoint match; the endpoints are optional on the wire type
@@ -544,7 +560,7 @@ export function registerCatchesRoute(app: FastifyInstance, opts: CatchesRouteOpt
     // The catch's own moment picks the guess-bonus era (the 2026-08-13 route
     // re-balance is going-forward only) — never the scoring moment, so a
     // delayed offline upload of an old catch still earns its era's fraction.
-    const caughtAtDate = new Date(caughtAt * 1000);
+    const caughtAtDate = new Date(storedCaughtAt(caughtAt, nowSeconds()) * 1000);
     const { typecode, rarity, points, scoringVersion } = await catchStore.scoreCatch(icao24, {
       firstOfType,
       guess: guess ? { kind: guess.kind, correct: guessCorrect } : undefined,

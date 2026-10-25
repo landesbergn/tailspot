@@ -23,6 +23,7 @@
  */
 
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from "drizzle-orm";
+import { clampToFloor } from "../catches/caughtAtBounds.js";
 import {
   CURRENT_SCORING_VERSION,
   type GuessKind,
@@ -31,6 +32,7 @@ import {
   pointsForRarity,
 } from "../catches/points.js";
 import type { Database } from "../db/client.js";
+import { isUniqueViolation } from "../db/errors.js";
 import { withDbRetry } from "../db/retry.js";
 import {
   alltimeToppers,
@@ -178,8 +180,15 @@ export class DrizzleIdentityStore implements IdentityStore {
       return { ok: false, reason: "taken" };
     }
     // The UPDATE is deliberately NOT retried here — a dropped connection would
-    // reopen the taken-check race; the route's own error path is the safety net.
-    await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
+    // reopen the taken-check race. Two devices racing for the same handle both
+    // pass the read above; the lower(handle) unique index rejects the loser,
+    // which is the same answer as the check — "taken", not a 500.
+    try {
+      await this.db.update(devices).set({ handle }).where(eq(devices.id, deviceId));
+    } catch (err) {
+      if (isUniqueViolation(err)) return { ok: false, reason: "taken" };
+      throw err;
+    }
     return { ok: true, handle };
   }
 
@@ -956,17 +965,15 @@ export class DrizzleCatchStore implements CatchStore {
       this.db
         .select({
           points: sql<number>`coalesce(sum(${catches.points}), 0)`,
-          createdAt: devices.createdAt,
         })
         .from(devices)
         .leftJoin(catches, joinOn)
         .where(eq(devices.id, deviceId))
-        .groupBy(devices.id, devices.createdAt)
+        .groupBy(devices.id)
         .limit(1),
     );
     if (mine.length === 0) return null; // unknown device
     const myPoints = Number(mine[0].points);
-    const myCreatedAt = mine[0].createdAt;
 
     // Zero in-window points → UNRANKED (rank 0), not "last among everyone".
     // The createdAt tiebreak below would otherwise rank a brand-new device
@@ -994,28 +1001,36 @@ export class DrizzleCatchStore implements CatchStore {
     // it shifts the rank of every user — a wider blast radius than the kill
     // switch needs. Revisit if a disabled device is ever ranked high enough for
     // the off-by-one to be visible to real players.
-    const ranked = await withDbRetry(() =>
+    //
+    // Counted in SQL (one scalar back) rather than shipping every device row
+    // ever registered to Node and looping — that grew with installs, not
+    // players. INNER join: myPoints > 0 here, so a device with no (in-window)
+    // catches can never outrank me — skipping the drive-by-install rows
+    // changes no count. `me.created_at` is compared at full timestamp
+    // precision via the subquery.
+    const agg = this.db
+      .select({
+        deviceId: devices.id,
+        createdAt: devices.createdAt,
+        points: sql<number>`sum(${catches.points})`.as("p"),
+      })
+      .from(devices)
+      .innerJoin(catches, joinOn)
+      .groupBy(devices.id, devices.createdAt)
+      .as("agg");
+    const myCreated = sql`(select ${devices.createdAt} from ${devices} where ${devices.id} = ${deviceId})`;
+    const counted = await withDbRetry(() =>
       this.db
-        .select({
-          deviceId: devices.id,
-          points: sql<number>`coalesce(sum(${catches.points}), 0)`.as("p"),
-          createdAt: devices.createdAt,
-        })
-        .from(devices)
-        .leftJoin(catches, joinOn)
-        .groupBy(devices.id, devices.createdAt),
+        .select({ ahead: sql<number>`count(*)` })
+        .from(agg)
+        .where(
+          sql`${agg.deviceId} <> ${deviceId}
+            and (${agg.points} > ${myPoints}
+              or (${agg.points} = ${myPoints} and ${agg.createdAt} < ${myCreated})
+              or (${agg.points} = ${myPoints} and ${agg.createdAt} = ${myCreated} and ${agg.deviceId} < ${deviceId}))`,
+        ),
     );
-
-    let ahead = 0;
-    for (const r of ranked) {
-      if (r.deviceId === deviceId) continue;
-      const p = Number(r.points);
-      const outranks =
-        p > myPoints ||
-        (p === myPoints && r.createdAt < myCreatedAt) ||
-        (p === myPoints && +r.createdAt === +myCreatedAt && r.deviceId < deviceId);
-      if (outranks) ahead += 1;
-    }
+    const ahead = Number(counted[0]?.ahead ?? 0);
     return { rank: ahead + 1, points: myPoints };
   }
 
@@ -1054,7 +1069,7 @@ export class DrizzleCatchStore implements CatchStore {
 
     let decidedCount = 0;
     for (
-      let ws = weekStartUtc(new Date(earliest));
+      let ws = weekStartUtc(clampToFloor(new Date(earliest)));
       ws.getTime() <= lastClosed.getTime();
       ws = addDaysUtc(ws, 7)
     ) {
@@ -1173,7 +1188,7 @@ export class DrizzleCatchStore implements CatchStore {
 
     let decidedCount = 0;
     for (
-      let ms = monthStartUtc(new Date(earliest));
+      let ms = monthStartUtc(clampToFloor(new Date(earliest)));
       ms.getTime() <= lastClosed.getTime();
       ms = nextMonthStartUtc(ms)
     ) {

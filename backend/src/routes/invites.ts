@@ -5,8 +5,10 @@
  *   POST /v1/invites/:code/join       (bearer + handle) → 200 detail | 409 full | 410 closed | 422 no handle
  *   GET  /v1/invites/:code/preview    (no auth, Origin allowlist) → { name, creatorHandle, startsAt, endsAt, participantCount, status }
  *
- * The code lookup is metered PER IP BEFORE the token lookup — codes are
- * unguessable (~40 bits) and this limiter is what keeps them that way.
+ * The code lookup is metered PER IP BEFORE the token lookup — new codes are
+ * ~30 bits (31^6; legacy 8-char ~40) and this limiter is what keeps them
+ * unguessable. IPv6 clients are bucketed per /64 (see clientIp.ts), or one
+ * ordinary allocation would be ~2^64 fresh buckets.
  * Unknown codes are 404 on every route, so nothing can be enumerated.
  *
  * Anti-spam (spec §9.1): opening a link records nothing and notifies nobody.

@@ -10,6 +10,7 @@
 // so the Fly logs always say which mode we're in.
 import * as Sentry from "@sentry/node";
 import type { ErrorEvent } from "@sentry/node";
+import { stripSqlParams } from "./monitoring/sqlParams.js";
 
 const dsn = process.env.SENTRY_DSN;
 
@@ -50,6 +51,14 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   if (isRecord(data) && "observer" in data) {
     data.observer = "[redacted: observer coordinates]";
   }
+  // 3. Bound SQL parameters in exception text. drizzle's DrizzleQueryError
+  //    message is "Failed query: <sql>\nparams: <values>", and for a catch
+  //    insert those values include observer_lat / observer_lon. The query text
+  //    is useful when reading the error; the values are not worth the leak.
+  for (const ex of event.exception?.values ?? []) {
+    if (typeof ex.value === "string") ex.value = stripSqlParams(ex.value);
+  }
+  if (typeof event.message === "string") event.message = stripSqlParams(event.message);
   return event;
 }
 

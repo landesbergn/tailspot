@@ -5,6 +5,26 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
+
+- Four parallel reviews (backend auth, backend catches/challenges, web + CI,
+  iOS), each finding re-verified against the code before fixing. No authn
+  bypass, IDOR, SSRF or injection.
+- Backend: generic 5xx bodies, Sentry param scrub, `caughtAt` range,
+  callsign bounds, IPv6 /64 keys,
+  handle race → 409, dependency bumps. Web: headers on every response, HSTS,
+  pinned flyctl action. iOS: replay masks for the map and coordinates,
+  https-only external links, path-safe ids. Open items in PLAN §9.
+
+## 2026-10-24 — Upgrade-launch budget test (branch `test/big-hangar-launch-budget`)
+
+- `LargeHangarBudgetTests` now covers the first launch after a trophy
+  roster bump (1.2.2 → 1.2.3 went 3 → 4) on a 10,000-catch Hangar with an
+  undated ledger: four trophies granted, one inputs pass and at most one
+  date pass, under a wall-clock ceiling. A DEBUG-only counter (`TrophyAchievementDates.prefixEvaluations`)
+  makes the date-pass check exact; the clock alone let a 20-pass launch
+  through. About 2 s of CI.
+
 ## 2026-10-23 — "Make the app much better", batch 1 + wave 2 (PRs #355–#363, #366–#370)
 
 - Batch 1 (integrity, measurement, polish): route-guess bonuses reach the

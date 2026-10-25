@@ -70,6 +70,14 @@ export async function upsertRegistryFillMissing(
         typecode: sql`coalesce(${registry.typecode}, ${excluded("typecode")})`,
         updatedAt: sql`now()`,
       },
+      // Only update a row that actually has a gap to fill. Without this guard
+      // every sighting of an already-complete airframe rewrote its row (the
+      // `updated_at` bump alone makes a new tuple version), so each feed fetch
+      // churned hundreds of dead tuples + their full-row WAL for no data
+      // change. (A skipped conflict still takes a brief row lock — far cheaper
+      // than a new version, but not literally free.)
+      setWhere: sql`(${registry.registration} is null and ${excluded("registration")} is not null)
+        or (${registry.typecode} is null and ${excluded("typecode")} is not null)`,
     });
   return rows.length;
 }

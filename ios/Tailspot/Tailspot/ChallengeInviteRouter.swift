@@ -101,7 +101,8 @@ struct ChallengeInviteRouter: View {
     /// The server can hand down its own listing URL (config `appStoreURL`);
     /// otherwise the app's own campaign-attributed listing link.
     private var appStoreURL: URL {
-        if let raw = model?.config?.appStoreURL, let url = URL(string: raw) {
+        // https only: this URL is server-supplied and opened on tap.
+        if let raw = model?.config?.appStoreURL, let url = URL(string: raw), url.scheme?.lowercased() == "https" {
             return url
         }
         return AppStoreListing.url(campaign: "Challenge Invite")

@@ -265,11 +265,19 @@ struct ProfileScreen: View {
     /// Returns nil when the user has no catches yet; falls back to
     /// the omitted state.
     private var joinedDateLabel: String? {
-        guard let oldest = catches.map(\.caughtAt).min() else { return nil }
+        // `catches` is sorted newest-first, so the oldest is the last row —
+        // no whole-Hangar map + min on every body eval.
+        guard let oldest = catches.last?.caughtAt else { return nil }
+        return "joined " + Self.joinedFormatter.string(from: oldest)
+    }
+
+    /// Built once: a DateFormatter is expensive to create, and this used to
+    /// make a fresh one per body eval.
+    private static let joinedFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "MMMM yyyy"
-        return "joined " + fmt.string(from: oldest)
-    }
+        return fmt
+    }()
 
     private func identityHeader(stats: ProfileStats) -> some View {
         // Cached server standing (instant, no flash); local Hangar total / "—"

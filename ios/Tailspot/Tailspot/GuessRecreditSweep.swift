@@ -321,7 +321,10 @@ struct GuessRecreditSweep {
 
     /// The POST; transport errors read as "try again later".
     func send(_ candidate: GuessRecreditCandidate, token: String) async -> GuessRecreditOutcome {
-        guard let url = URL(string: "v1/catches/\(candidate.serverUuid)/guess", relativeTo: baseURL)?
+        // A server-assigned id; "..", "/" etc. must never be spliced into an
+        // authorized path (see PathSegment.swift).
+        guard PathSegment.isSafeID(candidate.serverUuid),
+              let url = URL(string: "v1/catches/\(candidate.serverUuid)/guess", relativeTo: baseURL)?
             .absoluteURL else { return .rejected }
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.httpMethod = "POST"

@@ -3803,7 +3803,11 @@ struct ContentView: View {
                 Text(formatLocation())
                 Text(formatHeading())
                     .foregroundStyle(isHeadingAccuracyBad ? Brand.Color.alertCaution : Brand.Color.textPrimary)
-                Text(formatCameraElevation())
+                // Own 10 Hz tick: MotionManager no longer publishes, so this
+                // debug line would otherwise freeze while the heading holds.
+                TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+                    Text(formatCameraElevation())
+                }
                 if !cameraAuthorized {
                     Text("camera: not authorized")
                 }
