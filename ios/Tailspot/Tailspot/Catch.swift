@@ -408,7 +408,21 @@ final class Catch {
 /// inside the app sandbox.
 nonisolated enum CatchPhotoStore {
     /// The directory all catch photos live in. Created lazily.
+    ///
+    /// Resolved once per launch: this used to run (a Documents lookup plus
+    /// a create-directory call) on every `url(forFilename:)`, which the
+    /// Hangar's Recent list called on the main thread for every row render.
+    /// If the first attempt fails it isn't cached, so a later call retries.
     static func directory() throws -> URL {
+        if let resolvedDirectory { return resolvedDirectory }
+        return try makeDirectory()
+    }
+
+    /// A `static let` is initialized lazily, once, and thread-safely, so it
+    /// needs no lock even though this enum is `nonisolated`.
+    private static let resolvedDirectory: URL? = try? makeDirectory()
+
+    private static func makeDirectory() throws -> URL {
         let docs = try FileManager.default.url(
             for: .documentDirectory,
             in: .userDomainMask,
@@ -428,6 +442,12 @@ nonisolated enum CatchPhotoStore {
     static func save(_ data: Data, icao24: String, at timestamp: Date) -> String? {
         do {
             let dir = try directory()
+            // Re-create on every save, not just once per launch: the cached
+            // URL doesn't prove the folder still exists, and a missing folder
+            // would make every later catch this session photo-less, which
+            // can't be recovered in a local-only Hangar. Saves are rare, so
+            // the extra call costs nothing that matters.
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let filename = "\(icao24.lowercased())_\(Int(timestamp.timeIntervalSince1970)).jpg"
             let url = dir.appendingPathComponent(filename)
             try data.write(to: url, options: .atomic)
@@ -446,10 +466,21 @@ nonisolated enum CatchPhotoStore {
         return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
     }
 
-    /// Delete the photo file for a Catch being removed. Safe to call
-    /// with a nil filename (no-op) or a missing file (no-op).
+    /// Where `filename` would live, WITHOUT checking that it exists. For
+    /// callers that read the file off the main thread and already handle a
+    /// missing one (the list thumbnail: `PhotoThumbnailLoader` returns nil),
+    /// so a scrolling row doesn't pay a filesystem check per render.
+    static func fileURL(forFilename filename: String) -> URL? {
+        (try? directory())?.appendingPathComponent(filename)
+    }
+
+    /// Delete the photo file for a Catch being removed, and its cached list
+    /// thumbnail. Safe to call with a nil filename (no-op) or a missing
+    /// file (no-op).
     static func delete(filename: String?) {
-        guard let filename, let url = url(forFilename: filename) else { return }
+        guard let filename else { return }
+        PhotoThumbnailLoader.removeDiskThumbnails(forFilename: filename)
+        guard let url = url(forFilename: filename) else { return }
         try? FileManager.default.removeItem(at: url)
     }
 }
