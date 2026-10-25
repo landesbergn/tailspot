@@ -442,6 +442,12 @@ nonisolated enum CatchPhotoStore {
     static func save(_ data: Data, icao24: String, at timestamp: Date) -> String? {
         do {
             let dir = try directory()
+            // Re-create on every save, not just once per launch: the cached
+            // URL doesn't prove the folder still exists, and a missing folder
+            // would make every later catch this session photo-less, which
+            // can't be recovered in a local-only Hangar. Saves are rare, so
+            // the extra call costs nothing that matters.
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let filename = "\(icao24.lowercased())_\(Int(timestamp.timeIntervalSince1970)).jpg"
             let url = dir.appendingPathComponent(filename)
             try data.write(to: url, options: .atomic)

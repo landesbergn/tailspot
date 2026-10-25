@@ -132,10 +132,25 @@ struct FocusThumbnailLoaderTests {
         let url = uniqueJPEG(.blue)
         let thumb = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 228))
         defer { try? FileManager.default.removeItem(at: url) }
+        let small = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 120))
         _ = PhotoThumbnailLoader.load(url: url, maxPixel: 228)
+        _ = PhotoThumbnailLoader.load(url: url, maxPixel: 120)        // a second size
         #expect(FileManager.default.fileExists(atPath: thumb.path))
+        #expect(FileManager.default.fileExists(atPath: small.path))
         PhotoThumbnailLoader.removeDiskThumbnails(forFilename: url.lastPathComponent)
         #expect(!FileManager.default.fileExists(atPath: thumb.path))
+        #expect(!FileManager.default.fileExists(atPath: small.path), "every size goes, not a fixed list")
+    }
+
+    /// Rows scrolled back into view check memory on the main actor first, so
+    /// a decoded thumbnail shows without a placeholder frame.
+    @Test func memoryHitIsAvailableSynchronously() throws {
+        let url = uniqueJPEG(.blue)
+        let thumb = try #require(PhotoThumbnailLoader.diskURL(for: url, maxPixel: 228))
+        defer { try? FileManager.default.removeItem(at: url); try? FileManager.default.removeItem(at: thumb) }
+        #expect(PhotoThumbnailLoader.cached(url: url, maxPixel: 228) == nil)
+        _ = PhotoThumbnailLoader.load(url: url, maxPixel: 228)
+        #expect(PhotoThumbnailLoader.cached(url: url, maxPixel: 228) != nil)
     }
 
     @Test func fileURLSkipsTheExistenceCheck() {

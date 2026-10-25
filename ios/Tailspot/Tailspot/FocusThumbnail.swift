@@ -48,10 +48,6 @@ nonisolated enum PhotoThumbnailLoader {
         return cache
     }()
 
-    /// The pixel caps in use (the Hangar row: 76 pt @3x). `removeDiskThumbnails`
-    /// deletes these sizes; a size added later should be listed here too.
-    static let diskSizes: [Int] = [228]
-
     private static let diskDirectory: URL? = {
         guard let caches = try? FileManager.default.url(
             for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -79,8 +75,20 @@ nonisolated enum PhotoThumbnailLoader {
         return load(url: url, maxPixel: maxPixel)
     }
 
+    /// The memory layer only, synchronously. `NSCache` is thread-safe, so
+    /// the row can check it on the main actor and show a hit in the same
+    /// frame, instead of flashing the placeholder while `loadAsync` hops
+    /// off the main actor and back.
+    static func cached(url: URL, maxPixel: CGFloat) -> UIImage? {
+        cache.object(forKey: memoryKey(url, maxPixel))
+    }
+
+    private static func memoryKey(_ url: URL, _ maxPixel: CGFloat) -> NSString {
+        "\(url.path)#\(Int(maxPixel))" as NSString
+    }
+
     static func load(url: URL, maxPixel: CGFloat) -> UIImage? {
-        let key = "\(url.path)#\(Int(maxPixel))" as NSString
+        let key = memoryKey(url, maxPixel)
         if let cached = cache.object(forKey: key) { return cached }
         // A missing photo is nil, even if an old thumbnail is still on disk:
         // the row then shows the placeholder, as it always did.
@@ -92,7 +100,12 @@ nonisolated enum PhotoThumbnailLoader {
            let cg = decodeFull(thumbURL) {
             image = UIImage(cgImage: cg)
         } else {
-            guard let cg = decodeThumbnail(url, maxPixel: maxPixel) else { return nil }
+            // Check again before the expensive part (a full-photo decode plus
+            // a JPEG encode): a row can scroll away after `loadAsync`'s entry
+            // check. `Task.isCancelled` reads the current task, so it works
+            // here in synchronous code (and is false outside any task).
+            guard !Task.isCancelled,
+                  let cg = decodeThumbnail(url, maxPixel: maxPixel) else { return nil }
             if let thumbURL { writeJPEG(cg, to: thumbURL) }
             image = UIImage(cgImage: cg)
         }
@@ -100,12 +113,16 @@ nonisolated enum PhotoThumbnailLoader {
         return image
     }
 
-    /// Delete `filename`'s cached thumbnails (called when its catch is deleted).
+    /// Delete `filename`'s cached thumbnails at every size (called when its
+    /// catch is deleted). Lists the folder rather than guessing sizes, so a
+    /// new thumbnail size can't leave orphans; deletes are rare enough that
+    /// the listing doesn't matter.
     static func removeDiskThumbnails(forFilename filename: String) {
-        guard let diskDirectory else { return }
-        for size in diskSizes {
-            try? FileManager.default.removeItem(
-                at: diskDirectory.appendingPathComponent("\(filename)@\(size).jpg"))
+        guard let diskDirectory,
+              let names = try? FileManager.default.contentsOfDirectory(atPath: diskDirectory.path)
+        else { return }
+        for name in names where name.hasPrefix("\(filename)@") {
+            try? FileManager.default.removeItem(at: diskDirectory.appendingPathComponent(name))
         }
     }
 
@@ -147,7 +164,14 @@ nonisolated enum PhotoThumbnailLoader {
             data, UTType.jpeg.identifier as CFString, 1, nil) else { return }
         CGImageDestinationAddImage(dest, cg, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return }
-        try? (data as Data).write(to: url, options: .atomic)
+        if (try? (data as Data).write(to: url, options: .atomic)) == nil {
+            // The OS may purge Caches mid-session, folder included: recreate
+            // it and retry once, or the disk layer would stay off until the
+            // next launch.
+            try? FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? (data as Data).write(to: url, options: .atomic)
+        }
     }
 }
 
@@ -190,9 +214,22 @@ struct FocusThumbnail: View {
 
     private func load() async {
         guard let url else { image = nil; return }
-        // @3x for the on-screen point size; decoded off the main actor, and
-        // cancelled with this row's `.task` when it scrolls away.
-        image = await PhotoThumbnailLoader.loadAsync(url: url, maxPixel: side * 3)
+        // @3x for the on-screen point size.
+        let maxPixel = side * 3
+        // A memory hit shows in this frame (no placeholder flash on rows
+        // scrolled back into view).
+        if let hit = PhotoThumbnailLoader.cached(url: url, maxPixel: maxPixel) {
+            image = hit
+            return
+        }
+        // Otherwise decoded off the main actor, and cancelled with this
+        // row's `.task` when it scrolls away.
+        let loaded = await PhotoThumbnailLoader.loadAsync(url: url, maxPixel: maxPixel)
+        // A cancelled task (the row scrolled away, or its url changed) can
+        // resume AFTER its replacement; don't let its stale or empty result
+        // overwrite the newer one.
+        guard !Task.isCancelled else { return }
+        image = loaded
     }
 }
 
