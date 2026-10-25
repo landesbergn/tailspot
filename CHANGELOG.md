@@ -5,6 +5,18 @@ longer carries a live "Current state" block — the authoritative current status
 lives in **PLAN.md §9**, and each completed round lands here, newest first.
 Git history + PLAN.md §9 remain the authoritative record.
 
+## 2026-10-25 — Frame-is-the-catch behind a PostHog flag (branch `feat/frame-catch-flag`, PR #229)
+
+- The new catch rule now ships dark. PostHog boolean flag
+  `frame-is-the-catch` turns it on per person or cohort; off, unloaded or
+  keyless means the shipped rule, so App Store behaviour is unchanged.
+  The value changes only at cold launch or foreground, never mid-aim.
+- Debug builds: the wrench "New catch rule" switch overrides the flag on
+  this phone, with "Follow PostHog" to drop the override; NEW CATCH RULE
+  badge under the zoom pill while the new rule is live.
+- Merged 56 main commits. Streak debug tooling kept from main; first-label
+  tap telemetry wired into both modes' tap paths.
+
 ## 2026-10-24 — Security audit (branch `worktree-security-audit-2026-10`)
 
 - Four parallel reviews (backend auth, backend catches/challenges, web + CI,

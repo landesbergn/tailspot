@@ -59,13 +59,25 @@ struct ContentView: View {
     /// machine. Stays `.idle` for the whole session while the frame mode
     /// is live — nothing calls `update`/`forceLock` on it there.
     @StateObject private var lockOn = LockOnEngine()
-    /// Catch-mode A/B switch (2026-09-02, see `CatchMode.swift`). The raw
-    /// stored choice; `catchMode` below is what the view actually runs
-    /// (Release builds ignore the store). The wrench-panel `catchModeRow`
-    /// is the only writer — via `setCatchMode`, which also clears the
-    /// mode-specific state the other mode left behind.
-    @AppStorage(CatchMode.storageKey) private var catchModeRaw: String = CatchMode.default.rawValue
-    private var catchMode: CatchMode { CatchMode.effective(stored: catchModeRaw) }
+    /// Catch-rule feature flag (see `CatchMode.swift`). `catchMode` is
+    /// what the view actually runs: the PostHog `frame-is-the-catch` flag,
+    /// unless this Debug install has a wrench override (Release ignores
+    /// the override). The wrench-panel `catchModeRow` is the override's
+    /// only writer; `reconcileCatchMode` clears the outgoing mode's state
+    /// whenever the effective mode changes, whichever side changed it.
+    @AppStorage(CatchMode.storageKey) private var catchModeOverrideRaw: String?
+    private let catchModeFlag = CatchModeFlag.shared
+    private var catchMode: CatchMode {
+        CatchMode.effective(override: catchModeOverrideRaw, remoteEnabled: catchModeFlag.remoteEnabled)
+    }
+    /// The mode whose state (pins, assertions) is currently live — lags
+    /// `catchMode` until `reconcileCatchMode` clears the old mode's state.
+    @State private var appliedCatchMode: CatchMode?
+    /// LEGACY catch mode: metadata for the engine's current target, fetched
+    /// the moment it changes (the ambient prefetch re-keys only when
+    /// `observed` republishes, ~1 Hz). Always nil in frame mode, where the
+    /// engine stays idle.
+    @State private var lockedMetadata: AircraftMetadata?
     /// Field-session recorder for replay/regression. Off by default;
     /// the debug overlay carries a tap-to-start row. When active a 1 Hz
     /// task captures the current sensor state + visible aircraft and
@@ -154,7 +166,7 @@ struct ContentView: View {
     /// LEGACY catch mode only: the tap-pinned plane. Overrides the
     /// center-driven closest-target heuristic; tap-elsewhere clears,
     /// tap-same-plane toggles off, the plane leaving visibility clears
-    /// (via the 1 Hz `pruneLegacyPin`). Taps drive `forceLock()` on the
+    /// (via the `.onChange(of: lockOn.state.targetIcao24)` housekeeping). Taps drive `forceLock()` on the
     /// engine — the only way into `.locked`. Always nil in the frame mode.
     @State private var pinnedIcao: String?
     /// LEGACY catch mode only: tap-to-reveal (2026-06-19) — a plane the
@@ -326,7 +338,6 @@ struct ContentView: View {
     /// tick, so `permission_recovery_shown` fires once per hidden-to-shown
     /// transition (see `permissionRecoveryFunnelTick`).
     @State private var permissionRecoveryWasShowing = false
-
 
     var body: some View {
         ZStack {
@@ -517,8 +528,11 @@ struct ContentView: View {
                                 // override, so this IS the projection.
                                 if let pos = frame.labelPositions[icao] {
                                     let style = frame.style(for: icao)
-                                    let metaForPlane: AircraftMetadata? =
-                                        ambientMetadata[icao] ?? nil
+                                    // Legacy's pinned plane prefers the
+                                    // freshly fetched `lockedMetadata`.
+                                    let metaForPlane: AircraftMetadata? = icao == frame.pinned
+                                        ? (lockedMetadata ?? (ambientMetadata[icao] ?? nil))
+                                        : (ambientMetadata[icao] ?? nil)
                                     PlaneLabel(
                                         aircraft: obs,
                                         position: pos,
@@ -654,9 +668,9 @@ struct ContentView: View {
                         cautionBadge
                         zoomPill
                         #if DEBUG
-                        // "Badge the lying screen": while the legacy mode is
-                        // live the AR view behaves like the App Store build,
-                        // not this branch — say so on screen, always.
+                        // "Badge the lying screen": while the new rule is
+                        // live this phone behaves unlike the App Store
+                        // default — say so on screen, always.
                         catchModeBadge
                         #endif
                     }
@@ -879,6 +893,9 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
+                // Session boundary: the one moment the catch-rule flag may
+                // change (applied by the 1 Hz `reconcileCatchMode`).
+                catchModeFlag.refreshForNewSession()
                 adsb.start { location.cllocation }
                 if arOccluded {
                     adsb.pauseReAnnotation()
@@ -907,6 +924,28 @@ struct ContentView: View {
         // MetadataCache actor dedupes lookups, so the first sighting
         // of an icao24 fires a single OpenSky request and every later
         // observation is a free in-memory hit.
+        // LEGACY catch mode (the engine is idle in frame mode, so both of
+        // these no-op there). Re-runs whenever the lock engine switches to
+        // (or away from) a target icao. Hits ADSBManager.metadata(for:) —
+        // instant on a cache hit.
+        .task(id: lockOn.state.targetIcao24) {
+            if let icao = lockOn.state.targetIcao24 {
+                lockedMetadata = await adsb.metadata(for: icao)
+            } else {
+                lockedMetadata = nil
+            }
+        }
+        // Pin housekeeping, as shipped: if the engine moved off the pinned
+        // plane (target left visibility → sticky → idle), clear the pin at
+        // once so the next empty-sky tap isn't spent un-pinning a plane the
+        // engine already let go. A revealed plane is only visible *because*
+        // it's pinned, so the reveal drops with the pin.
+        .onChange(of: lockOn.state.targetIcao24) { _, newIcao in
+            if let pin = pinnedIcao, newIcao != pin {
+                pinnedIcao = nil
+                revealedIcao = nil
+            }
+        }
         .task(id: visibleIcaoSignature) {
             // Body extracted to a method: the inline task-group closure made
             // this one expression too complex for the type checker (compile
@@ -1090,8 +1129,8 @@ struct ContentView: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 labelSuppressionTick()
+                reconcileCatchMode()
                 pruneAssertedPlanes()
-                pruneLegacyPin()
                 emptySkyFunnelTick()
                 steeringPillTick()
                 permissionRecoveryFunnelTick()
@@ -1123,20 +1162,6 @@ struct ContentView: View {
                 // Legacy mode's tap-reveal (frame mode never sets it).
                 || (!$0.grounded && $0.aircraft.icao24 == revealedIcao)
         }
-    }
-
-    /// LEGACY catch mode: pin housekeeping, 1 Hz. If the engine moved off
-    /// the pinned plane (target left visibility → sticky → idle), clear the
-    /// pin so the view stops fighting the engine. The pre-#229 app did
-    /// this from an `.onChange(of: lockOn.state.targetIcao24)`; it rides
-    /// the existing 1 Hz task here so `body`'s modifier chain (at the
-    /// type-check budget) doesn't grow — the engine's own 2 s sticky hold
-    /// already dominates the latency. A revealed plane is only visible
-    /// *because* it's pinned, so the reveal drops with the pin.
-    private func pruneLegacyPin() {
-        guard let pin = pinnedIcao, lockOn.state.targetIcao24 != pin else { return }
-        pinnedIcao = nil
-        revealedIcao = nil
     }
 
     /// 1 Hz lifetime keeper for `assertedPlanes` (D5: on frame + grace).
@@ -1275,7 +1300,7 @@ struct ContentView: View {
             // Target choice: the explicit tap-pinned plane (if still
             // visible) wins; otherwise fall back to whichever visible
             // plane is nearest to screen center. A pin pointing at a
-            // no-longer-visible plane is ignored here; `pruneLegacyPin`
+            // no-longer-visible plane is ignored here; the `.onChange` housekeeping
             // clears it once the engine lets go.
             let centerClosest = closestTargetIcao24(
                 in: visible,
@@ -1388,34 +1413,49 @@ struct ContentView: View {
     }
 
     #if DEBUG
-    /// Wrench-panel row: the catch-mode A/B switch. NEW (this branch's
-    /// frame-is-the-catch) ↔ OLD (the shipped zones-and-pins model).
-    /// Tap to flip; persists across launches on this Debug install only.
+    /// Wrench-panel row for the catch-rule flag. Flipping the switch sets
+    /// a Debug-only override of the PostHog flag; "Follow PostHog" drops
+    /// the override. Persists across launches on this Debug install only.
     private var catchModeRow: some View {
-        debugFlagRow(
-            title: "New catch rule",
-            detail: "On: a press catches every bright-labeled plane on screen (up to 3, biggest first); a tap only rescues a plane the app is hiding. Off: App Store behavior — aim the center at a plane or tap to pin it, then press.",
-            isOn: Binding(
-                get: { catchMode == .frame },
-                set: { setCatchMode($0 ? .frame : .legacy) }
+        VStack(alignment: .leading, spacing: 2) {
+            debugFlagRow(
+                title: "New catch rule",
+                detail: "On: a press catches every bright-labeled plane on screen (up to 3, biggest first); a tap only rescues a plane the app is hiding. Off: App Store behavior, where you aim the center at a plane or tap to pin it, then press.",
+                isOn: Binding(
+                    get: { catchMode == .frame },
+                    set: { setCatchModeOverride($0 ? .frame : .legacy) }
+                )
             )
-        )
+            HStack(spacing: 8) {
+                Text(CatchMode.override(stored: catchModeOverrideRaw) == nil
+                     ? "Following the PostHog flag (\(catchModeFlag.remoteEnabled ? "on" : "off"))."
+                     : "Set on this phone. PostHog says \(catchModeFlag.remoteEnabled ? "on" : "off").")
+                    .font(Brand.Font.mono(size: 10))
+                    .foregroundStyle(Brand.Color.textTertiary)
+                if CatchMode.override(stored: catchModeOverrideRaw) != nil {
+                    Button("Follow PostHog") { setCatchModeOverride(nil) }
+                        .font(Brand.Font.mono(size: 10, weight: .bold))
+                        .buttonStyle(.bordered)
+                        .tint(Brand.Color.cyan)
+                }
+            }
+        }
     }
 
-    /// Always-on screen badge while the LEGACY mode is live, so a field
-    /// session (and its screenshots) can't mistake shipped behaviour for
-    /// this branch's. Nothing renders in the frame mode.
+    /// Always-on screen badge while the NEW rule is live, so a field
+    /// session (and its screenshots) can't mistake it for App Store
+    /// behaviour. Nothing renders under the shipped rule.
     @ViewBuilder
     private var catchModeBadge: some View {
-        if catchMode == .legacy {
-            Text("OLD CATCH RULE (App Store behavior)")
+        if catchMode == .frame {
+            Text("NEW CATCH RULE (flag on)")
                 .font(Brand.Font.mono(size: 10, weight: .bold))
                 .foregroundStyle(Brand.Color.alertCaution)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(Brand.Color.bgElevated.opacity(0.92), in: .capsule)
                 .overlay(Capsule().strokeBorder(Brand.Color.alertCaution.opacity(0.45), lineWidth: 1))
-                .accessibilityLabel("Old catch rule is on")
+                .accessibilityLabel("New catch rule is on")
         }
     }
     #endif
@@ -2562,7 +2602,12 @@ struct ContentView: View {
             var detectorVerdict: DetectorGateVerdict?
             var singleSnap: CatchPhotoSnapper.Snap?
             var singleSnapped: CGPoint?
-            if let data = photoData, !icaos.isEmpty {
+            // The legacy rule snaps single catches only, as shipped: a
+            // multi-catch there is a zone cluster, and per-target searches
+            // (each up to ~19 CoreML passes, sequential) would slow the
+            // reveal for every flag-off user.
+            let snapsThisCatch = catchMode == .frame || icaos.count == 1
+            if let data = photoData, !icaos.isEmpty, snapsThisCatch {
                 let predictions: [(icao: String, predicted: CGPoint)] = icaos.compactMap { icao in
                     let predicted = pressScreenPosition(
                         for: icao, in: pressObserved, screenSize: screenSize,
@@ -2725,10 +2770,14 @@ struct ContentView: View {
                     duplicates.append(icao)
                     continue
                 }
-                // Metadata: the ambient prefetch cache (which covers every
-                // labeled plane), then a direct manager lookup.
+                // Metadata: legacy's pinned snapshot, then the ambient
+                // prefetch cache (which covers every labeled plane), then a
+                // direct manager lookup.
                 let metadata: AircraftMetadata?
-                if let cached = ambientMetadata[icao] ?? nil {
+                if let locked = lockedMetadata,
+                   icao == lockOn.state.targetIcao24 {
+                    metadata = locked
+                } else if let cached = ambientMetadata[icao] ?? nil {
                     metadata = cached
                 } else {
                     metadata = await adsb.metadata(for: icao)
@@ -3602,12 +3651,16 @@ struct ContentView: View {
         )
     }
 
-    /// Metadata already on hand at tap time — the ambient prefetch cache,
-    /// which covers every labeled plane. Never the network: the shell
-    /// can't wait, and the pipeline's own `adsb.metadata(for:)` fallback
-    /// fills the row (and thus the loader's final snapshot) later.
+    /// Metadata already on hand at tap time — legacy's pinned snapshot,
+    /// else the ambient prefetch cache, which covers every labeled plane.
+    /// Never the network: the shell can't wait, and the pipeline's own
+    /// `adsb.metadata(for:)` fallback fills the row (and thus the loader's
+    /// final snapshot) later.
     private func cachedMetadata(for icao: String) -> AircraftMetadata? {
-        ambientMetadata[icao] ?? nil
+        if let locked = lockedMetadata, icao == lockOn.state.targetIcao24 {
+            return locked
+        }
+        return ambientMetadata[icao] ?? nil
     }
 
     /// Big central capture button. A single circle that is always
@@ -4482,7 +4535,7 @@ struct ContentView: View {
     }
 
     /// LEGACY catch mode: explicit "cancel". Both writes required — the
-    /// 1 Hz `pruneLegacyPin` covers engine → view only; without `unpin()`
+    /// `.onChange` housekeeping covers engine → view only; without `unpin()`
     /// the engine would still hold `.locked` until forced.
     private func legacyUnpin(at now: Date) {
         recorder.recordUnpin(at: now)
@@ -4504,18 +4557,32 @@ struct ContentView: View {
         }
     }
 
-    /// The ONLY writer of the catch-mode switch (wrench-panel row). Clears
-    /// the state the outgoing mode owns so nothing leaks across: legacy's
-    /// pin / reveal / engine lock / live detector target, frame's
-    /// assertions. Persisted via `@AppStorage`; Release builds ignore it.
-    private func setCatchMode(_ mode: CatchMode) {
-        guard mode != catchMode else { return }
+    #if DEBUG
+    /// The ONLY writer of the Debug catch-rule override (wrench-panel row);
+    /// nil = follow the PostHog flag. Persisted via `@AppStorage`; Release
+    /// builds never read it.
+    private func setCatchModeOverride(_ mode: CatchMode?) {
+        catchModeOverrideRaw = mode?.rawValue
+        reconcileCatchMode()
+    }
+    #endif
+
+    /// Clears the state the outgoing mode owns whenever the effective mode
+    /// changes, so nothing leaks across: legacy's pin / reveal / engine
+    /// lock / live detector target, frame's assertions. Called right after
+    /// a wrench flip, and from the 1 Hz tick for PostHog-driven changes
+    /// (which land at a session start; see `CatchModeFlag`). The first call
+    /// only records the launch mode.
+    private func reconcileCatchMode() {
+        let mode = catchMode
+        guard mode != appliedCatchMode else { return }
+        defer { appliedCatchMode = mode }
+        guard appliedCatchMode != nil else { return }
         pinnedIcao = nil
         revealedIcao = nil
         lockOn.unpin()
         visualConfirm.updateTarget(nil)
         assertedPlanes = [:]
-        catchModeRaw = mode.rawValue
         Log.ui.notice("Catch mode → \(mode.label, privacy: .public)")
     }
 
@@ -5274,7 +5341,9 @@ private struct PlaneLabel: View {
         // the 0.55 scrim down to ~0.19, leaving dimmed 8–9 pt cyan text
         // nearly scrim-less over a bright sky (and defeated the halo's
         // "held at full opacity" design).
-        let dimFactor: Double = style == .faint ? 0.35 : 1.0
+        // Legacy's pinned plane keeps the faint-tier dim, as shipped.
+        let dimFactor: Double =
+            style == .faint || (style == .pinned && aircraft.visibilityTier == .faint) ? 0.35 : 1.0
 
         VStack(spacing: 2) {
             LockBrackets(

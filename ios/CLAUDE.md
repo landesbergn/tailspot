@@ -80,7 +80,7 @@ the source + each one's focused test file — they're not restated here.
   arrival on angle). **Don't loosen the ambient filter to chase one** — it
   resurfaces the MLAT clutter the precision lean kills (see the `FieldReplays`
   regression).
-- **Frame is the catch (2026-08-28).** Press membership is `chooseCatchMembers`
+- **Frame is the catch (2026-08-28; behind the flag below).** Press membership is `chooseCatchMembers`
   (`CatchMembership.swift`): bright (`.full`) tier on frame, occlusion-demoted
   via the live sky grid, asserted planes guaranteed, arcmin-ranked, capped at
   `maxCatchTargets` (3). Three load-bearing invariants: **bright = in the
@@ -92,14 +92,20 @@ the source + each one's focused test file — they're not restated here.
   (`docs/plans/2026-08-28-feat-frame-is-the-catch.md`). The detector runs at
   catch time only; `VisualConfirmationPipeline.updateTarget` is the kept-but-
   unarmed live-tracking upgrade path.
-- **Catch-mode A/B switch (2026-09-02, Ring 0 only).** `CatchMode.swift`:
-  `.frame` (the model above) vs `.legacy` (the shipped v1.1.x zones-and-pins
-  model — `LockOnEngine.swift` + its zone/dominance helpers, restored for the
-  comparison). UserDefaults-backed (`tailspot.debug.catchMode`), **honored
-  only in DEBUG builds** — `CatchMode.effective` is `.frame` on Release, so a
-  flipped phone can't leak the legacy model into TestFlight. The wrench-panel
-  `catchModeRow` is the only writer (`setCatchMode` clears the other mode's
-  state); an OLD CATCH RULE badge sits under the zoom pill while it's on.
+- **Catch-rule feature flag (PostHog `frame-is-the-catch`, 2026-10-25).**
+  `CatchMode.swift`: `.frame` (the model above) vs `.legacy` (the shipped
+  zones-and-pins model — `LockOnEngine.swift` + its zone/dominance helpers).
+  **Default is `.legacy`**: the flag is off for everyone it doesn't target,
+  so #229 rides trains dark and App Store users keep the shipped rule.
+  Resolution is one funnel, `CatchMode.effective`: a Debug-only wrench
+  override (`tailspot.debug.catchMode`; **Release never reads it**) beats the
+  PostHog value; flag off / not loaded / keyless analytics → `.legacy`.
+  `CatchModeFlag` applies the PostHog value at session boundaries only
+  (cold launch + each foreground, cached value first, then a fresh fetch) —
+  never mid-aim; `reconcileCatchMode` (1 Hz tick + wrench flip) clears the
+  outgoing mode's pins/assertions. Debug builds badge NEW CATCH RULE under
+  the zoom pill while `.frame` is live. Keep the flag key stable — renaming
+  it silently turns the new rule off for every targeted person.
   **Wrench-panel toggles are feature flags in plain language** (Noah,
   2026-09-05): a real `Toggle` per flag via `debugFlagRow` — title + one
   "On: … Off: …" sentence ("Building/tree check", "Plane-in-photo check",
@@ -108,10 +114,10 @@ the source + each one's focused test file — they're not restated here.
   Both modes branch at ONE render funnel (`resolveFrameSelection` →
   `FrameSelection`) plus the tap handler, Gate 5, and the diagnostics
   selector; `catch_performed` / `catch_pipeline_timing` carry `catch_mode`.
-  The legacy invariants above ("no selection", "bright = in the press") hold
+  The frame invariants above ("no selection", "bright = in the press") hold
   for `.frame` only — legacy renders pinned/dimmed, no chosen highlight.
-  Delete `LockOnEngine.swift`, `CatchMode.swift` and the legacy tests once
-  the comparison is decided.
+  Once the rule is decided, delete the losing side (`LockOnEngine.swift` +
+  legacy tests, or the frame files) together with `CatchMode.swift`.
 - **The catch pipeline reads the shutter-press snapshot, never live sensors.**
   `runCatch` snapshots pose + observations (`press*`) before its first await;
   everything downstream — bracket projection, capture diagnostics — uses the
