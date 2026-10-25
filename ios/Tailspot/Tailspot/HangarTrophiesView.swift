@@ -75,8 +75,12 @@ struct HangarTrophiesView: View {
     var body: some View {
         // One hashing pass per body eval, shared by the memo and the task id.
         let token = Self.memoKey(catches)
+        // The inputs come from the shared memo: the app-root unlock center
+        // has usually computed them for this exact token already (launch
+        // diff, post-catch diff), so opening the Hangar is a token compare
+        // instead of a full pass. This box only keeps the board ordering.
         let derived = cache.value(for: token) {
-            let inputs = Trophies.inputs(from: catches)
+            let inputs = TrophyInputsMemo.shared.inputs(for: token) { Trophies.inputs(from: catches) }
             return (inputs: inputs, items: TrophyBoard.visible(inputs: inputs))
         }
         let inputs = derived.inputs

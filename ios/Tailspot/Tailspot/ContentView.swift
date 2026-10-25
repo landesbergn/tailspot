@@ -235,7 +235,7 @@ struct ContentView: View {
     /// existing tester is never flooded. Survives the Hangar sheet as a
     /// `@StateObject`, so a moment interrupted by backgrounding re-renders
     /// on return (the overlay is declarative, bound to `hasPending`).
-    @StateObject private var unlockCenter = TrophyUnlockCenter()
+    @StateObject private var unlockCenter = TrophyUnlockCenter(inputsMemo: .shared)
     /// Hangar restore-from-server (PLAN §9 #7, issue #58): checks once per
     /// launch whether this (Keychain-surviving) device identity holds
     /// catches on the backend while the local Hangar is empty — the

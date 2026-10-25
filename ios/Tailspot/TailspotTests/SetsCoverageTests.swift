@@ -208,6 +208,8 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-09-27.
         ("BL17", "Bellanca", "17 Viking"),
         ("EVOT", "Evolution", "EVOT-550 Evolution"),
+        // Public catalog coverage addition validated 2026-10-24.
+        ("EVOP", "Lancair", "Evolution Piston"),
         // Public catalog coverage additions validated 2026-09-28.
         ("GA8", "Gippsaero", "GA-8 Airvan"),
         ("HROC", "Harmon", "Rocket"),
@@ -298,6 +300,10 @@ struct SetsCoverageTests {
         // Public catalog coverage additions validated 2026-10-23.
         ("BE60", "Beechcraft", "60 Duke"),
         ("RJ85", "Avro", "RJ-85 Avroliner"),
+        // Public catalog coverage additions validated 2026-10-25.
+        ("BUSH", "Rainbow Skyreach", "BushCat"),
+        ("C337", "Cessna", "337 Super Skymaster"),
+        ("SLH4", "Sling Aircraft", "4 High Wing"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -383,6 +389,7 @@ struct SetsCoverageTests {
             (("SREY", "Progressive Aerodyne", "SeaRey"), "fam-sport-classics", "fsc-searey"),
             (("BL17", "Bellanca", "17 Viking"), "fam-sport-classics", "fsc-viking"),
             (("EVOT", "Evolution", "EVOT-550 Evolution"), "fam-sport-classics", "fsc-evolution"),
+            (("EVOP", "Lancair", "Evolution Piston"), "fam-sport-classics", "fsc-evolution-piston"),
             (("GA8", "Gippsaero", "GA-8 Airvan"), "fam-sport-classics", "fsc-airvan"),
             (("HROC", "Harmon", "Rocket"), "fam-sport-classics", "fsc-harmon-rocket"),
             (("PA24", "Piper", "PA-24 Comanche"), "fam-piper", "fpa24"),
@@ -453,6 +460,9 @@ struct SetsCoverageTests {
             (("S64", "Sikorsky", "CH-54 Tarhe"), "fam-heli", "fh-s64"),
             (("BE60", "Beechcraft", "60 Duke"), "fam-beech", "fbe60"),
             (("RJ85", "Avro", "RJ-85 Avroliner"), "fam-avro-rj", "farj85"),
+            (("BUSH", "Rainbow Skyreach", "BushCat"), "fam-sport-classics", "fsc-bushcat"),
+            (("C337", "Cessna", "337 Super Skymaster"), "fam-cessna", "fc337"),
+            (("SLH4", "Sling Aircraft", "4 High Wing"), "fam-sport-classics", "fsc-sling-high-wing"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -647,14 +657,21 @@ struct SetsCoverageTests {
                 "A GLAS Glasair must not fill the GLST GlaStar slot")
 
         // Bellanca's 19 Skyrocket and Evektor's SportStar are distinct from
-        // the Bellanca 17 Viking and Evolution Turbine families.
+        // the Bellanca 17 Viking and Evolution families.
         let sportSet = CardSets.families.first { $0.id == "fam-sport-classics" }!
         let vikingEntry = sportSet.entries.first { $0.id == "fsc-viking" }!
         let evolutionEntry = sportSet.entries.first { $0.id == "fsc-evolution" }!
+        let evolutionPistonEntry = sportSet.entries.first { $0.id == "fsc-evolution-piston" }!
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("BL19", "Aviabellanca", "19 Skyrocket"))), entry: vikingEntry),
                 "A Bellanca 19 Skyrocket must not fill the Bellanca 17 Viking slot")
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("EVSS", "Evektor", "SportStar"))), entry: evolutionEntry),
                 "An Evektor SportStar must not fill the Evolution Turbine slot")
+        let evolutionPiston = mk(("EVOP", "Lancair", "Evolution Piston"))
+        let evolutionTurbine = mk(("EVOT", "Evolution", "EVOT-550 Evolution"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: evolutionPiston), entry: evolutionEntry),
+                "The piston Evolution must not fill the Evolution Turbine slot")
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: evolutionTurbine), entry: evolutionPistonEntry),
+                "The turbine Evolution must not fill the Evolution Piston slot")
 
         // Manufacturer-qualified tokens keep similarly named or coded public
         // aircraft out of the Airvan, Harmon Rocket, and Comanche slots.
@@ -696,6 +713,26 @@ struct SetsCoverageTests {
             #expect(!CardSets.matches(key: CardSets.matchKey(for: adjacentAvroRJ), entry: avroRJ85Entry),
                     "An adjacent Avro RJ variant must not fill the RJ85 slot")
         }
+
+        let bushCatEntry = sportSet.entries.first { $0.id == "fsc-bushcat" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("BMAN", "Aak", "Bushman"))),
+                                 entry: bushCatEntry),
+                "The AAK Bushman must not fill the Rainbow SkyReach BushCat slot")
+
+        let cessna337Entry = CardSets.families.first { $0.id == "fam-cessna" }!
+            .entries.first { $0.id == "fc337" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("A337", "Airbus", "A330-700 Beluga XL"))),
+                                 entry: cessna337Entry),
+                "The Airbus A337 Beluga XL must not fill the Cessna 337 slot")
+
+        let sling4Entry = sportSet.entries.first { $0.id == "fsc-sling4" }!
+        let slingHighWingEntry = sportSet.entries.first { $0.id == "fsc-sling-high-wing" }!
+        let sling4 = mk(("SLG4", "Airplane Factory", "Sling 4"))
+        let slingHighWing = mk(("SLH4", "Sling Aircraft", "4 High Wing"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: slingHighWing), entry: sling4Entry),
+                "The Sling High Wing must not fill the low-wing Sling 4 slot")
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: sling4), entry: slingHighWingEntry),
+                "The low-wing Sling 4 must not fill the Sling High Wing slot")
 
         // Legacy and Texan names are shared across unrelated aircraft lines.
         let lancairLegacyEntry = sportSet.entries.first { $0.id == "fsc-lancair-legacy" }!

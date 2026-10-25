@@ -898,7 +898,10 @@ nonisolated enum Trophies {
     static func bestGuessStreak(_ timeline: [(Date, Bool)]) -> Int {
         var best = 0
         var run = 0
-        for (_, correct) in timeline.sorted(by: { $0.0 < $1.0 }) {
+        // Ties at one instant (a multi-catch press) break wrong-answer first,
+        // so the result never depends on the caller's fetch order: the
+        // shared `TrophyInputsMemo` serves screens that fetch differently.
+        for (_, correct) in timeline.sorted(by: { ($0.0, $0.1 ? 1 : 0) < ($1.0, $1.1 ? 1 : 0) }) {
             run = correct ? run + 1 : 0
             best = max(best, run)
         }
@@ -946,8 +949,13 @@ nonisolated enum Trophies {
 
     /// True if any two time-adjacent catches share the same operator
     /// (Doubleheader). Sorts the (time, operator) timeline and scans neighbors.
+    /// Ties at one instant (a multi-catch press) sort by operator, so the
+    /// answer doesn't depend on fetch order (the shared `TrophyInputsMemo`
+    /// serves screens that fetch differently). That also makes two
+    /// same-operator planes in one press count, as they already did whenever
+    /// the fetch happened to put them side by side.
     static func hasConsecutiveSameOperator(_ timeline: [(Date, String)]) -> Bool {
-        let sorted = timeline.sorted { $0.0 < $1.0 }
+        let sorted = timeline.sorted { ($0.0, $0.1) < ($1.0, $1.1) }
         for i in 1..<max(1, sorted.count) where i < sorted.count {
             if sorted[i].1 == sorted[i - 1].1 { return true }
         }

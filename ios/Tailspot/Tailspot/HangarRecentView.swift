@@ -31,12 +31,15 @@ struct HangarRecentView: View {
         }
     }
 
-    private var rows: [HangarRow] { derived.0 }
-    /// icao24s whose card gets the first-of-type sparkle + bonus share.
-    private var firstOfTypeIDs: Set<String> { derived.1 }
-
     var body: some View {
-        ScrollView {
+        // Read ONCE per body. Even a cache hit re-hashes every catch
+        // (CatchFingerprint), and the ForEach row closure below runs again
+        // each time a row scrolls into view. These used to be computed
+        // properties read inside that closure, so every row coming on screen
+        // hashed the whole Hangar: the Recent-list scroll stutter (2026-10),
+        // worst on the biggest Hangars. Locals are captured by value instead.
+        let (rows, firstOfTypeIDs) = derived
+        return ScrollView {
             if rows.isEmpty {
                 Text("No catches yet")
                     .font(Brand.Font.body)
@@ -45,6 +48,8 @@ struct HangarRecentView: View {
             } else {
                 LazyVStack(spacing: 10) {
                     ForEach(rows) { row in
+                        // `firstOfTypeIDs`: icao24s whose card gets the
+                        // first-of-type sparkle + bonus share.
                         NavigationLink(value: row) {
                             TailCard(
                                 row: row,

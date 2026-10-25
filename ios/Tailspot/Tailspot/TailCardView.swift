@@ -44,7 +44,9 @@ struct TailCard: View {
     var isFirstOfType: Bool = false
 
     private var photoURL: URL? {
-        row.mostRecent.photoFilename.flatMap { CatchPhotoStore.url(forFilename: $0) }
+        // `fileURL`, not `url`: no file-exists check on the main thread per
+        // row render. A missing file just decodes to nil (placeholder).
+        row.mostRecent.photoFilename.flatMap { CatchPhotoStore.fileURL(forFilename: $0) }
     }
 
     /// Dimmed middle-dot used between fields on a line. `.footnote` is
