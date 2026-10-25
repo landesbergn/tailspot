@@ -58,12 +58,13 @@ struct ProfileScreen: View {
     @State private var showHandleSheet = false
     /// "Handle changed to @x" confirmation, cleared after a few seconds.
     @State private var handleToast: String?
-    /// Memo for the whole-Hangar derivations (see `ProfileDerived`). A
-    /// `static let`, not `@State`: view state dies with the sheet, so every
-    /// Profile open used to redo the whole-Hangar pass even when nothing had
-    /// changed. A static lives for the process, and the content token keeps
-    /// it honest (any row, store, time-zone or day change misses).
-    private static let derivedCache = DerivedCacheBox<ProfileDerived>()
+    /// Memo for the whole-Hangar derivations (see `ProfileDerived`). Held in
+    /// `@State` so the same box survives body re-evaluations. Deliberately
+    /// not process-wide: `ProfileDerived.bestCatch` is a SwiftData model,
+    /// and a box that outlived its container could hand back a row from a
+    /// torn-down store. The expensive part, the trophy inputs, comes from
+    /// the process-wide `TrophyInputsMemo`, which holds only values.
+    @State private var derivedCache = DerivedCacheBox<ProfileDerived>()
 
     var body: some View {
         // Aggregate the Hangar ONCE per render. `stats` and `inputs` used to be
@@ -86,7 +87,7 @@ struct ProfileScreen: View {
         // The trophy inputs come from the shared memo, usually already filled
         // by the app-root unlock center's launch/catch diff.
         let trophyToken = TrophyInputsToken.of(catches)
-        let derived = Self.derivedCache.value(for: ProfileDerived.token(trophyToken: trophyToken)) {
+        let derived = derivedCache.value(for: ProfileDerived.token(trophyToken: trophyToken)) {
             ProfileDerived(catches: catches, inputs: TrophyInputsMemo.shared.inputs(for: trophyToken) {
                 Trophies.inputs(from: catches)
             })

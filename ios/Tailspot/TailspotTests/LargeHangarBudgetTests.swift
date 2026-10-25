@@ -261,6 +261,21 @@ struct LargeHangarBudgetTests {
         #expect(TrophyInputsToken.of([newCatch()] + rows, events: events, standing: standing) != base)
     }
 
+    /// The token's order independence is only sound if the inputs are too.
+    /// Multi-catch rows share one `caughtAt`, so the timeline helpers must
+    /// break ties themselves rather than keep the caller's fetch order.
+    @Test func timelineTrophiesIgnoreFetchOrderOnTies() {
+        let t = Date(timeIntervalSince1970: 1_760_000_000)
+        let later = t.addingTimeInterval(600)
+        // One press caught a Delta and a United; the next catch is a Delta.
+        let a: [(Date, String)] = [(t, "Delta"), (t, "United"), (later, "Delta")]
+        let b: [(Date, String)] = [(t, "United"), (t, "Delta"), (later, "Delta")]
+        #expect(Trophies.hasConsecutiveSameOperator(a) == Trophies.hasConsecutiveSameOperator(b))
+        let g1: [(Date, Bool)] = [(t, true), (t, false), (later, true)]
+        let g2: [(Date, Bool)] = [(t, false), (t, true), (later, true)]
+        #expect(Trophies.bestGuessStreak(g1) == Trophies.bestGuessStreak(g2))
+    }
+
     /// The Hangar-open fix: the app-root center's launch diff fills the
     /// shared memo, so the Trophies tab / Profile opening afterwards (with
     /// their own fetch order) finds the inputs without a second full pass.
@@ -297,16 +312,19 @@ struct LargeHangarBudgetTests {
         let standing = LeaderboardStandingCache(defaults: suite)
         let ledger = UserDefaultsTrophyLedger(defaults: suite)
         let memo = TrophyInputsMemo()
-        let rows = Self.hangar10k
+        // Two catches, so the one bounded probe finishes the date search and
+        // writes into THIS test's ledger. (Counting probes via the global
+        // `TrophyAchievementDates.prefixEvaluations` would race other suites,
+        // which Swift Testing runs in parallel.)
+        let rows = [newCatch(icao: "f00d01"), newCatch(icao: "f00d02")]
         let token = TrophyInputsToken.of(rows, events: events, standing: standing)
         memo.store(Trophies.inputs(from: rows, events: events, standing: standing), for: token)
         let center = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing, inputsMemo: memo)
-        let probesBefore = TrophyAchievementDates.prefixEvaluations
         center.enqueueNewUnlocks(from: rows)
         #expect(center.fullInputsPasses == 0)
         #expect(ledger.isSeeded)
-        #expect(TrophyAchievementDates.prefixEvaluations == probesBefore + 1,
-                "the bounded date probe must still run once for the screen-filled inputs")
+        #expect(!ledger.achievedDates.isEmpty,
+                "the bounded date probe must still run for the screen-filled inputs")
     }
 
     @Test func oneNewCatchDoesExactlyOneInputsPass() {
