@@ -16,14 +16,9 @@ import StoreKit       // \.requestReview environment action (the review ask)
 import os
 
 struct ContentView: View {
-    /// Camera FOV at 1× zoom (approximate for iPhone 16 main wide camera
-    /// in portrait). The effective FOV passed to projection math is
-    /// these divided by the current `zoom` factor — at 2× the visible
-    /// world halves horizontally and vertically. Refine when we query
-    /// `AVCaptureDevice.activeFormat.videoFieldOfView` (which gives
-    /// only horizontal); for v0 the approximation is good enough.
-    private static let baseHfovDeg: Double = 56
-    private static let baseVfovDeg: Double = 72
+    // Camera FOV lives in `CameraFOV` — it depends on the screen's aspect
+    // ratio (aspect-fill crop), not just the lens, so iPhone Duo's wider
+    // inner display gets its own numbers. Divided by `zoom` as before.
 
     /// Compass accuracy must exceed this (degrees) for the caution
     /// badge to be considered. Bumped from 10° to 25° because typical
@@ -379,8 +374,9 @@ struct ContentView: View {
                 // update() calls with the same target are idempotent —
                 // so calling it from inside the TimelineView body is safe.
                 GeometryReader { geo in
-                    let effectiveHfov = Self.baseHfovDeg / zoom
-                    let effectiveVfov = Self.baseVfovDeg / zoom
+                    let fov = CameraFOV.effective(for: geo.size, zoom: zoom)
+                    let effectiveHfov = fov.hfovDeg
+                    let effectiveVfov = fov.vfovDeg
 
                     // `paused: arOccluded` freezes this 30 Hz render loop
                     // while an opaque sheet covers the AR view — no point
@@ -840,6 +836,11 @@ struct ContentView: View {
                     Spacer()
                 }
             }
+
+            // iPhone Duo's inner display ignores the portrait pin; cover
+            // the AR view if the UI ever lays out sideways (inert on slab
+            // iPhones). Above the AR stack, below the sheet backdrop.
+            SidewaysHoldGuard()
 
             PrimarySheetBackdrop(isOpaque: primarySheetBackdropOpaque)
         }
@@ -2177,11 +2178,12 @@ struct ContentView: View {
             cameraElevationDeg: cameraElevationDeg,
             rollDeg: rollDeg
         )
+        let fov = CameraFOV.effective(for: screenSize, zoom: zoom)
         return obs.screenPosition(
             basis: basis,
             in: screenSize,
-            hfovDeg: Self.baseHfovDeg / zoom,
-            vfovDeg: Self.baseVfovDeg / zoom
+            hfovDeg: fov.hfovDeg,
+            vfovDeg: fov.vfovDeg
         )
     }
 
@@ -2220,6 +2222,7 @@ struct ContentView: View {
             gravityX: motion.gravityX, gravityY: motion.gravityY, gravityZ: motion.gravityZ
         )
         let pressZoom = zoom
+        let pressFov = CameraFOV.effective(for: screenSize, zoom: pressZoom)
         // `Dictionary(uniquingKeysWith:)` over `uniqueKeysWithValues:` —
         // if upstream ever emits two observations with the same icao24
         // (reannotation race, future provider quirk) we deduplicate
@@ -2432,7 +2435,7 @@ struct ContentView: View {
                             DetectorGate.expectedFootprintPx(
                                 wingspanMeters: obs.aircraft.estimatedWingspanMeters,
                                 slantMeters: obs.slantDistanceMeters,
-                                effectiveHfovDeg: Self.baseHfovDeg / pressZoom,
+                                effectiveHfovDeg: pressFov.hfovDeg,
                                 photoWidthPx: photoWidth
                             )
                         }
@@ -2480,7 +2483,8 @@ struct ContentView: View {
                 in: pressObserved, phoneHeadingDeg: pressHeading ?? 0,
                 cameraElevationDeg: pressElevationDeg, rollDeg: pressRollDeg,
                 screenSize: screenSize,
-                hfovDeg: Self.baseHfovDeg / pressZoom, vfovDeg: Self.baseVfovDeg / pressZoom,
+                hfovDeg: pressFov.hfovDeg,
+                vfovDeg: pressFov.vfovDeg,
                 zoneRadius: Self.catchZoneRadius
             )
 
