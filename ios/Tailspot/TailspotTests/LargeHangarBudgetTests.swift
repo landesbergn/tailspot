@@ -243,6 +243,72 @@ struct LargeHangarBudgetTests {
         #expect(center.fullInputsPasses == afterLaunch + 1)
     }
 
+    /// The screens fetch in different orders (the app root and the Trophies
+    /// tab unsorted, Profile newest-first), so the token must not care, or
+    /// the shared memo would miss on every screen switch.
+    @Test func trophyTokenIgnoresRowOrder() {
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let rows = Self.hangar10k
+        let base = TrophyInputsToken.of(rows, events: events, standing: standing)
+        #expect(TrophyInputsToken.of(rows.reversed(), events: events, standing: standing) == base)
+        var rng = SeededRNG(state: 42)
+        #expect(TrophyInputsToken.of(rows.shuffled(using: &rng), events: events, standing: standing) == base)
+        // Still content-sensitive: dropping a row or adding one changes it.
+        #expect(TrophyInputsToken.of(Array(rows.dropFirst()), events: events, standing: standing) != base)
+        #expect(TrophyInputsToken.of([newCatch()] + rows, events: events, standing: standing) != base)
+    }
+
+    /// The Hangar-open fix: the app-root center's launch diff fills the
+    /// shared memo, so the Trophies tab / Profile opening afterwards (with
+    /// their own fetch order) finds the inputs without a second full pass.
+    @Test func screensReuseTheCentersInputs() {
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let memo = TrophyInputsMemo()
+        let center = TrophyUnlockCenter(
+            ledger: UserDefaultsTrophyLedger(defaults: suite),
+            events: events, standing: standing, inputsMemo: memo)
+        let rows = Self.hangar10k
+        center.enqueueNewUnlocks(from: Array(rows.reversed()))   // unsorted-ish app-root fetch
+        #expect(center.fullInputsPasses == 1)
+        let screenToken = TrophyInputsToken.of(rows, events: events, standing: standing)
+        var screenPasses = 0
+        let inputs = memo.inputs(for: screenToken) {
+            screenPasses += 1
+            return Trophies.inputs(from: rows, events: events, standing: standing)
+        }
+        #expect(screenPasses == 0, "a Hangar/Profile open after the launch diff must be a memo hit")
+        #expect(inputs.totalCatches == rows.count)
+    }
+
+    /// The other direction: a screen filled the memo (e.g. the Hangar was
+    /// opened before the center's re-diff ran). The center reuses the
+    /// inputs, but still runs its bounded date probe for them, since no date
+    /// pass has run for this token yet.
+    @Test func centerReusesAScreensInputsButStillDates() {
+        let (suiteName, suite) = makeSuite()
+        defer { drop(suiteName) }
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let ledger = UserDefaultsTrophyLedger(defaults: suite)
+        let memo = TrophyInputsMemo()
+        let rows = Self.hangar10k
+        let token = TrophyInputsToken.of(rows, events: events, standing: standing)
+        memo.store(Trophies.inputs(from: rows, events: events, standing: standing), for: token)
+        let center = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing, inputsMemo: memo)
+        let probesBefore = TrophyAchievementDates.prefixEvaluations
+        center.enqueueNewUnlocks(from: rows)
+        #expect(center.fullInputsPasses == 0)
+        #expect(ledger.isSeeded)
+        #expect(TrophyAchievementDates.prefixEvaluations == probesBefore + 1,
+                "the bounded date probe must still run once for the screen-filled inputs")
+    }
+
     @Test func oneNewCatchDoesExactlyOneInputsPass() {
         let (suiteName, suite) = makeSuite()
         defer { drop(suiteName) }
