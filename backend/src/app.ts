@@ -404,11 +404,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // headroom for ~4 simultaneously-starved phones on one IP — and a hard stop
   // on a runaway loop, which is what actually threatens the upstream quota.
   const aircraftLimiter = new RateLimiter({ capacity: 120, windowMs: 60_000 }, rlNow);
-  // 20/min per IP on polls that would spend UPSTREAM budget (cold/expired
-  // tile). A phone on one tile triggers ≤6/min (10 s TTL), so this covers ~3
-  // independently-moving phones behind one IP (carrier NAT); past it a refresh
-  // serves the cache. 0.33 rps keeps one IP well under the 0.8 rps budget.
-  const aircraftFetchLimiter = new RateLimiter({ capacity: 20, windowMs: 60_000 }, rlNow);
   // 300/min per IP on metadata. Sized off the real burst: the ambient prefetch
   // can fire 40–60 lookups in a few seconds on a first launch near SFO, and the
   // app renders a 429 as an error pill, so being stingy here is a visible bug.
@@ -546,7 +541,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }
       : undefined,
     ipLimiter: aircraftLimiter,
-    fetchLimiter: aircraftFetchLimiter,
     cacheConfig,
     now: options.now,
     onFreshSnapshot,

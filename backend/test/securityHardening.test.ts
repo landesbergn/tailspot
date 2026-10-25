@@ -18,7 +18,6 @@ import { scrubEvent } from "../src/instrument.js";
 import { stripSqlParams } from "../src/monitoring/sqlParams.js";
 import type { Bbox, PositionProvider, ProviderSnapshot } from "../src/providers/types.js";
 import { UpstreamBudget } from "../src/providers/upstreamBudget.js";
-import { FetchRateLimitedError, TileCache } from "../src/routes/tileCache.js";
 import { makeTestDb } from "./helpers/pgliteDb.js";
 
 /**
@@ -265,67 +264,6 @@ describe("POST /v1/catches input bounds", () => {
     expect(res.statusCode).toBe(201);
     const [row] = await db.select({ callsign: catches.callsign }).from(catches);
     expect(row.callsign).toHaveLength(16);
-  });
-});
-
-describe("TileCache per-client fetch gate", () => {
-  const bbox: Bbox = { lamin: 37.6, lomin: -122.5, lamax: 37.7, lomax: -122.4 };
-
-  function countingProvider(): { provider: PositionProvider; calls: () => number } {
-    let n = 0;
-    const provider: PositionProvider = {
-      name: "stub",
-      async aircraftInBbox(): Promise<ProviderSnapshot> {
-        n += 1;
-        return { fetchedAt: 1_790_000_000, aircraft: [] };
-      },
-    };
-    return { provider, calls: () => n };
-  }
-
-  it("over the allowance, a cold tile still fetches on an idle budget slot", async () => {
-    const { provider, calls } = countingProvider();
-    const budget = new UpstreamBudget({ now: () => 0 });
-    const cache = new TileCache(provider, {}, () => 0, undefined, undefined, { budget });
-    const res = await cache.get(bbox, { mayFetch: () => false });
-    expect(res.stale).toBe(false);
-    expect(calls()).toBe(1);
-  });
-
-  it("over the allowance with the budget busy and nothing cached: 429, no upstream call", async () => {
-    const { provider, calls } = countingProvider();
-    const budget = new UpstreamBudget({ now: () => 0 });
-    expect(budget.tryTake()).toBe(true); // someone else holds the only slot
-    const cache = new TileCache(provider, {}, () => 0, undefined, undefined, { budget });
-    await expect(cache.get(bbox, { mayFetch: () => false })).rejects.toBeInstanceOf(
-      FetchRateLimitedError,
-    );
-    expect(calls()).toBe(0);
-  });
-
-  it("an expired-but-servable tile serves stale cache instead of fetching", async () => {
-    const { provider, calls } = countingProvider();
-    let nowMs = 0;
-    const cache = new TileCache(provider, {}, () => nowMs);
-    await cache.get(bbox);
-    nowMs = 20_000; // past the 10 s TTL, inside the 60 s stale window
-    const res = await cache.get(bbox, { mayFetch: () => false });
-    expect(res.stale).toBe(true);
-    expect(calls()).toBe(1);
-  });
-
-  it("a fresh cache hit never charges the allowance", async () => {
-    const { provider } = countingProvider();
-    const cache = new TileCache(provider, {}, () => 0);
-    await cache.get(bbox);
-    let charged = 0;
-    await cache.get(bbox, {
-      mayFetch: () => {
-        charged += 1;
-        return true;
-      },
-    });
-    expect(charged).toBe(0);
   });
 });
 

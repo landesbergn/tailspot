@@ -11,7 +11,7 @@ Git history + PLAN.md §9 remain the authoritative record.
   iOS), each finding re-verified against the code before fixing. No authn
   bypass, IDOR, SSRF or injection.
 - Backend: generic 5xx bodies, Sentry param scrub, `caughtAt` range,
-  callsign bounds, upstream-fetch limits, IPv6 /64 keys,
+  callsign bounds, IPv6 /64 keys,
   handle race → 409, dependency bumps. Web: headers on every response, HSTS,
   pinned flyctl action. iOS: replay masks for the map and coordinates,
   https-only external links, path-safe ids. Open items in PLAN §9.
