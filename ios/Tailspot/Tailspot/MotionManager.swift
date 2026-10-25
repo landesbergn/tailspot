@@ -2,8 +2,8 @@
 //  MotionManager.swift
 //  Tailspot
 //
-//  Wraps CMMotionManager and exposes device attitude (pitch / roll / yaw)
-//  as @Published properties so SwiftUI views auto-refresh.
+//  Wraps CMMotionManager and exposes device attitude (pitch / roll / yaw).
+//  Not published: ContentView's 30 Hz TimelineView samples it (see `sample`).
 //
 //  Reference frame: .xArbitraryZVertical — gravity-aligned vertical axis,
 //  arbitrary horizontal axis. We don't need true-north alignment from this
@@ -16,17 +16,17 @@ import Combine
 import CoreMotion
 import os
 
-/// One CoreMotion sample's worth of attitude + gravity, bundled so the
-/// whole sample publishes as a SINGLE value. Angles in radians.
+/// One CoreMotion sample's worth of attitude + gravity, stored as a SINGLE
+/// value so readers always see one coherent sample. Angles in radians.
 ///
-/// Coalescing rationale: the old shape wrote six separate `@Published`
-/// properties per 30 Hz sample, so each sample fired `objectWillChange`
-/// six times (~180/sec), and every one invalidated ContentView's entire
-/// body. Bundling them into one struct assigned once per sample drops
-/// that to a single invalidation signal per sample.
+/// History: this once backed six separate `@Published` properties (~180
+/// body invalidations/sec), then one published struct (30/sec); since the
+/// 2026-10 perf audit it isn't published at all — see `MotionManager.sample`.
+/// Anything that must refresh live from motion has to sit inside a
+/// TimelineView (as the AR overlay and the debug Cam-el readout do).
 ///
 /// `nonisolated` + `Sendable` so it can be built on the CoreMotion
-/// background queue and handed across to the main-thread publish hop.
+/// background queue and handed across to the main-thread store hop.
 nonisolated struct MotionSample: Sendable {
     var pitch: Double = 0      // tilt forward / back
     var roll: Double = 0       // tilt left / right
@@ -45,14 +45,22 @@ final class MotionManager: ObservableObject {
         return q
     }()
 
-    /// The latest coalesced sample — the ONE `@Published` this manager now
-    /// mutates per CoreMotion tick (see `MotionSample`). `private(set)` so
+    /// The latest coalesced sample (see `MotionSample`). `private(set)` so
     /// only the CoreMotion callback writes it.
-    @Published private(set) var sample = MotionSample()
+    ///
+    /// Deliberately NOT `@Published` (2026-10 perf audit). Every reader is
+    /// either inside ContentView's 30 Hz `TimelineView` — which re-samples
+    /// this on its own schedule — or a one-shot read (the shutter-press
+    /// snapshot, the 1 Hz steering/telemetry ticks, replay ticks). Publishing
+    /// it fired `objectWillChange` 30×/s, which re-evaluated ContentView's
+    /// ENTIRE body on top of the TimelineView's own ticks, roughly doubling
+    /// the AR render work for no visible gain. The class stays an
+    /// `ObservableObject` only so it can keep living in a `@StateObject`.
+    private(set) var sample = MotionSample()
 
     // Forwarding accessors so every existing call site (`motion.pitch`,
     // `motion.gravityX`, …) keeps compiling unchanged — they now read the
-    // one coalesced sample instead of six separate stored @Published vars.
+    // one coalesced sample.
     var pitch: Double { sample.pitch }   // tilt forward / back
     var roll: Double { sample.roll }     // tilt left / right
     var yaw: Double { sample.yaw }       // rotation around vertical
@@ -75,10 +83,8 @@ final class MotionManager: ObservableObject {
         manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { [weak self] motion, error in
             guard let self, let motion else { return }
             // CMMotionManager fires on our background queue. Build the
-            // Sendable sample here, then publish it in a SINGLE assignment on
-            // main — one `objectWillChange` per sample instead of six (see
-            // `MotionSample`). @Published mutations must hop back to main for
-            // SwiftUI to consume them safely.
+            // Sendable sample here, then store it in a SINGLE assignment on
+            // main, where every reader lives (MainActor-isolated class).
             let next = MotionSample(
                 pitch: motion.attitude.pitch,
                 roll: motion.attitude.roll,

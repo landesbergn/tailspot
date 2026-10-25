@@ -34,6 +34,14 @@
 //  REQUEST, not on display — at most one ask per public release, even if
 //  the OS swallowed it.
 //
+//  Spacing (Noah, 2026-10-23): on top of once-per-version, asks are at
+//  least `minimumSpacingDays` (120) apart, from a stored request date.
+//  Five versions shipped in seven weeks, so once-per-version alone spent
+//  Apple's 3-per-365 budget on patch releases. Devices asked before the
+//  date stamp existed have a version stamp but no date: the first eligible
+//  moment SEEDS the date instead of asking, so they wait a full 120 days
+//  from upgrade (the safe reading of "at least 120 days").
+//
 
 import Foundation
 import StoreKit
@@ -52,17 +60,35 @@ nonisolated enum ReviewPromptPolicy {
     /// stickiness signal (42% of devices reach 3 catches on day 1).
     static let minimumCatchDays = 2
 
-    /// One ask per public release: eligible again only after
-    /// `MARKETING_VERSION` moves past the stamped one.
+    /// Minimum gap between two asks, measured from the last REQUEST.
+    static let minimumSpacingDays = 120
+
+    /// One ask per public release (eligible again only after
+    /// `MARKETING_VERSION` moves past the stamped one) AND at least
+    /// `minimumSpacingDays` since the last ask. `lastPromptedAt` nil means
+    /// never asked under the dated stamp.
     static func shouldRequest(
         totalCatches: Int,
         distinctCatchDays: Int,
         currentVersion: String,
-        lastPromptedVersion: String?
+        lastPromptedVersion: String?,
+        lastPromptedAt: Date? = nil,
+        now: Date = Date()
     ) -> Bool {
         guard totalCatches >= minimumCatches else { return false }
         guard distinctCatchDays >= minimumCatchDays else { return false }
-        return currentVersion != lastPromptedVersion
+        guard currentVersion != lastPromptedVersion else { return false }
+        if let lastPromptedAt {
+            let spacing = TimeInterval(minimumSpacingDays) * 86_400
+            guard now.timeIntervalSince(lastPromptedAt) >= spacing else { return false }
+        }
+        return true
+    }
+
+    /// A device stamped by the pre-spacing build: it has been asked (a
+    /// version stamp) but we don't know when. Seed the date rather than ask.
+    static func needsLegacySeed(lastPromptedVersion: String?, lastPromptedAt: Date?) -> Bool {
+        lastPromptedVersion != nil && lastPromptedAt == nil
     }
 }
 
@@ -75,6 +101,9 @@ final class ReviewPrompter {
     static let shared = ReviewPrompter()
 
     private static let lastVersionKey = "reviewPromptLastVersion"
+    /// When the last ask was REQUESTED (a Date). Read by the 120-day
+    /// spacing and by the notification re-offer's 20-second separation.
+    static let lastRequestedAtKey = "reviewPromptLastRequestedAt"
 
     private let defaults: UserDefaults
     private let currentVersion: String
@@ -83,20 +112,27 @@ final class ReviewPrompter {
     // MainActor-isolated, and storing it as a plain `() -> Void` erases that
     // — a Swift 6 language-mode error the Release build flags today.
     private let request: @MainActor () -> Void
+    private let now: () -> Date
 
     init(
         defaults: UserDefaults = .standard,
         currentVersion: String = Bundle.main
             .object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0",
+        now: @escaping () -> Date = Date.init,
         request: @escaping @MainActor () -> Void = ReviewPrompter.presentSystemSheet
     ) {
         self.defaults = defaults
         self.currentVersion = currentVersion
+        self.now = now
         self.request = request
     }
 
     var lastPromptedVersion: String? {
         defaults.string(forKey: Self.lastVersionKey)
+    }
+
+    var lastRequestedAt: Date? {
+        defaults.object(forKey: Self.lastRequestedAtKey) as? Date
     }
 
     /// The post-reveal hook (see the timing contract above): a catch's
@@ -113,15 +149,25 @@ final class ReviewPrompter {
         distinctCatchDays: Int,
         present: (() -> Void)? = nil
     ) {
+        let now = now()
+        if ReviewPromptPolicy.needsLegacySeed(
+            lastPromptedVersion: lastPromptedVersion, lastPromptedAt: lastRequestedAt
+        ) {
+            defaults.set(now, forKey: Self.lastRequestedAtKey)
+        }
         guard ReviewPromptPolicy.shouldRequest(
             totalCatches: totalCatches,
             distinctCatchDays: distinctCatchDays,
             currentVersion: currentVersion,
-            lastPromptedVersion: lastPromptedVersion
+            lastPromptedVersion: lastPromptedVersion,
+            lastPromptedAt: lastRequestedAt,
+            now: now
         ) else { return }
         // Stamp BEFORE the request: StoreKit gives no shown/suppressed
-        // signal, so the invariant is at-most-one REQUEST per version.
+        // signal, so the invariant is at-most-one REQUEST per version
+        // and per 120 days.
         defaults.set(currentVersion, forKey: Self.lastVersionKey)
+        defaults.set(now, forKey: Self.lastRequestedAtKey)
         Analytics.capture("review_prompt_requested", [
             "trigger": .string("post_catch_reveal"),
             "total_catches": .int(totalCatches),
@@ -138,6 +184,7 @@ final class ReviewPrompter {
     /// into the debug overlay — never ship a reset path.
     func debugClearStamp() {
         defaults.removeObject(forKey: Self.lastVersionKey)
+        defaults.removeObject(forKey: Self.lastRequestedAtKey)
     }
     #endif
 

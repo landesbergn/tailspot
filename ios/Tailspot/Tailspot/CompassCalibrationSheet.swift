@@ -301,6 +301,10 @@ private struct ExplanationRow: View {
     let glyph: String
     let title: String
     let detail: String
+    /// 14 pt at the default text size, scaling with Dynamic Type next to
+    /// the caption below it (a bare `.system(size: 14)` stayed fixed).
+    /// `@ScaledMetric` because no built-in style is exactly 14 pt.
+    @ScaledMetric(relativeTo: .subheadline) private var titleSize: CGFloat = 14
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: glyph)
@@ -313,7 +317,7 @@ private struct ExplanationRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: titleSize, weight: .semibold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(detail)
                     .font(Brand.Font.caption)

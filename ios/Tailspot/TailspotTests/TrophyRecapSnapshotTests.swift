@@ -100,6 +100,64 @@ struct TrophyRecapSnapshotTests {
         )
     }
 
+    // MARK: - Roster-bump reseed cards
+
+    /// What a roster-bump reseed now presents: ordinary "NEW TROPHY" cards
+    /// (not the recap sheet). Drives a REAL reseed — a roster-3 ledger that
+    /// never knew Heritage / Living History / Constellation, then today's
+    /// roster over a Hangar that qualifies for all three — and renders the
+    /// overlay the way ContentView mounts it. The longer settle lets the
+    /// card's spring entrance finish.
+    @Test func renderReseedUnlockCards() async throws {
+        let tag = UUID().uuidString
+        let ledger = UserDefaultsTrophyLedger(defaults: UserDefaults(suiteName: "snap.reseed.\(tag)")!)
+        let suite = UserDefaults(suiteName: "snap.reseed.facts.\(tag)")!
+        let events = TrophyEventStore(defaults: suite)
+        let standing = LeaderboardStandingCache(defaults: suite)
+        let press = Date(timeIntervalSince1970: 1_716_000_000)
+        func mk(_ typecode: String?, _ at: Date) -> Catch {
+            Catch(icao24: String(UUID().uuidString.prefix(6)).lowercased(), callsign: nil,
+                  model: nil, manufacturer: nil, caughtAt: at,
+                  observerLat: 0, observerLon: 0, slantDistanceMeters: 1000, typecode: typecode)
+        }
+        let hangar = [mk(nil, press), mk(nil, press)]
+            + (0..<5).map { mk("DC3", press.addingTimeInterval(Double($0 + 1) * 3600)) }
+        let added = ["heritage", "heritage2", "multi"]
+        TrophyUnlockCenter(ledger: ledger, roster: Trophies.roster.filter { !added.contains($0.id) },
+                           events: events, standing: standing, rosterVersion: 3)
+            .enqueueNewUnlocks(from: hangar)
+        let center = TrophyUnlockCenter(ledger: ledger, events: events, standing: standing)
+        center.enqueueNewUnlocks(from: hangar)
+        #expect(center.pendingRecap == nil)
+        #expect(center.head?.achievementID == "heritage")
+
+        try await snapshotSettled(TrophyUnlockView(center: center), as: "reseed_card_heritage_of_3")
+        center.advance(); center.advance()
+        try await snapshotSettled(TrophyUnlockView(center: center), as: "reseed_card_constellation_last")
+    }
+
+    /// `snapshot` with a longer settle for the animated unlock card. Waits
+    /// with an async sleep, not a RunLoop spin, so the view's `.task` (which
+    /// starts the entrance) actually gets the main actor and runs.
+    private func snapshotSettled<V: View>(_ view: V, as name: String) async throws {
+        try? FileManager.default.createDirectory(at: Self.snapDir, withIntermediateDirectories: true)
+        let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
+        let host = UIHostingController(rootView: view)
+        let window = UIWindow(frame: bounds)
+        window.rootViewController = host
+        window.overrideUserInterfaceStyle = .dark
+        window.makeKeyAndVisible()
+        host.view.layoutIfNeeded()
+        try await Task.sleep(for: .seconds(1.5))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        let png = UIGraphicsImageRenderer(bounds: bounds, format: format).pngData { _ in
+            host.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+        }
+        try? png.write(to: Self.snapDir.appendingPathComponent("\(name).png"))
+        window.isHidden = true
+    }
+
     // MARK: - Hangar trophy list states
 
     @Test func renderAchievementDateStrips() {

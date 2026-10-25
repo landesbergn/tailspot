@@ -290,6 +290,14 @@ struct SetsCoverageTests {
         ("LA4", "Lake", "LA-4"),
         ("S92", "Sikorsky", "S-92"),
         ("U2", "Lockheed", "U-2"),
+        // Public catalog coverage addition validated 2026-10-21.
+        ("B3XM", "Boeing", "737 MAX 10"),
+        // Public catalog coverage additions validated 2026-10-22.
+        ("PA30", "Piper", "PA-30 Twin Comanche"),
+        ("S64", "Sikorsky", "CH-54 Tarhe"),
+        // Public catalog coverage additions validated 2026-10-23.
+        ("BE60", "Beechcraft", "60 Duke"),
+        ("RJ85", "Avro", "RJ-85 Avroliner"),
     ]
 
     private func mk(_ row: (String, String, String)) -> Catch {
@@ -440,6 +448,11 @@ struct SetsCoverageTests {
             (("LA4", "Lake", "LA-4"), "fam-sport-classics", "fsc-lake-la4"),
             (("S92", "Sikorsky", "S-92"), "fam-heli", "fh-s92"),
             (("U2", "Lockheed", "U-2"), "fam-military", "fm-u2"),
+            (("B3XM", "Boeing", "737 MAX 10"), "fam-737", "f737-max10"),
+            (("PA30", "Piper", "PA-30 Twin Comanche"), "fam-piper", "fpa30"),
+            (("S64", "Sikorsky", "CH-54 Tarhe"), "fam-heli", "fh-s64"),
+            (("BE60", "Beechcraft", "60 Duke"), "fam-beech", "fbe60"),
+            (("RJ85", "Avro", "RJ-85 Avroliner"), "fam-avro-rj", "farj85"),
         ]
 
         for (row, setID, entryID) in assignments {
@@ -658,6 +671,31 @@ struct SetsCoverageTests {
         let twinComanche = mk(("PA30", "Piper", "PA-30 Twin Comanche"))
         #expect(!CardSets.matches(key: CardSets.matchKey(for: twinComanche), entry: comancheEntry),
                 "A PA-30 Twin Comanche must not fill the PA-24 Comanche slot")
+        let twinComancheEntry = CardSets.families.first { $0.id == "fam-piper" }!
+            .entries.first { $0.id == "fpa30" }!
+        let singleComanche = mk(("PA24", "Piper", "PA-24 Comanche"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: singleComanche), entry: twinComancheEntry),
+                "A PA-24 Comanche must not fill the PA-30 Twin Comanche slot")
+
+        let skycraneEntry = CardSets.families.first { $0.id == "fam-heli" }!
+            .entries.first { $0.id == "fh-s64" }!
+        let sikorskyS76 = mk(("S76", "Sikorsky", "S-76"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: sikorskyS76), entry: skycraneEntry),
+                "A Sikorsky S-76 must not fill the S-64 / CH-54 Skycrane slot")
+
+        let dukeEntry = CardSets.families.first { $0.id == "fam-beech" }!
+            .entries.first { $0.id == "fbe60" }!
+        let beechBaron = mk(("BE58", "Beechcraft", "58 Baron"))
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: beechBaron), entry: dukeEntry),
+                "A Beechcraft 58 Baron must not fill the Beechcraft 60 Duke slot")
+
+        let avroRJ85Entry = CardSets.families.first { $0.id == "fam-avro-rj" }!
+            .entries.first { $0.id == "farj85" }!
+        for adjacentAvroRJ in [mk(("RJ70", "Avro", "RJ-70 Avroliner")),
+                               mk(("RJ1H", "Avro", "RJ-100 Avroliner"))] {
+            #expect(!CardSets.matches(key: CardSets.matchKey(for: adjacentAvroRJ), entry: avroRJ85Entry),
+                    "An adjacent Avro RJ variant must not fill the RJ85 slot")
+        }
 
         // Legacy and Texan names are shared across unrelated aircraft lines.
         let lancairLegacyEntry = sportSet.entries.first { $0.id == "fsc-lancair-legacy" }!
@@ -803,6 +841,13 @@ struct SetsCoverageTests {
         #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("WT10", "Aerospool", "WT-10 Advantic"))),
                                     entry: wt9Entry),
                 "An Aerospool WT10 must not fill the WT9 slot")
+
+        // Each MAX family slot remains variant-specific.
+        let max10Entry = CardSets.families.first { $0.id == "fam-737" }!
+            .entries.first { $0.id == "f737-max10" }!
+        #expect(!CardSets.matches(key: CardSets.matchKey(for: mk(("B38M", "Boeing", "737 MAX 8"))),
+                                    entry: max10Entry),
+                "A 737 MAX 8 must not fill the 737 MAX 10 slot")
     }
 
     /// The healed FlyNYON tour helicopter (a4b0e2 / N401FN → B06) — the
@@ -817,6 +862,14 @@ struct SetsCoverageTests {
         // ...and never the Bell 407 slot next door.
         let b407 = heliSet.entries.first { $0.id == "fh-b407" }!
         #expect(!CardSets.matches(key: key, entry: b407))
+        // ...nor the Cessna 206 / 207 slot, whose bare "206" token used to
+        // match the canonical name "Bell 206 JetRanger / LongRanger".
+        let cessnaSet = CardSets.families.first { $0.id == "fam-cessna" }!
+        let fc206 = cessnaSet.entries.first { $0.id == "fc206" }!
+        #expect(!CardSets.matches(key: key, entry: fc206),
+                "A Bell 206 must not fill the Cessna 206 / 207 slot")
+        let jetRanger = CardSets.matchKey(for: mk(("B06", "Bell", "206B JetRanger III")))
+        #expect(!CardSets.matches(key: jetRanger, entry: fc206))
 
         // Bell's 505 Jet Ranger X is its own type and must not collapse into
         // the older 206 JetRanger slot merely because the names are similar.

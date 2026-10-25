@@ -33,7 +33,7 @@ struct CatchShareSheetSnapshotTests {
         let host = UIHostingController(rootView:
             CatchShareSheet(plane: plane, shareText: "Caught SWA3170",
                             shareMessage: "Caught on Tailspot", hasCatchPhoto: false,
-                            startPage: page)
+                            source: .detail, startPage: page)
                 .environment(\.replayMaskingDisabled, true))
         let window = UIWindow(frame: bounds)
         window.rootViewController = host

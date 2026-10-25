@@ -5,22 +5,23 @@
 //  The hype-peak full-screen reveal that fires when the user catches
 //  ≥2 planes in a single frame (T11). Cards stagger in one-at-a-time
 //  (~250 ms apart); each non-duplicate landing fires a haptic + chime
-//  via `RevealAudio.tap(step:)`. A combo banner builds across the
-//  reveal:
+//  via `RevealAudio.tap(step:)`. A banner builds across the reveal:
 //
-//    "CATCH ×1"  →  "COMBO ×2 +N pts"  →  "COMBO ×3 +M pts"  ...
+//    "CATCH ×1"  →  "MULTI-CATCH ×2 · +N pts"  →  "MULTI-CATCH ×3 · +M pts"
 //
-//  Only fresh (non-duplicate) tails contribute to the combo count and
-//  the awarded points. Duplicates appear inline with an `ALREADY
-//  CAUGHT` stamp (reused styling from `CardReveal` T10) but don't
-//  bump the combo.
+//  Only fresh (non-duplicate) tails count toward the banner and the
+//  awarded points. Duplicates appear inline with an `ALREADY CAUGHT`
+//  stamp (reused styling from `CardReveal` T10) and earn nothing.
 //
-//  Combo multiplier (per the design canvas — preserved API; tests pin
-//  these values):
-//    2 fresh → ×1.5
-//    3 fresh → ×2.0
-//    4 fresh → ×2.5
-//    5+ fresh → ×3.0
+//  NO COMBO MULTIPLIER (2026-10-23). This view used to multiply the run
+//  by ×1.5–×3.0 ("COMBO ×1.5" on the receipt), but the server never
+//  awarded a combo (no scoring version has one), so the leaderboard
+//  showed fewer points than the reveal promised. The points shown are
+//  now exactly what each catch earns on its own: base + FIRST OF TYPE
+//  (via `ScoringBonuses`, the same source as the single reveal's
+//  ledger). "MULTI-CATCH ×N" stays as a celebration, not a multiplier.
+//  Nothing local ever stored the combo: points are re-derived from the
+//  rarity base wherever they're totalled, so there's no data to fix.
 //
 //  Single-catch reveal (`CardReveal.swift`) handles the N=1 case;
 //  this view assumes `entries.count >= 2`.
@@ -30,8 +31,8 @@ import SwiftUI
 
 struct MultiCatchReveal: View {
     /// Pairing of a card payload with a duplicate flag. Duplicates
-    /// render inline with the ALREADY CAUGHT stamp but don't contribute
-    /// to the combo math (no points, no chime).
+    /// render inline with the ALREADY CAUGHT stamp and earn nothing
+    /// (no points, no chime).
     struct Entry: Identifiable, Equatable {
         let id = UUID()
         let plane: CardPlane
@@ -51,16 +52,94 @@ struct MultiCatchReveal: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 0..<entries.count as the stagger advances. -1 = pre-stagger.
-    @State private var revealedIndex: Int = -1
+    @State private var landedIndex: Int = -1
+
+    #if DEBUG
+    /// Snapshot seam: ImageRenderer never runs `.task`, so `landedIndex` would
+    /// stay at -1 (an empty screen). true renders the final, all-landed frame.
+    var _snapshotAllLanded = false
+    private var revealedIndex: Int { _snapshotAllLanded ? entries.count - 1 : landedIndex }
+    #else
+    private var revealedIndex: Int { landedIndex }
+    #endif
 
     /// Time between successive card lands. 0.25 s matches spec § 3.3.
-    private static let stagger: TimeInterval = 0.25
+    private static let staggerInterval: TimeInterval = 0.25
     /// Cap the fan to 5 cards visually even if more entries arrive
     /// (defensive — `performCatch` already gates at ≤5 from the AR
     /// zone, but the math should still degrade gracefully).
     private static let maxFan = 5
 
-    // MARK: - Combo math (running totals based on revealedIndex)
+    /// The share sheet for `shareSubject`.
+    @State private var showShareSheet = false
+
+    // MARK: - Points (running totals based on revealedIndex)
+
+    /// What the run is worth, counting only fresh tails. Each fresh card
+    /// earns exactly what it would on its own (base + first-of-type); there
+    /// is no multi-catch multiplier, because the server doesn't award one.
+    struct Tally: Equatable {
+        var freshCount = 0
+        var duplicateCount = 0
+        var basePoints = 0
+        var firstOfTypePoints = 0
+        var awarded: Int { basePoints + firstOfTypePoints }
+    }
+
+    static func tally<C: Collection>(_ entries: C) -> Tally where C.Element == Entry {
+        var t = Tally()
+        for e in entries {
+            if e.isDuplicate { t.duplicateCount += 1; continue }
+            let base = e.plane.rarity.basePoints
+            t.freshCount += 1
+            t.basePoints += base
+            if e.plane.isFirstOfType {
+                t.firstOfTypePoints += ScoringBonuses.firstOfTypeBonus(base: base)
+            }
+        }
+        return t
+    }
+
+    /// First-of-type flags for a run's fresh catches, in order. The server
+    /// pays the bonus once per typecode the device didn't already hold
+    /// (`isFirstOfType` checks its history before each insert), so when a run
+    /// has two catches of a new type only the first earns it. The per-row
+    /// Hangar scan in `ContentView.cardPlane` can't see that: it gave both
+    /// rows the same answer, so the receipt showed two bonuses or none.
+    /// Both catches share a typecode and so a base, so which one carries
+    /// the bonus doesn't change the total. A nil typecode never qualifies.
+    nonisolated static func runFirstOfType(typecodes: [String?],
+                                           heldTypecodes: Set<String>) -> [Bool] {
+        var seen = heldTypecodes
+        return typecodes.map { tc in
+            guard let tc else { return false }
+            return seen.insert(tc).inserted
+        }
+    }
+
+    /// The card the Share button sends: the rarest fresh catch of the run
+    /// (the first one on a tie), else the rarest card overall when every
+    /// card was already caught. The fan has no single "current" card, so
+    /// the best catch is the one worth showing off.
+    static func shareSubject(_ entries: [Entry]) -> Entry? {
+        let fresh = entries.filter { !$0.isDuplicate }
+        let pool = fresh.isEmpty ? entries : fresh
+        return pool.reduce(nil) { best, e in
+            guard let best else { return e }
+            return e.plane.rarity.basePoints > best.plane.rarity.basePoints ? e : best
+        }
+    }
+
+    /// Banner text for the tally of the cards landed so far.
+    static func bannerLabel(for t: Tally) -> String {
+        switch t.freshCount {
+        // Edge case: a dup revealed first. Quiet placeholder so the banner
+        // slot doesn't pop later.
+        case 0: return "ALREADY CAUGHT"
+        case 1: return "CATCH ×1"
+        default: return "MULTI-CATCH ×\(t.freshCount) · +\(t.awarded) pts"
+        }
+    }
 
     /// Up-to-`revealedIndex` slice — what the user can see right now.
     private var visibleEntries: ArraySlice<Entry> {
@@ -73,37 +152,6 @@ struct MultiCatchReveal: View {
         visibleEntries.filter { !$0.isDuplicate }.count
     }
 
-    /// Total fresh count at the end of the run — pins the multiplier.
-    private var totalFresh: Int {
-        entries.filter { !$0.isDuplicate }.count
-    }
-
-    /// Base points across all currently-visible fresh cards.
-    private var baseSoFar: Int {
-        visibleEntries
-            .filter { !$0.isDuplicate }
-            .reduce(0) { $0 + $1.plane.rarity.basePoints }
-    }
-
-    /// Points awarded so far (base × multiplier). Multiplier is keyed
-    /// to the *final* fresh count (not the running one) so the banner
-    /// uses the same multiplier the receipt will close with.
-    private var awardedSoFar: Int {
-        Int((Double(baseSoFar) * Self.comboMultiplier(for: totalFresh)).rounded())
-    }
-
-    /// Combo multiplier as a function of fresh-catch count. (Tests
-    /// pin these values; the API is preserved from the prior version.)
-    static func comboMultiplier(for n: Int) -> Double {
-        switch n {
-        case ..<2: return 1.0
-        case 2:    return 1.5
-        case 3:    return 2.0
-        case 4:    return 2.5
-        default:   return 3.0
-        }
-    }
-
     var body: some View {
         ZStack {
             Brand.Color.bgPrimary.ignoresSafeArea()
@@ -114,7 +162,7 @@ struct MultiCatchReveal: View {
                     .opacity(revealedIndex >= 0 ? 1 : 0)
                     .offset(y: revealedIndex >= 0 || reduceMotion ? 0 : -8)
 
-                comboBanner
+                banner
                     .opacity(revealedIndex >= 0 ? 1 : 0)
                     .animation(.easeOut(duration: 0.2), value: freshSoFar)
 
@@ -152,7 +200,7 @@ struct MultiCatchReveal: View {
             // can paint without the first card popping in mid-fade.
             try? await Task.sleep(for: .milliseconds(120))
             for i in 0..<entries.count {
-                revealedIndex = i
+                landedIndex = i
                 let entry = entries[i]
                 // Haptic + chime only for fresh tails. Duplicates land
                 // silently so the chime ladder reads as the new-catch
@@ -165,27 +213,32 @@ struct MultiCatchReveal: View {
                         .filter { !$0.isDuplicate }.count - 1
                     RevealAudio.tap(step: max(0, freshStep))
                 }
-                try? await Task.sleep(for: .seconds(Self.stagger))
+                try? await Task.sleep(for: .seconds(Self.staggerInterval))
             }
             // The stagger + receipt carry no accessible narration of their
-            // own, so the combo result is announced once the run completes.
-            AccessibilityNotification.Announcement(comboAnnouncement).post()
+            // own, so the result is announced once the run completes.
+            AccessibilityNotification.Announcement(Self.announcement(for: Self.tally(entries))).post()
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let subject = Self.shareSubject(entries) {
+                let plane = subject.plane
+                let text = CatchShare.shareText(for: plane)
+                CatchShareSheet(plane: plane,
+                                shareText: text,
+                                shareMessage: CatchShare.shareMessage(shareText: text),
+                                hasCatchPhoto: plane.photoURL?.isFileURL == true,
+                                source: .multiReveal)
+            }
         }
     }
 
     /// One-sentence VoiceOver summary of the whole multi-catch, posted when
     /// the last card lands (mirrors the receipt's math).
-    private var comboAnnouncement: String {
-        let totalBase = entries
-            .filter { !$0.isDuplicate }
-            .reduce(0) { $0 + $1.plane.rarity.basePoints }
-        let multiplier = Self.comboMultiplier(for: totalFresh)
-        let totalAwarded = Int((Double(totalBase) * multiplier).rounded())
-        let dupCount = entries.filter(\.isDuplicate).count
-        var parts = ["\(totalFresh) planes caught"]
-        if dupCount > 0 { parts.append("\(dupCount) already in hangar") }
-        if totalFresh >= 2 { parts.append("combo times \(formatMultiplier(multiplier))") }
-        parts.append("\(totalAwarded) points awarded")
+    static func announcement(for t: Tally) -> String {
+        var parts = ["\(t.freshCount) planes caught"]
+        if t.duplicateCount > 0 { parts.append("\(t.duplicateCount) already in hangar") }
+        if t.firstOfTypePoints > 0 { parts.append("first of type plus \(t.firstOfTypePoints)") }
+        parts.append("\(t.awarded) points awarded")
         return parts.joined(separator: ", ")
     }
 
@@ -237,47 +290,37 @@ struct MultiCatchReveal: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func formatMultiplier(_ x: Double) -> String {
-        x.truncatingRemainder(dividingBy: 1) == 0
-            ? String(format: "%.0f", x)
-            : String(format: "%.1f", x)
-    }
-
-    // MARK: - Combo banner (T11)
+    // MARK: - Banner (T11)
 
     /// Builds across the stagger. Reads "CATCH ×1" at the first fresh
-    /// tail; flips to "COMBO ×N +M pts" once a second fresh tail
-    /// lands. Duplicate-only states (e.g., first card revealed is a
-    /// dup) read as "DUPLICATE" until a fresh tail arrives.
+    /// tail; flips to "MULTI-CATCH ×N · +M pts" once a second fresh tail
+    /// lands. Duplicate-only states (e.g., first card revealed is a dup)
+    /// read as "ALREADY CAUGHT" until a fresh tail arrives.
     ///
     /// Plain `some View` getter (no `@ViewBuilder`) because we need
     /// the `let` declarations + explicit `return` — the builder DSL
     /// would treat the `return` as disabling itself and warn.
-    private var comboBanner: some View {
-        let label: String
-        let isComboLive = freshSoFar >= 2
-        if freshSoFar == 0 {
-            // Edge case: dup revealed first. Quiet placeholder so the
-            // banner slot doesn't pop later.
-            label = "ALREADY CAUGHT"
-        } else if freshSoFar == 1 {
-            label = "CATCH ×1"
-        } else {
-            label = "COMBO ×\(freshSoFar) +\(awardedSoFar) pts"
-        }
-        let tint: Color = isComboLive
+    private var banner: some View {
+        let soFar = Self.tally(visibleEntries)
+        let isMultiLive = soFar.freshCount >= 2
+        let tint: Color = isMultiLive
             ? Brand.Color.alertAdvisory
-            : (freshSoFar == 0 ? Brand.Color.alertWarning : Brand.Color.cyan)
-        return Text(label)
+            : (soFar.freshCount == 0 ? Brand.Color.alertWarning : Brand.Color.cyan)
+        // Tracking 1.5 (was 2) and a 0.5 floor: "MULTI-CATCH ×N · +M pts"
+        // is longer than the old "COMBO ×N +M pts" and has to fit one line
+        // on an SE at the largest text sizes.
+        return Text(Self.bannerLabel(for: soFar))
             .font(Brand.Font.mono(size: 14, weight: .bold))
-            .tracking(2)
+            .tracking(1.5)
             .foregroundStyle(tint)
             .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
             .background(tint.opacity(0.16), in: .capsule)
             .overlay(Capsule().strokeBorder(tint.opacity(0.55), lineWidth: 1))
-            .scaleEffect(isComboLive && !reduceMotion ? 1.02 : 1.0)
+            .scaleEffect(isMultiLive && !reduceMotion ? 1.02 : 1.0)
     }
 
     // MARK: - Fan
@@ -359,40 +402,39 @@ struct MultiCatchReveal: View {
     // MARK: - Receipt (final state)
 
     private var receipt: some View {
-        let totalBase = entries
-            .filter { !$0.isDuplicate }
-            .reduce(0) { $0 + $1.plane.rarity.basePoints }
-        let multiplier = Self.comboMultiplier(for: totalFresh)
-        let totalAwarded = Int((Double(totalBase) * multiplier).rounded())
-        let dupCount = entries.filter(\.isDuplicate).count
+        let t = Self.tally(entries)
         return VStack(spacing: 6) {
             HStack {
                 Text("Base")
                     .font(Brand.Font.caption)
                     .foregroundStyle(Brand.Color.textSecondary)
                 Spacer()
-                Text("\(totalBase) pt")
+                Text("\(t.basePoints) pt")
                     .font(Brand.Font.mono(size: 12, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                     .monospacedDigit()
             }
-            HStack {
-                Text("Combo (×\(formatMultiplier(multiplier)))")
-                    .font(Brand.Font.caption)
-                    .foregroundStyle(Brand.Color.alertAdvisory)
-                Spacer()
-                Text("+\(totalAwarded - totalBase) pt")
-                    .font(Brand.Font.mono(size: 12, weight: .bold))
-                    .foregroundStyle(Brand.Color.alertAdvisory)
-                    .monospacedDigit()
+            // Same bonus, same gold, as the single reveal's FIRST OF TYPE
+            // ledger line.
+            if t.firstOfTypePoints > 0 {
+                HStack {
+                    Text("First of type")
+                        .font(Brand.Font.caption)
+                        .foregroundStyle(RP.gold)
+                    Spacer()
+                    Text("+\(t.firstOfTypePoints) pt")
+                        .font(Brand.Font.mono(size: 12, weight: .bold))
+                        .foregroundStyle(RP.gold)
+                        .monospacedDigit()
+                }
             }
-            if dupCount > 0 {
+            if t.duplicateCount > 0 {
                 HStack {
                     Text("Already in Hangar")
                         .font(Brand.Font.caption)
                         .foregroundStyle(Brand.Color.alertWarning)
                     Spacer()
-                    Text("×\(dupCount)")
+                    Text("×\(t.duplicateCount)")
                         .font(Brand.Font.mono(size: 12, weight: .bold))
                         .foregroundStyle(Brand.Color.alertWarning)
                         .monospacedDigit()
@@ -405,7 +447,7 @@ struct MultiCatchReveal: View {
                     .tracking(1)
                     .foregroundStyle(Brand.Color.textTertiary)
                 Spacer()
-                Text("+\(totalAwarded.formatted(.number)) pt")
+                Text("+\(t.awarded.formatted(.number)) pt")
                     .font(Brand.Font.mono(size: 22, weight: .heavy))
                     .foregroundStyle(Brand.Color.cyan)
                     .monospacedDigit()
@@ -426,19 +468,31 @@ struct MultiCatchReveal: View {
 
     private var buttons: some View {
         VStack(spacing: 10) {
-            Button(action: onViewInHangar) {
-                Text("View in Hangar")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Brand.Color.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: Brand.Radius.row))
+            // View in Hangar and Share split the secondary row, so Share
+            // costs no extra height on a screen that's already full.
+            HStack(spacing: 10) {
+                Button(action: onViewInHangar) {
+                    secondaryLabel("View in Hangar")
+                }
+                .buttonStyle(.plain)
+                if let subject = Self.shareSubject(entries) {
+                    Button {
+                        CatchShareAnalytics(plane: subject.plane,
+                                            hasCatchPhoto: subject.plane.photoURL?.isFileURL == true,
+                                            source: .multiReveal)
+                            .sheetOpened()
+                        showShareSheet = true
+                    } label: {
+                        secondaryLabel(Self.shareTitle(for: subject.plane))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Self.shareAccessibilityLabel(for: subject.plane))
+                }
             }
-            .buttonStyle(.plain)
 
             Button(action: onDismiss) {
                 Text("Keep spotting")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.callout.weight(.bold))
                     .foregroundStyle(.black.opacity(0.85))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -448,6 +502,39 @@ struct MultiCatchReveal: View {
             .buttonStyle(.plain)
         }
         .frame(maxWidth: 360)
+    }
+
+    /// "Share UAL248": names the card that goes out, since the fan has
+    /// several.
+    /// Callsign, else hex id (`CatchShare.identifier`, the share copy's rule).
+    static func shareTitle(for plane: CardPlane) -> String {
+        guard let id = CatchShare.identifier(for: plane) else { return "Share" }
+        return "Share \(id)"
+    }
+
+    /// VoiceOver label: the visible title first, so Voice Control's "tap
+    /// Share UAL248" still matches, then the model for context.
+    static func shareAccessibilityLabel(for plane: CardPlane) -> String {
+        let title = shareTitle(for: plane)
+        guard let model = plane.model?.trimmingCharacters(in: .whitespaces), !model.isEmpty else {
+            return title == "Share" ? "Share best catch" : title
+        }
+        return "\(title), \(model)"
+    }
+
+    /// Built-in text styles (.subheadline = 15 pt at the default size) so
+    /// the buttons scale with Dynamic Type; one line, shrinking before it
+    /// truncates, since two share a row.
+    private func secondaryLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Brand.Color.textPrimary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(Brand.Color.bgElevated.opacity(0.85), in: .rect(cornerRadius: Brand.Radius.row))
     }
 }
 

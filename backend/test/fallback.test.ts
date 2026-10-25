@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AdsbFiProvider } from "../src/providers/adsbfi.js";
 import { AirplanesLiveProvider } from "../src/providers/airplaneslive.js";
 import { FallbackProvider } from "../src/providers/fallback.js";
-import { selectProvider } from "../src/providers/index.js";
+import { chainIncludesAdsbLol, selectProvider } from "../src/providers/index.js";
 import {
   type Bbox,
   type PositionProvider,
@@ -257,6 +257,32 @@ describe("selectProvider", () => {
     expect(selectProvider({ POSITION_PROVIDER: "adsblol" }).name).toBe("adsblol");
     expect(selectProvider({ POSITION_PROVIDER: "adsbfi" }).name).toBe("adsbfi");
     expect(selectProvider({ POSITION_PROVIDER: "airplaneslive" }).name).toBe("airplaneslive");
+  });
+
+  it("swaps the fallback to the keyed adsb.lol re-api when the key is set", () => {
+    expect(selectProvider({ ADSBLOL_REAPI_KEY: "k" }).name).toBe("adsbfi+adsblolreapi");
+    // A blank secret is no key: keep the public adsb.lol fallback.
+    expect(selectProvider({ ADSBLOL_REAPI_KEY: "  " }).name).toBe("adsbfi+adsblol");
+  });
+
+  it("selects re-api alone only with a key", () => {
+    expect(selectProvider({ POSITION_PROVIDER: "adsblolreapi", ADSBLOL_REAPI_KEY: "k" }).name).toBe(
+      "adsblolreapi",
+    );
+    expect(() => selectProvider({ POSITION_PROVIDER: "adsblolreapi" })).toThrow(
+      /needs ADSBLOL_REAPI_KEY/,
+    );
+  });
+
+  it("keeps route enrichment on whenever an adsb.lol feed is in the chain", () => {
+    expect(chainIncludesAdsbLol("adsbfi+adsblol")).toBe(true);
+    expect(chainIncludesAdsbLol("adsbfi+adsblolreapi")).toBe(true);
+    expect(chainIncludesAdsbLol("adsblol")).toBe(true);
+    expect(chainIncludesAdsbLol("adsbfi")).toBe(false);
+    expect(chainIncludesAdsbLol("airplaneslive")).toBe(false);
+    // Pinned to the real default names, so a rename can't silently drop routes.
+    expect(chainIncludesAdsbLol(selectProvider({ ADSBLOL_REAPI_KEY: "k" }).name)).toBe(true);
+    expect(chainIncludesAdsbLol(selectProvider({}).name)).toBe(true);
   });
 
   it("throws on an unknown provider instead of silently degrading", () => {

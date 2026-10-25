@@ -71,6 +71,17 @@ struct CatchDeletionSyncTests {
         #expect(sync.pending.isEmpty)
     }
 
+    /// A traversal-shaped serverUuid (bad upload response) must never become
+    /// an authorized DELETE on another route — and must not block the queue.
+    @Test func unsafeIdIsDroppedWithoutARequest() async {
+        let (sync, _) = makeSync()
+        sync.enqueue(["../devices/push-token", "aaaa-1"])
+        await sync.drain()
+        let reqs = CatchDeleteStubProtocol.recorded
+        #expect(reqs.map { $0.url?.absoluteString } == ["https://api.example.test/v1/catches/aaaa-1"])
+        #expect(sync.pending.isEmpty)
+    }
+
     @Test func enqueueDedupes() {
         let (sync, _) = makeSync()
         sync.enqueue(["a", "b"])

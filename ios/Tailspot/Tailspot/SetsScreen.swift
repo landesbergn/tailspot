@@ -149,25 +149,63 @@ struct SetDetailScreen: View {
     let set: CardSet
     @Query(sort: \Catch.caughtAt, order: .reverse) private var catches: [Catch]
 
+    /// The header's "N of M collected" line: 18 pt at the default text
+    /// size (no built-in style is exactly 18), scaling with Dynamic Type
+    /// like the prose around it. A bare `.system(size: 18)` never scaled.
+    @ScaledMetric(relativeTo: .headline) private var headerCountSize: CGFloat = 18
+
+    /// Per-entry tail count + most recent catch, keyed by entry id.
+    struct EntryStat { let tailCount: Int; let mostRecent: Date? }
+
+    /// Memoized per data change (see HangarDerivedCache). The rows used to
+    /// re-filter ALL catches per entry on every body eval — rebuilding each
+    /// catch's match strings once per entry (~10 entries × 10k catches for
+    /// the 737 family) — plus a third pass for the header.
+    @State private var cache = DerivedCacheBox<[String: EntryStat]>()
+
+    private var entryStats: [String: EntryStat] {
+        cache.value(for: CatchFingerprint.of(catches)) {
+            Self.computeEntryStats(set: set, catches: catches)
+        }
+    }
+
+    /// Internal (not private) for `SetDetailStatsTests`.
+    static func computeEntryStats(set: CardSet, catches: [Catch]) -> [String: EntryStat] {
+        let keys = CardSets.matchKeys(for: catches)
+        var stats: [String: EntryStat] = [:]
+        for entry in set.entries {
+            var tails = Set<String>()
+            var mostRecent: Date?
+            for key in keys where CardSets.matches(key: key, entry: entry) {
+                tails.insert(key.source.icao24)
+                let at = key.source.caughtAt
+                if mostRecent.map({ at > $0 }) ?? true { mostRecent = at }
+            }
+            stats[entry.id] = EntryStat(tailCount: tails.count, mostRecent: mostRecent)
+        }
+        return stats
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        // Read once per body: even a cache hit re-hashes the whole Hangar
+        // (CatchFingerprint), so the header and rows share this one read.
+        let stats = entryStats
+        return VStack(spacing: 0) {
             HangarChildBar(title: set.title)
             List {
                 Section {
-                    header
+                    header(stats: stats)
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
                 Section {
                     ForEach(set.entries) { entry in
-                        let matching = catches.filter { CardSets.matches(catch: $0, entry: entry) }
-                        let tailCount = Set(matching.map(\.icao24)).count
-                        let mostRecent = matching.map(\.caughtAt).max()
+                        let stat = stats[entry.id]
                         NavigationLink {
                             ModelDetailScreen(entry: entry)
                         } label: {
-                            modelRow(entry: entry, tailCount: tailCount, mostRecent: mostRecent)
+                            modelRow(entry: entry, tailCount: stat?.tailCount ?? 0, mostRecent: stat?.mostRecent)
                         }
                         .listRowBackground(Brand.Color.bgElevated)
                     }
@@ -187,15 +225,18 @@ struct SetDetailScreen: View {
         .swipeBackEnabled()
     }
 
-    private var header: some View {
-        let p = CardSets.progress(of: set, against: catches)
+    private func header(stats: [String: EntryStat]) -> some View {
+        // An entry is "caught" iff some catch matches it — i.e. tailCount > 0
+        // — which is exactly `CardSets.progress`'s first-match-wins count.
+        let p = (caught: set.entries.filter { (stats[$0.id]?.tailCount ?? 0) > 0 }.count,
+                 total: set.entries.count)
         let frac = p.total == 0 ? 0 : Double(p.caught) / Double(p.total)
         let complete = p.total > 0 && p.caught == p.total
         return HStack(spacing: 16) {
             CompletionRing(progress: frac, tint: Brand.Color.cyan, lineWidth: 7, diameter: 64)
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(p.caught) of \(p.total) collected")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: headerCountSize, weight: .bold))
                     .foregroundStyle(Brand.Color.textPrimary)
                 Text(complete ? "Set complete" : "Catch \(p.total - p.caught) more to finish.")
                     .font(Brand.Font.caption)
@@ -218,7 +259,10 @@ struct SetDetailScreen: View {
                         // scales with Dynamic Type (a bare size: 16 doesn't).
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(caught ? Brand.Color.textPrimary : Brand.Color.textTertiary)
-                        .lineLimit(1)
+                        // Two lines, so the few long curated names ("de
+                        // Havilland DH.82 Tiger Moth / Queen Bee") wrap
+                        // instead of clipping, most of all at large text.
+                        .lineLimit(2)
                         // The sparkle below is hidden from VoiceOver (it
                         // reads as the junk word "sparkles"), so the rarity
                         // it signals rides on the name instead.
@@ -267,7 +311,10 @@ struct ModelDetailScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // Computed ONCE per body: `rows` is a whole-Hangar filter + grouping,
+        // and it used to run twice (isEmpty, then ForEach).
+        let rows = self.rows
+        return VStack(spacing: 0) {
             HangarChildBar(title: entry.canonicalName)
             ScrollView {
                 if rows.isEmpty {
@@ -299,6 +346,9 @@ struct ModelDetailScreen: View {
             Image(systemName: "binoculars")
                 .font(.system(size: 40, weight: .light))
                 .foregroundStyle(Brand.Color.textTertiary)
+                // Decorative: the headline below says it all, and
+                // VoiceOver would otherwise read the symbol's name.
+                .accessibilityHidden(true)
             Text("No \(entry.canonicalName) yet")
                 .brandDisplayFont()
                 .foregroundStyle(Brand.Color.textPrimary)

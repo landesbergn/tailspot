@@ -138,11 +138,22 @@ export interface PositionProvider {
 
 /** Thrown by adapters when the upstream is unreachable or returns a non-OK status. */
 export class UpstreamError extends Error {
+  /** HTTP status when the upstream answered with an error (429, 403, 5xx). */
+  readonly status?: number;
+  /**
+   * How long the upstream asked us to stay away (seconds), from Retry-After
+   * or the RateLimit reset header. The circuit breaker honours it.
+   */
+  readonly retryAfterSeconds?: number;
+
   constructor(
     message: string,
     readonly cause?: unknown,
+    details: { status?: number; retryAfterSeconds?: number } = {},
   ) {
     super(message);
     this.name = "UpstreamError";
+    this.status = details.status;
+    this.retryAfterSeconds = details.retryAfterSeconds;
   }
 }

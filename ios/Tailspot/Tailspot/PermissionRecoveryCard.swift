@@ -63,12 +63,17 @@ struct PermissionRecoveryCard: View {
                 .foregroundStyle(Brand.Color.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
+                ActivationTelemetry.firePermissionRecoverySettingsTapped(
+                    cameraDenied: cameraDenied, locationDenied: locationDenied
+                )
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             } label: {
                 Text("Open Settings")
-                    .font(.system(size: 15, weight: .bold))
+                    // Semantic button style so the label scales with
+                    // Dynamic Type (was a fixed 15 pt).
+                    .font(Brand.Font.button)
                     .foregroundStyle(.black.opacity(0.88))
                     .padding(.horizontal, 26)
                     .padding(.vertical, 12)
@@ -85,6 +90,9 @@ struct PermissionRecoveryCard: View {
             RoundedRectangle(cornerRadius: Brand.Radius.card)
                 .strokeBorder(Brand.Color.alertCaution.opacity(0.35), lineWidth: 1)
         )
+        // `permission_recovery_shown` is fired by ContentView when the card's
+        // show condition turns on (permissionRecoveryFunnelTick), not from
+        // `.onAppear` here, so remounts and snapshot harnesses don't re-fire it.
     }
 }
 

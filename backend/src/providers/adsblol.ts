@@ -76,7 +76,11 @@ export interface AdsbLolAircraft {
 /** Top-level /v2/point response wrapper. */
 export interface AdsbLolResponse {
   ac?: AdsbLolAircraft[] | null;
-  /** snapshot generation time, milliseconds since unix epoch. */
+  /** The same rows under readsb's own key: re-api (and adsb.fi's deprecated
+   *  v2) answer `aircraft` instead of the ADSBExchange-style `ac`. */
+  aircraft?: AdsbLolAircraft[] | null;
+  /** Snapshot generation time: milliseconds since unix epoch on /v2/point,
+   *  SECONDS on re-api (see `nowIsSeconds`). */
   now?: number;
   total?: number;
 }
@@ -94,7 +98,7 @@ export function normalizeAdsbLol(
   fetchedAt: number,
   bbox: Bbox | null,
 ): NormalizedAircraft[] {
-  const rows = resp.ac ?? [];
+  const rows = resp.ac ?? resp.aircraft ?? [];
   const out: NormalizedAircraft[] = [];
   for (const a of rows) {
     const normalized = normalizeOne(a, fetchedAt);
@@ -196,11 +200,45 @@ export function rateLimitSummary(headers: Headers): string | null {
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
+/**
+ * How long an error response asks us to wait, in seconds: `Retry-After`
+ * (delta-seconds or an HTTP date), else the RateLimit reset header. adsb.lol
+ * sends one reset per window ("1, 60, 41000"); without knowing which window
+ * tripped, the longest is the safe reading. Undefined when absent or garbled.
+ * Exported for tests.
+ */
+export function retryAfterSeconds(
+  headers: Headers,
+  nowMs: number = Date.now(),
+): number | undefined {
+  const retryAfter = headers.get("retry-after")?.trim();
+  if (retryAfter) {
+    if (/^\d+$/.test(retryAfter)) return Number(retryAfter);
+    const at = Date.parse(retryAfter);
+    if (Number.isFinite(at)) return Math.max(0, Math.ceil((at - nowMs) / 1000));
+  }
+  const reset = headers.get("x-ratelimit-reset") ?? headers.get("ratelimit-reset");
+  if (reset) {
+    const values = reset
+      .split(",")
+      .map((v) => Number.parseFloat(v.split(";")[0] ?? ""))
+      .filter((v) => Number.isFinite(v) && v >= 0);
+    if (values.length > 0) {
+      const v = Math.max(...values);
+      // Some servers send an epoch timestamp instead of a delta.
+      return v > 1e9 ? Math.max(0, Math.ceil(v - nowMs / 1000)) : Math.ceil(v);
+    }
+  }
+  return undefined;
+}
+
 export interface AdsbLolProviderOptions {
   baseUrl?: string;
   timeoutMs?: number;
   /** Injectable for tests; defaults to global fetch. */
   fetchFn?: typeof fetch;
+  /** Extra request headers (re-api's `x-api-key`). Never logged. */
+  headers?: Record<string, string>;
 }
 
 export class AdsbLolProvider implements PositionProvider {
@@ -211,11 +249,26 @@ export class AdsbLolProvider implements PositionProvider {
   protected readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
+  // An ES private field, not TS `private`: it holds re-api's key, and a `#`
+  // field is invisible to JSON.stringify and pino if the provider is logged.
+  readonly #headers: Record<string, string>;
+  /** True when the upstream's `now` is unix seconds (readsb re-api) rather
+   *  than the /v2/point milliseconds. Overridden by AdsbLolReApiProvider. */
+  protected readonly nowIsSeconds: boolean = false;
+  /**
+   * When true, a 200 body without an `aircraft` array is an UpstreamError
+   * rather than an empty sky. readsb's re-api always sends the array (empty
+   * when no planes), so its absence means an error body. Off for the /v2
+   * feeds, whose empty-area shape isn't pinned down; an error there would
+   * turn a quiet coverage desert into a fallback.
+   */
+  protected readonly requiresAircraftArray: boolean = false;
 
   constructor(opts: AdsbLolProviderOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchFn = opts.fetchFn ?? fetch;
+    this.#headers = opts.headers ?? {};
   }
 
   async aircraftInBbox(bbox: Bbox): Promise<ProviderSnapshot> {
@@ -227,10 +280,14 @@ export class AdsbLolProvider implements PositionProvider {
     const url = this.pointUrl(center.lat, center.lon, radiusNm);
 
     const resp = await this.fetchJson(url);
-    // adsb.lol `now` is milliseconds; the contract is unix seconds.
+    if (this.requiresAircraftArray && !Array.isArray(resp.aircraft)) {
+      throw new UpstreamError(`${this.name} returned no aircraft array`);
+    }
+    // /v2/point `now` is milliseconds, re-api's is seconds; the contract is
+    // unix seconds.
     const fetchedAt =
       typeof resp.now === "number" && Number.isFinite(resp.now)
-        ? Math.floor(resp.now / 1000)
+        ? Math.floor(this.nowIsSeconds ? resp.now : resp.now / 1000)
         : Math.floor(Date.now() / 1000);
 
     return {
@@ -279,7 +336,7 @@ export class AdsbLolProvider implements PositionProvider {
   private async fetchOnce(url: string, signal: AbortSignal): Promise<AdsbLolResponse> {
     const res = await this.fetchFn(url, {
       method: "GET",
-      headers: { accept: "application/json", "user-agent": "tailspot-backend" },
+      headers: { accept: "application/json", "user-agent": "tailspot-backend", ...this.#headers },
       signal,
     });
     if (!res.ok) {
@@ -291,6 +348,8 @@ export class AdsbLolProvider implements PositionProvider {
       const quota = rateLimitSummary(res.headers);
       throw new UpstreamError(
         `${this.name} returned HTTP ${res.status}${quota ? ` (${quota})` : ""}`,
+        undefined,
+        { status: res.status, retryAfterSeconds: retryAfterSeconds(res.headers) },
       );
     }
     return (await res.json()) as AdsbLolResponse;

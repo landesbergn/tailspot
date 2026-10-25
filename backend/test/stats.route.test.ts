@@ -13,7 +13,7 @@ import { makeTestDb } from "./helpers/pgliteDb.js";
  * catch posted inside the TTL is invisible until the memo expires).
  */
 
-const NOW = 1_700_000_000;
+const NOW = 1_780_000_000; // 2026-05-28, after CAUGHT_AT_FLOOR (earlier catches are rejected)
 const SITE = "https://tailspot.app";
 const ICAO = "c0c0c0";
 

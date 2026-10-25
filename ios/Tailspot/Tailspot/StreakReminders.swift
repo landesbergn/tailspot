@@ -53,8 +53,30 @@ nonisolated enum StreakReminders {
     static let enabledKey = "tailspot.streak.remindersEnabled"
     /// One-shot latch for the in-camera permission pre-prompt. Set when the
     /// prompt is shown (any outcome) and by a Settings-initiated request —
-    /// the ask never repeats; recovery from denial is the Settings row.
+    /// the first ask never repeats. A "Not now" decliner gets exactly one
+    /// re-offer later (`reoffer`, 2026-10-23); otherwise recovery is the
+    /// Settings row.
     static let permissionAskedKey = "tailspot.streak.permissionAsked"
+    /// Set when the user taps "Not now" on the pre-prompt (and, once, by
+    /// `StreakReminderCenter.migrateDeclinersIfNeeded` for people who
+    /// declined before this key existed). Makes them eligible for the one
+    /// re-offer; `permissionAskedKey` stays set, so the FIRST ask never
+    /// fires again.
+    static let permissionDeclinedKey = "tailspot.streak.permissionDeclined"
+    /// The `Streaks.dayKey` of that "Not now" tap. The re-offer never lands
+    /// on the same day as the decline: a new spotter's first catch, a look
+    /// at the (default) Week board and a second catch can all happen within
+    /// minutes, and "Not now" shouldn't be re-asked that fast. Absent for
+    /// migrated earlier decliners, who declined on some earlier build.
+    static let permissionDeclinedDayKey = "tailspot.streak.permissionDeclinedDay"
+    /// The one re-offer has been shown. Latched at presentation, never
+    /// cleared (outside the wrench Reset), so it can't repeat.
+    static let reofferUsedKey = "tailspot.streak.reofferUsed"
+    /// When the re-offer was shown (a Date), for the 20-second separation
+    /// from the App Store review ask.
+    static let reofferShownAtKey = "tailspot.streak.reofferShownAt"
+    /// The one-time decliner migration has run on this install.
+    static let declineMigrationKey = "tailspot.streak.declineMigration.v1"
     /// Last `StreakTelemetry.scheduledStamp` fired — `sync` re-arms the same
     /// request many times a day, and only a changed stamp is worth an event.
     static let scheduledTelemetryKey = "tailspot.streak.telemetry.scheduled"
@@ -144,6 +166,86 @@ nonisolated enum StreakReminders {
         authStatusIsNotDetermined: Bool
     ) -> Bool {
         currentStreak >= minimumStreak && enabled && !alreadyAsked && authStatusIsNotDetermined
+    }
+
+    // MARK: Re-offer (Noah, 2026-10-23)
+
+    /// The streak that earns a decliner the re-offer.
+    static let reofferStreak = 3
+
+    /// The re-offer and the App Store review ask never land within this
+    /// many seconds of each other, in either order.
+    static let promptSeparationSeconds: TimeInterval = 20
+
+    /// What earned the re-offer. Raw values are the telemetry `trigger`.
+    enum ReofferTrigger: String, Sendable {
+        case streak = "streak_3_day"
+        case weeklyBoard = "weekly_board"
+    }
+
+    /// A re-offer that may be shown. `routesToSettings` is true when iOS
+    /// itself said no: `requestAuthorization` would return instantly
+    /// without a dialog, so the only honest action is iOS Settings (the
+    /// same escape hatch as the Settings REMINDERS row).
+    struct Reoffer: Equatable, Sendable {
+        let trigger: ReofferTrigger
+        let routesToSettings: Bool
+    }
+
+    /// One pre-prompt presentation: the streak the card quotes, plus the
+    /// re-offer details when this isn't the first ask.
+    struct Offer: Equatable, Sendable {
+        let days: Int
+        var reoffer: Reoffer? = nil
+    }
+
+    /// Re-offer eligibility, pure. Only for people who said "Not now" on
+    /// the pre-prompt, at most once ever, never on the day they said it,
+    /// never while reminders are muted, and only when there's something to
+    /// offer (iOS hasn't granted).
+    /// Trigger is whichever came first: a weekly-board placement is latched
+    /// when the leaderboard reports it, so if it's already set it predates
+    /// this catch; otherwise a 3-day streak.
+    static func reoffer(
+        currentStreak: Int,
+        placedOnWeeklyBoard: Bool,
+        enabled: Bool,
+        declined: Bool,
+        reofferUsed: Bool,
+        authStatus: UNAuthorizationStatus,
+        declinedToday: Bool = false
+    ) -> Reoffer? {
+        guard enabled, declined, !reofferUsed, !declinedToday else { return nil }
+        let routesToSettings: Bool
+        switch authStatus {
+        case .notDetermined: routesToSettings = false
+        case .denied: routesToSettings = true
+        // Authorized, provisional, ephemeral: nothing to offer.
+        default: return nil
+        }
+        if placedOnWeeklyBoard {
+            return Reoffer(trigger: .weeklyBoard, routesToSettings: routesToSettings)
+        }
+        if currentStreak >= reofferStreak {
+            return Reoffer(trigger: .streak, routesToSettings: routesToSettings)
+        }
+        return nil
+    }
+
+    /// True when `other` (the other prompt's timestamp) is absent or at
+    /// least `promptSeparationSeconds` away from `now`, either side.
+    static func isSeparated(now: Date, from other: Date?) -> Bool {
+        guard let other else { return true }
+        return abs(now.timeIntervalSince(other)) >= promptSeparationSeconds
+    }
+
+    /// The one-time migration's rule: someone the app asked (the latch is
+    /// set) whom iOS never asked can only have tapped "Not now" (or killed
+    /// the app on the card). "Notify me", the Settings toggles and the
+    /// challenge scheduler all go on to the system dialog, which moves the
+    /// status off `.notDetermined`.
+    static func isLegacyDecliner(asked: Bool, authStatus: UNAuthorizationStatus) -> Bool {
+        asked && authStatus == .notDetermined
     }
 
     /// Foreground presentation policy, pure. Empty options = iOS suppresses
@@ -325,6 +427,24 @@ final class StreakReminderCenter: NSObject, UNUserNotificationCenterDelegate {
 
     func authorizationStatus() async -> UNAuthorizationStatus {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    /// One-time, on the first foreground of the build that introduced the
+    /// re-offer: mark people who already said "Not now" as decliners so
+    /// they're eligible for the one re-offer. It does NOT clear
+    /// `permissionAskedKey`; clearing it would make the first ask fire on
+    /// their very next reveal instead of waiting for an earned moment.
+    func migrateDeclinersIfNeeded(defaults: UserDefaults = .standard) async {
+        guard !defaults.bool(forKey: StreakReminders.declineMigrationKey) else { return }
+        let status = await authorizationStatus()
+        if StreakReminders.isLegacyDecliner(
+            asked: defaults.bool(forKey: StreakReminders.permissionAskedKey),
+            authStatus: status
+        ) {
+            defaults.set(true, forKey: StreakReminders.permissionDeclinedKey)
+            Log.ui.notice("Streak ask: marked an earlier \"Not now\" eligible for the re-offer")
+        }
+        defaults.set(true, forKey: StreakReminders.declineMigrationKey)
     }
 
     // MARK: UNUserNotificationCenterDelegate
