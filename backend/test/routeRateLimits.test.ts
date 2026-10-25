@@ -55,6 +55,10 @@ const metadataStore: MetadataStore = { lookup: async () => null };
  */
 const catchStore = {
   listCatches: async () => ({ total: 0, catches: [] }),
+  // GET /v1/leaderboard (window=all, no token) touches exactly these.
+  ensureMonthsDecided: async () => 0,
+  leaderboard: async () => ({ entries: [], totalCatchers: 0 }),
+  recordAlltimeTopper: async () => {},
 } as unknown as CatchStore;
 
 describe("per-IP and per-device limits on the previously-unmetered routes", () => {
@@ -133,6 +137,18 @@ describe("per-IP and per-device limits on the previously-unmetered routes", () =
     // deserves rather than the device's 429 (the two limiters are distinct).
     const anon = await a.inject({ method: "GET", url: "/v1/catches" });
     expect(anon.statusCode).toBe(401);
+  });
+
+  it("GET /v1/leaderboard is capped at 300/min per IP", async () => {
+    const a = await build();
+    for (let i = 0; i < 300; i++) {
+      const res = await a.inject({ method: "GET", url: "/v1/leaderboard" });
+      expect(res.statusCode).toBe(200);
+    }
+    const denied = await a.inject({ method: "GET", url: "/v1/leaderboard" });
+    expect(denied.statusCode).toBe(429);
+    expect(denied.json()).toEqual({ error: "rate limited" });
+    expect(denied.headers["retry-after"]).toBeTruthy();
   });
 });
 
